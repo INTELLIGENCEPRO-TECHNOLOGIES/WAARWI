@@ -1,0 +1,2574 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
+  Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
+  ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, Pause, RotateCcw,
+  FileText, List, Play, Car, Delete, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote,
+  Globe, Truck, ShoppingBag, Sparkles, Clock as ClockIcon, Phone, MapPin, AlertCircle
+} from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useApp } from '../context/AppContext';
+import { useToast } from '../context/ToastContext';
+import { formatFCFA } from '../lib/format';
+import { Modal } from '../components/Modal';
+import { EmptyState } from '../components/EmptyState';
+import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
+import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
+import { ActiveCashSessionCard, RecentCashSessionsList } from '../components/CashSessionPremium';
+import { isAutoParts } from '../lib/types';
+import { desktopAutoFocus } from '../lib/device';
+import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, type PrintTenant } from '../lib/print';
+import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from '../lib/types';
+
+type ArticleLite = {
+  id: string; internal_ref: string; name: string; oem_ref: string;
+  sale_price: number; purchase_price: number; stock_available: number;
+  category_id: string | null; image_url: string | null;
+};
+
+type CategoryLite = { id: string; name: string; parent_id: string | null };
+
+type ControlLine = {
+  payment_method_id: string | null;
+  method_name: string;
+  theoretical_amount: number;
+  counted_amount: number;
+};
+
+type CloseStep = 'control' | 'regularize' | 'confirm';
+
+type HeldCart = {
+  id: string;
+  label: string;
+  cart: CartItem[];
+  customer: Customer | null;
+  discount: number;
+  savedAt: string;
+};
+
+type SessionSale = {
+  id: string;
+  sale_number: string;
+  total: number;
+  created_at: string;
+  customer_name: string | null;
+  status: string;
+  items: { name: string; quantity: number; unit_price: number }[];
+};
+
+function printXReport(
+  session: CashSession & { opening_note?: string; closing_note?: string },
+  controls: ControlLine[],
+  salesStats: {
+    count: number; total: number;
+    byMethod: { method_name: string; amount: number }[];
+    topArticles: { name: string; qty: number; total: number }[];
+    movements?: { kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movExpense?: number; movIncome?: number; movPrepay?: number; netTotal?: number;
+  },
+  regularizations: { reg_type: string; amount: number; reason: string }[],
+  tenantArg: { name: string; ninea?: string; rccm?: string; address?: string },
+  cashier: string,
+  siteName: string
+) {
+  printXReport80({
+    tenant: tenantArg as PrintTenant,
+    cashier,
+    siteName,
+    sessionId: session.id,
+    openedAt: session.opened_at,
+    closedAt: session.closed_at,
+    openingAmount: Number(session.opening_amount),
+    salesCount: salesStats.count,
+    salesTotal: salesStats.total,
+    byMethod: salesStats.byMethod,
+    movements: salesStats.movements,
+    controls: controls.map(c => ({
+      method_name: c.method_name,
+      theoretical_amount: c.theoretical_amount,
+      counted_amount: c.counted_amount,
+    })),
+    regularizations,
+    topArticles: salesStats.topArticles,
+  });
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────────
+
+export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
+  const { tenant, currentSite, profile } = useApp();
+  const tenantForPrint: PrintTenant = tenant ? {
+    name: tenant.name, legal_name: (tenant as any).legal_name,
+    ninea: (tenant as any).ninea, rccm: (tenant as any).rccm,
+    address: (tenant as any).address, phone: (tenant as any).phone,
+    email: (tenant as any).email, website: (tenant as any).website,
+    logo_url: (tenant as any).logo_url,
+    business_type: (tenant as any).business_type,
+  } : { name: '' };
+  const cashierName = profile?.full_name || profile?.email || '';
+
+  const printSaleTicket = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }) => {
+    printTicket80Shared({
+      sale_number: sale.sale_number,
+      created_at: sale.created_at,
+      total: sale.total,
+      discount: sale.discount,
+      items: sale.items.map(i => ({ name: i.name, internal_ref: i.internal_ref, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount })),
+      payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
+      customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
+    }, tenantForPrint, cashierName);
+  };
+
+  const printSaleInvoice = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }) => {
+    const items = sale.items.map(i => ({ name: i.name, internal_ref: i.internal_ref, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount }));
+    const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+    const paid = sale.payments.reduce((s, p) => s + p.amount, 0);
+    printDocumentA4({
+      tenant: tenantForPrint,
+      docLabel: 'FACTURE',
+      docNumber: sale.sale_number,
+      docDate: new Date(sale.created_at).toLocaleDateString('fr-FR'),
+      customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
+      items, subtotal, discount: sale.discount, total: sale.total,
+      payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
+      paid, cashier: cashierName,
+    });
+  };
+  const autoMode = isAutoParts(tenant);
+  const { success, error } = useToast();
+
+  // Screen state: 'open-form' | 'resume' | 'pos'
+  const [screen, setScreen] = useState<'open-form' | 'resume' | 'pos'>('open-form');
+
+  // Data
+  const [articles, setArticles] = useState<ArticleLite[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [session, setSession] = useState<CashSession | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // Session open form
+  const [openingAmount, setOpeningAmount] = useState(0);
+  const [openingNote, setOpeningNote] = useState('');
+  const [openingSubmitting, setOpeningSubmitting] = useState(false);
+
+  // Catalog filters
+  const [categories, setCategories] = useState<CategoryLite[]>([]);
+  const [topScores, setTopScores] = useState<Record<string, number>>({});
+  const [sortMode, setSortMode] = useState<'top' | 'alpha'>('top');
+  const [categoryId, setCategoryId] = useState<string>('');
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+
+  // Cart
+  const [search, setSearch] = useState('');
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [discount, setDiscount] = useState(0);
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
+
+  // Held carts (mise en attente)
+  const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
+  const [holdOpen, setHoldOpen] = useState(false);
+
+  // Payment
+  const [payOpen, setPayOpen] = useState(false);
+  const [payments, setPayments] = useState<SalePayment[]>([]);
+  const [paying, setPaying] = useState(false);
+  const [lastSale, setLastSale] = useState<{
+    sale_number: string; created_at: string; total: number; discount: number;
+    items: CartItem[]; payments: SalePayment[]; customer: Customer | null;
+  } | null>(null);
+  const [printInvoice, setPrintInvoice] = useState(false);
+
+  // Cash movement (expense / income / customer prepayment)
+  const [mvOpen, setMvOpen] = useState(false);
+  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment'>('expense');
+  const [mvAmount, setMvAmount] = useState(0);
+  const [mvReason, setMvReason] = useState('');
+  const [mvNote, setMvNote] = useState('');
+  const [mvRef, setMvRef] = useState('');
+  const [mvMethod, setMvMethod] = useState<PaymentMethod | null>(null);
+  const [mvCustomer, setMvCustomer] = useState<Customer | null>(null);
+  const [mvCustSearch, setMvCustSearch] = useState('');
+  const [mvSubmitting, setMvSubmitting] = useState(false);
+
+  // Customer payment (encaissement libre)
+  const [custPayOpen, setCustPayOpen] = useState(false);
+  const [custPayCustomer, setCustPayCustomer] = useState<Customer | null>(null);
+  const [custPayUnpaid, setCustPayUnpaid] = useState<{ id: string; sale_number: string; total: number; paid: number; created_at: string }[]>([]);
+  const [custPaySaleId, setCustPaySaleId] = useState<string>('');
+  const [custPayAmount, setCustPayAmount] = useState<number>(0);
+  const [custPayMethod, setCustPayMethod] = useState<PaymentMethod | null>(null);
+  const [custPayRef, setCustPayRef] = useState('');
+  const [custPaySubmitting, setCustPaySubmitting] = useState(false);
+  const [custPaySearch, setCustPaySearch] = useState('');
+
+  // Return ticket
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnSearch, setReturnSearch] = useState('');
+  const [returnSales, setReturnSales] = useState<SessionSale[]>([]);
+  const [returnLoading, setReturnLoading] = useState(false);
+  const [returnSelected, setReturnSelected] = useState<SessionSale | null>(null);
+  const [returnLines, setReturnLines] = useState<{ name: string; quantity: number; unit_price: number; maxQty: number; selected: boolean }[]>([]);
+
+  // Session tickets list
+  const [ticketsOpen, setTicketsOpen] = useState(false);
+  const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+
+  // Close workflow
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeStep, setCloseStep] = useState<CloseStep>('control');
+  const [controlLines, setControlLines] = useState<ControlLine[]>([]);
+  const [loadingControl, setLoadingControl] = useState(false);
+  const [closingNote, setClosingNote] = useState('');
+  const [closing, setClosing] = useState(false);
+  const [statsData, setStatsData] = useState<{
+    count: number; total: number;
+    byMethod: { method_name: string; amount: number }[];
+    topArticles: { name: string; qty: number; total: number }[];
+    movements: { kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movExpense: number; movIncome: number; movPrepay: number;
+    netTotal: number;
+  } | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  // Vehicle picker
+  const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
+
+  // Web orders
+  type WebOrder = {
+    id: string; order_number: string; status: string; payment_status: string;
+    delivery_mode: string; delivery_address: string; payment_mode: string;
+    customer_name: string; customer_phone: string; customer_whatsapp: string;
+    customer_note: string; subtotal: number; delivery_fee: number; total: number;
+    created_at: string; sale_id: string | null;
+  };
+  type WebOrderItem = {
+    id: string; article_id: string; article_name: string; internal_ref: string;
+    quantity: number; unit_price: number; line_total: number;
+  };
+  const [webOrdersOpen, setWebOrdersOpen] = useState(false);
+  const [webOrders, setWebOrders] = useState<WebOrder[]>([]);
+  const [webOrdersLoading, setWebOrdersLoading] = useState(false);
+  const [webOrdersFilter, setWebOrdersFilter] = useState<'all' | 'a_transformer' | 'livraison' | 'attente_paiement'>('a_transformer');
+  const [webOrderDetail, setWebOrderDetail] = useState<WebOrder | null>(null);
+  const [webOrderItems, setWebOrderItems] = useState<WebOrderItem[]>([]);
+  const [transforming, setTransforming] = useState(false);
+
+  // Regularization
+  const [regOpen, setRegOpen] = useState(false);
+  const [regType, setRegType] = useState<'excedent' | 'manquant' | 'depot' | 'retrait'>('manquant');
+  const [regAmount, setRegAmount] = useState(0);
+  const [regReason, setRegReason] = useState('');
+  const [regNote, setRegNote] = useState('');
+  const [savingReg, setSavingReg] = useState(false);
+  const [sessionRegs, setSessionRegs] = useState<{ reg_type: string; amount: number; reason: string; note: string }[]>([]);
+
+  const load = useCallback(async () => {
+    if (!tenant || !currentSite) return;
+    setLoadingData(true);
+    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ data: arts }, { data: stk }, { data: pm }, { data: cs }, { data: cust }, { data: cats }, { data: topRows }] = await Promise.all([
+      supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url').eq('tenant_id', tenant.id).eq('is_active', true),
+      supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
+      supabase.from('payment_methods').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
+      supabase.from('cash_sessions').select('*').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('customers').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300),
+      supabase.from('part_categories').select('id, name, parent_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+      supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
+    ]);
+    const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
+    setArticles((arts || []).map((a: any) => ({
+      id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
+      sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
+      stock_available: qmap.get(a.id) || 0,
+      category_id: a.category_id || null,
+      image_url: a.image_url || null,
+    })));
+    setMethods((pm || []).filter((m: any) => m.payment_type !== 'credit'));
+    setCustomers(cust || []);
+    setCategories((cats || []) as CategoryLite[]);
+    const scores: Record<string, number> = {};
+    for (const r of (topRows || []) as any[]) {
+      if (!r.article_id) continue;
+      scores[r.article_id] = (scores[r.article_id] || 0) + Number(r.quantity || 0);
+    }
+    setTopScores(scores);
+    const existingSession = cs || null;
+    setSession(existingSession);
+    // Only update screen if we're not already inside the POS (avoids resetting after a sale)
+    setScreen(prev => {
+      if (prev === 'pos') return 'pos';
+      return existingSession ? 'resume' : 'open-form';
+    });
+    setLoadingData(false);
+  }, [tenant?.id, currentSite?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const categoryMatchIds = useMemo(() => {
+    if (!categoryId) return null;
+    const ids = new Set<string>([categoryId]);
+    for (const c of categories) if (c.parent_id === categoryId) ids.add(c.id);
+    return ids;
+  }, [categoryId, categories]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    let base = articles;
+    if (categoryMatchIds) base = base.filter(a => a.category_id && categoryMatchIds.has(a.category_id));
+    if (q) {
+      base = base.filter(a => a.name.toLowerCase().includes(q) || a.internal_ref.toLowerCase().includes(q));
+    }
+    const sorted = [...base].sort((a, b) => {
+      if (sortMode === 'alpha') return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+      const sa = topScores[a.id] || 0;
+      const sb = topScores[b.id] || 0;
+      if (sb !== sa) return sb - sa;
+      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+    });
+    const cap = q || categoryId ? 300 : 120;
+    return sorted.slice(0, cap);
+  }, [articles, search, sortMode, topScores, categoryMatchIds, categoryId]);
+
+  // ─── Cart operations ──────────────────────────────────────────────────────
+
+  const addToCart = (a: ArticleLite) => {
+    setCart(c => {
+      const existing = c.find(i => i.article_id === a.id);
+      if (existing) {
+        if (existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return c; }
+        return c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      if (a.stock_available <= 0) { error('Article en rupture'); return c; }
+      return [...c, {
+        article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
+        quantity: 1, unit_price: a.sale_price, discount: 0,
+        stock_available: a.stock_available, purchase_cost: a.purchase_price,
+      }];
+    });
+  };
+
+  const updateQty = (id: string, delta: number) => {
+    setCart(c => c.flatMap(i => {
+      if (i.article_id !== id) return [i];
+      const q = i.quantity + delta;
+      if (q <= 0) return [];
+      if (q > i.stock_available) { error(`Stock insuffisant (${i.stock_available})`); return [i]; }
+      return [{ ...i, quantity: q }];
+    }));
+  };
+
+  const setQty = (id: string, q: number) => {
+    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: Math.max(1, Math.min(q, i.stock_available)) } : i));
+  };
+
+  const setPrice = (id: string, p: number) => {
+    setCart(c => c.map(i => i.article_id === id ? { ...i, unit_price: Math.max(0, p) } : i));
+  };
+
+  const removeLine = (id: string) => setCart(c => c.filter(i => i.article_id !== id));
+
+  const subtotal = cart.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+  const total = Math.max(0, subtotal - discount);
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+  const remaining = total - totalPaid;
+
+  // ─── Hold cart ────────────────────────────────────────────────────────────
+
+  const holdCart = () => {
+    if (cart.length === 0) { error('Panier vide, rien à mettre en attente'); return; }
+    const held: HeldCart = {
+      id: crypto.randomUUID(),
+      label: customer ? customer.name : `Ticket #${heldCarts.length + 1}`,
+      cart: [...cart], customer, discount,
+      savedAt: new Date().toISOString(),
+    };
+    setHeldCarts(h => [...h, held]);
+    setCart([]); setDiscount(0); setCustomer(null);
+    success('Ticket mis en attente');
+  };
+
+  const resumeHeld = (h: HeldCart) => {
+    if (cart.length > 0 && !confirm('Remplacer le panier actuel par ce ticket en attente ?')) return;
+    setCart(h.cart); setCustomer(h.customer); setDiscount(h.discount);
+    setHeldCarts(held => held.filter(x => x.id !== h.id));
+    setHoldOpen(false);
+  };
+
+  const deleteHeld = (id: string) => setHeldCarts(h => h.filter(x => x.id !== id));
+
+  // ─── Session open ─────────────────────────────────────────────────────────
+
+  const openSessionSubmit = async () => {
+    if (!tenant || !currentSite || !profile) return;
+    setOpeningSubmitting(true);
+    const { data, error: e } = await supabase.from('cash_sessions').insert({
+      tenant_id: tenant.id, site_id: currentSite.id, user_id: profile.id,
+      opening_amount: openingAmount, opening_note: openingNote, status: 'open',
+    }).select().single();
+    setOpeningSubmitting(false);
+    if (e) { error(e.message); return; }
+    setSession(data); setScreen('pos'); success('Caisse ouverte');
+  };
+
+  const leaveSession = () => {
+    setCart([]); setDiscount(0); setCustomer(null);
+    onLeave?.();
+  };
+
+  // ─── Payment ──────────────────────────────────────────────────────────────
+
+  const openPayment = () => {
+    if (cart.length === 0) { error('Panier vide'); return; }
+    if (!session) { error('Ouvrez d\'abord la caisse'); return; }
+    const defaultMethod = methods[0];
+    setPayments(defaultMethod ? [{ payment_method_id: defaultMethod.id, method_name: defaultMethod.name, amount: total, reference: '' }] : []);
+    setPayOpen(true);
+  };
+
+  const addPayment = () => {
+    if (methods[0]) {
+      setPayments(p => [...p, { payment_method_id: methods[0].id, method_name: methods[0].name, amount: Math.max(0, remaining), reference: '' }]);
+    }
+  };
+
+  const validateCreditSale = async () => {
+    if (!session || !currentSite) return;
+    if (!customer) { error('Sélectionnez un client pour une vente à crédit'); return; }
+    if (cart.length === 0) { error('Panier vide'); return; }
+    setPaying(true);
+    const saleItems = cart.map(i => ({
+      article_id: i.article_id, name: i.name, quantity: i.quantity,
+      unit_price: i.unit_price, discount: i.discount, purchase_cost: i.purchase_cost,
+    }));
+    const { data, error: e } = await supabase.rpc('create_credit_sale', {
+      p_site_id: currentSite.id,
+      p_cash_session_id: session.id,
+      p_customer_id: customer.id,
+      p_items: saleItems,
+      p_discount: discount,
+      p_note: '',
+    });
+    setPaying(false);
+    if (e) { error(e.message); return; }
+    const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
+    setLastSale({
+      sale_number: saleNum, created_at: new Date().toISOString(),
+      total, discount, items: [...cart], payments: [], customer,
+    });
+    setPrintInvoice(false);
+    success('Vente à crédit enregistrée');
+    setCart([]); setDiscount(0); setCustomer(null); setPayments([]); setPayOpen(false); setMobileCartOpen(false);
+    load();
+  };
+
+  // ─── Customer payment (encaissement libre) ────────────────────────────────
+
+  const openCustomerPayment = () => {
+    if (!session) { error('Ouvrez d\'abord la caisse'); return; }
+    setCustPayOpen(true);
+    setCustPayCustomer(null);
+    setCustPayUnpaid([]);
+    setCustPaySaleId('');
+    setCustPayAmount(0);
+    setCustPayMethod(methods[0] || null);
+    setCustPayRef('');
+    setCustPaySearch('');
+  };
+
+  const loadCustomerUnpaid = async (c: Customer) => {
+    if (!tenant) return;
+    setCustPayCustomer(c);
+    const { data } = await supabase.from('sales')
+      .select('id, sale_number, total, paid, status, created_at')
+      .eq('tenant_id', tenant.id).eq('customer_id', c.id).neq('status', 'cancelled')
+      .order('created_at', { ascending: true });
+    const unpaid = (data || [])
+      .map((s: any) => ({ ...s, total: Number(s.total), paid: Number(s.paid) }))
+      .filter((s: any) => s.paid < s.total);
+    setCustPayUnpaid(unpaid);
+    setCustPaySaleId('');
+    const totalDue = unpaid.reduce((a, s) => a + (s.total - s.paid), 0);
+    setCustPayAmount(totalDue);
+  };
+
+  const openMovement = () => {
+    if (!session) { error('Ouvrez d\'abord la caisse'); return; }
+    setMvOpen(true);
+    setMvKind('expense');
+    setMvAmount(0); setMvReason(''); setMvNote(''); setMvRef('');
+    setMvMethod(methods[0] || null);
+    setMvCustomer(null); setMvCustSearch('');
+  };
+
+  const submitMovement = async () => {
+    if (!session || !currentSite) return;
+    if (mvAmount <= 0) { error('Montant invalide'); return; }
+    if (mvKind !== 'expense' && !mvMethod) { error('Mode de règlement requis'); return; }
+    if (mvKind === 'customer_prepayment' && !mvCustomer) { error('Client obligatoire'); return; }
+    setMvSubmitting(true);
+    const { data, error: e } = await supabase.rpc('record_cash_movement', {
+      p_cash_session_id: session.id,
+      p_site_id: currentSite.id,
+      p_kind: mvKind,
+      p_amount: mvAmount,
+      p_reason: mvReason,
+      p_note: mvNote,
+      p_reference: mvRef,
+      p_customer_id: mvCustomer?.id || null,
+      p_payment_method_id: mvMethod?.id || null,
+      p_method_name: mvMethod?.name || '',
+    });
+    setMvSubmitting(false);
+    if (e) { error(e.message); return; }
+    const autoApplied = Number((data as any)?.auto_applied || 0);
+    if (mvKind === 'customer_prepayment' && autoApplied > 0) {
+      success(`Acompte enregistré · ${formatFCFA(autoApplied)} imputé automatiquement`);
+    } else if (mvKind === 'expense') {
+      success('Dépense enregistrée');
+    } else if (mvKind === 'income') {
+      success('Entrée enregistrée');
+    } else {
+      success('Acompte enregistré · en attente de facture');
+    }
+    setMvOpen(false);
+  };
+
+  const submitCustomerPayment = async () => {
+    if (!session || !custPayCustomer || !custPayMethod) return;
+    if (custPayAmount <= 0) { error('Montant invalide'); return; }
+    setCustPaySubmitting(true);
+    const { error: e } = await supabase.rpc('register_customer_payment', {
+      p_customer_id: custPayCustomer.id,
+      p_payment_method_id: custPayMethod.id,
+      p_method_name: custPayMethod.name,
+      p_amount: custPayAmount,
+      p_reference: custPayRef,
+      p_cash_session_id: session.id,
+      p_sale_id: custPaySaleId || null,
+    });
+    setCustPaySubmitting(false);
+    if (e) { error(e.message); return; }
+    success('Règlement encaissé');
+    setCustPayOpen(false);
+    load();
+  };
+
+  const validateSale = async () => {
+    if (!session || !currentSite) return;
+    if (totalPaid < total) { error('Paiement insuffisant'); return; }
+    setPaying(true);
+    const saleItems = cart.map(i => ({
+      article_id: i.article_id, name: i.name, quantity: i.quantity,
+      unit_price: i.unit_price, discount: i.discount, purchase_cost: i.purchase_cost,
+    }));
+    const salePayments = payments.map(p => ({
+      payment_method_id: p.payment_method_id, method_name: p.method_name,
+      amount: p.amount, reference: p.reference,
+    }));
+    const { data, error: e } = await supabase.rpc('create_pos_sale', {
+      p_site_id: currentSite.id,
+      p_cash_session_id: session.id,
+      p_customer_id: customer?.id || null,
+      p_items: saleItems,
+      p_payments: salePayments,
+      p_discount: discount,
+      p_note: '',
+    });
+    setPaying(false);
+    if (e) { error(e.message); return; }
+    const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
+    const saleId = (data as any)?.sale_id || (data as any)?.id || null;
+    setLastSale({
+      sale_number: saleNum, created_at: new Date().toISOString(),
+      total, discount, items: [...cart], payments: [...payments], customer,
+    });
+    setPrintInvoice(false);
+    // Link to web order if this sale originated from one
+    const pendingWeb = (window as any).__pendingWebOrderId as string | undefined;
+    if (pendingWeb && tenant && saleId) {
+      await supabase.from('online_orders').update({
+        status: 'livree', payment_status: 'paye', sale_id: saleId,
+      }).eq('id', pendingWeb).eq('tenant_id', tenant.id);
+      await supabase.rpc('log_online_order_status', {
+        p_order_id: pendingWeb, p_old_status: 'prete', p_new_status: 'livree', p_note: `Transformée en vente ${saleNum}`,
+      }).then(() => {}).catch(() => {});
+      (window as any).__pendingWebOrderId = undefined;
+    }
+    success('Vente enregistrée');
+    setCart([]); setDiscount(0); setCustomer(null); setPayments([]); setPayOpen(false); setMobileCartOpen(false);
+    load();
+  };
+
+  // ─── Return ticket ────────────────────────────────────────────────────────
+
+  const openReturn = async () => {
+    setReturnOpen(true); setReturnSelected(null); setReturnLines([]);
+    setReturnLoading(true);
+    const { data } = await supabase
+      .from('sales')
+      .select('id, sale_number, total, created_at, customers(name), status, sale_items(name, quantity, unit_price)')
+      .eq('tenant_id', tenant!.id)
+      .eq('cash_session_id', session!.id)
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false });
+    setReturnSales((data || []).map((s: any) => ({
+      id: s.id, sale_number: s.sale_number, total: Number(s.total),
+      created_at: s.created_at, customer_name: s.customers?.name || null, status: s.status,
+      items: (s.sale_items || []).map((i: any) => ({ name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
+    })));
+    setReturnLoading(false);
+  };
+
+  const selectReturnSale = (s: SessionSale) => {
+    setReturnSelected(s);
+    setReturnSearch('');
+    setReturnLines(s.items.map(i => ({ ...i, maxQty: i.quantity, selected: true })));
+  };
+
+  const printReturn = () => {
+    if (!returnSelected) return;
+    const lines = returnLines.filter(l => l.selected && l.quantity > 0);
+    if (lines.length === 0) { error('Aucun article sélectionné'); return; }
+    const total = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
+    printReturnTicket80Shared(returnSelected.sale_number, lines, total, tenantForPrint, cashierName);
+    setReturnOpen(false);
+    success('Ticket de retour imprimé');
+  };
+
+  const filteredReturnSales = useMemo(() => {
+    const q = returnSearch.toLowerCase().trim();
+    if (!q) return returnSales;
+    return returnSales.filter(s => s.sale_number.toLowerCase().includes(q) || (s.customer_name || '').toLowerCase().includes(q));
+  }, [returnSales, returnSearch]);
+
+  // ─── Session tickets ──────────────────────────────────────────────────────
+
+  const openTickets = async () => {
+    setTicketsOpen(true); setLoadingTickets(true);
+    const { data } = await supabase
+      .from('sales')
+      .select('id, sale_number, total, created_at, customers(name), status, sale_items(name, quantity, unit_price)')
+      .eq('tenant_id', tenant!.id)
+      .eq('cash_session_id', session!.id)
+      .order('created_at', { ascending: false });
+    setSessionSales((data || []).map((s: any) => ({
+      id: s.id, sale_number: s.sale_number, total: Number(s.total),
+      created_at: s.created_at, customer_name: s.customers?.name || null, status: s.status,
+      items: (s.sale_items || []).map((i: any) => ({ name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
+    })));
+    setLoadingTickets(false);
+  };
+
+  // ─── Web orders ───────────────────────────────────────────────────────────
+
+  const loadWebOrders = useCallback(async () => {
+    if (!tenant) return;
+    setWebOrdersLoading(true);
+    const { data } = await supabase
+      .from('online_orders')
+      .select('id, order_number, status, payment_status, delivery_mode, delivery_address, payment_mode, customer_name, customer_phone, customer_whatsapp, customer_note, subtotal, delivery_fee, total, created_at, sale_id')
+      .eq('tenant_id', tenant.id)
+      .in('status', ['nouvelle', 'confirmee', 'en_preparation', 'prete', 'livree'])
+      .order('created_at', { ascending: false })
+      .limit(200);
+    setWebOrders((data || []) as WebOrder[]);
+    setWebOrdersLoading(false);
+  }, [tenant]);
+
+  // Fetch badge count on mount
+  useEffect(() => { if (tenant) loadWebOrders(); }, [tenant, loadWebOrders]);
+
+  const openWebOrders = () => {
+    setWebOrdersOpen(true);
+    setWebOrderDetail(null);
+    setWebOrderItems([]);
+    loadWebOrders();
+  };
+
+  const openWebOrderDetail = async (o: WebOrder) => {
+    setWebOrderDetail(o);
+    const { data } = await supabase
+      .from('online_order_items')
+      .select('id, article_id, article_name, internal_ref, quantity, unit_price, line_total')
+      .eq('order_id', o.id);
+    setWebOrderItems((data || []) as WebOrderItem[]);
+  };
+
+  const loadToCartFromWebOrder = () => {
+    if (!webOrderDetail || webOrderItems.length === 0) return;
+    if (cart.length > 0 && !confirm('Remplacer le panier actuel par cette commande web ?')) return;
+    const newCart: CartItem[] = [];
+    const missing: string[] = [];
+    for (const it of webOrderItems) {
+      const a = articles.find(x => x.id === it.article_id);
+      if (!a) { missing.push(it.article_name); continue; }
+      if (a.stock_available < it.quantity) {
+        error(`Stock insuffisant pour "${a.name}" (${a.stock_available} dispo / ${it.quantity} requis)`);
+        return;
+      }
+      newCart.push({
+        article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
+        quantity: it.quantity, unit_price: Number(it.unit_price), discount: 0,
+        stock_available: a.stock_available, purchase_cost: a.purchase_price,
+      });
+    }
+    if (missing.length > 0) { error(`Articles introuvables: ${missing.join(', ')}`); return; }
+    setCart(newCart);
+    setDiscount(0);
+    setCustomer(null);
+    setWebOrdersOpen(false);
+    setMobileCartOpen(true);
+    success(`Commande ${webOrderDetail.order_number} chargée. Validez le paiement pour finaliser.`);
+    // Remember pending web order id for post-sale linking
+    (window as any).__pendingWebOrderId = webOrderDetail.id;
+  };
+
+  const markWebOrderDelivered = async (o: WebOrder) => {
+    if (!tenant) return;
+    if (!o.sale_id) { error('Commande non transformée en vente'); return; }
+    const { error: e } = await supabase
+      .from('online_orders')
+      .update({ status: 'livree', payment_status: 'paye' })
+      .eq('id', o.id).eq('tenant_id', tenant.id);
+    if (e) { error(e.message); return; }
+    await supabase.rpc('log_online_order_status', {
+      p_order_id: o.id, p_old_status: o.status, p_new_status: 'livree', p_note: 'Livrée depuis caisse',
+    }).then(() => {}).catch(() => {});
+    success('Commande marquée comme livrée');
+    loadWebOrders();
+  };
+
+  const cancelWebOrder = async (o: WebOrder) => {
+    if (!tenant) return;
+    if (!confirm(`Annuler la commande ${o.order_number} ?`)) return;
+    const { error: e } = await supabase
+      .from('online_orders')
+      .update({ status: 'annulee' })
+      .eq('id', o.id).eq('tenant_id', tenant.id);
+    if (e) { error(e.message); return; }
+    await supabase.rpc('log_online_order_status', {
+      p_order_id: o.id, p_old_status: o.status, p_new_status: 'annulee', p_note: 'Annulée depuis caisse',
+    }).then(() => {}).catch(() => {});
+    success('Commande annulée');
+    loadWebOrders();
+    setWebOrderDetail(null);
+  };
+
+  const webOrdersFiltered = useMemo(() => {
+    return webOrders.filter(o => {
+      if (webOrdersFilter === 'all') return true;
+      if (webOrdersFilter === 'a_transformer') return !o.sale_id && o.status !== 'annulee' && o.status !== 'livree';
+      if (webOrdersFilter === 'livraison') return o.delivery_mode === 'livraison' && o.status !== 'annulee';
+      if (webOrdersFilter === 'attente_paiement') return o.payment_status !== 'paye' && o.status !== 'annulee';
+      return true;
+    });
+  }, [webOrders, webOrdersFilter]);
+
+  const webOrdersCounts = useMemo(() => ({
+    a_transformer: webOrders.filter(o => !o.sale_id && o.status !== 'annulee' && o.status !== 'livree').length,
+    livraison: webOrders.filter(o => o.delivery_mode === 'livraison' && o.status !== 'annulee').length,
+    attente_paiement: webOrders.filter(o => o.payment_status !== 'paye' && o.status !== 'annulee').length,
+  }), [webOrders]);
+
+  // ─── Stats ────────────────────────────────────────────────────────────────
+
+  const openStats = async () => {
+    if (!session || !tenant) return;
+    setStatsOpen(true); setLoadingStats(true);
+    const [{ data: sales }, { data: pmtRows }, { data: mvRows }] = await Promise.all([
+      supabase.from('sales').select('id, total, sale_items(name, quantity, total)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).neq('status', 'cancelled'),
+      supabase.from('sale_payments').select('method_name, amount').eq('tenant_id', tenant.id).eq('cash_session_id', session.id),
+      supabase.from('cash_movements').select('kind, amount, reason, method_name, customers(name)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
+    ]);
+    const salesList = sales || [];
+    const pmtList = pmtRows || [];
+    const byMethod: Record<string, number> = {};
+    pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
+    const articleMap: Record<string, { name: string; qty: number; total: number }> = {};
+    salesList.forEach((s: any) => {
+      (s.sale_items || []).forEach((item: any) => {
+        if (!articleMap[item.name]) articleMap[item.name] = { name: item.name, qty: 0, total: 0 };
+        articleMap[item.name].qty += Number(item.quantity);
+        articleMap[item.name].total += Number(item.total);
+      });
+    });
+    const topArticles = Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10);
+    const movs = (mvRows || []).map((m: any) => ({
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
+      amount: Number(m.amount), reason: m.reason || '',
+      method_name: m.method_name || '', customer_name: m.customers?.name || null,
+    }));
+    const movExpense = movs.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+    const movIncome = movs.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
+    const movPrepay = movs.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
+    const total = salesList.reduce((s: number, r: any) => s + Number(r.total), 0);
+    setStatsData({
+      count: salesList.length,
+      total,
+      byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
+      topArticles,
+      movements: movs,
+      movExpense, movIncome, movPrepay,
+      netTotal: total + movIncome + movPrepay - movExpense,
+    });
+    setLoadingStats(false);
+  };
+
+  // ─── Close workflow ───────────────────────────────────────────────────────
+
+  const openCloseWorkflow = async () => {
+    if (!session || !tenant) return;
+    setCloseStep('control');
+    setLoadingControl(true);
+    setCloseOpen(true);
+
+    const [{ data: pmts }, { data: regs }, salesResult, { data: mvs }] = await Promise.all([
+      supabase.from('sale_payments').select('payment_method_id, method_name, amount').eq('tenant_id', tenant.id).eq('cash_session_id', session.id),
+      supabase.from('cash_regularizations').select('reg_type, amount, reason, note').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
+      supabase.from('sales').select('id, total, sale_items(name, quantity, total)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).neq('status', 'cancelled'),
+      supabase.from('cash_movements').select('kind, amount, payment_method_id, method_name, reason, customers(name)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
+    ]);
+
+    // Build theoretical per method — include sale payments + cash movements
+    const pmtList = pmts || [];
+    const theoretical: Record<string, { method_name: string; payment_method_id: string | null; amount: number }> = {};
+    pmtList.forEach((p: any) => {
+      const key = p.method_name;
+      if (!theoretical[key]) theoretical[key] = { method_name: p.method_name, payment_method_id: p.payment_method_id, amount: 0 };
+      theoretical[key].amount += Number(p.amount);
+    });
+    (mvs || []).forEach((m: any) => {
+      const key = m.method_name || (m.kind === 'expense' ? 'Espèces' : '—');
+      if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
+      if (m.kind === 'expense') {
+        theoretical[key].amount -= Number(m.amount);
+      } else {
+        theoretical[key].amount += Number(m.amount);
+      }
+    });
+
+    const lines: ControlLine[] = methods.map(m => {
+      const th = theoretical[m.name];
+      let base = th ? th.amount : 0;
+      const isCash = m.name.toLowerCase().includes('espèce') || m.name.toLowerCase().includes('liquide') || m.name.toLowerCase().includes('cash') || m.payment_type === 'cash';
+      if (isCash && Number(session.opening_amount) > 0) base += Number(session.opening_amount);
+      return { payment_method_id: m.id, method_name: m.name, theoretical_amount: base, counted_amount: base };
+    });
+    Object.values(theoretical).forEach(t => {
+      if (!lines.find(l => l.method_name === t.method_name)) {
+        lines.push({ payment_method_id: t.payment_method_id, method_name: t.method_name, theoretical_amount: t.amount, counted_amount: t.amount });
+      }
+    });
+
+    // Build stats for X report
+    const salesList = salesResult.data || [];
+    const byMethod: Record<string, number> = {};
+    pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
+    const articleMap: Record<string, { name: string; qty: number; total: number }> = {};
+    salesList.forEach((s: any) => {
+      (s.sale_items || []).forEach((item: any) => {
+        if (!articleMap[item.name]) articleMap[item.name] = { name: item.name, qty: 0, total: 0 };
+        articleMap[item.name].qty += Number(item.quantity);
+        articleMap[item.name].total += Number(item.total);
+      });
+    });
+    const movList = (mvs || []).map((m: any) => ({
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
+      amount: Number(m.amount), reason: m.reason || '',
+      method_name: m.method_name || '', customer_name: m.customers?.name || null,
+    }));
+    const movExpense = movList.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+    const movIncome = movList.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
+    const movPrepay = movList.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
+    const totalSales = salesList.reduce((s: number, r: any) => s + Number(r.total), 0);
+    setStatsData({
+      count: salesList.length,
+      total: totalSales,
+      byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
+      topArticles: Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10),
+      movements: movList,
+      movExpense, movIncome, movPrepay,
+      netTotal: totalSales + movIncome + movPrepay - movExpense,
+    });
+
+    setControlLines(lines);
+    setSessionRegs(regs || []);
+    setLoadingControl(false);
+  };
+
+  const totalVariance = controlLines.reduce((s, c) => s + (c.counted_amount - c.theoretical_amount), 0);
+
+  const saveRegularization = async () => {
+    if (!session || !tenant || !profile) return;
+    if (regAmount <= 0) { error('Montant invalide'); return; }
+    setSavingReg(true);
+    const { error: e } = await supabase.from('cash_regularizations').insert({
+      tenant_id: tenant.id, cash_session_id: session.id,
+      reg_type: regType, amount: regAmount, reason: regReason, note: regNote, user_id: profile.id,
+    });
+    setSavingReg(false);
+    if (e) { error(e.message); return; }
+    setSessionRegs(r => [...r, { reg_type: regType, amount: regAmount, reason: regReason, note: regNote }]);
+    setRegOpen(false); setRegAmount(0); setRegReason(''); setRegNote('');
+    success('Régularisation enregistrée');
+  };
+
+  const confirmClose = async () => {
+    if (!session || !tenant) return;
+    setClosing(true);
+    const ctrlRows = controlLines.map(c => ({
+      tenant_id: tenant.id, cash_session_id: session.id,
+      payment_method_id: c.payment_method_id, method_name: c.method_name,
+      theoretical_amount: c.theoretical_amount, counted_amount: c.counted_amount,
+    }));
+    await supabase.from('cash_control_lines').insert(ctrlRows);
+    const countedTotal = controlLines.reduce((s, c) => s + c.counted_amount, 0);
+    const { error: e } = await supabase.from('cash_sessions').update({
+      status: 'closed', closed_at: new Date().toISOString(),
+      closing_amount: countedTotal, counted_cash: countedTotal,
+      variance: totalVariance, closing_note: closingNote, updated_at: new Date().toISOString(),
+    }).eq('id', session.id);
+    setClosing(false);
+    if (e) { error(e.message); return; }
+    if (statsData) {
+      printXReport(
+        { ...session, closing_note: closingNote } as any, controlLines, statsData, sessionRegs,
+        { name: tenant.name, ninea: (tenant as any).ninea, rccm: (tenant as any).rccm, address: (tenant as any).address },
+        profile?.full_name || profile?.email || '', currentSite?.name || ''
+      );
+    }
+    success('Caisse clôturée');
+    setCloseOpen(false); setSession(null); setScreen('open-form');
+    setCart([]); setDiscount(0); setCustomer(null);
+    setOpeningAmount(0); setOpeningNote('');
+    setControlLines([]); setSessionRegs([]); setStatsData(null);
+    load();
+  };
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
+  if (loadingData) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
+  }
+
+  // Screen: open form (no active session)
+  if (screen === 'open-form') {
+    return (
+      <>
+      <POSGuide tenantId={tenant?.id} hasSession={false} businessType={(tenant as any)?.business_type} />
+      <div className="max-w-md mx-auto px-4 pt-3 pb-24">
+        <div className="relative overflow-hidden rounded-2xl border border-brand-200/70 shadow-[0_8px_30px_-12px_rgba(2,132,199,0.3)] bg-gradient-to-br from-white via-brand-50/40 to-brand-100/30 backdrop-blur-xl">
+          <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-brand-400/15 blur-3xl pointer-events-none" />
+          <div className="relative p-3.5 sm:p-4">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center shadow-md ring-2 ring-white shrink-0">
+                <ShoppingCart className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-brand-700 leading-none mb-0.5">
+                  Nouvelle session
+                </div>
+                <h2 className="text-sm font-bold text-slate-900 leading-tight">Ouvrir la caisse</h2>
+                {currentSite && (
+                  <p className="text-[11px] text-slate-500 truncate leading-tight">{currentSite.name}</p>
+                )}
+              </div>
+              <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                Fermée
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 block">
+                  Fond de caisse initial (FCFA)
+                </label>
+                <input
+                  type="number"
+                  value={openingAmount || ''}
+                  onChange={e => setOpeningAmount(Number(e.target.value))}
+                  className="w-full h-10 px-3 rounded-xl bg-white border border-slate-200 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm font-bold tabular-nums shadow-sm"
+                  placeholder="0"
+                  min="0"
+                  autoFocus={desktopAutoFocus}
+                  inputMode="numeric"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 block">
+                  Note (optionnel)
+                </label>
+                <input
+                  value={openingNote}
+                  onChange={e => setOpeningNote(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl bg-white border border-slate-200 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-xs shadow-sm"
+                  placeholder="Ex: monnaie disponible…"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={openSessionSubmit}
+              disabled={openingSubmitting}
+              className="group mt-3 w-full relative overflow-hidden rounded-xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm py-2.5 px-4 shadow-[0_6px_20px_-8px_rgba(2,132,199,0.55)] active:scale-[0.99] transition-all"
+            >
+              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+              <span className="relative flex items-center justify-center gap-2">
+                {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
+                Ouvrir la caisse
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <RecentCashSessionsList
+          tenantId={tenant?.id}
+          siteId={currentSite?.id}
+          limit={1}
+          onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
+        />
+      </div>
+      </>
+    );
+  }
+
+  // Screen: resume (active session found — opened by someone else or after "Quitter")
+  if (screen === 'resume' && session) {
+    return (
+      <>
+      <POSGuide tenantId={tenant?.id} hasSession={true} businessType={(tenant as any)?.business_type} />
+      <div className="max-w-md mx-auto px-4 pt-3 pb-24">
+        <ActiveCashSessionCard
+          session={{ opened_at: session.opened_at, opening_amount: session.opening_amount }}
+          siteName={currentSite?.name}
+          onResume={() => setScreen('pos')}
+        />
+        <RecentCashSessionsList
+          tenantId={tenant?.id}
+          siteId={currentSite?.id}
+          excludeSessionId={session.id}
+          limit={1}
+          onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
+        />
+      </div>
+      </>
+    );
+  }
+
+  // ─── Main POS screen ──────────────────────────────────────────────────────
+
+  const CartPanel = (
+    <div className="flex flex-col h-full bg-slate-50/40">
+      <div className="px-4 py-3.5 border-b border-slate-200/70 bg-white flex items-center justify-between">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Panier</div>
+          <div className="text-base font-bold text-slate-900">{cart.length} ligne{cart.length !== 1 ? 's' : ''}</div>
+        </div>
+        <div className="flex items-center gap-1">
+          {cart.length > 0 && (
+            <button onClick={() => setCart([])} className="p-2 rounded-xl hover:bg-red-50 text-red-500 transition-colors" title="Vider">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          {heldCarts.length > 0 && (
+            <button onClick={() => setHoldOpen(true)} className="relative p-2 rounded-xl hover:bg-amber-50 text-amber-600 transition-colors" title="Tickets en attente">
+              <List className="w-4 h-4" />
+              <span className="absolute top-0 right-0 w-4 h-4 text-[10px] rounded-full bg-amber-500 text-white flex items-center justify-center font-bold">{heldCarts.length}</span>
+            </button>
+          )}
+          <button onClick={() => setMobileCartOpen(false)} className="lg:hidden p-2 rounded-xl hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4 py-3 border-b border-slate-200/70 bg-white">
+        <div className="relative">
+          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <select value={customer?.id || ''} onChange={e => setCustomer(customers.find(c => c.id === e.target.value) || null)} className="input pl-10 text-sm">
+            <option value="">Client comptoir</option>
+            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+        {cart.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400 p-6">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+              <ShoppingCart className="w-8 h-8 opacity-50" />
+            </div>
+            <p className="text-sm font-medium">Panier vide</p>
+            <p className="text-xs text-slate-400 text-center">Sélectionnez un article pour démarrer la vente</p>
+            {heldCarts.length > 0 && (
+              <button onClick={() => setHoldOpen(true)} className="mt-2 chip text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100">
+                <List className="w-3.5 h-3.5" />
+                {heldCarts.length} ticket{heldCarts.length > 1 ? 's' : ''} en attente
+              </button>
+            )}
+          </div>
+        ) : (
+          cart.map(i => (
+            <div key={i.article_id} className="cart-line group">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center shrink-0">
+                <Package className="w-5 h-5 text-slate-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-slate-900 leading-snug line-clamp-2">{i.name}</div>
+                    <div className="text-[10px] font-mono text-slate-400 tracking-wide mt-0.5">{i.internal_ref}</div>
+                    {i.oem_ref && <div className="text-[10px] font-mono text-slate-400 tracking-wide">OEM: {i.oem_ref}</div>}
+                  </div>
+                  <button onClick={() => removeLine(i.article_id)} className="opacity-50 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-50 text-red-500 transition-all shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center bg-slate-100 rounded-xl shrink-0">
+                    <button onClick={() => updateQty(i.article_id, -1)} className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 rounded-l-xl active:scale-95 transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                    <input type="number" value={i.quantity} onChange={e => setQty(i.article_id, Number(e.target.value))} className="w-9 text-center bg-transparent text-sm font-bold num" />
+                    <button onClick={() => updateQty(i.article_id, 1)} className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 rounded-r-xl active:scale-95 transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                  </div>
+                  <input type="number" value={i.unit_price} onChange={e => setPrice(i.article_id, Number(e.target.value))} className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs text-right num focus:outline-none focus:border-brand-500" title="Prix unitaire" />
+                  <div className="text-sm font-bold text-slate-900 num whitespace-nowrap">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="border-t border-slate-200/70 p-4 space-y-3 bg-white pb-safe">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-500">Sous-total</span>
+          <span className="font-semibold text-slate-800 num">{formatFCFA(subtotal)}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm gap-3">
+          <span className="text-slate-500 shrink-0">Remise globale</span>
+          <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-right num w-28 focus:outline-none focus:border-brand-500" placeholder="0" />
+        </div>
+        <div className="flex items-end justify-between pt-3 border-t border-slate-200">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</div>
+            <div className="text-3xl font-bold text-slate-900 num leading-none mt-1">{formatFCFA(total)}</div>
+          </div>
+        </div>
+        <button onClick={openPayment} disabled={cart.length === 0}
+          className="w-full h-14 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 text-white font-bold text-base shadow-glow hover:shadow-premium active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none">
+          <CreditCard className="w-5 h-5" /> Encaisser {total > 0 && <span className="num">· {formatFCFA(total)}</span>}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+    <POSGuide tenantId={tenant?.id} hasSession={!!session} businessType={(tenant as any)?.business_type} />
+    <div className="flex-1 flex flex-col overflow-hidden w-full min-h-0" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-top))' }}>
+      {/* Action bar */}
+      <div className="px-2 py-1.5 border-b border-slate-200/70 glass shrink-0">
+        {/* Mobile: single compact row — no EN SERVICE dot, panier always visible at far right */}
+        <div className="flex items-center gap-1 lg:hidden">
+          <button onClick={openStats} className="pos-btn hidden sm:flex" title="Stats"><BarChart2 className="w-4 h-4" /></button>
+          <button onClick={openTickets} className="pos-btn" title="Tickets"><List className="w-4 h-4" /></button>
+          <button onClick={openReturn} className="pos-btn" title="Retour"><RotateCcw className="w-4 h-4" /></button>
+          <button onClick={openCustomerPayment} className="pos-btn" title="Encaisser"><Wallet className="w-4 h-4" /></button>
+          <button onClick={openMovement} className="pos-btn" title="Mouvement"><ArrowDownRight className="w-4 h-4" /></button>
+          <button onClick={openWebOrders} className="pos-btn relative" title="Commandes web">
+            <Globe className="w-4 h-4 text-brand-700" />
+            {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[8px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}
+          </button>
+          <button onClick={holdCart} className="pos-btn" title="Pause"><Pause className="w-4 h-4" /></button>
+          <button onClick={leaveSession} className="pos-btn" title="Quitter"><LogOut className="w-4 h-4" /></button>
+          <button onClick={openCloseWorkflow} className="pos-btn-dark ml-0.5" title="Clôturer"><Lock className="w-4 h-4" /></button>
+          {/* Panier — always last, never hidden */}
+          <button onClick={() => setMobileCartOpen(true)} className="relative ml-1 flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow active:scale-95 transition-all shrink-0">
+            <ShoppingCart className="w-4 h-4" />
+            {cart.length > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border-2 border-white">{cart.length}</span>}
+          </button>
+        </div>
+        {/* Desktop: EN SERVICE indicator + labeled chips */}
+        <div className="hidden lg:flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="relative w-2 h-2">
+              <div className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60" />
+              <div className="relative w-2 h-2 rounded-full bg-emerald-500" />
+            </div>
+            <span className="text-[10px] font-bold text-emerald-700 tracking-wide">En service</span>
+            <span className="text-[10px] text-slate-400 ml-1">· Fond&nbsp;<span className="font-bold text-slate-600 num">{formatFCFA(Number(session!.opening_amount))}</span></span>
+          </div>
+          <div className="flex-1" />
+          <button onClick={openStats} className="chip"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button>
+          <button onClick={openTickets} className="chip"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
+          <button onClick={openReturn} className="chip"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>
+          <button onClick={openCustomerPayment} className="chip"><Wallet className="w-3.5 h-3.5" /><span className="hidden xl:inline">Encaisser</span></button>
+          <button onClick={openMovement} className="chip"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button>
+          <button onClick={openWebOrders} className="chip relative">
+            <Globe className="w-3.5 h-3.5 text-brand-700" /><span className="hidden xl:inline">Commandes web</span>
+            {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border border-white">{webOrdersCounts.a_transformer}</span>}
+          </button>
+          <button onClick={holdCart} className="chip"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
+          <button onClick={leaveSession} className="chip"><LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Quitter</span></button>
+          <button onClick={openCloseWorkflow} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold bg-ink-900 text-white hover:bg-ink-800 transition-all active:scale-95 shadow-sm">
+            <Lock className="w-3.5 h-3.5" /><span>Clôturer</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="px-3 sm:px-4 pt-4 pb-3 glass border-b border-slate-200/60 sticky top-0 z-10">
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Rechercher…"
+                  className="flex-1 min-w-0 w-0 bg-transparent text-sm focus:outline-none placeholder:text-slate-400"
+                  autoFocus={desktopAutoFocus}
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <POSGuideInlineTrigger />
+                <button
+                  onClick={() => setCategoryPickerOpen(true)}
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
+                    categoryId
+                      ? 'bg-brand-50 text-brand-700 border border-brand-200'
+                      : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                  title="Filtrer par catégorie"
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline max-w-[120px] truncate">
+                    {categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Catégorie') : 'Catégorie'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 transition-all"
+                  title={sortMode === 'top' ? 'Tri : meilleures ventes' : 'Tri : A → Z'}
+                >
+                  {sortMode === 'top' ? <Flame className="w-3.5 h-3.5 text-amber-500" /> : <ArrowDownAZ className="w-3.5 h-3.5 text-brand-700" />}
+                  <span className="hidden md:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
+                </button>
+              </div>
+              {autoMode && (
+                <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-brand-50 hover:border-brand-400 text-slate-800 transition-all text-sm font-semibold active:scale-95 shadow-sm" title="Recherche par véhicule">
+                  <Car className="w-4 h-4 text-brand-700" />
+                  <span className="hidden sm:inline">Par véhicule</span>
+                </button>
+              )}
+            </div>
+            {(categoryId || sortMode !== 'top') && (
+              <div className="mt-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
+                {sortMode === 'top' ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                    <Flame className="w-3 h-3" />Meilleures ventes
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                    <ArrowDownAZ className="w-3 h-3" />A → Z
+                  </span>
+                )}
+                {categoryId && (
+                  <button onClick={() => setCategoryId('')} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">
+                    {categories.find(c => c.id === categoryId)?.name} <X className="w-3 h-3" />
+                  </button>
+                )}
+                <span className="text-slate-400 num">· {filtered.length} article{filtered.length > 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            <div className="p-3 sm:p-4 w-full max-w-full mx-auto">
+            {filtered.length === 0 ? (
+              <EmptyState icon={Package} title="Aucun article" description="Créez des articles dans le catalogue." />
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5 w-full justify-center">
+                {filtered.map(a => {
+                  const out = a.stock_available <= 0;
+                  const low = a.stock_available > 0 && a.stock_available <= 3;
+                  return (
+                    <button key={a.id} onClick={() => addToCart(a)} disabled={out}
+                      className="product-card disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="relative aspect-[4/3] bg-white rounded-lg flex items-center justify-center overflow-hidden border border-slate-100">
+                        {a.image_url ? (
+                          <img src={a.image_url} alt={a.name} className="w-full h-full object-contain p-1" loading="lazy" />
+                        ) : (
+                          <Package className="w-7 h-7 text-slate-300" />
+                        )}
+                        <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${out ? 'bg-red-500 text-white' : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-slate-700 border border-slate-200'} shadow-sm num`}>
+                          {out ? 'Rupture' : `×${a.stock_available}`}
+                        </span>
+                      </div>
+                      <div className="text-[9px] font-mono text-slate-400 truncate tracking-wide">{a.internal_ref}</div>
+                      <div className="text-[12px] font-semibold text-slate-900 line-clamp-2 leading-[1.25] article-text">{a.name}</div>
+                      <div className="flex items-center justify-between mt-auto pt-0.5">
+                        <span className="text-[13px] font-bold text-slate-900 num">{formatFCFA(a.sale_price)}</span>
+                        <span className="w-6 h-6 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <Plus className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            </div>
+          </div>
+        </div>
+
+        <aside className="hidden lg:flex w-[400px] xl:w-[440px] bg-white border-l border-slate-200/70 flex-col shadow-[inset_8px_0_24px_-16px_rgb(15_23_42_/0.08)]">
+          {CartPanel}
+        </aside>
+
+        {mobileCartOpen && (
+          <div className="fixed inset-0 z-40 lg:hidden animate-fade-in">
+            <div className="scrim" onClick={() => setMobileCartOpen(false)} />
+            <div className="absolute inset-x-0 bottom-0 top-[6vh] bg-white flex flex-col animate-sheet-up rounded-t-3xl shadow-premium overflow-hidden" style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
+              <div className="sheet-handle" />
+              {CartPanel}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Modals ───────────────────────────────────────────────────────────── */}
+
+      {/* Category picker sheet */}
+      {categoryPickerOpen && (
+        <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryPickerOpen(false)} />
+          <div className="relative w-full sm:max-w-md bg-white sm:rounded-2xl shadow-premium flex flex-col max-h-[85vh] animate-slide-up">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100 shrink-0">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/80">Filtrer</div>
+                <h3 className="text-base font-bold text-slate-900">Catégorie</h3>
+              </div>
+              <button onClick={() => setCategoryPickerOpen(false)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              <button
+                onClick={() => { setCategoryId(''); setCategoryPickerOpen(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                  !categoryId ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'hover:bg-slate-50 text-slate-700 border border-transparent'
+                }`}
+              >
+                <span className="inline-flex items-center gap-2"><Tag className="w-4 h-4" />Toutes les catégories</span>
+                {!categoryId && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
+              </button>
+              {categories.filter(c => !c.parent_id).map(c => {
+                const children = categories.filter(s => s.parent_id === c.id);
+                const sel = categoryId === c.id;
+                const count = articles.filter(a => a.category_id === c.id || children.some(ch => ch.id === a.category_id)).length;
+                return (
+                  <div key={c.id}>
+                    <button
+                      onClick={() => { setCategoryId(c.id); setCategoryPickerOpen(false); }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                        sel ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'hover:bg-slate-50 text-slate-800 border border-transparent'
+                      }`}
+                    >
+                      <span className="truncate">{c.name}</span>
+                      <span className="inline-flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] font-bold num text-slate-400">{count}</span>
+                        {sel && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
+                      </span>
+                    </button>
+                    {children.map(s => {
+                      const sSel = categoryId === s.id;
+                      const sCount = articles.filter(a => a.category_id === s.id).length;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => { setCategoryId(s.id); setCategoryPickerOpen(false); }}
+                          className={`w-full flex items-center justify-between pl-8 pr-3 py-2 rounded-xl text-sm transition-all ${
+                            sSel ? 'bg-brand-50 text-brand-700 border border-brand-200 font-semibold' : 'hover:bg-slate-50 text-slate-600 border border-transparent'
+                          }`}
+                        >
+                          <span className="truncate">{s.name}</span>
+                          <span className="inline-flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] font-bold num text-slate-400">{sCount}</span>
+                            {sSel && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {categories.length === 0 && (
+                <div className="text-center text-xs text-slate-400 py-6">Aucune catégorie disponible</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vehicle article picker */}
+      {autoMode && <VehicleArticlePicker
+        open={vehiclePickerOpen}
+        onClose={() => setVehiclePickerOpen(false)}
+        onSelect={a => {
+          const article: ArticleLite = {
+            id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: (a as any).oem_ref || '',
+            sale_price: a.sale_price, purchase_price: a.purchase_price,
+            stock_available: a.stock_available,
+            category_id: null,
+            image_url: null,
+          };
+          addToCart(article);
+        }}
+        priceMode="sale"
+        tenantId={tenant!.id}
+        siteId={currentSite!.id}
+      />}
+
+      {/* Cash movement (expense / income / customer prepayment) */}
+      {mvOpen && (
+        <Modal open onClose={() => setMvOpen(false)} title="Mouvement de caisse" size="md"
+          footer={
+            <div className="flex gap-2 w-full">
+              <button onClick={() => setMvOpen(false)} className="btn-secondary flex-1 justify-center">Annuler</button>
+              <button onClick={submitMovement} disabled={mvSubmitting || mvAmount <= 0}
+                className="btn-primary flex-1 justify-center">
+                {mvSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Enregistrer
+              </button>
+            </div>
+          }>
+          <div className="space-y-4">
+            <div>
+              <label className="label">Type de mouvement</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button type="button" onClick={() => setMvKind('expense')}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${mvKind === 'expense' ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                  <ArrowUpRight className={`w-5 h-5 mx-auto mb-1 ${mvKind === 'expense' ? 'text-red-600' : 'text-slate-400'}`} />
+                  <div className={`text-xs font-bold ${mvKind === 'expense' ? 'text-red-700' : 'text-slate-600'}`}>Dépense</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Sortie de caisse</div>
+                </button>
+                <button type="button" onClick={() => setMvKind('income')}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${mvKind === 'income' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                  <ArrowDownRight className={`w-5 h-5 mx-auto mb-1 ${mvKind === 'income' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                  <div className={`text-xs font-bold ${mvKind === 'income' ? 'text-emerald-700' : 'text-slate-600'}`}>Entrée</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Apport libre</div>
+                </button>
+                <button type="button" onClick={() => setMvKind('customer_prepayment')}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${mvKind === 'customer_prepayment' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                  <Banknote className={`w-5 h-5 mx-auto mb-1 ${mvKind === 'customer_prepayment' ? 'text-brand-600' : 'text-slate-400'}`} />
+                  <div className={`text-xs font-bold ${mvKind === 'customer_prepayment' ? 'text-brand-700' : 'text-slate-600'}`}>Acompte</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Client</div>
+                </button>
+              </div>
+            </div>
+
+            {mvKind === 'customer_prepayment' && (
+              <div>
+                <label className="label">Client</label>
+                {mvCustomer ? (
+                  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-brand-50 border border-brand-200">
+                    <div className="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center shrink-0"><User className="w-4 h-4" /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-slate-900 truncate">{mvCustomer.name}</div>
+                      {mvCustomer.phone && <div className="text-[10px] text-slate-500 truncate">{mvCustomer.phone}</div>}
+                    </div>
+                    <button onClick={() => setMvCustomer(null)} className="text-xs font-semibold text-brand-700 hover:underline shrink-0">Changer</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input autoFocus value={mvCustSearch} onChange={e => setMvCustSearch(e.target.value)}
+                        className="input pl-9" placeholder="Rechercher un client…" />
+                    </div>
+                    <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+                      {customers
+                        .filter(cu => {
+                          const q = mvCustSearch.toLowerCase().trim();
+                          if (!q) return true;
+                          return cu.name.toLowerCase().includes(q) || (cu.phone || '').includes(q);
+                        })
+                        .slice(0, 20)
+                        .map(cu => (
+                          <button key={cu.id} onClick={() => setMvCustomer(cu)}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
+                            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="text-sm font-semibold text-slate-800 truncate">{cu.name}</span>
+                            {cu.phone && <span className="text-[10px] text-slate-500 ml-auto shrink-0">{cu.phone}</span>}
+                          </button>
+                        ))}
+                    </div>
+                  </>
+                )}
+                <div className="text-[10px] text-slate-500 mt-1.5">
+                  Si ce client a des factures impayées, l'acompte sera imputé automatiquement. Sinon, son compte sera crédité et le montant s'imputera dès la prochaine facture.
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="label">Montant</label>
+              <input type="number" value={mvAmount || ''} onChange={e => setMvAmount(Math.max(0, Number(e.target.value)))}
+                className="input text-lg font-bold num" placeholder="0" min={0} />
+            </div>
+
+            {(mvKind === 'income' || mvKind === 'customer_prepayment') && (
+              <div>
+                <label className="label">Mode de règlement</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {methods.map(m => (
+                    <button key={m.id} type="button" onClick={() => setMvMethod(m)}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${mvMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="label">{mvKind === 'expense' ? 'Motif de dépense' : 'Motif'}</label>
+              <input value={mvReason} onChange={e => setMvReason(e.target.value)}
+                className="input" placeholder={mvKind === 'expense' ? 'Ex: Carburant, achat fournitures…' : 'Motif du mouvement'} />
+            </div>
+
+            <div>
+              <label className="label">Référence (optionnel)</label>
+              <input value={mvRef} onChange={e => setMvRef(e.target.value)} className="input" placeholder="N° pièce, bordereau…" />
+            </div>
+
+            {mvNote || true ? (
+              <div>
+                <label className="label">Note (optionnel)</label>
+                <textarea value={mvNote} onChange={e => setMvNote(e.target.value)} className="input min-h-16" rows={2} placeholder="Détails complémentaires…" />
+              </div>
+            ) : null}
+          </div>
+        </Modal>
+      )}
+
+      {/* Customer payment (encaissement libre) */}
+      {custPayOpen && (
+        <Modal open onClose={() => setCustPayOpen(false)} title="Encaisser un client" size="md"
+          footer={
+            <div className="flex gap-2 w-full">
+              <button onClick={() => setCustPayOpen(false)} className="btn-secondary flex-1 justify-center">Annuler</button>
+              <button onClick={submitCustomerPayment} disabled={custPaySubmitting || !custPayCustomer || !custPayMethod || custPayAmount <= 0}
+                className="btn-primary flex-1 justify-center">
+                {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Valider {custPayAmount > 0 ? `· ${formatFCFA(custPayAmount)}` : ''}
+              </button>
+            </div>
+          }>
+          <div className="space-y-4">
+            {!custPayCustomer ? (
+              <div>
+                <label className="label">Rechercher un client</label>
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input autoFocus value={custPaySearch} onChange={e => setCustPaySearch(e.target.value)}
+                    className="input pl-9" placeholder="Nom, téléphone…" />
+                </div>
+                <div className="mt-2 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 divide-y divide-slate-100">
+                  {customers
+                    .filter(c => {
+                      const q = custPaySearch.toLowerCase().trim();
+                      if (!q) return true;
+                      return c.name.toLowerCase().includes(q) || (c.phone || '').includes(q);
+                    })
+                    .slice(0, 30)
+                    .map(c => (
+                      <button key={c.id} onClick={() => loadCustomerUnpaid(c)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 active:bg-slate-100 text-left transition-colors">
+                        <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"><User className="w-4 h-4" /></div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-slate-900 truncate">{c.name}</div>
+                          {c.phone && <div className="text-[11px] text-slate-500 truncate">{c.phone}</div>}
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                      </button>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-br from-brand-50 to-white border border-brand-200/70">
+                  <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center shrink-0"><User className="w-5 h-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-slate-900 truncate">{custPayCustomer.name}</div>
+                    <div className="text-[11px] text-slate-500">{custPayUnpaid.length} facture(s) impayée(s) · Dû total {formatFCFA(custPayUnpaid.reduce((a, s) => a + (s.total - s.paid), 0))}</div>
+                  </div>
+                  <button onClick={() => setCustPayCustomer(null)} className="text-xs font-semibold text-brand-700 hover:underline shrink-0">Changer</button>
+                </div>
+
+                {custPayUnpaid.length === 0 ? (
+                  <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-center">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
+                    <div className="text-sm font-semibold text-emerald-800">Aucune facture en attente</div>
+                    <div className="text-xs text-emerald-700 mt-0.5">Ce client est à jour.</div>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="label">Imputation</label>
+                      <select value={custPaySaleId} onChange={e => {
+                        setCustPaySaleId(e.target.value);
+                        if (e.target.value) {
+                          const s = custPayUnpaid.find(x => x.id === e.target.value);
+                          if (s) setCustPayAmount(s.total - s.paid);
+                        } else {
+                          setCustPayAmount(custPayUnpaid.reduce((a, s) => a + (s.total - s.paid), 0));
+                        }
+                      }} className="input">
+                        <option value="">Répartir automatiquement (plus ancienne d'abord)</option>
+                        {custPayUnpaid.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.sale_number} · dû {formatFCFA(s.total - s.paid)} · {new Date(s.created_at).toLocaleDateString('fr-FR')}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label">Montant</label>
+                      <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
+                        className="input text-lg font-bold num" placeholder="0" min={0} />
+                    </div>
+
+                    <div>
+                      <label className="label">Mode de règlement</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {methods.map(m => (
+                          <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
+                            className={`px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${custPayMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                            {m.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="label">Référence (optionnel)</label>
+                      <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="input" placeholder="N° bordereau, transaction…" />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Fullscreen immersive payment */}
+      {payOpen && (
+        <PaymentScreen
+          total={total}
+          customer={customer}
+          methods={methods}
+          payments={payments}
+          setPayments={setPayments}
+          paying={paying}
+          onClose={() => setPayOpen(false)}
+          onValidate={validateSale}
+          onValidateCredit={validateCreditSale}
+          onAddPayment={addPayment}
+        />
+      )}
+
+      {/* Post-sale: print choice */}
+      {lastSale && (
+        <Modal open={!!lastSale} onClose={() => setLastSale(null)} title="Vente enregistrée" size="sm"
+          footer={<div className="w-full grid grid-cols-3 gap-2">
+            <button onClick={() => setLastSale(null)} className="px-2 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition inline-flex items-center justify-center">Fermer</button>
+            <button onClick={() => {
+              printSaleTicket(lastSale);
+              setLastSale(null);
+            }} className="px-2 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:border-brand-400 transition inline-flex items-center justify-center gap-1.5">
+              <Printer className="w-3.5 h-3.5" /> Ticket
+            </button>
+            <button onClick={() => {
+              printSaleInvoice(lastSale);
+              setLastSale(null);
+            }} className="px-2 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition inline-flex items-center justify-center gap-1.5 active:scale-95">
+              <FileText className="w-3.5 h-3.5" /> Facture
+            </button>
+          </div>}
+        >
+          <div className="text-center py-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
+              <Check className="w-7 h-7 text-emerald-600" />
+            </div>
+            <div className="font-semibold text-slate-900">{lastSale.sale_number}</div>
+            <div className="text-2xl font-bold text-brand-800 mt-1">{formatFCFA(lastSale.total)}</div>
+            {lastSale.payments.reduce((s, p) => s + p.amount, 0) > lastSale.total && (
+              <div className="mt-2 text-sm text-emerald-700 font-semibold">
+                Monnaie : {formatFCFA(lastSale.payments.reduce((s, p) => s + p.amount, 0) - lastSale.total)}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Held carts */}
+      <Modal open={holdOpen} onClose={() => setHoldOpen(false)} title={`Tickets en attente (${heldCarts.length})`} size="md"
+        footer={<button onClick={() => setHoldOpen(false)} className="btn-secondary">Fermer</button>}
+      >
+        {heldCarts.length === 0 ? (
+          <div className="py-8 text-center text-sm text-slate-500">Aucun ticket en attente.</div>
+        ) : (
+          <div className="space-y-2">
+            {heldCarts.map(h => (
+              <div key={h.id} className="flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:bg-slate-50">
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm">{h.label}</div>
+                  <div className="text-xs text-slate-500">{h.cart.length} article{h.cart.length > 1 ? 's' : ''} · {formatFCFA(h.cart.reduce((s, i) => s + i.quantity * i.unit_price - i.discount, 0) - h.discount)}</div>
+                  <div className="text-xs text-slate-400">{new Date(h.savedAt).toLocaleTimeString('fr-FR')}</div>
+                </div>
+                <div className="flex items-center gap-2 ml-3 shrink-0">
+                  <button onClick={() => resumeHeld(h)} className="btn-primary text-xs py-1.5 px-3">
+                    <Play className="w-3.5 h-3.5" /> Reprendre
+                  </button>
+                  <button onClick={() => deleteHeld(h.id)} className="p-1.5 rounded hover:bg-red-50 text-red-500">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
+      {/* Return ticket */}
+      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title="Ticket de retour" size="lg"
+        footer={<>
+          <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="btn-secondary">Fermer</button>
+          {returnSelected && (
+            <button onClick={printReturn} className="btn-primary">
+              <Printer className="w-4 h-4" /> Imprimer le retour
+            </button>
+          )}
+        </>}
+      >
+        {returnLoading ? (
+          <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+        ) : !returnSelected ? (
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input value={returnSearch} onChange={e => setReturnSearch(e.target.value)} placeholder="Rechercher un ticket de la session…" className="input pl-9" autoFocus={desktopAutoFocus} />
+            </div>
+            {filteredReturnSales.length === 0 ? (
+              <div className="py-8 text-center text-sm text-slate-500">Aucun ticket dans cette session.</div>
+            ) : (
+              <div className="space-y-1 max-h-80 overflow-y-auto">
+                {filteredReturnSales.map(s => (
+                  <button key={s.id} onClick={() => selectReturnSale(s)} className="w-full text-left p-3 border border-slate-200 rounded-xl hover:bg-brand-50 hover:border-brand-200 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-mono font-semibold text-sm text-brand-700">{s.sale_number}</span>
+                        {s.customer_name && <span className="text-xs text-slate-500 ml-2">· {s.customer_name}</span>}
+                      </div>
+                      <span className="font-bold text-sm">{formatFCFA(s.total)}</span>
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">{new Date(s.created_at).toLocaleString('fr-FR')} · {s.items.length} article{s.items.length > 1 ? 's' : ''}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl text-sm">
+              <div>
+                <span className="font-mono font-semibold text-brand-700">{returnSelected.sale_number}</span>
+                {returnSelected.customer_name && <span className="text-slate-500 ml-2">· {returnSelected.customer_name}</span>}
+              </div>
+              <button onClick={() => setReturnSelected(null)} className="text-xs text-slate-500 hover:text-slate-700 underline">Changer</button>
+            </div>
+            <p className="text-sm text-slate-600">Sélectionnez les articles à retourner et ajustez les quantités.</p>
+            <div className="space-y-2">
+              {returnLines.map((l, i) => {
+                const toggle = (v: boolean) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, selected: v } : x));
+                const setQ = (q: number) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, quantity: Math.min(l.maxQty, Math.max(1, q)) } : x));
+                return (
+                  <div key={i} className={`rounded-2xl border p-3 transition-all ${l.selected ? 'border-red-200 bg-red-50/40 shadow-sm' : 'border-slate-200 bg-white'}`}>
+                    <div className="flex items-start gap-3">
+                      <button type="button" onClick={() => toggle(!l.selected)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-slate-300'}`}>
+                        {l.selected && <Check className="w-4 h-4 text-white" />}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-slate-900 break-words">{l.name}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 num">{formatFCFA(l.unit_price)} · max {l.maxQty}</div>
+                      </div>
+                      <div className="num font-bold shrink-0 text-right text-red-600">
+                        {l.selected ? `-${formatFCFA(l.quantity * l.unit_price)}` : <span className="text-slate-300">—</span>}
+                      </div>
+                    </div>
+                    {l.selected && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-500">Qté à retourner</span>
+                        <div className="ml-auto flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl p-1">
+                          <button type="button" onClick={() => setQ(l.quantity - 1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
+                          <input type="number" value={l.quantity} min="1" max={l.maxQty} onChange={e => setQ(Number(e.target.value))} className="w-12 text-center text-sm font-bold num bg-transparent outline-none" />
+                          <button type="button" onClick={() => setQ(l.quantity + 1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="rounded-2xl bg-gradient-to-br from-red-50 to-amber-50 border border-red-200 p-4 flex items-center justify-between mt-1">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-red-700">Avoir total</div>
+                  <div className="text-xs text-slate-600 mt-0.5">{returnLines.filter(l => l.selected).length} article{returnLines.filter(l => l.selected).length > 1 ? 's' : ''}</div>
+                </div>
+                <div className="num text-2xl font-bold text-red-700">
+                  -{formatFCFA(returnLines.filter(l => l.selected).reduce((s, l) => s + l.quantity * l.unit_price, 0))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Session tickets list */}
+      <Modal open={ticketsOpen} onClose={() => setTicketsOpen(false)} title="Tickets de la session" size="lg"
+        footer={<button onClick={() => setTicketsOpen(false)} className="btn-secondary">Fermer</button>}
+      >
+        {loadingTickets ? (
+          <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+        ) : sessionSales.length === 0 ? (
+          <div className="py-8 text-center text-sm text-slate-500">Aucune vente dans cette session.</div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="card p-3 text-center">
+                <div className="text-xs text-slate-500">Ventes</div>
+                <div className="text-xl font-bold mt-0.5">{sessionSales.length}</div>
+              </div>
+              <div className="card p-3 text-center col-span-2">
+                <div className="text-xs text-slate-500">CA Total</div>
+                <div className="text-xl font-bold text-brand-800 mt-0.5">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</div>
+              </div>
+            </div>
+            <div className="space-y-2 max-h-[55vh] overflow-y-auto -mx-1 px-1 pb-1">
+              {sessionSales.map(s => (
+                <div key={s.id} className="card p-3 flex items-center gap-3 hover:shadow-elevated transition-all">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-bold text-brand-700">{s.sale_number}</span>
+                      <span className="text-[11px] text-slate-400 num">{new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="text-xs text-slate-600 article-text line-clamp-1 mt-0.5">{s.customer_name || 'Client comptoir'}</div>
+                  </div>
+                  <div className="num font-bold text-slate-900 shrink-0">{formatFCFA(s.total)}</div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button title="Ticket 80mm" onClick={() => {
+                            const fakeSale = {
+                              sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
+                              items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
+                              payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                              customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: '', email: '', address: '', customer_type: '', balance: 0 } : null,
+                            };
+                            printSaleTicket(fakeSale);
+                          }} className="p-1.5 rounded hover:bg-slate-100 text-slate-600">
+                            <Printer className="w-4 h-4" />
+                          </button>
+                          <button title="Facture A4" onClick={() => {
+                            const fakeSale = {
+                              sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
+                              items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
+                              payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                              customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: '', email: '', address: '', customer_type: '', balance: 0 } : null,
+                            };
+                            printSaleInvoice(fakeSale);
+                          }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600">
+                            <FileText className="w-4 h-4" />
+                          </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Stats */}
+      <Modal open={statsOpen} onClose={() => setStatsOpen(false)} title="Statistiques de la session" size="lg"
+        footer={<>
+          <button onClick={() => setStatsOpen(false)} className="btn-secondary">Fermer</button>
+          {statsData && (
+            <button onClick={() => printXReport(
+              session as any,
+              methods.map(m => ({ payment_method_id: m.id, method_name: m.name, theoretical_amount: statsData.byMethod.find(b => b.method_name === m.name)?.amount || 0, counted_amount: 0 })),
+              statsData, sessionRegs,
+              { name: tenant!.name, ninea: (tenant as any).ninea, rccm: (tenant as any).rccm, address: (tenant as any).address },
+              profile?.full_name || profile?.email || '', currentSite?.name || ''
+            )} className="btn-primary">
+              <Printer className="w-4 h-4" /> Imprimer rapport
+            </button>
+          )}
+        </>}
+      >
+        {loadingStats ? (
+          <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+        ) : statsData ? (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="card p-4"><div className="text-xs text-slate-500">Ventes</div><div className="text-2xl font-bold mt-1">{statsData.count}</div></div>
+              <div className="card p-4"><div className="text-xs text-slate-500">CA Total</div><div className="text-2xl font-bold text-brand-800 mt-1">{formatFCFA(statsData.total)}</div></div>
+            </div>
+            {(statsData.movements.length > 0) && (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="card p-3"><div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Entrées</div><div className="text-lg font-bold text-emerald-700 num mt-0.5">+{formatFCFA(statsData.movIncome + statsData.movPrepay)}</div></div>
+                <div className="card p-3"><div className="text-[10px] font-bold uppercase tracking-wider text-red-700">Dépenses</div><div className="text-lg font-bold text-red-700 num mt-0.5">-{formatFCFA(statsData.movExpense)}</div></div>
+                <div className="card p-3 bg-gradient-to-br from-brand-50 to-brand-100/40 border-brand-200"><div className="text-[10px] font-bold uppercase tracking-wider text-brand-800">Net caisse</div><div className="text-lg font-bold text-brand-900 num mt-0.5">{formatFCFA(statsData.netTotal)}</div></div>
+              </div>
+            )}
+            {statsData.movements.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Mouvements de caisse</div>
+                <div className="space-y-1.5">
+                  {statsData.movements.map((m, i) => {
+                    const isExp = m.kind === 'expense';
+                    const label = isExp ? 'Dépense' : m.kind === 'customer_prepayment' ? 'Acompte client' : 'Entrée';
+                    const parts = [m.customer_name, m.reason].filter(Boolean).join(' · ');
+                    return (
+                      <div key={i} className={`flex items-center justify-between p-3 rounded-lg text-sm border ${isExp ? 'bg-red-50/50 border-red-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
+                        <div className="min-w-0 truncate">
+                          <span className="font-semibold">{label}</span>
+                          {parts && <span className="text-slate-600 ml-2">— {parts}</span>}
+                          {m.method_name && <span className="text-slate-400 ml-2 text-xs">({m.method_name})</span>}
+                        </div>
+                        <span className={`font-bold num shrink-0 ml-2 ${isExp ? 'text-red-700' : 'text-emerald-700'}`}>{isExp ? '-' : '+'}{formatFCFA(m.amount)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {statsData.byMethod.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Encaissements par mode</div>
+                <div className="space-y-2">
+                  {statsData.byMethod.map(m => (
+                    <div key={m.method_name} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm">
+                      <span className="font-medium">{m.method_name}</span>
+                      <span className="font-bold">{formatFCFA(m.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {statsData.topArticles.length > 0 && (
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Top articles</div>
+                <div className="space-y-2">
+                  {statsData.topArticles.map((a, i) => (
+                    <div key={a.name} className="card p-3 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-brand-50 flex items-center justify-center shrink-0 text-xs font-bold text-brand-700 num">#{i + 1}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-slate-900 article-text line-clamp-2">{a.name}</div>
+                        <div className="text-[11px] text-slate-500 num mt-0.5">Qté {a.qty}</div>
+                      </div>
+                      <div className="num font-bold text-slate-900 shrink-0">{formatFCFA(a.total)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* Regularization */}
+      <Modal open={regOpen} onClose={() => setRegOpen(false)} title="Régularisation d'écart" size="sm" layer="top"
+        footer={<>
+          <button onClick={() => setRegOpen(false)} className="btn-secondary">Annuler</button>
+          <button onClick={saveRegularization} disabled={savingReg} className="btn-primary">
+            {savingReg && <Loader2 className="w-4 h-4 animate-spin" />} Enregistrer
+          </button>
+        </>}
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="label">Type</label>
+            <select value={regType} onChange={e => setRegType(e.target.value as any)} className="input">
+              <option value="manquant">Manquant (déficit)</option>
+              <option value="excedent">Excédent (surplus)</option>
+              <option value="depot">Dépôt</option>
+              <option value="retrait">Retrait</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Montant (FCFA)</label>
+            <input type="number" value={regAmount || ''} onChange={e => setRegAmount(Number(e.target.value))} className="input" min="0" />
+          </div>
+          <div>
+            <label className="label">Motif *</label>
+            <input value={regReason} onChange={e => setRegReason(e.target.value)} className="input" placeholder="Ex: Écart de monnaie, dépôt initial…" />
+          </div>
+          <div>
+            <label className="label">Note (optionnel)</label>
+            <input value={regNote} onChange={e => setRegNote(e.target.value)} className="input" />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Close workflow */}
+      <Modal open={closeOpen} onClose={() => !closing && setCloseOpen(false)} title="Clôture de caisse" size="md"
+        footer={
+          closeStep === 'control' ? (
+            <>
+              <button onClick={() => setCloseOpen(false)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Annuler</button>
+              <button onClick={() => setRegOpen(true)} className="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:border-brand-300 transition inline-flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5" /> Régulariser
+              </button>
+              <button onClick={() => setCloseStep('regularize')} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition inline-flex items-center gap-1.5 active:scale-95">
+                Suivant <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : closeStep === 'regularize' ? (
+            <>
+              <button onClick={() => setCloseStep('control')} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Retour</button>
+              <button onClick={() => setCloseStep('confirm')} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition inline-flex items-center gap-1.5 active:scale-95">
+                Confirmer <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setCloseStep('regularize')} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Retour</button>
+              <button onClick={confirmClose} disabled={closing} className="px-4 py-2 rounded-xl text-xs font-bold bg-ink-900 hover:bg-ink-800 text-white shadow-sm transition inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
+                {closing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                Clôturer
+              </button>
+            </>
+          )
+        }
+      >
+        {/* Premium stepper */}
+        <div className="flex items-center gap-1.5 mb-4">
+          {(['control', 'regularize', 'confirm'] as CloseStep[]).map((s, i) => {
+            const labels = ['Contrôle', 'Régul.', 'Confirm.'];
+            const active = closeStep === s;
+            const done = (['control', 'regularize', 'confirm'] as CloseStep[]).indexOf(closeStep) > i;
+            return (
+              <div key={s} className="flex items-center gap-1.5 flex-1">
+                <div className={`relative flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-all duration-300 flex-1 justify-center ${active ? 'bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow' : done ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-50 text-slate-400 border border-slate-200'}`}>
+                  {done ? <Check className="w-3 h-3" /> : <span className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[9px] ${active ? 'bg-white/25' : 'bg-slate-200'}`}>{i + 1}</span>}
+                  <span>{labels[i]}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {loadingControl ? (
+          <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
+        ) : closeStep === 'control' ? (
+          <div className="space-y-2.5 count-up">
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Saisissez les montants comptés</p>
+            <div className="space-y-1.5">
+              {controlLines.map((c, idx) => {
+                const diff = c.counted_amount - c.theoretical_amount;
+                const balanced = diff === 0 && c.counted_amount > 0;
+                return (
+                  <div key={c.method_name} className={`rounded-xl border p-2.5 transition-all duration-300 ${balanced ? 'border-emerald-200 bg-emerald-50/40' : diff < 0 ? 'border-red-200 bg-red-50/40' : diff > 0 ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-slate-900 truncate">{c.method_name}</div>
+                        <div className="text-[10px] text-slate-500 num mt-0.5">Théorique: <span className="font-semibold text-slate-700">{formatFCFA(c.theoretical_amount)}</span></div>
+                      </div>
+                      <input type="number" value={c.counted_amount || ''} onChange={e => setControlLines(lines => lines.map((l, i) => i === idx ? { ...l, counted_amount: Number(e.target.value) } : l))} className="w-24 px-2 py-1.5 text-xs text-right font-bold num rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition" min="0" placeholder="0" />
+                      <div className={`text-[10px] font-bold num w-14 text-right ${balanced ? 'text-emerald-600' : diff < 0 ? 'text-red-600' : diff > 0 ? 'text-amber-600' : 'text-slate-300'}`}>
+                        {c.counted_amount === 0 ? '—' : diff === 0 ? 'OK' : `${diff > 0 ? '+' : ''}${formatFCFA(diff)}`}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className={`rounded-xl p-2.5 flex items-center justify-between transition-all duration-300 ${totalVariance === 0 ? 'bg-gradient-to-br from-emerald-50 to-brand-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Écart total</div>
+              <div className={`num font-bold text-sm ${totalVariance > 0 ? 'text-amber-600' : totalVariance < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                {totalVariance === 0 ? <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Équilibré</span> : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
+              </div>
+            </div>
+            {Math.abs(totalVariance) > 0 && (
+              <div className={`flex items-start gap-2 p-2 rounded-lg text-[11px] ${totalVariance < 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{totalVariance < 0 ? `Manquant de ${formatFCFA(-totalVariance)}` : `Excédent de ${formatFCFA(totalVariance)}`}</span>
+              </div>
+            )}
+          </div>
+        ) : closeStep === 'regularize' ? (
+          <div className="space-y-3 count-up">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl p-2.5 bg-white border border-slate-200 text-center">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Écart</div>
+                <div className={`text-xs font-bold mt-0.5 num ${totalVariance === 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {totalVariance === 0 ? 'OK' : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
+                </div>
+              </div>
+              <div className="rounded-xl p-2.5 bg-white border border-slate-200 text-center">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Régul.</div>
+                <div className="text-xs font-bold mt-0.5 num">{sessionRegs.length}</div>
+              </div>
+              <div className="rounded-xl p-2.5 bg-white border border-slate-200 text-center">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Montant</div>
+                <div className="text-xs font-bold mt-0.5 num">{formatFCFA(sessionRegs.reduce((s, r) => s + r.amount, 0))}</div>
+              </div>
+            </div>
+            {sessionRegs.length > 0 ? (
+              <div className="space-y-1.5">
+                {sessionRegs.map((r, i) => (
+                  <div key={i} className={`rounded-xl p-2.5 flex items-center gap-2 border ${r.reg_type === 'manquant' ? 'bg-red-50/40 border-red-200' : r.reg_type === 'excedent' ? 'bg-amber-50/40 border-amber-200' : 'bg-white border-slate-200'}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold capitalize text-slate-800">{r.reg_type}</div>
+                      {r.reason && <div className="text-[10px] text-slate-500 article-text line-clamp-1 mt-0.5">{r.reason}</div>}
+                    </div>
+                    <div className="num font-bold text-xs text-slate-900 shrink-0">{formatFCFA(r.amount)}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-[11px] text-slate-500">Aucune régularisation.</div>
+            )}
+            <button onClick={() => setRegOpen(true)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-dashed border-slate-300 text-slate-700 hover:border-brand-400 hover:bg-brand-50/40 transition">
+              <Plus className="w-3.5 h-3.5" /> Ajouter une régularisation
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3 count-up">
+            <div className="p-3 bg-gradient-to-br from-ink-900 to-slate-800 text-white rounded-2xl space-y-2 shadow-premium">
+              <div className="flex items-center gap-1.5"><Lock className="w-4 h-4 text-slate-300" /><span className="text-xs font-bold tracking-wide">RÉCAPITULATIF</span></div>
+              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                <span className="text-slate-400">Fond ouverture</span>
+                <span className="text-right font-semibold num">{formatFCFA(session!.opening_amount)}</span>
+                <span className="text-slate-400">Total compté</span>
+                <span className="text-right font-semibold num">{formatFCFA(controlLines.reduce((s, c) => s + c.counted_amount, 0))}</span>
+                <span className="text-slate-400 border-t border-slate-700 pt-1.5">Écart final</span>
+                <span className={`border-t border-slate-700 pt-1.5 text-right font-bold num ${totalVariance === 0 ? 'text-emerald-400' : totalVariance < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                  {totalVariance === 0 ? 'Équilibré' : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
+                </span>
+              </div>
+            </div>
+            <input value={closingNote} onChange={e => setClosingNote(e.target.value)} className="input text-sm" placeholder="Note de clôture (optionnel)" />
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 text-[11px] text-amber-800">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>Action irréversible. La session sera verrouillée.</span>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Web orders modal */}
+      <Modal open={webOrdersOpen} onClose={() => { setWebOrdersOpen(false); setWebOrderDetail(null); }} title="Commandes web" size="lg"
+        footer={<button onClick={() => { setWebOrdersOpen(false); setWebOrderDetail(null); }} className="btn-secondary">Fermer</button>}>
+        {!webOrderDetail ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { k: 'a_transformer', label: 'À transformer', count: webOrdersCounts.a_transformer, icon: Sparkles },
+                { k: 'livraison', label: 'Livraison', count: webOrdersCounts.livraison, icon: Truck },
+                { k: 'attente_paiement', label: 'Attente paiement', count: webOrdersCounts.attente_paiement, icon: ClockIcon },
+                { k: 'all', label: 'Toutes', count: webOrders.length, icon: Globe },
+              ] as const).map(f => {
+                const Icon = f.icon;
+                const active = webOrdersFilter === f.k;
+                return (
+                  <button key={f.k} onClick={() => setWebOrdersFilter(f.k as any)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${active ? 'bg-gradient-to-r from-brand-600 to-brand-800 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+                    <Icon className="w-3.5 h-3.5" />{f.label}
+                    <span className={`min-w-[20px] h-4 px-1 rounded-full flex items-center justify-center text-[10px] ${active ? 'bg-white/25' : 'bg-white text-slate-700'}`}>{f.count}</span>
+                  </button>
+                );
+              })}
+              <button onClick={loadWebOrders} className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-brand-700 hover:bg-brand-50">
+                <RotateCcw className="w-3.5 h-3.5" />Actualiser
+              </button>
+            </div>
+            {webOrdersLoading ? (
+              <div className="flex items-center justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-brand-600" /></div>
+            ) : webOrdersFiltered.length === 0 ? (
+              <EmptyState icon={Globe} title="Aucune commande" description="Aucune commande web dans cette catégorie." />
+            ) : (
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                {webOrdersFiltered.map(o => {
+                  const transformed = !!o.sale_id;
+                  return (
+                    <button key={o.id} onClick={() => openWebOrderDetail(o)}
+                      className="w-full text-left p-3 rounded-xl bg-white border border-slate-200 hover:border-brand-400 hover:shadow-sm transition-all">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${o.status === 'annulee' ? 'bg-rose-100 text-rose-700' : transformed ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-100 text-brand-700'}`}>
+                          {o.delivery_mode === 'livraison' ? <Truck className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-slate-900 tracking-wider text-sm">{o.order_number}</span>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${o.status === 'nouvelle' ? 'bg-sky-100 text-sky-700' : o.status === 'confirmee' ? 'bg-indigo-100 text-indigo-700' : o.status === 'en_preparation' ? 'bg-amber-100 text-amber-700' : o.status === 'prete' ? 'bg-violet-100 text-violet-700' : o.status === 'livree' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{o.status}</span>
+                            {transformed && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-600 text-white inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Transformée</span>}
+                            {o.payment_status !== 'paye' && <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">{o.payment_status === 'en_attente' ? 'Attente' : 'Non payé'}</span>}
+                          </div>
+                          <div className="text-xs text-slate-600 mt-0.5 break-words">{o.customer_name} · <Phone className="inline w-3 h-3" /> {o.customer_phone}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{new Date(o.created_at).toLocaleString('fr-FR')}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-extrabold text-slate-900 num">{formatFCFA(o.total)}</div>
+                          <div className="text-[10px] text-slate-500 capitalize">{(o.payment_mode || '').replace(/_/g, ' ')}</div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <button onClick={() => { setWebOrderDetail(null); setWebOrderItems([]); }} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900">
+              <ChevronLeft className="w-4 h-4" />Retour à la liste
+            </button>
+            <div className="p-4 rounded-xl bg-gradient-to-br from-brand-50 to-white border border-brand-100">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700">Commande</div>
+                  <div className="font-extrabold text-lg text-slate-900 tracking-wider">{webOrderDetail.order_number}</div>
+                  <div className="text-xs text-slate-600 mt-1">{new Date(webOrderDetail.created_at).toLocaleString('fr-FR')}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total</div>
+                  <div className="font-extrabold text-xl text-slate-900 num">{formatFCFA(webOrderDetail.total)}</div>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1"><User className="w-3 h-3" />Client</div>
+                <div className="font-bold text-slate-900">{webOrderDetail.customer_name}</div>
+                <div className="text-slate-600 flex items-center gap-1 mt-0.5"><Phone className="w-3 h-3" />{webOrderDetail.customer_phone}</div>
+                {webOrderDetail.customer_whatsapp && <div className="text-emerald-700 mt-0.5">WhatsApp: {webOrderDetail.customer_whatsapp}</div>}
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
+                  {webOrderDetail.delivery_mode === 'livraison' ? <Truck className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
+                  {webOrderDetail.delivery_mode === 'livraison' ? 'Livraison' : 'Retrait'}
+                </div>
+                <div className="text-slate-800">{webOrderDetail.delivery_mode === 'livraison' ? (webOrderDetail.delivery_address || '—') : 'Retrait en boutique'}</div>
+                {webOrderDetail.delivery_fee > 0 && <div className="text-slate-500 mt-0.5">Frais: {formatFCFA(webOrderDetail.delivery_fee)}</div>}
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-900">
+                <div className="font-bold">Paiement: <span className="capitalize">{(webOrderDetail.payment_mode || '').replace(/_/g, ' ')}</span></div>
+                <div className="mt-0.5">Le stock sera décrémenté uniquement lors de la validation de la vente en caisse.</div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">Articles ({webOrderItems.length})</div>
+              <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                {webOrderItems.map(it => (
+                  <div key={it.id} className="flex items-start justify-between px-3 py-2 gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-slate-900 break-words">{it.article_name}</div>
+                      <div className="text-[11px] text-slate-500">Qté {it.quantity} × {formatFCFA(it.unit_price)}</div>
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 shrink-0 num whitespace-nowrap">{formatFCFA(it.line_total)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {webOrderDetail.customer_note && (
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700">
+                <span className="font-bold">Note client:</span> {webOrderDetail.customer_note}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              {!webOrderDetail.sale_id && webOrderDetail.status !== 'annulee' && (
+                <button onClick={loadToCartFromWebOrder} disabled={!session || transforming}
+                  className="flex-1 h-11 rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 text-white font-bold inline-flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.98] transition-all shadow-glow disabled:opacity-60">
+                  <ArrowRight className="w-4 h-4" />Transformer en vente
+                </button>
+              )}
+              {webOrderDetail.sale_id && webOrderDetail.status !== 'livree' && (
+                <button onClick={() => markWebOrderDelivered(webOrderDetail)} className="flex-1 h-11 rounded-xl bg-emerald-600 text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-[0.98] transition-all">
+                  <CheckCircle2 className="w-4 h-4" />Marquer livrée
+                </button>
+              )}
+              {webOrderDetail.customer_phone && (
+                <a href={`tel:${webOrderDetail.customer_phone}`} className="h-11 px-4 rounded-xl bg-slate-100 text-slate-700 font-semibold inline-flex items-center justify-center gap-2 hover:bg-slate-200 transition-all">
+                  <Phone className="w-4 h-4" />Appeler
+                </a>
+              )}
+              {webOrderDetail.status !== 'annulee' && !webOrderDetail.sale_id && (
+                <button onClick={() => cancelWebOrder(webOrderDetail)} className="h-11 px-4 rounded-xl bg-rose-50 text-rose-700 font-semibold inline-flex items-center justify-center gap-2 hover:bg-rose-100 transition-all border border-rose-200">
+                  <X className="w-4 h-4" />Annuler
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+    </>
+  );
+}
+
+// ═══ Fullscreen immersive payment screen ═══════════════════════════════════════
+
+function PaymentScreen({
+  total, customer, methods, payments, setPayments, paying,
+  onClose, onValidate, onValidateCredit, onAddPayment,
+}: {
+  total: number;
+  customer: Customer | null;
+  methods: PaymentMethod[];
+  payments: SalePayment[];
+  setPayments: (updater: (p: SalePayment[]) => SalePayment[]) => void;
+  paying: boolean;
+  onClose: () => void;
+  onValidate: () => void;
+  onValidateCredit: () => void;
+  onAddPayment: () => void;
+}) {
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+  const remaining = total - totalPaid;
+  const activeIdx = payments.length - 1;
+  const activeMethod = payments[activeIdx];
+
+  const setMethod = (m: PaymentMethod) => {
+    setPayments(arr => arr.map((it, i) => i === activeIdx ? { ...it, payment_method_id: m.id, method_name: m.name } : it));
+  };
+
+  const setActiveAmount = (amt: number) => {
+    setPayments(arr => arr.map((it, i) => i === activeIdx ? { ...it, amount: Math.max(0, amt) } : it));
+  };
+
+  const appendDigit = (d: string) => {
+    if (!activeMethod) return;
+    const current = String(activeMethod.amount || 0);
+    if (d === '.' && current.includes('.')) return;
+    const next = current === '0' && d !== '.' ? d : current + d;
+    setActiveAmount(Number(next));
+  };
+  const backspace = () => {
+    if (!activeMethod) return;
+    const current = String(activeMethod.amount || 0);
+    const next = current.slice(0, -1);
+    setActiveAmount(Number(next || 0));
+  };
+  const clearAmount = () => setActiveAmount(0);
+  const setExact = () => setActiveAmount(Math.max(0, remaining + (activeMethod?.amount || 0)));
+
+  const quickAmounts = [500, 1000, 2000, 5000, 10000];
+
+  // Pick iconic label / tint per known mode
+  const modeStyle = (name: string): { tint: string; emoji: string } => {
+    const n = name.toLowerCase();
+    if (n.includes('espèce') || n.includes('liquide') || n.includes('cash')) return { tint: 'from-emerald-500/20 to-emerald-600/10', emoji: 'ESP' };
+    if (n.includes('wave')) return { tint: 'from-sky-500/25 to-sky-600/10', emoji: 'WAV' };
+    if (n.includes('orange')) return { tint: 'from-orange-500/25 to-orange-600/10', emoji: 'OM' };
+    if (n.includes('free')) return { tint: 'from-pink-500/25 to-pink-600/10', emoji: 'FM' };
+    if (n.includes('carte') || n.includes('cb')) return { tint: 'from-brand-500/25 to-brand-700/10', emoji: 'CB' };
+    if (n.includes('virement')) return { tint: 'from-blue-500/25 to-blue-700/10', emoji: 'VIR' };
+    if (n.includes('chèque') || n.includes('cheque')) return { tint: 'from-violet-500/25 to-violet-700/10', emoji: 'CHQ' };
+    if (n.includes('crédit') || n.includes('credit')) return { tint: 'from-amber-500/25 to-amber-700/10', emoji: 'CRE' };
+    return { tint: 'from-slate-400/20 to-slate-600/10', emoji: '∙' };
+  };
+
+  const enough = totalPaid >= total && total > 0;
+  const [step, setStep] = useState<'mode' | 'keypad'>('mode');
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-ink-900 text-white flex flex-col animate-fade-in overflow-hidden safe-top safe-bottom">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute inset-0 opacity-60">
+        <div className="absolute -top-40 -right-40 w-[520px] h-[520px] rounded-full bg-brand-500/20 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-[520px] h-[520px] rounded-full bg-brand-700/20 blur-3xl" />
+      </div>
+
+      {/* Header */}
+      <div className="relative flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
+        <button onClick={step === 'keypad' ? () => setStep('mode') : onClose} className="p-2 rounded-xl hover:bg-white/10 transition-colors" disabled={paying}>
+          {step === 'keypad' ? <ChevronLeft className="w-5 h-5" /> : <X className="w-5 h-5" />}
+        </button>
+        <div className="flex items-center gap-2">
+          <div className={`w-6 h-1 rounded-full transition-all ${step === 'mode' ? 'bg-white' : 'bg-white/30'}`} />
+          <div className={`w-6 h-1 rounded-full transition-all ${step === 'keypad' ? 'bg-white' : 'bg-white/30'}`} />
+        </div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+          {step === 'mode' ? 'Règlement' : 'Montant'}
+        </div>
+      </div>
+
+      {/* Total banner — always visible */}
+      <div className="relative px-4 pt-4 pb-3 shrink-0">
+        <div className="max-w-md mx-auto text-center">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Total à encaisser</div>
+          <div className="mt-1 text-4xl sm:text-5xl font-bold tracking-tight num leading-none">{formatFCFA(total)}</div>
+          {customer && <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 text-xs"><User className="w-3 h-3" /> {customer.name}</div>}
+          {payments.length > 0 && remaining !== total && (
+            <div className="mt-2 flex items-center justify-center gap-3 text-[11px]">
+              <span className="text-white/60">Payé <span className="num font-bold text-white">{formatFCFA(totalPaid)}</span></span>
+              {remaining > 0 ? <span className="text-amber-300 font-semibold">Reste <span className="num">{formatFCFA(remaining)}</span></span>
+              : <span className="text-emerald-300 font-semibold">Monnaie <span className="num">{formatFCFA(-remaining)}</span></span>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Step content */}
+      <div className="relative flex-1 min-h-0 overflow-y-auto px-4 pb-3">
+        <div className="max-w-md mx-auto">
+          {step === 'mode' ? (
+            <div className="space-y-4">
+              {/* Existing payments */}
+              {payments.filter(p => p.payment_method_id && p.amount > 0).length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Paiements enregistrés</div>
+                  {payments.map((p, idx) => (
+                    p.payment_method_id && p.amount > 0 ? (
+                      <div key={idx} className="flex items-center gap-2.5 p-2.5 rounded-2xl bg-white/5 border border-white/10">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500/30 to-brand-700/10 flex items-center justify-center text-[9px] font-bold">{modeStyle(p.method_name).emoji}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] text-white/50 leading-tight">{p.method_name}</div>
+                          <div className="text-sm font-bold num leading-tight">{formatFCFA(p.amount)}</div>
+                        </div>
+                        <button onClick={() => setPayments(arr => arr.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">Choisir un mode</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {methods.map(m => {
+                    const { tint, emoji } = modeStyle(m.name);
+                    const active = activeMethod?.payment_method_id === m.id;
+                    return (
+                      <button key={m.id} onClick={() => { setMethod(m); setStep('keypad'); }}
+                        className={`pay-mode !p-2.5 ${active ? 'pay-mode-active' : ''}`}>
+                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${tint} flex items-center justify-center text-[9px] font-bold tracking-wider ${active ? 'text-brand-700' : 'text-white/90'}`}>
+                          {emoji}
+                        </div>
+                        <div className={`text-[11px] font-semibold ${active ? 'text-ink-900' : 'text-white/90'} leading-tight`}>{m.name}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {remaining > 0 && payments.filter(p => p.payment_method_id && p.amount > 0).length > 0 && (
+                <button onClick={onAddPayment} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/20 text-white/70 hover:bg-white/5 hover:border-white/40 transition-all text-xs font-semibold">
+                  <Plus className="w-3.5 h-3.5" /> Ajouter un autre règlement
+                </button>
+              )}
+
+              {customer && payments.filter(p => p.amount > 0).length === 0 && (
+                <div className="pt-2 mt-2 border-t border-white/10">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">Ou créer une facture à crédit</div>
+                  <button onClick={onValidateCredit} disabled={paying}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-100 hover:bg-amber-500/25 transition-all text-sm font-bold">
+                    {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    Vente à crédit · {customer.name}
+                  </button>
+                  <div className="text-[10px] text-white/50 mt-1.5 text-center">Aucun encaissement — facture non payée dans le compte client.</div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Active amount display */}
+              <div className="rounded-2xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 p-3.5">
+                <div className="flex items-center justify-between mb-0.5">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">{activeMethod?.method_name || '—'}</div>
+                  <div className="text-[10px] text-white/50">Reste <span className="num font-bold text-amber-300">{formatFCFA(Math.max(0, remaining + (activeMethod?.amount || 0)))}</span></div>
+                </div>
+                <div className="text-4xl font-bold num tracking-tight leading-none">{formatFCFA(activeMethod?.amount || 0)}</div>
+              </div>
+
+              {/* Quick amounts */}
+              <div className="grid grid-cols-4 gap-1.5">
+                <button onClick={setExact} className="h-9 rounded-xl bg-brand-500/30 text-brand-100 hover:bg-brand-500/50 text-[11px] font-bold transition-colors">Exact</button>
+                {quickAmounts.slice(0, 3).map(q => (
+                  <button key={q} onClick={() => setActiveAmount((activeMethod?.amount || 0) + q)} className="h-9 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-semibold num transition-colors">
+                    +{q >= 1000 ? `${q / 1000}k` : q}
+                  </button>
+                ))}
+              </div>
+
+              {/* Numeric keypad */}
+              <div className="grid grid-cols-3 gap-2">
+                {['1','2','3','4','5','6','7','8','9'].map(d => (
+                  <button key={d} onClick={() => appendDigit(d)} className="keypad-btn !h-12 !text-xl">{d}</button>
+                ))}
+                <button onClick={() => appendDigit('00')} className="keypad-btn !h-12 !text-xl">00</button>
+                <button onClick={() => appendDigit('0')} className="keypad-btn !h-12 !text-xl">0</button>
+                <button onClick={backspace} className="keypad-btn !h-12 flex items-center justify-center">
+                  <Delete className="w-5 h-5" />
+                </button>
+              </div>
+
+              <button onClick={clearAmount} className="w-full py-2 rounded-xl bg-white/5 hover:bg-red-500/20 text-xs font-semibold transition-colors">
+                Effacer
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="relative border-t border-white/10 px-4 py-3 bg-ink-900/80 backdrop-blur-xl shrink-0 safe-bottom">
+        <div className="max-w-md mx-auto flex gap-2">
+          {step === 'mode' ? (
+            <>
+              <button onClick={onClose} className="px-4 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-colors" disabled={paying}>
+                Annuler
+              </button>
+              {enough ? (
+                <button onClick={onValidate} disabled={paying}
+                  className="flex-1 h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[0_12px_40px_-12px_rgb(16_185_129_/0.5)] active:scale-[0.98]">
+                  {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                  {paying ? 'Traitement…' : `Valider · ${formatFCFA(total)}`}
+                </button>
+              ) : (
+                <button onClick={() => activeMethod?.payment_method_id ? setStep('keypad') : null} disabled={!activeMethod?.payment_method_id}
+                  className={`flex-1 h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeMethod?.payment_method_id ? 'bg-white text-ink-900 active:scale-[0.98]' : 'bg-white/10 text-white/40 cursor-not-allowed'}`}>
+                  Suivant <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <button onClick={() => setStep('mode')} className="px-4 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-colors" disabled={paying}>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button onClick={enough ? onValidate : () => setStep('mode')} disabled={paying || !activeMethod?.amount}
+                className={`flex-1 h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${enough ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[0_12px_40px_-12px_rgb(16_185_129_/0.5)]' : activeMethod?.amount ? 'bg-white text-ink-900' : 'bg-white/10 text-white/40 cursor-not-allowed'} active:scale-[0.98]`}>
+                {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : enough ? <Check className="w-5 h-5" /> : null}
+                {paying ? 'Traitement…' : enough ? `Valider · ${formatFCFA(total)}` : remaining > 0 ? `Suite · Reste ${formatFCFA(Math.max(0, remaining))}` : 'Valider'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

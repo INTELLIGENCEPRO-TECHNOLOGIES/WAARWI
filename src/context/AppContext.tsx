@@ -1,0 +1,201 @@
+import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import type { Profile, Tenant, Site } from '../lib/types';
+
+type AppState = {
+  loading: boolean;
+  user: { id: string; email: string } | null;
+  profile: Profile | null;
+  tenant: Tenant | null;
+  sites: Site[];
+  currentSite: Site | null;
+  setCurrentSite: (site: Site) => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, companyName: string, businessType: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  refresh: () => Promise<void>;
+  /** bumps whenever tenant-scoped data changes on the server (insert/update/delete). */
+  dataTick: number;
+  /** subscribe to targeted change events for a specific table. Returns an unsubscribe. */
+  onDataChange: (tables: string[], cb: () => void) => () => void;
+};
+
+const Ctx = createContext<AppState | null>(null);
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AppState['user']>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [currentSite, setCurrentSite] = useState<Site | null>(null);
+  const [dataTick, setDataTick] = useState(0);
+  const listenersRef = useRef<{ tables: Set<string>; cb: () => void }[]>([]);
+
+  const loadSession = useCallback(async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData.session;
+    if (!session) {
+      setUser(null); setProfile(null); setTenant(null); setSites([]); setCurrentSite(null);
+      setLoading(false);
+      return;
+    }
+    setUser({ id: session.user.id, email: session.user.email || '' });
+
+    const { data: prof } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+    setProfile(prof || null);
+
+    if (prof?.tenant_id) {
+      const [{ data: ten }, { data: s }] = await Promise.all([
+        supabase.from('tenants').select('*').eq('id', prof.tenant_id).maybeSingle(),
+        supabase.from('sites').select('*').eq('tenant_id', prof.tenant_id).eq('is_active', true).order('name'),
+      ]);
+      setTenant(ten || null);
+      setSites(s || []);
+      const stored = localStorage.getItem('currentSiteId');
+      const found = (s || []).find(x => x.id === stored) || (s || [])[0] || null;
+      setCurrentSite(found);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadSession();
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, _session) => {
+      (async () => { await loadSession(); })();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [loadSession]);
+
+  // ── Realtime: one channel per tenant, fans out to page-level listeners ─────
+  useEffect(() => {
+    const tid = profile?.tenant_id;
+    if (!tid) return;
+    const tables = [
+      'articles','part_categories','stock_levels','stock_movements',
+      'vehicle_brands','vehicle_models','article_compatibilities',
+      'payment_methods','cash_sessions','sales','sale_items','sale_payments',
+      'quotes','quote_items','sale_returns','sale_return_items',
+      'customers','suppliers','supplier_orders','supplier_order_items','supplier_payments',
+      'online_orders','online_order_items','shop_settings','tenants','sites','profiles','tenant_messages',
+    ];
+    const channel = supabase.channel(`tenant:${tid}`);
+    tables.forEach(table => {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table },
+        () => {
+          setDataTick(t => t + 1);
+          listenersRef.current.forEach(l => {
+            if (l.tables.has(table) || l.tables.has('*')) {
+              try { l.cb(); } catch (_e) { /* ignore listener errors */ }
+            }
+          });
+        }
+      );
+    });
+    channel.subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.tenant_id]);
+
+  // Also refresh tenant/profile/sites opportunistically when dataTick moves
+  // so branding & module toggles propagate without a reload. Debounced to avoid
+  // a refetch burst when many tables change at once.
+  useEffect(() => {
+    if (!profile?.tenant_id || dataTick === 0) return;
+    const tid = profile.tenant_id;
+    const pid = profile.id;
+    const timer = setTimeout(async () => {
+      const [{ data: ten }, { data: s }, { data: prof }] = await Promise.all([
+        supabase.from('tenants').select('*').eq('id', tid).maybeSingle(),
+        supabase.from('sites').select('*').eq('tenant_id', tid).eq('is_active', true).order('name'),
+        supabase.from('profiles').select('*').eq('id', pid).maybeSingle(),
+      ]);
+      if (ten) setTenant(ten as Tenant);
+      if (s) {
+        setSites(s);
+        setCurrentSite(prev => prev ? (s.find(x => x.id === prev.id) || s[0] || null) : (s[0] || null));
+      }
+      if (prof) setProfile(prof);
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataTick]);
+
+  const onDataChange = useCallback((tables: string[], cb: () => void) => {
+    const entry = { tables: new Set(tables), cb };
+    listenersRef.current.push(entry);
+    return () => {
+      listenersRef.current = listenersRef.current.filter(l => l !== entry);
+    };
+  }, []);
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  };
+
+  const signUp = async (email: string, password: string, fullName: string, companyName: string, businessType: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    if (!data.user) throw new Error('Inscription impossible');
+    const { error: rpcErr } = await supabase.rpc('provision_tenant', {
+      p_company_name: companyName,
+      p_user_full_name: fullName,
+      p_business_type: businessType,
+    });
+    if (rpcErr) throw rpcErr;
+    await loadSession();
+  };
+
+  const signOut = async () => {
+    try {
+      setUser(null);
+      setProfile(null);
+      setTenant(null);
+      setSites([]);
+      setCurrentSite(null);
+      try { localStorage.removeItem('currentSiteId'); } catch {}
+
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise(resolve => setTimeout(resolve, 1500)),
+      ]);
+    } catch {
+      // ignore - we still want to force a clean state
+    } finally {
+      try {
+        const keys: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('sb-') || k.includes('supabase.auth'))) keys.push(k);
+        }
+        keys.forEach(k => localStorage.removeItem(k));
+      } catch {}
+      try { sessionStorage.clear(); } catch {}
+      window.location.replace('/');
+    }
+  };
+
+  const handleSetCurrentSite = (site: Site) => {
+    setCurrentSite(site);
+    localStorage.setItem('currentSiteId', site.id);
+  };
+
+  return (
+    <Ctx.Provider value={{
+      loading, user, profile, tenant, sites, currentSite,
+      setCurrentSite: handleSetCurrentSite,
+      signIn, signUp, signOut, refresh: loadSession,
+      dataTick, onDataChange,
+    }}>
+      {children}
+    </Ctx.Provider>
+  );
+}
+
+export function useApp() {
+  const v = useContext(Ctx);
+  if (!v) throw new Error('useApp must be used within AppProvider');
+  return v;
+}
