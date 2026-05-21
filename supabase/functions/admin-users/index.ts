@@ -227,6 +227,18 @@ Deno.serve(async (req: Request) => {
       }).eq("id", tenant_id);
       if (error) return json({ error: error.message }, 400);
       await logEvent("tenant.approve", tenant_id, {});
+
+      // Send approval notification email (fire-and-forget)
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+      fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
+        method: "POST",
+        headers: {
+          "Authorization": authHeader,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ type: "approval", tenant_id }),
+      }).catch(() => {});
+
       return json({ success: true });
     }
 
@@ -241,6 +253,18 @@ Deno.serve(async (req: Request) => {
       }).eq("id", tenant_id);
       if (error) return json({ error: error.message }, 400);
       await logEvent("tenant.reject", tenant_id, { reason: reason || "" });
+
+      // Send rejection notification email (fire-and-forget)
+      const SUPABASE_URL2 = Deno.env.get("SUPABASE_URL")!;
+      fetch(`${SUPABASE_URL2}/functions/v1/send-notification-email`, {
+        method: "POST",
+        headers: {
+          "Authorization": authHeader,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ type: "rejection", tenant_id, reason: reason || "" }),
+      }).catch(() => {});
+
       return json({ success: true });
     }
 

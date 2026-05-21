@@ -372,22 +372,22 @@ export function CashHistory() {
               return (
                 <div className="rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 to-white p-3">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700 mb-2">Net caisse</div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ventes</div>
-                      <div className="text-xs font-bold text-slate-800 num mt-0.5">{formatFCFA(salesTotal)}</div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ventes</span>
+                      <span className="text-sm font-bold text-slate-800 num">{formatFCFA(salesTotal)}</span>
                     </div>
-                    <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-700">Entrées</div>
-                      <div className="text-xs font-bold text-emerald-700 num mt-0.5">+{formatFCFA(mvIn + mvPre)}</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Entrées</span>
+                      <span className="text-sm font-bold text-emerald-700 num">+{formatFCFA(mvIn + mvPre)}</span>
                     </div>
-                    <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-red-700">Sorties</div>
-                      <div className="text-xs font-bold text-red-700 num mt-0.5">-{formatFCFA(mvExp)}</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-red-700">Sorties</span>
+                      <span className="text-sm font-bold text-red-700 num">-{formatFCFA(mvExp)}</span>
                     </div>
-                    <div className="text-right">
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-brand-800">Net</div>
-                      <div className="text-sm font-bold text-brand-900 num mt-0.5">{formatFCFA(net)}</div>
+                    <div className="border-t border-brand-200 pt-1.5 flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-brand-800">Net</span>
+                      <span className="text-base font-bold text-brand-900 num">{formatFCFA(net)}</span>
                     </div>
                   </div>
                 </div>

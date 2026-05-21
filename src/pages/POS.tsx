@@ -14,7 +14,6 @@ import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
-import { ActiveCashSessionCard, RecentCashSessionsList } from '../components/CashSessionPremium';
 import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
 import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, type PrintTenant } from '../lib/print';
@@ -91,6 +90,628 @@ function printXReport(
     regularizations,
     topArticles: salesStats.topArticles,
   });
+}
+
+// ─── POS Landing Screens (Desktop-first) ──────────────────────────────────────
+
+type LandingSite = { id: string; name: string } | null;
+type RecentSession = {
+  id: string; opened_at: string; closed_at: string | null;
+  opening_amount: number; closing_amount: number | null; status: string;
+};
+type DaySummary = {
+  salesCount: number; salesTotal: number;
+  byMethod: { method_name: string; amount: number }[];
+};
+
+function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
+  const [summary, setSummary] = useState<DaySummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!tenantId || !siteId || !sessionId) return;
+    setLoading(true);
+    (async () => {
+      const { data: sales } = await supabase
+        .from('sales')
+        .select('id, total')
+        .eq('tenant_id', tenantId)
+        .eq('cash_session_id', sessionId)
+        .neq('status', 'cancelled');
+      const { data: payments } = await supabase
+        .from('sale_payments')
+        .select('method_name, amount, sales!inner(cash_session_id, status)')
+        .eq('sales.cash_session_id', sessionId)
+        .neq('sales.status', 'cancelled');
+      const salesArr = sales || [];
+      const paymentsArr = (payments || []) as { method_name: string; amount: number }[];
+      const byMethod: Record<string, number> = {};
+      for (const p of paymentsArr) {
+        byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount);
+      }
+      setSummary({
+        salesCount: salesArr.length,
+        salesTotal: salesArr.reduce((s, r) => s + Number(r.total), 0),
+        byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
+      });
+      setLoading(false);
+    })();
+  }, [tenantId, siteId, sessionId]);
+  return { summary, loading };
+}
+
+function useRecentSessions(tenantId?: string, siteId?: string, excludeId?: string) {
+  const [sessions, setSessions] = useState<RecentSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!tenantId || !siteId) return;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('cash_sessions')
+        .select('id, opened_at, closed_at, opening_amount, closing_amount, status')
+        .eq('tenant_id', tenantId)
+        .eq('site_id', siteId)
+        .eq('status', 'closed')
+        .order('closed_at', { ascending: false, nullsFirst: false })
+        .limit(6);
+      let rows = (data || []) as RecentSession[];
+      if (excludeId) rows = rows.filter(r => r.id !== excludeId);
+      setSessions(rows.slice(0, 5));
+      setLoading(false);
+    })();
+  }, [tenantId, siteId, excludeId]);
+  return { sessions, loading };
+}
+
+const fmtDateShort = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+const fmtTimeLanding = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const fmtDateFull = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+
+function sessionDuration(opened: string) {
+  const ms = Date.now() - new Date(opened).getTime();
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h > 0) return `${h}h ${m}min`;
+  return `${m} min`;
+}
+
+function POSLandingOpen({
+  currentSite, openingAmount, setOpeningAmount, openingNote, setOpeningNote,
+  openingSubmitting, openSessionSubmit, tenantId, onSeeAll, cashierName,
+}: {
+  currentSite: LandingSite;
+  openingAmount: number; setOpeningAmount: (v: number) => void;
+  openingNote: string; setOpeningNote: (v: string) => void;
+  openingSubmitting: boolean; openSessionSubmit: () => void;
+  tenantId?: string; onSeeAll?: () => void; cashierName: string;
+}) {
+  const { sessions, loading: loadingSessions } = useRecentSessions(tenantId, currentSite?.id);
+
+  return (
+    <div className="space-y-3 pb-6">
+      {/* ── Unified header bar (same style as Sales/Articles pages) ── */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
+            <div className="leading-tight">
+              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Caisse</h1>
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">Nouvelle session</div>
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Ouvrir</div>
+            </div>
+          </div>
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            {currentSite && (
+              <span className="text-[11px] text-slate-500 truncate flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                {currentSite.name}
+              </span>
+            )}
+          </div>
+          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider">
+            <Lock className="w-2.5 h-2.5" />
+            Fermee
+          </span>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow shrink-0">
+            <Wallet className="w-3.5 h-3.5 text-white" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Desktop: 2-column grid ── */}
+      <div className="hidden lg:grid lg:grid-cols-5 gap-4">
+        {/* Left: open form */}
+        <div className="col-span-3">
+          <div className="relative overflow-hidden rounded-2xl border border-brand-200/60 bg-white shadow-card">
+            <div className="absolute -top-24 -right-24 w-56 h-56 rounded-full bg-brand-400/8 blur-3xl pointer-events-none" />
+            <div className="relative p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center shadow-lg">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Ouvrir la caisse</h2>
+                  <p className="text-xs text-slate-500">Demarrez une nouvelle session de vente</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 max-w-sm">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">Fond de caisse initial (FCFA)</label>
+                  <input
+                    type="number"
+                    value={openingAmount || ''}
+                    onChange={e => setOpeningAmount(Number(e.target.value))}
+                    className="w-full h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-base font-bold tabular-nums transition-all"
+                    placeholder="0"
+                    min="0"
+                    autoFocus
+                    inputMode="numeric"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">Note (optionnel)</label>
+                  <input
+                    value={openingNote}
+                    onChange={e => setOpeningNote(e.target.value)}
+                    className="w-full h-10 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition-all"
+                    placeholder="Ex: monnaie disponible..."
+                  />
+                </div>
+                {cashierName && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
+                    <User className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs text-slate-500">Vendeur :</span>
+                    <span className="text-xs font-semibold text-slate-700">{cashierName}</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={openSessionSubmit}
+                disabled={openingSubmitting}
+                className="group mt-6 w-full max-w-sm relative overflow-hidden rounded-xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 disabled:opacity-60 text-white font-bold text-sm py-3.5 px-5 shadow-[0_6px_20px_-8px_rgba(15,118,110,0.55)] hover:shadow-[0_8px_28px_-6px_rgba(15,118,110,0.7)] active:scale-[0.99] transition-all"
+              >
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                <span className="relative flex items-center justify-center gap-2">
+                  {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
+                  Ouvrir la caisse
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: tips */}
+        <div className="col-span-2 space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center"><AlertCircle className="w-4 h-4" /></div>
+              <h3 className="text-sm font-bold text-slate-800">Rappel</h3>
+            </div>
+            <ul className="space-y-2 text-xs text-slate-600 leading-relaxed">
+              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Comptez les especes dans votre tiroir-caisse avant d'ouvrir.</li>
+              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Le fond de caisse initial sera verifie a la cloture.</li>
+              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Vous pouvez quitter la caisse et y revenir sans la fermer.</li>
+            </ul>
+          </div>
+          {currentSite && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"><MapPin className="w-4 h-4" /></div>
+                <h3 className="text-sm font-bold text-slate-800">Point de vente</h3>
+              </div>
+              <p className="text-sm font-semibold text-slate-900">{currentSite.name}</p>
+              <p className="text-xs text-slate-500 mt-0.5">La session sera liee a ce point de vente.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Mobile: open form card ── */}
+      <div className="lg:hidden">
+        <div className="rounded-2xl border border-brand-200/70 bg-white shadow-card overflow-hidden">
+          <div className="p-4">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center shadow-md">
+                <ShoppingCart className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Ouvrir la caisse</h2>
+                {cashierName && <p className="text-[10px] text-slate-500">{cashierName}</p>}
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 block">Fond de caisse (FCFA)</label>
+                <input
+                  type="number"
+                  value={openingAmount || ''}
+                  onChange={e => setOpeningAmount(Number(e.target.value))}
+                  className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-base font-bold tabular-nums"
+                  placeholder="0"
+                  min="0"
+                  autoFocus={desktopAutoFocus}
+                  inputMode="numeric"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 block">Note (optionnel)</label>
+                <input
+                  value={openingNote}
+                  onChange={e => setOpeningNote(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-xs"
+                  placeholder="Ex: monnaie disponible..."
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={openSessionSubmit}
+              disabled={openingSubmitting}
+              className="group mt-3 w-full rounded-xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 disabled:opacity-60 text-white font-bold text-sm py-3 px-4 shadow-glow active:scale-[0.99] transition-all"
+            >
+              <span className="flex items-center justify-center gap-2">
+                {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
+                Ouvrir la caisse
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Recent sessions ── */}
+      {!loadingSessions && sessions.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-1.5 px-1">
+            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernieres sessions</h3>
+            {onSeeAll && (
+              <button onClick={onSeeAll} className="text-[11px] font-semibold text-brand-700 inline-flex items-center gap-0.5">
+                Voir tout <ChevronRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-card">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Date</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Ouverture</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fermeture</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fond</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Encaisse</th>
+                  <th className="text-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sessions.map(s => {
+                  const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-800">{fmtDateFull(s.opened_at)}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-slate-600">{fmtTimeLanding(s.opened_at)}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-slate-600">{s.closed_at ? fmtTimeLanding(s.closed_at) : '-'}</td>
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-800 tabular-nums text-right">{formatFCFA(Number(s.opening_amount))}</td>
+                      <td className="px-4 py-3 text-xs font-bold text-brand-800 tabular-nums text-right">{collected != null ? formatFCFA(collected) : '-'}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase">
+                          <Lock className="w-2 h-2" /> Cloturee
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* Mobile list */}
+          <div className="lg:hidden space-y-1.5">
+            {sessions.slice(0, 3).map(s => {
+              const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
+              return (
+                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-slate-200">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center shrink-0"><Lock className="w-2.5 h-2.5 text-slate-500" /></div>
+                    <div className="min-w-0">
+                      <span className="text-[11px] font-bold text-slate-800">{fmtDateShort(s.opened_at)}</span>
+                      <span className="text-[10px] text-slate-400 ml-1.5 tabular-nums">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-bold text-brand-800 tabular-nums shrink-0">{collected != null ? formatFCFA(collected) : '-'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function POSLandingResume({
+  session, currentSite, onResume, tenantId, onSeeAll, cashierName,
+}: {
+  session: CashSession; currentSite: LandingSite;
+  onResume: () => void; tenantId?: string; onSeeAll?: () => void; cashierName: string;
+}) {
+  const { summary, loading: loadingSummary } = useDaySummary(tenantId, currentSite?.id, session.id);
+  const { sessions, loading: loadingSessions } = useRecentSessions(tenantId, currentSite?.id, session.id);
+
+  return (
+    <div className="space-y-3 pb-6">
+      {/* ── Unified header bar (same style as Sales/Articles pages) ── */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
+            <div className="leading-tight">
+              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Caisse</h1>
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">Session active</div>
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Ouverte</div>
+            </div>
+          </div>
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            {currentSite && (
+              <span className="text-[11px] text-slate-500 truncate flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                {currentSite.name}
+              </span>
+            )}
+          </div>
+          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-emerald-500 text-white text-[9px] font-bold uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            Ouverte
+          </span>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-glow shrink-0">
+            <Wallet className="w-3.5 h-3.5 text-white" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Desktop: 2-column grid ── */}
+      <div className="hidden lg:grid lg:grid-cols-5 gap-4">
+        {/* Left: session details */}
+        <div className="col-span-3">
+          <div className="relative overflow-hidden rounded-2xl border border-emerald-200/60 bg-white shadow-card">
+            <div className="absolute -top-24 -right-24 w-56 h-56 rounded-full bg-emerald-400/8 blur-3xl pointer-events-none" />
+            <div className="relative p-6">
+              <div className="flex items-start gap-3 mb-5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white flex items-center justify-center shadow-lg">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-slate-900">Session en cours</h2>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold uppercase tracking-wider">
+                      <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                      Active
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">Caisse ouverte et prete pour les ventes</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><MapPin className="w-3.5 h-3.5" /></div>
+                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Point de vente</div><div className="text-xs font-semibold text-slate-800">{currentSite?.name || '-'}</div></div>
+                </div>
+                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><ClockIcon className="w-3.5 h-3.5" /></div>
+                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Ouverte le</div><div className="text-xs font-semibold text-slate-800">{fmtDateFull(session.opened_at)} a {fmtTimeLanding(session.opened_at)}</div></div>
+                </div>
+                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
+                  <div className="w-7 h-7 rounded-lg bg-white border border-emerald-200 flex items-center justify-center text-emerald-600"><Banknote className="w-3.5 h-3.5" /></div>
+                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-emerald-600">Fond initial</div><div className="text-xs font-bold text-emerald-800 tabular-nums">{formatFCFA(Number(session.opening_amount))}</div></div>
+                </div>
+                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><ClockIcon className="w-3.5 h-3.5" /></div>
+                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Duree</div><div className="text-xs font-semibold text-slate-800">{sessionDuration(session.opened_at)}</div></div>
+                </div>
+                {cashierName && (
+                  <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100 col-span-2">
+                    <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><User className="w-3.5 h-3.5" /></div>
+                    <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Vendeur</div><div className="text-xs font-semibold text-slate-800">{cashierName}</div></div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={onResume}
+                className="group w-full max-w-sm relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-emerald-700 text-white font-bold text-sm py-3.5 px-5 shadow-[0_6px_20px_-8px_rgba(16,185,129,0.55)] hover:shadow-[0_8px_28px_-6px_rgba(16,185,129,0.7)] active:scale-[0.99] transition-all"
+              >
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                <span className="relative flex items-center justify-center gap-2">
+                  <Play className="w-4 h-4 fill-current" />
+                  Reprendre la session
+                  <ChevronRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: summary + actions */}
+        <div className="col-span-2 space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center"><BarChart2 className="w-4 h-4" /></div>
+              <h3 className="text-sm font-bold text-slate-800">Resume de la session</h3>
+            </div>
+            {loadingSummary ? (
+              <div className="space-y-2.5 animate-pulse"><div className="h-10 bg-slate-100 rounded-xl" /><div className="h-10 bg-slate-100 rounded-xl" /></div>
+            ) : summary ? (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-brand-50 border border-brand-100">
+                  <span className="text-xs font-semibold text-brand-700">Total encaisse</span>
+                  <span className="text-base font-bold text-brand-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-xs font-semibold text-slate-600">Nombre de ventes</span>
+                  <span className="text-base font-bold text-slate-800 tabular-nums">{summary.salesCount}</span>
+                </div>
+                {summary.byMethod.length > 0 && (
+                  <div className="border-t border-slate-100 pt-2.5 mt-1">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Par mode de paiement</div>
+                    <div className="space-y-1.5">
+                      {summary.byMethod.map(m => (
+                        <div key={m.method_name} className="flex items-center justify-between">
+                          <span className="text-xs text-slate-600">{m.method_name}</span>
+                          <span className="text-xs font-bold text-slate-800 tabular-nums">{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {summary.salesCount === 0 && <p className="text-xs text-slate-500 text-center py-2">Aucune vente enregistree.</p>}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 text-center py-3">Donnees non disponibles</p>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+            <div className="flex items-center gap-2 mb-2.5">
+              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"><Sparkles className="w-4 h-4" /></div>
+              <h3 className="text-sm font-bold text-slate-800">Actions rapides</h3>
+            </div>
+            <div className="space-y-1.5">
+              <button onClick={onResume} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-emerald-50 border border-slate-100 hover:border-emerald-200 text-left transition-colors">
+                <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-xs font-medium text-slate-700">Acceder au point de vente</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400 ml-auto" />
+              </button>
+              {onSeeAll && (
+                <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-colors">
+                  <BarChart2 className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-xs font-medium text-slate-700">Historique des sessions</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 ml-auto" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Mobile: session card ── */}
+      <div className="lg:hidden">
+        <div className="rounded-2xl border border-emerald-200/70 bg-white shadow-card overflow-hidden">
+          <div className="p-4">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white flex items-center justify-center shadow-md">
+                <Wallet className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-sm font-bold text-slate-900">Caisse ouverte</h2>
+                <p className="text-[10px] text-slate-500 truncate">{fmtDateFull(session.opened_at)} a {fmtTimeLanding(session.opened_at)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100">
+                <div className="text-[9px] font-bold uppercase text-emerald-600">Fond</div>
+                <div className="text-xs font-bold text-emerald-800 tabular-nums">{formatFCFA(Number(session.opening_amount))}</div>
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
+                <div className="text-[9px] font-bold uppercase text-slate-400">Duree</div>
+                <div className="text-xs font-bold text-slate-700 tabular-nums">{sessionDuration(session.opened_at)}</div>
+              </div>
+            </div>
+
+            {!loadingSummary && summary && summary.salesCount > 0 && (
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-50 border border-brand-100 mb-3">
+                <div>
+                  <div className="text-[9px] font-bold uppercase text-brand-600">Encaisse</div>
+                  <div className="text-sm font-bold text-brand-900 tabular-nums">{formatFCFA(summary.salesTotal)}</div>
+                </div>
+                <div className="ml-auto text-right">
+                  <div className="text-[9px] font-bold uppercase text-brand-600">Ventes</div>
+                  <div className="text-sm font-bold text-brand-900 tabular-nums">{summary.salesCount}</div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={onResume}
+              className="group w-full rounded-xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-emerald-700 text-white font-bold text-sm py-3 px-4 shadow-[0_6px_20px_-8px_rgba(16,185,129,0.55)] active:scale-[0.99] transition-all"
+            >
+              <span className="flex items-center justify-center gap-2">
+                <Play className="w-4 h-4 fill-current" />
+                Reprendre la session
+                <ChevronRight className="w-4 h-4 opacity-70" />
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Recent sessions ── */}
+      {!loadingSessions && sessions.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-1.5 px-1">
+            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernieres sessions</h3>
+            {onSeeAll && (
+              <button onClick={onSeeAll} className="text-[11px] font-semibold text-brand-700 inline-flex items-center gap-0.5">
+                Voir tout <ChevronRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-card">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Date</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Ouverture</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fermeture</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fond</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Encaisse</th>
+                  <th className="text-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sessions.map(s => {
+                  const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-800">{fmtDateFull(s.opened_at)}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-slate-600">{fmtTimeLanding(s.opened_at)}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-slate-600">{s.closed_at ? fmtTimeLanding(s.closed_at) : '-'}</td>
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-800 tabular-nums text-right">{formatFCFA(Number(s.opening_amount))}</td>
+                      <td className="px-4 py-3 text-xs font-bold text-brand-800 tabular-nums text-right">{collected != null ? formatFCFA(collected) : '-'}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase">
+                          <Lock className="w-2 h-2" /> Cloturee
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* Mobile list */}
+          <div className="lg:hidden space-y-1.5">
+            {sessions.slice(0, 3).map(s => {
+              const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
+              return (
+                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-slate-200">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center shrink-0"><Lock className="w-2.5 h-2.5 text-slate-500" /></div>
+                    <div className="min-w-0">
+                      <span className="text-[11px] font-bold text-slate-800">{fmtDateShort(s.opened_at)}</span>
+                      <span className="text-[10px] text-slate-400 ml-1.5 tabular-nums">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-bold text-brand-800 tabular-nums shrink-0">{collected != null ? formatFCFA(collected) : '-'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -958,104 +1579,42 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Screen: open form (no active session)
   if (screen === 'open-form') {
     return (
-      <>
-      <POSGuide tenantId={tenant?.id} hasSession={false} businessType={(tenant as any)?.business_type} />
-      <div className="max-w-md mx-auto px-4 pt-3 pb-24">
-        <div className="relative overflow-hidden rounded-2xl border border-brand-200/70 shadow-[0_8px_30px_-12px_rgba(2,132,199,0.3)] bg-gradient-to-br from-white via-brand-50/40 to-brand-100/30 backdrop-blur-xl">
-          <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-brand-400/15 blur-3xl pointer-events-none" />
-          <div className="relative p-3.5 sm:p-4">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center shadow-md ring-2 ring-white shrink-0">
-                <ShoppingCart className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-brand-700 leading-none mb-0.5">
-                  Nouvelle session
-                </div>
-                <h2 className="text-sm font-bold text-slate-900 leading-tight">Ouvrir la caisse</h2>
-                {currentSite && (
-                  <p className="text-[11px] text-slate-500 truncate leading-tight">{currentSite.name}</p>
-                )}
-              </div>
-              <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider shadow-sm">
-                Fermée
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 block">
-                  Fond de caisse initial (FCFA)
-                </label>
-                <input
-                  type="number"
-                  value={openingAmount || ''}
-                  onChange={e => setOpeningAmount(Number(e.target.value))}
-                  className="w-full h-10 px-3 rounded-xl bg-white border border-slate-200 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm font-bold tabular-nums shadow-sm"
-                  placeholder="0"
-                  min="0"
-                  autoFocus={desktopAutoFocus}
-                  inputMode="numeric"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 block">
-                  Note (optionnel)
-                </label>
-                <input
-                  value={openingNote}
-                  onChange={e => setOpeningNote(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl bg-white border border-slate-200 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-xs shadow-sm"
-                  placeholder="Ex: monnaie disponible…"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={openSessionSubmit}
-              disabled={openingSubmitting}
-              className="group mt-3 w-full relative overflow-hidden rounded-xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm py-2.5 px-4 shadow-[0_6px_20px_-8px_rgba(2,132,199,0.55)] active:scale-[0.99] transition-all"
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
-              <span className="relative flex items-center justify-center gap-2">
-                {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-                Ouvrir la caisse
-              </span>
-            </button>
-          </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[92px] lg:pb-8">
+          <POSGuide tenantId={tenant?.id} hasSession={false} businessType={(tenant as any)?.business_type} />
+          <POSLandingOpen
+            currentSite={currentSite}
+            openingAmount={openingAmount}
+            setOpeningAmount={setOpeningAmount}
+            openingNote={openingNote}
+            setOpeningNote={setOpeningNote}
+            openingSubmitting={openingSubmitting}
+            openSessionSubmit={openSessionSubmit}
+            tenantId={tenant?.id}
+            onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
+            cashierName={cashierName}
+          />
         </div>
-
-        <RecentCashSessionsList
-          tenantId={tenant?.id}
-          siteId={currentSite?.id}
-          limit={1}
-          onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
-        />
       </div>
-      </>
     );
   }
 
   // Screen: resume (active session found — opened by someone else or after "Quitter")
   if (screen === 'resume' && session) {
     return (
-      <>
-      <POSGuide tenantId={tenant?.id} hasSession={true} businessType={(tenant as any)?.business_type} />
-      <div className="max-w-md mx-auto px-4 pt-3 pb-24">
-        <ActiveCashSessionCard
-          session={{ opened_at: session.opened_at, opening_amount: session.opening_amount }}
-          siteName={currentSite?.name}
-          onResume={() => setScreen('pos')}
-        />
-        <RecentCashSessionsList
-          tenantId={tenant?.id}
-          siteId={currentSite?.id}
-          excludeSessionId={session.id}
-          limit={1}
-          onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
-        />
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[92px] lg:pb-8">
+          <POSGuide tenantId={tenant?.id} hasSession={true} businessType={(tenant as any)?.business_type} />
+          <POSLandingResume
+            session={session}
+            currentSite={currentSite}
+            onResume={() => setScreen('pos')}
+            tenantId={tenant?.id}
+            onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
+            cashierName={cashierName}
+          />
+        </div>
       </div>
-      </>
     );
   }
 
