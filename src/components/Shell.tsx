@@ -5,6 +5,7 @@ import {
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { usePermissions, type PermissionKey } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
 
 export type Route =
@@ -58,22 +59,37 @@ const ROUTE_MODULE: Record<string, string> = {
   settings: 'settings',
 };
 
+const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
+  sales: 'view_sales_history',
+  cash_history: 'view_cash_sessions',
+  stock: 'view_stock_levels',
+  supplier_orders: 'manage_supplier_orders',
+  online_orders: 'manage_online_orders',
+  acc_plan: 'view_accounting',
+  acc_journals: 'view_accounting',
+  acc_balance: 'view_accounting',
+  settings: 'manage_settings',
+};
+
 export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r: Route) => void; children: ReactNode }) {
   const { tenant, profile, signOut, sites, currentSite, setCurrentSite } = useApp();
+  const { can } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const enabledModules: string[] = Array.isArray((tenant as any)?.enabled_modules)
     ? (tenant as any).enabled_modules
     : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings'];
-  const moduleEnabled = (key: Route) => {
+  const routeVisible = (key: Route) => {
     const mod = ROUTE_MODULE[key];
-    if (!mod) return true;
-    return enabledModules.includes(mod);
+    if (mod && !enabledModules.includes(mod)) return false;
+    const perm = ROUTE_PERMISSION[key];
+    if (perm && !can(perm)) return false;
+    return true;
   };
 
   const visibleNav = NAV_GROUPS
-    .map(g => ({ ...g, items: g.items.filter(i => moduleEnabled(i.key)) }))
+    .map(g => ({ ...g, items: g.items.filter(i => routeVisible(i.key)) }))
     .filter(g => g.items.length > 0);
-  const visibleMobileTabs = MOBILE_TABS.filter(t => moduleEnabled(t.key));
+  const visibleMobileTabs = MOBILE_TABS.filter(t => routeVisible(t.key));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [tenantTagline, setTenantTagline] = useState('');
@@ -211,7 +227,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         </div>
       ))}
-      {moduleEnabled('settings') && (
+      {routeVisible('settings') && (
         <div>
           <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] uppercase text-slate-400">Système</div>
           <button

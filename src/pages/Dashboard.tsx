@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { usePermissions } from '../lib/permissions';
 import { formatFCFA } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
 import {
@@ -52,7 +53,17 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [shopInfo, setShopInfo] = useState<ShopInfo | null>(null);
-  const [balanceHidden, setBalanceHidden] = useState(false);
+  const [balanceHidden, setBalanceHidden] = useState(() => {
+    try { return localStorage.getItem('dashboardBalanceHidden') === '1'; } catch { return false; }
+  });
+  const toggleBalanceHidden = () => {
+    setBalanceHidden(prev => {
+      const next = !prev;
+      try { localStorage.setItem('dashboardBalanceHidden', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
+  const { can } = usePermissions();
 
   useEffect(() => {
     if (!tenant || !currentSite) return;
@@ -232,7 +243,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
   const now = new Date();
   const hourGreet = now.getHours() < 12 ? 'Bonjour' : now.getHours() < 18 ? 'Bon après-midi' : 'Bonsoir';
-  const marginPct = stats.monthSales > 0 ? Math.round(stats.monthMargin / stats.monthSales * 100) : 0;
+  const marginPct = can('view_margins') && stats.monthSales > 0 ? Math.round(stats.monthMargin / stats.monthSales * 100) : 0;
   const dayDelta = stats.yesterdaySales > 0
     ? Math.round(((stats.todaySales - stats.yesterdaySales) / stats.yesterdaySales) * 100)
     : (stats.todaySales > 0 ? 100 : 0);
@@ -253,19 +264,19 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           dayDelta={dayDelta}
           marginPct={marginPct}
           nav={nav}
-          balanceHidden={balanceHidden}
-          setBalanceHidden={setBalanceHidden}
+          balanceHidden={balanceHidden || !can('view_dashboard_stats')}
+          toggleBalanceHidden={toggleBalanceHidden}
         />
       </div>
 
       {/* ═════════ DESKTOP — premium cockpit ═════════ */}
       <div className="hidden lg:block">
         <DesktopDashboard
-          stats={stats}
+          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0 }}
           shopInfo={shopInfo}
           greet={hourGreet}
           firstName={firstName}
-          dayDelta={dayDelta}
+          dayDelta={can('view_dashboard_stats') ? dayDelta : 0}
           marginPct={marginPct}
           nav={nav}
         />
@@ -279,7 +290,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
   stats, shopInfo, greet, firstName, tenantName, tenantLegal, dayDelta, marginPct, nav,
-  balanceHidden, setBalanceHidden,
+  balanceHidden, toggleBalanceHidden,
 }: any) {
   const now = new Date();
   const totalStockAlerts = stats.outOfStockCount + stats.lowStockCount;
@@ -353,7 +364,7 @@ function MobileDashboard({
                   {balanceHidden ? '••••••' : formatFCFA(stats.todaySales)}
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setBalanceHidden((v: boolean) => !v); }}
+                  onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
                   className="mb-1 w-7 h-7 rounded-full bg-white/10 border border-white/15 flex items-center justify-center active:scale-90"
                   aria-label={balanceHidden ? 'Afficher' : 'Masquer'}
                 >
@@ -366,21 +377,23 @@ function MobileDashboard({
             </div>
           </div>
 
-          <div className="mt-2.5 flex items-center gap-1.5">
-            <span
-              className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                dayDelta >= 0 ? 'bg-emerald-400/20 text-emerald-200' : 'bg-rose-400/20 text-rose-200'
-              }`}
-            >
-              {dayDelta >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
-              {dayDelta >= 0 ? '+' : ''}{dayDelta}%
-            </span>
-            <span className="text-[10px] text-white/60">vs hier</span>
-            <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-white/70">
-              <FileText className="w-3 h-3" />
-              {stats.todayCount} tickets
-            </span>
-          </div>
+          {!balanceHidden && (
+            <div className="mt-2.5 flex items-center gap-1.5">
+              <span
+                className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  dayDelta >= 0 ? 'bg-emerald-400/20 text-emerald-200' : 'bg-rose-400/20 text-rose-200'
+                }`}
+              >
+                {dayDelta >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+                {dayDelta >= 0 ? '+' : ''}{dayDelta}%
+              </span>
+              <span className="text-[10px] text-white/60">vs hier</span>
+              <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-white/70">
+                <FileText className="w-3 h-3" />
+                {stats.todayCount} tickets
+              </span>
+            </div>
+          )}
 
           {/* Session metrics — flat lines */}
           <div className="mt-4 pt-3 border-t border-white/10 space-y-2 text-[10px]">
@@ -418,8 +431,8 @@ function MobileDashboard({
             </div>
             <div className="flex items-center justify-between pt-2 border-t border-white/10">
               <span className="text-white/60 font-medium uppercase tracking-wider">Mois en cours</span>
-              <span className="text-white font-bold num">{formatFCFA(stats.monthSales)}</span>
-              {marginPct > 0 && (
+              <span className="text-white font-bold num">{balanceHidden ? '••••' : formatFCFA(stats.monthSales)}</span>
+              {!balanceHidden && marginPct > 0 && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-200 font-bold">
                   marge {marginPct}%
                 </span>
@@ -436,7 +449,7 @@ function MobileDashboard({
             tone="blue"
             icon={CreditCard}
             label="Créances clients"
-            value={formatFCFA(stats.receivables)}
+            value={balanceHidden ? '••••' : formatFCFA(stats.receivables)}
             sub={`${stats.customersCount} clients`}
             onClick={() => nav('tiers', { target: 'receivables' })}
           />
@@ -444,7 +457,7 @@ function MobileDashboard({
             tone="amber"
             icon={Truck}
             label="Dettes fournisseurs"
-            value={formatFCFA(stats.payables)}
+            value={balanceHidden ? '••••' : formatFCFA(stats.payables)}
             sub={`${stats.suppliersCount} fournisseurs`}
             onClick={() => nav('supplier_orders', { target: 'payables' })}
           />
@@ -621,7 +634,7 @@ function MobileDashboard({
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[13px] font-extrabold text-slate-900 num whitespace-nowrap">
-                    +{formatFCFA(s.total)}
+                    {balanceHidden ? '••••' : `+${formatFCFA(s.total)}`}
                   </div>
                 </div>
               </button>

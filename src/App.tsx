@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
+import { usePermissions, type PermissionKey } from './lib/permissions';
 import { ToastProvider } from './context/ToastContext';
 import { Auth } from './pages/Auth';
 import { TenantWelcome } from './components/TenantWelcome';
@@ -63,8 +64,21 @@ const ROUTE_MODULE: Record<string, string> = {
   settings: 'settings',
 };
 
+const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
+  sales: 'view_sales_history',
+  cash_history: 'view_cash_sessions',
+  stock: 'view_stock_levels',
+  supplier_orders: 'manage_supplier_orders',
+  online_orders: 'manage_online_orders',
+  acc_plan: 'view_accounting',
+  acc_journals: 'view_accounting',
+  acc_balance: 'view_accounting',
+  settings: 'manage_settings',
+};
+
 function Inner() {
   const { loading, user, tenant, profile } = useApp();
+  const { can } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const [route, setRoute] = useState<Route>('dashboard');
   const [showWelcome, setShowWelcome] = useState(false);
@@ -87,8 +101,10 @@ function Inner() {
     if (!tenant && isSuperAdmin) { setRoute('platform_admin'); return; }
     if (isSuperAdmin) return;
     const mod = ROUTE_MODULE[route];
-    if (mod && !enabled.includes(mod)) setRoute('dashboard');
-  }, [tenant, isSuperAdmin, route, enabled.join(',')]);
+    if (mod && !enabled.includes(mod)) { setRoute('dashboard'); return; }
+    const perm = ROUTE_PERMISSION[route];
+    if (perm && !can(perm)) setRoute('dashboard');
+  }, [tenant, isSuperAdmin, route, enabled.join(','), can]);
 
   if (loading) {
     return (

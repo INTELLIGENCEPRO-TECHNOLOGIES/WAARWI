@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
+import { PermissionsTab } from '../components/PermissionsTab';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -8,7 +9,7 @@ import { Modal, ConfirmDialog } from '../components/Modal';
 import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
 
-type TabKey = 'company' | 'boutique' | 'users' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'backup';
+type TabKey = 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'backup';
 
 export function Settings() {
   const { refresh, profile, tenant } = useApp();
@@ -19,6 +20,7 @@ export function Settings() {
     { k: 'company', l: 'Entreprise', icon: Building2 },
     { k: 'boutique', l: 'Boutique en ligne', icon: ShoppingBag },
     { k: 'users', l: 'Utilisateurs', icon: Users },
+    { k: 'permissions', l: 'Permissions', icon: Shield },
     { k: 'sites', l: 'Magasins', icon: Store },
     { k: 'payments', l: 'Paiements', icon: CreditCard },
     { k: 'categories', l: 'Catégories', icon: Tag },
@@ -49,6 +51,7 @@ export function Settings() {
       {tab === 'company' && <CompanyTab onRefresh={refresh} />}
       {tab === 'boutique' && <BoutiqueTab />}
       {tab === 'users' && <UsersTab />}
+      {tab === 'permissions' && <PermissionsTab />}
       {tab === 'sites' && <SitesTab />}
       {tab === 'payments' && <PaymentsTab />}
       {tab === 'categories' && <CategoriesTab />}

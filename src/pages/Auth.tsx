@@ -102,9 +102,9 @@ export function Auth() {
   if (submitted) {
     return (
       <AuthLayout isTenantBranded={isTenantBranded} brandName={brandName} brandTagline={brandTagline} branding={branding}>
-        <div className="flex-1 flex items-center justify-center p-5">
+        <div className="flex-1 flex items-center justify-center p-0 lg:p-5">
           <div className="w-full max-w-[400px]">
-            <div className="bg-white/90 backdrop-blur-2xl border border-white/60 rounded-3xl shadow-premium p-7 text-center">
+            <div className="bg-white/95 backdrop-blur-2xl border border-white/60 rounded-3xl shadow-premium p-7 text-center">
               <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center mb-4 ring-1 ring-amber-200/50">
                 <CheckCircle2 className="w-7 h-7 text-amber-600" />
               </div>
@@ -318,19 +318,10 @@ export function Auth() {
 
   return (
     <AuthLayout isTenantBranded={isTenantBranded} brandName={brandName} brandTagline={brandTagline} branding={branding}>
-      <div className="flex-1 flex flex-col justify-center p-4 sm:p-6 lg:p-10">
+      <div className="flex-1 flex flex-col justify-center p-0 lg:p-10">
         <div className="w-full max-w-[400px] lg:max-w-[440px] mx-auto">
-          {/* Mobile logo */}
-          <div className="flex flex-col items-center mb-5 lg:hidden">
-            {isTenantBranded && branding?.logo_url ? (
-              <img src={branding.logo_url} alt={brandName} className="w-20 h-20 object-contain" />
-            ) : (
-              <img src="/waarwi-logo.png" alt="WAARWI" className="w-28 h-auto object-contain" />
-            )}
-          </div>
-
           {/* Auth Card */}
-          <div className="bg-white/90 backdrop-blur-2xl border border-white/70 rounded-3xl shadow-premium p-5 sm:p-6 ring-1 ring-slate-900/[0.03]">
+          <div className="bg-white/95 backdrop-blur-2xl border border-white/70 rounded-3xl shadow-premium p-5 sm:p-6 ring-1 ring-slate-900/[0.03]">
             {/* Mode tabs */}
             {!isTenantBranded && (
               <div className="flex bg-slate-100/80 rounded-xl p-1 mb-5">
@@ -362,25 +353,14 @@ export function Auth() {
             {mode === 'register' && step === 2 && renderRegisterStep2()}
             {mode === 'register' && step === 3 && renderRegisterStep3()}
           </div>
-
-          {/* Footer on mobile */}
-          <div className="mt-4 text-center lg:hidden">
-            <div className="text-[11px] text-slate-400">
-              Propulsée par <span className="font-semibold text-slate-600">WAARWI</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              Plateforme Business 2.0 made in Sénégal
-            </div>
-          </div>
         </div>
       </div>
     </AuthLayout>
   );
 }
 
-function RotatingFeatures() {
+function RotatingFeatures({ count = 4 }: { count?: number }) {
   const [visibleIndex, setVisibleIndex] = useState(0);
-  const VISIBLE_COUNT = 4;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -391,11 +371,11 @@ function RotatingFeatures() {
 
   const visibleFeatures = useMemo(() => {
     const features = [];
-    for (let i = 0; i < VISIBLE_COUNT; i++) {
+    for (let i = 0; i < count; i++) {
       features.push(ALL_FEATURES[(visibleIndex + i) % ALL_FEATURES.length]);
     }
     return features;
-  }, [visibleIndex]);
+  }, [visibleIndex, count]);
 
   return (
     <div className="space-y-3">
@@ -446,9 +426,8 @@ function AuthLayout({ children, isTenantBranded, brandName, brandTagline, brandi
             {isTenantBranded && branding?.logo_url ? (
               <img src={branding.logo_url} alt={brandName} className="w-10 h-10 object-contain" />
             ) : (
-              <img src="/waarwi-mark.png" alt="WAARWI" className="w-10 h-10 object-contain" />
+              <img src="/waarwi-logo.png" alt="WAARWI" className="h-14 w-auto object-contain brightness-0 invert" />
             )}
-            <span className="text-lg font-bold text-white tracking-tight">{brandName}</span>
           </div>
 
           {/* Center: Hero */}
@@ -464,7 +443,7 @@ function AuthLayout({ children, isTenantBranded, brandName, brandTagline, brandi
             </p>
 
             <div className="mt-10">
-              <RotatingFeatures />
+              <RotatingFeatures count={4} />
             </div>
           </div>
 
@@ -484,8 +463,58 @@ function AuthLayout({ children, isTenantBranded, brandName, brandTagline, brandi
         </div>
       </div>
 
-      {/* Right auth panel */}
-      <div className="flex-1 relative flex flex-col overflow-hidden">
+      {/* Mobile: dark full-screen fixed layout (no scroll) */}
+      <div className="flex lg:hidden flex-col w-full h-full overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(13,148,136,0.12),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_80%_80%,rgba(20,184,166,0.06),transparent_50%)]" />
+
+        <div className="relative z-10 flex flex-col h-full px-5 pt-8 pb-4">
+          {/* Mobile Header: Logo + Tagline + Feature */}
+          <div className="flex flex-col items-center text-center shrink-0">
+            {isTenantBranded && branding?.logo_url ? (
+              <img src={branding.logo_url} alt={brandName} className="w-14 h-14 object-contain mb-2" />
+            ) : (
+              <img src="/waarwi-logo.png" alt="WAARWI" className="w-20 h-auto object-contain mb-2 brightness-0 invert" />
+            )}
+            <h1 className="text-lg font-bold text-white leading-tight tracking-tight">
+              Gérez votre entreprise{' '}
+              <span className="bg-gradient-to-r from-brand-300 to-brand-400 bg-clip-text text-transparent">
+                en toute simplicité
+              </span>
+            </h1>
+            <p className="mt-1.5 text-xs text-slate-400">
+              {brandTagline || 'Plateforme Business 2.0 made in Sénégal'}
+            </p>
+
+            {/* Single rotating feature */}
+            <div className="mt-3 w-full max-w-xs">
+              <RotatingFeatures count={1} />
+            </div>
+          </div>
+
+          {/* Auth form card — fixed height container */}
+          <div className="flex-1 flex flex-col justify-center min-h-0 my-4">
+            <div className="overflow-y-auto">
+              {children}
+            </div>
+          </div>
+
+          {/* Footer — always visible */}
+          <div className="shrink-0 text-center space-y-1">
+            <div className="text-[11px] text-slate-500">
+              &copy; {new Date().getFullYear()} WAARWI. Tous droits réservés.
+            </div>
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
+              <div className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse" />
+              Sécurisé par Supabase
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right auth panel — desktop only */}
+      <div className="hidden lg:flex flex-1 relative flex-col overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100/60" />
         <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-gradient-to-br from-brand-100/40 via-brand-50/20 to-transparent blur-3xl" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] rounded-full bg-gradient-to-tr from-brand-50/30 to-transparent blur-3xl" />

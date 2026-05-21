@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
 import { Modal } from '../components/Modal';
@@ -718,6 +719,7 @@ function POSLandingResume({
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, profile } = useApp();
+  const { can } = usePermissions();
   const tenantForPrint: PrintTenant = tenant ? {
     name: tenant.name, legal_name: (tenant as any).legal_name,
     ninea: (tenant as any).ninea, rccm: (tenant as any).rccm,
@@ -1705,10 +1707,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <span className="text-slate-500">Sous-total</span>
           <span className="font-semibold text-slate-800 num">{formatFCFA(subtotal)}</span>
         </div>
-        <div className="flex items-center justify-between text-sm gap-3">
-          <span className="text-slate-500 shrink-0">Remise globale</span>
-          <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-right num w-28 focus:outline-none focus:border-brand-500" placeholder="0" />
-        </div>
+        {can('apply_discounts') && (
+          <div className="flex items-center justify-between text-sm gap-3">
+            <span className="text-slate-500 shrink-0">Remise globale</span>
+            <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-right num w-28 focus:outline-none focus:border-brand-500" placeholder="0" />
+          </div>
+        )}
         <div className="flex items-end justify-between pt-3 border-t border-slate-200">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Boxes, Plus, Minus, Search, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal } from '../components/Modal';
@@ -26,6 +27,7 @@ type FilterKey = 'all' | 'low' | 'out';
 
 export function Stock() {
   const { tenant, currentSite, sites, dataTick } = useApp();
+  const { can } = usePermissions();
   const { success, error } = useToast();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -411,29 +413,31 @@ export function Stock() {
         >
           <AlertTriangle className="w-3 h-3" />{outCount} rupture{outCount > 1 ? 's' : ''}
         </button>
-        <span className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200 num">Val. {formatFCFA(totalValue)}</span>
+        {can('view_purchase_prices') && <span className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200 num">Val. {formatFCFA(totalValue)}</span>}
       </div>
 
       {/* Quick actions row */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
-        <button onClick={() => openAdjNew('in')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-all active:scale-95">
-          <ArrowDownCircle className="w-3.5 h-3.5 text-emerald-600" />Entrée
-        </button>
-        <button onClick={() => openAdjNew('out')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 transition-all active:scale-95">
-          <ArrowUpCircle className="w-3.5 h-3.5 text-red-500" />Sortie
-        </button>
-        {sites.length > 1 && (
-          <button onClick={() => openAdjNew('transfer')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-all active:scale-95">
-            <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />Transfert
+      {can('manage_stock') && (
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
+          <button onClick={() => openAdjNew('in')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-all active:scale-95">
+            <ArrowDownCircle className="w-3.5 h-3.5 text-emerald-600" />Entrée
           </button>
-        )}
-        <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-all active:scale-95">
-          <ClipboardList className="w-3.5 h-3.5 text-blue-600" />Inventaire
-        </button>
-        <button onClick={printInventoryBook} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-gradient-to-br from-ink-900 to-slate-800 text-white hover:shadow-glow transition-all active:scale-95 ml-auto">
-          <BookOpen className="w-3.5 h-3.5" />Livre d'inventaire
-        </button>
-      </div>
+          <button onClick={() => openAdjNew('out')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 transition-all active:scale-95">
+            <ArrowUpCircle className="w-3.5 h-3.5 text-red-500" />Sortie
+          </button>
+          {sites.length > 1 && (
+            <button onClick={() => openAdjNew('transfer')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-all active:scale-95">
+              <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />Transfert
+            </button>
+          )}
+          <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-all active:scale-95">
+            <ClipboardList className="w-3.5 h-3.5 text-blue-600" />Inventaire
+          </button>
+          <button onClick={printInventoryBook} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-gradient-to-br from-ink-900 to-slate-800 text-white hover:shadow-glow transition-all active:scale-95 ml-auto">
+            <BookOpen className="w-3.5 h-3.5" />Livre d'inventaire
+          </button>
+        </div>
+      )}
 
       {tab === 'stocks' ? (
         loading ? (
@@ -487,7 +491,7 @@ export function Stock() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-100">
+                  <div className={`grid gap-1.5 pt-1.5 border-t border-slate-100 ${can('view_purchase_prices') ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <div>
                       <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Min</div>
                       <div className="text-[11px] font-bold text-slate-700 num leading-tight mt-0.5">{r.stock_min}</div>
@@ -496,12 +500,15 @@ export function Stock() {
                       <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Max</div>
                       <div className="text-[11px] font-bold text-slate-700 num leading-tight mt-0.5">{r.stock_max || '—'}</div>
                     </div>
-                    <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Valeur</div>
-                      <div className="text-[11px] font-bold text-slate-800 num leading-tight mt-0.5 truncate">{formatFCFA(value)}</div>
-                    </div>
+                    {can('view_purchase_prices') && (
+                      <div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Valeur</div>
+                        <div className="text-[11px] font-bold text-slate-800 num leading-tight mt-0.5 truncate">{formatFCFA(value)}</div>
+                      </div>
+                    )}
                   </div>
 
+                  {can('manage_stock') && (
                   <div className="flex items-center gap-1 pt-1">
                     <button onClick={() => openAdj(r, 'in')} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all active:scale-95" title="Entrée">
                       <Plus className="w-3 h-3" />Entrée
@@ -518,6 +525,7 @@ export function Stock() {
                       <ClipboardList className="w-3 h-3" />
                     </button>
                   </div>
+                  )}
                 </div>
               );
             })}

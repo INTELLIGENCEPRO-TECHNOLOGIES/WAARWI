@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
@@ -23,6 +24,7 @@ type TabKey = 'infos' | 'prix' | 'stock' | 'compat' | 'image';
 
 export function Articles({ onNavigate }: { onNavigate?: (route: string) => void } = {}) {
   const { tenant, currentSite, dataTick } = useApp();
+  const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const businessLabel = BUSINESS_TYPE_LABELS[tenant?.business_type || 'auto_parts'] || 'Catalogue';
   const { success, error } = useToast();
@@ -473,6 +475,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                 selectionMode={selectionMode}
                 selected={selectedIds.has(a.id)}
                 onToggleSelect={() => toggleSelected(a.id)}
+                showMargin={can('view_margins')}
+                showStock={can('view_stock_levels')}
               />
             ))}
           </div>
@@ -497,8 +501,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                   <th className="px-4 py-3 text-left font-semibold">Référence</th>
                   <th className="px-4 py-3 text-left font-semibold">Catégorie</th>
                   <th className="px-4 py-3 text-right font-semibold">Prix vente</th>
-                  <th className="px-4 py-3 text-right font-semibold">Marge</th>
-                  <th className="px-4 py-3 text-right font-semibold">Stock</th>
+                  {can('view_margins') && <th className="px-4 py-3 text-right font-semibold">Marge</th>}
+                  {can('view_stock_levels') && <th className="px-4 py-3 text-right font-semibold">Stock</th>}
                   <th className="px-4 py-3 text-right font-semibold"></th>
                 </tr>
               </thead>
@@ -537,17 +541,21 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">{a.internal_ref}</td>
                       <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[140px]">{cat?.name || '—'}</td>
                       <td className="px-4 py-3 text-right font-bold text-slate-900 num">{formatFCFA(a.sale_price)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold num ${mgTone}`}>
-                          {mg.toFixed(0)}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold num ${mStatus.badge}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />
-                          {qty}
-                        </span>
-                      </td>
+                      {can('view_margins') && (
+                        <td className="px-4 py-3 text-right">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold num ${mgTone}`}>
+                            {mg.toFixed(0)}%
+                          </span>
+                        </td>
+                      )}
+                      {can('view_stock_levels') && (
+                        <td className="px-4 py-3 text-right">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold num ${mStatus.badge}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />
+                            {qty}
+                          </span>
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openEdit(a)} className="p-1.5 rounded-lg hover:bg-brand-100 text-slate-600 hover:text-brand-700 transition-colors" aria-label="Modifier">
@@ -634,7 +642,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                 />
               )}
               {tab === 'prix' && (
-                <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} />
+                <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')} />
               )}
               {tab === 'stock' && (
                 <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />
@@ -731,7 +739,7 @@ function stockStatus(qty: number, min: number) {
 
 // ─── Article card (mobile) ───────────────────────────────────────────
 
-function ArticleCard({ article, category, qty, onEdit, onDelete, selectionMode, selected, onToggleSelect }: {
+function ArticleCard({ article, category, qty, onEdit, onDelete, selectionMode, selected, onToggleSelect, showMargin = true, showStock = true }: {
   article: Article;
   category: Category | undefined;
   qty: number;
@@ -740,6 +748,8 @@ function ArticleCard({ article, category, qty, onEdit, onDelete, selectionMode, 
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
+  showMargin?: boolean;
+  showStock?: boolean;
 }) {
   const min = Number(article.stock_min || 0);
   const st = stockStatus(qty, min);
@@ -795,13 +805,17 @@ function ArticleCard({ article, category, qty, onEdit, onDelete, selectionMode, 
 
       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 overflow-hidden">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold num shrink-0 ${st.badge}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-            {qty} <span className="opacity-70">{st.label}</span>
-          </span>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold num shrink-0 ${mgTone}`}>
-            {mg.toFixed(0)}%
-          </span>
+          {showStock && (
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold num shrink-0 ${st.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+              {qty} <span className="opacity-70">{st.label}</span>
+            </span>
+          )}
+          {showMargin && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold num shrink-0 ${mgTone}`}>
+              {mg.toFixed(0)}%
+            </span>
+          )}
         </div>
         <div className="text-right shrink-0">
           <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Vente</div>
@@ -1048,9 +1062,10 @@ function InfosTab({ form, setForm, editing, categories, suppliers, onGenerateRef
 
 // ─── Prix tab ────────────────────────────────────────────────────────
 
-function PrixTab({ form, setForm, marginValue, marginStr }: {
+function PrixTab({ form, setForm, marginValue, marginStr, showPurchasePrice = true, showMargin = true }: {
   form: Form; setForm: (f: (prev: Form) => Form) => void;
   marginValue: number; marginStr: string;
+  showPurchasePrice?: boolean; showMargin?: boolean;
 }) {
   const achat = Number(form.purchase_price || 0);
   const vente = Number(form.sale_price || 0);
@@ -1066,37 +1081,41 @@ function PrixTab({ form, setForm, marginValue, marginStr }: {
   return (
     <div className="space-y-4">
       {/* Marge KPI hero card */}
-      <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${marginTone.bg} p-5 shadow-premium`}>
-        <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
-        <div className="absolute -bottom-10 -left-6 w-28 h-28 rounded-full bg-black/10" />
-        <div className="relative">
-          <div className="flex items-center gap-2 text-white/80 text-[10px] font-bold uppercase tracking-wider">
-            <MgIcon className="w-3.5 h-3.5" />
-            {marginTone.label}
-          </div>
-          <div className="mt-2 flex items-end gap-3">
-            <div className={`text-5xl font-bold ${marginTone.text} num leading-none`}>{marginStr}<span className="text-2xl ml-1">%</span></div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2">
-              <div className="text-[10px] text-white/70 font-semibold uppercase tracking-wider">Gain unitaire</div>
-              <div className="text-white font-bold num text-sm mt-0.5">{formatFCFA(marginFcfa)}</div>
+      {showMargin && (
+        <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${marginTone.bg} p-5 shadow-premium`}>
+          <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
+          <div className="absolute -bottom-10 -left-6 w-28 h-28 rounded-full bg-black/10" />
+          <div className="relative">
+            <div className="flex items-center gap-2 text-white/80 text-[10px] font-bold uppercase tracking-wider">
+              <MgIcon className="w-3.5 h-3.5" />
+              {marginTone.label}
             </div>
-            <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2">
-              <div className="text-[10px] text-white/70 font-semibold uppercase tracking-wider">Coefficient</div>
-              <div className="text-white font-bold num text-sm mt-0.5">
-                {achat > 0 ? (vente / achat).toFixed(2) : '—'}×
+            <div className="mt-2 flex items-end gap-3">
+              <div className={`text-5xl font-bold ${marginTone.text} num leading-none`}>{marginStr}<span className="text-2xl ml-1">%</span></div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2">
+                <div className="text-[10px] text-white/70 font-semibold uppercase tracking-wider">Gain unitaire</div>
+                <div className="text-white font-bold num text-sm mt-0.5">{formatFCFA(marginFcfa)}</div>
+              </div>
+              <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2">
+                <div className="text-[10px] text-white/70 font-semibold uppercase tracking-wider">Coefficient</div>
+                <div className="text-white font-bold num text-sm mt-0.5">
+                  {achat > 0 ? (vente / achat).toFixed(2) : '—'}×
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Prix grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-        <Field label="Prix d'achat" hint="FCFA HT">
-          <PriceInput value={form.purchase_price} onChange={v => setForm(f => ({ ...f, purchase_price: v }))} />
-        </Field>
+        {showPurchasePrice && (
+          <Field label="Prix d'achat" hint="FCFA HT">
+            <PriceInput value={form.purchase_price} onChange={v => setForm(f => ({ ...f, purchase_price: v }))} />
+          </Field>
+        )}
         <Field label="Prix de vente" required hint="FCFA TTC">
           <PriceInput value={form.sale_price} onChange={v => setForm(f => ({ ...f, sale_price: v }))} emphasize />
         </Field>
