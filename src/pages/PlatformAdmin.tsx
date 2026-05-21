@@ -305,6 +305,26 @@ function TenantsSection() {
     try { await call('reject_tenant', { tenant_id: t.id, reason }); success('Tenant rejeté'); load(); }
     catch (e: any) { error(e.message); }
   };
+  const [deleting, setDeleting] = useState<any>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const deleteTenant = async () => {
+    if (!deleting) return;
+    setDeleteLoading(true);
+    try {
+      const res = await call('delete_tenant', { tenant_id: deleting.id, reason: deleteReason });
+      success(`Tenant "${res.tenant_name}" supprimé définitivement (${res.users_deleted} utilisateur(s) supprimé(s))`);
+      setDeleting(null);
+      setDeleteConfirmName('');
+      setDeleteReason('');
+      setDetail(null);
+      load();
+    } catch (e: any) { error(e.message); }
+    setDeleteLoading(false);
+  };
+
   const pendingCount = tenants.filter(t => (t.approval_status || 'approved') === 'pending').length;
 
   return (
@@ -411,6 +431,11 @@ function TenantsSection() {
                           <Power className="w-3.5 h-3.5" />
                         </button>
                       ))}
+                      <button
+                        onClick={() => { setDeleting(t); setDeleteConfirmName(''); setDeleteReason(''); }}
+                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                        title="Supprimer définitivement"
+                      ><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                 </div>
@@ -421,7 +446,78 @@ function TenantsSection() {
         </div>
       )}
 
-      {detail && <TenantDetailModal tenant={detail} plans={plans} onClose={() => setDetail(null)} onRefresh={load} />}
+      {detail && <TenantDetailModal tenant={detail} plans={plans} onClose={() => setDetail(null)} onRefresh={load} onDelete={(t: any) => { setDeleting(t); setDeleteConfirmName(''); setDeleteReason(''); }} />}
+
+      {/* Delete tenant confirmation modal */}
+      <Modal open={!!deleting} onClose={() => { if (!deleteLoading) { setDeleting(null); setDeleteConfirmName(''); setDeleteReason(''); } }} title="" size="md" footer={null}>
+        {deleting && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-red-900">Supprimer definitivement</h3>
+                <p className="text-sm text-red-700">Cette action est irreversible !</p>
+              </div>
+            </div>
+
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
+              <p className="text-sm text-red-800 font-semibold">Toutes les donnees suivantes seront supprimees :</p>
+              <ul className="text-xs text-red-700 space-y-1 ml-4 list-disc">
+                <li>Tous les articles, categories et compatibilites</li>
+                <li>Toutes les ventes, factures, devis et avoirs</li>
+                <li>Tous les clients, fournisseurs et commandes fournisseurs</li>
+                <li>Tout le stock, mouvements et sessions de caisse</li>
+                <li>La boutique en ligne et les commandes</li>
+                <li>La comptabilite et les ecritures</li>
+                <li>Les abonnements et sauvegardes</li>
+                <li>Tous les comptes utilisateurs du tenant</li>
+              </ul>
+            </div>
+
+            <div>
+              <label className="label text-red-800">Motif de la suppression</label>
+              <input
+                value={deleteReason}
+                onChange={e => setDeleteReason(e.target.value)}
+                className="input border-red-200 focus:ring-red-500 focus:border-red-500"
+                placeholder="Ex: Demande du client, compte test, doublon..."
+              />
+            </div>
+
+            <div>
+              <label className="label text-red-800">
+                Tapez <span className="font-mono font-bold bg-red-100 px-1.5 py-0.5 rounded">{deleting.name}</span> pour confirmer
+              </label>
+              <input
+                value={deleteConfirmName}
+                onChange={e => setDeleteConfirmName(e.target.value)}
+                className="input border-red-200 focus:ring-red-500 focus:border-red-500 font-mono"
+                placeholder={deleting.name}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                onClick={() => { setDeleting(null); setDeleteConfirmName(''); setDeleteReason(''); }}
+                disabled={deleteLoading}
+                className="btn-secondary"
+              >Annuler</button>
+              <button
+                onClick={deleteTenant}
+                disabled={deleteConfirmName !== deleting.name || deleteLoading}
+                className="px-4 py-2 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+              >
+                {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Supprimer definitivement
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -607,7 +703,7 @@ function UsageBar({ label, current, limit }: { label: string; current: number; l
   );
 }
 
-function TenantDetailModal({ tenant, plans, onClose, onRefresh }: { tenant: any; plans: any[]; onClose: () => void; onRefresh: () => void }) {
+function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { tenant: any; plans: any[]; onClose: () => void; onRefresh: () => void; onDelete?: (t: any) => void }) {
   const [detail, setDetail] = useState<any>(null);
   const [tab, setTab] = useState<'info' | 'sub' | 'modules' | 'users' | 'history'>('info');
   const [form, setForm] = useState<any>({
@@ -748,6 +844,27 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh }: { tenant: any;
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer
                     </button>
                   </div>
+
+                  {/* Danger zone */}
+                  {onDelete && (
+                    <div className="sm:col-span-2 mt-6 border-t border-red-200 pt-4">
+                      <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-2xl p-4">
+                        <div className="flex items-center gap-3">
+                          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+                          <div>
+                            <div className="text-sm font-bold text-red-900">Zone de danger</div>
+                            <div className="text-xs text-red-700">Supprimer definitivement ce tenant et toutes ses donnees.</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => { onClose(); setTimeout(() => onDelete(tenant), 150); }}
+                          className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700 flex items-center gap-1.5 shrink-0 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />Supprimer
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

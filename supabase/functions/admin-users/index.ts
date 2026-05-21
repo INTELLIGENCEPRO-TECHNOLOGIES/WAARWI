@@ -268,6 +268,38 @@ Deno.serve(async (req: Request) => {
       return json({ success: true });
     }
 
+    if (action === "delete_tenant") {
+      const { tenant_id, reason } = body;
+      if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
+
+      const { data: result, error: rpcErr } = await admin.rpc("delete_tenant_permanently", {
+        p_tenant_id: tenant_id,
+        p_actor_id: caller.id,
+        p_actor_email: caller.email || "",
+        p_reason: reason || "",
+      });
+
+      if (rpcErr) return json({ error: rpcErr.message }, 400);
+      if (!result?.success) return json({ error: result?.error || "Échec de la suppression" }, 400);
+
+      // Delete auth users that belonged to this tenant
+      const userIds: string[] = result.user_ids || [];
+      const deleteErrors: string[] = [];
+      for (const uid of userIds) {
+        if (uid === caller.id) continue; // never delete the super admin
+        const { error: delErr } = await admin.auth.admin.deleteUser(uid);
+        if (delErr) deleteErrors.push(`${uid}: ${delErr.message}`);
+      }
+
+      return json({
+        success: true,
+        tenant_name: result.tenant_name,
+        users_deleted: userIds.length - deleteErrors.length,
+        data_summary: result.data_summary,
+        delete_errors: deleteErrors.length > 0 ? deleteErrors : undefined,
+      });
+    }
+
     // ============ PLANS ============
     if (action === "list_plans") {
       const { data } = await admin.from("plans").select("*").order("sort_order");

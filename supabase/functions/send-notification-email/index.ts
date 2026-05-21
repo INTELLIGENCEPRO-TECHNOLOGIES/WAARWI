@@ -216,10 +216,10 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Tenant ou email introuvable" }, 404);
     }
 
-    const APP_URL = Deno.env.get("APP_URL") || "https://waarwi.com";
+    const APP_URL = Deno.env.get("APP_URL") || "https://app.waarwi.com";
     const fromEmail =
       Deno.env.get("NOTIFICATION_FROM_EMAIL") ||
-      "Papa D Sall - WAARWI <noreply@waarwi.com>";
+      "WAARWI <noreply@waarwi.com>";
     const year = new Date().getFullYear();
 
     let subject = "";
