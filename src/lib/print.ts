@@ -341,9 +341,9 @@ const a4Style = `
   @page { margin: 14mm; size: A4; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #0f172a; display: flex; flex-direction: column; min-height: 100vh; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #0f172a; display: flex; flex-direction: column; }
   .page-content { flex: 1 1 auto; }
-  .page-bottom { margin-top: auto; }
+  .page-bottom { margin-top: 12px; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; padding-bottom: 18px; border-bottom: 2px solid #0f172a; }
   .brand { display: flex; gap: 14px; align-items: flex-start; }
   .brand img { max-width: 80px; max-height: 80px; object-fit: contain; }
