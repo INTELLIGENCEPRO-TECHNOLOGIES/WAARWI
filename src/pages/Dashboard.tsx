@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
-import { formatFCFA } from '../lib/format';
+import { formatFCFA, formatCompactFCFA } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
 import {
   TrendingUp, TrendingDown, AlertTriangle, Package, Loader2,
   Users, FileText, RotateCcw, ExternalLink, Globe,
-  ShoppingCart, ArrowRight, ChevronRight, Zap, Bell,
-  CheckCircle, Clock, Receipt, Wallet, Sparkles, ArrowUpRight, ArrowDownRight,
-  ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff,
+  ShoppingCart, ChevronRight, Bell,
+  CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowDownRight,
+  ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, Plus, X,
 } from 'lucide-react';
 
 type ShopInfo = { slug: string | null; isActive: boolean };
@@ -99,7 +99,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('online_orders').select('created_at').eq('tenant_id', tenant.id).eq('status', 'nouvelle').order('created_at', { ascending: true }).limit(1),
         supabase.from('online_orders').select('order_number, customer_name, total, created_at').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'open'),
-        supabase.from('stock_movements').select('quantity').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('type', 'in').gte('created_at', today.toISOString()),
+        supabase.from('stock_movements').select('quantity').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['purchase', 'adjustment_in']).gte('created_at', today.toISOString()),
       ]);
 
       if (shopData.data?.public_slug) {
@@ -127,7 +127,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const webTodayRows = (webTodayData.data || []) as any[];
       const webTodayTotal = webTodayRows.reduce((s, r) => s + Number(r.total || 0), 0);
 
-      // Payables: sum of (total - paid) over non-cancelled supplier orders
       const { data: unpaidOrders } = await supabase
         .from('supplier_orders')
         .select('total, paid')
@@ -139,7 +138,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       }, 0);
       const customersCount = (custData.data || []).length;
 
-      // Receivables: sum of (total - paid) for unpaid sales with an identified customer
       const { data: unpaidSales } = await supabase
         .from('sales')
         .select('total, paid')
@@ -153,7 +151,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         return s + Math.max(0, remaining);
       }, 0);
 
-      // Current session: use the most recent open session for this site
       const currentSession = (openSessions.data || []).length > 0
         ? (openSessions.data as any[]).sort((a: any, b: any) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())[0]
         : null;
@@ -177,7 +174,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           .eq('cash_session_id', currentSession.id);
         const sessionPaymentsTotal = (sessionPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
 
-        // Movements tied to current session
         const { data: sessionMovs } = await supabase
           .from('cash_movements')
           .select('kind, amount')
@@ -252,8 +248,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
   return (
     <>
-      {/* ═════════ MOBILE — distinct fintech banking experience ═════════ */}
-      <div className="lg:hidden space-y-4">
+      <div className="lg:hidden space-y-2.5">
         <MobileDashboard
           stats={stats}
           shopInfo={shopInfo}
@@ -269,7 +264,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         />
       </div>
 
-      {/* ═════════ DESKTOP — premium cockpit ═════════ */}
       <div className="hidden lg:block">
         <DesktopDashboard
           stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0 }}
@@ -286,381 +280,224 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
- *  MOBILE DASHBOARD
+ *  MOBILE DASHBOARD — Ultra-compact Premium Fintech 2026
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
-  stats, shopInfo, greet, firstName, tenantName, tenantLegal, dayDelta, marginPct, nav,
+  stats, shopInfo, greet, firstName, dayDelta, marginPct, nav,
   balanceHidden, toggleBalanceHidden,
 }: any) {
   const now = new Date();
-  const totalStockAlerts = stats.outOfStockCount + stats.lowStockCount;
 
   return (
-    <>
-      {/* Welcome line */}
-      <div className="flex items-center justify-between gap-3 pt-1 animate-fade-in">
+    <div className="space-y-2 animate-fade-in pb-2">
+      {/* ── GREETING ── */}
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.15em]">
+          <div className="text-[13px] font-bold text-slate-800 tracking-tight">
             {greet}{firstName ? `, ${firstName}` : ''}
           </div>
-          <div className="text-[11px] text-slate-400 font-medium mt-0.5 capitalize">
+          <div className="text-[10px] text-slate-400 font-medium capitalize">
             {now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
         </div>
         {shopInfo?.isActive && shopInfo.slug && (
           <button
             onClick={() => window.open(`${window.location.origin}/shop/${shopInfo.slug}`, '_blank')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold active:scale-95 shrink-0"
+            className="flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold active:scale-95 shrink-0 border bg-emerald-50 border-emerald-200 text-emerald-700"
           >
             <span className="relative flex w-1.5 h-1.5">
               <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75" />
               <span className="relative rounded-full bg-emerald-500 w-1.5 h-1.5" />
             </span>
-            Boutique active
-            <ExternalLink className="w-3 h-3" />
+            Boutique
+            <ExternalLink className="w-2.5 h-2.5" />
           </button>
         )}
       </div>
 
-      {/* ═══ HERO BANKING CARD — the centerpiece ═══ */}
+      {/* ── HERO CARD — Clean, fluid, minimal internal borders ── */}
       <button
         onClick={() => nav('sales')}
-        className="w-full text-left relative overflow-hidden rounded-[28px] p-5 pb-6 group active:scale-[0.99] transition-transform"
+        className="w-full text-left relative overflow-hidden rounded-[20px] p-4 active:scale-[0.985] transition-transform duration-200"
         style={{
-          background: 'linear-gradient(135deg, #041d2e 0%, #063b44 40%, #0d5c5c 70%, #0d9488 100%)',
-          boxShadow: '0 20px 50px -15px rgba(6, 59, 68, 0.55), 0 8px 20px -8px rgba(13, 148, 136, 0.35), inset 0 1px 0 rgba(255,255,255,0.1)',
+          background: 'linear-gradient(145deg, #021e2f 0%, #053d47 40%, #0a5e58 70%, #0d8f82 100%)',
+          boxShadow: '0 20px 40px -12px rgba(5, 61, 71, 0.55), 0 6px 12px -4px rgba(13, 148, 136, 0.25)',
         }}
       >
-        {/* Animated decorative layers */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-gradient-to-br from-teal-300/30 via-teal-400/10 to-transparent blur-3xl animate-pulse-slow" />
-          <div className="absolute -bottom-32 -left-16 w-72 h-72 rounded-full bg-gradient-to-tr from-cyan-300/20 to-transparent blur-3xl" />
-          <div
-            className="absolute inset-0 opacity-[0.08]"
-            style={{
-              backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-              backgroundSize: '24px 24px',
-              maskImage: 'radial-gradient(ellipse at top right, black 0%, transparent 70%)',
-              WebkitMaskImage: 'radial-gradient(ellipse at top right, black 0%, transparent 70%)',
-            }}
-          />
-          <div
-            className="absolute inset-0 opacity-40"
-            style={{ background: 'linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)' }}
-          />
+          <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-teal-300/20 to-transparent blur-3xl animate-pulse-slow" />
+          <div className="absolute -bottom-20 -left-10 w-52 h-52 rounded-full bg-gradient-to-tr from-cyan-300/10 to-transparent blur-3xl" />
         </div>
 
         <div className="relative">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <div className="w-1 h-1 rounded-full bg-teal-300 animate-pulse" />
-                <span className="text-[10px] font-bold text-teal-100/90 uppercase tracking-[0.18em]">
-                  Encaissement du jour
-                </span>
-              </div>
-              <div className="flex items-end gap-2">
-                <div className="text-[32px] font-black text-white leading-none tracking-tight num">
-                  {balanceHidden ? '••••••' : formatFCFA(stats.todaySales)}
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
-                  className="mb-1 w-7 h-7 rounded-full bg-white/10 border border-white/15 flex items-center justify-center active:scale-90"
-                  aria-label={balanceHidden ? 'Afficher' : 'Masquer'}
-                >
-                  {balanceHidden ? <Eye className="w-3.5 h-3.5 text-white/80" /> : <EyeOff className="w-3.5 h-3.5 text-white/80" />}
-                </button>
-              </div>
+          <div className="flex items-start justify-between mb-0.5">
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-300 animate-pulse" />
+              <span className="text-[9px] font-bold text-teal-200/70 uppercase tracking-[0.15em]">
+                Encaissement du jour
+              </span>
             </div>
-            <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/15 flex items-center justify-center group-active:bg-white/15">
-              <ArrowUpRight className="w-4 h-4 text-white" />
-            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
+              className="w-6 h-6 rounded-full bg-white/8 border border-white/10 flex items-center justify-center active:scale-90 transition-transform"
+              aria-label={balanceHidden ? 'Afficher' : 'Masquer'}
+            >
+              {balanceHidden ? <Eye className="w-3 h-3 text-white/60" /> : <EyeOff className="w-3 h-3 text-white/60" />}
+            </button>
           </div>
 
+          {/* Main amount - auto-sizing for large amounts */}
+          <div className="num font-black text-white leading-none tracking-tight" style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
+            {balanceHidden ? '••••••' : formatFCFA(stats.todaySales)}
+          </div>
+
+          {/* Delta + tickets inline */}
           {!balanceHidden && (
-            <div className="mt-2.5 flex items-center gap-1.5">
-              <span
-                className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  dayDelta >= 0 ? 'bg-emerald-400/20 text-emerald-200' : 'bg-rose-400/20 text-rose-200'
-                }`}
-              >
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${dayDelta >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
                 {dayDelta >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
                 {dayDelta >= 0 ? '+' : ''}{dayDelta}%
               </span>
-              <span className="text-[10px] text-white/60">vs hier</span>
-              <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-white/70">
-                <FileText className="w-3 h-3" />
-                {stats.todayCount} tickets
+              <span className="text-[9px] text-white/40 font-medium">vs hier</span>
+              <span className="ml-auto inline-flex items-center gap-1 text-[9px] text-white/50 font-medium">
+                <Receipt className="w-2.5 h-2.5" />
+                {stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}
               </span>
             </div>
           )}
 
-          {/* Session metrics — flat lines */}
-          <div className="mt-4 pt-3 border-t border-white/10 space-y-2 text-[10px]">
+          {/* Session metrics - subtle separation, no hard borders */}
+          <div className="mt-3 pt-2.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             {stats.sessionInfo ? (
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-teal-200/70 font-bold uppercase tracking-wider flex items-center gap-1">
-                  <Clock className="w-2.5 h-2.5" /> Session en cours
-                </span>
-                <span className="text-white/60 font-medium num">
-                  {new Date(stats.sessionInfo.openedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} · {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                </span>
+              <div className="flex items-center gap-1 mb-2 text-[8px] text-teal-200/50 font-semibold uppercase tracking-[0.1em]">
+                <Clock className="w-2.5 h-2.5" />
+                Session {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
               </div>
             ) : (
-              <div className="flex items-center justify-center py-1">
-                <span className="text-white/40 font-medium">Aucune session ouverte</span>
+              <div className="flex items-center gap-1 mb-2 text-[8px] text-white/25 font-medium">
+                Aucune session
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <span className="text-white/60 font-medium uppercase tracking-wider flex items-center gap-1">
-                <Wallet className="w-2.5 h-2.5" /> Solde caisse
-              </span>
-              <span className="text-white font-bold num">{balanceHidden ? '••••' : formatFCFA(stats.cashBalance)}</span>
+
+            <div className="flex items-center gap-2">
+              <HeroMetric label="Caisse" value={balanceHidden ? '•••' : formatCompactFCFA(stats.cashBalance)} icon={Wallet} />
+              <div className="w-px h-5 bg-white/8 shrink-0" />
+              <HeroMetric label="Entrées" value={balanceHidden ? '•••' : formatCompactFCFA(stats.sessionCashIn)} icon={ArrowDownRight} positive />
+              <div className="w-px h-5 bg-white/8 shrink-0" />
+              <HeroMetric label="Dépenses" value={balanceHidden ? '•••' : formatCompactFCFA(stats.sessionExpenses)} icon={ArrowUpLeft} negative />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-emerald-300/80 font-medium uppercase tracking-wider flex items-center gap-1">
-                <ArrowDownRight className="w-2.5 h-2.5" /> Entrées
-              </span>
-              <span className="text-emerald-200 font-bold num">{balanceHidden ? '••••' : formatFCFA(stats.sessionCashIn)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-rose-300/80 font-medium uppercase tracking-wider flex items-center gap-1">
-                <ArrowUpLeft className="w-2.5 h-2.5" /> Dépenses
-              </span>
-              <span className="text-rose-200 font-bold num">{balanceHidden ? '••••' : formatFCFA(stats.sessionExpenses)}</span>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-white/10">
-              <span className="text-white/60 font-medium uppercase tracking-wider">Mois en cours</span>
-              <span className="text-white font-bold num">{balanceHidden ? '••••' : formatFCFA(stats.monthSales)}</span>
-              {!balanceHidden && marginPct > 0 && (
-                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-200 font-bold">
-                  marge {marginPct}%
-                </span>
-              )}
-            </div>
+
+            {!balanceHidden && (
+              <div className="mt-2 flex items-center justify-between text-[9px]">
+                <span className="text-white/40 font-medium">Mois</span>
+                <span className="text-white/90 font-bold num">{formatCompactFCFA(stats.monthSales)}</span>
+                {marginPct > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-400/10 text-emerald-200 text-[8px] font-bold">
+                    marge {marginPct}%
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </button>
 
-      {/* ═══ FINANCIAL KPI HORIZONTAL SCROLLER ═══ */}
-      <div className="-mx-3 px-3 overflow-x-auto scrollbar-hide">
-        <div className="flex gap-2.5 snap-x snap-mandatory pb-1">
-          <FinanceCard
-            tone="blue"
-            icon={CreditCard}
-            label="Créances clients"
-            value={balanceHidden ? '••••' : formatFCFA(stats.receivables)}
-            sub={`${stats.customersCount} clients`}
-            onClick={() => nav('tiers', { target: 'receivables' })}
-          />
-          <FinanceCard
-            tone="amber"
-            icon={Truck}
-            label="Dettes fournisseurs"
-            value={balanceHidden ? '••••' : formatFCFA(stats.payables)}
-            sub={`${stats.suppliersCount} fournisseurs`}
-            onClick={() => nav('supplier_orders', { target: 'payables' })}
-          />
-          <FinanceCard
-            tone={stats.outOfStockCount > 0 ? 'rose' : 'slate'}
-            icon={AlertTriangle}
-            label="Ruptures"
-            value={String(stats.outOfStockCount)}
-            sub={stats.lowStockCount > 0 ? `${stats.lowStockCount} stock bas` : 'stock ok'}
-            onClick={() => nav('stock', { target: 'outOfStock' })}
-            pulse={stats.outOfStockCount > 0}
-          />
-          <FinanceCard
-            tone="emerald"
-            icon={Package}
-            label="Entrées stock"
-            value={String(stats.stockInToday)}
-            sub="aujourd'hui"
-            onClick={() => nav('stock', { target: 'stockIn' })}
-          />
-          <FinanceCard
-            tone="blue"
-            icon={FileText}
-            label="Devis"
-            value={String(stats.pendingQuotes)}
-            sub="en attente"
-            onClick={() => nav('billing', { target: 'quotes' })}
-          />
-        </div>
+      {/* ── KPI GRID — No scroll, compact 2x3 grid ── */}
+      <div className="grid grid-cols-3 gap-1">
+        <KpiCard
+          tone="blue"
+          icon={CreditCard}
+          label="Créances"
+          value={balanceHidden ? '•••' : formatCompactFCFA(stats.receivables)}
+          onClick={() => nav('tiers', { target: 'receivables' })}
+        />
+        <KpiCard
+          tone="amber"
+          icon={Truck}
+          label="Fournisseurs"
+          value={balanceHidden ? '•••' : formatCompactFCFA(stats.payables)}
+          onClick={() => nav('supplier_orders', { target: 'payables' })}
+        />
+        <KpiCard
+          tone={stats.outOfStockCount > 0 ? 'rose' : 'slate'}
+          icon={AlertTriangle}
+          label="Ruptures"
+          value={String(stats.outOfStockCount)}
+          onClick={() => nav('stock', { target: 'outOfStock' })}
+          pulse={stats.outOfStockCount > 0}
+        />
+        <KpiCard
+          tone="emerald"
+          icon={Package}
+          label="Stock"
+          value={`+${stats.stockInToday}`}
+          onClick={() => nav('stock', { target: 'stockIn' })}
+        />
+        <KpiCard
+          tone="blue"
+          icon={FileText}
+          label="Devis"
+          value={String(stats.pendingQuotes)}
+          onClick={() => nav('billing', { target: 'quotes' })}
+        />
+        <KpiCard
+          tone="teal"
+          icon={Globe}
+          label="Web"
+          value={String(stats.webNew)}
+          onClick={() => nav('online_orders', stats.webNew > 0 ? { target: 'webNew' } : undefined)}
+          pulse={stats.webNew > 0}
+        />
       </div>
 
-      {/* ═══ PRIMARY SHORTCUTS ═══ */}
-      <div>
-        <div className="flex items-center justify-between mb-2 px-0.5">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.18em] flex items-center gap-1.5">
-            <Zap className="w-2.5 h-2.5" />
-            Accès rapide
-          </span>
-        </div>
-        <div className="grid grid-cols-4 gap-2">
-          <PrimaryShortcut icon={ShoppingCart} label="Caisse" primary onClick={() => nav('pos')} />
-          <PrimaryShortcut icon={Globe} label="Web" badge={stats.webNew} tone="rose" onClick={() => nav('online_orders', stats.webNew > 0 ? { target: 'webNew' } : undefined)} />
-          <PrimaryShortcut icon={Receipt} label="Journal" onClick={() => nav('sales')} />
-          <PrimaryShortcut icon={Package} label="Articles" onClick={() => nav('articles')} />
-          <PrimaryShortcut icon={AlertTriangle} label="Stock" badge={stats.outOfStockCount} tone="amber" onClick={() => nav('stock', stats.outOfStockCount > 0 ? { target: 'outOfStock' } : undefined)} />
-          <PrimaryShortcut icon={FileText} label="Devis" badge={stats.pendingQuotes} tone="blue" onClick={() => nav('billing', stats.pendingQuotes > 0 ? { target: 'quotes' } : undefined)} />
-          <PrimaryShortcut icon={Users} label="Tiers" onClick={() => nav('tiers')} />
-          <PrimaryShortcut icon={Wallet} label="Caisses" onClick={() => nav('cash_history')} />
-        </div>
-      </div>
-
-      {/* ═══ ONLINE ORDERS OPERATIONS CENTER ═══ */}
-      <div
-        className="relative rounded-3xl overflow-hidden"
-        style={{
-          background: 'linear-gradient(180deg, #ffffff 0%, #fafafa 100%)',
-          boxShadow: '0 4px 16px -4px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04)',
-          border: '1px solid rgba(226,232,240,0.8)',
-        }}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center shadow-sm">
-              <Globe className="w-3.5 h-3.5 text-white" />
+      {/* ── ONLINE ORDERS — Compact funnel ── */}
+      {(stats.webNew > 0 || stats.webPrep > 0 || stats.webReady > 0) && (
+        <div
+          className="rounded-2xl overflow-hidden bg-white"
+          style={{ boxShadow: '0 1px 4px rgba(15,23,42,0.04)', border: '1px solid rgba(226,232,240,0.6)' }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100/60">
+            <div className="flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-teal-600" />
+              <span className="text-[11px] font-bold text-slate-800">Commandes en ligne</span>
             </div>
-            <div>
-              <div className="text-[12px] font-bold text-slate-900 leading-tight">Commandes en ligne</div>
-              <div className="text-[10px] text-slate-400 font-medium">
-                {stats.webTodayCount} aujourd'hui · {formatFCFA(stats.webTodayTotal)}
-              </div>
-            </div>
+            <button onClick={() => nav('online_orders')} className="text-[9px] font-bold text-brand-700 flex items-center gap-0.5">
+              Voir <ChevronRight className="w-2.5 h-2.5" />
+            </button>
           </div>
-          <button onClick={() => nav('online_orders')} className="text-[10px] font-bold text-brand-700 flex items-center gap-0.5">
-            Centre <ChevronRight className="w-3 h-3" />
-          </button>
+          <div className="grid grid-cols-3 divide-x divide-slate-100/60">
+            <FunnelCell count={stats.webNew} label="Nouvelles" tone="rose" onClick={() => nav('online_orders', { target: 'webNew' })} pulse />
+            <FunnelCell count={stats.webPrep} label="Préparation" tone="amber" onClick={() => nav('online_orders', { target: 'webPrep' })} />
+            <FunnelCell count={stats.webReady} label="Prêtes" tone="emerald" onClick={() => nav('online_orders', { target: 'webReady' })} />
+          </div>
         </div>
+      )}
 
-        <div className="grid grid-cols-3 divide-x divide-slate-100 bg-white">
-          <FunnelCell count={stats.webNew} label="Nouvelles" tone="rose" onClick={() => nav('online_orders', { target: 'webNew' })} pulse />
-          <FunnelCell count={stats.webPrep} label="Préparation" tone="amber" onClick={() => nav('online_orders', { target: 'webPrep' })} />
-          <FunnelCell count={stats.webReady} label="Prêtes" tone="emerald" onClick={() => nav('online_orders', { target: 'webReady' })} />
-        </div>
-
-        {stats.lastWebOrder && (
-          <button
-            onClick={() => nav('online_orders')}
-            className="w-full flex items-center gap-2 px-4 py-3 border-t border-slate-50 active:bg-slate-50/70 text-left"
-          >
-            <div className="w-7 h-7 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center shrink-0">
-              <Clock className="w-3 h-3 text-teal-600" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-bold text-slate-900 break-words">
-                {stats.lastWebOrder.order_number} · {stats.lastWebOrder.customer_name || 'Client'}
-              </div>
-              <div className="text-[12px] font-extrabold text-slate-900 num mt-0.5">
-                {formatFCFA(stats.lastWebOrder.total)}
-              </div>
-              <div className="text-[10px] text-slate-400 font-medium">
-                {getTimeAgo(stats.lastWebOrder.created_at)}{stats.webAvgWait > 0 && stats.webNew > 0 ? ` · attente ${stats.webAvgWait}min` : ''}
-              </div>
-            </div>
-          </button>
-        )}
-      </div>
-
-      {/* ═══ INTELLIGENT ALERTS ═══ */}
+      {/* ── INTELLIGENT ALERTS ── */}
       <IntelligentAlerts stats={stats} nav={nav} />
 
-      {/* ═══ TRANSACTIONAL TIMELINE ═══ */}
-      <div
-        className="relative rounded-3xl overflow-hidden"
-        style={{
-          background: '#ffffff',
-          boxShadow: '0 4px 16px -4px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04)',
-          border: '1px solid rgba(226,232,240,0.8)',
-        }}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-              <Activity className="w-3.5 h-3.5 text-white" />
-            </div>
-            <div>
-              <div className="text-[12px] font-bold text-slate-900 leading-tight">Activité récente</div>
-              <div className="text-[10px] text-slate-400 font-medium">Dernières transactions</div>
-            </div>
-          </div>
-          <button onClick={() => nav('sales')} className="text-[10px] font-bold text-brand-700 flex items-center gap-0.5">
-            Journal <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
+      {/* ── BUSINESS PULSE — Compact summary replacing verbose activity ── */}
+      <BusinessPulse stats={stats} balanceHidden={balanceHidden} nav={nav} />
 
-        {stats.recentSales.length === 0 ? (
-          <button onClick={() => nav('pos')} className="w-full py-6 text-center active:bg-slate-50/50">
-            <div className="w-10 h-10 mx-auto mb-2 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4 text-brand-600" />
-            </div>
-            <div className="text-[11px] text-slate-500 font-semibold">Aucune vente aujourd'hui</div>
-            <div className="text-[10px] text-brand-600 font-bold mt-1">Ouvrir la caisse →</div>
-          </button>
-        ) : (
-          <div className="px-2 py-1">
-            {stats.recentSales.slice(0, 5).map((s: any, idx: number) => (
-              <button
-                key={s.id}
-                onClick={() => nav('sales')}
-                className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl active:bg-slate-50 text-left relative"
-              >
-                {/* Timeline rail */}
-                <div className="relative shrink-0">
-                  <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-[0_2px_8px_-2px_rgba(16,185,129,0.5)]">
-                    <CheckCircle className="w-4 h-4 text-white" strokeWidth={2.5} />
-                  </div>
-                  {idx < Math.min(4, stats.recentSales.length - 1) && (
-                    <div className="absolute top-9 left-1/2 -translate-x-1/2 w-px h-[22px] bg-gradient-to-b from-slate-200 to-transparent" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-extrabold text-slate-900 break-words">
-                    {s.customers?.name || 'Client anonyme'}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium flex-wrap">
-                    <span>{s.sale_number}</span>
-                    <span>·</span>
-                    <span>{getTimeAgo(s.created_at)}</span>
-                    {s.sale_payments?.[0]?.method_name && (
-                      <>
-                        <span>·</span>
-                        <span>{s.sale_payments[0].method_name}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[13px] font-extrabold text-slate-900 num whitespace-nowrap">
-                    {balanceHidden ? '••••' : `+${formatFCFA(s.total)}`}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ═══ FOOTER REFERENCE STATS ═══ */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* ── FOOTER STATS ── */}
+      <div className="grid grid-cols-3 gap-1">
         <FooterChip icon={Package} value={stats.articlesCount} label="Articles" onClick={() => nav('articles')} />
         <FooterChip icon={Users} value={stats.customersCount} label="Clients" onClick={() => nav('tiers')} />
-        <FooterChip icon={Sparkles} value={stats.suppliersCount} label="Fourn." onClick={() => nav('tiers')} />
+        <FooterChip icon={Truck} value={stats.suppliersCount} label="Fourn." onClick={() => nav('tiers')} />
       </div>
 
       {shopInfo && !shopInfo.isActive && shopInfo.slug === null && (
         <button
           onClick={() => nav('settings')}
-          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-slate-50 border border-dashed border-slate-200 active:bg-slate-100"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 border border-dashed border-slate-200 active:bg-slate-100"
         >
           <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <span className="text-[11px] text-slate-500 font-semibold flex-1 text-left">Activer la boutique en ligne</span>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <span className="text-[10px] text-slate-500 font-semibold flex-1 text-left">Activer la boutique en ligne</span>
+          <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
         </button>
       )}
-    </>
+
+    </div>
   );
 }
 
@@ -672,7 +509,6 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, marginP
 
   return (
     <div className="space-y-5">
-      {/* Header row */}
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -706,11 +542,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, marginP
         </div>
       </div>
 
-      {/* Grid: left cockpit + right finance column */}
       <div className="grid grid-cols-12 gap-5 items-stretch">
-        {/* LEFT — operational cockpit */}
         <div className="col-span-12 xl:col-span-8 space-y-5">
-          {/* Hero banking card */}
+          {/* Hero */}
           <button
             onClick={() => nav('sales')}
             className="w-full text-left relative overflow-hidden rounded-[32px] p-6 group hover:scale-[1.005] transition-transform"
@@ -782,37 +616,22 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, marginP
                 </div>
               )}
               <div className="grid grid-cols-3 gap-3">
-                <InnerBankMetric label="Solde caisse" value={formatFCFA(stats.cashBalance)} icon={Wallet} large />
-                <InnerBankMetric label="Entrées" value={formatFCFA(stats.sessionCashIn)} icon={ArrowDownRight} positive large />
-                <InnerBankMetric label="Dépenses" value={formatFCFA(stats.sessionExpenses)} icon={ArrowUpLeft} negative large />
+                <InnerBankMetric label="Solde caisse" value={formatFCFA(stats.cashBalance)} icon={Wallet} />
+                <InnerBankMetric label="Entrées" value={formatFCFA(stats.sessionCashIn)} icon={ArrowDownRight} positive />
+                <InnerBankMetric label="Dépenses" value={formatFCFA(stats.sessionExpenses)} icon={ArrowUpLeft} negative />
               </div>
             </div>
           </button>
 
-          {/* Online orders funnel — wider desktop variant */}
-          <div
-            className="relative rounded-3xl overflow-hidden bg-white"
-            style={{
-              boxShadow: '0 4px 20px -6px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04)',
-              border: '1px solid rgba(226,232,240,0.8)',
-            }}
+          {/* Online orders */}
+          <Section
+            icon={Globe}
+            iconGradient="from-teal-500 to-teal-700"
+            title="Centre de commandes en ligne"
+            subtitle={`${stats.webTodayCount} aujourd'hui · ${formatFCFA(stats.webTodayTotal)}`}
+            action={{ label: 'Gérer', onClick: () => nav('online_orders'), dark: true }}
+            desktop
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center shadow-sm">
-                  <Globe className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-slate-900">Centre de commandes en ligne</div>
-                  <div className="text-xs text-slate-500 font-medium">
-                    {stats.webTodayCount} aujourd'hui · {formatFCFA(stats.webTodayTotal)}
-                  </div>
-                </div>
-              </div>
-              <button onClick={() => nav('online_orders')} className="inline-flex items-center gap-1 h-9 px-3 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800">
-                Gérer <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
             <div className="grid grid-cols-3 divide-x divide-slate-100">
               <FunnelCell count={stats.webNew} label="Nouvelles" tone="rose" onClick={() => nav('online_orders')} pulse large />
               <FunnelCell count={stats.webPrep} label="Préparation" tone="amber" onClick={() => nav('online_orders')} large />
@@ -836,31 +655,17 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, marginP
                 <span className="text-base font-extrabold text-slate-900 num">{formatFCFA(stats.lastWebOrder.total)}</span>
               </button>
             )}
-          </div>
+          </Section>
 
-          {/* Transactional timeline */}
-          <div
-            className="relative rounded-3xl overflow-hidden bg-white"
-            style={{
-              boxShadow: '0 4px 20px -6px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04)',
-              border: '1px solid rgba(226,232,240,0.8)',
-            }}
+          {/* Timeline */}
+          <Section
+            icon={Activity}
+            iconGradient="from-slate-700 to-slate-900"
+            title="Dernières transactions"
+            subtitle="Flux temps réel"
+            action={{ label: 'Journal complet', onClick: () => nav('sales') }}
+            desktop
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-slate-900">Dernières transactions</div>
-                  <div className="text-xs text-slate-500 font-medium">Flux temps réel</div>
-                </div>
-              </div>
-              <button onClick={() => nav('sales')} className="text-xs font-bold text-brand-700 hover:text-brand-800 flex items-center gap-1">
-                Journal complet <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
             {stats.recentSales.length === 0 ? (
               <button onClick={() => nav('pos')} className="w-full py-10 text-center hover:bg-slate-50/50">
                 <div className="w-12 h-12 mx-auto mb-3 rounded-3xl bg-brand-50 border border-brand-100 flex items-center justify-center">
@@ -881,7 +686,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, marginP
                       <CheckCircle className="w-4 h-4 text-white" strokeWidth={2.5} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold text-slate-900 truncate">{s.customers?.name || 'Client anonyme'}</div>
+                      <div className="text-sm font-bold text-slate-900 truncate">{s.customers?.name || 'Client comptoir'}</div>
                       <div className="text-xs text-slate-500 font-medium">
                         {s.sale_number} · {getTimeAgo(s.created_at)}
                         {s.sale_payments?.[0]?.method_name && ` · ${s.sale_payments[0].method_name}`}
@@ -894,58 +699,24 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, marginP
                 ))}
               </div>
             )}
-          </div>
+          </Section>
 
-          {/* Quick references — placed left so right column stays balanced */}
           <div className="grid grid-cols-3 gap-2">
             <FooterChip icon={Package} value={stats.articlesCount} label="Articles" onClick={() => nav('articles')} />
             <FooterChip icon={Users} value={stats.customersCount} label="Clients" onClick={() => nav('tiers')} />
-            <FooterChip icon={Sparkles} value={stats.suppliersCount} label="Fourn." onClick={() => nav('tiers')} />
+            <FooterChip icon={Truck} value={stats.suppliersCount} label="Fourn." onClick={() => nav('tiers')} />
           </div>
         </div>
 
-        {/* RIGHT — finance column */}
+        {/* RIGHT column */}
         <div className="col-span-12 xl:col-span-4 flex flex-col gap-5 h-full">
-          {/* Finance KPIs as stacked cards */}
           <div className="space-y-3">
-            <DesktopFinanceRow
-              tone="blue"
-              icon={CreditCard}
-              label="Créances clients"
-              value={formatFCFA(stats.receivables)}
-              sub={`${stats.customersCount} clients`}
-              onClick={() => nav('tiers', { target: 'receivables' })}
-            />
-            <DesktopFinanceRow
-              tone="amber"
-              icon={Truck}
-              label="Dettes fournisseurs"
-              value={formatFCFA(stats.payables)}
-              sub={`${stats.suppliersCount} fournisseurs`}
-              onClick={() => nav('supplier_orders', { target: 'payables' })}
-            />
-            <DesktopFinanceRow
-              tone={stats.outOfStockCount > 0 ? 'rose' : 'slate'}
-              icon={AlertTriangle}
-              label="Ruptures de stock"
-              value={String(stats.outOfStockCount)}
-              sub={stats.lowStockCount > 0 ? `${stats.lowStockCount} stocks bas` : 'stocks à jour'}
-              onClick={() => nav('stock', { target: 'outOfStock' })}
-            />
-            <DesktopFinanceRow
-              tone="emerald"
-              icon={Package}
-              label="Entrées stock"
-              value={String(stats.stockInToday)}
-              sub="aujourd'hui"
-              onClick={() => nav('stock', { target: 'stockIn' })}
-            />
+            <DesktopFinanceRow tone="blue" icon={CreditCard} label="Créances clients" value={formatFCFA(stats.receivables)} sub={`${stats.customersCount} clients`} onClick={() => nav('tiers', { target: 'receivables' })} />
+            <DesktopFinanceRow tone="amber" icon={Truck} label="Dettes fournisseurs" value={formatFCFA(stats.payables)} sub={`${stats.suppliersCount} fournisseurs`} onClick={() => nav('supplier_orders', { target: 'payables' })} />
+            <DesktopFinanceRow tone={stats.outOfStockCount > 0 ? 'rose' : 'slate'} icon={AlertTriangle} label="Ruptures de stock" value={String(stats.outOfStockCount)} sub={stats.lowStockCount > 0 ? `${stats.lowStockCount} stocks bas` : 'stocks à jour'} onClick={() => nav('stock', { target: 'outOfStock' })} />
+            <DesktopFinanceRow tone="emerald" icon={Package} label="Entrées stock" value={String(stats.stockInToday)} sub="aujourd'hui" onClick={() => nav('stock', { target: 'stockIn' })} />
           </div>
-
-          {/* Alerts */}
           <IntelligentAlerts stats={stats} nav={nav} />
-
-          {/* Activité caisse — fills remaining right-column space */}
           <div className="flex-1 flex flex-col min-h-[140px]">
             <CashActivityCard stats={stats} marginPct={marginPct} nav={nav} />
           </div>
@@ -959,53 +730,65 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, marginP
  *  REUSABLE SUB-COMPONENTS
  * ════════════════════════════════════════════════════════════════════════════ */
 
-function InnerBankMetric({ label, value, icon: Icon, positive, negative, large }: any) {
+function HeroMetric({ label, value, icon: Icon, positive, negative }: any) {
+  return (
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center gap-1 mb-0.5">
+        <Icon className={`w-2.5 h-2.5 shrink-0 ${positive ? 'text-emerald-300' : negative ? 'text-rose-300' : 'text-white/50'}`} />
+        <span className="text-[8px] font-semibold text-white/40 uppercase tracking-wider truncate">{label}</span>
+      </div>
+      <div className="text-[11px] font-bold text-white/90 num leading-tight truncate">{value}</div>
+    </div>
+  );
+}
+
+function InnerBankMetric({ label, value, icon: Icon, positive, negative }: any) {
   return (
     <div className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 p-2.5 min-w-0 overflow-hidden">
       <div className="flex items-center gap-1">
         <Icon className={`w-2.5 h-2.5 shrink-0 ${positive ? 'text-emerald-300' : negative ? 'text-rose-300' : 'text-white/60'}`} />
         <span className="text-[9px] font-bold text-white/60 uppercase tracking-wider leading-tight break-words">{label}</span>
       </div>
-      <div className={`${large ? 'text-xl' : 'text-[13px]'} font-black text-white num mt-1 leading-tight break-all`}>{value}</div>
+      <div className="text-xl font-black text-white num mt-1 leading-tight break-all">{value}</div>
     </div>
   );
 }
 
-function FinanceCard({ icon: Icon, label, value, sub, tone, onClick, pulse }: any) {
+function KpiCard({ icon: Icon, label, value, tone, onClick, pulse }: any) {
   const tones: Record<string, any> = {
-    blue:    { iconBg: 'bg-blue-50',    iconColor: 'text-blue-600',    border: 'border-blue-100',    accent: 'from-blue-500 to-blue-700' },
-    amber:   { iconBg: 'bg-amber-50',   iconColor: 'text-amber-600',   border: 'border-amber-100',   accent: 'from-amber-500 to-amber-700' },
-    rose:    { iconBg: 'bg-rose-50',    iconColor: 'text-rose-600',    border: 'border-rose-100',    accent: 'from-rose-500 to-rose-700' },
-    emerald: { iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', border: 'border-emerald-100', accent: 'from-emerald-500 to-emerald-700' },
-    slate:   { iconBg: 'bg-slate-100',  iconColor: 'text-slate-500',   border: 'border-slate-200',   accent: 'from-slate-500 to-slate-700' },
+    blue:    { iconBg: 'bg-blue-50', iconColor: 'text-blue-600', border: 'border-blue-100/60' },
+    amber:   { iconBg: 'bg-amber-50', iconColor: 'text-amber-600', border: 'border-amber-100/60' },
+    rose:    { iconBg: 'bg-rose-50', iconColor: 'text-rose-600', border: 'border-rose-100/60' },
+    emerald: { iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', border: 'border-emerald-100/60' },
+    teal:    { iconBg: 'bg-teal-50', iconColor: 'text-teal-600', border: 'border-teal-100/60' },
+    slate:   { iconBg: 'bg-slate-100', iconColor: 'text-slate-500', border: 'border-slate-200/60' },
   };
   const t = tones[tone] || tones.slate;
   return (
     <button
       onClick={onClick}
-      className={`relative snap-start shrink-0 w-[160px] rounded-2xl bg-white border ${t.border} p-3 text-left active:scale-[0.97] transition-all overflow-hidden`}
-      style={{ boxShadow: '0 2px 8px -2px rgba(15,23,42,0.06)' }}
+      className={`relative rounded-xl bg-white border ${t.border} p-1.5 text-left active:scale-[0.96] transition-all overflow-hidden`}
+      style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}
     >
-      <div className="flex items-center justify-between">
-        <div className={`w-7 h-7 rounded-xl ${t.iconBg} flex items-center justify-center`}>
-          <Icon className={`w-3.5 h-3.5 ${t.iconColor}`} />
+      <div className="flex items-center justify-between mb-0.5">
+        <div className={`w-5 h-5 rounded-md ${t.iconBg} flex items-center justify-center`}>
+          <Icon className={`w-2.5 h-2.5 ${t.iconColor}`} />
         </div>
-        {pulse && <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-rose-500 animate-ping" /><span className="relative rounded-full bg-rose-500 w-2 h-2" /></span>}
+        {pulse && <span className="relative flex w-1.5 h-1.5"><span className="absolute inset-0 rounded-full bg-rose-500 animate-ping" /><span className="relative rounded-full bg-rose-500 w-1.5 h-1.5" /></span>}
       </div>
-      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-2">{label}</div>
-      <div className="text-[14px] font-extrabold text-slate-900 num leading-tight mt-0.5 break-all">{value}</div>
-      <div className="text-[10px] text-slate-500 font-medium mt-0.5">{sub}</div>
+      <div className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider leading-tight">{label}</div>
+      <div className="num font-extrabold text-slate-900 leading-tight mt-0.5" style={{ fontSize: 'clamp(9px, 2.8vw, 12px)' }}>{value}</div>
     </button>
   );
 }
 
 function DesktopFinanceRow({ icon: Icon, label, value, sub, tone, onClick }: any) {
   const tones: Record<string, any> = {
-    blue:    { iconBg: 'bg-blue-50',    iconColor: 'text-blue-600' },
-    amber:   { iconBg: 'bg-amber-50',   iconColor: 'text-amber-600' },
-    rose:    { iconBg: 'bg-rose-50',    iconColor: 'text-rose-600' },
+    blue:    { iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
+    amber:   { iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
+    rose:    { iconBg: 'bg-rose-50', iconColor: 'text-rose-600' },
     emerald: { iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-    slate:   { iconBg: 'bg-slate-100',  iconColor: 'text-slate-500' },
+    slate:   { iconBg: 'bg-slate-100', iconColor: 'text-slate-500' },
   };
   const t = tones[tone] || tones.slate;
   return (
@@ -1018,7 +801,7 @@ function DesktopFinanceRow({ icon: Icon, label, value, sub, tone, onClick }: any
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</div>
-        <div className="text-xl font-extrabold text-slate-900 num leading-tight mt-0.5 whitespace-nowrap">{value}</div>
+        <div className="text-xl font-extrabold text-slate-900 num leading-tight mt-0.5 break-all">{value}</div>
         <div className="text-[11px] text-slate-500 font-medium">{sub}</div>
       </div>
       <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
@@ -1026,36 +809,39 @@ function DesktopFinanceRow({ icon: Icon, label, value, sub, tone, onClick }: any
   );
 }
 
-function PrimaryShortcut({ icon: Icon, label, onClick, badge, primary, tone = 'slate' }: any) {
-  const tones: Record<string, string> = {
-    rose: 'text-rose-600',
-    amber: 'text-amber-600',
-    blue: 'text-blue-600',
-    slate: 'text-slate-600',
-  };
-  const iconColor = primary ? 'text-white' : tones[tone] || tones.slate;
-
+function Section({ icon: Icon, iconGradient, title, subtitle, action, children, desktop }: any) {
   return (
-    <button
-      onClick={onClick}
-      className={`relative flex flex-col items-center justify-center gap-1.5 rounded-2xl py-3 px-1 active:scale-[0.93] transition-all ${
-        primary ? '' : 'bg-white border border-slate-200/70'
-      }`}
-      style={primary ? {
-        background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)',
-        boxShadow: '0 8px 20px -6px rgba(15,118,110,0.5), 0 2px 4px rgba(15,118,110,0.15), inset 0 1px 0 rgba(255,255,255,0.15)',
-      } : {
-        boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+    <div
+      className="relative rounded-2xl overflow-hidden bg-white"
+      style={{
+        boxShadow: '0 1px 4px rgba(15,23,42,0.04)',
+        border: '1px solid rgba(226,232,240,0.6)',
       }}
     >
-      {!!badge && badge > 0 && (
-        <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center border border-white num">
-          {badge > 9 ? '9+' : badge}
-        </span>
-      )}
-      <Icon className={`w-[18px] h-[18px] ${iconColor}`} strokeWidth={primary ? 2.4 : 2} />
-      <span className={`text-[10px] font-bold leading-none ${primary ? 'text-white' : 'text-slate-700'}`}>{label}</span>
-    </button>
+      <div className={`flex items-center justify-between ${desktop ? 'px-5 py-4' : 'px-3 py-2'} border-b border-slate-100/60`}>
+        <div className="flex items-center gap-2">
+          <div className={`${desktop ? 'w-9 h-9 rounded-2xl' : 'w-6 h-6 rounded-lg'} bg-gradient-to-br ${iconGradient} flex items-center justify-center`}>
+            <Icon className={`${desktop ? 'w-4 h-4' : 'w-3 h-3'} text-white`} />
+          </div>
+          <div>
+            <div className={`${desktop ? 'text-sm' : 'text-[11px]'} font-bold text-slate-800 leading-tight`}>{title}</div>
+            {subtitle && <div className={`${desktop ? 'text-xs' : 'text-[9px]'} text-slate-400 font-medium`}>{subtitle}</div>}
+          </div>
+        </div>
+        {action && (
+          action.dark ? (
+            <button onClick={action.onClick} className="inline-flex items-center gap-1 h-8 px-3 rounded-xl bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-800">
+              {action.label} <ChevronRight className="w-3 h-3" />
+            </button>
+          ) : (
+            <button onClick={action.onClick} className="text-[9px] font-bold text-brand-700 flex items-center gap-0.5">
+              {action.label} <ChevronRight className="w-2.5 h-2.5" />
+            </button>
+          )
+        )}
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -1067,15 +853,15 @@ function FunnelCell({ count, label, tone, onClick, pulse, large }: any) {
   };
   const t = tones[tone];
   return (
-    <button onClick={onClick} className={`relative flex flex-col items-center justify-center gap-0.5 ${large ? 'py-5' : 'py-3'} transition-colors ${t.hover}`}>
+    <button onClick={onClick} className={`relative flex flex-col items-center justify-center gap-0.5 ${large ? 'py-5' : 'py-2.5'} transition-colors ${t.hover} active:scale-95`}>
       {pulse && count > 0 && (
-        <span className="absolute top-2 right-1/3 flex w-1.5 h-1.5">
+        <span className="absolute top-1.5 right-1/3 flex w-1.5 h-1.5">
           <span className={`absolute inset-0 rounded-full ${t.dot} animate-ping opacity-75`} />
           <span className={`relative rounded-full ${t.dot} w-1.5 h-1.5`} />
         </span>
       )}
-      <span className={`${large ? 'text-3xl' : 'text-xl'} font-black num leading-none ${t.text}`}>{count}</span>
-      <span className={`text-[10px] font-bold uppercase tracking-wider ${t.label}`}>{label}</span>
+      <span className={`${large ? 'text-3xl' : 'text-lg'} font-black num leading-none ${t.text}`}>{count}</span>
+      <span className={`text-[9px] font-bold uppercase tracking-wider ${t.label}`}>{label}</span>
     </button>
   );
 }
@@ -1099,59 +885,97 @@ function IntelligentAlerts({ stats, nav }: any) {
   };
 
   return (
-    <div
-      className="relative rounded-3xl overflow-hidden bg-white"
-      style={{
-        boxShadow: '0 4px 16px -4px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04)',
-        border: '1px solid rgba(226,232,240,0.8)',
-      }}
-    >
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
-        <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-400 to-rose-500 flex items-center justify-center shadow-sm">
-          <Bell className="w-3.5 h-3.5 text-white" />
-        </div>
-        <div className="text-[12px] font-bold text-slate-900">Notifications intelligentes</div>
-        <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 num">
-          {alerts.length}
-        </span>
-      </div>
-      <div className="p-2 space-y-1.5">
-        {alerts.map((a, i) => {
-          const Icon = a.icon;
-          const t = toneMap[a.tone];
-          return (
-            <button
-              key={i}
-              onClick={() => nav(a.route, a.ctx)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl ${t.bg} ${t.border} border active:scale-[0.98] transition-all text-left`}
-            >
-              <div className={`w-8 h-8 rounded-xl ${t.iconBg} flex items-center justify-center shrink-0 shadow-sm`}>
-                <Icon className="w-4 h-4 text-white" strokeWidth={2.5} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className={`text-[12px] font-bold ${t.text} truncate`}>{a.title}</div>
-                <div className="text-[10px] text-slate-600 font-medium">{a.detail}</div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
-            </button>
-          );
-        })}
-      </div>
+    <div className="space-y-1">
+      {alerts.slice(0, 3).map((a, i) => {
+        const Icon = a.icon;
+        const t = toneMap[a.tone];
+        return (
+          <button
+            key={i}
+            onClick={() => nav(a.route, a.ctx)}
+            className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl ${t.bg} ${t.border} border active:scale-[0.98] transition-all text-left`}
+          >
+            <div className={`w-6 h-6 rounded-lg ${t.iconBg} flex items-center justify-center shrink-0`}>
+              <Icon className="w-3 h-3 text-white" strokeWidth={2.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className={`text-[10px] font-bold ${t.text} truncate`}>{a.title}</div>
+              <div className="text-[8px] text-slate-500 font-medium">{a.detail}</div>
+            </div>
+            <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+          </button>
+        );
+      })}
     </div>
   );
 }
+
+function BusinessPulse({ stats, balanceHidden, nav }: any) {
+  const avgTicket = stats.todayCount > 0 ? Math.round(stats.todaySales / stats.todayCount) : 0;
+  const topSale = stats.recentSales.length > 0 ? stats.recentSales[0] : null;
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden bg-white"
+      style={{ boxShadow: '0 1px 4px rgba(15,23,42,0.04)', border: '1px solid rgba(226,232,240,0.6)' }}
+    >
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100/60">
+        <div className="flex items-center gap-1.5">
+          <Activity className="w-3 h-3 text-slate-500" />
+          <span className="text-[10px] font-bold text-slate-700">Santé business</span>
+        </div>
+        <button onClick={() => nav('sales')} className="text-[9px] font-bold text-brand-700 flex items-center gap-0.5">
+          Journal <ChevronRight className="w-2.5 h-2.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-slate-100/60">
+        <div className="px-3 py-2">
+          <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Ticket moyen</div>
+          <div className="text-[13px] font-extrabold text-slate-900 num leading-tight mt-0.5">
+            {balanceHidden ? '•••' : formatFCFA(avgTicket)}
+          </div>
+        </div>
+        <div className="px-3 py-2">
+          <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Dernière vente</div>
+          <div className="text-[13px] font-extrabold text-slate-900 num leading-tight mt-0.5 truncate">
+            {topSale ? (balanceHidden ? '•••' : formatFCFA(topSale.total)) : '-'}
+          </div>
+        </div>
+      </div>
+      {topSale && (
+        <button
+          onClick={() => nav('sales')}
+          className="w-full flex items-center gap-2 px-3 py-1.5 border-t border-slate-100/60 active:bg-slate-50/50 text-left"
+        >
+          <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
+            <CheckCircle className="w-2.5 h-2.5 text-emerald-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-semibold text-slate-700 truncate">
+              {topSale.customers?.name || 'Client comptoir'}
+            </div>
+          </div>
+          <div className="text-[9px] text-slate-400 font-medium shrink-0">
+            {getTimeAgo(topSale.created_at)}
+          </div>
+        </button>
+      )}
+    </div>
+  );
+}
+
 
 function FooterChip({ icon: Icon, value, label, onClick }: any) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200/70 px-2.5 py-2 active:scale-[0.97] transition-all"
-      style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}
+      className="flex items-center gap-1.5 rounded-xl bg-white border border-slate-200/60 px-2 py-1.5 active:scale-[0.97] transition-all"
+      style={{ boxShadow: '0 1px 2px rgba(15,23,42,0.03)' }}
     >
-      <Icon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+      <Icon className="w-3 h-3 text-slate-400 shrink-0" />
       <div className="flex-1 text-left min-w-0">
-        <div className="text-sm font-extrabold text-slate-900 num leading-none">{value}</div>
-        <div className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate">{label}</div>
+        <div className="text-[12px] font-extrabold text-slate-900 num leading-none">{value}</div>
+        <div className="text-[8px] text-slate-400 font-semibold mt-0.5 truncate">{label}</div>
       </div>
     </button>
   );
@@ -1163,10 +987,10 @@ function CashActivityCard({ stats, marginPct, nav }: { stats: Stats; marginPct: 
 
   return (
     <div
-      className="relative rounded-3xl overflow-hidden bg-white flex-1 flex flex-col"
+      className="relative rounded-[20px] overflow-hidden bg-white flex-1 flex flex-col"
       style={{
-        boxShadow: '0 4px 20px -6px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.04)',
-        border: '1px solid rgba(226,232,240,0.8)',
+        boxShadow: '0 2px 12px -4px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.03)',
+        border: '1px solid rgba(226,232,240,0.7)',
       }}
     >
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -1194,14 +1018,14 @@ function CashActivityCard({ stats, marginPct, nav }: { stats: Stats; marginPct: 
             <ArrowUpRight className="w-3 h-3 text-emerald-600" />
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Entrées</span>
           </div>
-          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1 whitespace-nowrap">{formatFCFA(stats.sessionCashIn)}</div>
+          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1">{formatFCFA(stats.sessionCashIn)}</div>
         </div>
         <div className="px-4 py-3">
           <div className="flex items-center gap-1.5">
             <ArrowDownRight className="w-3 h-3 text-rose-600" />
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dépenses</span>
           </div>
-          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1 whitespace-nowrap">{formatFCFA(stats.sessionExpenses)}</div>
+          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1">{formatFCFA(stats.sessionExpenses)}</div>
         </div>
       </div>
 
@@ -1211,7 +1035,7 @@ function CashActivityCard({ stats, marginPct, nav }: { stats: Stats; marginPct: 
             <Activity className="w-3 h-3 text-slate-500" />
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Flux net</span>
           </div>
-          <div className={`text-[15px] font-extrabold num leading-tight mt-1 whitespace-nowrap ${netCash >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+          <div className={`text-[15px] font-extrabold num leading-tight mt-1 ${netCash >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
             {netCash >= 0 ? '+' : ''}{formatFCFA(netCash)}
           </div>
         </div>
@@ -1220,7 +1044,7 @@ function CashActivityCard({ stats, marginPct, nav }: { stats: Stats; marginPct: 
             <Receipt className="w-3 h-3 text-slate-500" />
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ticket moyen</span>
           </div>
-          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1 whitespace-nowrap">{formatFCFA(avgTicket)}</div>
+          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1">{formatFCFA(avgTicket)}</div>
         </div>
       </div>
 

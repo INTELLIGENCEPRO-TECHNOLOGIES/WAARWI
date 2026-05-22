@@ -2,7 +2,8 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
-  Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library
+  Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
+  Plus, CreditCard, Wallet, ChevronRight, Truck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -45,7 +46,6 @@ const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any
 const MOBILE_TABS: { key: Route; label: string; icon: any }[] = [
   { key: 'dashboard', label: 'Accueil', icon: LayoutDashboard },
   { key: 'pos', label: 'Caisse', icon: ShoppingCart },
-  { key: 'articles', label: 'Articles', icon: Package },
   { key: 'online_orders', label: 'Commandes', icon: Globe },
   { key: 'sales', label: 'Journal', icon: Calculator },
 ];
@@ -91,6 +91,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     .filter(g => g.items.length > 0);
   const visibleMobileTabs = MOBILE_TABS.filter(t => routeVisible(t.key));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [tenantTagline, setTenantTagline] = useState('');
 
@@ -536,71 +537,163 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
         <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
           {isPOS ? (
-            <div className="flex-1 flex flex-col min-h-0 pb-[72px] lg:pb-0">{children}</div>
+            <div className="flex-1 flex flex-col min-h-0 pb-[64px] lg:pb-0">{children}</div>
           ) : (
-            <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[92px] lg:pb-8">{children}</div>
+            <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[76px] lg:pb-8">{children}</div>
           )}
         </main>
 
-        {/* Floating premium banking dock — global, persistent across all routes */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none" style={{ paddingBottom: 'max(14px, calc(env(safe-area-inset-bottom) + 6px))' }}>
-          <div className="mx-3 pointer-events-auto relative">
+        {/* Bottom nav — dark teal, full width, with FAB notch */}
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="pointer-events-auto">
             <div
-              aria-hidden
-              className="absolute inset-x-4 -bottom-2 h-8 rounded-full opacity-60 blur-2xl"
-              style={{ background: 'radial-gradient(60% 100% at 50% 50%, rgba(13,148,136,0.35), rgba(15,23,42,0.05) 70%, transparent)' }}
-            />
-            <div
-              className="relative flex items-center justify-around rounded-[26px] px-1.5 py-1.5"
+              className="relative flex items-center justify-around h-[54px]"
               style={{
-                background: 'rgba(255,255,255,0.78)',
-                backdropFilter: 'saturate(1.9) blur(28px)',
-                WebkitBackdropFilter: 'saturate(1.9) blur(28px)',
-                border: '1px solid rgba(255,255,255,0.92)',
-                boxShadow: '0 18px 42px -10px rgba(15,23,42,0.28), 0 4px 12px -4px rgba(15,23,42,0.1), inset 0 1px 0 rgba(255,255,255,0.98), inset 0 -1px 0 rgba(226,232,240,0.5), 0 0 0 1px rgba(226,232,240,0.4)',
+                background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)',
+                boxShadow: '0 -2px 12px -4px rgba(15,118,110,0.3)',
               }}
             >
-              {(isSuperAdmin ? [{ key: 'platform_admin' as Route, label: 'Plateforme', icon: Crown }] : visibleMobileTabs).map(tab => {
-                const Icon = tab.icon;
-                const active = route === tab.key;
-                const badge = tab.key === 'online_orders' ? badgeFor(tab.key) : 0;
+              {(() => {
+                const tabs = isSuperAdmin ? [{ key: 'platform_admin' as Route, label: 'Plateforme', icon: Crown }] : visibleMobileTabs;
+                const mid = Math.floor(tabs.length / 2);
+                const left = tabs.slice(0, mid);
+                const right = tabs.slice(mid);
                 return (
-                  <button
-                    key={tab.key}
-                    onClick={() => onRoute(tab.key)}
-                    className="relative flex flex-col items-center justify-center gap-[3px] px-1 py-0.5 rounded-xl transition-all duration-300 active:scale-[0.88] min-w-0 flex-1"
-                  >
-                    {active && (
-                      <span
-                        aria-hidden
-                        className="absolute -top-1 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full opacity-70 blur-xl"
-                        style={{ background: 'radial-gradient(circle, rgba(13,148,136,0.6) 0%, rgba(13,148,136,0.2) 50%, transparent 75%)' }}
-                      />
-                    )}
-                    <div
-                      className={`relative w-[42px] h-[32px] flex items-center justify-center rounded-[14px] transition-all duration-300 ${
-                        active ? 'bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 -translate-y-0.5' : ''
-                      }`}
-                      style={active ? {
-                        boxShadow: '0 8px 20px -4px rgba(13,148,136,0.55), 0 3px 8px -2px rgba(15,118,110,0.35), inset 0 1px 0 rgba(255,255,255,0.25), 0 0 0 1px rgba(13,148,136,0.4)',
-                      } : undefined}
-                    >
-                      <Icon className={`w-[18px] h-[18px] transition-all duration-300 ${active ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]' : 'text-slate-500'}`} strokeWidth={active ? 2.5 : 2} />
-                      {badge > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-gradient-to-br from-rose-500 to-rose-600 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white num shadow-md animate-pulse">
-                          {badge > 9 ? '9+' : badge}
-                        </span>
-                      )}
-                    </div>
-                    <span className={`text-[9.5px] font-bold leading-none transition-all duration-300 tracking-tight ${active ? 'text-brand-700' : 'text-slate-400'}`}>
-                      {tab.label}
-                    </span>
-                  </button>
+                  <>
+                    {left.map(tab => {
+                      const Icon = tab.icon;
+                      const active = route === tab.key;
+                      const badge = tab.key === 'online_orders' ? badgeFor(tab.key) : 0;
+                      return (
+                        <button
+                          key={tab.key}
+                          onClick={() => onRoute(tab.key)}
+                          className="relative flex flex-col items-center justify-center gap-[2px] transition-all duration-200 active:scale-[0.88] min-w-0 flex-1 h-full"
+                        >
+                          <div className="relative flex items-center justify-center">
+                            <Icon className={`w-[18px] h-[18px] transition-all duration-200 ${active ? 'text-white' : 'text-white/50'}`} strokeWidth={active ? 2.3 : 1.8} />
+                            {badge > 0 && (
+                              <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-rose-500 text-white text-[7px] font-extrabold flex items-center justify-center border-[1.5px] border-teal-800 num">
+                                {badge > 9 ? '9+' : badge}
+                              </span>
+                            )}
+                          </div>
+                          <span className={`text-[8.5px] font-semibold leading-none ${active ? 'text-white' : 'text-white/45'}`}>{tab.label}</span>
+                          {active && <span aria-hidden className="absolute bottom-[6px] left-1/2 -translate-x-1/2 w-3.5 h-[2px] rounded-full bg-white/80" />}
+                        </button>
+                      );
+                    })}
+                    {/* Center spacer for FAB */}
+                    <div className="w-[60px] shrink-0" />
+                    {right.map(tab => {
+                      const Icon = tab.icon;
+                      const active = route === tab.key;
+                      const badge = tab.key === 'online_orders' ? badgeFor(tab.key) : 0;
+                      return (
+                        <button
+                          key={tab.key}
+                          onClick={() => onRoute(tab.key)}
+                          className="relative flex flex-col items-center justify-center gap-[2px] transition-all duration-200 active:scale-[0.88] min-w-0 flex-1 h-full"
+                        >
+                          <div className="relative flex items-center justify-center">
+                            <Icon className={`w-[18px] h-[18px] transition-all duration-200 ${active ? 'text-white' : 'text-white/50'}`} strokeWidth={active ? 2.3 : 1.8} />
+                            {badge > 0 && (
+                              <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-rose-500 text-white text-[7px] font-extrabold flex items-center justify-center border-[1.5px] border-teal-800 num">
+                                {badge > 9 ? '9+' : badge}
+                              </span>
+                            )}
+                          </div>
+                          <span className={`text-[8.5px] font-semibold leading-none ${active ? 'text-white' : 'text-white/45'}`}>{tab.label}</span>
+                          {active && <span aria-hidden className="absolute bottom-[6px] left-1/2 -translate-x-1/2 w-3.5 h-[2px] rounded-full bg-white/80" />}
+                        </button>
+                      );
+                    })}
+                  </>
                 );
-              })}
+              })()}
             </div>
           </div>
         </nav>
+
+        {/* FAB overlay */}
+        {fabOpen && (
+          <div
+            className="lg:hidden fixed inset-0 z-[42]"
+            style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+            onClick={() => setFabOpen(false)}
+          />
+        )}
+
+        {/* FAB actions panel */}
+        {fabOpen && (
+          <div className="lg:hidden fixed inset-x-0 z-[44] flex justify-center px-3 animate-scale-in" style={{ bottom: 'calc(max(6px, env(safe-area-inset-bottom)) + 72px)' }}>
+            <div
+              className="w-full max-w-[340px] rounded-[22px] overflow-hidden"
+              style={{
+                background: 'rgba(255,255,255,0.97)',
+                backdropFilter: 'saturate(1.8) blur(24px)',
+                WebkitBackdropFilter: 'saturate(1.8) blur(24px)',
+                boxShadow: '0 24px 60px -12px rgba(15,23,42,0.35), 0 6px 16px -4px rgba(15,23,42,0.12)',
+                border: '1px solid rgba(255,255,255,0.9)',
+              }}
+            >
+              <div className="px-4 pt-3 pb-2 border-b border-slate-100/60">
+                <div className="text-[11px] font-bold text-slate-800">Actions rapides</div>
+                <div className="text-[9px] text-slate-400 font-medium">Raccourcis intelligents</div>
+              </div>
+              <div className="p-2 space-y-0.5">
+                {[
+                  { icon: CreditCard, label: 'Encaisser client', desc: 'Règlement facture', route: 'tiers' as Route },
+                  { icon: Wallet, label: 'Saisir acompte', desc: 'Paiement partiel', route: 'tiers' as Route },
+                  { icon: Receipt, label: 'Réimprimer ticket', desc: 'Session en cours', route: 'sales' as Route },
+                  { icon: ShoppingCart, label: 'Vente rapide', desc: 'Ouvrir la caisse', route: 'pos' as Route },
+                  { icon: Package, label: 'Entrée stock', desc: 'Réception rapide', route: 'stock' as Route },
+                  { icon: FileText, label: 'Nouveau devis', desc: 'Créer un devis', route: 'billing' as Route },
+                ].map((a, i) => {
+                  const Icon = a.icon;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => { onRoute(a.route); setFabOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl active:scale-[0.97] active:bg-teal-50/60 transition-all text-left"
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-100/60 flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-teal-700" strokeWidth={2} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-bold text-slate-800">{a.label}</div>
+                        <div className="text-[9px] text-slate-400 font-medium">{a.desc}</div>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FAB button — centered over nav bar top edge, below modals (z-50) */}
+        <button
+          onClick={() => setFabOpen(v => !v)}
+          className="lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-300 active:scale-90"
+          style={{
+            bottom: 'calc(env(safe-area-inset-bottom) + 28px)',
+            transform: `translateX(-50%) ${fabOpen ? 'rotate(135deg)' : 'rotate(0deg)'}`,
+            width: '50px',
+            height: '50px',
+            borderRadius: '50%',
+            background: fabOpen
+              ? 'linear-gradient(135deg, #1e293b, #0f172a)'
+              : 'linear-gradient(145deg, #ccfbf1 0%, #5eead4 50%, #2dd4bf 100%)',
+            boxShadow: fabOpen
+              ? '0 6px 20px -4px rgba(15,23,42,0.6)'
+              : '0 4px 14px -3px rgba(13,148,136,0.5)',
+            border: '3px solid #064e3b',
+          }}
+        >
+          <Plus className={`w-5 h-5 ${fabOpen ? 'text-white' : 'text-teal-900'}`} strokeWidth={fabOpen ? 2.5 : 2.8} />
+        </button>
       </div>
     </div>
   );

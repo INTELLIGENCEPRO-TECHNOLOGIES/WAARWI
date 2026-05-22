@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Plus, FileText, Loader2, Search, Eye, Printer, CheckCircle, X, Trash2, Car,
+  Plus, FileText, Loader2, Eye, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, User,
-  CreditCard, ShoppingCart, ArrowRight, Banknote
+  CreditCard, ShoppingCart, ArrowRight, Banknote, MessageCircle, Link2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -37,6 +37,7 @@ type Invoice = {
   id: string; sale_number: string; total: number; paid: number; status: string;
   customer_id: string | null;
   created_at: string;
+  public_code?: string | null;
   customers: { name: string } | null;
 };
 type SaleReturn = {
@@ -157,9 +158,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (!silent) setLoading(true);
     const siteId = currentSite.id;
     const [q, s, r] = await Promise.all([
-      supabase.from('quotes').select('*, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
-      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
-      supabase.from('sale_returns').select('*, customers(name), sales(sale_number)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
+      supabase.from('quotes').select('*, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
+      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
+      supabase.from('sale_returns').select('*, customers(name, phone, address), sales(sale_number)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
     ]);
     setQuotes((q.data as any) || []);
     setInvoices((s.data as any) || []);
@@ -327,7 +328,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       docLabel: 'DEVIS',
       docNumber: quoteDetail.quote_number,
       docDate: new Date(quoteDetail.created_at).toLocaleDateString('fr-FR'),
-      customer: quoteDetail.customers ? { name: quoteDetail.customers.name } : null,
+      customer: quoteDetail.customers ? { name: quoteDetail.customers.name, phone: (quoteDetail.customers as any).phone || undefined, address: (quoteDetail.customers as any).address || undefined } : null,
       items, subtotal, total: Number(quoteDetail.total),
       footerNote: 'Devis valable 30 jours à compter de la date d\'émission.',
     });
@@ -375,7 +376,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
 
   const reloadInvoice = async (id: string) => {
-    const { data } = await supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, customers(name)').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, customers(name, phone, address)').eq('id', id).maybeSingle();
     if (data) {
       setInvoiceDetail(data as any);
       const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', id);
@@ -393,12 +394,54 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       docLabel: 'FACTURE',
       docNumber: invoiceDetail.sale_number,
       docDate: new Date(invoiceDetail.created_at).toLocaleDateString('fr-FR'),
-      customer: invoiceDetail.customers ? { name: invoiceDetail.customers.name } : null,
+      customer: invoiceDetail.customers ? { name: invoiceDetail.customers.name, phone: (invoiceDetail.customers as any).phone || undefined, address: (invoiceDetail.customers as any).address || undefined } : null,
       items, subtotal, total: Number(invoiceDetail.total),
       payments: invoicePays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(invoiceDetail.paid),
     });
   };
+
+  const invoiceUrl = (inv: Invoice | null) => {
+    if (!inv?.public_code) return '';
+    return `${window.location.origin}/inv/${inv.public_code}`;
+  };
+
+  const copyInvoiceLink = async (inv?: Invoice | null) => {
+    const target = inv || invoiceDetail;
+    const url = invoiceUrl(target);
+    if (!url) { error('Lien indisponible'); return; }
+    try {
+      await navigator.clipboard.writeText(url);
+      success('Lien copié');
+    } catch {
+      window.prompt('Copiez le lien :', url);
+    }
+  };
+
+  const sendInvoiceWhatsApp = (inv?: Invoice | null) => {
+    const target = inv || invoiceDetail;
+    if (!target) return;
+    const cust = target.customers as any;
+    const phoneRaw = (cust?.whatsapp || cust?.phone || '').replace(/[^0-9]/g, '');
+    if (!phoneRaw) { error('Aucun numéro WhatsApp/téléphone pour ce client'); return; }
+    const phone = phoneRaw.startsWith('221') ? phoneRaw : phoneRaw.length === 9 ? `221${phoneRaw}` : phoneRaw;
+    const due = Math.max(0, Number(target.total) - Number(target.paid));
+    const link = invoiceUrl(target);
+    const msg = [
+      `Bonjour ${cust?.name || ''},`,
+      '',
+      `Votre facture *${target.sale_number}* du ${formatDate(target.created_at)}.`,
+      `*Total : ${formatFCFA(target.total)}*`,
+      due > 0 ? `Reste à payer : *${formatFCFA(due)}*` : 'Payée intégralement.',
+      link ? `\nVoir la facture : ${link}` : '',
+      '',
+      'Merci.',
+    ].filter(Boolean).join('\n');
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  const quickWhatsApp = (inv: Invoice) => sendInvoiceWhatsApp(inv);
+  const quickCopy = (inv: Invoice) => copyInvoiceLink(inv);
 
   // ── Register payment ─────────────────────────────────────────
   const openPay = () => {
@@ -543,7 +586,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       docLabel: isCredit ? 'AVOIR' : 'RETOUR',
       docNumber: returnDetail.return_number,
       docDate: new Date(returnDetail.created_at).toLocaleDateString('fr-FR'),
-      customer: returnDetail.customers ? { name: returnDetail.customers.name } : null,
+      customer: returnDetail.customers ? { name: returnDetail.customers.name, phone: (returnDetail.customers as any).phone || undefined, address: (returnDetail.customers as any).address || undefined } : null,
       extraMeta: extra,
       items, subtotal, total: Number(returnDetail.total),
       footerNote: returnDetail.reason ? `Motif : ${returnDetail.reason}` : undefined,
@@ -622,9 +665,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             <Filter className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Filtres</span>
           </button>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow shrink-0">
-            <Search className="w-3.5 h-3.5 text-white" />
-          </div>
+          <button
+            onClick={primaryAction}
+            className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
+            style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
+            aria-label={primaryLabel}
+          >
+            <Plus className="w-3.5 h-3.5 text-white" />
+          </button>
         </div>
       </div>
 
@@ -831,7 +879,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <button onClick={e => { e.stopPropagation(); openInvoiceDetail(inv); }} className="p-1.5 rounded-lg hover:bg-white hover:shadow-sm text-slate-500 hover:text-brand-700 transition-all"><Eye className="w-4 h-4" /></button>
+                                <div className="flex items-center justify-end gap-0.5">
+                                  {inv.customers && (
+                                    <button onClick={e => { e.stopPropagation(); quickWhatsApp(inv); }} className="p-1.5 rounded-lg hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>
+                                  )}
+                                  <button onClick={e => { e.stopPropagation(); quickCopy(inv); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
+                                  <button onClick={e => { e.stopPropagation(); openInvoiceDetail(inv); }} className="p-1.5 rounded-lg hover:bg-white hover:shadow-sm text-slate-500 hover:text-brand-700 transition-all"><Eye className="w-3.5 h-3.5" /></button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1212,6 +1266,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="text-sm px-3 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold flex items-center gap-1"><Wallet className="w-4 h-4" />Appliquer avoir</button>}
           </div>
           <div className="flex gap-2">
+            <button onClick={() => copyInvoiceLink()} className="btn-secondary" title="Copier le lien de la facture"><Link2 className="w-4 h-4" /><span className="hidden sm:inline">Copier lien</span></button>
+            {invoiceDetail?.customers && (
+              <button onClick={() => sendInvoiceWhatsApp()} className="flex items-center gap-1.5 px-3 py-2 bg-[#25D366] text-white rounded-xl hover:brightness-95 font-semibold text-sm transition shadow-sm" title="Envoyer par WhatsApp"><MessageCircle className="w-4 h-4" /><span className="hidden sm:inline">WhatsApp</span></button>
+            )}
             <button onClick={() => setInvoiceDetail(null)} className="btn-secondary">Fermer</button>
             <button onClick={printInvoice} className="btn-primary"><Printer className="w-4 h-4" />Imprimer</button>
           </div>

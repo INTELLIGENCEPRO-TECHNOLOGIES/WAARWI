@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Plus, Users, Truck, Loader2, Search, CreditCard as Edit2, PowerOff,
-  X, Calendar, FileText, Wallet, Info, ChevronRight, MoreVertical,
+  Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
+  X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
   ShoppingBag, Check, Filter
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -13,6 +13,7 @@ import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
+import { printDocumentA4, type PrintTenant } from '../lib/print';
 import type { Customer } from '../lib/types';
 
 type Supplier = {
@@ -253,9 +254,14 @@ export function Tiers() {
               <Filter className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Filtres</span>
             </button>
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow shrink-0">
-              <Search className="w-3.5 h-3.5 text-white" />
-            </div>
+            <button
+              onClick={() => setFabOpen(v => !v)}
+              className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
+              style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
+              aria-label="Nouveau tiers"
+            >
+              <Plus className="w-3.5 h-3.5 text-white" />
+            </button>
         </div>
       </div>
 
@@ -285,16 +291,6 @@ export function Tiers() {
               </button>
             );
           })}
-          <div className="shrink-0 ml-auto flex items-center gap-1.5">
-            <button onClick={openCustCreate} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow hover:shadow-lg transition-all active:scale-95">
-              <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Nouveau client</span>
-            </button>
-            <button onClick={openSupCreate} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold bg-white text-slate-700 border border-slate-200 hover:border-brand-300 hover:text-brand-700 transition-all active:scale-95">
-              <Truck className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Fournisseur</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -364,8 +360,8 @@ export function Tiers() {
         </div>
       )}
 
-      {/* Mobile FAB */}
-      <div className="sm:hidden fixed bottom-20 right-4 z-30">
+      {/* FAB */}
+      <div className="fixed bottom-20 right-4 z-30">
         {fabOpen && (
           <div className="absolute bottom-16 right-0 flex flex-col gap-2 animate-slide-down">
             <button onClick={openCustCreate} className="flex items-center gap-2 pr-4 pl-2 py-2 rounded-full bg-white border border-slate-200 shadow-premium text-sm font-semibold text-slate-800">
@@ -562,68 +558,37 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClic
       : <div className="card"><EmptyState icon={Users} title="Aucun résultat" description="Aucun client ne correspond à votre recherche." /></div>;
   }
   return (
-    <>
-      {/* Mobile cards */}
-      <div className="space-y-2 lg:hidden">
-        {list.map(c => {
-          const due = dueMap[c.id] || 0;
-          return (
-            <button key={c.id} onClick={() => onClickRow(c)} className={`w-full text-left card p-3.5 transition-transform active:scale-[0.99] ${(c as any).is_active === false ? 'opacity-60' : ''}`}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 shrink-0 rounded-2xl bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 flex items-center justify-center font-bold">{c.name.charAt(0).toUpperCase()}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-slate-900">{c.name}</div>
-                  {c.phone && <div className="mt-0.5 text-xs text-slate-500">{c.phone}</div>}
+    <div className="space-y-1.5">
+      {list.map(c => {
+        const due = dueMap[c.id] || 0;
+        const inactive = (c as any).is_active === false;
+        return (
+          <button
+            key={c.id}
+            onClick={() => onClickRow(c)}
+            className={`w-full text-left flex items-center gap-3 px-3.5 py-3 rounded-xl bg-white border border-slate-200/80 hover:border-brand-300 hover:shadow-sm active:scale-[0.99] transition-all ${inactive ? 'opacity-50' : ''}`}
+          >
+            <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold">
+              {c.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-slate-900">{c.name}</div>
+              {c.phone && (
+                <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                  <Phone className="w-3 h-3 shrink-0" />{c.phone}
                 </div>
-                {(c as any).is_active === false && <Badge tone="slate">Inactif</Badge>}
-                <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-              </div>
-              <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Solde dû</div>
-                <div className={`text-base font-bold tabular-nums ${due > 0 ? 'text-amber-700' : 'text-slate-300'}`}>{formatFCFA(due)}</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Desktop table */}
-      <div className="hidden lg:block card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50/80 sticky top-0 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3 text-left font-semibold">Nom</th>
-              <th className="px-4 py-3 text-left font-semibold">Téléphone</th>
-              <th className="px-4 py-3 text-left font-semibold">Email</th>
-              <th className="px-4 py-3 text-center font-semibold">Type</th>
-              <th className="px-4 py-3 text-right font-semibold">Total achats</th>
-              <th className="px-4 py-3 text-right font-semibold">Solde dû</th>
-              <th className="px-4 py-3 text-center font-semibold">Statut</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {list.map(c => {
-              const due = dueMap[c.id] || 0;
-              return (
-                <tr key={c.id} onClick={() => onClickRow(c)} className={`hover:bg-slate-50/70 cursor-pointer ${(c as any).is_active === false ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-slate-900">{c.name}</td>
-                  <td className="px-4 py-3 text-slate-600">{c.phone || '—'}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">{c.email || '—'}</td>
-                  <td className="px-4 py-3 text-center"><Badge tone="neutral">{c.customer_type}</Badge></td>
-                  <td className="px-4 py-3 text-right text-slate-700">{formatFCFA(totalMap[c.id] || 0)}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${due > 0 ? 'text-amber-700' : 'text-slate-300'}`}>{formatFCFA(due)}</td>
-                  <td className="px-4 py-3 text-center">
-                    {(c as any).is_active === false ? <Badge tone="slate">Inactif</Badge> : <Badge tone="emerald">Actif</Badge>}
-                  </td>
-                  <td className="px-4 py-3 text-right text-slate-300"><MoreVertical className="w-4 h-4 inline" /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </>
+              )}
+            </div>
+            <div className="text-right shrink-0">
+              <div className={`text-sm font-bold tabular-nums ${due > 0 ? 'text-amber-700' : 'text-slate-300'}`}>{formatFCFA(due)}</div>
+              {due > 0 && <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">solde dû</div>}
+            </div>
+            {inactive && <Badge tone="slate">Inactif</Badge>}
+            <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -639,63 +604,36 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
       : <div className="card"><EmptyState icon={Truck} title="Aucun résultat" description="Aucun fournisseur ne correspond à votre recherche." /></div>;
   }
   return (
-    <>
-      <div className="space-y-2 lg:hidden">
-        {list.map(s => {
-          const d = dueMap[s.id] || { total: 0, paid: 0, due: 0 };
-          return (
-            <button key={s.id} onClick={() => onClickRow(s)} className={`w-full text-left card p-3.5 transition-transform active:scale-[0.99] ${!s.is_active ? 'opacity-60' : ''}`}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 shrink-0 rounded-2xl bg-gradient-to-br from-sky-50 to-sky-100 text-sky-700 flex items-center justify-center font-bold">{s.name.charAt(0).toUpperCase()}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-slate-900">{s.name}</div>
-                  {s.phone && <div className="mt-0.5 text-xs text-slate-500">{s.phone}</div>}
+    <div className="space-y-1.5">
+      {list.map(s => {
+        const d = dueMap[s.id] || { total: 0, paid: 0, due: 0 };
+        return (
+          <button
+            key={s.id}
+            onClick={() => onClickRow(s)}
+            className={`w-full text-left flex items-center gap-3 px-3.5 py-3 rounded-xl bg-white border border-slate-200/80 hover:border-sky-300 hover:shadow-sm active:scale-[0.99] transition-all ${!s.is_active ? 'opacity-50' : ''}`}
+          >
+            <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-sky-50 to-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold">
+              {s.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-slate-900">{s.name}</div>
+              {s.phone && (
+                <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                  <Phone className="w-3 h-3 shrink-0" />{s.phone}
                 </div>
-                {!s.is_active && <Badge tone="slate">Inactif</Badge>}
-                <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-              </div>
-              <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Solde dû</div>
-                <div className={`text-base font-bold tabular-nums ${d.due > 0 ? 'text-red-700' : 'text-slate-300'}`}>{formatFCFA(d.due)}</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      <div className="hidden lg:block card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50/80 sticky top-0 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3 text-left font-semibold">Nom</th>
-              <th className="px-4 py-3 text-left font-semibold">Contact</th>
-              <th className="px-4 py-3 text-left font-semibold">Téléphone</th>
-              <th className="px-4 py-3 text-left font-semibold">Pays</th>
-              <th className="px-4 py-3 text-right font-semibold">Total achats</th>
-              <th className="px-4 py-3 text-right font-semibold">Dette</th>
-              <th className="px-4 py-3 text-center font-semibold">Statut</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {list.map(s => {
-              const d = dueMap[s.id] || { total: 0, paid: 0, due: 0 };
-              return (
-                <tr key={s.id} onClick={() => onClickRow(s)} className={`hover:bg-slate-50/70 cursor-pointer ${!s.is_active ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-slate-900">{s.name}</td>
-                  <td className="px-4 py-3 text-slate-600">{s.contact || '—'}</td>
-                  <td className="px-4 py-3 text-slate-600">{s.phone || '—'}</td>
-                  <td className="px-4 py-3 text-slate-600">{s.country || '—'}</td>
-                  <td className="px-4 py-3 text-right text-slate-700">{formatFCFA(d.total)}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${d.due > 0 ? 'text-red-700' : 'text-slate-300'}`}>{formatFCFA(d.due)}</td>
-                  <td className="px-4 py-3 text-center">{s.is_active ? <Badge tone="emerald">Actif</Badge> : <Badge tone="slate">Inactif</Badge>}</td>
-                  <td className="px-4 py-3 text-right text-slate-300"><MoreVertical className="w-4 h-4 inline" /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </>
+              )}
+            </div>
+            <div className="text-right shrink-0">
+              <div className={`text-sm font-bold tabular-nums ${d.due > 0 ? 'text-red-700' : 'text-slate-300'}`}>{formatFCFA(d.due)}</div>
+              {d.due > 0 && <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">dette</div>}
+            </div>
+            {!s.is_active && <Badge tone="slate">Inactif</Badge>}
+            <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -934,11 +872,29 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   };
 
   const printInvoice = (data: { sale: any; items: any[]; pays: any[] }) => {
-    const w = window.open('', '_blank'); if (!w) return;
-    const lines = data.items.map(i => `<tr><td style="padding:6px;border-bottom:1px solid #eee">${i.name}</td><td style="padding:6px;text-align:right;border-bottom:1px solid #eee">${i.quantity}</td><td style="padding:6px;text-align:right;border-bottom:1px solid #eee">${Number(i.unit_price).toLocaleString('fr-FR')} F</td><td style="padding:6px;text-align:right;border-bottom:1px solid #eee;font-weight:bold">${Number(i.total).toLocaleString('fr-FR')} F</td></tr>`).join('');
-    const paysHtml = data.pays.map(p => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span>${p.method_name}</span><span>${Number(p.amount).toLocaleString('fr-FR')} FCFA</span></div>`).join('');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Facture ${data.sale.sale_number}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:30px;color:#000}h1{font-size:22px;margin-bottom:18px}table{width:100%;border-collapse:collapse}th{background:#f5f5f5;padding:8px;text-align:left;border-bottom:2px solid #ddd}@media print{body{margin:0}}</style></head><body><h1>FACTURE — ${data.sale.sale_number}</h1><p style="margin-bottom:6px">Date : ${new Date(data.sale.created_at).toLocaleDateString('fr-FR')}</p><p style="margin-bottom:16px">Client : <strong>${c.name}</strong></p><table><thead><tr><th>Article</th><th style="text-align:right">Qté</th><th style="text-align:right">PU</th><th style="text-align:right">Total</th></tr></thead><tbody>${lines}</tbody></table><div style="margin-top:16px;text-align:right;font-size:18px;font-weight:bold">TOTAL : ${Number(data.sale.total).toLocaleString('fr-FR')} FCFA</div><div style="margin-top:6px;text-align:right;font-size:13px">Payé : ${Number(data.sale.paid).toLocaleString('fr-FR')} FCFA</div><div style="margin-top:12px">${paysHtml}</div><div style="margin-top:30px;padding-top:12px;border-top:1px dashed #cbd5e1;text-align:center;font-size:10px;color:#64748b">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div></body></html>`);
-    w.document.close(); setTimeout(() => w.print(), 300);
+    if (!tenant) return;
+    const tenantPrint: PrintTenant = {
+      name: tenant.name, legal_name: (tenant as any).legal_name, ninea: (tenant as any).ninea,
+      rccm: (tenant as any).rccm, address: (tenant as any).address, phone: (tenant as any).phone,
+      email: (tenant as any).email, website: (tenant as any).website, logo_url: (tenant as any).logo_url,
+      business_type: (tenant as any).business_type,
+    };
+    const items = data.items.map(i => ({
+      name: i.name, internal_ref: i.articles?.internal_ref || i.internal_ref || null,
+      oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity),
+      unit_price: Number(i.unit_price), discount: Number(i.discount || 0),
+    }));
+    const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+    printDocumentA4({
+      tenant: tenantPrint,
+      docLabel: 'FACTURE',
+      docNumber: data.sale.sale_number,
+      docDate: new Date(data.sale.created_at).toLocaleDateString('fr-FR'),
+      customer: { name: c.name, phone: c.phone || undefined, address: c.address || undefined },
+      items, subtotal, total: Number(data.sale.total),
+      payments: data.pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
+      paid: Number(data.sale.paid),
+    });
   };
 
   const modalTitle = key === 'info' ? 'Compte client' : key === 'payment' ? 'Saisir un règlement' : 'Documents de ventes';
@@ -1584,11 +1540,30 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   };
 
   const printOrder = (data: { order: any; items: any[]; pays: any[] }) => {
-    const w = window.open('', '_blank'); if (!w) return;
-    const lines = data.items.map(i => `<tr><td style="padding:6px;border-bottom:1px solid #eee">${i.name}</td><td style="padding:6px;text-align:right;border-bottom:1px solid #eee">${i.quantity_ordered}</td><td style="padding:6px;text-align:right;border-bottom:1px solid #eee">${Number(i.unit_price).toLocaleString('fr-FR')} F</td><td style="padding:6px;text-align:right;border-bottom:1px solid #eee;font-weight:bold">${Number(i.total).toLocaleString('fr-FR')} F</td></tr>`).join('');
-    const paysHtml = data.pays.map(p => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span>${p.method_name}</span><span>${Number(p.amount).toLocaleString('fr-FR')} FCFA</span></div>`).join('');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Commande ${data.order.order_number}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:30px;color:#000}h1{font-size:22px;margin-bottom:18px}table{width:100%;border-collapse:collapse}th{background:#f5f5f5;padding:8px;text-align:left;border-bottom:2px solid #ddd}@media print{body{margin:0}}</style></head><body><h1>COMMANDE — ${data.order.order_number}</h1><p style="margin-bottom:6px">Date : ${new Date(data.order.created_at).toLocaleDateString('fr-FR')}</p><p style="margin-bottom:16px">Fournisseur : <strong>${s.name}</strong></p><table><thead><tr><th>Article</th><th style="text-align:right">Qté</th><th style="text-align:right">PU</th><th style="text-align:right">Total</th></tr></thead><tbody>${lines}</tbody></table><div style="margin-top:16px;text-align:right;font-size:18px;font-weight:bold">TOTAL : ${Number(data.order.total).toLocaleString('fr-FR')} FCFA</div><div style="margin-top:6px;text-align:right;font-size:13px">Payé : ${Number(data.order.paid || 0).toLocaleString('fr-FR')} FCFA</div><div style="margin-top:12px">${paysHtml}</div><div style="margin-top:30px;padding-top:12px;border-top:1px dashed #cbd5e1;text-align:center;font-size:10px;color:#64748b">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div></body></html>`);
-    w.document.close(); setTimeout(() => w.print(), 300);
+    if (!tenant) return;
+    const tenantPrint: PrintTenant = {
+      name: tenant.name, legal_name: (tenant as any).legal_name, ninea: (tenant as any).ninea,
+      rccm: (tenant as any).rccm, address: (tenant as any).address, phone: (tenant as any).phone,
+      email: (tenant as any).email, website: (tenant as any).website, logo_url: (tenant as any).logo_url,
+      business_type: (tenant as any).business_type,
+    };
+    const items = data.items.map(i => ({
+      name: i.name, internal_ref: i.supplier_ref || i.articles?.internal_ref || null,
+      oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity_ordered),
+      unit_price: Number(i.unit_price), discount: 0,
+    }));
+    const subtotal = items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
+    const paidTotal = data.pays.reduce((sum, p) => sum + Number(p.amount), 0);
+    printDocumentA4({
+      tenant: tenantPrint,
+      docLabel: 'BON DE COMMANDE',
+      docNumber: data.order.order_number,
+      docDate: new Date(data.order.created_at).toLocaleDateString('fr-FR'),
+      customer: { name: s.name, phone: s.phone || undefined, address: s.address || undefined },
+      items, subtotal, total: Number(data.order.total),
+      payments: data.pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
+      paid: paidTotal,
+    });
   };
 
   const modalTitle = key === 'info' ? 'Compte fournisseur' : key === 'payment' ? 'Saisir un règlement' : key === 'articles' ? 'Articles liés' : 'Documents d\'achats';

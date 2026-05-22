@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calculator, Loader2, Eye, Printer, ShoppingCart, Search, X, Calendar, Filter, Check, CreditCard, User, Store, Receipt } from 'lucide-react';
+import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, CreditCard, User, Store, Receipt } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
-import { printTicket80 } from '../lib/print';
+import { printTicket80, printDocumentA4, type PrintTenant } from '../lib/print';
 
 type Sale = {
   id: string; sale_number: string; total: number; paid: number;
@@ -66,7 +66,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     let cancelled = false;
     (async () => {
       const { data } = await supabase.from('sales')
-        .select('*, customers(name), sites(name), sale_payments(method_name)')
+        .select('*, customers(name, phone, address), sites(name), sale_payments(method_name)')
         .eq('tenant_id', tenant.id)
         .eq('site_id', currentSite.id)
         .order('created_at', { ascending: false })
@@ -122,6 +122,19 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     setItemsLoading(false);
   };
 
+  const tenantForPrint: PrintTenant = {
+    name: tenant?.name || '',
+    legal_name: (tenant as any)?.legal_name,
+    ninea: (tenant as any)?.ninea,
+    rccm: (tenant as any)?.rccm,
+    address: (tenant as any)?.address,
+    phone: (tenant as any)?.phone,
+    email: (tenant as any)?.email,
+    website: (tenant as any)?.website,
+    logo_url: (tenant as any)?.logo_url,
+    business_type: (tenant as any)?.business_type,
+  };
+
   const printTicket = () => {
     if (!selected || !tenant) return;
     printTicket80(
@@ -139,22 +152,37 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           discount: Number(i.discount ?? 0),
         })),
         payments: pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
-        customer: selected.customers ? { name: selected.customers.name } : null,
+        customer: selected.customers ? { name: selected.customers.name, phone: (selected.customers as any).phone || undefined, address: (selected.customers as any).address || undefined } : null,
       },
-      {
-        name: tenant.name,
-        legal_name: (tenant as any).legal_name,
-        ninea: (tenant as any).ninea,
-        rccm: (tenant as any).rccm,
-        address: (tenant as any).address,
-        phone: (tenant as any).phone,
-        email: (tenant as any).email,
-        website: (tenant as any).website,
-        logo_url: (tenant as any).logo_url,
-        business_type: (tenant as any).business_type,
-      },
+      tenantForPrint,
       ''
     );
+  };
+
+  const printInvoice = () => {
+    if (!selected || !tenant) return;
+    const printItems = items.map(i => ({
+      name: i.name,
+      internal_ref: i.articles?.internal_ref ?? i.internal_ref ?? null,
+      oem_ref: i.articles?.oem_ref ?? null,
+      quantity: Number(i.quantity),
+      unit_price: Number(i.unit_price),
+      discount: Number(i.discount ?? 0),
+    }));
+    const subtotal = printItems.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+    const paidTotal = pays.reduce((s, p) => s + Number(p.amount), 0);
+    printDocumentA4({
+      tenant: tenantForPrint,
+      docLabel: 'FACTURE',
+      docNumber: selected.sale_number,
+      docDate: new Date(selected.created_at).toLocaleDateString('fr-FR'),
+      customer: selected.customers ? { name: selected.customers.name, phone: (selected.customers as any).phone || undefined, address: (selected.customers as any).address || undefined } : null,
+      items: printItems,
+      subtotal,
+      total: Number(selected.total),
+      payments: pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
+      paid: paidTotal,
+    });
   };
 
   const todayCount = sales.filter(s => new Date(s.created_at).toDateString() === new Date().toDateString()).length;
@@ -201,9 +229,14 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             <span className="hidden md:inline">Filtres</span>
             {activeFilterCount > 0 && <span className="num">· {activeFilterCount}</span>}
           </button>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow shrink-0">
-            <Search className="w-3.5 h-3.5 text-white" />
-          </div>
+          <button
+            onClick={() => onNavigate?.('pos')}
+            className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
+            style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
+            aria-label="Nouvelle vente"
+          >
+            <ShoppingCart className="w-3.5 h-3.5 text-white" />
+          </button>
         </div>
       </div>
 
@@ -403,7 +436,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       <Modal open={open} onClose={() => setOpen(false)} title={selected ? `Vente ${selected.sale_number}` : ''} size="lg"
         footer={<>
           <button onClick={() => setOpen(false)} className="btn-secondary">Fermer</button>
-          <button onClick={printTicket} className="btn-primary"><Printer className="w-4 h-4" />Imprimer ticket</button>
+          <button onClick={printTicket} className="btn-secondary"><Receipt className="w-4 h-4" />Ticket</button>
+          <button onClick={printInvoice} className="btn-primary"><Printer className="w-4 h-4" />Facture A4</button>
         </>}
       >
         {selected && (() => {

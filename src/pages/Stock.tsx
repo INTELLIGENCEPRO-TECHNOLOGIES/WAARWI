@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Boxes, Plus, Minus, Search, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen } from 'lucide-react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -365,19 +365,12 @@ export function Stock() {
           )}
           <button
             onClick={() => setTab(t => t === 'stocks' ? 'movements' : 'stocks')}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
-              tab === 'movements'
-                ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
-            }`}
-            title={tab === 'stocks' ? 'Voir les mouvements' : 'Voir l\'inventaire'}
+            className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
+            style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
+            aria-label={tab === 'stocks' ? 'Voir les mouvements' : 'Voir l\'inventaire'}
           >
-            <History className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">{tab === 'stocks' ? 'Mouvements' : 'Inventaire'}</span>
+            <History className="w-3.5 h-3.5 text-white" />
           </button>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow shrink-0">
-            <Search className="w-3.5 h-3.5 text-white" />
-          </div>
         </div>
       </div>
 

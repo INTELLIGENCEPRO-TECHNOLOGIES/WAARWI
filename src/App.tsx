@@ -54,7 +54,13 @@ function getPublicOrderToken(): string | null {
   return m ? m[1] : null;
 }
 
+function getPublicInvoiceToken(): string | null {
+  const m = window.location.pathname.match(/^\/inv\/([A-Za-z0-9]+)/);
+  return m ? m[1] : null;
+}
+
 const PublicSupplierOrder = lazyWithRetry(() => import('./pages/PublicSupplierOrder').then(m => ({ default: m.PublicSupplierOrder })));
+const PublicInvoice = lazyWithRetry(() => import('./pages/PublicInvoice').then(m => ({ default: m.PublicInvoice })));
 
 const ROUTE_MODULE: Record<string, string> = {
   dashboard: 'dashboard', pos: 'pos', sales: 'sales', cash_history: 'cash_history',
@@ -171,11 +177,20 @@ function Inner() {
 export default function App() {
   const shopRoute = getShopRoute();
   const poToken = getPublicOrderToken();
+  const invToken = getPublicInvoiceToken();
 
   if (poToken) {
     return (
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>}>
         <PublicSupplierOrder token={poToken} />
+      </Suspense>
+    );
+  }
+
+  if (invToken) {
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>}>
+        <PublicInvoice token={invToken} />
       </Suspense>
     );
   }

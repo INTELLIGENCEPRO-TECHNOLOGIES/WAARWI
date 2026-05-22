@@ -3,7 +3,7 @@ import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
   ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, Pause, RotateCcw,
-  FileText, List, Play, Car, Delete, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote,
+  FileText, List, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote,
   Globe, Truck, ShoppingBag, Sparkles, Clock as ClockIcon, Phone, MapPin, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -52,6 +52,8 @@ type SessionSale = {
   total: number;
   created_at: string;
   customer_name: string | null;
+  customer_phone: string | null;
+  customer_address: string | null;
   status: string;
   items: { name: string; quantity: number; unit_price: number }[];
 };
@@ -210,9 +212,9 @@ function POSLandingOpen({
           </div>
           <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider">
             <Lock className="w-2.5 h-2.5" />
-            Fermee
+            Fermée
           </span>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow shrink-0">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-glow shrink-0" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
             <Wallet className="w-3.5 h-3.5 text-white" />
           </div>
         </div>
@@ -226,12 +228,12 @@ function POSLandingOpen({
             <div className="absolute -top-24 -right-24 w-56 h-56 rounded-full bg-brand-400/8 blur-3xl pointer-events-none" />
             <div className="relative p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center shadow-lg">
+                <div className="w-12 h-12 rounded-2xl text-white flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
                   <ShoppingCart className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Ouvrir la caisse</h2>
-                  <p className="text-xs text-slate-500">Demarrez une nouvelle session de vente</p>
+                  <p className="text-xs text-slate-500">Démarrez une nouvelle session de vente</p>
                 </div>
               </div>
 
@@ -270,7 +272,8 @@ function POSLandingOpen({
               <button
                 onClick={openSessionSubmit}
                 disabled={openingSubmitting}
-                className="group mt-6 w-full max-w-sm relative overflow-hidden rounded-xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 disabled:opacity-60 text-white font-bold text-sm py-3.5 px-5 shadow-[0_6px_20px_-8px_rgba(15,118,110,0.55)] hover:shadow-[0_8px_28px_-6px_rgba(15,118,110,0.7)] active:scale-[0.99] transition-all"
+                className="group mt-6 w-full max-w-sm relative overflow-hidden rounded-xl disabled:opacity-60 text-white font-bold text-sm py-3.5 px-5 shadow-[0_6px_20px_-8px_rgba(6,78,59,0.55)] hover:shadow-[0_8px_28px_-6px_rgba(6,78,59,0.7)] active:scale-[0.99] transition-all"
+                style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
                 <span className="relative flex items-center justify-center gap-2">
@@ -290,8 +293,8 @@ function POSLandingOpen({
               <h3 className="text-sm font-bold text-slate-800">Rappel</h3>
             </div>
             <ul className="space-y-2 text-xs text-slate-600 leading-relaxed">
-              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Comptez les especes dans votre tiroir-caisse avant d'ouvrir.</li>
-              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Le fond de caisse initial sera verifie a la cloture.</li>
+              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Comptez les espèces dans votre tiroir-caisse avant d'ouvrir.</li>
+              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Le fond de caisse initial sera vérifié à la clôture.</li>
               <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Vous pouvez quitter la caisse et y revenir sans la fermer.</li>
             </ul>
           </div>
@@ -302,7 +305,7 @@ function POSLandingOpen({
                 <h3 className="text-sm font-bold text-slate-800">Point de vente</h3>
               </div>
               <p className="text-sm font-semibold text-slate-900">{currentSite.name}</p>
-              <p className="text-xs text-slate-500 mt-0.5">La session sera liee a ce point de vente.</p>
+              <p className="text-xs text-slate-500 mt-0.5">La session sera liée à ce point de vente.</p>
             </div>
           )}
         </div>
@@ -313,7 +316,7 @@ function POSLandingOpen({
         <div className="rounded-2xl border border-brand-200/70 bg-white shadow-card overflow-hidden">
           <div className="p-4">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center shadow-md">
+              <div className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
                 <ShoppingCart className="w-4 h-4" />
               </div>
               <div>
@@ -350,7 +353,8 @@ function POSLandingOpen({
             <button
               onClick={openSessionSubmit}
               disabled={openingSubmitting}
-              className="group mt-3 w-full rounded-xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 disabled:opacity-60 text-white font-bold text-sm py-3 px-4 shadow-glow active:scale-[0.99] transition-all"
+              className="group mt-3 w-full rounded-xl disabled:opacity-60 text-white font-bold text-sm py-3 px-4 shadow-[0_6px_20px_-8px_rgba(6,78,59,0.55)] active:scale-[0.99] transition-all"
+              style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
             >
               <span className="flex items-center justify-center gap-2">
                 {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
@@ -365,7 +369,7 @@ function POSLandingOpen({
       {!loadingSessions && sessions.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-1.5 px-1">
-            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernieres sessions</h3>
+            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernières sessions</h3>
             {onSeeAll && (
               <button onClick={onSeeAll} className="text-[11px] font-semibold text-brand-700 inline-flex items-center gap-0.5">
                 Voir tout <ChevronRight className="w-3 h-3" />
@@ -381,7 +385,7 @@ function POSLandingOpen({
                   <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Ouverture</th>
                   <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fermeture</th>
                   <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fond</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Encaisse</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Encaissé</th>
                   <th className="text-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Statut</th>
                 </tr>
               </thead>
@@ -397,7 +401,7 @@ function POSLandingOpen({
                       <td className="px-4 py-3 text-xs font-bold text-brand-800 tabular-nums text-right">{collected != null ? formatFCFA(collected) : '-'}</td>
                       <td className="px-4 py-3 text-center">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase">
-                          <Lock className="w-2 h-2" /> Cloturee
+                          <Lock className="w-2 h-2" /> Clôturée
                         </span>
                       </td>
                     </tr>
@@ -463,7 +467,7 @@ function POSLandingResume({
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             Ouverte
           </span>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-glow shrink-0">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-glow shrink-0" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
             <Wallet className="w-3.5 h-3.5 text-white" />
           </div>
         </div>
@@ -477,7 +481,7 @@ function POSLandingResume({
             <div className="absolute -top-24 -right-24 w-56 h-56 rounded-full bg-emerald-400/8 blur-3xl pointer-events-none" />
             <div className="relative p-6">
               <div className="flex items-start gap-3 mb-5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white flex items-center justify-center shadow-lg">
+                <div className="w-12 h-12 rounded-2xl text-white flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
                   <Wallet className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
@@ -488,7 +492,7 @@ function POSLandingResume({
                       Active
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">Caisse ouverte et prete pour les ventes</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Caisse ouverte et prête pour les ventes</p>
                 </div>
               </div>
 
@@ -499,7 +503,7 @@ function POSLandingResume({
                 </div>
                 <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><ClockIcon className="w-3.5 h-3.5" /></div>
-                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Ouverte le</div><div className="text-xs font-semibold text-slate-800">{fmtDateFull(session.opened_at)} a {fmtTimeLanding(session.opened_at)}</div></div>
+                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Ouverte le</div><div className="text-xs font-semibold text-slate-800">{fmtDateFull(session.opened_at)} à {fmtTimeLanding(session.opened_at)}</div></div>
                 </div>
                 <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
                   <div className="w-7 h-7 rounded-lg bg-white border border-emerald-200 flex items-center justify-center text-emerald-600"><Banknote className="w-3.5 h-3.5" /></div>
@@ -507,7 +511,7 @@ function POSLandingResume({
                 </div>
                 <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><ClockIcon className="w-3.5 h-3.5" /></div>
-                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Duree</div><div className="text-xs font-semibold text-slate-800">{sessionDuration(session.opened_at)}</div></div>
+                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Durée</div><div className="text-xs font-semibold text-slate-800">{sessionDuration(session.opened_at)}</div></div>
                 </div>
                 {cashierName && (
                   <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100 col-span-2">
@@ -519,7 +523,8 @@ function POSLandingResume({
 
               <button
                 onClick={onResume}
-                className="group w-full max-w-sm relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-emerald-700 text-white font-bold text-sm py-3.5 px-5 shadow-[0_6px_20px_-8px_rgba(16,185,129,0.55)] hover:shadow-[0_8px_28px_-6px_rgba(16,185,129,0.7)] active:scale-[0.99] transition-all"
+                className="group w-full max-w-sm relative overflow-hidden rounded-xl text-white font-bold text-sm py-3.5 px-5 shadow-[0_6px_20px_-8px_rgba(6,78,59,0.55)] hover:shadow-[0_8px_28px_-6px_rgba(6,78,59,0.7)] active:scale-[0.99] transition-all"
+                style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
                 <span className="relative flex items-center justify-center gap-2">
@@ -537,14 +542,14 @@ function POSLandingResume({
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center"><BarChart2 className="w-4 h-4" /></div>
-              <h3 className="text-sm font-bold text-slate-800">Resume de la session</h3>
+              <h3 className="text-sm font-bold text-slate-800">Résumé de la session</h3>
             </div>
             {loadingSummary ? (
               <div className="space-y-2.5 animate-pulse"><div className="h-10 bg-slate-100 rounded-xl" /><div className="h-10 bg-slate-100 rounded-xl" /></div>
             ) : summary ? (
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-brand-50 border border-brand-100">
-                  <span className="text-xs font-semibold text-brand-700">Total encaisse</span>
+                  <span className="text-xs font-semibold text-brand-700">Total encaissé</span>
                   <span className="text-base font-bold text-brand-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
                 </div>
                 <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
@@ -564,10 +569,10 @@ function POSLandingResume({
                     </div>
                   </div>
                 )}
-                {summary.salesCount === 0 && <p className="text-xs text-slate-500 text-center py-2">Aucune vente enregistree.</p>}
+                {summary.salesCount === 0 && <p className="text-xs text-slate-500 text-center py-2">Aucune vente enregistrée.</p>}
               </div>
             ) : (
-              <p className="text-xs text-slate-500 text-center py-3">Donnees non disponibles</p>
+              <p className="text-xs text-slate-500 text-center py-3">Données non disponibles</p>
             )}
           </div>
 
@@ -579,7 +584,7 @@ function POSLandingResume({
             <div className="space-y-1.5">
               <button onClick={onResume} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-emerald-50 border border-slate-100 hover:border-emerald-200 text-left transition-colors">
                 <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="text-xs font-medium text-slate-700">Acceder au point de vente</span>
+                <span className="text-xs font-medium text-slate-700">Accéder au point de vente</span>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-400 ml-auto" />
               </button>
               {onSeeAll && (
@@ -599,12 +604,12 @@ function POSLandingResume({
         <div className="rounded-2xl border border-emerald-200/70 bg-white shadow-card overflow-hidden">
           <div className="p-4">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white flex items-center justify-center shadow-md">
+              <div className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
                 <Wallet className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-sm font-bold text-slate-900">Caisse ouverte</h2>
-                <p className="text-[10px] text-slate-500 truncate">{fmtDateFull(session.opened_at)} a {fmtTimeLanding(session.opened_at)}</p>
+                <p className="text-[10px] text-slate-500 truncate">{fmtDateFull(session.opened_at)} à {fmtTimeLanding(session.opened_at)}</p>
               </div>
             </div>
 
@@ -614,7 +619,7 @@ function POSLandingResume({
                 <div className="text-xs font-bold text-emerald-800 tabular-nums">{formatFCFA(Number(session.opening_amount))}</div>
               </div>
               <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
-                <div className="text-[9px] font-bold uppercase text-slate-400">Duree</div>
+                <div className="text-[9px] font-bold uppercase text-slate-400">Durée</div>
                 <div className="text-xs font-bold text-slate-700 tabular-nums">{sessionDuration(session.opened_at)}</div>
               </div>
             </div>
@@ -622,7 +627,7 @@ function POSLandingResume({
             {!loadingSummary && summary && summary.salesCount > 0 && (
               <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-50 border border-brand-100 mb-3">
                 <div>
-                  <div className="text-[9px] font-bold uppercase text-brand-600">Encaisse</div>
+                  <div className="text-[9px] font-bold uppercase text-brand-600">Encaissé</div>
                   <div className="text-sm font-bold text-brand-900 tabular-nums">{formatFCFA(summary.salesTotal)}</div>
                 </div>
                 <div className="ml-auto text-right">
@@ -634,7 +639,8 @@ function POSLandingResume({
 
             <button
               onClick={onResume}
-              className="group w-full rounded-xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-emerald-700 text-white font-bold text-sm py-3 px-4 shadow-[0_6px_20px_-8px_rgba(16,185,129,0.55)] active:scale-[0.99] transition-all"
+              className="group w-full rounded-xl text-white font-bold text-sm py-3 px-4 shadow-[0_6px_20px_-8px_rgba(6,78,59,0.55)] active:scale-[0.99] transition-all"
+              style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
             >
               <span className="flex items-center justify-center gap-2">
                 <Play className="w-4 h-4 fill-current" />
@@ -650,7 +656,7 @@ function POSLandingResume({
       {!loadingSessions && sessions.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-1.5 px-1">
-            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernieres sessions</h3>
+            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernières sessions</h3>
             {onSeeAll && (
               <button onClick={onSeeAll} className="text-[11px] font-semibold text-brand-700 inline-flex items-center gap-0.5">
                 Voir tout <ChevronRight className="w-3 h-3" />
@@ -666,7 +672,7 @@ function POSLandingResume({
                   <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Ouverture</th>
                   <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fermeture</th>
                   <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fond</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Encaisse</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Encaissé</th>
                   <th className="text-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Statut</th>
                 </tr>
               </thead>
@@ -682,7 +688,7 @@ function POSLandingResume({
                       <td className="px-4 py-3 text-xs font-bold text-brand-800 tabular-nums text-right">{collected != null ? formatFCFA(collected) : '-'}</td>
                       <td className="px-4 py-3 text-center">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase">
-                          <Lock className="w-2 h-2" /> Cloturee
+                          <Lock className="w-2 h-2" /> Clôturée
                         </span>
                       </td>
                     </tr>
@@ -1047,16 +1053,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const openPayment = () => {
     if (cart.length === 0) { error('Panier vide'); return; }
     if (!session) { error('Ouvrez d\'abord la caisse'); return; }
-    const defaultMethod = methods[0];
-    setPayments(defaultMethod ? [{ payment_method_id: defaultMethod.id, method_name: defaultMethod.name, amount: total, reference: '' }] : []);
+    setPayments([]);
     setPayOpen(true);
   };
 
-  const addPayment = () => {
-    if (methods[0]) {
-      setPayments(p => [...p, { payment_method_id: methods[0].id, method_name: methods[0].name, amount: Math.max(0, remaining), reference: '' }]);
-    }
-  };
 
   const validateCreditSale = async () => {
     if (!session || !currentSite) return;
@@ -1182,7 +1182,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const validateSale = async () => {
     if (!session || !currentSite) return;
-    if (totalPaid < total) { error('Paiement insuffisant'); return; }
+    if (totalPaid < total && !customer) { error('Sélectionnez un client pour un paiement partiel'); return; }
     setPaying(true);
     const saleItems = cart.map(i => ({
       article_id: i.article_id, name: i.name, quantity: i.quantity,
@@ -1233,14 +1233,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setReturnLoading(true);
     const { data } = await supabase
       .from('sales')
-      .select('id, sale_number, total, created_at, customers(name), status, sale_items(name, quantity, unit_price)')
+      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(name, quantity, unit_price)')
       .eq('tenant_id', tenant!.id)
       .eq('cash_session_id', session!.id)
       .neq('status', 'cancelled')
       .order('created_at', { ascending: false });
     setReturnSales((data || []).map((s: any) => ({
       id: s.id, sale_number: s.sale_number, total: Number(s.total),
-      created_at: s.created_at, customer_name: s.customers?.name || null, status: s.status,
+      created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
       items: (s.sale_items || []).map((i: any) => ({ name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
     })));
     setReturnLoading(false);
@@ -1274,13 +1274,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setTicketsOpen(true); setLoadingTickets(true);
     const { data } = await supabase
       .from('sales')
-      .select('id, sale_number, total, created_at, customers(name), status, sale_items(name, quantity, unit_price)')
+      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(name, quantity, unit_price)')
       .eq('tenant_id', tenant!.id)
       .eq('cash_session_id', session!.id)
       .order('created_at', { ascending: false });
     setSessionSales((data || []).map((s: any) => ({
       id: s.id, sale_number: s.sale_number, total: Number(s.total),
-      created_at: s.created_at, customer_name: s.customers?.name || null, status: s.status,
+      created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
       items: (s.sale_items || []).map((i: any) => ({ name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
     })));
     setLoadingTickets(false);
@@ -2246,7 +2246,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           onClose={() => setPayOpen(false)}
           onValidate={validateSale}
           onValidateCredit={validateCreditSale}
-          onAddPayment={addPayment}
         />
       )}
 
@@ -2443,7 +2442,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                               sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
                               items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
                               payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
-                              customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: '', email: '', address: '', customer_type: '', balance: 0 } : null,
+                              customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
                             };
                             printSaleTicket(fakeSale);
                           }} className="p-1.5 rounded hover:bg-slate-100 text-slate-600">
@@ -2454,7 +2453,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                               sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
                               items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
                               payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
-                              customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: '', email: '', address: '', customer_type: '', balance: 0 } : null,
+                              customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
                             };
                             printSaleInvoice(fakeSale);
                           }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600">
@@ -2894,7 +2893,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
 function PaymentScreen({
   total, customer, methods, payments, setPayments, paying,
-  onClose, onValidate, onValidateCredit, onAddPayment,
+  onClose, onValidate, onValidateCredit,
 }: {
   total: number;
   customer: Customer | null;
@@ -2905,40 +2904,12 @@ function PaymentScreen({
   onClose: () => void;
   onValidate: () => void;
   onValidateCredit: () => void;
-  onAddPayment: () => void;
 }) {
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = total - totalPaid;
-  const activeIdx = payments.length - 1;
-  const activeMethod = payments[activeIdx];
+  const enough = totalPaid >= total && total > 0;
+  const canPartial = customer && totalPaid > 0 && totalPaid < total;
 
-  const setMethod = (m: PaymentMethod) => {
-    setPayments(arr => arr.map((it, i) => i === activeIdx ? { ...it, payment_method_id: m.id, method_name: m.name } : it));
-  };
-
-  const setActiveAmount = (amt: number) => {
-    setPayments(arr => arr.map((it, i) => i === activeIdx ? { ...it, amount: Math.max(0, amt) } : it));
-  };
-
-  const appendDigit = (d: string) => {
-    if (!activeMethod) return;
-    const current = String(activeMethod.amount || 0);
-    if (d === '.' && current.includes('.')) return;
-    const next = current === '0' && d !== '.' ? d : current + d;
-    setActiveAmount(Number(next));
-  };
-  const backspace = () => {
-    if (!activeMethod) return;
-    const current = String(activeMethod.amount || 0);
-    const next = current.slice(0, -1);
-    setActiveAmount(Number(next || 0));
-  };
-  const clearAmount = () => setActiveAmount(0);
-  const setExact = () => setActiveAmount(Math.max(0, remaining + (activeMethod?.amount || 0)));
-
-  const quickAmounts = [500, 1000, 2000, 5000, 10000];
-
-  // Pick iconic label / tint per known mode
   const modeStyle = (name: string): { tint: string; emoji: string } => {
     const n = name.toLowerCase();
     if (n.includes('espèce') || n.includes('liquide') || n.includes('cash')) return { tint: 'from-emerald-500/20 to-emerald-600/10', emoji: 'ESP' };
@@ -2948,16 +2919,33 @@ function PaymentScreen({
     if (n.includes('carte') || n.includes('cb')) return { tint: 'from-brand-500/25 to-brand-700/10', emoji: 'CB' };
     if (n.includes('virement')) return { tint: 'from-blue-500/25 to-blue-700/10', emoji: 'VIR' };
     if (n.includes('chèque') || n.includes('cheque')) return { tint: 'from-violet-500/25 to-violet-700/10', emoji: 'CHQ' };
-    if (n.includes('crédit') || n.includes('credit')) return { tint: 'from-amber-500/25 to-amber-700/10', emoji: 'CRE' };
     return { tint: 'from-slate-400/20 to-slate-600/10', emoji: '∙' };
   };
 
-  const enough = totalPaid >= total && total > 0;
-  const [step, setStep] = useState<'mode' | 'keypad'>('mode');
+  const selectMethod = (m: PaymentMethod) => {
+    const existing = payments.findIndex(p => p.payment_method_id === m.id);
+    if (existing >= 0) return;
+    const amt = Math.max(0, remaining);
+    setPayments(arr => [...arr.filter(p => p.amount > 0 || p.payment_method_id === m.id), { payment_method_id: m.id, method_name: m.name, amount: amt, reference: '' }]);
+  };
+
+  const updateAmount = (idx: number, val: string) => {
+    const n = Math.max(0, Number(val) || 0);
+    setPayments(arr => arr.map((p, i) => i === idx ? { ...p, amount: n } : p));
+  };
+
+  const removePayment = (idx: number) => {
+    setPayments(arr => arr.filter((_, i) => i !== idx));
+  };
+
+  const setExact = (idx: number) => {
+    const othersTotal = payments.reduce((s, p, i) => i === idx ? s : s + p.amount, 0);
+    const needed = Math.max(0, total - othersTotal);
+    setPayments(arr => arr.map((p, i) => i === idx ? { ...p, amount: needed } : p));
+  };
 
   return (
     <div className="fixed inset-0 z-[80] bg-ink-900 text-white flex flex-col animate-fade-in overflow-hidden safe-top safe-bottom">
-      {/* Ambient glow */}
       <div className="pointer-events-none absolute inset-0 opacity-60">
         <div className="absolute -top-40 -right-40 w-[520px] h-[520px] rounded-full bg-brand-500/20 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-[520px] h-[520px] rounded-full bg-brand-700/20 blur-3xl" />
@@ -2965,27 +2953,21 @@ function PaymentScreen({
 
       {/* Header */}
       <div className="relative flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
-        <button onClick={step === 'keypad' ? () => setStep('mode') : onClose} className="p-2 rounded-xl hover:bg-white/10 transition-colors" disabled={paying}>
-          {step === 'keypad' ? <ChevronLeft className="w-5 h-5" /> : <X className="w-5 h-5" />}
+        <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/10 transition-colors" disabled={paying}>
+          <X className="w-5 h-5" />
         </button>
-        <div className="flex items-center gap-2">
-          <div className={`w-6 h-1 rounded-full transition-all ${step === 'mode' ? 'bg-white' : 'bg-white/30'}`} />
-          <div className={`w-6 h-1 rounded-full transition-all ${step === 'keypad' ? 'bg-white' : 'bg-white/30'}`} />
-        </div>
-        <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">
-          {step === 'mode' ? 'Règlement' : 'Montant'}
-        </div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Encaissement</div>
+        <div className="w-9" />
       </div>
 
-      {/* Total banner — always visible */}
+      {/* Total */}
       <div className="relative px-4 pt-4 pb-3 shrink-0">
         <div className="max-w-md mx-auto text-center">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Total à encaisser</div>
-          <div className="mt-1 text-4xl sm:text-5xl font-bold tracking-tight num leading-none">{formatFCFA(total)}</div>
+          <div className="text-4xl sm:text-5xl font-bold tracking-tight num leading-none">{formatFCFA(total)}</div>
           {customer && <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 text-xs"><User className="w-3 h-3" /> {customer.name}</div>}
-          {payments.length > 0 && remaining !== total && (
+          {totalPaid > 0 && (
             <div className="mt-2 flex items-center justify-center gap-3 text-[11px]">
-              <span className="text-white/60">Payé <span className="num font-bold text-white">{formatFCFA(totalPaid)}</span></span>
+              <span className="text-white/60">Reçu <span className="num font-bold text-white">{formatFCFA(totalPaid)}</span></span>
               {remaining > 0 ? <span className="text-amber-300 font-semibold">Reste <span className="num">{formatFCFA(remaining)}</span></span>
               : <span className="text-emerald-300 font-semibold">Monnaie <span className="num">{formatFCFA(-remaining)}</span></span>}
             </div>
@@ -2993,105 +2975,69 @@ function PaymentScreen({
         </div>
       </div>
 
-      {/* Step content */}
+      {/* Content */}
       <div className="relative flex-1 min-h-0 overflow-y-auto px-4 pb-3">
-        <div className="max-w-md mx-auto">
-          {step === 'mode' ? (
-            <div className="space-y-4">
-              {/* Existing payments */}
-              {payments.filter(p => p.payment_method_id && p.amount > 0).length > 0 && (
-                <div className="space-y-1.5">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Paiements enregistrés</div>
-                  {payments.map((p, idx) => (
-                    p.payment_method_id && p.amount > 0 ? (
-                      <div key={idx} className="flex items-center gap-2.5 p-2.5 rounded-2xl bg-white/5 border border-white/10">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500/30 to-brand-700/10 flex items-center justify-center text-[9px] font-bold">{modeStyle(p.method_name).emoji}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[10px] text-white/50 leading-tight">{p.method_name}</div>
-                          <div className="text-sm font-bold num leading-tight">{formatFCFA(p.amount)}</div>
-                        </div>
-                        <button onClick={() => setPayments(arr => arr.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : null
-                  ))}
-                </div>
-              )}
-
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">Choisir un mode</div>
-                <div className="grid grid-cols-3 gap-2">
-                  {methods.map(m => {
-                    const { tint, emoji } = modeStyle(m.name);
-                    const active = activeMethod?.payment_method_id === m.id;
-                    return (
-                      <button key={m.id} onClick={() => { setMethod(m); setStep('keypad'); }}
-                        className={`pay-mode !p-2.5 ${active ? 'pay-mode-active' : ''}`}>
-                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${tint} flex items-center justify-center text-[9px] font-bold tracking-wider ${active ? 'text-brand-700' : 'text-white/90'}`}>
-                          {emoji}
-                        </div>
-                        <div className={`text-[11px] font-semibold ${active ? 'text-ink-900' : 'text-white/90'} leading-tight`}>{m.name}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {remaining > 0 && payments.filter(p => p.payment_method_id && p.amount > 0).length > 0 && (
-                <button onClick={onAddPayment} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/20 text-white/70 hover:bg-white/5 hover:border-white/40 transition-all text-xs font-semibold">
-                  <Plus className="w-3.5 h-3.5" /> Ajouter un autre règlement
-                </button>
-              )}
-
-              {customer && payments.filter(p => p.amount > 0).length === 0 && (
-                <div className="pt-2 mt-2 border-t border-white/10">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">Ou créer une facture à crédit</div>
-                  <button onClick={onValidateCredit} disabled={paying}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-100 hover:bg-amber-500/25 transition-all text-sm font-bold">
-                    {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                    Vente à crédit · {customer.name}
-                  </button>
-                  <div className="text-[10px] text-white/50 mt-1.5 text-center">Aucun encaissement — facture non payée dans le compte client.</div>
-                </div>
-              )}
+        <div className="max-w-md mx-auto space-y-4">
+          {/* Payment lines */}
+          {payments.length > 0 && (
+            <div className="space-y-2">
+              {payments.map((p, idx) => {
+                const { emoji } = modeStyle(p.method_name);
+                return (
+                  <div key={idx} className="flex items-center gap-2 p-2.5 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0">{emoji}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] text-white/50 leading-tight mb-0.5">{p.method_name}</div>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={p.amount || ''}
+                        onChange={e => updateAmount(idx, e.target.value)}
+                        className="w-full bg-transparent text-lg font-bold num outline-none border-none p-0 leading-tight [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        placeholder="0"
+                      />
+                    </div>
+                    <button onClick={() => setExact(idx)} className="px-2 py-1 rounded-lg bg-brand-500/30 text-brand-100 text-[10px] font-bold hover:bg-brand-500/50 transition-colors shrink-0">
+                      Exact
+                    </button>
+                    <button onClick={() => removePayment(idx)} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Active amount display */}
-              <div className="rounded-2xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 p-3.5">
-                <div className="flex items-center justify-between mb-0.5">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">{activeMethod?.method_name || '—'}</div>
-                  <div className="text-[10px] text-white/50">Reste <span className="num font-bold text-amber-300">{formatFCFA(Math.max(0, remaining + (activeMethod?.amount || 0)))}</span></div>
-                </div>
-                <div className="text-4xl font-bold num tracking-tight leading-none">{formatFCFA(activeMethod?.amount || 0)}</div>
-              </div>
+          )}
 
-              {/* Quick amounts */}
-              <div className="grid grid-cols-4 gap-1.5">
-                <button onClick={setExact} className="h-9 rounded-xl bg-brand-500/30 text-brand-100 hover:bg-brand-500/50 text-[11px] font-bold transition-colors">Exact</button>
-                {quickAmounts.slice(0, 3).map(q => (
-                  <button key={q} onClick={() => setActiveAmount((activeMethod?.amount || 0) + q)} className="h-9 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-semibold num transition-colors">
-                    +{q >= 1000 ? `${q / 1000}k` : q}
+          {/* Payment methods grid */}
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">
+              {payments.length > 0 ? 'Ajouter un autre mode' : 'Mode de paiement'}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {methods.filter(m => !payments.some(p => p.payment_method_id === m.id)).map(m => {
+                const { tint, emoji } = modeStyle(m.name);
+                return (
+                  <button key={m.id} onClick={() => selectMethod(m)} className="pay-mode !p-2.5">
+                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${tint} flex items-center justify-center text-[9px] font-bold tracking-wider text-white/90`}>
+                      {emoji}
+                    </div>
+                    <div className="text-[11px] font-semibold text-white/90 leading-tight">{m.name}</div>
                   </button>
-                ))}
-              </div>
+                );
+              })}
+            </div>
+          </div>
 
-              {/* Numeric keypad */}
-              <div className="grid grid-cols-3 gap-2">
-                {['1','2','3','4','5','6','7','8','9'].map(d => (
-                  <button key={d} onClick={() => appendDigit(d)} className="keypad-btn !h-12 !text-xl">{d}</button>
-                ))}
-                <button onClick={() => appendDigit('00')} className="keypad-btn !h-12 !text-xl">00</button>
-                <button onClick={() => appendDigit('0')} className="keypad-btn !h-12 !text-xl">0</button>
-                <button onClick={backspace} className="keypad-btn !h-12 flex items-center justify-center">
-                  <Delete className="w-5 h-5" />
-                </button>
-              </div>
-
-              <button onClick={clearAmount} className="w-full py-2 rounded-xl bg-white/5 hover:bg-red-500/20 text-xs font-semibold transition-colors">
-                Effacer
+          {/* Credit sale option */}
+          {customer && totalPaid === 0 && (
+            <div className="pt-2 border-t border-white/10">
+              <button onClick={onValidateCredit} disabled={paying}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-100 hover:bg-amber-500/25 transition-all text-sm font-bold">
+                {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                Tout à crédit · {customer.name}
               </button>
+              <div className="text-[10px] text-white/50 mt-1.5 text-center">Facture impayée dans le compte client</div>
             </div>
           )}
         </div>
@@ -3100,35 +3046,25 @@ function PaymentScreen({
       {/* Footer */}
       <div className="relative border-t border-white/10 px-4 py-3 bg-ink-900/80 backdrop-blur-xl shrink-0 safe-bottom">
         <div className="max-w-md mx-auto flex gap-2">
-          {step === 'mode' ? (
-            <>
-              <button onClick={onClose} className="px-4 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-colors" disabled={paying}>
-                Annuler
-              </button>
-              {enough ? (
-                <button onClick={onValidate} disabled={paying}
-                  className="flex-1 h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[0_12px_40px_-12px_rgb(16_185_129_/0.5)] active:scale-[0.98]">
-                  {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                  {paying ? 'Traitement…' : `Valider · ${formatFCFA(total)}`}
-                </button>
-              ) : (
-                <button onClick={() => activeMethod?.payment_method_id ? setStep('keypad') : null} disabled={!activeMethod?.payment_method_id}
-                  className={`flex-1 h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeMethod?.payment_method_id ? 'bg-white text-ink-900 active:scale-[0.98]' : 'bg-white/10 text-white/40 cursor-not-allowed'}`}>
-                  Suivant <ChevronRight className="w-4 h-4" />
-                </button>
-              )}
-            </>
+          <button onClick={onClose} className="px-4 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-colors" disabled={paying}>
+            Annuler
+          </button>
+          {enough ? (
+            <button onClick={onValidate} disabled={paying}
+              className="flex-1 min-w-0 h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[0_12px_40px_-12px_rgb(16_185_129_/0.5)] active:scale-[0.98] whitespace-nowrap">
+              {paying ? <Loader2 className="w-5 h-5 animate-spin shrink-0" /> : <Check className="w-5 h-5 shrink-0" />}
+              <span className="truncate">{paying ? 'Traitement...' : `Valider · ${formatFCFA(total)}`}</span>
+            </button>
+          ) : canPartial ? (
+            <button onClick={onValidate} disabled={paying}
+              className="flex-1 min-w-0 h-12 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-[0_12px_40px_-12px_rgb(217_119_6_/0.4)] active:scale-[0.98] whitespace-nowrap px-3">
+              {paying ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />}
+              <span className="truncate">{paying ? 'Traitement...' : `Partiel · ${formatFCFA(remaining)} à crédit`}</span>
+            </button>
           ) : (
-            <>
-              <button onClick={() => setStep('mode')} className="px-4 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-colors" disabled={paying}>
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button onClick={enough ? onValidate : () => setStep('mode')} disabled={paying || !activeMethod?.amount}
-                className={`flex-1 h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${enough ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[0_12px_40px_-12px_rgb(16_185_129_/0.5)]' : activeMethod?.amount ? 'bg-white text-ink-900' : 'bg-white/10 text-white/40 cursor-not-allowed'} active:scale-[0.98]`}>
-                {paying ? <Loader2 className="w-5 h-5 animate-spin" /> : enough ? <Check className="w-5 h-5" /> : null}
-                {paying ? 'Traitement…' : enough ? `Valider · ${formatFCFA(total)}` : remaining > 0 ? `Suite · Reste ${formatFCFA(Math.max(0, remaining))}` : 'Valider'}
-              </button>
-            </>
+            <div className="flex-1 min-w-0 h-12 rounded-2xl bg-white/10 text-white/40 font-semibold text-sm flex items-center justify-center whitespace-nowrap">
+              {totalPaid === 0 ? 'Choisir un mode' : `Reste ${formatFCFA(remaining)}`}
+            </div>
           )}
         </div>
       </div>
