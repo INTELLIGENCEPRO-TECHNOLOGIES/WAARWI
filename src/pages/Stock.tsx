@@ -127,44 +127,45 @@ export function Stock() {
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Livre d'inventaire — ${ref}</title>
 <style>
   @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
-  * { box-sizing: border-box; }
+  @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #0f172a; font-size: 9.5pt; line-height: 1.35; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #000000; font-size: 9.5pt; line-height: 1.4; background: #fff; }
   .doc { max-width: 186mm; margin: 0 auto; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 8mm; margin-bottom: 6mm; }
-  .head .brand { font-size: 14pt; font-weight: 700; letter-spacing: 0.5px; color: #0f172a; }
-  .head .sub { font-size: 8pt; color: #475569; margin-top: 1mm; text-transform: uppercase; letter-spacing: 1.2px; }
-  .head .meta { text-align: right; font-size: 8.5pt; color: #334155; }
-  .head .meta .ref { font-family: 'Courier New', monospace; font-weight: 700; color: #0f172a; font-size: 10pt; }
-  .title { text-align: center; font-size: 15pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 2mm; }
-  .title-sub { text-align: center; font-size: 8.5pt; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 7mm; }
-  .info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; margin-bottom: 6mm; border: 1px solid #e2e8f0; border-radius: 2mm; padding: 3mm 4mm; background: #f8fafc; }
-  .info .cell .l { font-size: 7pt; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-  .info .cell .v { font-size: 10pt; color: #0f172a; font-weight: 700; margin-top: 0.5mm; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5px solid #000000; padding-bottom: 8mm; margin-bottom: 6mm; }
+  .head .brand { font-size: 15pt; font-weight: 900; letter-spacing: 0.5px; color: #000000; }
+  .head .sub { font-size: 8.5pt; font-weight: 700; color: #000000; margin-top: 1mm; text-transform: uppercase; letter-spacing: 1.2px; }
+  .head .meta { text-align: right; font-size: 8.5pt; font-weight: 600; color: #000000; }
+  .head .meta .ref { font-family: 'Courier New', monospace; font-weight: 900; color: #000000; font-size: 10.5pt; }
+  .title { text-align: center; font-size: 16pt; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 2mm; color: #000000; }
+  .title-sub { text-align: center; font-size: 9pt; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 7mm; }
+  .info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; margin-bottom: 6mm; border: 1.5px solid #000000; border-radius: 2mm; padding: 3mm 4mm; background: #f5f5f5; }
+  .info .cell .l { font-size: 7pt; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 1px; }
+  .info .cell .v { font-size: 10.5pt; font-weight: 900; color: #000000; margin-top: 0.5mm; font-variant-numeric: tabular-nums; }
   table { width: 100%; border-collapse: collapse; }
   thead { display: table-header-group; }
-  thead tr { background: #0f172a; color: #fff; }
-  thead th { text-align: left; font-size: 8pt; padding: 2.2mm 2mm; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+  thead tr { background: #000000; color: #ffffff; }
+  thead th { text-align: left; font-size: 8pt; padding: 2.5mm 2mm; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #ffffff; }
   thead th.right { text-align: right; }
-  tbody tr { page-break-inside: avoid; border-bottom: 1px solid #e2e8f0; }
-  tbody tr:nth-child(even) { background: #f8fafc; }
-  tbody td { padding: 1.8mm 2mm; font-size: 9pt; vertical-align: top; }
-  .c-num { width: 10mm; color: #94a3b8; text-align: right; font-variant-numeric: tabular-nums; }
-  .c-ref { width: 26mm; font-family: 'Courier New', monospace; font-size: 8.5pt; color: #334155; }
-  .c-name { color: #0f172a; }
-  .c-loc { width: 22mm; color: #64748b; font-size: 8.5pt; }
-  .c-qty { width: 14mm; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .c-unit { width: 28mm; text-align: right; font-variant-numeric: tabular-nums; color: #334155; }
-  .c-val { width: 32mm; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f172a; }
-  tfoot tr { background: #0f172a; color: #fff; }
-  tfoot td { padding: 3mm 2mm; font-size: 9.5pt; font-weight: 700; }
-  tfoot .lbl { text-transform: uppercase; letter-spacing: 1.2px; font-size: 8.5pt; }
-  .foot { margin-top: 10mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 8pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 4mm; }
+  tbody tr { page-break-inside: avoid; border-bottom: 1px solid #000000; }
+  tbody tr:nth-child(even) { background: #f5f5f5; }
+  tbody td { padding: 2mm 2mm; font-size: 9pt; font-weight: 500; color: #000000; vertical-align: top; }
+  .c-num { width: 10mm; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; color: #000000; }
+  .c-ref { width: 26mm; font-family: 'Courier New', monospace; font-size: 8.5pt; font-weight: 700; color: #000000; }
+  .c-name { font-weight: 600; color: #000000; }
+  .c-loc { width: 22mm; font-size: 8.5pt; font-weight: 600; color: #000000; }
+  .c-qty { width: 14mm; text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; color: #000000; }
+  .c-unit { width: 28mm; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: #000000; }
+  .c-val { width: 32mm; text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; color: #000000; }
+  tfoot tr { background: #000000; color: #ffffff; }
+  tfoot td { padding: 3mm 2mm; font-size: 9.5pt; font-weight: 800; color: #ffffff; }
+  tfoot .lbl { text-transform: uppercase; letter-spacing: 1.2px; font-size: 8.5pt; font-weight: 900; }
+  .foot { margin-top: 10mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 8.5pt; font-weight: 600; color: #000000; border-top: 1.5px solid #000000; padding-top: 4mm; }
   .sig { width: 55mm; text-align: center; }
-  .sig .line { height: 14mm; border-bottom: 1px solid #94a3b8; }
-  .sig .cap { margin-top: 1.5mm; text-transform: uppercase; letter-spacing: 1px; font-size: 7.5pt; font-weight: 600; color: #475569; }
+  .sig .line { height: 14mm; border-bottom: 1.5px solid #000000; }
+  .sig .cap { margin-top: 1.5mm; text-transform: uppercase; letter-spacing: 1px; font-size: 7.5pt; font-weight: 800; color: #000000; }
   .pagenum::after { content: "Page " counter(page); }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  .waarwi { margin-top: 8mm; padding-top: 3mm; border-top: 1px dashed #000000; text-align: center; font-size: 9px; font-weight: 600; color: #000000; letter-spacing: 0.3px; }
 </style>
 </head><body>
 <div class="doc">
@@ -202,7 +203,7 @@ export function Stock() {
       </tr>
     </thead>
     <tbody>
-      ${rowsHtml || '<tr><td colspan="7" style="padding:10mm; text-align:center; color:#64748b;">Aucun article disponible en stock.</td></tr>'}
+      ${rowsHtml || '<tr><td colspan="7" style="padding:10mm;text-align:center;font-weight:600;color:#000000;">Aucun article disponible en stock.</td></tr>'}
     </tbody>
     <tfoot>
       <tr>
@@ -222,7 +223,7 @@ export function Stock() {
       <div style="margin-top:1mm;">Document généré automatiquement</div>
     </div>
   </div>
-  <div style="margin-top:8mm;padding-top:3mm;border-top:1px dashed #cbd5e1;text-align:center;font-size:9px;color:#64748b;letter-spacing:0.3px">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
+  <div class="waarwi">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
 </div>
 </body></html>`);
     w.document.close();

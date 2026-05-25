@@ -380,6 +380,82 @@ h1, h2, h3, h4 { letter-spacing: -0.015em; }
 }
 .waarwi-flash-scroll { scroll-margin-top: 80px; }
 
+/* ── Global Print Styles ────────────────────────────────────────────────────── */
+/* Applied to the main app UI when user triggers browser print (Ctrl+P).        */
+/* All print documents (invoices, tickets, etc.) use their own inlined styles   */
+/* in print.ts and inline print functions — this handles any edge case fallback. */
+@media print {
+  /* Reset all visual effects */
+  *,
+  *::before,
+  *::after {
+    color: #000000 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide non-essential UI */
+  nav,
+  .nav-item,
+  .float-sidebar-overlay,
+  .float-sidebar-panel,
+  .sheet,
+  .scrim,
+  button:not(.print-show),
+  [role="dialog"],
+  [data-radix-popper-content-wrapper],
+  .toast,
+  .animate-sheet-up {
+    display: none !important;
+  }
+
+  /* Typography */
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif !important;
+    font-size: 12pt !important;
+    line-height: 1.45 !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+  }
+
+  /* Tables */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  th, td {
+    border: 1px solid #000000 !important;
+    padding: 6px 8px !important;
+    color: #000000 !important;
+    font-weight: 500 !important;
+  }
+  th {
+    font-weight: 800 !important;
+  }
+
+  /* Page breaks */
+  h1, h2, h3 { page-break-after: avoid; }
+  table, figure { page-break-inside: avoid; }
+
+  /* Remove animations */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* scrollbar premium */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }

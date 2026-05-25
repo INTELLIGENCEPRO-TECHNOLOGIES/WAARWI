@@ -162,44 +162,110 @@ export function OnlineOrders() {
   };
 
   const printOrder = (o: OnlineOrder) => {
-    const w = window.open('', '_blank', 'width=640,height=800');
+    const w = window.open('', '_blank', 'width=760,height=900');
     if (!w) return;
     const t: any = tenant || {};
-    const rows = items.map(i => `<tr><td>${escapeHtml(i.article_name)}${i.internal_ref ? ` <span style="color:#64748b">(${escapeHtml(i.internal_ref)})</span>` : ''}</td><td style="text-align:center">${i.quantity}</td><td style="text-align:right">${formatFCFA(i.unit_price)}</td><td style="text-align:right;font-weight:600">${formatFCFA(i.line_total)}</td></tr>`).join('');
+    const fmtMoney = (n: number) => Math.round(Number(n) || 0).toLocaleString('fr-FR');
+    const rows = items.map(i => `<tr>
+      <td><span class="item-name">${escapeHtml(i.article_name)}</span>${i.internal_ref ? `<br/><span class="item-ref">Réf : ${escapeHtml(i.internal_ref)}</span>` : ''}</td>
+      <td class="center">${i.quantity}</td>
+      <td class="right">${fmtMoney(i.unit_price)} FCFA</td>
+      <td class="right bold">${fmtMoney(i.line_total)} FCFA</td>
+    </tr>`).join('');
     const tenantInfoLines: string[] = [];
     if (t.address) tenantInfoLines.push(escapeHtml(t.address));
-    if (t.phone) tenantInfoLines.push('Tél: ' + escapeHtml(t.phone));
+    if (t.phone) tenantInfoLines.push('Tél : ' + escapeHtml(t.phone));
     if (t.email) tenantInfoLines.push(escapeHtml(t.email));
     if (t.website) tenantInfoLines.push(escapeHtml(t.website));
     const idLines: string[] = [];
-    if (t.ninea) idLines.push('NINEA: ' + escapeHtml(t.ninea));
-    if (t.rccm) idLines.push('RCCM: ' + escapeHtml(t.rccm));
-    const logoHtml = t.logo_url ? `<img src="${escapeHtml(t.logo_url)}" alt="" style="max-width:90px;max-height:72px;object-fit:contain;margin-bottom:6px" onerror="this.style.display='none'"/>` : '';
+    if (t.ninea) idLines.push('NINEA : ' + escapeHtml(t.ninea));
+    if (t.rccm) idLines.push('RCCM : ' + escapeHtml(t.rccm));
+    const logoHtml = t.logo_url ? `<img src="${escapeHtml(t.logo_url)}" alt="" style="max-width:80px;max-height:70px;object-fit:contain;margin-bottom:6px" onerror="this.style.display='none'"/>` : '';
+    const printStyle = `
+      @page { margin: 14mm; size: A4; }
+      @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #000000; padding: 24px; max-width: 720px; margin: auto; font-size: 12px; background: #fff; line-height: 1.45; }
+      .hdr { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; padding-bottom: 14px; border-bottom: 2.5px solid #000000; margin-bottom: 18px; }
+      h1 { font-size: 22px; font-weight: 900; color: #000000; margin: 0 0 2px 0; }
+      .legal { font-size: 11px; font-weight: 700; color: #000000; }
+      .info { font-size: 11px; font-weight: 600; color: #000000; line-height: 1.6; margin-top: 5px; }
+      .ids { font-size: 10.5px; font-weight: 700; color: #000000; margin-top: 4px; }
+      .doc-tag { text-transform: uppercase; font-size: 10px; letter-spacing: 1.5px; font-weight: 900; color: #000000; }
+      .doc-num { font-weight: 900; font-size: 20px; color: #000000; margin-top: 3px; }
+      .doc-date { font-size: 11px; font-weight: 600; color: #000000; margin-top: 2px; }
+      .section { border: 1.5px solid #000000; border-radius: 4px; padding: 10px 14px; margin: 14px 0; }
+      .section-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #000000; border-bottom: 1px solid #000000; padding-bottom: 5px; margin-bottom: 8px; }
+      .cust-name { font-weight: 800; font-size: 13px; color: #000000; }
+      .cust-info { font-size: 11.5px; font-weight: 600; color: #000000; margin-top: 2px; }
+      .note { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #000000; font-size: 11px; font-weight: 600; color: #000000; font-style: italic; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      thead tr { background: #000000; color: #ffffff; }
+      th { padding: 9px 10px; text-align: left; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #ffffff; }
+      th.center { text-align: center; }
+      th.right { text-align: right; }
+      td { padding: 9px 10px; border-bottom: 1px solid #000000; font-size: 11px; font-weight: 500; color: #000000; vertical-align: top; }
+      tbody tr:nth-child(even) td { background: #f5f5f5; }
+      td.center { text-align: center; font-weight: 700; }
+      td.right { text-align: right; }
+      td.bold { font-weight: 800; }
+      .item-name { font-weight: 700; color: #000000; }
+      .item-ref { font-size: 10px; font-weight: 600; font-family: 'Courier New', monospace; color: #000000; }
+      .total-row { display: flex; justify-content: flex-end; margin-top: 14px; }
+      .total-box { border: 2px solid #000000; border-radius: 4px; overflow: hidden; min-width: 280px; }
+      .total-grand { display: flex; justify-content: space-between; padding: 12px 16px; background: #000000; color: #ffffff; font-size: 15px; font-weight: 900; }
+      .payment-info { display: flex; justify-content: space-between; padding: 9px 16px; font-size: 11.5px; font-weight: 600; color: #000000; border-bottom: 1px solid #000000; }
+      .footer { margin-top: 24px; padding-top: 12px; border-top: 1.5px solid #000000; display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; color: #000000; }
+      .waarwi { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #000000; text-align: center; font-size: 9.5px; font-weight: 600; color: #000000; }
+    `;
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(o.order_number)}</title>
-      <style>body{font-family:system-ui,-apple-system,sans-serif;color:#0f172a;padding:24px;max-width:680px;margin:auto}h1{font-size:22px;margin:0 0 2px 0;letter-spacing:-0.01em}.muted{color:#64748b;font-size:12px}.tenant-info{color:#475569;font-size:11.5px;line-height:1.45}.box{border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin:12px 0}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{padding:8px;border-bottom:1px solid #e2e8f0;font-size:13px}th{background:#f8fafc;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;color:#64748b;letter-spacing:.5px}.tot{font-size:18px;font-weight:800;text-align:right;padding-top:10px}.hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding-bottom:14px;border-bottom:2px solid #0f766e;margin-bottom:14px}.ids{font-size:10.5px;color:#64748b;margin-top:4px}</style>
+      <style>${printStyle}</style>
       </head><body>
       <div class="hdr">
         <div style="flex:1">
           ${logoHtml}
           <h1>${escapeHtml(t.name || '')}</h1>
-          ${t.legal_name ? `<div class="muted" style="font-weight:600">${escapeHtml(t.legal_name)}</div>` : ''}
-          <div class="tenant-info" style="margin-top:6px">${tenantInfoLines.join('<br/>')}</div>
+          ${t.legal_name ? `<div class="legal">${escapeHtml(t.legal_name)}</div>` : ''}
+          <div class="info">${tenantInfoLines.join('<br/>')}</div>
           ${idLines.length ? `<div class="ids">${idLines.join(' · ')}</div>` : ''}
         </div>
-        <div style="text-align:right;shrink:0">
-          <div style="text-transform:uppercase;font-size:10px;letter-spacing:1.5px;color:#0f766e;font-weight:800">Commande en ligne</div>
-          <div style="font-weight:800;font-size:18px;margin-top:2px">${escapeHtml(o.order_number)}</div>
-          <div class="muted">${formatDateTime(o.created_at)}</div>
+        <div style="text-align:right">
+          <div class="doc-tag">Commande en ligne</div>
+          <div class="doc-num">${escapeHtml(o.order_number)}</div>
+          <div class="doc-date">${formatDateTime(o.created_at)}</div>
         </div>
       </div>
-      <div class="box"><div style="font-weight:700;margin-bottom:4px">Client</div><div>${escapeHtml(o.customer_name || '-')}</div><div class="muted">${escapeHtml(o.customer_phone || '')}</div>${o.delivery_mode === 'livraison' ? `<div class="muted" style="margin-top:4px">Livraison : ${escapeHtml(o.delivery_address || '')}</div>` : '<div class="muted" style="margin-top:4px">Retrait en boutique</div>'}${o.customer_note ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #e2e8f0"><em>${escapeHtml(o.customer_note)}</em></div>` : ''}</div>
-      <table><thead><tr><th>Article</th><th style="text-align:center">Qté</th><th style="text-align:right">PU</th><th style="text-align:right">Total</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="tot">Total : ${formatFCFA(o.total)}</div>
-      <div class="muted" style="margin-top:8px">Paiement : ${escapeHtml(o.payment_mode)} — ${PAYMENT_META[o.payment_status].label}</div>
-      <div style="margin-top:24px;padding-top:12px;border-top:1px dashed #cbd5e1;text-align:center;font-size:10px;color:#64748b">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
+      <div class="section">
+        <div class="section-title">Client</div>
+        <div class="cust-name">${escapeHtml(o.customer_name || '-')}</div>
+        ${o.customer_phone ? `<div class="cust-info">${escapeHtml(o.customer_phone)}</div>` : ''}
+        <div class="cust-info">${o.delivery_mode === 'livraison' ? `Livraison : ${escapeHtml(o.delivery_address || '')}` : 'Retrait en boutique'}</div>
+        ${o.customer_note ? `<div class="note">${escapeHtml(o.customer_note)}</div>` : ''}
+      </div>
+      <table>
+        <thead><tr>
+          <th>Article</th>
+          <th class="center">Qté</th>
+          <th class="right">Prix unitaire</th>
+          <th class="right">Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="total-row">
+        <div class="total-box">
+          <div class="payment-info"><span>Mode de paiement</span><span>${escapeHtml(o.payment_mode)}</span></div>
+          <div class="payment-info"><span>Statut</span><span>${PAYMENT_META[o.payment_status].label}</span></div>
+          <div class="total-grand"><span>TOTAL</span><span>${fmtMoney(o.total)} FCFA</span></div>
+        </div>
+      </div>
+      <div class="footer">
+        <span>${escapeHtml(t.name || '')}${t.ninea ? ` — NINEA : ${escapeHtml(t.ninea)}` : ''}</span>
+        <span>Imprimé le ${new Date().toLocaleString('fr-FR')}</span>
+      </div>
+      <div class="waarwi">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
       </body></html>`);
     w.document.close();
-    setTimeout(() => { w.focus(); w.print(); }, 200);
+    setTimeout(() => { w.focus(); w.print(); }, 300);
   };
 
   const doCancel = async () => { setConfirmCancel(false); await updateStatus('annulee'); };
