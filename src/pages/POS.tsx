@@ -742,14 +742,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       created_at: sale.created_at,
       total: sale.total,
       discount: sale.discount,
-      items: sale.items.map(i => ({ name: i.name, internal_ref: i.internal_ref, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount })),
+      items: sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount })),
       payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
       customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
     }, tenantForPrint, cashierName);
   };
 
   const printSaleInvoice = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }) => {
-    const items = sale.items.map(i => ({ name: i.name, internal_ref: i.internal_ref, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount }));
+    const items = sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     const paid = sale.payments.reduce((s, p) => s + p.amount, 0);
     printDocumentA4({
@@ -760,7 +760,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
       items, subtotal, discount: sale.discount, total: sale.total,
       payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
-      paid, cashier: cashierName,
+      paid, cashier: cashierName, issuedBy: profile?.full_name || undefined,
     });
   };
   const autoMode = isAutoParts(tenant);

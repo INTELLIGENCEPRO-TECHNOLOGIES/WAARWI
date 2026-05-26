@@ -44,7 +44,7 @@ export function PublicSupplierOrder({ token }: { token: string }) {
       docDate: formatDate(data.order.created_at),
       customer: data.supplier ? { name: data.supplier.name, phone: data.supplier.phone, address: data.supplier.address } : null,
       extraMeta: data.order.expected_date ? [{ label: 'Livraison prévue', value: formatDate(data.order.expected_date) }] : [],
-      items: data.items.map(i => ({ name: i.name, internal_ref: i.supplier_ref || i.internal_ref || null, oem_ref: i.oem_ref || null, quantity: Number(i.quantity_ordered), unit_price: Number(i.unit_price), discount: 0 })),
+      items: data.items.map(i => ({ name: i.name, supplier_ref: i.supplier_ref || null, oem_ref: i.oem_ref || null, quantity: Number(i.quantity_ordered), unit_price: Number(i.unit_price), discount: 0 })),
       subtotal: Number(data.order.subtotal),
       discount: Number(data.order.discount),
       total: Number(data.order.total),

@@ -121,8 +121,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       }
 
       const stockRows = stockData.data || [];
-      const low = stockRows.filter((r: any) => Number(r.quantity) <= Number(r.articles?.stock_min || 0) && Number(r.quantity) > 0).length;
-      const out = stockRows.filter((r: any) => Number(r.quantity) <= 0).length;
+      const low = stockRows.filter((r: any) => Number(r.quantity) > 0 && Number(r.articles?.stock_min || 0) > 0 && Number(r.quantity) <= Number(r.articles.stock_min)).length;
+      // Only count as rupture if stock_min > 0 (merchant actively tracks this item's minimum)
+      const out = stockRows.filter((r: any) => Number(r.quantity) <= 0 && Number(r.articles?.stock_min || 0) > 0).length;
 
       const webTodayRows = (webTodayData.data || []) as any[];
       const webTodayTotal = webTodayRows.reduce((s, r) => s + Number(r.total || 0), 0);

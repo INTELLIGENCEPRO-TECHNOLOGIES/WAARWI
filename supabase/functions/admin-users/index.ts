@@ -398,6 +398,25 @@ Deno.serve(async (req: Request) => {
       return json({ events: data || [] });
     }
 
+    // ============ LOGIN CONFIG ============
+    if (action === "get_login_config") {
+      const { data } = await admin.from("platform_login_config").select("*").eq("id", "default").maybeSingle();
+      return json(data || {});
+    }
+
+    if (action === "update_login_config") {
+      const { headline, headline_accent, subtitle, modules } = body;
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: caller.id };
+      if (headline !== undefined) patch.headline = headline;
+      if (headline_accent !== undefined) patch.headline_accent = headline_accent;
+      if (subtitle !== undefined) patch.subtitle = subtitle;
+      if (modules !== undefined) patch.modules = modules;
+      const { data, error } = await admin.from("platform_login_config").update(patch).eq("id", "default").select().maybeSingle();
+      if (error) return json({ error: error.message }, 400);
+      await logEvent("login_config.update", null, patch);
+      return json({ success: true, config: data });
+    }
+
     return json({ error: "Action inconnue" }, 400);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);

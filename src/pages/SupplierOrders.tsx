@@ -44,7 +44,7 @@ const FILTERS: { key: string; label: string }[] = [
 ];
 
 export function SupplierOrders() {
-  const { tenant, currentSite, dataTick } = useApp();
+  const { tenant, currentSite, dataTick, profile } = useApp();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
   const [list, setList] = useState<SupplierOrder[]>([]);
@@ -211,9 +211,10 @@ export function SupplierOrders() {
       docDate: formatDate(selected.created_at),
       customer: selectedSupplier ? { name: selectedSupplier.name, phone: selectedSupplier.phone, address: selectedSupplier.address } : null,
       extraMeta: selected.expected_date ? [{ label: 'Livraison prévue', value: formatDate(selected.expected_date) }] : [],
-      items: detailItems.map(i => ({ name: i.name, internal_ref: i.supplier_ref || i.articles?.internal_ref || null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity_ordered), unit_price: Number(i.unit_price), discount: 0 })),
+      items: detailItems.map(i => ({ name: i.name, supplier_ref: i.supplier_ref || null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity_ordered), unit_price: Number(i.unit_price), discount: 0 })),
       subtotal: Number(selected.total), total: Number(selected.total),
       footerNote: 'Merci de confirmer réception et délai de livraison.',
+      issuedBy: profile?.full_name || undefined,
     });
   };
 

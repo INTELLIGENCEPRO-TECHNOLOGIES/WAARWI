@@ -17,7 +17,7 @@ const WAARWI_FOOTER = 'Propulsée par WAARWI — Plateforme Business 2.0 made in
 
 export type PrintItem = {
   name: string;
-  internal_ref?: string | null;
+  supplier_ref?: string | null;
   oem_ref?: string | null;
   quantity: number;
   unit_price: number;
@@ -47,7 +47,6 @@ function tenantHeader80(t: PrintTenant) {
   return `
     ${logo}
     <div class="shop-name">${esc(t.name)}</div>
-    <div class="activity">${esc(activity)}</div>
     ${t.address ? `<div class="meta">${esc(t.address)}</div>` : ''}
     ${t.phone ? `<div class="meta">Tél: ${esc(t.phone)}</div>` : ''}
     ${t.email ? `<div class="meta">${esc(t.email)}</div>` : ''}
@@ -247,7 +246,7 @@ export function printTicket80(
       const lineTotal = i.quantity * i.unit_price - (i.discount || 0);
       return `<div class="item">
         <div class="item-name">${esc(i.name)}</div>
-        ${i.internal_ref ? `<div class="item-ref">Réf: ${esc(i.internal_ref)}</div>` : ''}
+        ${i.supplier_ref ? `<div class="item-ref">Réf: ${esc(i.supplier_ref)}</div>` : ''}
         ${i.oem_ref ? `<div class="item-ref">OEM: ${esc(i.oem_ref)}</div>` : ''}
         <div class="item-line">
           <span><span class="item-qty">${i.quantity}</span> <span class="item-pu">× ${fmtMoney(i.unit_price)} FCFA</span></span>
@@ -480,7 +479,7 @@ const a4Style = `
     line-height: 1.45;
   }
   .page-content { flex: 1 1 auto; }
-  .page-bottom { margin-top: 14px; }
+  .page-bottom { margin-top: 14px; page-break-inside: avoid; break-inside: avoid; }
 
   /* Header */
   .header {
@@ -520,8 +519,8 @@ const a4Style = `
   .doc-meta .tag {
     display: inline-block;
     padding: 5px 12px;
-    background: #000000;
-    color: #ffffff;
+    background: #e8e8e8;
+    color: #000000;
     border-radius: 3px;
     font-size: 10px;
     letter-spacing: 2px;
@@ -595,7 +594,7 @@ const a4Style = `
     margin-bottom: 18px;
     table-layout: fixed;
   }
-  thead tr { background: #000000; color: #ffffff; }
+  thead tr { background: #e8e8e8; color: #000000; }
   th {
     padding: 9px 10px;
     text-align: left;
@@ -603,14 +602,14 @@ const a4Style = `
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: #ffffff;
+    color: #000000;
   }
   th.right { text-align: right; }
   th.center { text-align: center; }
-  th:nth-child(1) { width: 40%; }
-  th:nth-child(2) { width: 10%; }
-  th:nth-child(3) { width: 25%; }
-  th:nth-child(4) { width: 25%; }
+  th:nth-child(1) { width: 55%; }
+  th:nth-child(2) { width: 8%; }
+  th:nth-child(3) { width: 18%; }
+  th:nth-child(4) { width: 19%; }
   td {
     padding: 9px 10px;
     font-size: 11px;
@@ -656,13 +655,13 @@ const a4Style = `
   .fin-row.subtotal { background: #f5f5f5; }
   .fin-row.discount { background: #f5f5f5; font-weight: 700; }
   .fin-row.grand {
-    background: #000000;
-    color: #ffffff;
+    background: #e8e8e8;
+    color: #000000;
     font-size: 15px;
     font-weight: 900;
     padding: 12px 16px;
   }
-  .fin-row.grand span { color: #ffffff !important; }
+  .fin-row.grand span { color: #000000 !important; }
   .fin-row.paid-row { background: #f5f5f5; font-weight: 700; }
   .fin-row.due-row { background: #e8e8e8; font-weight: 900; font-size: 13px; }
 
@@ -735,6 +734,7 @@ export function printDocumentA4(opts: {
   payments?: PrintPayment[];
   paid?: number;
   cashier?: string;
+  issuedBy?: string;
 }) {
   const w = window.open('', '_blank', 'width=840,height=1180');
   if (!w) return;
@@ -751,7 +751,7 @@ export function printDocumentA4(opts: {
       return `<tr>
         <td>
           <div class="bold">${esc(i.name)}</div>
-          ${i.internal_ref ? `<div class="item-ref">Réf : ${esc(i.internal_ref)}</div>` : ''}
+          ${i.supplier_ref ? `<div class="item-ref">Réf : ${esc(i.supplier_ref)}</div>` : ''}
           ${i.oem_ref ? `<div class="item-ref">OEM : ${esc(i.oem_ref)}</div>` : ''}
         </td>
         <td class="center">${i.quantity}</td>
@@ -778,13 +778,12 @@ export function printDocumentA4(opts: {
 
   // Financial summary rows
   let financialRows = `
-    <div class="fin-row subtotal"><span>Sous-total</span><span>${fmtMoney(opts.subtotal)} FCFA</span></div>
     ${opts.discount && opts.discount > 0 ? `<div class="fin-row discount"><span>Remise</span><span>- ${fmtMoney(opts.discount)} FCFA</span></div>` : ''}
     <div class="fin-row grand"><span>TOTAL TTC</span><span>${fmtMoney(opts.total)} FCFA</span></div>
   `;
   if (isInvoiceType) {
     financialRows += `
-      <div class="fin-row paid-row"><span>Montant réglé</span><span>${fmtMoney(paidAmount)} FCFA</span></div>
+      <div class="fin-row paid-row"><span>Règlement</span><span>${fmtMoney(paidAmount)} FCFA</span></div>
       <div class="fin-row due-row"><span>Reste à payer</span><span>${fmtMoney(remaining)} FCFA</span></div>
     `;
   }
@@ -809,7 +808,6 @@ export function printDocumentA4(opts: {
     ${logoImg}
     <div class="brand-text">
       <h1>${esc(t.name)}</h1>
-      <div class="activity">${esc(activity)}</div>
       ${t.address ? `<p>${esc(t.address)}</p>` : ''}
       ${t.phone ? `<p>Tél : ${esc(t.phone)}</p>` : ''}
       ${t.email ? `<p>${esc(t.email)}</p>` : ''}
@@ -830,11 +828,8 @@ export function printDocumentA4(opts: {
 
 <div class="parties">
   <div class="party">
-    <h3>Émetteur</h3>
-    <p><strong>${esc(t.legal_name || t.name)}</strong></p>
-    ${t.address ? `<p>${esc(t.address)}</p>` : ''}
-    ${t.phone ? `<p>${esc(t.phone)}</p>` : ''}
-    ${t.ninea ? `<p>NINEA : ${esc(t.ninea)}</p>` : ''}
+    <h3>Facturé par</h3>
+    <p><strong>${esc(opts.issuedBy || t.legal_name || t.name)}</strong></p>
   </div>
   <div class="party">
     <h3>Destinataire</h3>

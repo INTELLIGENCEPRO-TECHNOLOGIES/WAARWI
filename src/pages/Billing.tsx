@@ -87,7 +87,7 @@ const TABS: { key: Tab; label: string; icon: any }[] = [
 ];
 
 export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
-  const { tenant, currentSite, dataTick } = useApp();
+  const { tenant, currentSite, dataTick, profile } = useApp();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
 
@@ -321,7 +321,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const printQuote = () => {
     if (!quoteDetail || !tenant) return;
-    const items = quoteItemsDetail.map(i => ({ name: i.name, internal_ref: i.articles?.internal_ref || null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
+    const items = quoteItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     printDocumentA4({
       tenant: tenantForPrint(tenant),
@@ -331,6 +331,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       customer: quoteDetail.customers ? { name: quoteDetail.customers.name, phone: (quoteDetail.customers as any).phone || undefined, address: (quoteDetail.customers as any).address || undefined } : null,
       items, subtotal, total: Number(quoteDetail.total),
       footerNote: 'Devis valable 30 jours à compter de la date d\'émission.',
+      issuedBy: profile?.full_name || undefined,
     });
   };
 
@@ -387,7 +388,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const printInvoice = () => {
     if (!invoiceDetail || !tenant) return;
-    const items = invoiceItems.map(i => ({ name: i.name, internal_ref: i.articles?.internal_ref || null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
+    const items = invoiceItems.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     printDocumentA4({
       tenant: tenantForPrint(tenant),
@@ -398,6 +399,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       items, subtotal, total: Number(invoiceDetail.total),
       payments: invoicePays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(invoiceDetail.paid),
+      issuedBy: profile?.full_name || undefined,
     });
   };
 
@@ -577,7 +579,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const printReturn = () => {
     if (!returnDetail || !tenant) return;
     const isCredit = returnDetail.refund_method === 'avoir';
-    const items = returnItemsDetail.map(i => ({ name: i.name, internal_ref: i.articles?.internal_ref || null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price) }));
+    const items = returnItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
     const extra: { label: string; value: string }[] = [];
     if (returnDetail.sales?.sale_number) extra.push({ label: 'Vente liée', value: returnDetail.sales.sale_number });
@@ -590,6 +592,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       extraMeta: extra,
       items, subtotal, total: Number(returnDetail.total),
       footerNote: returnDetail.reason ? `Motif : ${returnDetail.reason}` : undefined,
+      issuedBy: profile?.full_name || undefined,
     });
   };
 

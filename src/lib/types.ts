@@ -16,6 +16,7 @@ export type Tenant = {
   business_type?: string;
   enabled_modules?: string[];
   approval_status?: string;
+  slogan?: string;
 };
 
 export const BUSINESS_TYPE_LABELS: Record<string, string> = {

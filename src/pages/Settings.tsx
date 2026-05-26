@@ -102,7 +102,7 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
     const { error: e } = await supabase.from('tenants').update({
       name: form.name, legal_name: form.legal_name || '', ninea: form.ninea || '',
       rccm: form.rccm || '', address: form.address || '', phone: form.phone || '', email: form.email || '',
-      website: form.website || '',
+      website: form.website || '', slogan: form.slogan || '',
     }).eq('id', tenant.id);
     setSaving(false);
     if (e) error(e.message); else { success('Paramètres enregistrés'); onRefresh(); }
@@ -156,6 +156,7 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
         <div className="sm:col-span-2"><label className="label">Email</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="input" /></div>
         <div className="sm:col-span-2"><label className="label">Site web</label><input value={form.website || ''} onChange={e => setForm({ ...form, website: e.target.value })} className="input" placeholder="https://…" /></div>
         <div className="sm:col-span-2"><label className="label">Adresse</label><textarea value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} className="input resize-none" rows={2} /></div>
+        <div className="sm:col-span-2"><label className="label">Slogan</label><input value={form.slogan || ''} onChange={e => setForm({ ...form, slogan: e.target.value })} className="input" placeholder="Ex: Pièces auto de qualité, livrées rapidement." /></div>
       </div>
       <div className="mt-5 flex justify-end">
         <button onClick={save} disabled={saving} className="btn-primary">

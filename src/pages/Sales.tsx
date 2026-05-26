@@ -44,7 +44,7 @@ function statusStyles(status: string) {
 }
 
 export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite, dataTick } = useApp();
+  const { tenant, currentSite, dataTick, profile } = useApp();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -145,7 +145,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         discount: 0,
         items: items.map(i => ({
           name: i.name,
-          internal_ref: i.articles?.internal_ref ?? i.internal_ref ?? null,
+          supplier_ref: null,
           oem_ref: i.articles?.oem_ref ?? null,
           quantity: Number(i.quantity),
           unit_price: Number(i.unit_price),
@@ -155,7 +155,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         customer: selected.customers ? { name: selected.customers.name, phone: (selected.customers as any).phone || undefined, address: (selected.customers as any).address || undefined } : null,
       },
       tenantForPrint,
-      ''
+      profile?.full_name || profile?.email || ''
     );
   };
 
@@ -163,7 +163,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     if (!selected || !tenant) return;
     const printItems = items.map(i => ({
       name: i.name,
-      internal_ref: i.articles?.internal_ref ?? i.internal_ref ?? null,
+      supplier_ref: null,
       oem_ref: i.articles?.oem_ref ?? null,
       quantity: Number(i.quantity),
       unit_price: Number(i.unit_price),
@@ -182,6 +182,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       total: Number(selected.total),
       payments: pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: paidTotal,
+      issuedBy: profile?.full_name || undefined,
     });
   };
 

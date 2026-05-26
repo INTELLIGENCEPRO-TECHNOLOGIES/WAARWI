@@ -137,7 +137,7 @@ function Inner() {
 
   const welcomeName = tenant?.name || (isSuperAdmin ? 'Console plateforme' : 'WAARWI');
   const welcomeLogo = (tenant as any)?.logo_url || null;
-  const welcomeTagline = (tenant as any)?.tagline || 'Plateforme Business 2.0 made in Sénégal';
+  const welcomeTagline = tenant?.slogan || null;
 
   return (
     <>

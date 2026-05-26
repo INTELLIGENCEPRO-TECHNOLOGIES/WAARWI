@@ -27,7 +27,7 @@ type CustomerOptionKey = 'info' | 'payment' | 'docs' | null;
 type SupplierOptionKey = 'info' | 'payment' | 'docs' | 'articles' | null;
 
 export function Tiers() {
-  const { tenant, currentSite } = useApp();
+  const { tenant, currentSite, profile } = useApp();
   const { success, error } = useToast();
   const [tab, setTab] = useState<TabKey>('all');
 
@@ -880,7 +880,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       business_type: (tenant as any).business_type,
     };
     const items = data.items.map(i => ({
-      name: i.name, internal_ref: i.articles?.internal_ref || i.internal_ref || null,
+      name: i.name, supplier_ref: null,
       oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity),
       unit_price: Number(i.unit_price), discount: Number(i.discount || 0),
     }));
@@ -894,6 +894,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       items, subtotal, total: Number(data.sale.total),
       payments: data.pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(data.sale.paid),
+      issuedBy: profile?.full_name || undefined,
     });
   };
 
@@ -1407,7 +1408,7 @@ function Line({ label, value, strong, tone }: { label: string; value: string; st
 /* ───────────────────────── Supplier detail modal ───────────────────────── */
 function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: SupplierOptionKey }; siteId: string | null; onClose: () => void }) {
   const { s, key } = view;
-  const { tenant } = useApp();
+  const { tenant, profile } = useApp();
   const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1548,7 +1549,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       business_type: (tenant as any).business_type,
     };
     const items = data.items.map(i => ({
-      name: i.name, internal_ref: i.supplier_ref || i.articles?.internal_ref || null,
+      name: i.name, supplier_ref: i.supplier_ref || null,
       oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity_ordered),
       unit_price: Number(i.unit_price), discount: 0,
     }));
@@ -1563,6 +1564,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       items, subtotal, total: Number(data.order.total),
       payments: data.pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: paidTotal,
+      issuedBy: profile?.full_name || undefined,
     });
   };
 

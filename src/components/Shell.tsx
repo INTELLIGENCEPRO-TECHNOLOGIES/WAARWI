@@ -93,13 +93,10 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [mobileOpen, setMobileOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
-  const [tenantTagline, setTenantTagline] = useState('');
 
   useEffect(() => {
     if (!tenant) return;
     let active = true;
-    supabase.from('shop_settings').select('tagline').eq('tenant_id', tenant.id).maybeSingle()
-      .then(({ data }) => { if (active && data?.tagline) setTenantTagline(data.tagline); });
     const load = async () => {
       const { count } = await supabase
         .from('online_orders')
@@ -265,7 +262,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           )}
           <div className="leading-tight min-w-0">
             <div className="text-sm font-bold text-slate-900 tracking-tight truncate">{tenant?.name || 'WAARWI'}</div>
-            <div className="text-[10px] font-semibold text-slate-500 tracking-wider uppercase truncate">{tenant?.legal_name || 'Plateforme Business 2.0'}</div>
+            {tenant?.slogan && <div className="text-[10px] font-medium text-slate-500 leading-tight truncate">{tenant.slogan}</div>}
           </div>
         </div>
         <NavList />
@@ -340,7 +337,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   )}
                   <div className="min-w-0">
                     <div className="text-[13px] font-bold text-slate-900 tracking-tight truncate leading-tight">{tenant?.name || 'WAARWI'}</div>
-                    <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold truncate">{tenant?.legal_name || profile?.email}</div>
+                    <div className="text-[9px] text-slate-500 leading-tight font-medium truncate">{tenant?.slogan || profile?.email}</div>
                   </div>
                 </div>
                 <button
@@ -478,9 +475,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 {tenant?.name || 'WAARWI'}
               </div>
             </div>
-            {tenantTagline && (
+            {tenant?.slogan && (
               <div className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5 truncate">
-                {tenantTagline}
+                {tenant.slogan}
               </div>
             )}
           </div>

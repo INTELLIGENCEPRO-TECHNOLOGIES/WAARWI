@@ -13,7 +13,7 @@ import { Modal, ConfirmDialog } from '../components/Modal';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
 
-type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs';
+type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config';
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const { data: sess } = await supabase.auth.getSession();
@@ -44,6 +44,7 @@ export function PlatformAdmin() {
     { k: 'plans', l: 'Plans', icon: Layers },
     { k: 'subscriptions', l: 'Abonnements', icon: CircleDollarSign },
     { k: 'messages', l: 'Messages', icon: MessageSquare },
+    { k: 'login_config', l: 'Écran d\'accueil', icon: Store_ },
     { k: 'master_catalogs', l: 'Catalogues maîtres', icon: Library },
     { k: 'activity', l: 'Activité', icon: Activity },
   ];
@@ -92,6 +93,7 @@ export function PlatformAdmin() {
       {section === 'plans' && <PlansSection />}
       {section === 'subscriptions' && <SubscriptionsSection />}
       {section === 'messages' && <MessagesSection />}
+      {section === 'login_config' && <LoginConfigSection />}
       {section === 'master_catalogs' && <MasterCatalogAdmin />}
       {section === 'activity' && <ActivitySection />}
     </div>
@@ -1311,6 +1313,191 @@ function ActivitySection() {
       <div className="space-y-1">
         {events.map(ev => <EventRow key={ev.id} ev={ev} />)}
         {events.length === 0 && <div className="text-center text-slate-400 py-10 text-sm">Aucune activité enregistrée.</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ============== LOGIN CONFIG ============== */
+
+const AVAILABLE_ICONS = [
+  { value: 'Zap', label: 'Éclair (POS)' },
+  { value: 'Package', label: 'Colis (Stock)' },
+  { value: 'Receipt', label: 'Reçu (Facturation)' },
+  { value: 'Globe', label: 'Globe (Boutique)' },
+  { value: 'BarChart3', label: 'Graphique (Comptabilité)' },
+  { value: 'Shield', label: 'Bouclier (Sécurité)' },
+];
+
+type LoginModule = { icon: string; label: string; desc: string };
+
+function LoginConfigSection() {
+  const { success, error } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [headline, setHeadline] = useState('');
+  const [headlineAccent, setHeadlineAccent] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [modules, setModules] = useState<LoginModule[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await call('get_login_config');
+        setHeadline(data.headline || '');
+        setHeadlineAccent(data.headline_accent || '');
+        setSubtitle(data.subtitle || '');
+        setModules(data.modules || []);
+      } catch (e: any) { error(e.message); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await call('update_login_config', { headline, headline_accent: headlineAccent, subtitle, modules });
+      success('Configuration de l\'écran d\'accueil enregistrée');
+    } catch (e: any) { error(e.message); }
+    setSaving(false);
+  };
+
+  const updateModule = (idx: number, field: keyof LoginModule, value: string) => {
+    setModules(prev => prev.map((m, i) => i === idx ? { ...m, [field]: value } : m));
+  };
+
+  const removeModule = (idx: number) => {
+    setModules(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const addModule = () => {
+    if (modules.length >= 6) return;
+    setModules(prev => [...prev, { icon: 'Zap', label: '', desc: '' }]);
+  };
+
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
+
+  return (
+    <div className="space-y-5">
+      {/* En-tête */}
+      <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
+        <div className="flex items-center gap-2 mb-1">
+          <Store_ className="w-4 h-4 text-brand-700" />
+          <h3 className="text-sm font-bold text-slate-900">Personnalisation de l'écran de connexion</h3>
+        </div>
+        <p className="text-xs text-slate-500 mb-5">Modifiez les textes et modules affichés sur la page de connexion WAARWI. Les changements sont visibles immédiatement.</p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Titre principal */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Titre principal</label>
+            <input
+              value={headline}
+              onChange={e => setHeadline(e.target.value)}
+              placeholder="Gérez votre business,"
+              className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Première ligne du titre affiché sur la page</p>
+          </div>
+
+          {/* Partie accentuée */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Accent du titre (en couleur)</label>
+            <input
+              value={headlineAccent}
+              onChange={e => setHeadlineAccent(e.target.value)}
+              placeholder="tout-en-un."
+              className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Partie colorée en dégradé turquoise</p>
+          </div>
+
+          {/* Sous-titre */}
+          <div className="lg:col-span-2">
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre</label>
+            <textarea
+              value={subtitle}
+              onChange={e => setSubtitle(e.target.value)}
+              rows={2}
+              placeholder="POS, stocks, facturation..."
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 resize-none"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Description courte visible sous le titre</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Modules métier */}
+      <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Modules affichés</h3>
+            <p className="text-xs text-slate-500">Maximum 6 modules. Ils apparaissent sur la page de connexion.</p>
+          </div>
+          <button
+            onClick={addModule}
+            disabled={modules.length >= 6}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-xs font-semibold hover:bg-brand-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-3.5 h-3.5" /> Ajouter
+          </button>
+        </div>
+
+        {modules.length === 0 && (
+          <div className="text-center py-8 text-sm text-slate-400">Aucun module configuré. Cliquez sur "Ajouter" pour commencer.</div>
+        )}
+
+        <div className="space-y-3">
+          {modules.map((mod, idx) => (
+            <div key={idx} className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50">
+              <div className="shrink-0">
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Icône</label>
+                <select
+                  value={mod.icon}
+                  onChange={e => updateModule(idx, 'icon', e.target.value)}
+                  className="h-9 px-2 rounded-lg border border-slate-200 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                >
+                  {AVAILABLE_ICONS.map(ic => (
+                    <option key={ic.value} value={ic.value}>{ic.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1 min-w-0">
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Nom du module</label>
+                <input
+                  value={mod.label}
+                  onChange={e => updateModule(idx, 'label', e.target.value)}
+                  placeholder="Ex : Point de vente"
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Description courte</label>
+                <input
+                  value={mod.desc}
+                  onChange={e => updateModule(idx, 'desc', e.target.value)}
+                  placeholder="Ex : Caisse rapide"
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+              <button onClick={() => removeModule(idx)} className="shrink-0 mt-5 p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bouton sauvegarder */}
+      <div className="flex justify-end">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-700 text-white text-sm font-semibold hover:bg-brand-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Enregistrer les modifications
+        </button>
       </div>
     </div>
   );
