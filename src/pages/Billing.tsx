@@ -14,6 +14,8 @@ import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate, formatDateTime } from '../lib/format';
 import { printDocumentA4, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
+import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
+import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
 
 const tenantForPrint = (t: any): PrintTenant => ({
   name: t?.name || '', legal_name: t?.legal_name, ninea: t?.ninea, rccm: t?.rccm,
@@ -1001,8 +1003,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Filters Modal ────────────────────────────────────── */}
       <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtres avancés" size="md"
         footer={<>
-          <button onClick={clearFilters} className="btn-secondary"><X className="w-4 h-4" />Réinitialiser</button>
-          <button onClick={() => setFiltersOpen(false)} className="btn-primary"><Check className="w-4 h-4" />Appliquer</button>
+          <button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><X className="w-4 h-4" /></button>
+          <button onClick={() => setFiltersOpen(false)} className="btn-icon-primary" title="Appliquer"><Check className="w-4 h-4" /></button>
         </>}>
         <div className="space-y-4">
           <div>
@@ -1130,76 +1132,44 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Quote detail ─────────────────────────────────────── */}
       <Modal open={!!quoteDetail} onClose={() => setQuoteDetail(null)} title={quoteDetail ? `Devis ${quoteDetail.quote_number}` : ''} size="lg"
         footer={<>
-          <div className="flex gap-2 flex-wrap">
-            {quoteDetail?.status === 'draft' && <button onClick={() => changeQuoteStatus(quoteDetail, 'sent')} className="btn-secondary text-sm">Marquer envoyé</button>}
-            {quoteDetail && ['draft', 'sent'].includes(quoteDetail.status) && <button onClick={() => changeQuoteStatus(quoteDetail, 'accepted')} className="text-sm px-3 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold flex items-center gap-1"><CheckCircle className="w-4 h-4" />Accepter</button>}
-            {quoteDetail?.status === 'accepted' && <button onClick={() => openConvert(quoteDetail)} className="text-sm px-3 py-2 bg-gradient-to-br from-brand-600 to-brand-800 text-white rounded-xl hover:shadow-glow font-semibold flex items-center gap-1"><ArrowRight className="w-4 h-4" />Convertir en facture</button>}
+          <div className="flex gap-1.5 mr-auto">
+            {quoteDetail?.status === 'draft' && <button onClick={() => changeQuoteStatus(quoteDetail, 'sent')} className="btn-icon" title="Marquer envoyé"><CheckCircle className="w-4 h-4 text-blue-500" /></button>}
+            {quoteDetail && ['draft', 'sent'].includes(quoteDetail.status) && <button onClick={() => changeQuoteStatus(quoteDetail, 'accepted')} className="btn-icon-success" title="Accepter"><CheckCircle className="w-4 h-4" /></button>}
+            {quoteDetail?.status === 'accepted' && <button onClick={() => openConvert(quoteDetail)} className="btn-icon-primary" title="Convertir en facture"><ArrowRight className="w-4 h-4" /></button>}
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setQuoteDetail(null)} className="btn-secondary">Fermer</button>
-            <button onClick={printQuote} className="btn-primary"><Printer className="w-4 h-4" />Imprimer</button>
-          </div>
+          <button onClick={() => setQuoteDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          <button onClick={printQuote} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
         </>}>
         {quoteDetail && (() => {
           const st = QUOTE_STATUS[quoteDetail.status] || QUOTE_STATUS.draft;
+          const slimStatus: DocStatusConfig = {
+            label: st.label,
+            color: quoteDetail.status === 'accepted' ? 'emerald' : quoteDetail.status === 'rejected' ? 'rose' : quoteDetail.status === 'converted' ? 'teal' : quoteDetail.status === 'sent' ? 'blue' : quoteDetail.status === 'expired' ? 'amber' : 'slate',
+          };
           return (
             <div className="space-y-4">
-              <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border ${st.pill}`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-                  <span className={`w-2 h-2 rounded-full ${st.dot} animate-pulse`} />Devis {st.label}
-                </div>
-                <div className="text-[10px] font-semibold opacity-70 num">{formatDate(quoteDetail.created_at)}</div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-400"><Calendar className="w-3 h-3" />Date</div>
-                  <div className="text-[11px] font-semibold text-slate-800 mt-1 num">{formatDate(quoteDetail.created_at)}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-400"><User className="w-3 h-3" />Client</div>
-                  <div className="text-[11px] font-semibold text-slate-800 mt-1 truncate">{quoteDetail.customers?.name || 'Comptoir'}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-900 text-white border border-slate-900">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-white/50"><Receipt className="w-3 h-3" />Total</div>
-                  <div className="text-sm font-bold mt-1 num">{formatFCFA(quoteDetail.total)}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-700/70"><Calendar className="w-3 h-3" />Validité</div>
-                  <div className="text-[11px] font-semibold text-amber-800 mt-1 num">{quoteDetail.valid_until ? formatDate(quoteDetail.valid_until) : '—'}</div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Articles</div>
-                  <span className="text-[10px] font-bold text-slate-400 num">{quoteItemsDetail.length}</span>
-                </div>
-                <div className="md:hidden space-y-1.5">
-                  {quoteItemsDetail.map(i => (
-                    <div key={i.id} className="p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[12px] font-semibold text-slate-900 truncate">{i.name}</div>
-                          {i.articles?.internal_ref && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.articles.internal_ref}</div>}
-                          {i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className="text-[11px] font-bold text-slate-900 num">{formatFCFA(i.total)}</div>
-                          <div className="text-[9px] text-slate-400 num mt-0.5">{i.quantity} × {formatFCFA(i.unit_price)}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="hidden md:block rounded-xl border border-slate-200 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                      <tr><th className="px-4 py-2.5 text-left">Article</th><th className="px-4 py-2.5 text-right">Qté</th><th className="px-4 py-2.5 text-right">P.U.</th><th className="px-4 py-2.5 text-right">Total</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {quoteItemsDetail.map(i => <tr key={i.id} className="hover:bg-slate-50/60"><td className="px-4 py-2.5 text-slate-800"><div>{i.name}</div>{i.articles?.internal_ref && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.articles.internal_ref}</div>}{i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}</td><td className="px-4 py-2.5 text-right num">{i.quantity}</td><td className="px-4 py-2.5 text-right num">{formatFCFA(i.unit_price)}</td><td className="px-4 py-2.5 text-right font-bold num">{formatFCFA(i.total)}</td></tr>)}
-                    </tbody>
-                  </table>
-                </div>
+              <DocSlimHeader
+                status={slimStatus}
+                customerName={quoteDetail.customers?.name ?? null}
+                date={formatDate(quoteDetail.created_at)}
+                extra={quoteDetail.valid_until ? `Valide ${formatDate(quoteDetail.valid_until)}` : undefined}
+              />
+              <div className="space-y-3">
+                <DocSectionTitle title="Articles" count={quoteItemsDetail.length} />
+                <DocItems items={quoteItemsDetail.map(i => ({
+                  id: i.id,
+                  name: i.name,
+                  internal_ref: i.articles?.internal_ref || null,
+                  oem_ref: i.articles?.oem_ref || null,
+                  quantity: Number(i.quantity),
+                  unit_price: Number(i.unit_price),
+                  discount: Number(i.discount ?? 0),
+                  total: Number(i.total),
+                }) satisfies DocItem)} />
+                <DocTotals
+                  subtotal={quoteItemsDetail.reduce((s, i) => s + Number(i.total), 0)}
+                  total={Number(quoteDetail.total)}
+                />
               </div>
               {quoteDetail.note && <div className="p-3 bg-slate-50 rounded-xl text-sm text-slate-600 border border-slate-200/70"><span className="font-semibold">Note :</span> {quoteDetail.note}</div>}
             </div>
@@ -1264,99 +1234,65 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Invoice detail ───────────────────────────────────── */}
       <Modal open={!!invoiceDetail} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''} size="lg"
         footer={<>
-          <div className="flex gap-2 flex-wrap">
-            {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="text-sm px-3 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold flex items-center gap-1"><Banknote className="w-4 h-4" />Encaisser</button>}
-            {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="text-sm px-3 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold flex items-center gap-1"><Wallet className="w-4 h-4" />Appliquer avoir</button>}
+          <div className="flex gap-1.5 mr-auto">
+            {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Banknote className="w-4 h-4" /></button>}
+            {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => copyInvoiceLink()} className="btn-secondary" title="Copier le lien de la facture"><Link2 className="w-4 h-4" /><span className="hidden sm:inline">Copier lien</span></button>
-            {invoiceDetail?.customers && (
-              <button onClick={() => sendInvoiceWhatsApp()} className="flex items-center gap-1.5 px-3 py-2 bg-[#25D366] text-white rounded-xl hover:brightness-95 font-semibold text-sm transition shadow-sm" title="Envoyer par WhatsApp"><MessageCircle className="w-4 h-4" /><span className="hidden sm:inline">WhatsApp</span></button>
-            )}
-            <button onClick={() => setInvoiceDetail(null)} className="btn-secondary">Fermer</button>
-            <button onClick={printInvoice} className="btn-primary"><Printer className="w-4 h-4" />Imprimer</button>
-          </div>
+          <button onClick={() => copyInvoiceLink()} className="btn-icon" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
+          {invoiceDetail?.customers && (
+            <button onClick={() => sendInvoiceWhatsApp()} className="btn-icon" title="WhatsApp" style={{ color: '#25D366' }}><MessageCircle className="w-4 h-4" /></button>
+          )}
+          <button onClick={() => setInvoiceDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          <button onClick={printInvoice} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
         </>}>
         {invoiceDetail && (() => {
           const st = invoiceStatus(invoiceDetail);
+          const slimStatus: DocStatusConfig = {
+            label: st.label,
+            color: invoiceDetail.status === 'cancelled' ? 'rose' : invoiceDetail.paid >= invoiceDetail.total ? 'emerald' : Number(invoiceDetail.paid) > 0 ? 'amber' : 'blue',
+          };
           return (
             <div className="space-y-4">
-              <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border ${st.pill}`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-                  <span className={`w-2 h-2 rounded-full ${st.dot} animate-pulse`} />Facture {st.label}
-                </div>
-                <div className="text-[10px] font-semibold opacity-70 num">{formatDateTime(invoiceDetail.created_at)}</div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-400"><User className="w-3 h-3" />Client</div>
-                  <div className="text-[11px] font-semibold text-slate-800 mt-1 truncate">{invoiceDetail.customers?.name || 'Comptoir'}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-900 text-white border border-slate-900">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-white/50"><Receipt className="w-3 h-3" />Total</div>
-                  <div className="text-sm font-bold mt-1 num">{formatFCFA(invoiceDetail.total)}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700/70"><CreditCard className="w-3 h-3" />Payé</div>
-                  <div className="text-sm font-bold text-emerald-700 mt-1 num">{formatFCFA(invoiceDetail.paid)}</div>
-                </div>
-                <div className={`p-3 rounded-xl border ${invoiceDue > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50/80 border-slate-200/70'}`}>
-                  <div className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider ${invoiceDue > 0 ? 'text-amber-700/70' : 'text-slate-400'}`}><Wallet className="w-3 h-3" />Solde</div>
-                  <div className={`text-sm font-bold mt-1 num ${invoiceDue > 0 ? 'text-amber-700' : 'text-slate-500'}`}>{formatFCFA(invoiceDue)}</div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Articles</div>
-                  <span className="text-[10px] font-bold text-slate-400 num">{invoiceItems.length}</span>
-                </div>
-                <div className="md:hidden space-y-1.5">
-                  {invoiceItems.map(i => (
-                    <div key={i.id} className="p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[12px] font-semibold text-slate-900 truncate">{i.name}</div>
-                          {i.articles?.internal_ref && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.articles.internal_ref}</div>}
-                          {i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className="text-[11px] font-bold text-slate-900 num">{formatFCFA(i.total)}</div>
-                          <div className="text-[9px] text-slate-400 num mt-0.5">{i.quantity} × {formatFCFA(i.unit_price)}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="hidden md:block rounded-xl border border-slate-200 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                      <tr><th className="px-4 py-2.5 text-left">Article</th><th className="px-4 py-2.5 text-right">Qté</th><th className="px-4 py-2.5 text-right">P.U.</th><th className="px-4 py-2.5 text-right">Total</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {invoiceItems.map(i => <tr key={i.id} className="hover:bg-slate-50/60"><td className="px-4 py-2.5 text-slate-800"><div>{i.name}</div>{i.articles?.internal_ref && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.articles.internal_ref}</div>}{i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}</td><td className="px-4 py-2.5 text-right num">{i.quantity}</td><td className="px-4 py-2.5 text-right num">{formatFCFA(i.unit_price)}</td><td className="px-4 py-2.5 text-right font-bold num">{formatFCFA(i.total)}</td></tr>)}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              {invoicePays.length > 0 && (
-                <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Paiements</div>
-                  <div className="space-y-1.5">
-                    {invoicePays.map(p => (
-                      <div key={p.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white border border-slate-200/70 shadow-sm">
-                        <div className="flex items-center gap-2 text-sm text-slate-700 min-w-0">
-                          <div className="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center shrink-0"><CreditCard className="w-3.5 h-3.5 text-brand-700" /></div>
-                          <div className="min-w-0">
-                            <div className="truncate font-medium">{p.method_name}</div>
-                            <div className="text-[10px] text-slate-400 num">{formatDateTime(p.created_at)}</div>
-                          </div>
-                        </div>
-                        <span className="font-bold text-slate-900 num">{formatFCFA(p.amount)}</span>
-                      </div>
-                    ))}
+              <DocSlimHeader
+                status={slimStatus}
+                customerName={invoiceDetail.customers?.name ?? null}
+                date={formatDateTime(invoiceDetail.created_at)}
+              />
+              <div className="space-y-3">
+                <DocSectionTitle title="Articles" count={invoiceItems.length} />
+                <DocItems items={invoiceItems.map(i => ({
+                  id: i.id,
+                  name: i.name,
+                  internal_ref: i.articles?.internal_ref || null,
+                  oem_ref: i.articles?.oem_ref || null,
+                  quantity: Number(i.quantity),
+                  unit_price: Number(i.unit_price),
+                  discount: Number(i.discount ?? 0),
+                  total: Number(i.total),
+                }) satisfies DocItem)} />
+                {(() => {
+                  const subtotal = invoiceItems.reduce((s, i) => s + Number(i.total), 0);
+                  const paidTotal = invoicePays.reduce((s, p) => s + Number(p.amount), 0);
+                  const due = Math.max(0, Number(invoiceDetail.total) - paidTotal);
+                  return (
+                    <DocTotals
+                      subtotal={subtotal}
+                      total={Number(invoiceDetail.total)}
+                      paid={paidTotal > 0 ? paidTotal : undefined}
+                      remaining={due > 0 ? due : undefined}
+                    />
+                  );
+                })()}
+                {invoicePays.length > 0 && (
+                  <div className="space-y-2">
+                    <DocSectionTitle title="Paiements" count={invoicePays.length} />
+                    <DocPayments
+                      payments={invoicePays.map(p => ({ method_name: p.method_name, amount: Number(p.amount), paid_at: p.created_at }) satisfies DocPayment)}
+                      formatDate={formatDateTime}
+                    />
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           );
         })()}
@@ -1533,49 +1469,30 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Return detail ─────────────────────────────────────── */}
       <Modal open={!!returnDetail} onClose={() => setReturnDetail(null)} title={returnDetail ? `${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}` : ''} size="md"
         footer={<>
-          {returnDetail?.status === 'pending' && <button onClick={() => { approveReturn(returnDetail); }} className="text-sm px-3 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold flex items-center gap-1"><CheckCircle className="w-4 h-4" />Approuver</button>}
-          <button onClick={() => setReturnDetail(null)} className="btn-secondary">Fermer</button>
-          <button onClick={printReturn} className="btn-primary"><Printer className="w-4 h-4" />Imprimer</button>
+          {returnDetail?.status === 'pending' && <button onClick={() => { approveReturn(returnDetail); }} className="btn-icon-success" title="Approuver"><CheckCircle className="w-4 h-4" /></button>}
+          <button onClick={() => setReturnDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          <button onClick={printReturn} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
         </>}>
         {returnDetail && (() => {
           const isCredit = returnDetail.refund_method === 'avoir';
           const st = isCredit ? creditStatus(returnDetail) : (RETURN_STATUS[returnDetail.status] || RETURN_STATUS.pending);
           const used = Number(returnDetail.credit_used || 0);
           const balance = Number(returnDetail.total) - used;
+          const slimStatusColor = returnDetail.status === 'approved' ? (isCredit ? 'blue' : 'emerald') : returnDetail.status === 'rejected' ? 'rose' : 'amber';
           return (
             <div className="space-y-4">
-              <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border ${st.pill}`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-                  <span className={`w-2 h-2 rounded-full ${st.dot} animate-pulse`} />{isCredit ? 'Avoir' : 'Retour'} {st.label}
+              <DocSlimHeader
+                status={{ label: st.label, color: slimStatusColor as any }}
+                customerName={returnDetail.customers?.name ?? null}
+                date={formatDateTime(returnDetail.created_at)}
+                extra={returnDetail.sales?.sale_number ? `Vente ${returnDetail.sales.sale_number}` : undefined}
+              />
+              {isCredit && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[12px]">
+                  <span className="font-semibold text-emerald-800">Solde avoir</span>
+                  <span className="font-bold text-emerald-700 num">{formatFCFA(balance)}{used > 0 ? ` (utilisé ${formatFCFA(used)})` : ''}</span>
                 </div>
-                <div className="text-[10px] font-semibold opacity-70 num">{formatDateTime(returnDetail.created_at)}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vente liée</div>
-                  <div className="text-[11px] font-mono font-semibold text-slate-800 mt-1 truncate">{returnDetail.sales?.sale_number || '—'}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Client</div>
-                  <div className="text-[11px] font-semibold text-slate-800 mt-1 truncate">{returnDetail.customers?.name || '—'}</div>
-                </div>
-                <div className={`p-3 rounded-xl border ${isCredit ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'}`}>
-                  <div className={`text-[9px] font-bold uppercase tracking-wider ${isCredit ? 'text-blue-700/70' : 'text-red-700/70'}`}>{isCredit ? 'Montant initial' : 'Remboursé'}</div>
-                  <div className={`text-sm font-bold mt-1 num ${isCredit ? 'text-blue-700' : 'text-red-700'}`}>{formatFCFA(returnDetail.total)}</div>
-                </div>
-                {isCredit ? (
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-700/70">Solde disponible</div>
-                    <div className="text-sm font-bold text-emerald-700 mt-1 num">{formatFCFA(balance)}</div>
-                    {used > 0 && <div className="text-[9px] text-emerald-600/70 mt-0.5 num">{formatFCFA(used)} utilisé</div>}
-                  </div>
-                ) : (
-                  <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Remise stock</div>
-                    <div className="text-[11px] font-semibold text-slate-800 mt-1">{returnDetail.restock ? 'Oui' : 'Non'}</div>
-                  </div>
-                )}
-              </div>
+              )}
               {returnDetail.reason && <div className="p-3 bg-slate-50 rounded-xl text-sm border border-slate-200/70"><span className="font-semibold">Motif :</span> {returnDetail.reason}</div>}
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Articles</div>

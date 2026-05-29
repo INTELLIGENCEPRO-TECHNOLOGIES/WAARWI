@@ -18,6 +18,10 @@ type AppState = {
   dataTick: number;
   /** subscribe to targeted change events for a specific table. Returns an unsubscribe. */
   onDataChange: (tables: string[], cb: () => void) => () => void;
+  /** POS cart state shared with Shell so the FAB becomes the cart button */
+  posCartCount: number;
+  posCartOpen: boolean;
+  setPosCart: (count: number, open: boolean) => void;
 };
 
 const Ctx = createContext<AppState | null>(null);
@@ -30,6 +34,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sites, setSites] = useState<Site[]>([]);
   const [currentSite, setCurrentSite] = useState<Site | null>(null);
   const [dataTick, setDataTick] = useState(0);
+  const [posCartCount, setPosCartCount] = useState(0);
+  const [posCartOpen, setPosCartOpenState] = useState(false);
   const listenersRef = useRef<{ tables: Set<string>; cb: () => void }[]>([]);
 
   const loadSession = useCallback(async () => {
@@ -182,12 +188,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('currentSiteId', site.id);
   };
 
+  const setPosCart = useCallback((count: number, open: boolean) => {
+    setPosCartCount(count);
+    setPosCartOpenState(open);
+  }, []);
+
   return (
     <Ctx.Provider value={{
       loading, user, profile, tenant, sites, currentSite,
       setCurrentSite: handleSetCurrentSite,
       signIn, signUp, signOut, refresh: loadSession,
       dataTick, onDataChange,
+      posCartCount, posCartOpen, setPosCart,
     }}>
       {children}
     </Ctx.Provider>

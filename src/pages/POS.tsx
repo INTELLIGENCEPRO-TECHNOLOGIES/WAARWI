@@ -724,7 +724,7 @@ function POSLandingResume({
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite, profile } = useApp();
+  const { tenant, currentSite, profile, setPosCart, posCartOpen } = useApp();
   const { can } = usePermissions();
   const tenantForPrint: PrintTenant = tenant ? {
     name: tenant.name, legal_name: (tenant as any).legal_name,
@@ -794,6 +794,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [discount, setDiscount] = useState(0);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+
+  // Sync cart state to Shell FAB
+  useEffect(() => {
+    setPosCart(cart.length, mobileCartOpen);
+  }, [cart.length, mobileCartOpen, setPosCart]);
+
+  // React to Shell FAB toggling the cart
+  useEffect(() => {
+    setMobileCartOpen(posCartOpen);
+  }, [posCartOpen]);
+
+  // Reset FAB state on unmount
+  useEffect(() => {
+    return () => { setPosCart(0, false); };
+  }, [setPosCart]);
 
   // Held carts (mise en attente)
   const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
@@ -972,11 +987,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         return c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
       if (a.stock_available <= 0) { error('Article en rupture'); return c; }
-      return [...c, {
+      const next = [...c, {
         article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
         quantity: 1, unit_price: a.sale_price, discount: 0,
         stock_available: a.stock_available, purchase_cost: a.purchase_price,
       }];
+      return next;
     });
   };
 
@@ -1623,105 +1639,99 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // ─── Main POS screen ──────────────────────────────────────────────────────
 
   const CartPanel = (
-    <div className="flex flex-col h-full bg-slate-50/40">
-      <div className="px-4 py-3.5 border-b border-slate-200/70 bg-white flex items-center justify-between">
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Panier</div>
-          <div className="text-base font-bold text-slate-900">{cart.length} ligne{cart.length !== 1 ? 's' : ''}</div>
-        </div>
-        <div className="flex items-center gap-1">
-          {cart.length > 0 && (
-            <button onClick={() => setCart([])} className="p-2 rounded-xl hover:bg-red-50 text-red-500 transition-colors" title="Vider">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-          {heldCarts.length > 0 && (
-            <button onClick={() => setHoldOpen(true)} className="relative p-2 rounded-xl hover:bg-amber-50 text-amber-600 transition-colors" title="Tickets en attente">
-              <List className="w-4 h-4" />
-              <span className="absolute top-0 right-0 w-4 h-4 text-[10px] rounded-full bg-amber-500 text-white flex items-center justify-center font-bold">{heldCarts.length}</span>
-            </button>
-          )}
-          <button onClick={() => setMobileCartOpen(false)} className="lg:hidden p-2 rounded-xl hover:bg-slate-100">
-            <X className="w-5 h-5" />
+    <div className="flex flex-col h-full bg-white">
+      {/* Header — compact */}
+      <div className="px-3 py-2 border-b border-slate-200/70 bg-white flex items-center gap-2">
+        <span className="text-xs font-bold text-slate-900 leading-none">{cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
+        <div className="flex-1" />
+        {heldCarts.length > 0 && (
+          <button onClick={() => setHoldOpen(true)} className="relative p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" title="Tickets en attente">
+            <List className="w-3.5 h-3.5" />
+            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] rounded-full bg-amber-500 text-white flex items-center justify-center font-bold">{heldCarts.length}</span>
           </button>
-        </div>
+        )}
+        {cart.length > 0 && (
+          <button onClick={() => setCart([])} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors" title="Vider">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+        <button onClick={() => setMobileCartOpen(false)} className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100 text-slate-500">
+          <X className="w-4 h-4" />
+        </button>
       </div>
 
-      <div className="px-4 py-3 border-b border-slate-200/70 bg-white">
+      {/* Customer selector — compact */}
+      <div className="px-3 py-1.5 border-b border-slate-200/70 bg-white">
         <div className="relative">
-          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <select value={customer?.id || ''} onChange={e => setCustomer(customers.find(c => c.id === e.target.value) || null)} className="input pl-10 text-sm">
+          <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <select value={customer?.id || ''} onChange={e => setCustomer(customers.find(c => c.id === e.target.value) || null)} className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:border-brand-400 text-slate-700">
             <option value="">Client comptoir</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+      {/* Cart lines */}
+      <div className="flex-1 overflow-y-auto">
         {cart.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400 p-6">
-            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
-              <ShoppingCart className="w-8 h-8 opacity-50" />
-            </div>
-            <p className="text-sm font-medium">Panier vide</p>
-            <p className="text-xs text-slate-400 text-center">Sélectionnez un article pour démarrer la vente</p>
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400 p-6">
+            <ShoppingCart className="w-8 h-8 opacity-30" />
+            <p className="text-xs font-medium text-slate-400">Panier vide</p>
             {heldCarts.length > 0 && (
-              <button onClick={() => setHoldOpen(true)} className="mt-2 chip text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100">
-                <List className="w-3.5 h-3.5" />
+              <button onClick={() => setHoldOpen(true)} className="mt-1 chip text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100 text-[11px]">
+                <List className="w-3 h-3" />
                 {heldCarts.length} ticket{heldCarts.length > 1 ? 's' : ''} en attente
               </button>
             )}
           </div>
         ) : (
-          cart.map(i => (
-            <div key={i.article_id} className="cart-line group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center shrink-0">
-                <Package className="w-5 h-5 text-slate-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-slate-900 leading-snug line-clamp-2">{i.name}</div>
-                    <div className="text-[10px] font-mono text-slate-400 tracking-wide mt-0.5">{i.internal_ref}</div>
-                    {i.oem_ref && <div className="text-[10px] font-mono text-slate-400 tracking-wide">OEM: {i.oem_ref}</div>}
+          <div className="divide-y divide-slate-100">
+            {cart.map(i => (
+              <div key={i.article_id} className="group px-3 py-1.5 hover:bg-slate-50 transition-colors">
+                {/* Row 1: name + delete */}
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-slate-900 leading-snug truncate">{i.name}</div>
                   </div>
-                  <button onClick={() => removeLine(i.article_id)} className="opacity-50 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-50 text-red-500 transition-all shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => removeLine(i.article_id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-red-400 transition-all shrink-0">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex items-center bg-slate-100 rounded-xl shrink-0">
-                    <button onClick={() => updateQty(i.article_id, -1)} className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 rounded-l-xl active:scale-95 transition-all"><Minus className="w-3.5 h-3.5" /></button>
-                    <input type="number" value={i.quantity} onChange={e => setQty(i.article_id, Number(e.target.value))} className="w-9 text-center bg-transparent text-sm font-bold num" />
-                    <button onClick={() => updateQty(i.article_id, 1)} className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 rounded-r-xl active:scale-95 transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                {/* Row 2: qty stepper + price input + line total */}
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex items-center bg-slate-100 rounded-lg shrink-0">
+                    <button onClick={() => updateQty(i.article_id, -1)} className="w-6 h-6 flex items-center justify-center hover:bg-slate-200 rounded-l-lg active:scale-95 transition-all text-slate-600"><Minus className="w-3 h-3" /></button>
+                    <input type="number" value={i.quantity} onChange={e => setQty(i.article_id, Number(e.target.value))} className="w-7 text-center bg-transparent text-xs font-bold num leading-none py-0" />
+                    <button onClick={() => updateQty(i.article_id, 1)} className="w-6 h-6 flex items-center justify-center hover:bg-slate-200 rounded-r-lg active:scale-95 transition-all text-slate-600"><Plus className="w-3 h-3" /></button>
                   </div>
-                  <input type="number" value={i.unit_price} onChange={e => setPrice(i.article_id, Number(e.target.value))} className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs text-right num focus:outline-none focus:border-brand-500" title="Prix unitaire" />
-                  <div className="text-sm font-bold text-slate-900 num whitespace-nowrap">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
+                  <input type="number" value={i.unit_price} onChange={e => setPrice(i.article_id, Number(e.target.value))} className="flex-1 min-w-0 px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] text-right num focus:outline-none focus:border-brand-500" title="Prix unitaire" />
+                  <div className="text-xs font-bold text-slate-900 num whitespace-nowrap min-w-[52px] text-right">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
-      <div className="border-t border-slate-200/70 p-4 space-y-3 bg-white pb-safe">
-        <div className="flex items-center justify-between text-sm">
+      {/* Footer totals + pay button */}
+      <div className="border-t border-slate-200 px-3 pt-2 pb-3 bg-white pb-safe space-y-1.5">
+        <div className="flex items-center justify-between text-[11px]">
           <span className="text-slate-500">Sous-total</span>
           <span className="font-semibold text-slate-800 num">{formatFCFA(subtotal)}</span>
         </div>
         {can('apply_discounts') && (
-          <div className="flex items-center justify-between text-sm gap-3">
-            <span className="text-slate-500 shrink-0">Remise globale</span>
-            <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-right num w-28 focus:outline-none focus:border-brand-500" placeholder="0" />
+          <div className="flex items-center justify-between text-[11px] gap-2">
+            <span className="text-slate-500 shrink-0">Remise</span>
+            <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] text-right num w-24 focus:outline-none focus:border-brand-500" placeholder="0" />
           </div>
         )}
-        <div className="flex items-end justify-between pt-3 border-t border-slate-200">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</div>
-            <div className="text-3xl font-bold text-slate-900 num leading-none mt-1">{formatFCFA(total)}</div>
-          </div>
+        <div className="flex items-center justify-between pt-1.5 border-t border-slate-200">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</span>
+          <div className="text-2xl font-bold text-slate-900 num leading-none">{formatFCFA(total)}</div>
         </div>
         <button onClick={openPayment} disabled={cart.length === 0}
-          className="w-full h-14 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 text-white font-bold text-base shadow-glow hover:shadow-premium active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none">
-          <CreditCard className="w-5 h-5" /> Encaisser {total > 0 && <span className="num">· {formatFCFA(total)}</span>}
+          className="btn-icon-primary w-full h-10 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none mt-1">
+          <CreditCard className="w-5 h-5" />
         </button>
       </div>
     </div>
@@ -1747,11 +1757,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <button onClick={holdCart} className="pos-btn" title="Pause"><Pause className="w-4 h-4" /></button>
           <button onClick={leaveSession} className="pos-btn" title="Quitter"><LogOut className="w-4 h-4" /></button>
           <button onClick={openCloseWorkflow} className="pos-btn-dark ml-0.5" title="Clôturer"><Lock className="w-4 h-4" /></button>
-          {/* Panier — always last, never hidden */}
-          <button onClick={() => setMobileCartOpen(true)} className="relative ml-1 flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow active:scale-95 transition-all shrink-0">
-            <ShoppingCart className="w-4 h-4" />
-            {cart.length > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border-2 border-white">{cart.length}</span>}
-          </button>
         </div>
         {/* Desktop: EN SERVICE indicator + labeled chips */}
         <div className="hidden lg:flex items-center gap-1.5">
@@ -3009,20 +3014,19 @@ function PaymentScreen({
             </div>
           )}
 
-          {/* Payment methods grid */}
+          {/* Payment methods — inline tokens */}
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">
               {payments.length > 0 ? 'Ajouter un autre mode' : 'Mode de paiement'}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-wrap gap-2">
               {methods.filter(m => !payments.some(p => p.payment_method_id === m.id)).map(m => {
-                const { tint, emoji } = modeStyle(m.name);
+                const { emoji } = modeStyle(m.name);
                 return (
-                  <button key={m.id} onClick={() => selectMethod(m)} className="pay-mode !p-2.5">
-                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${tint} flex items-center justify-center text-[9px] font-bold tracking-wider text-white/90`}>
-                      {emoji}
-                    </div>
-                    <div className="text-[11px] font-semibold text-white/90 leading-tight">{m.name}</div>
+                  <button key={m.id} onClick={() => selectMethod(m)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/8 border border-white/12 hover:bg-white/15 active:scale-95 transition-all">
+                    <span className="text-[11px] font-black tracking-wider text-white/80 font-mono leading-none">{emoji}</span>
+                    <span className="text-[12px] font-semibold text-white/90 leading-none">{m.name}</span>
                   </button>
                 );
               })}

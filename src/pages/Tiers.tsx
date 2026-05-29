@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
   X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
-  ShoppingBag, Check, Filter
+  ShoppingBag, Check, Filter, Printer
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -14,6 +14,8 @@ import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
 import { printDocumentA4, type PrintTenant } from '../lib/print';
+import { DocItems, DocTotals, DocPayments, DocSlimHeader } from '../components/DocLayout';
+import type { DocItem, DocPayment } from '../components/DocLayout';
 import type { Customer } from '../lib/types';
 
 type Supplier = {
@@ -1341,54 +1343,67 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
 /* ───────────────────────── Invoice viewer modal ───────────────────────── */
 function InvoiceViewModal({ data, customerName, onClose, onPrint }: { data: { sale: any; items: any[]; pays: any[] }; customerName: string; onClose: () => void; onPrint: () => void }) {
   const { sale, items, pays } = data;
+  const paidTotal = pays.reduce((s: number, p: any) => s + Number(p.amount), 0);
+  const due = Math.max(0, Number(sale.total) - paidTotal);
+  const subtotal = items.reduce((s: number, it: any) => s + Number(it.total), 0);
+
+  const docItems: DocItem[] = items.map((it: any) => ({
+    name: it.name,
+    quantity: Number(it.quantity),
+    unit_price: Number(it.unit_price),
+    discount: Number(it.discount ?? 0),
+    total: Number(it.total),
+  }));
+
+  const docPayments: DocPayment[] = pays.map((p: any) => ({
+    method_name: p.method_name,
+    amount: Number(p.amount),
+    paid_at: p.created_at,
+  }));
+
+  const statusColor = sale.status === 'paid' ? 'emerald' : sale.status === 'cancelled' ? 'rose' : sale.status === 'validated' ? 'blue' : 'amber';
+  const statusLabel = sale.status === 'paid' ? 'Payée' : sale.status === 'cancelled' ? 'Annulée' : sale.status === 'validated' ? 'Crédit' : 'Partielle';
+
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
       <div className="scrim" onClick={onClose} />
       <div className="relative w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-premium animate-sheet-up sm:animate-scale-in max-h-[92vh] flex flex-col">
         <div className="sm:hidden sheet-handle" />
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Facture</div>
             <div className="text-base font-bold text-slate-900 font-mono">{sale.sale_number}</div>
           </div>
-          <div className="flex items-center gap-1">
-            <button onClick={onPrint} className="btn-secondary text-xs py-1.5 px-3"><FileText className="w-3.5 h-3.5" />Imprimer</button>
-            <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500"><X className="w-5 h-5" /></button>
+          <div className="flex items-center gap-1.5">
+            <button onClick={onPrint} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
+            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          <div className="flex flex-wrap gap-3 text-sm">
-            <div><div className="text-[10px] uppercase text-slate-400 font-bold">Client</div><div className="font-semibold">{customerName}</div></div>
-            <div><div className="text-[10px] uppercase text-slate-400 font-bold">Date</div><div className="font-semibold">{formatDateTime(sale.created_at)}</div></div>
-            <div className="ml-auto"><div className="text-[10px] uppercase text-slate-400 font-bold">Statut</div><StatusBadgeSale sale={sale} /></div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr><th className="px-3 py-2 text-left">Article</th><th className="px-3 py-2 text-right">Qté</th><th className="px-3 py-2 text-right">PU</th><th className="px-3 py-2 text-right">Total</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {items.map((it: any, i: number) => (
-                  <tr key={i}><td className="px-3 py-2">{it.name}</td><td className="px-3 py-2 text-right tabular-nums">{Number(it.quantity).toLocaleString('fr-FR')}</td><td className="px-3 py-2 text-right tabular-nums">{formatFCFA(it.unit_price)}</td><td className="px-3 py-2 text-right font-semibold tabular-nums">{formatFCFA(it.total)}</td></tr>
-                ))}
-                {items.length === 0 && <tr><td colSpan={4} className="px-3 py-4 text-center text-slate-400 text-xs">Aucune ligne.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex justify-end">
-            <div className="w-full sm:w-80 rounded-2xl bg-slate-900 text-white p-4 space-y-1.5">
-              <Line label="Sous-total" value={formatFCFA(items.reduce((a: number, it: any) => a + Number(it.total), 0))} />
-              <Line label="Total" value={formatFCFA(sale.total)} strong />
-              <div className="pt-2 mt-2 border-t border-white/10 space-y-1">
-                {pays.map((p: any) => (
-                  <div key={p.id} className="flex items-center justify-between text-[12px] text-white/80"><span>{p.method_name}</span><span className="tabular-nums">{formatFCFA(p.amount)}</span></div>
-                ))}
-                {pays.length === 0 && <div className="text-[12px] text-white/60 text-center py-1">Aucun règlement</div>}
-              </div>
-              <Line label="Payé" value={formatFCFA(sale.paid)} tone="emerald" />
-              <Line label="Reste dû" value={formatFCFA(Math.max(0, Number(sale.total) - Number(sale.paid)))} tone="amber" />
-            </div>
-          </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          <DocSlimHeader
+            status={{ label: statusLabel, color: statusColor as any }}
+            customerName={customerName}
+            date={formatDateTime(sale.created_at)}
+          />
+
+          {/* Articles via DocItems */}
+          <DocItems items={docItems} />
+
+          {/* Totaux */}
+          <DocTotals
+            subtotal={subtotal}
+            total={Number(sale.total)}
+            paid={paidTotal > 0 ? paidTotal : undefined}
+            remaining={due > 0 ? due : undefined}
+          />
+
+          {/* Paiements */}
+          {docPayments.length > 0 && (
+            <DocPayments payments={docPayments} formatDate={formatDateTime} />
+          )}
         </div>
       </div>
     </div>

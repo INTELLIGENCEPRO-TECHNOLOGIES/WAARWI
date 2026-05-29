@@ -42,6 +42,7 @@ const Shop = lazyWithRetry(() => import('./pages/Shop').then(m => ({ default: m.
 const OnlineOrders = lazyWithRetry(() => import('./pages/OnlineOrders').then(m => ({ default: m.OnlineOrders })));
 const MasterCatalog = lazyWithRetry(() => import('./pages/MasterCatalog').then(m => ({ default: m.MasterCatalog })));
 const PlatformAdmin = lazyWithRetry(() => import('./pages/PlatformAdmin').then(m => ({ default: m.PlatformAdmin })));
+const Reports = lazyWithRetry(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 
 function getShopRoute(): { slug: string; initialView: 'shop' | 'track' } | null {
   const m = window.location.pathname.match(/^\/shop\/([^/]+)(\/track)?/);
@@ -67,7 +68,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
   acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting',
-  settings: 'settings',
+  settings: 'settings', reports: 'reports',
 };
 
 const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
@@ -101,7 +102,7 @@ function Inner() {
 
   const enabled: string[] = Array.isArray((tenant as any)?.enabled_modules)
     ? (tenant as any).enabled_modules
-    : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings'];
+    : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports'];
 
   useEffect(() => {
     if (!tenant && isSuperAdmin) { setRoute('platform_admin'); return; }
@@ -166,6 +167,7 @@ function Inner() {
         {route === 'acc_journals' && <Accounting section="journals" />}
         {route === 'acc_balance' && <Accounting section="balance" />}
         {route === 'settings' && <Settings />}
+        {route === 'reports' && <Reports />}
         {route === 'platform_admin' && isSuperAdmin && <PlatformAdmin />}
       </Suspense>
       <TenantMessagePopup />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, ShoppingBag, Loader2, Search, RefreshCw,
-  CheckCircle, Truck, Trash2, X, Car, Package, Calendar,
+  CheckCircle, Check, Truck, Trash2, X, Car, Package, Calendar,
   User, Minus, ChevronRight, FileText, Printer, MessageCircle, Pencil, Link2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -14,6 +14,8 @@ import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate } from '../lib/format';
 import { printDocumentA4, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
+import { DocItems, DocTotals, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
+import type { DocItem, DocStatusConfig } from '../components/DocLayout';
 
 type SupplierOrder = {
   id: string; order_number: string; total: number; status: string;
@@ -667,69 +669,53 @@ export function SupplierOrders() {
         size="lg"
         footer={
           <>
-            <button onClick={() => setDetailOpen(false)} className="btn-secondary">Fermer</button>
             {selected && !editMode && !receiveMode && (
-              <>
-                <button onClick={printOrder} className="btn-secondary" title="Imprimer / Télécharger (PDF)"><Printer className="w-4 h-4" /><span className="hidden sm:inline">Imprimer</span></button>
-                <button onClick={copyPublicLink} className="btn-secondary" title="Copier le lien partageable"><Link2 className="w-4 h-4" /><span className="hidden sm:inline">Copier lien</span></button>
-                <button onClick={sendWhatsApp} className="flex items-center gap-1.5 px-3 py-2 bg-[#25D366] text-white rounded-lg hover:brightness-95 font-semibold text-sm transition shadow-sm" title="Envoyer par WhatsApp (avec lien PDF)"><MessageCircle className="w-4 h-4" /><span className="hidden sm:inline">WhatsApp</span></button>
+              <div className="flex gap-1.5 mr-auto">
+                <button onClick={printOrder} className="btn-icon" title="Imprimer"><Printer className="w-4 h-4" /></button>
+                <button onClick={copyPublicLink} className="btn-icon" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
+                <button onClick={sendWhatsApp} className="btn-icon" title="WhatsApp" style={{ color: '#25D366' }}><MessageCircle className="w-4 h-4" /></button>
                 {['draft', 'sent', 'confirmed', 'partial'].includes(selected.status) && (
-                  <button onClick={beginEdit} className="btn-secondary"><Pencil className="w-4 h-4" /><span className="hidden sm:inline">Modifier</span></button>
+                  <button onClick={beginEdit} className="btn-icon" title="Modifier"><Pencil className="w-4 h-4" /></button>
                 )}
                 {selected.status === 'draft' && (
-                  <button onClick={() => changeStatus(selected, 'sent')} className="btn-secondary">Marquer envoyée</button>
+                  <button onClick={() => changeStatus(selected, 'sent')} className="btn-icon" title="Marquer envoyée"><CheckCircle className="w-4 h-4" /></button>
                 )}
-                {['sent', 'confirmed', 'partial'].includes(selected.status) && (
-                  <button
-                    onClick={() => setReceiveMode(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold text-sm transition shadow-sm"
-                  ><Truck className="w-4 h-4" />Réceptionner</button>
-                )}
-              </>
+              </div>
+            )}
+            <button onClick={() => setDetailOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+            {selected && !editMode && !receiveMode && ['sent', 'confirmed', 'partial'].includes(selected.status) && (
+              <button onClick={() => setReceiveMode(true)} className="btn-icon-success" title="Réceptionner"><Truck className="w-4 h-4" /></button>
             )}
             {selected && editMode && (
               <>
-                <button onClick={() => setEditMode(false)} className="btn-secondary">Annuler</button>
-                <button onClick={saveEdit} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button>
+                <button onClick={() => setEditMode(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+                <button onClick={saveEdit} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
               </>
             )}
             {selected && receiveMode && (
               <>
-                <button onClick={() => setReceiveMode(false)} className="btn-secondary">Annuler</button>
-                <button onClick={receivePartial} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold text-sm transition shadow-sm">
-                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}<Truck className="w-4 h-4" />Confirmer réception
-                </button>
+                <button onClick={() => setReceiveMode(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+                <button onClick={receivePartial} disabled={saving} className="btn-icon-success" title="Confirmer réception">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}</button>
               </>
             )}
           </>
         }
       >
-        {selected && (
+        {selected && (() => {
+          const STATUS_COLOR_MAP: Record<string, DocStatusConfig['color']> = {
+            draft: 'slate', sent: 'blue', confirmed: 'teal', partial: 'amber', received: 'emerald', cancelled: 'rose',
+          };
+          const slimStatus: DocStatusConfig = {
+            label: STATUS_MAP[selected.status]?.label || selected.status,
+            color: STATUS_COLOR_MAP[selected.status] || 'slate',
+          };
+          return (
           <div className="space-y-4">
-            {/* Info cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5">
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Date</div>
-                <div className="text-xs font-semibold text-slate-800 mt-0.5 truncate">{formatDate(selected.created_at)}</div>
-              </div>
-              <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5">
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Fournisseur</div>
-                <div className="text-xs font-semibold text-slate-800 mt-0.5 truncate">{selected.suppliers?.name || '—'}</div>
-              </div>
-              <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5">
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Montant</div>
-                <div className="text-xs font-extrabold text-slate-900 mt-0.5 num truncate">{formatFCFA(selected.total)}</div>
-              </div>
-              <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5">
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Statut</div>
-                <div className="mt-0.5">
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border ${STATUS_MAP[selected.status]?.pill}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_MAP[selected.status]?.dot}`} />
-                    {STATUS_MAP[selected.status]?.label}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <DocSlimHeader
+              status={slimStatus}
+              customerName={selected.suppliers?.name ?? null}
+              date={formatDate(selected.created_at)}
+            />
 
             {/* Articles list */}
             <div>
@@ -811,38 +797,35 @@ export function SupplierOrders() {
                   })}
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {detailItems.map(i => {
-                    const received = Number(i.quantity_received || 0);
-                    const ordered = Number(i.quantity_ordered || 0);
-                    const complete = received >= ordered;
-                    return (
-                      <div key={i.id} className="bg-white border border-slate-200/70 rounded-xl p-3 space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-slate-900 line-clamp-2">{i.name}</div>
-                            {(i.supplier_ref || i.articles?.internal_ref) && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.supplier_ref || i.articles?.internal_ref}</div>}
-                            {i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}
-                          </div>
-                          <div className="text-sm font-extrabold text-slate-900 num whitespace-nowrap">{formatFCFA(i.total)}</div>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-slate-500">
-                          <span>Qté: <span className="font-semibold text-slate-700 num">{ordered}</span></span>
-                          <span className="w-1 h-1 rounded-full bg-slate-300" />
-                          <span>P.U.: <span className="font-semibold text-slate-700 num">{formatFCFA(i.unit_price)}</span></span>
-                          <span className="w-1 h-1 rounded-full bg-slate-300" />
-                          <span className={`font-semibold num ${complete ? 'text-emerald-700' : 'text-amber-700'}`}>
-                            Reçu: {received}/{ordered}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="space-y-3">
+                  <DocSectionTitle title="Articles" count={detailItems.length} />
+                  <DocItems
+                    items={detailItems.map(i => ({
+                      id: i.id,
+                      name: i.name,
+                      supplier_ref: i.supplier_ref || null,
+                      internal_ref: i.articles?.internal_ref || null,
+                      oem_ref: i.articles?.oem_ref || null,
+                      quantity: Number(i.quantity_ordered || 0),
+                      quantity_ordered: Number(i.quantity_ordered || 0),
+                      quantity_received: Number(i.quantity_received || 0),
+                      unit_price: Number(i.unit_price),
+                      total: Number(i.total),
+                    }) satisfies DocItem)}
+                    showReceived
+                    qtyLabel="Cmd./Reçu"
+                  />
+                  <DocTotals
+                    subtotal={detailItems.reduce((s, i) => s + Number(i.total), 0)}
+                    total={detailItems.reduce((s, i) => s + Number(i.total), 0)}
+                    totalLabel="Total commande"
+                  />
                 </div>
               )}
             </div>
           </div>
-        )}
+          );
+        })()}
       </Modal>
 
       <ConfirmDialog

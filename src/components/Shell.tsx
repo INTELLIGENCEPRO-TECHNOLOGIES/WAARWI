@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
-  Plus, CreditCard, Wallet, ChevronRight, Truck
+  Plus, CreditCard, Wallet, ChevronRight, Truck, BarChart3, ClipboardList
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -12,7 +12,7 @@ import { supabase } from '../lib/supabase';
 export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'articles' | 'stock' | 'tiers'
   | 'sales' | 'billing' | 'supplier_orders' | 'online_orders' | 'master_catalog'
-  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'settings' | 'platform_admin';
+  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'settings' | 'platform_admin' | 'reports';
 
 const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any }[] }[] = [
   { title: 'Pilotage', items: [
@@ -29,7 +29,7 @@ const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any
     { key: 'stock', label: 'Stock', icon: Boxes },
   ]},
   { title: 'Commercial', items: [
-    { key: 'billing', label: 'Facturation', icon: Receipt },
+    { key: 'billing', label: 'Facturation', icon: ClipboardList },
     { key: 'online_orders', label: 'Commandes en ligne', icon: Globe },
   ]},
   { title: 'Tiers', items: [
@@ -40,6 +40,9 @@ const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any
     { key: 'acc_plan', label: 'Plan comptable', icon: BookOpen },
     { key: 'acc_journals', label: 'Journaux', icon: FileText },
     { key: 'acc_balance', label: 'Balance', icon: TrendingUp },
+  ]},
+  { title: 'Rapports', items: [
+    { key: 'reports', label: 'États', icon: BarChart3 },
   ]},
 ];
 
@@ -56,7 +59,7 @@ const ROUTE_MODULE: Record<string, string> = {
   billing: 'billing', online_orders: 'online_orders',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
   acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting',
-  settings: 'settings',
+  settings: 'settings', reports: 'reports',
 };
 
 const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
@@ -72,12 +75,12 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
 };
 
 export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r: Route) => void; children: ReactNode }) {
-  const { tenant, profile, signOut, sites, currentSite, setCurrentSite } = useApp();
+  const { tenant, profile, signOut, sites, currentSite, setCurrentSite, posCartCount, posCartOpen, setPosCart } = useApp();
   const { can } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const enabledModules: string[] = Array.isArray((tenant as any)?.enabled_modules)
     ? (tenant as any).enabled_modules
-    : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings'];
+    : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports'];
   const routeVisible = (key: Route) => {
     const mod = ROUTE_MODULE[key];
     if (mod && !enabledModules.includes(mod)) return false;
@@ -126,6 +129,30 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const panelRef = useRef<HTMLElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const touch = useRef<{ x: number; y: number; active: boolean; dx: number }>({ x: 0, y: 0, active: false, dx: 0 });
+
+  // Swipe-to-open: track touch on the left edge of the main area
+  const openTouch = useRef<{ x: number; y: number; active: boolean; moved: boolean }>({ x: 0, y: 0, active: false, moved: false });
+
+  const onMainTouchStart = (e: React.TouchEvent) => {
+    if (mobileOpen) return;
+    const t = e.touches[0];
+    if (t.clientX > 28) return; // only trigger from the very left edge
+    openTouch.current = { x: t.clientX, y: t.clientY, active: true, moved: false };
+  };
+  const onMainTouchMove = (e: React.TouchEvent) => {
+    if (!openTouch.current.active) return;
+    const t = e.touches[0];
+    const dx = t.clientX - openTouch.current.x;
+    const dy = Math.abs(t.clientY - openTouch.current.y);
+    if (dy > Math.abs(dx) + 8) { openTouch.current.active = false; return; }
+    if (dx > 10) openTouch.current.moved = true;
+  };
+  const onMainTouchEnd = () => {
+    if (openTouch.current.active && openTouch.current.moved) {
+      setMobileOpen(true);
+    }
+    openTouch.current = { x: 0, y: 0, active: false, moved: false };
+  };
 
   const closeDrawer = () => {
     setClosing(true);
@@ -349,7 +376,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 </button>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-hidden px-2 pb-0.5 space-y-1.5">
+              <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-0.5 space-y-1.5 scrollbar-hide">
                 {isSuperAdmin && (
                   <div>
                     <div className="px-2.5 mb-px text-[9px] font-bold tracking-[0.1em] uppercase text-slate-400">Plateforme</div>
@@ -420,7 +447,11 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0"
+        onTouchStart={onMainTouchStart}
+        onTouchMove={onMainTouchMove}
+        onTouchEnd={onMainTouchEnd}
+      >
         {/* Floating mobile hamburger — detached, glassmorphism */}
         <button
           onClick={() => setMobileOpen(true)}
@@ -671,26 +702,55 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         )}
 
         {/* FAB button — centered over nav bar top edge, below modals (z-50) */}
-        <button
-          onClick={() => setFabOpen(v => !v)}
-          className="lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-300 active:scale-90"
-          style={{
-            bottom: 'calc(env(safe-area-inset-bottom) + 28px)',
-            transform: `translateX(-50%) ${fabOpen ? 'rotate(135deg)' : 'rotate(0deg)'}`,
-            width: '50px',
-            height: '50px',
-            borderRadius: '50%',
-            background: fabOpen
-              ? 'linear-gradient(135deg, #1e293b, #0f172a)'
-              : 'linear-gradient(145deg, #ccfbf1 0%, #5eead4 50%, #2dd4bf 100%)',
-            boxShadow: fabOpen
-              ? '0 6px 20px -4px rgba(15,23,42,0.6)'
-              : '0 4px 14px -3px rgba(13,148,136,0.5)',
-            border: '3px solid #064e3b',
-          }}
-        >
-          <Plus className={`w-5 h-5 ${fabOpen ? 'text-white' : 'text-teal-900'}`} strokeWidth={fabOpen ? 2.5 : 2.8} />
-        </button>
+        {/* In POS mode: becomes the cart button */}
+        {route === 'pos' ? (
+          <button
+            onClick={() => setPosCart(posCartCount, !posCartOpen)}
+            className={`lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-300 active:scale-90${posCartCount > 0 && !posCartOpen ? ' cart-fab-blink' : ''}`}
+            style={{
+              bottom: 'calc(env(safe-area-inset-bottom) + 28px)',
+              transform: 'translateX(-50%)',
+              width: '50px',
+              height: '50px',
+              borderRadius: '50%',
+              background: posCartOpen
+                ? 'linear-gradient(135deg, #1e293b, #0f172a)'
+                : posCartCount > 0
+                  ? 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)'
+                  : 'linear-gradient(145deg, #ccfbf1 0%, #5eead4 50%, #2dd4bf 100%)',
+              boxShadow: posCartOpen
+                ? '0 6px 20px -4px rgba(15,23,42,0.6)'
+                : '0 4px 14px -3px rgba(13,148,136,0.5)',
+              border: '3px solid #064e3b',
+            }}
+          >
+            <ShoppingCart className={`w-5 h-5 ${posCartOpen || posCartCount > 0 ? 'text-white' : 'text-teal-900'}`} strokeWidth={2.5} />
+            {posCartCount > 0 && !posCartOpen && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border-2 border-white">{posCartCount}</span>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={() => setFabOpen(v => !v)}
+            className="lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-300 active:scale-90"
+            style={{
+              bottom: 'calc(env(safe-area-inset-bottom) + 28px)',
+              transform: `translateX(-50%) ${fabOpen ? 'rotate(135deg)' : 'rotate(0deg)'}`,
+              width: '50px',
+              height: '50px',
+              borderRadius: '50%',
+              background: fabOpen
+                ? 'linear-gradient(135deg, #1e293b, #0f172a)'
+                : 'linear-gradient(145deg, #ccfbf1 0%, #5eead4 50%, #2dd4bf 100%)',
+              boxShadow: fabOpen
+                ? '0 6px 20px -4px rgba(15,23,42,0.6)'
+                : '0 4px 14px -3px rgba(13,148,136,0.5)',
+              border: '3px solid #064e3b',
+            }}
+          >
+            <Plus className={`w-5 h-5 ${fabOpen ? 'text-white' : 'text-teal-900'}`} strokeWidth={fabOpen ? 2.5 : 2.8} />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -158,6 +158,33 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
         <div className="sm:col-span-2"><label className="label">Adresse</label><textarea value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} className="input resize-none" rows={2} /></div>
         <div className="sm:col-span-2"><label className="label">Slogan</label><input value={form.slogan || ''} onChange={e => setForm({ ...form, slogan: e.target.value })} className="input" placeholder="Ex: Pièces auto de qualité, livrées rapidement." /></div>
       </div>
+
+      {/* Reports preferences */}
+      <div className="mt-5 border-t border-slate-200 pt-5">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Préférences des états & rapports</div>
+        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <div>
+            <div className="text-sm font-semibold text-slate-700">Afficher les marges dans les rapports</div>
+            <div className="text-xs text-slate-400 mt-0.5">Inclut la marge brute et le taux de marge dans les états de ventes</div>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!tenant) return;
+              const cur = (tenant as any)?.settings || {};
+              const newVal = !cur.show_margin_in_reports;
+              await supabase.from('tenants').update({ settings: { ...cur, show_margin_in_reports: newVal } }).eq('id', tenant.id);
+              onRefresh();
+            }}
+            className="shrink-0 ml-4"
+          >
+            {(tenant as any)?.settings?.show_margin_in_reports
+              ? <ToggleRight className="w-8 h-8 text-brand-600" />
+              : <ToggleLeft className="w-8 h-8 text-slate-400" />}
+          </button>
+        </div>
+      </div>
+
       <div className="mt-5 flex justify-end">
         <button onClick={save} disabled={saving} className="btn-primary">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Enregistrer

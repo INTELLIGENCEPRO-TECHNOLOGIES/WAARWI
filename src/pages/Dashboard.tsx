@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -10,6 +10,7 @@ import {
   ShoppingCart, ChevronRight, Bell,
   CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowDownRight,
   ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, Plus, X,
+  Share2, Copy, Check as CheckIcon, MessageCircle,
 } from 'lucide-react';
 
 type ShopInfo = { slug: string | null; isActive: boolean };
@@ -34,6 +35,9 @@ type Stats = {
   pendingQuotes: number;
   pendingReturns: number;
   stockInToday: number;
+  stockValue: number;
+  todayMargin: number;
+  articlesInStockCount: number;
   recentSales: Array<{
     id: string; sale_number: string; total: number; created_at: string;
     customers: { name: string } | null;
@@ -81,11 +85,11 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         webNewData, webPrepData, webReadyData, webTodayData, webWaitData, lastWebOrderData,
         openSessions, stockInTodayData,
       ] = await Promise.all([
-        supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
+        supabase.from('sales').select('total, sale_items(unit_price, quantity, discount, purchase_cost)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
         supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', yest.toISOString()).lt('created_at', today.toISOString()).neq('status', 'cancelled'),
         supabase.from('sales').select('total, sale_items(total, purchase_cost, quantity)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', firstOfMonth.toISOString()).neq('status', 'cancelled'),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
-        supabase.from('stock_levels').select('quantity, articles!inner(stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId),
+        supabase.from('stock_levels').select('quantity, articles!inner(stock_min, purchase_price)').eq('tenant_id', tenant.id).eq('site_id', siteId),
         supabase.from('sales').select('id, sale_number, total, created_at, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
         supabase.from('customers').select('id').eq('tenant_id', tenant.id).eq('is_active', true),
         supabase.from('suppliers').select('id').eq('tenant_id', tenant.id).eq('is_active', true),
@@ -110,6 +114,13 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       }
 
       const todaySales = (todayData.data || []).reduce((s, r) => s + Number(r.total), 0);
+      let todayMargin = 0;
+      for (const sale of (todayData.data || []) as any[]) {
+        for (const item of (sale.sale_items || [])) {
+          const rev = (Number(item.unit_price) * Number(item.quantity)) - Number(item.discount || 0);
+          todayMargin += rev - (Number(item.purchase_cost || 0) * Number(item.quantity));
+        }
+      }
       const yesterdaySales = (yestData.data || []).reduce((s, r) => s + Number(r.total), 0);
       const monthSales = (monthData.data || []).reduce((s, r) => s + Number(r.total), 0);
 
@@ -124,6 +135,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const low = stockRows.filter((r: any) => Number(r.quantity) > 0 && Number(r.articles?.stock_min || 0) > 0 && Number(r.quantity) <= Number(r.articles.stock_min)).length;
       // Only count as rupture if stock_min > 0 (merchant actively tracks this item's minimum)
       const out = stockRows.filter((r: any) => Number(r.quantity) <= 0 && Number(r.articles?.stock_min || 0) > 0).length;
+      const stockValue = stockRows.reduce((s: number, r: any) => s + (Number(r.quantity || 0) * Number(r.articles?.purchase_price || 0)), 0);
+      const articlesInStockCount = stockRows.filter((r: any) => Number(r.quantity) > 0).length;
 
       const webTodayRows = (webTodayData.data || []) as any[];
       const webTodayTotal = webTodayRows.reduce((s, r) => s + Number(r.total || 0), 0);
@@ -197,11 +210,14 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         todaySales, todayCount: todayData.data?.length || 0,
         yesterdaySales,
         monthSales, monthMargin,
+        todayMargin,
         cashBalance, sessionExpenses: sessionMovExpense, sessionCashIn: sessionMovIncome,
         sessionInfo,
         receivables, payables,
         articlesCount: articlesCount.count || 0,
         lowStockCount: low, outOfStockCount: out,
+        stockValue,
+        articlesInStockCount,
         customersCount,
         suppliersCount: (suppData.data || []).length,
         pendingQuotes: quotesData.count || 0,
@@ -241,6 +257,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
   const now = new Date();
   const hourGreet = now.getHours() < 12 ? 'Bonjour' : now.getHours() < 18 ? 'Bon après-midi' : 'Bonsoir';
   const marginPct = can('view_margins') && stats.monthSales > 0 ? Math.round(stats.monthMargin / stats.monthSales * 100) : 0;
+  const dayMarginPct = can('view_margins') && stats.todaySales > 0 ? Math.round(stats.todayMargin / stats.todaySales * 100) : 0;
   const dayDelta = stats.yesterdaySales > 0
     ? Math.round(((stats.todaySales - stats.yesterdaySales) / stats.yesterdaySales) * 100)
     : (stats.todaySales > 0 ? 100 : 0);
@@ -255,6 +272,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           shopInfo={shopInfo}
           dayDelta={dayDelta}
           marginPct={marginPct}
+          dayMarginPct={dayMarginPct}
           nav={nav}
           balanceHidden={balanceHidden || !can('view_dashboard_stats')}
           toggleBalanceHidden={toggleBalanceHidden}
@@ -280,9 +298,57 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
  *  MOBILE DASHBOARD — Ultra-compact Premium Fintech 2026
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
-  stats, shopInfo, dayDelta, marginPct, nav,
+  stats, shopInfo, dayDelta, marginPct, dayMarginPct, nav,
   balanceHidden, toggleBalanceHidden,
 }: any) {
+
+  // ── Web order notification (blink + sound) ──────────────────────────────
+  const prevWebNew = useRef(stats.webNew);
+  const webCardRef = useRef<HTMLButtonElement>(null);
+  const [webBlink, setWebBlink] = useState(false);
+
+  // ── Share shop modal ─────────────────────────────────────────────────────
+  const [shareOpen, setShareOpen] = useState(false);
+  const [waNumber, setWaNumber] = useState('');
+  const [copied, setCopied] = useState(false);
+  const shopUrl = shopInfo?.slug ? `${window.location.origin}/shop/${shopInfo.slug}` : '';
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(shopUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const sendWhatsApp = () => {
+    const clean = waNumber.replace(/\D/g, '');
+    if (!clean) return;
+    const msg = encodeURIComponent(`Bonjour ! Voici le lien de notre boutique en ligne : ${shopUrl}`);
+    window.open(`https://wa.me/${clean}?text=${msg}`, '_blank');
+  };
+
+  useEffect(() => {
+    if (stats.webNew > 0 && stats.webNew >= prevWebNew.current) {
+      setWebBlink(true);
+      // Try to play a notification sound (short beep via AudioContext)
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.4);
+      } catch { /* AudioContext blocked is fine */ }
+    }
+    if (stats.webNew === 0) setWebBlink(false);
+    prevWebNew.current = stats.webNew;
+  }, [stats.webNew]);
+
+  const netCaisse = stats.cashBalance - stats.sessionExpenses;
 
   return (
     <div className="space-y-1.5 animate-fade-in pb-1">
@@ -290,129 +356,155 @@ function MobileDashboard({
       {/* ── HERO CARD ── */}
       <button
         onClick={() => nav('sales')}
-        className="w-full text-left relative overflow-hidden rounded-[18px] p-4 active:scale-[0.985] transition-transform duration-200"
+        className="w-full text-left relative overflow-hidden rounded-[18px] p-3.5 active:scale-[0.985] transition-transform duration-200"
         style={{
           background: 'linear-gradient(160deg, #021e2f 0%, #053d47 35%, #0a5e58 65%, #0d8f82 100%)',
-          boxShadow: '0 24px 48px -12px rgba(5, 61, 71, 0.6), 0 8px 16px -4px rgba(13, 148, 136, 0.3)',
+          boxShadow: '0 16px 32px -8px rgba(5, 61, 71, 0.55), 0 6px 12px -4px rgba(13, 148, 136, 0.25)',
         }}
       >
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-gradient-to-br from-teal-300/15 to-transparent blur-3xl animate-pulse-slow" />
-          <div className="absolute -bottom-24 -left-12 w-64 h-64 rounded-full bg-gradient-to-tr from-cyan-300/8 to-transparent blur-3xl" />
+          <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-teal-300/15 to-transparent blur-3xl animate-pulse-slow" />
+          <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-cyan-300/8 to-transparent blur-3xl" />
         </div>
 
         <div className="relative">
           {/* Header row */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-teal-300 animate-pulse" />
-              <span className="text-[10px] font-bold text-teal-200/70 uppercase tracking-[0.15em]">
-                Encaissement du jour
-              </span>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-300 animate-pulse" />
+              <span className="text-[9px] font-bold text-teal-200/70 uppercase tracking-[0.15em]">Encaissement du jour</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-400/15 text-teal-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-                LIVE
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-teal-400/15 text-teal-200">
+                <span className="w-1 h-1 rounded-full bg-teal-400 animate-pulse" />LIVE
               </span>
+              {shopInfo?.isActive && shopUrl && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShareOpen(true); }}
+                  className="w-5 h-5 rounded-full bg-white/10 border border-white/15 flex items-center justify-center active:scale-90 transition-transform"
+                  aria-label="Partager la boutique"
+                >
+                  <Share2 className="w-2.5 h-2.5 text-white/70" />
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
-                className="w-6 h-6 rounded-full bg-white/8 border border-white/10 flex items-center justify-center active:scale-90 transition-transform"
-                aria-label={balanceHidden ? 'Afficher' : 'Masquer'}
+                className="w-5 h-5 rounded-full bg-white/8 border border-white/10 flex items-center justify-center active:scale-90 transition-transform"
               >
-                {balanceHidden ? <Eye className="w-3 h-3 text-white/60" /> : <EyeOff className="w-3 h-3 text-white/60" />}
+                {balanceHidden ? <Eye className="w-2.5 h-2.5 text-white/60" /> : <EyeOff className="w-2.5 h-2.5 text-white/60" />}
               </button>
             </div>
           </div>
 
-          {/* Main amount */}
-          <div className="num font-black text-white leading-none tracking-tight mb-2" style={{ fontSize: 'clamp(24px, 8vw, 34px)' }}>
-            {balanceHidden ? '••••••' : formatFCFA(stats.todaySales)}
+          {/* Main amount + delta */}
+          <div className="flex items-end gap-3 mb-2.5">
+            <div className="num font-black text-white leading-none tracking-tight" style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
+              {balanceHidden ? '••••••' : formatFCFA(stats.todaySales)}
+            </div>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${dayDelta >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
+                {dayDelta >= 0 ? <TrendingUp className="w-2 h-2" /> : <TrendingDown className="w-2 h-2" />}
+                {dayDelta >= 0 ? '+' : ''}{dayDelta}%
+              </span>
+              <span className="text-[8px] text-white/35">vs hier</span>
+              <span className="text-[8px] text-white/35">·</span>
+              <span className="text-[8px] text-white/45 num">{stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}</span>
+            </div>
           </div>
 
-          {/* Delta + tickets */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold ${dayDelta >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
-              {dayDelta >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
-              {dayDelta >= 0 ? '+' : ''}{dayDelta}%
-            </span>
-            <span className="text-[10px] text-white/40 font-medium">vs hier</span>
-            <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-white/50 font-medium">
-              <Receipt className="w-3 h-3" />
-              {stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}
-            </span>
-          </div>
+          {/* Stats rows list */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }} className="pt-2 space-y-0">
 
-          {/* Session header */}
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }} className="pt-3">
-            {stats.sessionInfo ? (
-              <div className="flex items-center gap-1.5 mb-2 text-[9px] text-teal-200/50 font-semibold uppercase tracking-[0.12em]">
-                <Clock className="w-3 h-3" />
-                Session {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+            {/* Session info */}
+            {stats.sessionInfo && (
+              <div className="flex items-center gap-1 mb-1.5 text-[8px] text-teal-200/40 font-semibold uppercase tracking-[0.1em]">
+                <Clock className="w-2.5 h-2.5" />
+                Session depuis {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
               </div>
-            ) : (
-              <div className="mb-2 text-[9px] text-white/25 font-medium">Aucune session</div>
             )}
 
             {/* CAISSE row */}
-            <div className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                  <Wallet className="w-3 h-3 text-white/70" />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                  <Wallet className="w-2.5 h-2.5 text-white/70" />
                 </div>
-                <span className="text-[10px] font-bold text-white/80 uppercase tracking-[0.08em]">Caisse</span>
+                <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Solde caisse</span>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="num text-[11px] font-black text-teal-300">
-                  {balanceHidden ? '•••' : formatFCFA(stats.cashBalance)}
-                </span>
-                <ChevronRight className="w-3 h-3 text-white/25" />
-              </div>
-            </div>
-
-            {/* ENTRÉES row */}
-            <div className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
-                  <ArrowDownRight className="w-3 h-3 text-emerald-300" />
-                </div>
-                <span className="text-[10px] font-bold text-white/80 uppercase tracking-[0.08em]">Entrées</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="num text-[11px] font-black text-white/90">
-                  {balanceHidden ? '•••' : formatFCFA(stats.sessionCashIn)}
-                </span>
-                <ChevronRight className="w-3 h-3 text-white/25" />
-              </div>
+              <span className="num text-[10px] font-black text-teal-300">
+                {balanceHidden ? '•••' : formatFCFA(stats.cashBalance)}
+              </span>
             </div>
 
             {/* DÉPENSES row */}
-            <div className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
-                  <ArrowUpLeft className="w-3 h-3 text-rose-300" />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
+                  <ArrowUpLeft className="w-2.5 h-2.5 text-rose-300" />
                 </div>
-                <span className="text-[10px] font-bold text-white/80 uppercase tracking-[0.08em]">Dépenses</span>
+                <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Dépenses</span>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="num text-[11px] font-black text-white/90">
-                  {balanceHidden ? '•••' : formatFCFA(stats.sessionExpenses)}
-                </span>
-                <ChevronRight className="w-3 h-3 text-white/25" />
-              </div>
+              <span className="num text-[10px] font-black text-white/80">
+                {balanceHidden ? '•••' : formatFCFA(stats.sessionExpenses)}
+              </span>
             </div>
 
-            {/* MARGE + MOIS bottom row */}
-            {!balanceHidden && (
-              <div className="flex items-center mt-2 gap-3">
-                <div className="flex-1">
-                  <div className="text-[8px] text-white/40 uppercase tracking-[0.08em] font-semibold mb-0.5">Marge</div>
-                  <div className="text-[16px] font-black text-emerald-300 num leading-none">{marginPct}%</div>
+            {/* ENTRÉES row */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
+                  <ArrowDownRight className="w-2.5 h-2.5 text-emerald-300" />
                 </div>
-                <div className="w-px h-8 bg-white/8 shrink-0" />
-                <div className="flex-1">
-                  <div className="text-[8px] text-white/40 uppercase tracking-[0.08em] font-semibold mb-0.5">Mois (CA)</div>
-                  <div className="text-[14px] font-black text-white/90 num leading-none">{formatCompactFCFA(stats.monthSales)}</div>
+                <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Entrées</span>
+              </div>
+              <span className="num text-[10px] font-black text-white/80">
+                {balanceHidden ? '•••' : formatFCFA(stats.sessionCashIn)}
+              </span>
+            </div>
+
+            {/* NET CAISSE row */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(20,184,166,0.15)' }}>
+                  <ArrowUpRight className="w-2.5 h-2.5 text-teal-300" />
+                </div>
+                <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Net caisse</span>
+              </div>
+              <span className={`num text-[10px] font-black ${netCaisse >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                {balanceHidden ? '•••' : formatFCFA(netCaisse)}
+              </span>
+            </div>
+
+            {/* MARGE DU JOUR row */}
+            {!balanceHidden && dayMarginPct > 0 && (
+              <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(52,211,153,0.15)' }}>
+                    <TrendingUp className="w-2.5 h-2.5 text-emerald-300" />
+                  </div>
+                  <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Marge jour</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="num text-[10px] font-black text-emerald-300">
+                    {formatFCFA(stats.todayMargin)}
+                  </span>
+                  <span className="text-[8px] font-bold text-emerald-400/60 num">{dayMarginPct}%</span>
+                </div>
+              </div>
+            )}
+
+            {/* MOIS row */}
+            {!balanceHidden && (
+              <div className="flex items-center justify-between py-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <Receipt className="w-2.5 h-2.5 text-white/50" />
+                  </div>
+                  <span className="text-[9px] font-bold text-white/50 uppercase tracking-[0.07em]">CA du mois</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="num text-[10px] font-black text-white/70">{formatCompactFCFA(stats.monthSales)}</span>
+                  {marginPct > 0 && <span className="text-[8px] font-bold text-emerald-400/60 num">marge {marginPct}%</span>}
                 </div>
               </div>
             )}
@@ -452,7 +544,7 @@ function MobileDashboard({
       </div>
 
       {/* ── ALERTES ── */}
-      {(stats.lowStockCount > 0 || stats.outOfStockCount > 0 || stats.pendingQuotes > 0 || stats.webNew > 0) && (
+      {(stats.lowStockCount > 0 || stats.outOfStockCount > 0 || stats.pendingQuotes > 0) && (
         <div className="rounded-xl overflow-hidden" style={{ background: '#fffbf0', border: '1px solid rgba(245,158,11,0.2)' }}>
           <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'rgba(245,158,11,0.15)' }}>
             <div className="flex items-center gap-1.5">
@@ -463,39 +555,41 @@ function MobileDashboard({
               Voir tout <ChevronRight className="w-2.5 h-2.5" />
             </button>
           </div>
-          <div className="grid grid-cols-2 divide-x" style={{ borderColor: 'rgba(245,158,11,0.1)' }}>
+          <div className="divide-y" style={{ borderColor: 'rgba(245,158,11,0.1)' }}>
+            {stats.outOfStockCount > 0 && (
+              <button onClick={() => nav('stock', { target: 'outOfStock' })} className="w-full px-3 py-2 text-left flex items-center gap-2 active:bg-rose-50 transition-colors">
+                <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold text-slate-800">{stats.outOfStockCount} rupture{stats.outOfStockCount > 1 ? 's' : ''} de stock</div>
+                  <div className="text-[8px] text-slate-500">À commander d'urgence</div>
+                </div>
+                <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+              </button>
+            )}
             {stats.lowStockCount > 0 && (
-              <button onClick={() => nav('stock', { target: 'lowStock' })} className="px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
+              <button onClick={() => nav('stock', { target: 'lowStock' })} className="w-full px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
                 <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                 </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-bold text-slate-800">{stats.lowStockCount} stocks bas</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold text-slate-800">{stats.lowStockCount} stock{stats.lowStockCount > 1 ? 's' : ''} bas</div>
                   <div className="text-[8px] text-slate-500">Seuil minimum atteint</div>
                 </div>
+                <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
               </button>
             )}
             {stats.pendingQuotes > 0 && (
-              <button onClick={() => nav('billing', { target: 'quotes' })} className="px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
+              <button onClick={() => nav('billing', { target: 'quotes' })} className="w-full px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
                 <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
                   <FileText className="w-3.5 h-3.5 text-blue-600" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[10px] font-bold text-slate-800">{stats.pendingQuotes} devis en attente</div>
-                  <div className="text-[8px] text-slate-500">Valeur : {formatCompactFCFA(0)}</div>
+                  <div className="text-[8px] text-slate-500">À traiter</div>
                 </div>
                 <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
-              </button>
-            )}
-            {stats.outOfStockCount > 0 && stats.pendingQuotes === 0 && (
-              <button onClick={() => nav('stock', { target: 'outOfStock' })} className="px-3 py-2 text-left flex items-center gap-2 active:bg-rose-50 transition-colors">
-                <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-bold text-slate-800">{stats.outOfStockCount} rupture{stats.outOfStockCount > 1 ? 's' : ''}</div>
-                  <div className="text-[8px] text-slate-500">À commander</div>
-                </div>
               </button>
             )}
           </div>
@@ -519,15 +613,19 @@ function MobileDashboard({
               <Package className="w-3 h-3 text-emerald-600" />
             </div>
             <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Stock</div>
-            <div className="num text-[13px] font-black text-slate-900 leading-tight">+{stats.stockInToday}</div>
-            <div className="text-[8px] text-slate-400 mt-0.5">Valeur : {formatCompactFCFA(0)}</div>
+            <div className="num text-[13px] font-black text-slate-900 leading-tight">{stats.articlesInStockCount}</div>
+            <div className="text-[8px] text-slate-400 mt-0.5 leading-tight">{stats.stockValue > 0 ? formatCompactFCFA(stats.stockValue) : `+${stats.stockInToday} aujourd'hui`}</div>
           </button>
-          <button onClick={() => nav('online_orders')} className="px-2 py-2 text-left active:bg-slate-50 transition-colors">
-            <div className="w-6 h-6 rounded-md bg-teal-50 flex items-center justify-center mb-1">
-              <Globe className="w-3 h-3 text-teal-600" />
+          <button
+            ref={webCardRef}
+            onClick={() => { setWebBlink(false); nav('online_orders'); }}
+            className={`px-2 py-2 text-left transition-colors ${webBlink ? 'animate-pulse bg-teal-50' : 'active:bg-slate-50'}`}
+          >
+            <div className={`w-6 h-6 rounded-md flex items-center justify-center mb-1 ${webBlink ? 'bg-teal-500' : 'bg-teal-50'}`}>
+              <Globe className={`w-3 h-3 ${webBlink ? 'text-white' : 'text-teal-600'}`} />
             </div>
             <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Web</div>
-            <div className="num text-[13px] font-black text-slate-900 leading-tight">{stats.webNew}</div>
+            <div className={`num text-[13px] font-black leading-tight ${webBlink ? 'text-teal-600' : 'text-slate-900'}`}>{stats.webNew}</div>
             <div className="text-[8px] text-slate-400 mt-0.5">{stats.webNew === 0 ? 'Aucune commande' : `${stats.webNew} nouvelle${stats.webNew > 1 ? 's' : ''}`}</div>
           </button>
           <button onClick={() => nav('billing', { target: 'quotes' })} className="px-2 py-2 text-left active:bg-slate-50 transition-colors">
@@ -605,6 +703,92 @@ function MobileDashboard({
         </div>
       </div>
 
+      {/* ── SHARE SHOP MODAL ── */}
+      {shareOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-8" onClick={() => setShareOpen(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-sm rounded-[24px] overflow-hidden"
+            style={{ background: 'linear-gradient(160deg, #021e2f 0%, #053d47 60%, #0a5e58 100%)', boxShadow: '0 32px 64px -16px rgba(5,61,71,0.8)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Decorative glow */}
+            <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-teal-400/20 blur-3xl pointer-events-none" />
+
+            <div className="relative p-5">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-teal-400/15 border border-teal-300/20 flex items-center justify-center">
+                    <Share2 className="w-4 h-4 text-teal-300" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-white leading-tight">Partager la boutique</div>
+                    <div className="text-[10px] text-teal-200/50 font-medium">Boutique en ligne active</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShareOpen(false)}
+                  className="w-7 h-7 rounded-full bg-white/8 border border-white/10 flex items-center justify-center"
+                >
+                  <X className="w-3.5 h-3.5 text-white/60" />
+                </button>
+              </div>
+
+              {/* Link field */}
+              <div className="mb-3">
+                <div className="text-[9px] font-bold text-teal-200/50 uppercase tracking-[0.1em] mb-1.5">Lien de la boutique</div>
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <Globe className="w-3.5 h-3.5 text-teal-300/60 shrink-0" />
+                  <span className="flex-1 text-[11px] text-white/70 font-medium truncate min-w-0">{shopUrl}</span>
+                  <button
+                    onClick={copyLink}
+                    className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${copied ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/8 text-white/60 active:bg-white/15'}`}
+                  >
+                    {copied ? <CheckIcon className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    {copied ? 'Copié !' : 'Copier'}
+                  </button>
+                </div>
+              </div>
+
+              {/* WhatsApp section */}
+              <div className="mb-4">
+                <div className="text-[9px] font-bold text-teal-200/50 uppercase tracking-[0.1em] mb-1.5">Envoyer par WhatsApp</div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-300/60 shrink-0" />
+                    <input
+                      type="tel"
+                      value={waNumber}
+                      onChange={e => setWaNumber(e.target.value)}
+                      placeholder="Numéro (ex: 221771234567)"
+                      className="flex-1 bg-transparent text-[11px] text-white/80 placeholder:text-white/25 font-medium outline-none min-w-0"
+                    />
+                  </div>
+                  <button
+                    onClick={sendWhatsApp}
+                    disabled={!waNumber.replace(/\D/g, '')}
+                    className="shrink-0 h-10 px-3 rounded-xl text-[11px] font-bold text-white transition-all disabled:opacity-30 active:scale-95"
+                    style={{ background: 'linear-gradient(135deg, #25d366 0%, #128c7e 100%)' }}
+                  >
+                    Envoyer
+                  </button>
+                </div>
+              </div>
+
+              {/* Open in browser */}
+              <button
+                onClick={() => window.open(shopUrl, '_blank')}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold text-teal-200/70 transition-colors active:bg-white/5"
+                style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Ouvrir la boutique
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, CreditCard, User, Store, Receipt } from 'lucide-react';
+import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Receipt, User, CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
@@ -7,6 +7,8 @@ import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printTicket80, printDocumentA4, type PrintTenant } from '../lib/print';
+import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
+import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
 
 type Sale = {
   id: string; sale_number: string; total: number; paid: number;
@@ -374,8 +376,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       {/* ── Filters Modal ────────────────────────────────────────── */}
       <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtres" size="sm"
         footer={<>
-          <button onClick={clearFilters} className="btn-secondary"><X className="w-4 h-4" />Réinitialiser</button>
-          <button onClick={() => setFiltersOpen(false)} className="btn-primary"><Check className="w-4 h-4" />Appliquer</button>
+          <button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><X className="w-4 h-4" /></button>
+          <button onClick={() => setFiltersOpen(false)} className="btn-icon-primary" title="Appliquer"><Check className="w-4 h-4" /></button>
         </>}
       >
         <div className="space-y-5">
@@ -436,140 +438,64 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       {/* ── Detail Modal ─────────────────────────────────────────── */}
       <Modal open={open} onClose={() => setOpen(false)} title={selected ? `Vente ${selected.sale_number}` : ''} size="lg"
         footer={<>
-          <button onClick={() => setOpen(false)} className="btn-secondary">Fermer</button>
-          <button onClick={printTicket} className="btn-secondary"><Receipt className="w-4 h-4" />Ticket</button>
-          <button onClick={printInvoice} className="btn-primary"><Printer className="w-4 h-4" />Facture A4</button>
+          <button onClick={() => setOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Receipt className="w-4 h-4" /></button>
+          <button onClick={printInvoice} className="btn-icon-primary" title="Facture A4"><Printer className="w-4 h-4" /></button>
         </>}
       >
         {selected && (() => {
           const st = statusStyles(selected.status);
+          const slimStatus: DocStatusConfig = {
+            label: st.label,
+            color: selected.status === 'paid' ? 'emerald' : selected.status === 'cancelled' ? 'rose' : selected.status === 'validated' ? 'blue' : 'amber',
+          };
           return (
             <div className="space-y-4">
-              {/* Status ribbon */}
-              <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border ${st.pill}`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-                  <span className={`w-2 h-2 rounded-full ${st.dot} animate-pulse`} />
-                  Vente {st.label}
-                </div>
-                <div className="text-[10px] font-semibold opacity-70 num">{formatDateTime(selected.created_at)}</div>
-              </div>
-
-              {/* Info cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                    <Calendar className="w-3 h-3" />Date
-                  </div>
-                  <div className="text-[11px] font-semibold text-slate-800 mt-1 leading-tight num">{formatDateTime(selected.created_at)}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                    <User className="w-3 h-3" />Client
-                  </div>
-                  <div className="text-[11px] font-semibold text-slate-800 mt-1 leading-tight truncate">{selected.customers?.name || 'Comptoir'}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-900 text-white">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-white/50">
-                    <Receipt className="w-3 h-3" />Total
-                  </div>
-                  <div className="text-sm font-bold mt-1 leading-tight num">{formatFCFA(selected.total)}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700/70">
-                    <CreditCard className="w-3 h-3" />Payé
-                  </div>
-                  <div className="text-sm font-bold text-emerald-700 mt-1 leading-tight num">{formatFCFA(selected.paid)}</div>
-                </div>
-              </div>
+              <DocSlimHeader
+                status={slimStatus}
+                customerName={selected.customers?.name ?? null}
+                date={formatDateTime(selected.created_at)}
+              />
 
               {itemsLoading ? (
                 <div className="py-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
               ) : (
                 <>
                   {/* Articles */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Articles</div>
-                      <span className="text-[10px] font-bold text-slate-400 num">{items.length}</span>
-                    </div>
-
-                    {/* Mobile list */}
-                    <div className="md:hidden space-y-1.5">
-                      {items.map(i => (
-                        <div key={i.id} className="p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[12px] font-semibold text-slate-900 leading-tight break-words">{i.name}</div>
-                              {(i.articles?.internal_ref || i.internal_ref) && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.articles?.internal_ref || i.internal_ref}</div>}
-                              {i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}
-                            </div>
-                            <div className="text-right shrink-0">
-                              <div className="text-[11px] font-bold text-slate-900 num whitespace-nowrap">{formatFCFA(i.total)}</div>
-                              <div className="text-[9px] text-slate-400 num mt-0.5">{i.quantity} × {formatFCFA(i.unit_price)}</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop table */}
-                    <div className="hidden md:block rounded-xl border border-slate-200 overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                          <tr>
-                            <th className="px-4 py-2.5 text-left">Article</th>
-                            <th className="px-4 py-2.5 text-right">Qté</th>
-                            <th className="px-4 py-2.5 text-right">Prix unit.</th>
-                            <th className="px-4 py-2.5 text-right">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {items.map(i => (
-                            <tr key={i.id} className="hover:bg-slate-50/60">
-                              <td className="px-4 py-2.5 text-slate-800">
-                                <div>{i.name}</div>
-                                {(i.articles?.internal_ref || i.internal_ref) && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.articles?.internal_ref || i.internal_ref}</div>}
-                                {i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}
-                              </td>
-                              <td className="px-4 py-2.5 text-right num text-slate-700">{i.quantity}</td>
-                              <td className="px-4 py-2.5 text-right num text-slate-700">{formatFCFA(i.unit_price)}</td>
-                              <td className="px-4 py-2.5 text-right font-bold num text-slate-900">{formatFCFA(i.total)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                  <div className="space-y-2">
+                    <DocSectionTitle title="Articles" count={items.length} />
+                    <DocItems items={items.map(i => ({
+                      id: i.id,
+                      name: i.name,
+                      internal_ref: i.articles?.internal_ref || i.internal_ref || null,
+                      oem_ref: i.articles?.oem_ref || null,
+                      quantity: Number(i.quantity),
+                      unit_price: Number(i.unit_price),
+                      discount: Number(i.discount ?? 0),
+                      total: Number(i.total),
+                    }) satisfies DocItem)} />
                   </div>
 
-                  {/* Payments */}
-                  {pays.length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Paiements</div>
-                        <span className="text-[10px] font-bold text-slate-400 num">{pays.length}</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {pays.map(p => (
-                          <div key={p.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white border border-slate-200/70 shadow-sm">
-                            <div className="flex items-center gap-2 text-sm text-slate-700 min-w-0">
-                              <div className="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
-                                <CreditCard className="w-3.5 h-3.5 text-brand-700" />
-                              </div>
-                              <span className="truncate font-medium">{p.method_name}</span>
-                            </div>
-                            <span className="font-bold text-slate-900 num whitespace-nowrap">{formatFCFA(p.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* Totaux */}
+                  {(() => {
+                    const subtotal = items.reduce((s, i) => s + Number(i.total), 0);
+                    const paidTotal = pays.reduce((s, p) => s + Number(p.amount), 0);
+                    const due = Math.max(0, Number(selected.total) - paidTotal);
+                    return (
+                      <DocTotals
+                        subtotal={subtotal}
+                        total={Number(selected.total)}
+                        paid={paidTotal > 0 ? paidTotal : undefined}
+                        remaining={due > 0 ? due : undefined}
+                      />
+                    );
+                  })()}
 
-                  {/* Site info */}
-                  {selected.sites?.name && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] text-slate-600">
-                      <Store className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="font-semibold">Magasin :</span>
-                      <span className="truncate">{selected.sites.name}</span>
+                  {/* Paiements */}
+                  {pays.length > 0 && (
+                    <div className="space-y-2">
+                      <DocSectionTitle title="Paiements" count={pays.length} />
+                      <DocPayments payments={pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) }) satisfies DocPayment)} />
                     </div>
                   )}
                 </>

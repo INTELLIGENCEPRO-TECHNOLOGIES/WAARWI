@@ -60,6 +60,27 @@ h1, h2, h3, h4 { letter-spacing: -0.015em; }
     @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-ink-900 text-white font-semibold
            hover:bg-ink-800 transition-all duration-200 active:scale-[0.98];
   }
+  /* Icon-only action buttons — uniform 36×36, no label */
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-600
+           hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900
+           transition-all duration-200 active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-icon-primary {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-xl bg-brand-700 text-white
+           hover:bg-brand-800 active:bg-brand-900 shadow-sm hover:shadow-glow
+           transition-all duration-200 active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-icon-danger {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-red-200 text-red-500
+           hover:bg-red-50 hover:border-red-300
+           transition-all duration-200 active:scale-[0.95];
+  }
+  .btn-icon-success {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-600 text-white
+           hover:bg-emerald-700 shadow-sm
+           transition-all duration-200 active:scale-[0.95];
+  }
 
   /* ── Surfaces ───────────────────────────────────────────── */
   .card {
@@ -112,16 +133,17 @@ h1, h2, h3, h4 { letter-spacing: -0.015em; }
   .chip-active {
     @apply bg-gradient-to-r from-brand-600 to-brand-700 text-white border-transparent shadow-glow;
   }
-  /* POS mobile compact icon-only buttons */
+  /* POS mobile compact icon-only buttons — aligned with btn-icon */
   .pos-btn {
-    @apply relative inline-flex items-center justify-center w-8 h-8 rounded-xl
-           bg-slate-100/80 text-slate-600 border border-slate-200/60
-           transition-all duration-150 active:scale-90 shrink-0;
+    @apply relative inline-flex items-center justify-center w-9 h-9 rounded-xl
+           bg-white text-slate-600 border border-slate-200
+           hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900
+           transition-all duration-200 active:scale-[0.95] shrink-0;
   }
   .pos-btn-dark {
-    @apply relative inline-flex items-center justify-center w-8 h-8 rounded-xl
-           bg-slate-800 text-white
-           transition-all duration-150 active:scale-90 shrink-0;
+    @apply relative inline-flex items-center justify-center w-9 h-9 rounded-xl
+           bg-slate-900 text-white border border-slate-800
+           hover:bg-slate-800 transition-all duration-200 active:scale-[0.95] shrink-0;
   }
 
   /* ── Stats / KPI ───────────────────────────────────────── */
@@ -366,6 +388,12 @@ h1, h2, h3, h4 { letter-spacing: -0.015em; }
     @apply bg-white text-ink-900 border-brand-400 shadow-glow;
   }
 }
+
+@keyframes cart-fab-blink {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(13 148 136 / 0.7); }
+  50%       { box-shadow: 0 0 0 8px rgb(13 148 136 / 0); }
+}
+.cart-fab-blink { animation: cart-fab-blink 1.2s ease-in-out infinite; }
 
 /* ── Highlight flash (navigation from dashboard) ─────────── */
 @keyframes waarwi-flash {
