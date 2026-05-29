@@ -253,10 +253,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         <MobileDashboard
           stats={stats}
           shopInfo={shopInfo}
-          greet={hourGreet}
-          firstName={firstName}
-          tenantName={tenant?.name || ''}
-          tenantLegal={tenant?.legal_name || 'Business 2.0'}
           dayDelta={dayDelta}
           marginPct={marginPct}
           nav={nav}
@@ -284,219 +280,330 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
  *  MOBILE DASHBOARD — Ultra-compact Premium Fintech 2026
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
-  stats, shopInfo, greet, firstName, dayDelta, marginPct, nav,
+  stats, shopInfo, dayDelta, marginPct, nav,
   balanceHidden, toggleBalanceHidden,
 }: any) {
-  const now = new Date();
 
   return (
-    <div className="space-y-2 animate-fade-in pb-2">
-      {/* ── GREETING ── */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-bold text-slate-800 tracking-tight">
-            {greet}{firstName ? `, ${firstName}` : ''}
-          </div>
-          <div className="text-[10px] text-slate-400 font-medium capitalize">
-            {now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </div>
-        </div>
-        {shopInfo?.isActive && shopInfo.slug && (
-          <button
-            onClick={() => window.open(`${window.location.origin}/shop/${shopInfo.slug}`, '_blank')}
-            className="flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold active:scale-95 shrink-0 border bg-emerald-50 border-emerald-200 text-emerald-700"
-          >
-            <span className="relative flex w-1.5 h-1.5">
-              <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75" />
-              <span className="relative rounded-full bg-emerald-500 w-1.5 h-1.5" />
-            </span>
-            Boutique
-            <ExternalLink className="w-2.5 h-2.5" />
-          </button>
-        )}
-      </div>
+    <div className="space-y-1.5 animate-fade-in pb-1">
 
-      {/* ── HERO CARD — Clean, fluid, minimal internal borders ── */}
+      {/* ── HERO CARD ── */}
       <button
         onClick={() => nav('sales')}
-        className="w-full text-left relative overflow-hidden rounded-[20px] p-4 active:scale-[0.985] transition-transform duration-200"
+        className="w-full text-left relative overflow-hidden rounded-[18px] p-4 active:scale-[0.985] transition-transform duration-200"
         style={{
-          background: 'linear-gradient(145deg, #021e2f 0%, #053d47 40%, #0a5e58 70%, #0d8f82 100%)',
-          boxShadow: '0 20px 40px -12px rgba(5, 61, 71, 0.55), 0 6px 12px -4px rgba(13, 148, 136, 0.25)',
+          background: 'linear-gradient(160deg, #021e2f 0%, #053d47 35%, #0a5e58 65%, #0d8f82 100%)',
+          boxShadow: '0 24px 48px -12px rgba(5, 61, 71, 0.6), 0 8px 16px -4px rgba(13, 148, 136, 0.3)',
         }}
       >
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-teal-300/20 to-transparent blur-3xl animate-pulse-slow" />
-          <div className="absolute -bottom-20 -left-10 w-52 h-52 rounded-full bg-gradient-to-tr from-cyan-300/10 to-transparent blur-3xl" />
+          <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-gradient-to-br from-teal-300/15 to-transparent blur-3xl animate-pulse-slow" />
+          <div className="absolute -bottom-24 -left-12 w-64 h-64 rounded-full bg-gradient-to-tr from-cyan-300/8 to-transparent blur-3xl" />
         </div>
 
         <div className="relative">
-          <div className="flex items-start justify-between mb-0.5">
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-teal-300 animate-pulse" />
-              <span className="text-[9px] font-bold text-teal-200/70 uppercase tracking-[0.15em]">
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-teal-300 animate-pulse" />
+              <span className="text-[10px] font-bold text-teal-200/70 uppercase tracking-[0.15em]">
                 Encaissement du jour
               </span>
             </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
-              className="w-6 h-6 rounded-full bg-white/8 border border-white/10 flex items-center justify-center active:scale-90 transition-transform"
-              aria-label={balanceHidden ? 'Afficher' : 'Masquer'}
-            >
-              {balanceHidden ? <Eye className="w-3 h-3 text-white/60" /> : <EyeOff className="w-3 h-3 text-white/60" />}
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-400/15 text-teal-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                LIVE
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
+                className="w-6 h-6 rounded-full bg-white/8 border border-white/10 flex items-center justify-center active:scale-90 transition-transform"
+                aria-label={balanceHidden ? 'Afficher' : 'Masquer'}
+              >
+                {balanceHidden ? <Eye className="w-3 h-3 text-white/60" /> : <EyeOff className="w-3 h-3 text-white/60" />}
+              </button>
+            </div>
           </div>
 
-          {/* Main amount - auto-sizing for large amounts */}
-          <div className="num font-black text-white leading-none tracking-tight" style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
+          {/* Main amount */}
+          <div className="num font-black text-white leading-none tracking-tight mb-2" style={{ fontSize: 'clamp(24px, 8vw, 34px)' }}>
             {balanceHidden ? '••••••' : formatFCFA(stats.todaySales)}
           </div>
 
-          {/* Delta + tickets inline */}
-          {!balanceHidden && (
-            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${dayDelta >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
-                {dayDelta >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
-                {dayDelta >= 0 ? '+' : ''}{dayDelta}%
-              </span>
-              <span className="text-[9px] text-white/40 font-medium">vs hier</span>
-              <span className="ml-auto inline-flex items-center gap-1 text-[9px] text-white/50 font-medium">
-                <Receipt className="w-2.5 h-2.5" />
-                {stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}
-              </span>
-            </div>
-          )}
+          {/* Delta + tickets */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold ${dayDelta >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
+              {dayDelta >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+              {dayDelta >= 0 ? '+' : ''}{dayDelta}%
+            </span>
+            <span className="text-[10px] text-white/40 font-medium">vs hier</span>
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-white/50 font-medium">
+              <Receipt className="w-3 h-3" />
+              {stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}
+            </span>
+          </div>
 
-          {/* Session metrics - subtle separation, no hard borders */}
-          <div className="mt-3 pt-2.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {/* Session header */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }} className="pt-3">
             {stats.sessionInfo ? (
-              <div className="flex items-center gap-1 mb-2 text-[8px] text-teal-200/50 font-semibold uppercase tracking-[0.1em]">
-                <Clock className="w-2.5 h-2.5" />
+              <div className="flex items-center gap-1.5 mb-2 text-[9px] text-teal-200/50 font-semibold uppercase tracking-[0.12em]">
+                <Clock className="w-3 h-3" />
                 Session {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
               </div>
             ) : (
-              <div className="flex items-center gap-1 mb-2 text-[8px] text-white/25 font-medium">
-                Aucune session
-              </div>
+              <div className="mb-2 text-[9px] text-white/25 font-medium">Aucune session</div>
             )}
 
-            <div className="flex items-center gap-2">
-              <HeroMetric label="Caisse" value={balanceHidden ? '•••' : formatCompactFCFA(stats.cashBalance)} icon={Wallet} />
-              <div className="w-px h-5 bg-white/8 shrink-0" />
-              <HeroMetric label="Entrées" value={balanceHidden ? '•••' : formatCompactFCFA(stats.sessionCashIn)} icon={ArrowDownRight} positive />
-              <div className="w-px h-5 bg-white/8 shrink-0" />
-              <HeroMetric label="Dépenses" value={balanceHidden ? '•••' : formatCompactFCFA(stats.sessionExpenses)} icon={ArrowUpLeft} negative />
+            {/* CAISSE row */}
+            <div className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                  <Wallet className="w-3 h-3 text-white/70" />
+                </div>
+                <span className="text-[10px] font-bold text-white/80 uppercase tracking-[0.08em]">Caisse</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="num text-[11px] font-black text-teal-300">
+                  {balanceHidden ? '•••' : formatFCFA(stats.cashBalance)}
+                </span>
+                <ChevronRight className="w-3 h-3 text-white/25" />
+              </div>
             </div>
 
+            {/* ENTRÉES row */}
+            <div className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
+                  <ArrowDownRight className="w-3 h-3 text-emerald-300" />
+                </div>
+                <span className="text-[10px] font-bold text-white/80 uppercase tracking-[0.08em]">Entrées</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="num text-[11px] font-black text-white/90">
+                  {balanceHidden ? '•••' : formatFCFA(stats.sessionCashIn)}
+                </span>
+                <ChevronRight className="w-3 h-3 text-white/25" />
+              </div>
+            </div>
+
+            {/* DÉPENSES row */}
+            <div className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
+                  <ArrowUpLeft className="w-3 h-3 text-rose-300" />
+                </div>
+                <span className="text-[10px] font-bold text-white/80 uppercase tracking-[0.08em]">Dépenses</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="num text-[11px] font-black text-white/90">
+                  {balanceHidden ? '•••' : formatFCFA(stats.sessionExpenses)}
+                </span>
+                <ChevronRight className="w-3 h-3 text-white/25" />
+              </div>
+            </div>
+
+            {/* MARGE + MOIS bottom row */}
             {!balanceHidden && (
-              <div className="mt-2 flex items-center justify-between text-[9px]">
-                <span className="text-white/40 font-medium">Mois</span>
-                <span className="text-white/90 font-bold num">{formatCompactFCFA(stats.monthSales)}</span>
-                {marginPct > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-400/10 text-emerald-200 text-[8px] font-bold">
-                    marge {marginPct}%
-                  </span>
-                )}
+              <div className="flex items-center mt-2 gap-3">
+                <div className="flex-1">
+                  <div className="text-[8px] text-white/40 uppercase tracking-[0.08em] font-semibold mb-0.5">Marge</div>
+                  <div className="text-[16px] font-black text-emerald-300 num leading-none">{marginPct}%</div>
+                </div>
+                <div className="w-px h-8 bg-white/8 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-[8px] text-white/40 uppercase tracking-[0.08em] font-semibold mb-0.5">Mois (CA)</div>
+                  <div className="text-[14px] font-black text-white/90 num leading-none">{formatCompactFCFA(stats.monthSales)}</div>
+                </div>
               </div>
             )}
           </div>
         </div>
       </button>
 
-      {/* ── KPI GRID — No scroll, compact 2x3 grid ── */}
-      <div className="grid grid-cols-3 gap-1">
-        <KpiCard
-          tone="blue"
-          icon={CreditCard}
-          label="Créances"
-          value={balanceHidden ? '•••' : formatCompactFCFA(stats.receivables)}
-          onClick={() => nav('tiers', { target: 'receivables' })}
-        />
-        <KpiCard
-          tone="amber"
-          icon={Truck}
-          label="Fournisseurs"
-          value={balanceHidden ? '•••' : formatCompactFCFA(stats.payables)}
-          onClick={() => nav('supplier_orders', { target: 'payables' })}
-        />
-        <KpiCard
-          tone={stats.outOfStockCount > 0 ? 'rose' : 'slate'}
-          icon={AlertTriangle}
-          label="Ruptures"
-          value={String(stats.outOfStockCount)}
-          onClick={() => nav('stock', { target: 'outOfStock' })}
-          pulse={stats.outOfStockCount > 0}
-        />
-        <KpiCard
-          tone="emerald"
-          icon={Package}
-          label="Stock"
-          value={`+${stats.stockInToday}`}
-          onClick={() => nav('stock', { target: 'stockIn' })}
-        />
-        <KpiCard
-          tone="blue"
-          icon={FileText}
-          label="Devis"
-          value={String(stats.pendingQuotes)}
-          onClick={() => nav('billing', { target: 'quotes' })}
-        />
-        <KpiCard
-          tone="teal"
-          icon={Globe}
-          label="Web"
-          value={String(stats.webNew)}
-          onClick={() => nav('online_orders', stats.webNew > 0 ? { target: 'webNew' } : undefined)}
-          pulse={stats.webNew > 0}
-        />
+      {/* ── FINANCES ── */}
+      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.06)', border: '1px solid rgba(226,232,240,0.8)' }}>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+          <div className="flex items-center gap-1.5">
+            <CreditCard className="w-3.5 h-3.5 text-blue-500" />
+            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Finances</span>
+          </div>
+          <button onClick={() => nav('accounting')} className="text-[9px] font-bold text-slate-400 flex items-center gap-0.5">
+            Voir tout <ChevronRight className="w-2.5 h-2.5" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-slate-100">
+          <button onClick={() => nav('tiers', { target: 'receivables' })} className="px-3 py-2 text-left active:bg-slate-50 transition-colors">
+            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Créances</div>
+            <div className="num text-[14px] font-black text-slate-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.receivables)}</div>
+            <div className="flex items-center justify-between mt-0.5">
+              <div className="text-[8px] text-slate-400">{stats.customersCount} client{stats.customersCount > 1 ? 's' : ''}</div>
+              <ChevronRight className="w-2.5 h-2.5 text-slate-300" />
+            </div>
+          </button>
+          <button onClick={() => nav('supplier_orders', { target: 'payables' })} className="px-3 py-2 text-left active:bg-slate-50 transition-colors">
+            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Fournisseurs</div>
+            <div className="num text-[14px] font-black text-slate-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.payables)}</div>
+            <div className="flex items-center justify-between mt-0.5">
+              <div className="text-[8px] text-slate-400">{stats.suppliersCount} fournisseur{stats.suppliersCount > 1 ? 's' : ''}</div>
+              <ChevronRight className="w-2.5 h-2.5 text-slate-300" />
+            </div>
+          </button>
+        </div>
       </div>
 
-      {/* ── ONLINE ORDERS — Compact funnel ── */}
-      {(stats.webNew > 0 || stats.webPrep > 0 || stats.webReady > 0) && (
-        <div
-          className="rounded-2xl overflow-hidden bg-white"
-          style={{ boxShadow: '0 1px 4px rgba(15,23,42,0.04)', border: '1px solid rgba(226,232,240,0.6)' }}
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100/60">
+      {/* ── ALERTES ── */}
+      {(stats.lowStockCount > 0 || stats.outOfStockCount > 0 || stats.pendingQuotes > 0 || stats.webNew > 0) && (
+        <div className="rounded-xl overflow-hidden" style={{ background: '#fffbf0', border: '1px solid rgba(245,158,11,0.2)' }}>
+          <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'rgba(245,158,11,0.15)' }}>
             <div className="flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-teal-600" />
-              <span className="text-[11px] font-bold text-slate-800">Commandes en ligne</span>
+              <Bell className="w-3.5 h-3.5 text-amber-500" />
+              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Alertes</span>
             </div>
-            <button onClick={() => nav('online_orders')} className="text-[9px] font-bold text-brand-700 flex items-center gap-0.5">
-              Voir <ChevronRight className="w-2.5 h-2.5" />
+            <button onClick={() => nav('stock')} className="text-[9px] font-bold text-amber-600 flex items-center gap-0.5">
+              Voir tout <ChevronRight className="w-2.5 h-2.5" />
             </button>
           </div>
-          <div className="grid grid-cols-3 divide-x divide-slate-100/60">
-            <FunnelCell count={stats.webNew} label="Nouvelles" tone="rose" onClick={() => nav('online_orders', { target: 'webNew' })} pulse />
-            <FunnelCell count={stats.webPrep} label="Préparation" tone="amber" onClick={() => nav('online_orders', { target: 'webPrep' })} />
-            <FunnelCell count={stats.webReady} label="Prêtes" tone="emerald" onClick={() => nav('online_orders', { target: 'webReady' })} />
+          <div className="grid grid-cols-2 divide-x" style={{ borderColor: 'rgba(245,158,11,0.1)' }}>
+            {stats.lowStockCount > 0 && (
+              <button onClick={() => nav('stock', { target: 'lowStock' })} className="px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
+                <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold text-slate-800">{stats.lowStockCount} stocks bas</div>
+                  <div className="text-[8px] text-slate-500">Seuil minimum atteint</div>
+                </div>
+              </button>
+            )}
+            {stats.pendingQuotes > 0 && (
+              <button onClick={() => nav('billing', { target: 'quotes' })} className="px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
+                <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold text-slate-800">{stats.pendingQuotes} devis en attente</div>
+                  <div className="text-[8px] text-slate-500">Valeur : {formatCompactFCFA(0)}</div>
+                </div>
+                <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+              </button>
+            )}
+            {stats.outOfStockCount > 0 && stats.pendingQuotes === 0 && (
+              <button onClick={() => nav('stock', { target: 'outOfStock' })} className="px-3 py-2 text-left flex items-center gap-2 active:bg-rose-50 transition-colors">
+                <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold text-slate-800">{stats.outOfStockCount} rupture{stats.outOfStockCount > 1 ? 's' : ''}</div>
+                  <div className="text-[8px] text-slate-500">À commander</div>
+                </div>
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── INTELLIGENT ALERTS ── */}
-      <IntelligentAlerts stats={stats} nav={nav} />
-
-      {/* ── BUSINESS PULSE — Compact summary replacing verbose activity ── */}
-      <BusinessPulse stats={stats} balanceHidden={balanceHidden} nav={nav} />
-
-      {/* ── FOOTER STATS ── */}
-      <div className="grid grid-cols-3 gap-1">
-        <FooterChip icon={Package} value={stats.articlesCount} label="Articles" onClick={() => nav('articles')} />
-        <FooterChip icon={Users} value={stats.customersCount} label="Clients" onClick={() => nav('tiers')} />
-        <FooterChip icon={Truck} value={stats.suppliersCount} label="Fourn." onClick={() => nav('tiers')} />
+      {/* ── ACTIVITÉ ── */}
+      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.06)', border: '1px solid rgba(226,232,240,0.8)' }}>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+          <div className="flex items-center gap-1.5">
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Activité</span>
+          </div>
+          <button onClick={() => nav('stock')} className="text-[9px] font-bold text-slate-400 flex items-center gap-0.5">
+            Voir tout <ChevronRight className="w-2.5 h-2.5" />
+          </button>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-slate-100">
+          <button onClick={() => nav('stock')} className="px-2 py-2 text-left active:bg-slate-50 transition-colors">
+            <div className="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center mb-1">
+              <Package className="w-3 h-3 text-emerald-600" />
+            </div>
+            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Stock</div>
+            <div className="num text-[13px] font-black text-slate-900 leading-tight">+{stats.stockInToday}</div>
+            <div className="text-[8px] text-slate-400 mt-0.5">Valeur : {formatCompactFCFA(0)}</div>
+          </button>
+          <button onClick={() => nav('online_orders')} className="px-2 py-2 text-left active:bg-slate-50 transition-colors">
+            <div className="w-6 h-6 rounded-md bg-teal-50 flex items-center justify-center mb-1">
+              <Globe className="w-3 h-3 text-teal-600" />
+            </div>
+            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Web</div>
+            <div className="num text-[13px] font-black text-slate-900 leading-tight">{stats.webNew}</div>
+            <div className="text-[8px] text-slate-400 mt-0.5">{stats.webNew === 0 ? 'Aucune commande' : `${stats.webNew} nouvelle${stats.webNew > 1 ? 's' : ''}`}</div>
+          </button>
+          <button onClick={() => nav('billing', { target: 'quotes' })} className="px-2 py-2 text-left active:bg-slate-50 transition-colors">
+            <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center mb-1">
+              <FileText className="w-3 h-3 text-blue-600" />
+            </div>
+            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Devis</div>
+            <div className="num text-[13px] font-black text-slate-900 leading-tight">{stats.pendingQuotes}</div>
+            <div className="text-[8px] text-slate-400 mt-0.5">{stats.pendingQuotes === 0 ? 'Aucun devis' : `${stats.pendingQuotes} en attente`}</div>
+          </button>
+        </div>
       </div>
 
-      {shopInfo && !shopInfo.isActive && shopInfo.slug === null && (
-        <button
-          onClick={() => nav('settings')}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 border border-dashed border-slate-200 active:bg-slate-100"
-        >
-          <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <span className="text-[10px] text-slate-500 font-semibold flex-1 text-left">Activer la boutique en ligne</span>
-          <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
-        </button>
-      )}
+      {/* ── SANTÉ BUSINESS ── */}
+      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.06)', border: '1px solid rgba(226,232,240,0.8)' }}>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+          <div className="flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-teal-500" />
+            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Santé business</span>
+          </div>
+          <button onClick={() => nav('sales')} className="text-[9px] font-bold text-teal-600 flex items-center gap-0.5">
+            Voir le journal <ChevronRight className="w-2.5 h-2.5" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
+          <div className="px-3 py-2">
+            <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Ticket moyen</div>
+            <div className="num text-[13px] font-black text-slate-900 leading-tight">
+              {balanceHidden ? '•••' : formatFCFA(stats.todayCount > 0 ? Math.round(stats.todaySales / stats.todayCount) : 0)}
+            </div>
+          </div>
+          <div className="px-3 py-2">
+            <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Dernière vente</div>
+            <div className="num text-[13px] font-black text-slate-900 leading-tight">
+              {stats.recentSales.length > 0 ? (balanceHidden ? '•••' : formatFCFA(stats.recentSales[0].total)) : '-'}
+            </div>
+          </div>
+        </div>
+        {stats.recentSales.length > 0 && (
+          <button onClick={() => nav('sales')} className="w-full flex items-center gap-2 px-3 py-2 active:bg-slate-50 transition-colors text-left border-b border-slate-100">
+            <div className="w-7 h-7 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-semibold text-slate-800 truncate">
+                {(stats.recentSales[0] as any).customers?.name || 'Client comptoir'}
+              </div>
+              <div className="text-[8px] text-slate-400">{getTimeAgo(stats.recentSales[0].created_at)}</div>
+            </div>
+            <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+          </button>
+        )}
+        <div className="grid grid-cols-3 divide-x divide-slate-100">
+          <button onClick={() => nav('articles')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-slate-50 transition-colors">
+            <Package className="w-3 h-3 text-slate-400 shrink-0" />
+            <div>
+              <div className="num text-[12px] font-extrabold text-slate-900 leading-none">{stats.articlesCount}</div>
+              <div className="text-[8px] text-slate-400 font-semibold mt-0.5">Articles</div>
+            </div>
+          </button>
+          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-slate-50 transition-colors">
+            <Users className="w-3 h-3 text-slate-400 shrink-0" />
+            <div>
+              <div className="num text-[12px] font-extrabold text-slate-900 leading-none">{stats.customersCount}</div>
+              <div className="text-[8px] text-slate-400 font-semibold mt-0.5">Clients</div>
+            </div>
+          </button>
+          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-slate-50 transition-colors">
+            <Truck className="w-3 h-3 text-slate-400 shrink-0" />
+            <div>
+              <div className="num text-[12px] font-extrabold text-slate-900 leading-none">{stats.suppliersCount}</div>
+              <div className="text-[8px] text-slate-400 font-semibold mt-0.5">Fourn.</div>
+            </div>
+          </button>
+        </div>
+      </div>
 
     </div>
   );
