@@ -428,9 +428,9 @@ export function Auth() {
   const hasLeftContent = !!(sloganBadge || hasHeadline || config?.subtitle || hasModules);
 
   const ecoBadge = (
-    <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-full bg-emerald-500/[0.06] border border-emerald-500/[0.12]">
+    <div className="flex items-center justify-center gap-2">
       <Leaf className="w-3 h-3 text-emerald-400 shrink-0" />
-      <span className="text-[10px] text-emerald-300/80 font-medium leading-tight">Le numérique quand c'est possible. L'impression quand c'est nécessaire.</span>
+      <span className="text-[10px] text-emerald-300/80 font-medium leading-tight">L'impression quand c'est nécessaire.</span>
     </div>
   );
 

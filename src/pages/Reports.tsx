@@ -290,18 +290,18 @@ async function fetchCustomerStats(
 async function fetchSupplierStats(tenantId: string, from: string, to: string) {
   const { data, error } = await supabase
     .from('supplier_orders')
-    .select('id, supplier_id, suppliers(name), total_amount, status, ordered_at, supplier_payments(amount)')
+    .select('id, supplier_id, suppliers(name), total, status, created_at, supplier_payments(amount)')
     .eq('tenant_id', tenantId)
     .neq('status', 'cancelled')
-    .gte('ordered_at', `${from}T00:00:00`)
-    .lte('ordered_at', `${to}T23:59:59`);
+    .gte('created_at', `${from}T00:00:00`)
+    .lte('created_at', `${to}T23:59:59`);
   if (error) throw error;
 
   const map = new Map<string, { name: string; orderCount: number; totalOrdered: number; totalPaid: number }>();
   for (const row of (data || [])) {
     const key = row.supplier_id;
     const name = (row.suppliers as any)?.name || 'Fournisseur inconnu';
-    const ordered = row.total_amount || 0;
+    const ordered = row.total || 0;
     const paid = ((row.supplier_payments || []) as any[]).reduce((s: number, p: any) => s + (p.amount || 0), 0);
     const prev = map.get(key) || { name, orderCount: 0, totalOrdered: 0, totalPaid: 0 };
     map.set(key, { name, orderCount: prev.orderCount + 1, totalOrdered: prev.totalOrdered + ordered, totalPaid: prev.totalPaid + paid });

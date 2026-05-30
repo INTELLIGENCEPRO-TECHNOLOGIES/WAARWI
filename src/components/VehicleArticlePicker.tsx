@@ -456,7 +456,12 @@ function ArticleList({ articles, totalCompatible, selectedCategoryLabel, priceMo
         ) : (
           <>
             <p className="text-slate-800 font-semibold text-sm">Aucune pièce compatible avec ce véhicule.</p>
-            <p className="text-xs text-slate-500 mt-2 max-w-sm">Aucun article n'a encore été rattaché à ce véhicule dans votre catalogue.</p>
+            <p className="text-xs text-slate-500 mt-2 max-w-sm leading-relaxed">
+              Aucun article n'est encore rattaché à <span className="font-semibold">{selectedModel?.name || 'ce modèle'}</span>.
+            </p>
+            <p className="text-xs text-slate-500 mt-1 max-w-sm leading-relaxed">
+              Pour associer des pièces, ouvrez un article dans le <span className="font-semibold">Catalogue → onglet Compatibilité</span> et ajoutez ce véhicule.
+            </p>
           </>
         )}
       </div>
