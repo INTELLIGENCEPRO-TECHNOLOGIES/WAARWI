@@ -1,7 +1,7 @@
 const KEY = 'waarwi:navCtx';
 
 export type NavContext = {
-  target?: 'receivables' | 'payables' | 'lowStock' | 'outOfStock' | 'quotes' | 'returns' | 'webNew' | 'webPrep' | 'webReady' | 'stockIn' | 'recentSales' | 'customers' | 'suppliers' | 'articles';
+  target?: 'receivables' | 'payables' | 'lowStock' | 'outOfStock' | 'quotes' | 'returns' | 'webNew' | 'webPrep' | 'webReady' | 'stockIn' | 'recentSales' | 'customers' | 'suppliers' | 'articles' | 'directPos' | 'newOrder' | 'newArticle';
   highlightId?: string;
   filter?: string;
 };

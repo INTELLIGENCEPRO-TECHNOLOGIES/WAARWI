@@ -12,6 +12,7 @@ import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
+import { consumeNavContext } from '../lib/navHighlight';
 import { ConfirmDialog } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import type { Article, Category, VehicleBrand } from '../lib/types';
@@ -83,6 +84,11 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id]);
   useEffect(() => { if (dataTick > 0) load(true); /* eslint-disable-next-line */ }, [dataTick]);
+
+  useEffect(() => {
+    const ctx = consumeNavContext();
+    if (ctx?.target === 'newArticle') openCreate();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();

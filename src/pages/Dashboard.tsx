@@ -4,16 +4,55 @@ import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { formatFCFA, formatCompactFCFA } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
+import { Modal } from '../components/Modal';
+import { desktopAutoFocus } from '../lib/device';
 import {
   TrendingUp, TrendingDown, AlertTriangle, Package, Loader2,
-  Users, FileText, RotateCcw, ExternalLink, Globe,
+  Users, FileText, ExternalLink, Globe,
   ShoppingCart, ChevronRight, Bell,
   CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowDownRight,
-  ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, Plus, X,
-  Share2, Copy, Check as CheckIcon, MessageCircle,
+  ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, X,
+  Share2, Copy, Check as CheckIcon, MessageCircle, RefreshCw,
+  ClipboardList, Banknote, RotateCcw,
+  ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3,
 } from 'lucide-react';
 
 type ShopInfo = { slug: string | null; isActive: boolean };
+
+type ActivityItem = {
+  id: string;
+  type: 'sale' | 'quote' | 'supplier_order' | 'payment_received' | 'online_order' | 'stock_movement' | 'return';
+  title: string;
+  detail: string;
+  amount: number | null;
+  amountType: 'positive' | 'negative' | 'neutral';
+  time: string;
+  route: string;
+  routeCtx?: NavContext;
+};
+
+type AlertItem = {
+  id: string;
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  time: string | null;
+  route: string;
+  routeCtx?: NavContext;
+};
+
+type OrderDetail = {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  status: string;
+  deliveryMode: string;
+  deliveryAddress: string;
+  total: number;
+  createdAt: string;
+  items: Array<{ name: string; qty: number; price: number }>;
+};
 
 type Stats = {
   todaySales: number;
@@ -35,6 +74,7 @@ type Stats = {
   pendingQuotes: number;
   pendingReturns: number;
   stockInToday: number;
+  stockOutToday: number;
   stockValue: number;
   todayMargin: number;
   articlesInStockCount: number;
@@ -43,6 +83,9 @@ type Stats = {
     customers: { name: string } | null;
     sale_payments?: Array<{ method_name?: string | null }>;
   }>;
+  recentActivities: ActivityItem[];
+  alerts: AlertItem[];
+  activeOrders: OrderDetail[];
   webNew: number;
   webPrep: number;
   webReady: number;
@@ -50,6 +93,9 @@ type Stats = {
   webTodayTotal: number;
   webAvgWait: number;
   lastWebOrder: { order_number: string; customer_name: string | null; total: number; created_at: string } | null;
+  hourlySales: number[];
+  weeklySales: { day: string; total: number }[];
+  weekTotal: number;
 };
 
 export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void }) {
@@ -85,7 +131,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         webNewData, webPrepData, webReadyData, webTodayData, webWaitData, lastWebOrderData,
         openSessions, stockInTodayData,
       ] = await Promise.all([
-        supabase.from('sales').select('total, sale_items(unit_price, quantity, discount, purchase_cost)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
+        supabase.from('sales').select('total, created_at, sale_items(unit_price, quantity, discount, purchase_cost)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
         supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', yest.toISOString()).lt('created_at', today.toISOString()).neq('status', 'cancelled'),
         supabase.from('sales').select('total, sale_items(total, purchase_cost, quantity)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', firstOfMonth.toISOString()).neq('status', 'cancelled'),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
@@ -203,8 +249,260 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       const stockIn = (stockInTodayData.data || []).reduce((s: number, r: any) => s + Number(r.quantity || 0), 0);
 
+      // Stock out today
+      const { data: stockOutTodayData2 } = await supabase
+        .from('stock_movements')
+        .select('quantity')
+        .eq('tenant_id', tenant.id)
+        .eq('site_id', siteId)
+        .in('movement_type', ['sale', 'adjustment_out'])
+        .gte('created_at', today.toISOString());
+      const stockOut = (stockOutTodayData2 || []).reduce((s: number, r: any) => s + Math.abs(Number(r.quantity || 0)), 0);
+
+      // Hourly sales breakdown for intraday chart
+      const hourlySales = new Array(24).fill(0);
+      for (const sale of (todayData.data || []) as any[]) {
+        const h = new Date(sale.created_at || today).getHours();
+        hourlySales[h] += Number(sale.total || 0);
+      }
+
+      // Weekly sales (last 7 days)
+      const weekStart = new Date(today);
+      weekStart.setDate(weekStart.getDate() - 6);
+      const { data: weekSalesRaw } = await supabase
+        .from('sales')
+        .select('total, created_at')
+        .eq('tenant_id', tenant.id)
+        .eq('site_id', siteId)
+        .gte('created_at', weekStart.toISOString())
+        .neq('status', 'cancelled');
+      const dayNames = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
+      const weeklySales: { day: string; total: number }[] = [];
+      let weekTotal = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 6 + i);
+        const dayStr = d.toISOString().slice(0, 10);
+        const dayTotal = (weekSalesRaw || [])
+          .filter((r: any) => (r.created_at || '').slice(0, 10) === dayStr)
+          .reduce((s: number, r: any) => s + Number(r.total || 0), 0);
+        weeklySales.push({ day: dayNames[d.getDay()], total: dayTotal });
+        weekTotal += dayTotal;
+      }
+
       const firstWaitRow = (webWaitData.data || [])[0];
       const avgWaitMin = firstWaitRow ? Math.max(0, Math.floor((Date.now() - new Date(firstWaitRow.created_at).getTime()) / 60000)) : 0;
+
+      // Fetch recent activities from multiple sources for intelligent feed
+      const [actSales, actQuotes, actSupOrders, actOnline, actReturns, actPayments] = await Promise.all([
+        supabase.from('sales').select('id, sale_number, total, created_at, status, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(8),
+        supabase.from('quotes').select('id, quote_number, total, created_at, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
+        supabase.from('supplier_orders').select('id, order_number, total, created_at, status, suppliers(name)').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
+        supabase.from('online_orders').select('id, order_number, total, created_at, status, customer_name').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
+        supabase.from('sale_returns').select('id, return_number, total, created_at, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(3),
+        supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, customers(name))').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
+      ]);
+
+      const activities: ActivityItem[] = [];
+
+      for (const s of (actSales.data || []) as any[]) {
+        const client = s.customers?.name || 'Client comptoir';
+        const method = s.sale_payments?.[0]?.method_name || '';
+        const statusLabel = s.status === 'paid' ? 'Payée' : s.status === 'partial' ? 'Partielle' : s.status === 'cancelled' ? 'Annulée' : 'Créée';
+        activities.push({
+          id: `sale-${s.id}`,
+          type: 'sale',
+          title: `Vente ${s.sale_number}`,
+          detail: `${client}${method ? ' · ' + method : ''} · ${statusLabel}`,
+          amount: Number(s.total),
+          amountType: s.status === 'cancelled' ? 'negative' : 'positive',
+          time: s.created_at,
+          route: 'sales',
+        });
+      }
+
+      for (const q of (actQuotes.data || []) as any[]) {
+        const client = q.customers?.name || 'Client';
+        const statusLabel = q.status === 'sent' ? 'Envoye' : q.status === 'accepted' ? 'Accepte' : q.status === 'converted' ? 'Converti' : 'Brouillon';
+        activities.push({
+          id: `quote-${q.id}`,
+          type: 'quote',
+          title: `Devis ${q.quote_number}`,
+          detail: `${client} · ${statusLabel}`,
+          amount: Number(q.total),
+          amountType: 'neutral',
+          time: q.created_at,
+          route: 'sales',
+        });
+      }
+
+      for (const o of (actSupOrders.data || []) as any[]) {
+        const supplier = o.suppliers?.name || 'Fournisseur';
+        const statusLabel = o.status === 'delivered' ? 'Livree' : o.status === 'sent' ? 'Envoyee' : o.status === 'partial' ? 'Partielle' : 'Brouillon';
+        activities.push({
+          id: `suporder-${o.id}`,
+          type: 'supplier_order',
+          title: `Commande ${o.order_number}`,
+          detail: `${supplier} · ${statusLabel}`,
+          amount: Number(o.total),
+          amountType: 'negative',
+          time: o.created_at,
+          route: 'supplier_orders',
+        });
+      }
+
+      for (const o of (actOnline.data || []) as any[]) {
+        const client = o.customer_name || 'Client web';
+        const statusLabel = o.status === 'nouvelle' ? 'Nouvelle' : o.status === 'en_preparation' ? 'En préparation' : o.status === 'prete' ? 'Prête' : o.status === 'livree' ? 'Livrée' : o.status;
+        activities.push({
+          id: `online-${o.id}`,
+          type: 'online_order',
+          title: `Commande en ligne ${o.order_number}`,
+          detail: `${client} · ${statusLabel}`,
+          amount: Number(o.total),
+          amountType: 'positive',
+          time: o.created_at,
+          route: 'online_orders',
+        });
+      }
+
+      for (const r of (actReturns.data || []) as any[]) {
+        const client = r.customers?.name || 'Client';
+        activities.push({
+          id: `return-${r.id}`,
+          type: 'return',
+          title: `Retour ${r.return_number || ''}`,
+          detail: `${client} · ${r.status === 'pending' ? 'En attente' : 'Traite'}`,
+          amount: Number(r.total || 0),
+          amountType: 'negative',
+          time: r.created_at,
+          route: 'sales',
+        });
+      }
+
+      for (const p of (actPayments.data || []) as any[]) {
+        const saleRef = p.sales?.sale_number || '';
+        const client = p.sales?.customers?.name || 'Client';
+        activities.push({
+          id: `payment-${p.id}`,
+          type: 'payment_received',
+          title: `Reglement ${saleRef}`,
+          detail: `${client} · ${p.method_name || 'Especes'}`,
+          amount: Number(p.amount),
+          amountType: 'positive',
+          time: p.created_at,
+          route: 'sales',
+        });
+      }
+
+      activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+      const recentActivities = activities.slice(0, 15);
+
+      // ── Intelligent Alerts ──
+      const [alertStockOut, alertStockLow, alertAdjustments, alertModifiedSales] = await Promise.all([
+        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).lte('quantity', 0),
+        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).gt('quantity', 0),
+        supabase.from('stock_movements').select('id, movement_type, quantity, note, created_at, articles(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['adjustment_in', 'adjustment_out']).order('created_at', { ascending: false }).limit(5),
+        supabase.from('sales').select('id, sale_number, total, updated_at, created_at, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('updated_at', { ascending: false }).limit(10),
+      ]);
+
+      const alerts: AlertItem[] = [];
+
+      const outItems = (alertStockOut.data || []).filter((r: any) => Number(r.articles?.stock_min || 0) > 0);
+      for (const item of outItems.slice(0, 5) as any[]) {
+        alerts.push({
+          id: `rupture-${item.articles.id}`,
+          severity: 'critical',
+          title: `Rupture : ${item.articles.name}`,
+          detail: `Ref. ${item.articles.internal_ref || '-'} · Stock: ${item.quantity}`,
+          time: null,
+          route: 'stock',
+          routeCtx: { filter: 'rupture' },
+        });
+      }
+
+      const lowItems = (alertStockLow.data || []).filter((r: any) => Number(r.articles?.stock_min || 0) > 0 && Number(r.quantity) <= Number(r.articles.stock_min));
+      for (const item of lowItems.slice(0, 5) as any[]) {
+        alerts.push({
+          id: `low-${item.articles.id}`,
+          severity: 'warning',
+          title: `Stock bas : ${item.articles.name}`,
+          detail: `Ref. ${item.articles.internal_ref || '-'} · Stock: ${item.quantity} / Min: ${item.articles.stock_min}`,
+          time: null,
+          route: 'stock',
+          routeCtx: { filter: 'bas' },
+        });
+      }
+
+      for (const adj of (alertAdjustments.data || []) as any[]) {
+        const dir = adj.movement_type === 'adjustment_in' ? 'Entrée' : 'Sortie';
+        alerts.push({
+          id: `adj-${adj.id}`,
+          severity: 'info',
+          title: `Ajustement stock (${dir})`,
+          detail: `${adj.articles?.name || 'Article'} · Qte: ${adj.quantity}${adj.note ? ' · ' + adj.note : ''}`,
+          time: adj.created_at,
+          route: 'stock',
+        });
+      }
+
+      const modifiedSales = (alertModifiedSales.data || []).filter((s: any) => {
+        const created = new Date(s.created_at).getTime();
+        const updated = new Date(s.updated_at).getTime();
+        return (updated - created) > 60000;
+      });
+      for (const s of modifiedSales.slice(0, 3) as any[]) {
+        alerts.push({
+          id: `mod-sale-${s.id}`,
+          severity: 'info',
+          title: `Facture modifiee : ${s.sale_number}`,
+          detail: `${s.customers?.name || 'Client'} · ${formatCompactFCFA(s.total)}`,
+          time: s.updated_at,
+          route: 'sales',
+        });
+      }
+
+      if (!currentSession) {
+        alerts.push({
+          id: 'no-session',
+          severity: 'warning',
+          title: 'Session caisse fermee',
+          detail: 'Aucune session de caisse n\'est ouverte',
+          time: null,
+          route: 'pos',
+        });
+      }
+
+      alerts.sort((a, b) => {
+        const sev = { critical: 0, warning: 1, info: 2 };
+        return sev[a.severity] - sev[b.severity];
+      });
+
+      // ── Active Orders with full details ──
+      const { data: activeOrdersRaw } = await supabase
+        .from('online_orders')
+        .select('id, order_number, customer_name, customer_phone, status, delivery_mode, delivery_address, total, created_at, online_order_items(article_name, quantity, unit_price)')
+        .eq('tenant_id', tenant.id)
+        .in('status', ['nouvelle', 'en_preparation', 'prete'])
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      const activeOrders: OrderDetail[] = ((activeOrdersRaw || []) as any[]).map((o) => ({
+        id: o.id,
+        orderNumber: o.order_number,
+        customerName: o.customer_name || 'Client',
+        customerPhone: o.customer_phone || '',
+        status: o.status,
+        deliveryMode: o.delivery_mode || 'retrait',
+        deliveryAddress: o.delivery_address || '',
+        total: Number(o.total),
+        createdAt: o.created_at,
+        items: (o.online_order_items || []).map((i: any) => ({
+          name: i.article_name,
+          qty: i.quantity,
+          price: Number(i.unit_price),
+        })),
+      }));
 
       const next: Stats = {
         todaySales, todayCount: todayData.data?.length || 0,
@@ -223,7 +521,11 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         pendingQuotes: quotesData.count || 0,
         pendingReturns: returnsData.count || 0,
         stockInToday: stockIn,
+        stockOutToday: stockOut,
         recentSales: (recent.data as any) || [],
+        recentActivities,
+        alerts,
+        activeOrders,
         webNew: webNewData.count || 0,
         webPrep: webPrepData.count || 0,
         webReady: webReadyData.count || 0,
@@ -231,6 +533,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         webTodayTotal,
         webAvgWait: avgWaitMin,
         lastWebOrder: lastWebOrderData.data as any || null,
+        hourlySales,
+        weeklySales,
+        weekTotal,
       };
       if (!cancelled) { setStats(next); setLoading(false); }
     })();
@@ -286,12 +591,23 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           greet={hourGreet}
           firstName={firstName}
           dayDelta={can('view_dashboard_stats') ? dayDelta : 0}
+          dayMarginPct={can('view_margins') ? dayMarginPct : 0}
           marginPct={marginPct}
           nav={nav}
         />
       </div>
     </>
   );
+}
+
+function getTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "A l'instant";
+  if (min < 60) return `Il y a ${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `Il y a ${h}h`;
+  return `Il y a ${Math.floor(h / 24)}j`;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -793,576 +1109,875 @@ function MobileDashboard({
   );
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
- *  DESKTOP DASHBOARD — cockpit
- * ════════════════════════════════════════════════════════════════════════════ */
-function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, marginPct, nav }: any) {
-  const now = new Date();
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            {greet}{firstName ? `, ${firstName}` : ''}
-          </h1>
-          <p className="text-sm text-slate-500 font-medium capitalize mt-0.5">
-            {now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {shopInfo?.isActive && shopInfo.slug && (
-            <button
-              onClick={() => window.open(`${window.location.origin}/shop/${shopInfo.slug}`, '_blank')}
-              className="inline-flex items-center gap-2 h-10 px-3.5 rounded-2xl bg-white border border-emerald-200 text-emerald-700 text-sm font-bold hover:bg-emerald-50 transition-colors"
-            >
-              <span className="relative flex w-1.5 h-1.5">
-                <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75" />
-                <span className="relative rounded-full bg-emerald-500 w-1.5 h-1.5" />
-              </span>
-              Boutique en ligne active
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button
-            onClick={() => nav('pos')}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-2xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20"
-          >
-            <ShoppingCart className="w-4 h-4" />
-            Ouvrir la caisse
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-12 gap-5 items-stretch">
-        <div className="col-span-12 xl:col-span-8 space-y-5">
-          {/* Hero */}
-          <button
-            onClick={() => nav('sales')}
-            className="w-full text-left relative overflow-hidden rounded-[32px] p-6 group hover:scale-[1.005] transition-transform"
-            style={{
-              background: 'linear-gradient(135deg, #041d2e 0%, #063b44 45%, #0d5c5c 75%, #0d9488 100%)',
-              boxShadow: '0 25px 60px -20px rgba(6, 59, 68, 0.55), 0 10px 24px -10px rgba(13, 148, 136, 0.35), inset 0 1px 0 rgba(255,255,255,0.1)',
-            }}
-          >
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-gradient-to-br from-teal-300/30 via-teal-400/10 to-transparent blur-3xl animate-pulse-slow" />
-              <div className="absolute -bottom-32 -left-16 w-80 h-80 rounded-full bg-gradient-to-tr from-cyan-300/20 to-transparent blur-3xl" />
-              <div
-                className="absolute inset-0 opacity-[0.08]"
-                style={{
-                  backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-                  backgroundSize: '28px 28px',
-                  maskImage: 'radial-gradient(ellipse at top right, black 0%, transparent 70%)',
-                  WebkitMaskImage: 'radial-gradient(ellipse at top right, black 0%, transparent 70%)',
-                }}
-              />
-            </div>
-
-            <div className="relative flex items-center justify-between gap-6">
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <div className="w-1 h-1 rounded-full bg-teal-300 animate-pulse" />
-                  <span className="text-[11px] font-bold text-teal-100/90 uppercase tracking-[0.2em]">
-                    Encaissement du jour
-                  </span>
-                </div>
-                <div className="text-[44px] font-black text-white leading-none tracking-tight num whitespace-nowrap">
-                  {formatFCFA(stats.todaySales)}
-                </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                      dayDelta >= 0 ? 'bg-emerald-400/20 text-emerald-200' : 'bg-rose-400/20 text-rose-200'
-                    }`}
-                  >
-                    {dayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    {dayDelta >= 0 ? '+' : ''}{dayDelta}% vs hier
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-sm text-white/70">
-                    <FileText className="w-3.5 h-3.5" />
-                    {stats.todayCount} tickets
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-sm text-white/70">
-                    <Wallet className="w-3.5 h-3.5" />
-                    Mois : <span className="text-white font-bold num">{formatFCFA(stats.monthSales)}</span>
-                    {marginPct > 0 && <span className="text-emerald-300 font-bold">· marge {marginPct}%</span>}
-                  </span>
-                </div>
-              </div>
-              <div className="w-14 h-14 rounded-3xl bg-white/10 backdrop-blur-sm border border-white/15 flex items-center justify-center group-hover:bg-white/15">
-                <ArrowUpRight className="w-6 h-6 text-white" />
-              </div>
-            </div>
-
-            <div className="relative mt-5 pt-5 border-t border-white/10">
-              {stats.sessionInfo && (
-                <div className="flex items-center gap-1.5 mb-3 text-[10px] text-white/50 font-medium uppercase tracking-wider">
-                  <Clock className="w-3 h-3" />
-                  Session ouverte le {new Date(stats.sessionInfo.openedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              )}
-              {!stats.sessionInfo && (
-                <div className="flex items-center gap-1.5 mb-3 text-[10px] text-white/40 font-medium">
-                  Aucune session ouverte
-                </div>
-              )}
-              <div className="grid grid-cols-3 gap-3">
-                <InnerBankMetric label="Solde caisse" value={formatFCFA(stats.cashBalance)} icon={Wallet} />
-                <InnerBankMetric label="Entrées" value={formatFCFA(stats.sessionCashIn)} icon={ArrowDownRight} positive />
-                <InnerBankMetric label="Dépenses" value={formatFCFA(stats.sessionExpenses)} icon={ArrowUpLeft} negative />
-              </div>
-            </div>
-          </button>
-
-          {/* Online orders */}
-          <Section
-            icon={Globe}
-            iconGradient="from-teal-500 to-teal-700"
-            title="Centre de commandes en ligne"
-            subtitle={`${stats.webTodayCount} aujourd'hui · ${formatFCFA(stats.webTodayTotal)}`}
-            action={{ label: 'Gérer', onClick: () => nav('online_orders'), dark: true }}
-            desktop
-          >
-            <div className="grid grid-cols-3 divide-x divide-slate-100">
-              <FunnelCell count={stats.webNew} label="Nouvelles" tone="rose" onClick={() => nav('online_orders')} pulse large />
-              <FunnelCell count={stats.webPrep} label="Préparation" tone="amber" onClick={() => nav('online_orders')} large />
-              <FunnelCell count={stats.webReady} label="Prêtes" tone="emerald" onClick={() => nav('online_orders')} large />
-            </div>
-            {stats.lastWebOrder && (
-              <button onClick={() => nav('online_orders')} className="w-full flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-50 hover:bg-slate-50/70 text-left">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-teal-600" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-slate-900">
-                      {stats.lastWebOrder.order_number} · {stats.lastWebOrder.customer_name || 'Client'}
-                    </div>
-                    <div className="text-xs text-slate-500 font-medium">
-                      {getTimeAgo(stats.lastWebOrder.created_at)}{stats.webAvgWait > 0 && stats.webNew > 0 ? ` · attente ${stats.webAvgWait}min` : ''}
-                    </div>
-                  </div>
-                </div>
-                <span className="text-base font-extrabold text-slate-900 num">{formatFCFA(stats.lastWebOrder.total)}</span>
-              </button>
-            )}
-          </Section>
-
-          {/* Timeline */}
-          <Section
-            icon={Activity}
-            iconGradient="from-slate-700 to-slate-900"
-            title="Dernières transactions"
-            subtitle="Flux temps réel"
-            action={{ label: 'Journal complet', onClick: () => nav('sales') }}
-            desktop
-          >
-            {stats.recentSales.length === 0 ? (
-              <button onClick={() => nav('pos')} className="w-full py-10 text-center hover:bg-slate-50/50">
-                <div className="w-12 h-12 mx-auto mb-3 rounded-3xl bg-brand-50 border border-brand-100 flex items-center justify-center">
-                  <ShoppingCart className="w-5 h-5 text-brand-600" />
-                </div>
-                <div className="text-sm text-slate-500 font-semibold">Aucune vente aujourd'hui</div>
-                <div className="text-xs text-brand-600 font-bold mt-1">Ouvrir la caisse →</div>
-              </button>
-            ) : (
-              <div className="divide-y divide-slate-50">
-                {stats.recentSales.slice(0, 4).map((s: any) => (
-                  <button
-                    key={s.id}
-                    onClick={() => nav('sales')}
-                    className="w-full flex items-center gap-4 px-5 py-3 hover:bg-slate-50/60 text-left"
-                  >
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-[0_4px_12px_-2px_rgba(16,185,129,0.5)]">
-                      <CheckCircle className="w-4 h-4 text-white" strokeWidth={2.5} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold text-slate-900 truncate">{s.customers?.name || 'Client comptoir'}</div>
-                      <div className="text-xs text-slate-500 font-medium">
-                        {s.sale_number} · {getTimeAgo(s.created_at)}
-                        {s.sale_payments?.[0]?.method_name && ` · ${s.sale_payments[0].method_name}`}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-base font-extrabold text-slate-900 num whitespace-nowrap">+{formatFCFA(s.total)}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </Section>
-
-          <div className="grid grid-cols-3 gap-2">
-            <FooterChip icon={Package} value={stats.articlesCount} label="Articles" onClick={() => nav('articles')} />
-            <FooterChip icon={Users} value={stats.customersCount} label="Clients" onClick={() => nav('tiers')} />
-            <FooterChip icon={Truck} value={stats.suppliersCount} label="Fourn." onClick={() => nav('tiers')} />
-          </div>
-        </div>
-
-        {/* RIGHT column */}
-        <div className="col-span-12 xl:col-span-4 flex flex-col gap-5 h-full">
-          <div className="space-y-3">
-            <DesktopFinanceRow tone="blue" icon={CreditCard} label="Créances clients" value={formatFCFA(stats.receivables)} sub={`${stats.customersCount} clients`} onClick={() => nav('tiers', { target: 'receivables' })} />
-            <DesktopFinanceRow tone="amber" icon={Truck} label="Dettes fournisseurs" value={formatFCFA(stats.payables)} sub={`${stats.suppliersCount} fournisseurs`} onClick={() => nav('supplier_orders', { target: 'payables' })} />
-            <DesktopFinanceRow tone={stats.outOfStockCount > 0 ? 'rose' : 'slate'} icon={AlertTriangle} label="Ruptures de stock" value={String(stats.outOfStockCount)} sub={stats.lowStockCount > 0 ? `${stats.lowStockCount} stocks bas` : 'stocks à jour'} onClick={() => nav('stock', { target: 'outOfStock' })} />
-            <DesktopFinanceRow tone="emerald" icon={Package} label="Entrées stock" value={String(stats.stockInToday)} sub="aujourd'hui" onClick={() => nav('stock', { target: 'stockIn' })} />
-          </div>
-          <IntelligentAlerts stats={stats} nav={nav} />
-          <div className="flex-1 flex flex-col min-h-[140px]">
-            <CashActivityCard stats={stats} marginPct={marginPct} nav={nav} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ════════════════════════════════════════════════════════════════════════════
- *  REUSABLE SUB-COMPONENTS
+ *  DESKTOP DASHBOARD — Exact match to capture specification
  * ════════════════════════════════════════════════════════════════════════════ */
 
-function HeroMetric({ label, value, icon: Icon, positive, negative }: any) {
-  return (
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-1 mb-0.5">
-        <Icon className={`w-2.5 h-2.5 shrink-0 ${positive ? 'text-emerald-300' : negative ? 'text-rose-300' : 'text-white/50'}`} />
-        <span className="text-[8px] font-semibold text-white/40 uppercase tracking-wider truncate">{label}</span>
-      </div>
-      <div className="text-[11px] font-bold text-white/90 num leading-tight truncate">{value}</div>
-    </div>
-  );
-}
+function HeroChart({ data }: { data: number[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const currentHour = new Date().getHours();
+  const sliced = data.slice(0, Math.max(currentHour + 1, 1));
+  const max = Math.max(...sliced, 1000);
 
-function InnerBankMetric({ label, value, icon: Icon, positive, negative }: any) {
-  return (
-    <div className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 p-2.5 min-w-0 overflow-hidden">
-      <div className="flex items-center gap-1">
-        <Icon className={`w-2.5 h-2.5 shrink-0 ${positive ? 'text-emerald-300' : negative ? 'text-rose-300' : 'text-white/60'}`} />
-        <span className="text-[9px] font-bold text-white/60 uppercase tracking-wider leading-tight break-words">{label}</span>
-      </div>
-      <div className="text-xl font-black text-white num mt-1 leading-tight break-all">{value}</div>
-    </div>
-  );
-}
+  const w = 800;
+  const h = 150;
+  const padL = 38;
+  const padR = 20;
+  const padT = 10;
+  const padB = 22;
+  const chartW = w - padL - padR;
+  const chartH = h - padT - padB;
 
-function KpiCard({ icon: Icon, label, value, tone, onClick, pulse }: any) {
-  const tones: Record<string, any> = {
-    blue:    { iconBg: 'bg-blue-50', iconColor: 'text-blue-600', border: 'border-blue-100/60' },
-    amber:   { iconBg: 'bg-amber-50', iconColor: 'text-amber-600', border: 'border-amber-100/60' },
-    rose:    { iconBg: 'bg-rose-50', iconColor: 'text-rose-600', border: 'border-rose-100/60' },
-    emerald: { iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', border: 'border-emerald-100/60' },
-    teal:    { iconBg: 'bg-teal-50', iconColor: 'text-teal-600', border: 'border-teal-100/60' },
-    slate:   { iconBg: 'bg-slate-100', iconColor: 'text-slate-500', border: 'border-slate-200/60' },
+  const points = sliced.map((v, i) => ({
+    x: padL + (i / 23) * chartW,
+    y: padT + (1 - v / max) * chartH,
+    value: v,
+    hour: i,
+  }));
+
+  const pathD = points.length < 2 ? '' : points.reduce((d, p, i) => {
+    if (i === 0) return `M ${p.x} ${p.y}`;
+    const prev = points[i - 1];
+    const cx1 = prev.x + (p.x - prev.x) * 0.4;
+    const cx2 = p.x - (p.x - prev.x) * 0.4;
+    return `${d} C ${cx1} ${prev.y}, ${cx2} ${p.y}, ${p.x} ${p.y}`;
+  }, '');
+
+  const areaD = pathD && points.length > 0
+    ? `${pathD} L ${points[points.length - 1].x} ${padT + chartH} L ${points[0].x} ${padT + chartH} Z`
+    : '';
+
+  const yTicks = [0, max * 0.33, max * 0.66, max].map(v => Math.round(v));
+  const xTicks = [0, 6, 12, 18, 24];
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!svgRef.current || points.length === 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const relX = ((e.clientX - rect.left) / rect.width) * w;
+    let closest = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const dist = Math.abs(points[i].x - relX);
+      if (dist < minDist) { minDist = dist; closest = i; }
+    }
+    setHover(closest);
   };
-  const t = tones[tone] || tones.slate;
+
+  const hp = hover !== null && hover < points.length ? points[hover] : null;
+
   return (
-    <button
-      onClick={onClick}
-      className={`relative rounded-xl bg-white border ${t.border} p-1.5 text-left active:scale-[0.96] transition-all overflow-hidden`}
-      style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${w} ${h}`}
+      className="w-full h-full cursor-crosshair block"
+      preserveAspectRatio="xMidYMid meet"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHover(null)}
     >
-      <div className="flex items-center justify-between mb-0.5">
-        <div className={`w-5 h-5 rounded-md ${t.iconBg} flex items-center justify-center`}>
-          <Icon className={`w-2.5 h-2.5 ${t.iconColor}`} />
-        </div>
-        {pulse && <span className="relative flex w-1.5 h-1.5"><span className="absolute inset-0 rounded-full bg-rose-500 animate-ping" /><span className="relative rounded-full bg-rose-500 w-1.5 h-1.5" /></span>}
-      </div>
-      <div className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider leading-tight">{label}</div>
-      <div className="num font-extrabold text-slate-900 leading-tight mt-0.5" style={{ fontSize: 'clamp(9px, 2.8vw, 12px)' }}>{value}</div>
-    </button>
-  );
-}
-
-function DesktopFinanceRow({ icon: Icon, label, value, sub, tone, onClick }: any) {
-  const tones: Record<string, any> = {
-    blue:    { iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
-    amber:   { iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
-    rose:    { iconBg: 'bg-rose-50', iconColor: 'text-rose-600' },
-    emerald: { iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-    slate:   { iconBg: 'bg-slate-100', iconColor: 'text-slate-500' },
-  };
-  const t = tones[tone] || tones.slate;
-  return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white border border-slate-200/70 hover:border-slate-300 hover:shadow-md transition-all text-left group"
-    >
-      <div className={`w-11 h-11 rounded-2xl ${t.iconBg} flex items-center justify-center shrink-0`}>
-        <Icon className={`w-5 h-5 ${t.iconColor}`} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</div>
-        <div className="text-xl font-extrabold text-slate-900 num leading-tight mt-0.5 break-all">{value}</div>
-        <div className="text-[11px] text-slate-500 font-medium">{sub}</div>
-      </div>
-      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
-    </button>
-  );
-}
-
-function Section({ icon: Icon, iconGradient, title, subtitle, action, children, desktop }: any) {
-  return (
-    <div
-      className="relative rounded-2xl overflow-hidden bg-white"
-      style={{
-        boxShadow: '0 1px 4px rgba(15,23,42,0.04)',
-        border: '1px solid rgba(226,232,240,0.6)',
-      }}
-    >
-      <div className={`flex items-center justify-between ${desktop ? 'px-5 py-4' : 'px-3 py-2'} border-b border-slate-100/60`}>
-        <div className="flex items-center gap-2">
-          <div className={`${desktop ? 'w-9 h-9 rounded-2xl' : 'w-6 h-6 rounded-lg'} bg-gradient-to-br ${iconGradient} flex items-center justify-center`}>
-            <Icon className={`${desktop ? 'w-4 h-4' : 'w-3 h-3'} text-white`} />
-          </div>
-          <div>
-            <div className={`${desktop ? 'text-sm' : 'text-[11px]'} font-bold text-slate-800 leading-tight`}>{title}</div>
-            {subtitle && <div className={`${desktop ? 'text-xs' : 'text-[9px]'} text-slate-400 font-medium`}>{subtitle}</div>}
-          </div>
-        </div>
-        {action && (
-          action.dark ? (
-            <button onClick={action.onClick} className="inline-flex items-center gap-1 h-8 px-3 rounded-xl bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-800">
-              {action.label} <ChevronRight className="w-3 h-3" />
-            </button>
-          ) : (
-            <button onClick={action.onClick} className="text-[9px] font-bold text-brand-700 flex items-center gap-0.5">
-              {action.label} <ChevronRight className="w-2.5 h-2.5" />
-            </button>
-          )
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function FunnelCell({ count, label, tone, onClick, pulse, large }: any) {
-  const tones: Record<string, any> = {
-    rose: { text: count > 0 ? 'text-rose-600' : 'text-slate-300', label: 'text-rose-700', hover: 'hover:bg-rose-50/40', dot: 'bg-rose-500' },
-    amber: { text: count > 0 ? 'text-amber-600' : 'text-slate-300', label: 'text-amber-700', hover: 'hover:bg-amber-50/40', dot: 'bg-amber-500' },
-    emerald: { text: count > 0 ? 'text-emerald-600' : 'text-slate-300', label: 'text-emerald-700', hover: 'hover:bg-emerald-50/40', dot: 'bg-emerald-500' },
-  };
-  const t = tones[tone];
-  return (
-    <button onClick={onClick} className={`relative flex flex-col items-center justify-center gap-0.5 ${large ? 'py-5' : 'py-2.5'} transition-colors ${t.hover} active:scale-95`}>
-      {pulse && count > 0 && (
-        <span className="absolute top-1.5 right-1/3 flex w-1.5 h-1.5">
-          <span className={`absolute inset-0 rounded-full ${t.dot} animate-ping opacity-75`} />
-          <span className={`relative rounded-full ${t.dot} w-1.5 h-1.5`} />
-        </span>
-      )}
-      <span className={`${large ? 'text-3xl' : 'text-lg'} font-black num leading-none ${t.text}`}>{count}</span>
-      <span className={`text-[9px] font-bold uppercase tracking-wider ${t.label}`}>{label}</span>
-    </button>
-  );
-}
-
-function IntelligentAlerts({ stats, nav }: any) {
-  const alerts: { icon: any; title: string; detail: string; tone: string; route: string; ctx?: NavContext }[] = [
-    ...(stats.outOfStockCount > 0 ? [{ icon: AlertTriangle, title: `${stats.outOfStockCount} rupture${stats.outOfStockCount > 1 ? 's' : ''} de stock`, detail: 'À commander en priorité', tone: 'rose', route: 'stock', ctx: { target: 'outOfStock' as const } }] : []),
-    ...(stats.webNew > 0 ? [{ icon: Globe, title: `${stats.webNew} commande${stats.webNew > 1 ? 's' : ''} web`, detail: 'En attente de traitement', tone: 'teal', route: 'online_orders', ctx: { target: 'webNew' as const } }] : []),
-    ...(stats.lowStockCount > 0 ? [{ icon: Package, title: `${stats.lowStockCount} stock${stats.lowStockCount > 1 ? 's' : ''} bas`, detail: 'Seuil minimum atteint', tone: 'amber', route: 'stock', ctx: { target: 'lowStock' as const } }] : []),
-    ...(stats.pendingQuotes > 0 ? [{ icon: FileText, title: `${stats.pendingQuotes} devis`, detail: 'En attente de validation', tone: 'blue', route: 'billing', ctx: { target: 'quotes' as const } }] : []),
-    ...(stats.pendingReturns > 0 ? [{ icon: RotateCcw, title: `${stats.pendingReturns} retour${stats.pendingReturns > 1 ? 's' : ''}`, detail: 'À valider', tone: 'amber', route: 'billing', ctx: { target: 'returns' as const } }] : []),
-  ];
-
-  if (alerts.length === 0) return null;
-
-  const toneMap: Record<string, any> = {
-    rose: { bg: 'bg-rose-50', border: 'border-rose-100', iconBg: 'bg-rose-500', text: 'text-rose-900' },
-    amber: { bg: 'bg-amber-50', border: 'border-amber-100', iconBg: 'bg-amber-500', text: 'text-amber-900' },
-    blue: { bg: 'bg-blue-50', border: 'border-blue-100', iconBg: 'bg-blue-500', text: 'text-blue-900' },
-    teal: { bg: 'bg-teal-50', border: 'border-teal-100', iconBg: 'bg-teal-500', text: 'text-teal-900' },
-  };
-
-  return (
-    <div className="space-y-1">
-      {alerts.slice(0, 3).map((a, i) => {
-        const Icon = a.icon;
-        const t = toneMap[a.tone];
+      <defs>
+        <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#5eead4" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#5eead4" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      {yTicks.map((v, i) => {
+        const y = padT + (1 - v / max) * chartH;
         return (
-          <button
-            key={i}
-            onClick={() => nav(a.route, a.ctx)}
-            className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl ${t.bg} ${t.border} border active:scale-[0.98] transition-all text-left`}
-          >
-            <div className={`w-6 h-6 rounded-lg ${t.iconBg} flex items-center justify-center shrink-0`}>
-              <Icon className="w-3 h-3 text-white" strokeWidth={2.5} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className={`text-[10px] font-bold ${t.text} truncate`}>{a.title}</div>
-              <div className="text-[8px] text-slate-500 font-medium">{a.detail}</div>
-            </div>
-            <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
-          </button>
+          <g key={i}>
+            <line x1={padL} y1={y} x2={w - padR} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
+            <text x={padL - 4} y={y + 3} textAnchor="end" fill="rgba(255,255,255,0.45)" fontSize="9" fontWeight="500">
+              {v >= 1000 ? `${Math.round(v / 1000)}K` : v}
+            </text>
+          </g>
         );
       })}
-    </div>
+      {xTicks.map((hr) => {
+        const x = padL + (hr / 24) * chartW;
+        return (
+          <text key={hr} x={x} y={h - 5} textAnchor="middle" fill="rgba(255,255,255,0.45)" fontSize="9" fontWeight="500">
+            {String(hr).padStart(2, '0')}:00
+          </text>
+        );
+      })}
+      {areaD && <path d={areaD} fill="url(#heroGrad)" />}
+      {pathD && <path d={pathD} fill="none" stroke="#5eead4" strokeWidth="2" strokeLinecap="round" />}
+      {hp && (
+        <>
+          <line x1={hp.x} y1={padT} x2={hp.x} y2={padT + chartH} stroke="#5eead4" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.7" />
+          <circle cx={hp.x} cy={hp.y} r="4" fill="#fff" stroke="#0d9488" strokeWidth="2" />
+          <rect x={Math.min(Math.max(hp.x - 40, 2), w - 82)} y={hp.y - 28} width="80" height="22" rx="4" fill="rgba(0,0,0,0.85)" />
+          <text x={Math.min(Math.max(hp.x, 42), w - 42)} y={hp.y - 14} textAnchor="middle" fill="#5eead4" fontSize="10" fontWeight="700">
+            {formatCompactFCFA(hp.value)} - {String(hp.hour).padStart(2, '0')}h
+          </text>
+        </>
+      )}
+    </svg>
   );
 }
 
-function BusinessPulse({ stats, balanceHidden, nav }: any) {
-  const avgTicket = stats.todayCount > 0 ? Math.round(stats.todaySales / stats.todayCount) : 0;
-  const topSale = stats.recentSales.length > 0 ? stats.recentSales[0] : null;
+function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const max = Math.max(...data.map(d => d.total), 1);
+  const w = 280;
+  const h = 120;
+  const padL = 30;
+  const padB = 20;
+  const padT = 10;
+  const chartW = w - padL - 10;
+  const chartH = h - padB - padT;
+  const barGap = chartW / data.length;
+  const barW = barGap * 0.6;
+
+  const yTicks = [0, max * 0.33, max * 0.66, max];
 
   return (
-    <div
-      className="rounded-2xl overflow-hidden bg-white"
-      style={{ boxShadow: '0 1px 4px rgba(15,23,42,0.04)', border: '1px solid rgba(226,232,240,0.6)' }}
-    >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100/60">
-        <div className="flex items-center gap-1.5">
-          <Activity className="w-3 h-3 text-slate-500" />
-          <span className="text-[10px] font-bold text-slate-700">Santé business</span>
-        </div>
-        <button onClick={() => nav('sales')} className="text-[9px] font-bold text-brand-700 flex items-center gap-0.5">
-          Journal <ChevronRight className="w-2.5 h-2.5" />
-        </button>
-      </div>
-      <div className="grid grid-cols-2 divide-x divide-slate-100/60">
-        <div className="px-3 py-2">
-          <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Ticket moyen</div>
-          <div className="text-[13px] font-extrabold text-slate-900 num leading-tight mt-0.5">
-            {balanceHidden ? '•••' : formatFCFA(avgTicket)}
-          </div>
-        </div>
-        <div className="px-3 py-2">
-          <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Dernière vente</div>
-          <div className="text-[13px] font-extrabold text-slate-900 num leading-tight mt-0.5 truncate">
-            {topSale ? (balanceHidden ? '•••' : formatFCFA(topSale.total)) : '-'}
-          </div>
-        </div>
-      </div>
-      {topSale && (
-        <button
-          onClick={() => nav('sales')}
-          className="w-full flex items-center gap-2 px-3 py-1.5 border-t border-slate-100/60 active:bg-slate-50/50 text-left"
+    <div className="relative">
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 120 }}>
+        {yTicks.map((v, i) => {
+          const y = padT + (1 - v / max) * chartH;
+          return (
+            <g key={i}>
+              <line x1={padL} y1={y} x2={w - 10} y2={y} stroke="#e2e8f0" strokeWidth="0.5" />
+              <text x={padL - 4} y={y + 3} textAnchor="end" fill="#94a3b8" fontSize="8" fontWeight="500">
+                {v >= 1000 ? `${Math.round(v / 1000)}K` : Math.round(v)}
+              </text>
+            </g>
+          );
+        })}
+        {data.map((d, i) => {
+          const barH = (d.total / max) * chartH;
+          const x = padL + i * barGap + (barGap - barW) / 2;
+          const y = padT + chartH - barH;
+          const isHov = hover === i;
+          return (
+            <g key={i}>
+              <rect
+                x={x} y={y} width={barW} height={barH}
+                rx="3" fill={isHov ? '#0d9488' : '#0d9488'}
+                opacity={isHov ? 1 : 0.75}
+                className="transition-opacity duration-150"
+              />
+              <rect
+                x={padL + i * barGap} y={0} width={barGap} height={h}
+                fill="transparent"
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+                className="cursor-pointer"
+              />
+              <text x={x + barW / 2} y={h - 5} textAnchor="middle" fill="#64748b" fontSize="8" fontWeight="600">
+                {d.day}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      {hover !== null && (
+        <div
+          className="absolute pointer-events-none z-10 px-2 py-1 rounded bg-slate-900 text-white text-[10px] font-semibold shadow-lg"
+          style={{ left: `${((hover + 0.5) / data.length) * 100}%`, top: 0, transform: 'translateX(-50%)' }}
         >
-          <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center shrink-0">
-            <CheckCircle className="w-2.5 h-2.5 text-emerald-600" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold text-slate-700 truncate">
-              {topSale.customers?.name || 'Client comptoir'}
-            </div>
-          </div>
-          <div className="text-[9px] text-slate-400 font-medium shrink-0">
-            {getTimeAgo(topSale.created_at)}
-          </div>
-        </button>
+          {formatCompactFCFA(data[hover].total)}
+        </div>
       )}
     </div>
   );
 }
 
+function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav }: any) {
+  const { tenant, currentSite, sites } = useApp();
+  const netFlux = stats.cashBalance - stats.sessionExpenses;
 
-function FooterChip({ icon: Icon, value, label, onClick }: any) {
+  // ── Quick-action modal state ─────────────────────────────────────────────
+  type QAModal = 'customer' | 'supplier' | 'stock_in' | 'stock_out' | 'stock_transfer' | null;
+  const [qaModal, setQAModal] = useState<QAModal>(null);
+  const [qaSaving, setQASaving] = useState(false);
+
+  // Customer form
+  const [custForm, setCustForm] = useState<any>({ customer_type: 'particulier' });
+  // Supplier form
+  const [supForm, setSupForm] = useState<any>({ country: 'Sénégal' });
+  // Stock adj
+  const [stockRows, setStockRows] = useState<{ article_id: string; name: string; internal_ref: string; quantity: number }[]>([]);
+  const [adjArticleId, setAdjArticleId] = useState('');
+  const [adjQty, setAdjQty] = useState<number | ''>('');
+  const [adjNote, setAdjNote] = useState('');
+  const [adjTargetSite, setAdjTargetSite] = useState('');
+
+  const openModal = async (modal: QAModal) => {
+    setQASaving(false);
+    setCustForm({ customer_type: 'particulier' });
+    setSupForm({ country: 'Sénégal' });
+    setAdjQty(''); setAdjNote(''); setAdjTargetSite('');
+
+    if (modal === 'stock_in' || modal === 'stock_out' || modal === 'stock_transfer') {
+      if (tenant && currentSite) {
+        const [{ data: arts }, { data: stk }] = await Promise.all([
+          supabase.from('articles').select('id, name, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+          supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
+        ]);
+        const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
+        const rows = (arts || []).map((a: any) => ({ article_id: a.id, name: a.name, internal_ref: a.internal_ref, quantity: qmap.get(a.id) ?? 0 }));
+        setStockRows(rows);
+        if (rows.length > 0) setAdjArticleId(rows[0].article_id);
+      }
+    }
+    setQAModal(modal);
+  };
+
+  const saveCustomer = async () => {
+    if (!tenant || !custForm.name?.trim()) return;
+    setQASaving(true);
+    const { error } = await supabase.from('customers').insert({
+      tenant_id: tenant.id, name: custForm.name.trim(),
+      phone: custForm.phone || '', email: custForm.email || '',
+      address: custForm.address || '', whatsapp: custForm.whatsapp || '',
+      customer_type: custForm.customer_type || 'particulier', is_active: true,
+    });
+    setQASaving(false);
+    if (!error) { setQAModal(null); nav('tiers', { target: 'customers' }); }
+  };
+
+  const saveSupplier = async () => {
+    if (!tenant || !supForm.name?.trim()) return;
+    setQASaving(true);
+    const { error } = await supabase.from('suppliers').insert({
+      tenant_id: tenant.id, name: supForm.name.trim(),
+      contact: supForm.contact || '', phone: supForm.phone || '',
+      whatsapp: supForm.whatsapp || '', email: supForm.email || '',
+      address: supForm.address || '', country: supForm.country || 'Sénégal',
+      delivery_days: Number(supForm.delivery_days || 0),
+      payment_terms: supForm.payment_terms || '', is_active: true,
+    });
+    setQASaving(false);
+    if (!error) { setQAModal(null); nav('tiers', { target: 'suppliers' }); }
+  };
+
+  const saveStockAdj = async () => {
+    if (!tenant || !currentSite || !adjArticleId || adjQty === '' || Number(adjQty) <= 0) return;
+    setQASaving(true);
+    const movType = qaModal === 'stock_in' ? 'adjustment_in' : qaModal === 'stock_out' ? 'adjustment_out' : 'transfer_out';
+    if (qaModal === 'stock_transfer') {
+      if (!adjTargetSite) { setQASaving(false); return; }
+      await supabase.rpc('adjust_stock', { p_article_id: adjArticleId, p_site_id: currentSite.id, p_quantity: -Number(adjQty), p_movement_type: 'transfer_out', p_note: adjNote || 'Transfert' });
+      await supabase.rpc('adjust_stock', { p_article_id: adjArticleId, p_site_id: adjTargetSite, p_quantity: Number(adjQty), p_movement_type: 'transfer_in', p_note: adjNote || 'Transfert' });
+    } else {
+      const qty = qaModal === 'stock_in' ? Number(adjQty) : -Number(adjQty);
+      await supabase.rpc('adjust_stock', { p_article_id: adjArticleId, p_site_id: currentSite.id, p_quantity: qty, p_movement_type: movType, p_note: adjNote || undefined });
+    }
+    setQASaving(false);
+    setQAModal(null);
+  };
+
+  const adjRow = stockRows.find(r => r.article_id === adjArticleId);
+
   return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1.5 rounded-xl bg-white border border-slate-200/60 px-2 py-1.5 active:scale-[0.97] transition-all"
-      style={{ boxShadow: '0 1px 2px rgba(15,23,42,0.03)' }}
-    >
-      <Icon className="w-3 h-3 text-slate-400 shrink-0" />
-      <div className="flex-1 text-left min-w-0">
-        <div className="text-[12px] font-extrabold text-slate-900 num leading-none">{value}</div>
-        <div className="text-[8px] text-slate-400 font-semibold mt-0.5 truncate">{label}</div>
-      </div>
-    </button>
-  );
-}
+    <div className="space-y-3 animate-fade-in">
 
-function CashActivityCard({ stats, marginPct, nav }: { stats: Stats; marginPct: number; nav: (r: string) => void }) {
-  const netCash = stats.sessionCashIn - stats.sessionExpenses;
-  const avgTicket = stats.todayCount > 0 ? Math.round(stats.todaySales / stats.todayCount) : 0;
-
-  return (
-    <div
-      className="relative rounded-[20px] overflow-hidden bg-white flex-1 flex flex-col"
-      style={{
-        boxShadow: '0 2px 12px -4px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.03)',
-        border: '1px solid rgba(226,232,240,0.7)',
-      }}
-    >
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center">
-            <Wallet className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <div className="text-sm font-bold text-slate-900">Activité caisse</div>
-            <div className="text-xs text-slate-500 font-medium">
-              {stats.sessionInfo
-                ? `Session du ${new Date(stats.sessionInfo.openedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à ${new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
-                : 'Aucune session ouverte'}
-            </div>
-          </div>
-        </div>
-        <button onClick={() => nav('cash_history')} className="text-xs font-bold text-brand-700 hover:text-brand-800 flex items-center gap-1">
-          Historique <ChevronRight className="w-3.5 h-3.5" />
+      {/* Quick access bar - desktop header */}
+      <div className="grid grid-cols-4 xl:grid-cols-9 gap-1 py-1">
+        {/* Nouvelle vente — goes directly to POS counter */}
+        <button
+          onClick={() => nav('pos', { target: 'directPos' })}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-teal-50 active:scale-95 transition-all group border border-transparent hover:border-teal-200"
+        >
+          <ShoppingCart className="w-4 h-4 text-teal-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-teal-700 whitespace-nowrap">Ventes</span>
+        </button>
+        {/* Nouvelle commande fournisseur — opens full panel in SupplierOrders page */}
+        <button
+          onClick={() => nav('supplier_orders', { target: 'newOrder' })}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-orange-50 active:scale-95 transition-all group border border-transparent hover:border-orange-200"
+        >
+          <Truck className="w-4 h-4 text-orange-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-orange-700 whitespace-nowrap">Commande</span>
+        </button>
+        {/* Nouveau client */}
+        <button
+          onClick={() => openModal('customer')}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-emerald-50 active:scale-95 transition-all group border border-transparent hover:border-emerald-200"
+        >
+          <Users className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-emerald-700 whitespace-nowrap">Client</span>
+        </button>
+        {/* Nouveau fournisseur */}
+        <button
+          onClick={() => openModal('supplier')}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-cyan-50 active:scale-95 transition-all group border border-transparent hover:border-cyan-200"
+        >
+          <Truck className="w-4 h-4 text-cyan-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-cyan-700 whitespace-nowrap">Fournisseur</span>
+        </button>
+        {/* Nouvel article — opens full drawer in Articles page */}
+        <button
+          onClick={() => nav('articles', { target: 'newArticle' })}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-amber-50 active:scale-95 transition-all group border border-transparent hover:border-amber-200"
+        >
+          <Package className="w-4 h-4 text-amber-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-amber-700 whitespace-nowrap">Articles</span>
+        </button>
+        {/* Entrée stock */}
+        <button
+          onClick={() => openModal('stock_in')}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-green-50 active:scale-95 transition-all group border border-transparent hover:border-green-200"
+        >
+          <ArrowDownCircle className="w-4 h-4 text-green-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-green-700 whitespace-nowrap">Entrée stock</span>
+        </button>
+        {/* Sortie stock */}
+        <button
+          onClick={() => openModal('stock_out')}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-rose-50 active:scale-95 transition-all group border border-transparent hover:border-rose-200"
+        >
+          <ArrowUpCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-rose-700 whitespace-nowrap">Sortie stock</span>
+        </button>
+        {/* Transfert (multi-magasin) */}
+        {sites.length > 1 && (
+          <button
+            onClick={() => openModal('stock_transfer')}
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-blue-50 active:scale-95 transition-all group border border-transparent hover:border-blue-200"
+          >
+            <ArrowRightLeft className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="text-[11px] font-semibold text-slate-600 group-hover:text-blue-700 whitespace-nowrap">Transfert</span>
+          </button>
+        )}
+        {/* Rapport */}
+        <button
+          onClick={() => nav('reports')}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-slate-100 active:scale-95 transition-all group border border-transparent hover:border-slate-200"
+        >
+          <BarChart3 className="w-4 h-4 text-slate-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-slate-800 whitespace-nowrap">Rapport</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-2 divide-x divide-slate-100">
-        <div className="px-4 py-3">
-          <div className="flex items-center gap-1.5">
-            <ArrowUpRight className="w-3 h-3 text-emerald-600" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Entrées</span>
-          </div>
-          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1">{formatFCFA(stats.sessionCashIn)}</div>
-        </div>
-        <div className="px-4 py-3">
-          <div className="flex items-center gap-1.5">
-            <ArrowDownRight className="w-3 h-3 text-rose-600" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dépenses</span>
-          </div>
-          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1">{formatFCFA(stats.sessionExpenses)}</div>
-        </div>
-      </div>
+      {/* ── Quick-action modals ────────────────────────────────────────────── */}
 
-      <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100">
-        <div className="px-4 py-3">
-          <div className="flex items-center gap-1.5">
-            <Activity className="w-3 h-3 text-slate-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Flux net</span>
+      {/* Nouveau client */}
+      <Modal open={qaModal === 'customer'} onClose={() => setQAModal(null)} title="Nouveau client" size="sm"
+        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveCustomer} disabled={qaSaving || !custForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Créer le client</button></>}>
+        <div className="space-y-3">
+          <div>
+            <label className="label">Nom *</label>
+            <input value={custForm.name || ''} onChange={e => setCustForm((f: any) => ({ ...f, name: e.target.value }))} className="input" autoFocus={desktopAutoFocus} placeholder="Nom du client" />
           </div>
-          <div className={`text-[15px] font-extrabold num leading-tight mt-1 ${netCash >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-            {netCash >= 0 ? '+' : ''}{formatFCFA(netCash)}
-          </div>
-        </div>
-        <div className="px-4 py-3">
-          <div className="flex items-center gap-1.5">
-            <Receipt className="w-3 h-3 text-slate-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ticket moyen</span>
-          </div>
-          <div className="text-[15px] font-extrabold text-slate-900 num leading-tight mt-1">{formatFCFA(avgTicket)}</div>
-        </div>
-      </div>
-
-      <div className="px-4 py-3 bg-gradient-to-r from-slate-50/80 to-transparent border-t border-slate-100 flex items-center justify-between flex-1">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-xl bg-emerald-50 flex items-center justify-center">
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Type</label>
+              <select value={custForm.customer_type || 'particulier'} onChange={e => setCustForm((f: any) => ({ ...f, customer_type: e.target.value }))} className="input">
+                <option value="particulier">Particulier</option>
+                <option value="professionnel">Professionnel</option>
+                <option value="garage">Garage</option>
+                <option value="revendeur">Revendeur</option>
+                <option value="societe">Société</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Téléphone</label>
+              <input value={custForm.phone || ''} onChange={e => setCustForm((f: any) => ({ ...f, phone: e.target.value }))} className="input" placeholder="+221 77 000 00 00" />
+            </div>
           </div>
           <div>
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Marge du mois</div>
-            <div className="text-[13px] font-extrabold text-slate-900 num leading-tight">{marginPct}%</div>
+            <label className="label">WhatsApp</label>
+            <input value={custForm.whatsapp || ''} onChange={e => setCustForm((f: any) => ({ ...f, whatsapp: e.target.value }))} className="input" placeholder="+221 77 000 00 00" />
+          </div>
+          <div>
+            <label className="label">Adresse</label>
+            <input value={custForm.address || ''} onChange={e => setCustForm((f: any) => ({ ...f, address: e.target.value }))} className="input" />
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ventes</div>
-          <div className="text-[13px] font-extrabold text-slate-900 num leading-tight">{stats.todayCount}</div>
+      </Modal>
+
+      {/* Nouveau fournisseur */}
+      <Modal open={qaModal === 'supplier'} onClose={() => setQAModal(null)} title="Nouveau fournisseur" size="sm"
+        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveSupplier} disabled={qaSaving || !supForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Créer le fournisseur</button></>}>
+        <div className="space-y-3">
+          <div>
+            <label className="label">Nom *</label>
+            <input value={supForm.name || ''} onChange={e => setSupForm((f: any) => ({ ...f, name: e.target.value }))} className="input" autoFocus={desktopAutoFocus} placeholder="Nom du fournisseur" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Contact</label>
+              <input value={supForm.contact || ''} onChange={e => setSupForm((f: any) => ({ ...f, contact: e.target.value }))} className="input" />
+            </div>
+            <div>
+              <label className="label">Téléphone</label>
+              <input value={supForm.phone || ''} onChange={e => setSupForm((f: any) => ({ ...f, phone: e.target.value }))} className="input" placeholder="+221 33 000 00 00" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">WhatsApp</label>
+              <input value={supForm.whatsapp || ''} onChange={e => setSupForm((f: any) => ({ ...f, whatsapp: e.target.value }))} className="input" />
+            </div>
+            <div>
+              <label className="label">Pays</label>
+              <input value={supForm.country || 'Sénégal'} onChange={e => setSupForm((f: any) => ({ ...f, country: e.target.value }))} className="input" />
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Nouvel article — removed, now navigates to Articles page */}
+
+      {/* Entrée / Sortie stock */}
+      <Modal
+        open={qaModal === 'stock_in' || qaModal === 'stock_out'}
+        onClose={() => setQAModal(null)}
+        title={qaModal === 'stock_in' ? 'Entrée de stock' : 'Sortie de stock'}
+        size="sm"
+        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Valider</button></>}
+      >
+        <div className="space-y-3">
+          {adjRow && (
+            <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
+              <div className="text-[12px] font-semibold text-slate-900 truncate">{adjRow.name}</div>
+              <div className="text-[10px] text-slate-500 font-mono">{adjRow.internal_ref}</div>
+              <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-700">
+                Stock actuel : <span className="num">{adjRow.quantity}</span>
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="label">Article</label>
+            <select value={adjArticleId} onChange={e => setAdjArticleId(e.target.value)} className="input">
+              {stockRows.map(r => <option key={r.article_id} value={r.article_id}>{r.name} ({r.internal_ref})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Quantité</label>
+            <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
+          </div>
+          <div>
+            <label className="label">Note / motif</label>
+            <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="input" placeholder="Achat, retour, perte, correction…" />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Transfert stock */}
+      <Modal open={qaModal === 'stock_transfer'} onClose={() => setQAModal(null)} title="Transfert de stock" size="sm"
+        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0 || !adjTargetSite} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Transférer</button></>}>
+        <div className="space-y-3">
+          <div>
+            <label className="label">Article</label>
+            <select value={adjArticleId} onChange={e => setAdjArticleId(e.target.value)} className="input">
+              {stockRows.map(r => <option key={r.article_id} value={r.article_id}>{r.name} ({r.internal_ref})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Magasin de destination</label>
+            <select value={adjTargetSite} onChange={e => setAdjTargetSite(e.target.value)} className="input">
+              <option value="">— Choisir —</option>
+              {sites.filter((s: any) => s.id !== currentSite?.id).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Quantité à transférer</label>
+            <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input" autoFocus={desktopAutoFocus} />
+          </div>
+          <div>
+            <label className="label">Note</label>
+            <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="input" placeholder="Motif du transfert" />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Nouvelle commande — removed, now navigates to SupplierOrders page */}
+
+      {/* ══ ROW 1: Hero Card (left) | Alertes (right) ══ */}
+      <div className="grid grid-cols-12 gap-3 items-stretch">
+
+        {/* LEFT COLUMN: Hero */}
+        <div className="col-span-12 xl:col-span-8">
+
+        {/* HERO CARD - dark teal gradient, compact */}
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, #0c2e3d 0%, #0a3d45 40%, #0d4a4a 100%)',
+            boxShadow: '0 20px 40px -12px rgba(12, 46, 61, 0.5)',
+          }}
+        >
+          {/* Header + Amount */}
+          <div className="px-5 pt-3 pb-1">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-sm font-bold text-white/90">Encaissement du jour</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/10">
+                <span className="text-xs font-medium text-white/80">Période : Aujourd'hui</span>
+                <ChevronRight className="w-3 h-3 text-white/50 rotate-90" />
+              </div>
+            </div>
+            <div className="flex items-end gap-3">
+              <span className="text-3xl font-black text-white tracking-tight num">{formatFCFA(stats.todaySales)}</span>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${dayDelta >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                  {dayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {dayDelta >= 0 ? '+' : ''}{dayDelta}% vs hier
+                </span>
+                <span className="text-[10px] text-white/50">{stats.todayCount} tickets</span>
+                {dayMarginPct > 0 && <span className="text-[10px] text-white/50">Marge {dayMarginPct}%</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Chart - full width, edge to edge */}
+          <div style={{ height: 110 }}>
+            <HeroChart data={stats.hourlySales} />
+          </div>
+
+          {/* KPIs - 2 columns x 3 rows, same style as mobile */}
+          <div className="grid grid-cols-2 border-t border-white/10">
+            {/* Left column */}
+            <div className="border-r border-white/8">
+              <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                    <Wallet className="w-3 h-3 text-white/70" />
+                  </div>
+                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Solde caisse</span>
+                </div>
+                <span className="num text-xs font-black text-teal-300">{formatFCFA(stats.cashBalance)}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
+                    <ArrowUpLeft className="w-3 h-3 text-rose-300" />
+                  </div>
+                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Dépenses</span>
+                </div>
+                <span className="num text-xs font-black text-white/80">{formatFCFA(stats.sessionExpenses)}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
+                    <ArrowDownRight className="w-3 h-3 text-emerald-300" />
+                  </div>
+                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Entrées</span>
+                </div>
+                <span className="num text-xs font-black text-white/80">{formatFCFA(stats.sessionCashIn)}</span>
+              </div>
+            </div>
+            {/* Right column */}
+            <div>
+              <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(20,184,166,0.15)' }}>
+                    <ArrowUpRight className="w-3 h-3 text-teal-300" />
+                  </div>
+                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Net caisse</span>
+                </div>
+                <span className={`num text-xs font-black ${netFlux >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{formatFCFA(netFlux)}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(52,211,153,0.15)' }}>
+                    <TrendingUp className="w-3 h-3 text-emerald-300" />
+                  </div>
+                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Marge jour</span>
+                </div>
+                <span className="num text-xs font-black text-emerald-300">{formatFCFA(stats.todayMargin)}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <Receipt className="w-3 h-3 text-white/50" />
+                  </div>
+                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">CA du mois</span>
+                </div>
+                <span className="num text-xs font-black text-white/70">{formatFCFA(stats.monthSales)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        </div>{/* end LEFT COLUMN */}
+
+        {/* RIGHT COLUMN: Alertes & priorités - matches hero height */}
+        <div className="col-span-12 xl:col-span-4 relative">
+          {/* Alertes & priorités - intelligent */}
+          <div className="xl:absolute xl:inset-0 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center">
+                  <Bell className="w-3.5 h-3.5 text-white" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-800">Alertes & priorités</h3>
+              </div>
+              {stats.alerts.length > 0 && (
+                <span className="min-w-[22px] h-[22px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {stats.alerts.length}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-1 -mr-2 pr-2">
+              {stats.alerts.map((alert) => {
+                const severityMap = {
+                  critical: { bg: 'bg-rose-50', fg: 'text-rose-600', icon: AlertTriangle, dot: 'bg-rose-500' },
+                  warning: { bg: 'bg-amber-50', fg: 'text-amber-600', icon: AlertTriangle, dot: 'bg-amber-500' },
+                  info: { bg: 'bg-sky-50', fg: 'text-sky-600', icon: Activity, dot: 'bg-sky-500' },
+                };
+                const cfg = severityMap[alert.severity];
+                const Icon = cfg.icon;
+                return (
+                  <button
+                    key={alert.id}
+                    onClick={() => nav(alert.route, alert.routeCtx)}
+                    className="w-full flex items-start gap-2.5 py-2 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group"
+                  >
+                    <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                      <Icon className={`w-3.5 h-3.5 ${cfg.fg}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} flex-shrink-0`} />
+                        <p className="text-xs font-semibold text-slate-700 group-hover:text-teal-700 transition-colors">
+                          {alert.title}
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-slate-400 ml-3">{alert.detail}</p>
+                    </div>
+                    {alert.time && (
+                      <span className="text-[9px] text-slate-400 flex-shrink-0 mt-1">{getTimeAgo(alert.time)}</span>
+                    )}
+                    <ChevronRight className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors flex-shrink-0 mt-1" />
+                  </button>
+                );
+              })}
+              {stats.alerts.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <CheckCircle className="w-8 h-8 text-emerald-300 mb-2" />
+                  <p className="text-xs font-semibold text-emerald-600">Tout est en ordre</p>
+                  <p className="text-[10px] text-slate-400">Aucune alerte à signaler</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ══ ROW 2: Centre de commandes | Vue synthétique | Activité en temps réel ══ */}
+      <div className="grid grid-cols-12 gap-3 items-stretch" style={{ height: '380px' }}>
+
+        {/* Centre de commandes - intelligent */}
+        <div className="col-span-12 xl:col-span-4 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
+                <ShoppingCart className="w-3.5 h-3.5 text-white" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">Centre de commandes</h3>
+            </div>
+            <button onClick={() => nav('online_orders')} className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-0.5">
+              Tout <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          {/* Status pills */}
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="text-center py-2 px-1 rounded-lg bg-teal-50 border border-teal-100">
+              <p className="text-lg font-black text-teal-600 num">{stats.webNew}</p>
+              <p className="text-[8px] font-bold text-teal-600 uppercase">Nouvelles</p>
+            </div>
+            <div className="text-center py-2 px-1 rounded-lg bg-amber-50 border border-amber-100">
+              <p className="text-lg font-black text-amber-500 num">{stats.webPrep}</p>
+              <p className="text-[8px] font-bold text-amber-500 uppercase">Préparation</p>
+            </div>
+            <div className="text-center py-2 px-1 rounded-lg bg-emerald-50 border border-emerald-100">
+              <p className="text-lg font-black text-emerald-500 num">{stats.webReady}</p>
+              <p className="text-[8px] font-bold text-emerald-500 uppercase">Prêtes</p>
+            </div>
+          </div>
+          {/* Order list with details */}
+          <div className="flex-1 overflow-y-auto space-y-2 -mr-2 pr-2 min-h-0">
+            {stats.activeOrders.map((order) => {
+              const statusColors: Record<string, string> = {
+                nouvelle: 'bg-teal-100 text-teal-700',
+                en_preparation: 'bg-amber-100 text-amber-700',
+                prete: 'bg-emerald-100 text-emerald-700',
+              };
+              const statusLabels: Record<string, string> = {
+                nouvelle: 'Nouvelle',
+                en_preparation: 'En prep.',
+                prete: 'Prete',
+              };
+              return (
+                <button
+                  key={order.id}
+                  onClick={() => nav('online_orders')}
+                  className="w-full p-2.5 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50/30 active:scale-[0.98] transition-all text-left group"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800">#{order.orderNumber}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${statusColors[order.status] || 'bg-slate-100 text-slate-600'}`}>
+                        {statusLabels[order.status] || order.status}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">{getTimeAgo(order.createdAt)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[11px] font-semibold text-slate-700">{order.customerName}</span>
+                    {order.customerPhone && <span className="text-[10px] text-slate-400">{order.customerPhone}</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    {order.deliveryMode === 'livraison' ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 text-[9px] font-semibold text-sky-700">
+                        <Truck className="w-2.5 h-2.5" /> Livraison
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-[9px] font-semibold text-slate-600">
+                        <Package className="w-2.5 h-2.5" /> Retrait
+                      </span>
+                    )}
+                    {order.deliveryMode === 'livraison' && order.deliveryAddress && (
+                      <span className="text-[9px] text-slate-400">{order.deliveryAddress}</span>
+                    )}
+                    <span className="ml-auto text-[11px] font-bold text-slate-800 num">{formatCompactFCFA(order.total)}</span>
+                  </div>
+                  {order.items.length > 0 && (
+                    <div className="mt-1 pt-1.5 border-t border-dashed border-slate-100">
+                      {order.items.slice(0, 3).map((item, i) => (
+                        <div key={i} className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-500">{item.qty}x {item.name}</span>
+                          <span className="text-slate-400 num">{formatCompactFCFA(item.price * item.qty)}</span>
+                        </div>
+                      ))}
+                      {order.items.length > 3 && (
+                        <p className="text-[9px] text-slate-400 mt-0.5">+{order.items.length - 3} autres articles</p>
+                      )}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+            {stats.activeOrders.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <ShoppingCart className="w-8 h-8 text-slate-200 mb-2" />
+                <p className="text-xs text-slate-400">Aucune commande en cours</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Vue synthétique - interactive */}
+        <div className="col-span-12 xl:col-span-4 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center">
+                <Activity className="w-3.5 h-3.5 text-white" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">Vue synthétique</h3>
+            </div>
+            <span className="text-[10px] font-medium text-slate-400">Aujourd'hui</span>
+          </div>
+          <div className="space-y-1.5 flex-1 overflow-y-auto min-h-0">
+            {[
+              { icon: Wallet, label: 'Encaissements', value: formatCompactFCFA(stats.todaySales), sub: `${stats.todayCount} ventes`, color: 'text-teal-600 bg-teal-50', route: 'sales' },
+              { icon: ArrowUpLeft, label: 'Dépenses', value: formatCompactFCFA(stats.sessionExpenses), sub: 'Session en cours', color: 'text-rose-600 bg-rose-50', route: 'pos' },
+              { icon: CreditCard, label: 'Créances clients', value: formatCompactFCFA(stats.receivables), sub: `${stats.customersCount} clients`, color: 'text-sky-600 bg-sky-50', route: 'tiers' },
+              { icon: Truck, label: 'Dettes fournisseurs', value: formatCompactFCFA(stats.payables), sub: `${stats.suppliersCount} fournisseurs`, color: 'text-orange-600 bg-orange-50', route: 'supplier_orders' },
+              { icon: ArrowUpRight, label: 'Entrées stock', value: `${stats.stockInToday} articles`, sub: 'Achats & ajustements', color: 'text-emerald-600 bg-emerald-50', route: 'stock' },
+              { icon: ArrowDownRight, label: 'Sorties stock', value: `${stats.stockOutToday} articles`, sub: 'Ventes & ajustements', color: 'text-amber-600 bg-amber-50', route: 'stock' },
+              { icon: TrendingUp, label: 'Marge du jour', value: `${dayMarginPct}%`, sub: formatCompactFCFA(stats.todayMargin), color: 'text-teal-600 bg-teal-50', route: 'reports' },
+              { icon: FileText, label: 'Devis en attente', value: String(stats.pendingQuotes), sub: 'À convertir', color: 'text-cyan-600 bg-cyan-50', route: 'sales' },
+            ].map((item) => (
+              <button
+                key={item.label}
+                onClick={() => nav(item.route)}
+                className="w-full flex items-center justify-between py-2 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.color}`}>
+                    <item.icon className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-semibold text-slate-700 group-hover:text-teal-700 transition-colors">{item.label}</p>
+                    <p className="text-[10px] text-slate-400">{item.sub}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-900 num">{item.value}</span>
+                  <ChevronRight className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Activité en temps réel */}
+        <div className="col-span-12 xl:col-span-4 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center">
+                <Clock className="w-3.5 h-3.5 text-white" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">Activité en temps réel</h3>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] font-medium text-emerald-600">Live</span>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-1 -mr-2 pr-2 min-h-0">
+            {stats.recentActivities.map((act) => {
+              const iconMap: Record<ActivityItem['type'], { icon: typeof Receipt; bg: string; fg: string }> = {
+                sale: { icon: Receipt, bg: 'bg-emerald-50', fg: 'text-emerald-600' },
+                quote: { icon: ClipboardList, bg: 'bg-sky-50', fg: 'text-sky-600' },
+                supplier_order: { icon: Truck, bg: 'bg-orange-50', fg: 'text-orange-600' },
+                payment_received: { icon: Banknote, bg: 'bg-teal-50', fg: 'text-teal-600' },
+                online_order: { icon: Globe, bg: 'bg-cyan-50', fg: 'text-cyan-600' },
+                stock_movement: { icon: RefreshCw, bg: 'bg-slate-100', fg: 'text-slate-600' },
+                return: { icon: RotateCcw, bg: 'bg-rose-50', fg: 'text-rose-500' },
+              };
+              const cfg = iconMap[act.type];
+              const Icon = cfg.icon;
+              const timeStr = getTimeAgo(act.time);
+              return (
+                <button
+                  key={act.id}
+                  onClick={() => nav(act.route, act.routeCtx)}
+                  className="w-full flex items-center gap-2.5 py-2 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group"
+                >
+                  <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center flex-shrink-0`}>
+                    <Icon className={`w-3.5 h-3.5 ${cfg.fg}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-700 group-hover:text-teal-700 transition-colors">
+                      {act.title}
+                    </p>
+                    <p className="text-[10px] text-slate-400">{act.detail}</p>
+                  </div>
+                  <div className="flex flex-col items-end flex-shrink-0">
+                    {act.amount !== null && (
+                      <span className={`text-[11px] font-bold num ${
+                        act.amountType === 'positive' ? 'text-emerald-600' :
+                        act.amountType === 'negative' ? 'text-rose-500' : 'text-slate-600'
+                      }`}>
+                        {act.amountType === 'positive' ? '+' : act.amountType === 'negative' ? '-' : ''}{formatCompactFCFA(Math.abs(act.amount))}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-slate-400">{timeStr}</span>
+                  </div>
+                  <ChevronRight className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors flex-shrink-0" />
+                </button>
+              );
+            })}
+            {stats.recentActivities.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Activity className="w-8 h-8 text-slate-200 mb-2" />
+                <p className="text-xs text-slate-400">Aucune activité récente</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
     </div>
   );
-}
-
-function getTimeAgo(dateStr: string): string {
-  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
-  if (diff < 60) return "à l'instant";
-  if (diff < 3600) return `${Math.floor(diff / 60)}min`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }

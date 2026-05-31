@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
   X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
-  ShoppingBag, Check, Filter, Printer
+  ShoppingBag, Check, Filter, Printer, Tag, Trash2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -21,11 +21,11 @@ import type { Customer } from '../lib/types';
 type Supplier = {
   id: string; tenant_id: string; name: string; contact: string;
   phone: string; whatsapp: string; email: string; address: string; country: string;
-  delivery_days: number; payment_terms: string; is_active: boolean;
+  delivery_days: number; payment_terms: string; credit_limit: number; credit_blocked: boolean; is_active: boolean;
 };
 
 type TabKey = 'all' | 'customers' | 'suppliers';
-type CustomerOptionKey = 'info' | 'payment' | 'docs' | null;
+type CustomerOptionKey = 'info' | 'payment' | 'docs' | 'pricing' | null;
 type SupplierOptionKey = 'info' | 'payment' | 'docs' | 'articles' | null;
 
 export function Tiers() {
@@ -169,6 +169,8 @@ export function Tiers() {
       email: custForm.email || '', address: custForm.address || '',
       whatsapp: custForm.whatsapp || '',
       customer_type: custForm.customer_type || 'particulier',
+      credit_limit: Number(custForm.credit_limit || 0),
+      credit_blocked: custForm.credit_blocked === true,
       is_active: custEdit ? custForm.is_active !== false : true,
     };
     const { error: e } = custEdit
@@ -198,6 +200,8 @@ export function Tiers() {
       address: supForm.address || '', country: supForm.country || 'Sénégal',
       delivery_days: Number(supForm.delivery_days || 0),
       payment_terms: supForm.payment_terms || '',
+      credit_limit: Number((supForm as any).credit_limit || 0),
+      credit_blocked: (supForm as any).credit_blocked === true,
       is_active: supEdit ? supForm.is_active : true,
     };
     const { error: e } = supEdit
@@ -420,6 +424,17 @@ export function Tiers() {
             <Field label="Email" full><input type="email" value={custForm.email || ''} onChange={e => setCustForm((f: any) => ({ ...f, email: e.target.value }))} className="input" /></Field>
             <Field label="Adresse" full><input value={custForm.address || ''} onChange={e => setCustForm((f: any) => ({ ...f, address: e.target.value }))} className="input" /></Field>
           </FieldSection>
+          <FieldSection title="Solvabilité / Crédit">
+            <Field label="Plafond crédit (FCFA)">
+              <input type="number" min={0} value={custForm.credit_limit ?? 0} onChange={e => setCustForm((f: any) => ({ ...f, credit_limit: Number(e.target.value) }))} className="input" placeholder="0 = illimité" />
+            </Field>
+            <Field label="Bloquer le crédit">
+              <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
+                <input type="checkbox" checked={custForm.credit_blocked === true} onChange={e => setCustForm((f: any) => ({ ...f, credit_blocked: e.target.checked }))} className="w-4 h-4" />
+                <span className="text-sm text-slate-700">Ventes à crédit bloquées</span>
+              </label>
+            </Field>
+          </FieldSection>
         </div>
       </Modal>
 
@@ -447,6 +462,15 @@ export function Tiers() {
           <FieldSection title="Conditions commerciales">
             <Field label="Délai livraison (jours)"><input type="number" value={supForm.delivery_days ?? ''} onChange={e => setSupForm(f => ({ ...f, delivery_days: Number(e.target.value) }))} className="input" min={0} /></Field>
             <Field label="Conditions de paiement"><input value={supForm.payment_terms || ''} onChange={e => setSupForm(f => ({ ...f, payment_terms: e.target.value }))} className="input" placeholder="30 jours, comptant…" /></Field>
+            <Field label="Plafond crédit (FCFA)">
+              <input type="number" min={0} value={(supForm as any).credit_limit ?? 0} onChange={e => setSupForm(f => ({ ...f, credit_limit: Number(e.target.value) } as any))} className="input" placeholder="0 = illimité" />
+            </Field>
+            <Field label="Bloquer le crédit">
+              <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
+                <input type="checkbox" checked={(supForm as any).credit_blocked === true} onChange={e => setSupForm(f => ({ ...f, credit_blocked: e.target.checked } as any))} className="w-4 h-4" />
+                <span className="text-sm text-slate-700">Commandes à crédit bloquées</span>
+              </label>
+            </Field>
           </FieldSection>
         </div>
       </Modal>
@@ -461,6 +485,7 @@ export function Tiers() {
           onDeactivate={(optCust as any).is_active !== false ? () => { const c = optCust; setOptCust(null); setToDeactivateCust(c); } : undefined}
           actions={[
             { icon: Info, label: 'Interroger le compte', desc: 'Solde, totaux et historique rapide', onClick: () => { setCustView({ c: optCust, key: 'info' }); setOptCust(null); } },
+            { icon: Tag, label: 'Tarifs d\'exception', desc: 'Prix spéciaux par article', onClick: () => { setCustView({ c: optCust, key: 'pricing' }); setOptCust(null); } },
             { icon: Wallet, label: 'Saisir un règlement', desc: 'Encaissement + imputation facture', onClick: () => { setCustView({ c: optCust, key: 'payment' }); setOptCust(null); } },
             { icon: FileText, label: 'Documents de ventes', desc: 'Factures filtrées par période', onClick: () => { setCustView({ c: optCust, key: 'docs' }); setOptCust(null); } },
           ]}
@@ -564,6 +589,11 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClic
       {list.map(c => {
         const due = dueMap[c.id] || 0;
         const inactive = (c as any).is_active === false;
+        const limit = Number((c as any).credit_limit || 0);
+        const blocked = (c as any).credit_blocked === true;
+        const balance = Number((c as any).balance || 0);
+        const nearLimit = limit > 0 && balance >= limit * 0.8;
+        const overLimit = limit > 0 && balance >= limit;
         return (
           <button
             key={c.id}
@@ -574,7 +604,12 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClic
               {c.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-slate-900">{c.name}</div>
+              <div className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                {c.name}
+                {blocked && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
+                {!blocked && overLimit && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
+                {!blocked && nearLimit && !overLimit && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
+              </div>
               {c.phone && (
                 <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
                   <Phone className="w-3 h-3 shrink-0" />{c.phone}
@@ -900,7 +935,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     });
   };
 
-  const modalTitle = key === 'info' ? 'Compte client' : key === 'payment' ? 'Saisir un règlement' : 'Documents de ventes';
+  const modalTitle = key === 'info' ? 'Compte client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
 
   return (
     <Modal open onClose={onClose} title={modalTitle} size="lg" layer="top"
@@ -919,15 +954,18 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
             {key === 'info' && 'Compte client · débit / crédit'}
             {key === 'payment' && 'Encaissement avec imputation'}
             {key === 'docs' && 'Documents de ventes · statistiques'}
+            {key === 'pricing' && 'Prix spéciaux par article'}
           </div>
+          {key !== 'pricing' && (
           <div className={`text-right ${totals.due > 0 ? 'text-amber-700' : totals.due < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
             <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">{totals.due < 0 ? 'Avoir' : 'Solde dû'}</div>
             <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(Math.abs(totals.due))}</div>
           </div>
+          )}
         </div>
       </div>
 
-      {loading ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div> : (
+      {loading && key !== 'pricing' ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div> : (
         <>
           {key === 'info' && (
             <LedgerView customerName={c.name} ledger={ledger} totalDebit={totals.total} totalCredit={totals.paid} balance={totals.due}
@@ -955,6 +993,10 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
               onClearDates={() => { setDateFrom(''); setDateTo(''); }}
               onOpenInvoice={openInvoice}
             />
+          )}
+
+          {key === 'pricing' && (
+            <ExceptionPricingView customerId={c.id} />
           )}
         </>
       )}
@@ -2109,4 +2151,132 @@ function StatusBadgeOrder({ order }: { order: any }) {
   if (paid >= total && total > 0) return <Badge tone="emerald">Réglée</Badge>;
   if (paid > 0) return <Badge tone="amber">Partielle</Badge>;
   return <Badge tone="sky">Ouverte</Badge>;
+}
+
+function ExceptionPricingView({ customerId }: { customerId: string }) {
+  const { tenant } = useApp();
+  const { success, error } = useToast();
+  const [prices, setPrices] = useState<any[]>([]);
+  const [articles, setArticles] = useState<{ id: string; name: string; internal_ref: string; sale_price: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const [newArticleId, setNewArticleId] = useState('');
+  const [newPrice, setNewPrice] = useState<number | ''>('');
+  const [newNote, setNewNote] = useState('');
+
+  const load = async () => {
+    if (!tenant) return;
+    setLoading(true);
+    const [{ data: ep }, { data: arts }] = await Promise.all([
+      supabase.from('customer_exception_prices').select('*, articles(name, internal_ref, sale_price)').eq('tenant_id', tenant.id).eq('customer_id', customerId).order('created_at', { ascending: false }),
+      supabase.from('articles').select('id, name, internal_ref, sale_price').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+    ]);
+    setPrices(ep || []);
+    setArticles(arts || []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [customerId]);
+
+  const addPrice = async () => {
+    if (!tenant || !newArticleId || newPrice === '' || Number(newPrice) < 0) return;
+    setSaving(true);
+    const { error: e } = await supabase.from('customer_exception_prices').upsert({
+      tenant_id: tenant.id,
+      customer_id: customerId,
+      article_id: newArticleId,
+      exception_price: Number(newPrice),
+      note: newNote,
+    }, { onConflict: 'tenant_id,customer_id,article_id' });
+    setSaving(false);
+    if (e) error(e.message);
+    else { success('Tarif ajouté'); setNewArticleId(''); setNewPrice(''); setNewNote(''); load(); }
+  };
+
+  const removePrice = async (id: string) => {
+    await supabase.from('customer_exception_prices').delete().eq('id', id);
+    success('Tarif supprimé');
+    load();
+  };
+
+  const existingArticleIds = new Set(prices.map((p: any) => p.article_id));
+  const availableArticles = articles.filter(a => !existingArticleIds.has(a.id));
+  const filteredAvailable = search
+    ? availableArticles.filter(a => a.name.toLowerCase().includes(search.toLowerCase()) || a.internal_ref.toLowerCase().includes(search.toLowerCase()))
+    : availableArticles;
+
+  if (loading) return <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>;
+
+  return (
+    <div className="space-y-4">
+      {/* Add new exception price */}
+      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ajouter un tarif d'exception</div>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_1fr_auto] gap-2 items-end">
+          <div>
+            <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Article</label>
+            <select value={newArticleId} onChange={e => {
+              setNewArticleId(e.target.value);
+              const art = articles.find(a => a.id === e.target.value);
+              if (art && newPrice === '') setNewPrice(art.sale_price);
+            }} className="input text-xs">
+              <option value="">— Choisir un article —</option>
+              {filteredAvailable.slice(0, 100).map(a => (
+                <option key={a.id} value={a.id}>{a.name} ({a.internal_ref}) — {formatFCFA(a.sale_price)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Prix spécial</label>
+            <input type="number" min={0} value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="input text-xs" placeholder="FCFA" />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Note</label>
+            <input value={newNote} onChange={e => setNewNote(e.target.value)} className="input text-xs" placeholder="Optionnelle" />
+          </div>
+          <button onClick={addPrice} disabled={saving || !newArticleId || newPrice === ''} className="btn-primary text-xs h-9 px-3 whitespace-nowrap">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+            Ajouter
+          </button>
+        </div>
+      </div>
+
+      {/* Existing exception prices */}
+      {prices.length === 0 ? (
+        <div className="text-center py-6 text-slate-400 text-sm">
+          Aucun tarif d'exception configuré pour ce client.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-1">
+            {prices.length} tarif{prices.length > 1 ? 's' : ''} configuré{prices.length > 1 ? 's' : ''}
+          </div>
+          {prices.map((p: any) => {
+            const art = p.articles;
+            const normalPrice = art?.sale_price || 0;
+            const diff = Number(p.exception_price) - normalPrice;
+            const pct = normalPrice > 0 ? ((diff / normalPrice) * 100).toFixed(1) : '0';
+            return (
+              <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-900 truncate">{art?.name || 'Article supprimé'}</div>
+                  <div className="text-[10px] text-slate-400 font-mono">{art?.internal_ref || '-'}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-xs font-bold text-slate-900 num">{formatFCFA(p.exception_price)}</div>
+                  <div className={`text-[10px] font-semibold ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                    {diff < 0 ? '' : '+'}{pct}% vs {formatFCFA(normalPrice)}
+                  </div>
+                </div>
+                {p.note && <div className="text-[10px] text-slate-400 max-w-[80px] truncate shrink-0" title={p.note}>{p.note}</div>}
+                <button onClick={() => removePrice(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }

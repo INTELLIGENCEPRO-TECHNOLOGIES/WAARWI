@@ -12,6 +12,7 @@ export type TenantBranding = {
   phone: string | null;
   address: string | null;
   tagline: string | null;
+  login_bg_url: string | null;
 };
 
 const APP_ROOT_HOSTS = new Set([

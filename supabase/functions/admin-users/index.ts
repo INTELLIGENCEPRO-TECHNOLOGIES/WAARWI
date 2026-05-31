@@ -405,12 +405,13 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "update_login_config") {
-      const { headline, headline_accent, subtitle, modules } = body;
+      const { headline, headline_accent, subtitle, modules, login_bg_url } = body;
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: caller.id };
       if (headline !== undefined) patch.headline = headline;
       if (headline_accent !== undefined) patch.headline_accent = headline_accent;
       if (subtitle !== undefined) patch.subtitle = subtitle;
       if (modules !== undefined) patch.modules = modules;
+      if (login_bg_url !== undefined) patch.login_bg_url = login_bg_url;
       const { data, error } = await admin.from("platform_login_config").update(patch).eq("id", "default").select().maybeSingle();
       if (error) return json({ error: error.message }, 400);
       await logEvent("login_config.update", null, patch);

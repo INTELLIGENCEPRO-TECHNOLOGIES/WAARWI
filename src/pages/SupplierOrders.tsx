@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   Plus, ShoppingBag, Loader2, Search, RefreshCw,
   CheckCircle, Check, Truck, Trash2, X, Car, Package, Calendar,
-  User, Minus, ChevronRight, FileText, Printer, MessageCircle, Pencil, Link2,
+  User, Minus, ChevronRight, FileText, Printer, MessageCircle, Pencil, Link2, GripVertical,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { Modal, ConfirmDialog } from '../components/Modal';
+import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
@@ -67,6 +67,9 @@ export function SupplierOrders() {
   const [receiveQty, setReceiveQty] = useState<Record<string, number>>({});
   const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
   const [flashList, setFlashList] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editingOrder, setEditingOrder] = useState<SupplierOrder | null>(null);
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
 
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [articles, setArticles] = useState<any[]>([]);
@@ -99,11 +102,14 @@ export function SupplierOrders() {
       setFlashList(true);
       setTimeout(() => setFlashList(false), 6800);
     }
+    if (ctx.target === 'newOrder') {
+      setOpen(true);
+    }
   }, []);
   useEffect(() => {
     if (!tenant) return;
     Promise.all([
-      supabase.from('suppliers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+      supabase.from('suppliers').select('id, name, phone, balance, credit_limit, credit_blocked').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
       supabase.from('articles').select('id, name, purchase_price, supplier_ref, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(500),
     ]).then(([{ data: s }, { data: a }]) => { setSuppliers(s || []); setArticles(a || []); });
   }, [tenant?.id]);
@@ -152,35 +158,101 @@ export function SupplierOrders() {
     if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
     if (!form.supplier_id) { error('Sélectionnez un fournisseur'); return; }
     if (orderItems.every(i => !i.name.trim())) { error('Ajoutez au moins un article'); return; }
-    setSaving(true);
-    const { data: numData } = await supabase.rpc('next_doc_number', {
-      p_tenant_id: tenant.id, p_kind: 'supplier_order', p_prefix: 'CMD',
-    });
-    const oNum = (numData as string) || ('CMD-' + Date.now());
-    const { data: o, error: e } = await supabase.from('supplier_orders').insert({
-      tenant_id: tenant.id, site_id: currentSite.id,
-      supplier_id: form.supplier_id,
-      order_number: oNum, subtotal, discount: 0, total: subtotal,
-      expected_date: form.expected_date || null, note: form.note, status: 'draft',
-    }).select().single();
-    if (e || !o) { error(e?.message || 'Erreur'); setSaving(false); return; }
     const validItems = orderItems.filter(i => i.name.trim());
-    await supabase.from('supplier_order_items').insert(validItems.map(i => ({
-      tenant_id: tenant.id, order_id: o.id,
-      article_id: i.article_id || null, name: i.name, supplier_ref: i.supplier_ref,
-      quantity_ordered: i.quantity_ordered, quantity_received: 0,
-      unit_price: i.unit_price, total: i.total,
-    })));
-    setSaving(false);
-    success('Commande créée'); setOpen(false);
-    setOrderItems([{ article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }]);
-    setForm({ supplier_id: '', expected_date: '', note: '' });
-    load();
+    const total = validItems.reduce((s, i) => s + Number(i.total), 0);
+    if (!editingOrderId) {
+      const { data: freshSup } = await supabase
+        .from('suppliers')
+        .select('id, balance, credit_limit, credit_blocked')
+        .eq('id', form.supplier_id)
+        .maybeSingle();
+      if (freshSup) {
+        if (freshSup.credit_blocked === true) {
+          error('Commandes à crédit bloquées pour ce fournisseur');
+          return;
+        }
+        const limit = Number(freshSup.credit_limit || 0);
+        if (limit > 0) {
+          const { data: outstanding } = await supabase
+            .from('supplier_orders')
+            .select('total')
+            .eq('supplier_id', form.supplier_id)
+            .eq('tenant_id', tenant.id)
+            .not('status', 'in', '("cancelled","received")');
+          const currentDebt = (outstanding || []).reduce((s: number, o: any) => s + Number(o.total || 0), 0);
+          if ((currentDebt + total) > limit) {
+            error(`Plafond crédit fournisseur dépassé (${formatFCFA(limit)}). Encours actuel : ${formatFCFA(currentDebt)}`);
+            return;
+          }
+        }
+      }
+    }
+    setSaving(true);
+
+    if (editingOrderId) {
+      await supabase.from('supplier_orders').update({
+        supplier_id: form.supplier_id,
+        subtotal: total, total,
+        expected_date: form.expected_date || null, note: form.note,
+      }).eq('id', editingOrderId);
+      await supabase.from('supplier_order_items').delete().eq('order_id', editingOrderId);
+      await supabase.from('supplier_order_items').insert(validItems.map(i => ({
+        tenant_id: tenant.id, order_id: editingOrderId,
+        article_id: i.article_id || null, name: i.name, supplier_ref: i.supplier_ref,
+        quantity_ordered: i.quantity_ordered, quantity_received: 0,
+        unit_price: i.unit_price, total: i.total,
+      })));
+      setSaving(false);
+      success('Commande mise à jour'); closeOrderPanel();
+      load();
+    } else {
+      const { data: numData } = await supabase.rpc('next_doc_number', {
+        p_tenant_id: tenant.id, p_kind: 'supplier_order', p_prefix: 'CMD',
+      });
+      const oNum = (numData as string) || ('CMD-' + Date.now());
+      const { data: o, error: e } = await supabase.from('supplier_orders').insert({
+        tenant_id: tenant.id, site_id: currentSite.id,
+        supplier_id: form.supplier_id,
+        order_number: oNum, subtotal: total, discount: 0, total,
+        expected_date: form.expected_date || null, note: form.note, status: 'draft',
+      }).select().single();
+      if (e || !o) { error(e?.message || 'Erreur'); setSaving(false); return; }
+      await supabase.from('supplier_order_items').insert(validItems.map(i => ({
+        tenant_id: tenant.id, order_id: o.id,
+        article_id: i.article_id || null, name: i.name, supplier_ref: i.supplier_ref,
+        quantity_ordered: i.quantity_ordered, quantity_received: 0,
+        unit_price: i.unit_price, total: i.total,
+      })));
+      setEditingOrderId(o.id);
+      setSaving(false);
+      success('Commande créée'); closeOrderPanel();
+      load();
+    }
   };
 
-  const openDetail = async (o: SupplierOrder) => {
+  const closeOrderPanel = () => {
+    setOpen(false);
+    setEditingOrderId(null);
+    setEditingOrder(null);
+    setOrderItems([{ article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }]);
+    setForm({ supplier_id: '', expected_date: '', note: '' });
+  };
+
+  const openOrderForEdit = async (o: SupplierOrder) => {
+    const { data } = await supabase.from('supplier_order_items').select('*, articles(internal_ref, oem_ref)').eq('order_id', o.id);
+    setEditingOrderId(o.id);
+    setEditingOrder(o);
+    setForm({ supplier_id: o.supplier_id || '', expected_date: o.expected_date || '', note: (o as any).note || '' });
+    setOrderItems((data || []).map((i: any) => ({
+      article_id: i.article_id || '', name: i.name, supplier_ref: i.supplier_ref || '',
+      quantity_ordered: Number(i.quantity_ordered), unit_price: Number(i.unit_price), total: Number(i.total),
+    })));
+    setOpen(true);
+  };
+
+  const openDetailPanel = async (o: SupplierOrder, forceReceive = false) => {
     setSelected(o); setDetailOpen(true);
-    setEditMode(false); setReceiveMode(false);
+    setEditMode(false); setReceiveMode(forceReceive);
     const [{ data: itemsData }, { data: supData }] = await Promise.all([
       supabase.from('supplier_order_items').select('*, articles(internal_ref, oem_ref)').eq('order_id', o.id),
       supabase.from('suppliers').select('*').eq('id', (o as any).supplier_id || '').maybeSingle(),
@@ -193,6 +265,18 @@ export function SupplierOrders() {
       rq[it.id] = remaining;
     });
     setReceiveQty(rq);
+  };
+
+  const openDetail = async (o: SupplierOrder) => {
+    if (isDesktop && ['draft', 'sent', 'confirmed', 'partial'].includes(o.status)) {
+      openOrderForEdit(o);
+    } else {
+      await openDetailPanel(o);
+    }
+  };
+
+  const openReceive = async (o: SupplierOrder) => {
+    await openDetailPanel(o, true);
   };
 
   const tenantForPrint = (): PrintTenant => {
@@ -489,7 +573,7 @@ export function SupplierOrders() {
                     )}
                     {canReceive && (
                       <button
-                        onClick={e => { e.stopPropagation(); openDetail(o); }}
+                        onClick={e => { e.stopPropagation(); openReceive(o); }}
                         className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600 transition"
                         title="Réceptionner"
                       ><Truck className="w-3.5 h-3.5" /></button>
@@ -510,9 +594,39 @@ export function SupplierOrders() {
         </div>
       )}
 
-      {/* Create modal */}
+      {/* Create/Edit - full screen panel on desktop */}
+      {open && isDesktop && (
+        <SupplierOrderFullPanel
+          suppliers={suppliers}
+          articles={articles}
+          form={form}
+          setForm={setForm}
+          orderItems={orderItems}
+          setOrderItems={setOrderItems}
+          updateItem={updateItem}
+          incQty={incQty}
+          subtotal={subtotal}
+          totalItems={totalItems}
+          saving={saving}
+          save={save}
+          onClose={closeOrderPanel}
+          autoMode={autoMode}
+          onVehiclePicker={() => setVehiclePickerOpen(true)}
+          editingOrderId={editingOrderId}
+          editingOrder={editingOrder}
+          onPrint={() => {
+            if (!editingOrder || !tenant) return;
+            const items = orderItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: i.supplier_ref || null, oem_ref: null, quantity: Number(i.quantity_ordered), unit_price: Number(i.unit_price), discount: 0 }));
+            printDocumentA4({ tenant: tenantForPrint(), docLabel: 'BON DE COMMANDE', docNumber: editingOrder.order_number, docDate: formatDate(editingOrder.created_at), customer: editingOrder.suppliers ? { name: editingOrder.suppliers.name } : null, items, subtotal: items.reduce((s, i) => s + i.quantity * i.unit_price, 0), total: items.reduce((s, i) => s + i.quantity * i.unit_price, 0), footerNote: 'Merci de confirmer réception et délai de livraison.' });
+          }}
+          onChangeStatus={(status: string) => { if (editingOrder) { changeStatus(editingOrder, status); setEditingOrder({ ...editingOrder, status }); } }}
+        />
+      )}
+
+      {/* Create modal - mobile only */}
+      {open && !isDesktop && (
       <Modal
-        open={open}
+        open={true}
         onClose={() => setOpen(false)}
         title="Nouvelle commande fournisseur"
         size="lg"
@@ -530,143 +644,57 @@ export function SupplierOrders() {
         }
       >
         <div className="space-y-3">
-          {/* Supplier + date */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className="label">Fournisseur *</label>
-              <select
-                value={form.supplier_id}
-                onChange={e => setForm(f => ({ ...f, supplier_id: e.target.value }))}
-                className="input"
-              >
+              <select value={form.supplier_id} onChange={e => setForm(f => ({ ...f, supplier_id: e.target.value }))} className="input">
                 <option value="">— Sélectionnez —</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>
               <label className="label">Livraison prévue</label>
-              <input
-                type="date"
-                value={form.expected_date}
-                onChange={e => setForm(f => ({ ...f, expected_date: e.target.value }))}
-                className="input"
-              />
+              <input type="date" value={form.expected_date} onChange={e => setForm(f => ({ ...f, expected_date: e.target.value }))} className="input" />
             </div>
           </div>
-
-          {/* Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-slate-500" />
-                <span className="text-sm font-semibold text-slate-700">Articles</span>
-                {totalItems > 0 && <span className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-700 rounded-full font-semibold num">{totalItems}</span>}
-              </div>
-              <div className="flex items-center gap-1.5">
-                {autoMode && <button
-                  onClick={() => setVehiclePickerOpen(true)}
-                  className="text-[11px] text-slate-600 border border-slate-200 rounded-lg px-2 py-1 hover:bg-slate-50 flex items-center gap-1 transition"
-                ><Car className="w-3 h-3" />Véhicule</button>}
-                <button
-                  onClick={() => setOrderItems(p => [...p, { article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }])}
-                  className="text-[11px] text-white bg-brand-700 hover:bg-brand-800 rounded-lg px-2 py-1 flex items-center gap-1 transition"
-                ><Plus className="w-3 h-3" />Ajouter</button>
-              </div>
+              <span className="text-sm font-semibold text-slate-700">Articles</span>
+              <button onClick={() => setOrderItems(p => [...p, { article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }])} className="text-[11px] text-white bg-brand-700 hover:bg-brand-800 rounded-lg px-2 py-1 flex items-center gap-1 transition"><Plus className="w-3 h-3" />Ajouter</button>
             </div>
-
             <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-1">
               {orderItems.map((it, idx) => (
                 <div key={idx} className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5 space-y-2">
-                  {/* Article select */}
                   <div className="flex items-start gap-2">
-                    <select
-                      value={it.article_id}
-                      onChange={e => updateItem(idx, 'article_id', e.target.value)}
-                      className="input text-xs flex-1 min-w-0"
-                    >
+                    <select value={it.article_id} onChange={e => updateItem(idx, 'article_id', e.target.value)} className="input text-xs flex-1 min-w-0">
                       <option value="">— Choisir un article —</option>
                       {articles.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
-                    {orderItems.length > 1 && (
-                      <button
-                        onClick={() => setOrderItems(p => p.filter((_, i) => i !== idx))}
-                        className="p-1.5 rounded-lg bg-white hover:bg-red-50 border border-slate-200 text-red-500 transition shrink-0"
-                      ><Trash2 className="w-3.5 h-3.5" /></button>
-                    )}
+                    {orderItems.length > 1 && <button onClick={() => setOrderItems(p => p.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg bg-white hover:bg-red-50 border border-slate-200 text-red-500 transition shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
-
-                  {/* Name override */}
-                  <input
-                    value={it.name}
-                    onChange={e => updateItem(idx, 'name', e.target.value)}
-                    placeholder="Désignation"
-                    className="input text-xs"
-                  />
-
-                  {/* Qty stepper + Price */}
+                  <input value={it.name} onChange={e => updateItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-white border border-slate-200 rounded-lg flex items-center overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => incQty(idx, -1)}
-                        disabled={Number(it.quantity_ordered) <= 1}
-                        className="w-9 h-9 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition"
-                      ><Minus className="w-3.5 h-3.5" /></button>
-                      <input
-                        type="number"
-                        value={it.quantity_ordered}
-                        onChange={e => updateItem(idx, 'quantity_ordered', Math.max(1, Number(e.target.value) || 1))}
-                        min="1"
-                        className="flex-1 min-w-0 h-9 text-center text-sm font-semibold bg-transparent focus:outline-none num"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => incQty(idx, +1)}
-                        className="w-9 h-9 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition"
-                      ><Plus className="w-3.5 h-3.5" /></button>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={it.unit_price}
-                        onChange={e => updateItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))}
-                        min="0"
-                        className="input text-xs pr-10 h-9 num"
-                        placeholder="P.U."
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-semibold">FCFA</span>
-                    </div>
+                    <input type="number" value={it.quantity_ordered} onChange={e => updateItem(idx, 'quantity_ordered', Math.max(1, Number(e.target.value) || 1))} min="1" className="input text-xs h-9 num" placeholder="Qte" />
+                    <input type="number" value={it.unit_price} onChange={e => updateItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))} min="0" className="input text-xs h-9 num" placeholder="Prix" />
                   </div>
-
-                  {/* Line total */}
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Sous-total ligne</span>
-                    <span className="text-sm font-extrabold text-slate-900 num">{formatFCFA(it.total)}</span>
-                  </div>
+                  <div className="text-right text-[11px] font-bold text-slate-900 num">{formatFCFA(it.total)}</div>
                 </div>
               ))}
             </div>
           </div>
-
           <div>
             <label className="label">Note</label>
-            <textarea
-              value={form.note}
-              onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
-              className="input resize-none"
-              rows={2}
-              placeholder="Optionnelle…"
-            />
+            <textarea value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} className="input resize-none" rows={2} placeholder="Optionnelle..." />
           </div>
         </div>
       </Modal>
+      )}
 
-      {/* Detail modal */}
-      <Modal
+      {/* Detail panel */}
+      <DocPanel
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         title={selected ? `Commande ${selected.order_number}` : ''}
-        size="lg"
         footer={
           <>
             {selected && !editMode && !receiveMode && (
@@ -826,7 +854,7 @@ export function SupplierOrders() {
           </div>
           );
         })()}
-      </Modal>
+      </DocPanel>
 
       <ConfirmDialog
         open={!!toCancel}
@@ -852,6 +880,391 @@ export function SupplierOrders() {
           siteId={currentSite.id}
         />
       )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SupplierOrderFullPanel — full-screen panel for creating supplier orders
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+function SupplierSearchInput({ suppliers, value, onSelect, placeholder }: {
+  suppliers: any[];
+  value: string;
+  onSelect: (s: any) => void;
+  placeholder?: string;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = suppliers.find(s => s.id === value);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return suppliers.slice(0, 20);
+    const q = query.toLowerCase().trim();
+    return suppliers.filter((s: any) =>
+      s.name.toLowerCase().includes(q) ||
+      (s.phone || '').toLowerCase().includes(q)
+    ).slice(0, 30);
+  }, [query, suppliers]);
+
+  useEffect(() => { setHighlighted(0); }, [filtered.length]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) { if (e.key === 'ArrowDown') setOpen(true); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
+    else if (e.key === 'Enter' && filtered[highlighted]) { e.preventDefault(); e.stopPropagation(); onSelect(filtered[highlighted]); setOpen(false); setQuery(''); }
+    else if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative">
+        <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+        <input
+          value={open ? query : (selected?.name || '')}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => { setQuery(''); setOpen(true); }}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder || "Rechercher fournisseur..."}
+          className="input text-xs h-8 pl-8 pr-2 max-w-[220px]"
+          autoComplete="off"
+        />
+      </div>
+      {open && (
+        <div className="absolute z-50 left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto min-w-[260px]">
+          {filtered.map((s: any, i: number) => (
+            <button
+              key={s.id}
+              onMouseDown={e => { e.preventDefault(); onSelect(s); setOpen(false); setQuery(''); }}
+              onMouseEnter={() => setHighlighted(i)}
+              className={`w-full text-left px-3 py-2 flex items-center gap-2 text-xs transition-colors ${i === highlighted ? 'bg-teal-50 text-teal-800' : 'hover:bg-slate-50 text-slate-700'}`}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{s.name}</p>
+                {s.phone && <p className="text-[10px] text-slate-400">{s.phone}</p>}
+              </div>
+            </button>
+          ))}
+          {filtered.length === 0 && query.trim() && (
+            <div className="px-3 py-3 text-center text-xs text-slate-400">Aucun fournisseur trouvé</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SOArticleSearchInput({ articles, value, onSelect, placeholder }: {
+  articles: any[];
+  value: string;
+  onSelect: (a: any) => void;
+  placeholder?: string;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return articles.slice(0, 20);
+    const q = query.toLowerCase().trim();
+    return articles.filter(a =>
+      a.name.toLowerCase().includes(q) ||
+      (a.internal_ref || '').toLowerCase().includes(q) ||
+      (a.supplier_ref || '').toLowerCase().includes(q)
+    ).slice(0, 30);
+  }, [query, articles]);
+
+  useEffect(() => { setHighlighted(0); }, [filtered.length]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) { if (e.key === 'ArrowDown') setOpen(true); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
+    else if (e.key === 'Enter' && filtered[highlighted]) { e.preventDefault(); e.stopPropagation(); onSelect(filtered[highlighted]); setOpen(false); }
+    else if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+        <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder || "Rechercher article..."}
+          className="input text-xs pl-8 pr-2"
+          autoComplete="off"
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+          {filtered.map((a, i) => (
+            <button
+              key={a.id}
+              onMouseDown={e => { e.preventDefault(); onSelect(a); setOpen(false); }}
+              onMouseEnter={() => setHighlighted(i)}
+              className={`w-full text-left px-3 py-2 flex items-center gap-2 text-xs transition-colors ${i === highlighted ? 'bg-teal-50 text-teal-800' : 'hover:bg-slate-50 text-slate-700'}`}
+            >
+              <Package className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{a.name}</p>
+                {a.internal_ref && <p className="text-[10px] text-slate-400">{a.internal_ref}</p>}
+              </div>
+              <span className="text-[11px] font-bold text-slate-500 num flex-shrink-0">{formatFCFA(a.purchase_price)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems, setOrderItems, updateItem, incQty, subtotal, totalItems, saving, save, onClose, autoMode, onVehiclePicker, editingOrderId, editingOrder, onPrint, onChangeStatus }: {
+  suppliers: any[];
+  articles: any[];
+  form: { supplier_id: string; expected_date: string; note: string };
+  setForm: (fn: any) => void;
+  orderItems: any[];
+  setOrderItems: (fn: any) => void;
+  updateItem: (idx: number, field: string, val: any) => void;
+  incQty: (idx: number, delta: number) => void;
+  subtotal: number;
+  totalItems: number;
+  saving: boolean;
+  save: () => void;
+  onClose: () => void;
+  autoMode: boolean;
+  onVehiclePicker: () => void;
+  editingOrderId: string | null;
+  editingOrder: SupplierOrder | null;
+  onPrint: () => void;
+  onChangeStatus: (status: string) => void;
+}) {
+  const [panelWidth, setPanelWidth] = useState<number | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const resizing = useRef(false);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
+  }, [onClose]);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizing.current = true;
+    const startX = e.clientX;
+    const startWidth = panelRef.current?.offsetWidth || window.innerWidth - 256;
+    const onMove = (ev: MouseEvent) => {
+      if (!resizing.current) return;
+      const diff = startX - ev.clientX;
+      setPanelWidth(Math.max(600, Math.min(window.innerWidth - 64, startWidth + diff)));
+    };
+    const onUp = () => { resizing.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
+
+  const handleRowKeyDown = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const item = orderItems[idx];
+      if (item.name.trim() && item.unit_price > 0) {
+        if (idx === orderItems.length - 1) {
+          setOrderItems((p: any[]) => [...p, { article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }]);
+          setTimeout(() => {
+            const rows = panelRef.current?.querySelectorAll('[data-row-idx]');
+            const lastRow = rows?.[rows.length - 1];
+            const input = lastRow?.querySelector('input') as HTMLInputElement;
+            input?.focus();
+          }, 50);
+        }
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
+      <div
+        className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-teal-100 transition-colors group flex-shrink-0 relative z-10"
+        style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
+        onMouseDown={startResize}
+      >
+        <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors" />
+      </div>
+
+      <div
+        ref={panelRef}
+        className="bg-white h-full flex flex-col shadow-2xl flex-1 w-full"
+        style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center">
+              <ShoppingBag className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">{editingOrderId ? `Commande ${editingOrder?.order_number || ''}` : 'Nouvelle commande fournisseur'}</h2>
+              <p className="text-[11px] text-slate-500">
+                {editingOrderId ? 'Sauvegarde automatique à chaque modification' : 'Entrée valide la ligne et ajoute une suivante'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {saving && <span className="text-[10px] text-teal-600 font-medium animate-pulse">Sauvegarde...</span>}
+            {editingOrder && (
+              <>
+                {editingOrder.status === 'draft' && <button onClick={() => onChangeStatus('sent')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors" title="Marquer envoyée"><CheckCircle className="w-3.5 h-3.5 inline mr-1" />Envoyée</button>}
+                <button onClick={onPrint} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title="Imprimer"><Printer className="w-4 h-4" /></button>
+              </>
+            )}
+            <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">Fermer</button>
+            <button onClick={save} disabled={saving} className="btn-primary text-xs px-4 py-1.5">
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {editingOrderId ? 'Enregistrer' : 'Créer'}
+            </button>
+          </div>
+        </div>
+
+        {/* Meta bar */}
+        <div className="flex items-center gap-4 px-5 py-3 border-b border-slate-100 bg-white flex-shrink-0">
+          <SupplierSearchInput
+            suppliers={suppliers}
+            value={form.supplier_id}
+            onSelect={(s) => setForm((f: any) => ({ ...f, supplier_id: s.id }))}
+            placeholder="Rechercher fournisseur..."
+          />
+          <div className="flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <input type="date" value={form.expected_date} onChange={e => setForm((f: any) => ({ ...f, expected_date: e.target.value }))} className="input text-xs h-8 w-36" />
+          </div>
+          <div className="flex items-center gap-2 flex-1 max-w-[240px]">
+            <MessageCircle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <input value={form.note} onChange={e => setForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note..." className="input text-xs h-8" />
+          </div>
+          {autoMode && (
+            <button onClick={onVehiclePicker} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:border-teal-300 hover:bg-teal-50/50 transition-all">
+              <Car className="w-3 h-3" />Par véhicule
+            </button>
+          )}
+        </div>
+
+        {/* Table header */}
+        <div className="grid grid-cols-[1fr_1.2fr_80px_120px_80px_40px] gap-2 px-5 py-2 border-b border-slate-200 bg-slate-50/50 flex-shrink-0">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Article</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Désignation</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Qte</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Prix achat</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Total</span>
+          <span></span>
+        </div>
+
+        {/* Scrollable rows */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {orderItems.map((it: any, idx: number) => (
+            <div
+              key={idx}
+              data-row-idx={idx}
+              className={`grid grid-cols-[1fr_1.2fr_80px_120px_80px_40px] gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === orderItems.length - 1 ? 'bg-blue-50/30' : ''}`}
+              onKeyDown={e => handleRowKeyDown(e, idx)}
+            >
+              <div>
+                <SOArticleSearchInput
+                  articles={articles}
+                  value={it.article_id ? (articles.find((a: any) => a.id === it.article_id)?.name || '') : ''}
+                  onSelect={a => updateItem(idx, 'article_id', a.id)}
+                  placeholder="Rechercher..."
+                />
+              </div>
+              <div>
+                <input
+                  value={it.name}
+                  onChange={e => updateItem(idx, 'name', e.target.value)}
+                  placeholder="Désignation"
+                  className="input text-xs"
+                />
+              </div>
+              <div>
+                <input
+                  type="number"
+                  value={it.quantity_ordered}
+                  onChange={e => updateItem(idx, 'quantity_ordered', Math.max(1, Number(e.target.value) || 1))}
+                  min="1"
+                  className="input text-xs text-center"
+                />
+              </div>
+              <div>
+                <input
+                  type="number"
+                  value={it.unit_price}
+                  onChange={e => updateItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))}
+                  min="0"
+                  className="input text-xs text-right num"
+                />
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span>
+              </div>
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setOrderItems((p: any[]) => p.filter((_: any, i: number) => i !== idx))}
+                  disabled={orderItems.length === 1}
+                  className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <div className="px-5 py-2">
+            <button
+              onClick={() => setOrderItems((p: any[]) => [...p, { article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }])}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-2 rounded-lg transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />Ajouter une ligne
+            </button>
+          </div>
+        </div>
+
+        {/* Footer totals */}
+        <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between flex-shrink-0">
+          <div className="text-xs text-slate-500">
+            {totalItems} article{totalItems > 1 ? 's' : ''}
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">Total commande</span>
+            <span className="text-lg font-black text-slate-900 num">{formatFCFA(subtotal)}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

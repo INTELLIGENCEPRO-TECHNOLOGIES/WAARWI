@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   Plus, FileText, Loader2, Eye, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, User,
-  CreditCard, ShoppingCart, ArrowRight, Banknote, MessageCircle, Link2
+  CreditCard, ShoppingCart, ArrowRight, Banknote, MessageCircle, Link2, Search, GripVertical, Lock
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { Modal, ConfirmDialog } from '../components/Modal';
+import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
@@ -82,8 +82,8 @@ function creditStatus(r: SaleReturn) {
 }
 
 const TABS: { key: Tab; label: string; icon: any }[] = [
-  { key: 'quotes',   label: 'Devis',    icon: FileText },
   { key: 'invoices', label: 'Factures', icon: Receipt },
+  { key: 'quotes',   label: 'Devis',    icon: FileText },
   { key: 'returns',  label: 'Retours',  icon: RotateCcw },
   { key: 'credits',  label: 'Avoirs',   icon: Wallet },
 ];
@@ -93,7 +93,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
 
-  const [tab, setTab] = useState<Tab>('quotes');
+  const [tab, setTab] = useState<Tab>('invoices');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
@@ -123,6 +123,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [quoteToCancel, setQuoteToCancel] = useState<Quote | null>(null);
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
   const [vehiclePickerTargetIdx, setVehiclePickerTargetIdx] = useState<number | null>(null);
+  const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
 
   // Conversion modal
   const [convertFrom, setConvertFrom] = useState<Quote | null>(null);
@@ -186,7 +189,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   useEffect(() => {
     if (!tenant) return;
     Promise.all([
-      supabase.from('customers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+      supabase.from('customers').select('id, name, phone').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
       supabase.from('articles').select('id, name, sale_price, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(500),
       supabase.from('sales').select('id, sale_number, customer_id, customers(name)').eq('tenant_id', tenant.id).eq('status', 'paid').order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
@@ -286,34 +289,79 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
   const quoteSubtotal = quoteItems.reduce((s, i) => s + Number(i.total), 0);
 
-  const saveQuote = async () => {
-    if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
-    if (quoteItems.every(i => !i.name.trim())) { error('Ajoutez au moins un article'); return; }
+  const saveQuote = async (opts?: { silent?: boolean }) => {
+    if (!tenant || !currentSite) { if (!opts?.silent) error('Magasin introuvable'); return; }
+    if (quoteItems.every(i => !i.name.trim())) { if (!opts?.silent) error('Ajoutez au moins un article'); return; }
     setSaving(true);
-    const { data: numData } = await supabase.rpc('next_doc_number', {
-      p_tenant_id: tenant.id, p_kind: 'quote', p_prefix: 'DEV',
-    });
-    const qNum = (numData as string) || ('DEV-' + Date.now());
-    const { data: q, error: e } = await supabase.from('quotes').insert({
-      tenant_id: tenant.id, site_id: currentSite.id,
-      customer_id: quoteForm.customer_id || null,
-      quote_number: qNum, subtotal: quoteSubtotal, discount: 0, total: quoteSubtotal,
-      valid_until: quoteForm.valid_until || null, note: quoteForm.note, status: 'draft',
-    }).select().single();
-    if (e || !q) { error(e?.message || 'Erreur'); setSaving(false); return; }
     const valid = quoteItems.filter(i => i.name.trim());
-    await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
-    setSaving(false);
-    success('Devis créé'); setQuoteOpen(false);
+    const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
+
+    if (editingQuoteId) {
+      await supabase.from('quotes').update({
+        customer_id: quoteForm.customer_id || null,
+        subtotal, discount: 0, total: subtotal,
+        valid_until: quoteForm.valid_until || null, note: quoteForm.note,
+      }).eq('id', editingQuoteId);
+      await supabase.from('quote_items').delete().eq('quote_id', editingQuoteId);
+      await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: editingQuoteId, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
+      setSaving(false);
+      if (!opts?.silent) { success('Devis mis à jour'); closeQuotePanel(); load(); }
+    } else {
+      const { data: numData } = await supabase.rpc('next_doc_number', {
+        p_tenant_id: tenant.id, p_kind: 'quote', p_prefix: 'DEV',
+      });
+      const qNum = (numData as string) || ('DEV-' + Date.now());
+      const { data: q, error: e } = await supabase.from('quotes').insert({
+        tenant_id: tenant.id, site_id: currentSite.id,
+        customer_id: quoteForm.customer_id || null,
+        quote_number: qNum, subtotal, discount: 0, total: subtotal,
+        valid_until: quoteForm.valid_until || null, note: quoteForm.note, status: 'draft',
+      }).select().single();
+      if (e || !q) { error(e?.message || 'Erreur'); setSaving(false); return; }
+      await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
+      setEditingQuoteId(q.id);
+      setSaving(false);
+      if (!opts?.silent) { success('Devis créé'); closeQuotePanel(); load(); }
+    }
+  };
+
+  const autoSaveQuote = async () => {
+    if (!tenant || !currentSite) return;
+    if (quoteItems.every(i => !i.name.trim())) return;
+    await saveQuote({ silent: true });
+  };
+
+  const closeQuotePanel = () => {
+    setQuoteOpen(false);
+    setEditingQuoteId(null);
+    setEditingQuote(null);
     setQuoteItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setQuoteForm({ customer_id: '', valid_until: '', note: '' });
-    load();
+  };
+
+  const openQuoteForEdit = async (q: Quote) => {
+    const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
+    setEditingQuoteId(q.id);
+    setEditingQuote(q);
+    setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '' });
+    setQuoteItems((data || []).map((i: any) => ({
+      article_id: i.article_id, name: i.name,
+      quantity: Number(i.quantity), unit_price: Number(i.unit_price),
+      discount: Number(i.discount || 0), total: Number(i.total),
+    })));
+    setQuoteOpen(true);
   };
 
   const openQuoteDetail = async (q: Quote) => {
-    setQuoteDetail(q);
-    const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref)').eq('quote_id', q.id);
-    setQuoteItemsDetail(data || []);
+    if (isDesktop && q.status === 'draft') {
+      openQuoteForEdit(q);
+    } else if (isDesktop) {
+      openQuoteForEdit(q);
+    } else {
+      setQuoteDetail(q);
+      const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref)').eq('quote_id', q.id);
+      setQuoteItemsDetail(data || []);
+    }
   };
   const changeQuoteStatus = async (q: Quote, status: string) => {
     await supabase.from('quotes').update({ status }).eq('id', q.id);
@@ -1043,91 +1091,95 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         </div>
       </Modal>
 
-      {/* ── Quote create modal ──────────────────────────────── */}
-      <Modal open={quoteOpen} onClose={() => setQuoteOpen(false)} title="Nouveau devis" size="lg"
-        footer={<>
-          <button onClick={() => setQuoteOpen(false)} className="btn-secondary">Annuler</button>
-          <button onClick={saveQuote} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button>
-        </>}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="label">Client</label>
-              <select value={quoteForm.customer_id} onChange={e => setQuoteForm(f => ({ ...f, customer_id: e.target.value }))} className="input">
-                <option value="">— Client comptoir —</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Valide jusqu'au</label>
-              <input type="date" value={quoteForm.valid_until} onChange={e => setQuoteForm(f => ({ ...f, valid_until: e.target.value }))} className="input" />
-            </div>
-          </div>
+      {/* ── Quote create/edit full-screen panel (desktop only) ──────────────────────────────── */}
+      {quoteOpen && isDesktop && (
+        <QuoteFullPanel
+          articles={articles}
+          customers={customers}
+          quoteForm={quoteForm}
+          setQuoteForm={setQuoteForm}
+          quoteItems={quoteItems}
+          setQuoteItems={setQuoteItems}
+          updateQuoteItem={updateQuoteItem}
+          quoteSubtotal={quoteSubtotal}
+          saving={saving}
+          saveQuote={saveQuote}
+          autoSaveQuote={autoSaveQuote}
+          onClose={closeQuotePanel}
+          autoMode={autoMode}
+          onVehiclePicker={(idx: number | null) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
+          editingQuoteId={editingQuoteId}
+          editingQuote={editingQuote}
+          onChangeStatus={(status: string) => { if (editingQuote) { changeQuoteStatus(editingQuote, status); setEditingQuote({ ...editingQuote, status }); } }}
+          onConvert={() => { if (editingQuote) openConvert(editingQuote); }}
+          onPrint={() => {
+            if (!editingQuote || !tenant) return;
+            const items = quoteItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
+            const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+            printDocumentA4({ tenant: tenantForPrint(tenant), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0 });
+          }}
+        />
+      )}
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="label mb-0">Articles</label>
-              <div className="flex items-center gap-1.5">
-                {autoMode && <button onClick={() => { setVehiclePickerTargetIdx(null); setVehiclePickerOpen(true); }} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:border-brand-300 hover:bg-brand-50/50 transition-all"><Car className="w-3 h-3" />Par véhicule</button>}
-                <button onClick={() => setQuoteItems(p => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 transition-all"><Plus className="w-3 h-3" />Ajouter</button>
+      {/* ── Quote create modal (mobile only) ──────────────────────────────── */}
+      {quoteOpen && !isDesktop && (
+        <Modal open={true} onClose={closeQuotePanel} title="Nouveau devis" size="lg"
+          footer={<>
+            <button onClick={closeQuotePanel} className="btn-secondary">Annuler</button>
+            <button onClick={() => saveQuote()} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button>
+          </>}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="label">Client</label>
+                <select value={quoteForm.customer_id} onChange={e => setQuoteForm((f: any) => ({ ...f, customer_id: e.target.value }))} className="input">
+                  <option value="">— Client comptoir —</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Valide jusqu'au</label>
+                <input type="date" value={quoteForm.valid_until} onChange={e => setQuoteForm((f: any) => ({ ...f, valid_until: e.target.value }))} className="input" />
               </div>
             </div>
-
-            <div className="md:hidden space-y-2 max-h-[45vh] overflow-y-auto -mx-1 px-1 pb-1">
-              {quoteItems.map((it, idx) => (
-                <div key={idx} className="p-3 rounded-2xl bg-slate-50/60 border border-slate-200/80">
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <select value={it.article_id || ''} onChange={e => updateQuoteItem(idx, 'article_id', e.target.value)} className="input text-xs h-9">
-                        <option value="">— Article —</option>
-                        {articles.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
-                      <input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs h-9" />
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <input type="number" value={it.quantity} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs h-9" placeholder="Qté" />
-                        <input type="number" value={it.unit_price} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs h-9" placeholder="Prix" />
-                        <input type="number" value={it.discount} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs h-9" placeholder="Remise" />
-                      </div>
-                      <div className="text-right text-[11px] font-bold text-slate-900 num">Total {formatFCFA(it.total)}</div>
-                    </div>
-                    <button onClick={() => setQuoteItems(p => p.filter((_, i) => i !== idx))} disabled={quoteItems.length === 1} className="p-2 rounded-lg hover:bg-red-50 text-red-400 disabled:opacity-30"><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="hidden md:block max-h-[45vh] overflow-y-auto">
-              <div className="space-y-1.5">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="label mb-0">Articles</label>
+                <button onClick={() => setQuoteItems(p => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 transition-all"><Plus className="w-3 h-3" />Ajouter</button>
+              </div>
+              <div className="space-y-2 max-h-[45vh] overflow-y-auto -mx-1 px-1 pb-1">
                 {quoteItems.map((it, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-1.5 items-start">
-                    <div className="col-span-4">
-                      <select value={it.article_id || ''} onChange={e => updateQuoteItem(idx, 'article_id', e.target.value)} className="input text-xs">
-                        <option value="">— Article —</option>
-                        {articles.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-4"><input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" /></div>
-                    <div className="col-span-1"><input type="number" value={it.quantity} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs" /></div>
-                    <div className="col-span-2"><input type="number" value={it.unit_price} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs" /></div>
-                    <div className="col-span-1 flex items-center justify-end">
-                      <button onClick={() => setQuoteItems(p => p.filter((_, i) => i !== idx))} disabled={quoteItems.length === 1} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <div key={idx} className="p-3 rounded-2xl bg-slate-50/60 border border-slate-200/80">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <select value={it.article_id || ''} onChange={e => updateQuoteItem(idx, 'article_id', e.target.value)} className="input text-xs h-9">
+                          <option value="">— Article —</option>
+                          {articles.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                        <input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs h-9" />
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <input type="number" value={it.quantity} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs h-9" placeholder="Qte" />
+                          <input type="number" value={it.unit_price} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs h-9" placeholder="Prix" />
+                          <input type="number" value={it.discount} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs h-9" placeholder="Remise" />
+                        </div>
+                        <div className="text-right text-[11px] font-bold text-slate-900 num">Total {formatFCFA(it.total)}</div>
+                      </div>
+                      <button onClick={() => setQuoteItems(p => p.filter((_, i) => i !== idx))} disabled={quoteItems.length === 1} className="p-2 rounded-lg hover:bg-red-50 text-red-400 disabled:opacity-30"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                 ))}
               </div>
+              <div className="mt-3 pt-3 border-t border-slate-100 flex justify-end">
+                <span className="font-bold text-slate-900 num">Total : {formatFCFA(quoteSubtotal)}</span>
+              </div>
             </div>
-
-            <div className="mt-3 pt-3 border-t border-slate-100 flex justify-end">
-              <span className="font-bold text-slate-900 num">Total : {formatFCFA(quoteSubtotal)}</span>
+            <div>
+              <label className="label">Note</label>
+              <textarea value={quoteForm.note} onChange={e => setQuoteForm((f: any) => ({ ...f, note: e.target.value }))} className="input resize-none" rows={2} />
             </div>
           </div>
-
-          <div>
-            <label className="label">Note</label>
-            <textarea value={quoteForm.note} onChange={e => setQuoteForm(f => ({ ...f, note: e.target.value }))} className="input resize-none" rows={2} />
-          </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
       {/* ── Quote detail ─────────────────────────────────────── */}
       <Modal open={!!quoteDetail} onClose={() => setQuoteDetail(null)} title={quoteDetail ? `Devis ${quoteDetail.quote_number}` : ''} size="lg"
@@ -1232,7 +1284,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </Modal>
 
       {/* ── Invoice detail ───────────────────────────────────── */}
-      <Modal open={!!invoiceDetail} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''} size="lg"
+      <DocPanel open={!!invoiceDetail} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
         footer={<>
           <div className="flex gap-1.5 mr-auto">
             {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Banknote className="w-4 h-4" /></button>}
@@ -1296,7 +1348,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             </div>
           );
         })()}
-      </Modal>
+      </DocPanel>
 
       {/* ── Register payment modal ───────────────────────────── */}
       <Modal open={payOpen} onClose={() => !paying && setPayOpen(false)} title="Encaisser la facture" size="sm"
@@ -1467,7 +1519,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </Modal>
 
       {/* ── Return detail ─────────────────────────────────────── */}
-      <Modal open={!!returnDetail} onClose={() => setReturnDetail(null)} title={returnDetail ? `${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}` : ''} size="md"
+      <DocPanel open={!!returnDetail} onClose={() => setReturnDetail(null)} title={returnDetail ? `${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}` : ''}
         footer={<>
           {returnDetail?.status === 'pending' && <button onClick={() => { approveReturn(returnDetail); }} className="btn-icon-success" title="Approuver"><CheckCircle className="w-4 h-4" /></button>}
           <button onClick={() => setReturnDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
@@ -1514,7 +1566,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             </div>
           );
         })()}
-      </Modal>
+      </DocPanel>
 
       {autoMode && tenant && currentSite && (
         <VehicleArticlePicker
@@ -1532,6 +1584,428 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           siteId={currentSite.id}
         />
       )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   QuoteFullPanel — Sage 100 Cloud-inspired full-screen document editor
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+function ArticleSearchInput({ articles, value, onSelect, onNameChange, placeholder }: {
+  articles: any[];
+  value: string;
+  onSelect: (a: any) => void;
+  onNameChange: (name: string) => void;
+  placeholder?: string;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return articles.slice(0, 20);
+    const q = query.toLowerCase().trim();
+    return articles.filter(a =>
+      a.name.toLowerCase().includes(q) ||
+      (a.internal_ref || '').toLowerCase().includes(q)
+    ).slice(0, 30);
+  }, [query, articles]);
+
+  useEffect(() => { setHighlighted(0); }, [filtered.length]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) { if (e.key === 'ArrowDown') setOpen(true); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
+    else if (e.key === 'Enter' && filtered[highlighted]) { e.preventDefault(); onSelect(filtered[highlighted]); setOpen(false); }
+    else if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => { setQuery(e.target.value); onNameChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder || "Rechercher un article..."}
+          className="input text-xs pl-8 pr-2"
+          autoComplete="off"
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+          {filtered.map((a, i) => (
+            <button
+              key={a.id}
+              onMouseDown={e => { e.preventDefault(); onSelect(a); setOpen(false); }}
+              onMouseEnter={() => setHighlighted(i)}
+              className={`w-full text-left px-3 py-2 flex items-center gap-2 text-xs transition-colors ${i === highlighted ? 'bg-teal-50 text-teal-800' : 'hover:bg-slate-50 text-slate-700'}`}
+            >
+              <Package className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{a.name}</p>
+                {a.internal_ref && <p className="text-[10px] text-slate-400">{a.internal_ref}</p>}
+              </div>
+              <span className="text-[11px] font-bold text-slate-500 num flex-shrink-0">{formatFCFA(a.sale_price)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustomerSearchInput({ customers, value, onSelect, placeholder }: {
+  customers: any[];
+  value: string;
+  onSelect: (c: any) => void;
+  placeholder?: string;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selectedCustomer = customers.find(c => c.id === value);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return customers.slice(0, 20);
+    const q = query.toLowerCase().trim();
+    return customers.filter((c: any) =>
+      c.name.toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q)
+    ).slice(0, 30);
+  }, [query, customers]);
+
+  useEffect(() => { setHighlighted(0); }, [filtered.length]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) { if (e.key === 'ArrowDown') setOpen(true); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
+    else if (e.key === 'Enter' && filtered[highlighted]) { e.preventDefault(); e.stopPropagation(); onSelect(filtered[highlighted]); setOpen(false); setQuery(''); }
+    else if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative">
+        <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+        <input
+          value={open ? query : (selectedCustomer?.name || '')}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => { setQuery(''); setOpen(true); }}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder || "Rechercher client..."}
+          className="input text-xs h-8 pl-8 pr-2 max-w-[220px]"
+          autoComplete="off"
+        />
+      </div>
+      {open && (
+        <div className="absolute z-50 left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto min-w-[260px]">
+          <button
+            onMouseDown={e => { e.preventDefault(); onSelect(null); setOpen(false); setQuery(''); }}
+            className={`w-full text-left px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 transition-colors ${!value ? 'bg-teal-50 font-semibold text-teal-700' : ''}`}
+          >
+            Client comptoir
+          </button>
+          {filtered.map((c: any, i: number) => (
+            <button
+              key={c.id}
+              onMouseDown={e => { e.preventDefault(); onSelect(c); setOpen(false); setQuery(''); }}
+              onMouseEnter={() => setHighlighted(i)}
+              className={`w-full text-left px-3 py-2 flex items-center gap-2 text-xs transition-colors ${i === highlighted ? 'bg-teal-50 text-teal-800' : 'hover:bg-slate-50 text-slate-700'}`}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{c.name}</p>
+                {c.phone && <p className="text-[10px] text-slate-400">{c.phone}</p>}
+              </div>
+            </button>
+          ))}
+          {filtered.length === 0 && query.trim() && (
+            <div className="px-3 py-3 text-center text-xs text-slate-400">Aucun client trouvé</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint }: {
+  articles: any[];
+  customers: any[];
+  quoteForm: { customer_id: string; valid_until: string; note: string };
+  setQuoteForm: (fn: any) => void;
+  quoteItems: QuoteItem[];
+  setQuoteItems: (fn: any) => void;
+  updateQuoteItem: (idx: number, field: keyof QuoteItem, val: any) => void;
+  quoteSubtotal: number;
+  saving: boolean;
+  saveQuote: (opts?: { silent?: boolean }) => void;
+  autoSaveQuote: () => void;
+  onClose: () => void;
+  autoMode: boolean;
+  onVehiclePicker: (idx: number | null) => void;
+  editingQuoteId: string | null;
+  editingQuote: Quote | null;
+  onChangeStatus: (status: string) => void;
+  onConvert: () => void;
+  onPrint: () => void;
+}) {
+  const [panelWidth, setPanelWidth] = useState<number | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const resizing = useRef(false);
+  const readOnly = editingQuote ? ['converted', 'rejected'].includes(editingQuote.status) : false;
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
+  }, [onClose]);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizing.current = true;
+    const startX = e.clientX;
+    const startWidth = panelRef.current?.offsetWidth || window.innerWidth - 256;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizing.current) return;
+      const diff = startX - ev.clientX;
+      const newWidth = Math.max(600, Math.min(window.innerWidth - 64, startWidth + diff));
+      setPanelWidth(newWidth);
+    };
+    const onUp = () => { resizing.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
+
+  const handleRowKeyDown = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const item = quoteItems[idx];
+      if (item.name.trim() && item.unit_price > 0) {
+        if (idx === quoteItems.length - 1) {
+          setQuoteItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
+          setTimeout(() => {
+            const rows = panelRef.current?.querySelectorAll('[data-row-idx]');
+            const lastRow = rows?.[rows.length - 1];
+            const input = lastRow?.querySelector('input') as HTMLInputElement;
+            input?.focus();
+          }, 50);
+        }
+        autoSaveQuote();
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
+      {/* Resize handle */}
+      <div
+        className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-teal-100 transition-colors group flex-shrink-0 relative z-10"
+        style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
+        onMouseDown={startResize}
+      >
+        <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors" />
+      </div>
+
+      {/* Main Panel */}
+      <div
+        ref={panelRef}
+        className="bg-white h-full flex flex-col shadow-2xl flex-1 w-full"
+        style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center">
+              <FileText className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">{editingQuoteId ? 'Edition devis' : 'Nouveau devis'}</h2>
+              <p className="text-[11px] text-slate-500">
+                {editingQuoteId ? 'Sauvegarde auto à chaque ligne validée' : 'Entrée valide la ligne et ajoute une suivante'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {saving && <span className="text-[10px] text-teal-600 font-medium animate-pulse">Sauvegarde...</span>}
+            {readOnly && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                <Lock className="w-3 h-3" />Verrouillé
+              </span>
+            )}
+            {editingQuote && !readOnly && (
+              <>
+                {editingQuote.status === 'draft' && <button onClick={() => onChangeStatus('sent')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors" title="Marquer envoyé"><CheckCircle className="w-3.5 h-3.5 inline mr-1" />Envoyé</button>}
+                {['draft', 'sent'].includes(editingQuote.status) && <button onClick={() => onChangeStatus('accepted')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors" title="Accepter"><CheckCircle className="w-3.5 h-3.5 inline mr-1" />Accepter</button>}
+                {editingQuote.status === 'accepted' && <button onClick={onConvert} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-brand-200 text-brand-700 bg-brand-50 hover:bg-brand-100 transition-colors" title="Convertir en facture"><ArrowRight className="w-3.5 h-3.5 inline mr-1" />Facturer</button>}
+              </>
+            )}
+            {editingQuote && <button onClick={onPrint} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title="Imprimer"><Printer className="w-4 h-4" /></button>}
+            <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">Fermer</button>
+            {!readOnly && (
+              <button onClick={() => saveQuote()} disabled={saving} className="btn-primary text-xs px-4 py-1.5">
+                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Enregistrer
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Meta bar - client search, date, note */}
+        <div className={`flex items-center gap-4 px-5 py-3 border-b border-slate-100 bg-white flex-shrink-0 ${readOnly ? 'pointer-events-none opacity-70' : ''}`}>
+          <CustomerSearchInput
+            customers={customers}
+            value={quoteForm.customer_id}
+            onSelect={(c) => setQuoteForm((f: any) => ({ ...f, customer_id: c?.id || '' }))}
+            placeholder="Rechercher client..."
+          />
+          <div className="flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <input type="date" value={quoteForm.valid_until} onChange={e => setQuoteForm((f: any) => ({ ...f, valid_until: e.target.value }))} className="input text-xs h-8 w-36" disabled={readOnly} />
+          </div>
+          <div className="flex items-center gap-2 flex-1 max-w-[240px]">
+            <MessageCircle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <input value={quoteForm.note} onChange={e => setQuoteForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note..." className="input text-xs h-8" disabled={readOnly} />
+          </div>
+          {autoMode && !readOnly && (
+            <button onClick={() => onVehiclePicker(null)} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:border-teal-300 hover:bg-teal-50/50 transition-all">
+              <Car className="w-3 h-3" />Par véhicule
+            </button>
+          )}
+        </div>
+
+        {/* Table header */}
+        <div className="grid grid-cols-[1fr_1.2fr_80px_120px_100px_80px_40px] gap-2 px-5 py-2 border-b border-slate-200 bg-slate-50/50 flex-shrink-0">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Article</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Désignation</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Qte</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Prix unit.</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Remise</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Total</span>
+          <span></span>
+        </div>
+
+        {/* Scrollable rows area */}
+        <div className={`flex-1 overflow-y-auto min-h-0 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
+          {quoteItems.map((it, idx) => (
+            <div
+              key={idx}
+              data-row-idx={idx}
+              className={`grid grid-cols-[1fr_1.2fr_80px_120px_100px_80px_40px] gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === quoteItems.length - 1 ? 'bg-teal-50/30' : ''}`}
+              onKeyDown={e => handleRowKeyDown(e, idx)}
+            >
+              <div>
+                <ArticleSearchInput
+                  articles={articles}
+                  value={it.article_id ? (articles.find(a => a.id === it.article_id)?.name || '') : ''}
+                  onSelect={a => updateQuoteItem(idx, 'article_id', a.id)}
+                  onNameChange={() => {}}
+                  placeholder="Rechercher..."
+                />
+              </div>
+              <div>
+                <input
+                  value={it.name}
+                  onChange={e => updateQuoteItem(idx, 'name', e.target.value)}
+                  placeholder="Désignation"
+                  className="input text-xs"
+                />
+              </div>
+              <div>
+                <input
+                  type="number"
+                  value={it.quantity}
+                  onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))}
+                  min="1"
+                  className="input text-xs text-center"
+                />
+              </div>
+              <div>
+                <input
+                  type="number"
+                  value={it.unit_price}
+                  onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))}
+                  min="0"
+                  className="input text-xs text-right num"
+                />
+              </div>
+              <div>
+                <input
+                  type="number"
+                  value={it.discount}
+                  onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))}
+                  min="0"
+                  className="input text-xs text-right num"
+                />
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span>
+              </div>
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setQuoteItems((p: QuoteItem[]) => p.filter((_, i) => i !== idx))}
+                  disabled={quoteItems.length === 1}
+                  className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Add line button */}
+          <div className="px-5 py-2">
+            <button
+              onClick={() => setQuoteItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-800 hover:bg-teal-50 px-3 py-2 rounded-lg transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />Ajouter une ligne
+            </button>
+          </div>
+        </div>
+
+        {/* Footer totals */}
+        <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between flex-shrink-0">
+          <div className="text-xs text-slate-500">
+            {quoteItems.filter(i => i.name.trim()).length} ligne{quoteItems.filter(i => i.name.trim()).length > 1 ? 's' : ''}
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">Total HT</span>
+              <span className="text-lg font-black text-slate-900 num">{formatFCFA(quoteSubtotal)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

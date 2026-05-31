@@ -71,7 +71,7 @@ export function TenantWelcome({ logoUrl, name, tagline, onDone }: Props) {
           />
         ) : (
           <img
-            src="/waarwi-logo.png"
+            src="/Picsart_26-05-30_02-43-37-384.png"
             alt={name}
             className="relative w-56 h-auto object-contain welcome-logo-reveal drop-shadow-[0_20px_50px_rgba(15,23,42,0.22)]"
           />

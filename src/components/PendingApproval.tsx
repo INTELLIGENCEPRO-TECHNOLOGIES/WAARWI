@@ -11,7 +11,7 @@ export function PendingApproval() {
       <div className="w-full max-w-lg">
         <div className="flex flex-col items-center mb-6">
           <div className="w-20 h-20 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center overflow-hidden p-2">
-            <img src="/waarwi-mark.png" alt="WAARWI" className="w-full h-full object-contain" />
+            <img src="/Picsart_26-05-30_02-43-37-384.png" alt="WAARWI" className="w-full h-full object-contain" />
           </div>
           <div className="text-sm font-bold tracking-wider text-slate-900 mt-2">WAARWI</div>
           <div className="text-[10px] text-slate-500 uppercase tracking-wider">Plateforme Business 2.0 made in Sénégal</div>

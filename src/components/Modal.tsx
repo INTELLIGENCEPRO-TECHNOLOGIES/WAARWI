@@ -1,5 +1,5 @@
-import { ReactNode, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { ReactNode, useEffect, useRef, useCallback, useState } from 'react';
+import { X, GripVertical } from 'lucide-react';
 
 type Props = {
   open: boolean;
@@ -37,6 +37,79 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && <div className="px-4 sm:px-5 py-3 border-t border-slate-100 bg-slate-50/70 sm:rounded-b-3xl flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full pb-safe">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+export function DocPanel({ open, onClose, title, children, footer }: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  const [panelWidth, setPanelWidth] = useState<number | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const resizing = useRef(false);
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
+  }, [open, onClose]);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizing.current = true;
+    const startX = e.clientX;
+    const startWidth = panelRef.current?.offsetWidth || window.innerWidth - 256;
+    const onMove = (ev: MouseEvent) => {
+      if (!resizing.current) return;
+      const diff = startX - ev.clientX;
+      setPanelWidth(Math.max(500, Math.min(window.innerWidth - 64, startWidth + diff)));
+    };
+    const onUp = () => { resizing.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
+
+  if (!open) return null;
+
+  if (!isDesktop) {
+    return (
+      <Modal open={open} onClose={onClose} title={title} size="lg" footer={footer}>
+        {children}
+      </Modal>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
+      <div
+        className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-teal-100 transition-colors group flex-shrink-0 relative z-10"
+        style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
+        onMouseDown={startResize}
+      >
+        <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors" />
+      </div>
+
+      <div
+        ref={panelRef}
+        className="bg-white h-full flex flex-col shadow-2xl flex-1 w-full"
+        style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
+          <h3 className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {footer && <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/80 flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full">{footer}</div>}
       </div>
     </div>
   );

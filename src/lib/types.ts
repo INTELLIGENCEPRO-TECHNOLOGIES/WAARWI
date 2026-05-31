@@ -120,6 +120,8 @@ export type Customer = {
   address: string;
   customer_type: string;
   balance: number;
+  credit_limit: number;
+  credit_blocked: boolean;
 };
 
 export type CashSession = {

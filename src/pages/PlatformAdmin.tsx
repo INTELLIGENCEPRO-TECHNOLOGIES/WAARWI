@@ -6,6 +6,7 @@ import {
   Wrench as Wrench_, Store as Store_, ShoppingBag as ShoppingBag_, Shirt as Shirt_, Cpu as Cpu_,
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
+  ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -57,7 +58,7 @@ export function PlatformAdmin() {
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-teal-500/20 to-transparent rounded-full blur-3xl" />
         <div className="relative flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center shadow-lg overflow-hidden p-1">
-            <img src="/waarwi-mark.png" alt="WAARWI" className="w-full h-full object-contain" />
+            <img src="/Picsart_26-05-30_02-43-37-384.png" alt="WAARWI" className="w-full h-full object-contain" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -841,6 +842,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                     <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded" />
                     Tenant actif (accès à l'application)
                   </label>
+
                   <div className="sm:col-span-2 flex justify-end mt-2">
                     <button onClick={saveInfo} disabled={saving} className="btn-primary">
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer
@@ -1320,13 +1322,39 @@ function ActivitySection() {
 
 /* ============== LOGIN CONFIG ============== */
 
+const ICON_MAP_ADMIN: Record<string, any> = {
+  ShoppingCart, Package: Package_, FileText: FileText_, Users, Truck,
+  Globe: Globe_, BarChart3, TrendingUp, Shield, Zap, Receipt,
+  Monitor, Wallet, Layers, Settings: Settings_,
+};
+
+const ALL_APP_FEATURES: { icon: string; label: string; desc: string; color: string }[] = [
+  { icon: 'ShoppingCart', label: 'Point de vente', desc: 'Caisse rapide et intuitive', color: 'text-teal-600 bg-teal-50' },
+  { icon: 'Package', label: 'Stock', desc: 'Maîtrisez vos stocks', color: 'text-sky-600 bg-sky-50' },
+  { icon: 'FileText', label: 'Facturation', desc: 'Devis et factures pro', color: 'text-amber-600 bg-amber-50' },
+  { icon: 'Users', label: 'Clients & Tiers', desc: 'CRM et créances', color: 'text-emerald-600 bg-emerald-50' },
+  { icon: 'Truck', label: 'Fournisseurs', desc: 'Commandes et dettes', color: 'text-orange-600 bg-orange-50' },
+  { icon: 'Globe', label: 'Boutique en ligne', desc: 'Vitrine et commandes web', color: 'text-cyan-600 bg-cyan-50' },
+  { icon: 'BarChart3', label: 'Comptabilité', desc: 'Suivi financier complet', color: 'text-rose-600 bg-rose-50' },
+  { icon: 'TrendingUp', label: 'Rapports', desc: 'Analyses et tableaux de bord', color: 'text-violet-600 bg-violet-50' },
+  { icon: 'Shield', label: 'Sécurité', desc: 'Rôles et permissions', color: 'text-slate-600 bg-slate-100' },
+];
+
 const AVAILABLE_ICONS = [
-  { value: 'Zap', label: 'Éclair (POS)' },
+  { value: 'ShoppingCart', label: 'Panier (POS)' },
   { value: 'Package', label: 'Colis (Stock)' },
-  { value: 'Receipt', label: 'Reçu (Facturation)' },
+  { value: 'FileText', label: 'Document (Facturation)' },
+  { value: 'Users', label: 'Utilisateurs (Clients)' },
+  { value: 'Truck', label: 'Camion (Fournisseurs)' },
   { value: 'Globe', label: 'Globe (Boutique)' },
   { value: 'BarChart3', label: 'Graphique (Comptabilité)' },
+  { value: 'TrendingUp', label: 'Tendance (Rapports)' },
   { value: 'Shield', label: 'Bouclier (Sécurité)' },
+  { value: 'Zap', label: 'Éclair' },
+  { value: 'Wallet', label: 'Portefeuille' },
+  { value: 'Layers', label: 'Couches' },
+  { value: 'Monitor', label: 'Écran' },
+  { value: 'Receipt', label: 'Reçu' },
 ];
 
 type LoginModule = { icon: string; label: string; desc: string };
@@ -1338,7 +1366,11 @@ function LoginConfigSection() {
   const [headline, setHeadline] = useState('');
   const [headlineAccent, setHeadlineAccent] = useState('');
   const [subtitle, setSubtitle] = useState('');
+  const [loginBgUrl, setLoginBgUrl] = useState<string | null>(null);
   const [modules, setModules] = useState<LoginModule[]>([]);
+  const [previewSlide, setPreviewSlide] = useState(0);
+  const [previewAnim, setPreviewAnim] = useState<'in' | 'out'>('in');
+  const [activeTab, setActiveTab] = useState<'textes' | 'modules'>('textes');
 
   useEffect(() => {
     (async () => {
@@ -1347,6 +1379,7 @@ function LoginConfigSection() {
         setHeadline(data.headline || '');
         setHeadlineAccent(data.headline_accent || '');
         setSubtitle(data.subtitle || '');
+        setLoginBgUrl(data.login_bg_url || null);
         setModules(data.modules || []);
       } catch (e: any) { error(e.message); }
       setLoading(false);
@@ -1356,8 +1389,8 @@ function LoginConfigSection() {
   const save = async () => {
     setSaving(true);
     try {
-      await call('update_login_config', { headline, headline_accent: headlineAccent, subtitle, modules });
-      success('Configuration de l\'écran d\'accueil enregistrée');
+      await call('update_login_config', { headline, headline_accent: headlineAccent, subtitle, modules, login_bg_url: loginBgUrl });
+      success('Configuration de l\'écran de connexion enregistrée');
     } catch (e: any) { error(e.message); }
     setSaving(false);
   };
@@ -1366,129 +1399,300 @@ function LoginConfigSection() {
     setModules(prev => prev.map((m, i) => i === idx ? { ...m, [field]: value } : m));
   };
 
-  const removeModule = (idx: number) => {
-    setModules(prev => prev.filter((_, i) => i !== idx));
-  };
+  const removeModule = (idx: number) => setModules(prev => prev.filter((_, i) => i !== idx));
 
   const addModule = () => {
-    if (modules.length >= 6) return;
-    setModules(prev => [...prev, { icon: 'Zap', label: '', desc: '' }]);
+    setModules(prev => [...prev, { icon: 'ShoppingCart', label: '', desc: '' }]);
+  };
+
+  const useAllDefaults = () => setModules(ALL_APP_FEATURES.map(f => ({ icon: f.icon, label: f.label, desc: f.desc })));
+
+  const moveModule = (idx: number, dir: -1 | 1) => {
+    const next = idx + dir;
+    if (next < 0 || next >= modules.length) return;
+    setModules(prev => {
+      const a = [...prev];
+      [a[idx], a[next]] = [a[next], a[idx]];
+      return a;
+    });
+  };
+
+  const previewModules = modules.length > 0 ? modules : ALL_APP_FEATURES.map(f => ({ icon: f.icon, label: f.label, desc: f.desc }));
+  const totalSlides = Math.ceil(previewModules.length / 3);
+  const slideModules = previewModules.slice(previewSlide * 3, previewSlide * 3 + 3);
+
+  const advancePreview = (idx: number) => {
+    setPreviewAnim('out');
+    setTimeout(() => { setPreviewSlide(idx); setPreviewAnim('in'); }, 260);
   };
 
   if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
 
   return (
     <div className="space-y-5">
-      {/* En-tête */}
+      {/* Header */}
       <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
         <div className="flex items-center gap-2 mb-1">
-          <Store_ className="w-4 h-4 text-brand-700" />
-          <h3 className="text-sm font-bold text-slate-900">Personnalisation de l'écran de connexion</h3>
+          <Eye className="w-4 h-4 text-brand-700" />
+          <h3 className="text-sm font-bold text-slate-900">Interface de connexion</h3>
         </div>
-        <p className="text-xs text-slate-500 mb-5">Modifiez les textes et modules affichés sur la page de connexion WAARWI. Les changements sont visibles immédiatement.</p>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Titre principal */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Titre principal</label>
-            <input
-              value={headline}
-              onChange={e => setHeadline(e.target.value)}
-              placeholder="Gérez votre business,"
-              className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">Première ligne du titre affiché sur la page</p>
-          </div>
-
-          {/* Partie accentuée */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Accent du titre (en couleur)</label>
-            <input
-              value={headlineAccent}
-              onChange={e => setHeadlineAccent(e.target.value)}
-              placeholder="tout-en-un."
-              className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">Partie colorée en dégradé turquoise</p>
-          </div>
-
-          {/* Sous-titre */}
-          <div className="lg:col-span-2">
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre</label>
-            <textarea
-              value={subtitle}
-              onChange={e => setSubtitle(e.target.value)}
-              rows={2}
-              placeholder="POS, stocks, facturation..."
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 resize-none"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">Description courte visible sous le titre</p>
-          </div>
-        </div>
+        <p className="text-xs text-slate-500">Personnalisez les textes et modules affichés sur l'écran de connexion WAARWI. Les changements sont visibles immédiatement.</p>
       </div>
 
-      {/* Modules métier */}
-      <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Modules affichés</h3>
-            <p className="text-xs text-slate-500">Maximum 6 modules. Ils apparaissent sur la page de connexion.</p>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        {/* Left: Editor */}
+        <div className="space-y-4">
+          {/* Tabs */}
+          <div className="flex bg-slate-100 rounded-xl p-1 border border-slate-200">
+            <button
+              onClick={() => setActiveTab('textes')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'textes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Textes
+            </button>
+            <button
+              onClick={() => setActiveTab('modules')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'modules' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Modules ({modules.length})
+            </button>
           </div>
-          <button
-            onClick={addModule}
-            disabled={modules.length >= 6}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-xs font-semibold hover:bg-brand-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Plus className="w-3.5 h-3.5" /> Ajouter
-          </button>
-        </div>
 
-        {modules.length === 0 && (
-          <div className="text-center py-8 text-sm text-slate-400">Aucun module configuré. Cliquez sur "Ajouter" pour commencer.</div>
-        )}
-
-        <div className="space-y-3">
-          {modules.map((mod, idx) => (
-            <div key={idx} className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/50">
-              <div className="shrink-0">
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Icône</label>
-                <select
-                  value={mod.icon}
-                  onChange={e => updateModule(idx, 'icon', e.target.value)}
-                  className="h-9 px-2 rounded-lg border border-slate-200 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                >
-                  {AVAILABLE_ICONS.map(ic => (
-                    <option key={ic.value} value={ic.value}>{ic.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex-1 min-w-0">
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Nom du module</label>
+          {activeTab === 'textes' && (
+            <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Titre principal</label>
                 <input
-                  value={mod.label}
-                  onChange={e => updateModule(idx, 'label', e.target.value)}
-                  placeholder="Ex : Point de vente"
-                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  value={headline}
+                  onChange={e => setHeadline(e.target.value)}
+                  placeholder="La plateforme qui simplifie,"
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Première ligne du titre</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Accent (en couleur turquoise)</label>
+                <input
+                  value={headlineAccent}
+                  onChange={e => setHeadlineAccent(e.target.value)}
+                  placeholder="connecte et propulse votre business."
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-teal-600 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Partie affichée en turquoise</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre</label>
+                <textarea
+                  value={subtitle}
+                  onChange={e => setSubtitle(e.target.value)}
+                  rows={2}
+                  placeholder="Gérez vos ventes, stocks, clients et finances..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 resize-none"
                 />
               </div>
-              <div className="flex-1 min-w-0">
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Description courte</label>
-                <input
-                  value={mod.desc}
-                  onChange={e => updateModule(idx, 'desc', e.target.value)}
-                  placeholder="Ex : Caisse rapide"
-                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                />
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Image de fond</label>
+                <div className="flex items-center gap-3">
+                  {loginBgUrl && (
+                    <img src={loginBgUrl} alt="Fond" className="w-24 h-14 object-cover rounded-xl border border-slate-200" />
+                  )}
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
+                    <ImagePlus className="w-4 h-4 text-slate-500" />
+                    {loginBgUrl ? 'Changer' : 'Uploader une image'}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 3 * 1024 * 1024) { error('Image trop lourde (max 3 Mo)'); return; }
+                      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+                      const path = `platform/login-bg-${Date.now()}.${ext}`;
+                      const { error: upErr } = await supabase.storage.from('tenant-logos').upload(path, file, { cacheControl: '86400', upsert: true, contentType: file.type });
+                      if (upErr) { error(upErr.message); return; }
+                      const { data: { publicUrl } } = supabase.storage.from('tenant-logos').getPublicUrl(path);
+                      setLoginBgUrl(publicUrl);
+                      success('Image uploadee');
+                    }} />
+                  </label>
+                  {loginBgUrl && (
+                    <button type="button" onClick={() => setLoginBgUrl(null)} className="text-xs text-red-500 hover:text-red-700 font-semibold">
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">Affichee en arriere-plan avec transparence. JPG/WebP recommande, max 3 Mo. Si absente, le fond par defaut s'applique.</p>
               </div>
-              <button onClick={() => removeModule(idx)} className="shrink-0 mt-5 p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all">
-                <Trash2 className="w-4 h-4" />
-              </button>
             </div>
-          ))}
+          )}
+
+          {activeTab === 'modules' && (
+            <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-700">Modules affichés ({modules.length})</p>
+                  <p className="text-[10px] text-slate-400">Ils défilent 3 par 3 sur l'écran de connexion</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={useAllDefaults}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200 transition-colors"
+                  >
+                    <Sparkles className="w-3 h-3" /> Tout rétablir
+                  </button>
+                  <button
+                    onClick={addModule}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Ajouter
+                  </button>
+                </div>
+              </div>
+
+              {modules.length === 0 && (
+                <div className="text-center py-6 space-y-2">
+                  <p className="text-xs text-slate-400">Aucun module configuré.</p>
+                  <button onClick={useAllDefaults} className="text-xs font-semibold text-brand-600 hover:text-brand-700">
+                    Utiliser tous les modules par défaut →
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-2 max-h-[420px] overflow-y-auto -mr-1 pr-1">
+                {modules.map((mod, idx) => {
+                  const IconComp = ICON_MAP_ADMIN[mod.icon] || Shield;
+                  return (
+                    <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 group">
+                      {/* Drag handle / order */}
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <button onClick={() => moveModule(idx, -1)} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors">
+                          <ArrowUpRight className="w-3 h-3 rotate-[-90deg]" />
+                        </button>
+                        <button onClick={() => moveModule(idx, 1)} disabled={idx === modules.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors">
+                          <ArrowUpRight className="w-3 h-3 rotate-90" />
+                        </button>
+                      </div>
+                      {/* Icon preview */}
+                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                        <IconComp className="w-3.5 h-3.5 text-teal-600" />
+                      </div>
+                      {/* Icon select */}
+                      <select
+                        value={mod.icon}
+                        onChange={e => updateModule(idx, 'icon', e.target.value)}
+                        className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0"
+                      >
+                        {AVAILABLE_ICONS.map(ic => (
+                          <option key={ic.value} value={ic.value}>{ic.label}</option>
+                        ))}
+                      </select>
+                      {/* Label */}
+                      <input
+                        value={mod.label}
+                        onChange={e => updateModule(idx, 'label', e.target.value)}
+                        placeholder="Nom du module"
+                        className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
+                      />
+                      {/* Desc */}
+                      <input
+                        value={mod.desc}
+                        onChange={e => updateModule(idx, 'desc', e.target.value)}
+                        placeholder="Description"
+                        className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
+                      />
+                      {/* Delete */}
+                      <button onClick={() => removeModule(idx)} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Live Preview */}
+        <div className="sticky top-4">
+          <div className="bg-white border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-bold text-slate-700">Aperçu en direct</span>
+              </div>
+              <span className="text-[10px] text-slate-400">Écran de connexion</span>
+            </div>
+            <div className="p-4 bg-[#f0f4f8]">
+              {/* Mini mockup of login screen left panel */}
+              <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-4 space-y-3">
+                {/* Logo */}
+                <div>
+                  <img src="/Picsart_26-05-30_02-43-37-384.png" alt="WAARWI" className="h-8 w-auto object-contain" />
+                  <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wider mt-1">Plateforme Business 2.0</p>
+                </div>
+                {/* Headline */}
+                <div>
+                  <p className="text-sm font-extrabold text-slate-900 leading-tight">
+                    {headline || 'La plateforme qui simplifie,'}
+                    {headlineAccent && <span className="text-teal-600"> {headlineAccent}</span>}
+                  </p>
+                  {subtitle && <p className="text-[9px] text-slate-500 mt-1 leading-relaxed">{subtitle}</p>}
+                </div>
+                {/* Feature carousel preview */}
+                <div>
+                  <div
+                    className="grid grid-cols-3 gap-1.5"
+                    style={{
+                      opacity: previewAnim === 'in' ? 1 : 0,
+                      transform: previewAnim === 'in' ? 'translateY(0)' : 'translateY(4px)',
+                      transition: 'opacity 0.26s ease, transform 0.26s ease',
+                    }}
+                  >
+                    {slideModules.map((m, i) => {
+                      const feat = ALL_APP_FEATURES.find(f => f.icon === m.icon);
+                      const colorCls = feat?.color || 'text-teal-600 bg-teal-50';
+                      const IconC = ICON_MAP_ADMIN[m.icon] || Shield;
+                      return (
+                        <div key={`${previewSlide}-${i}`} className={`rounded-lg border p-2 ${colorCls} border-current/20`}>
+                          <div className={`w-5 h-5 rounded flex items-center justify-center mb-1 ${colorCls}`}>
+                            <IconC className="w-3 h-3" />
+                          </div>
+                          <p className="text-[8px] font-bold text-slate-800 truncate">{m.label || '—'}</p>
+                          <p className="text-[7px] text-slate-400 leading-tight truncate">{m.desc || '—'}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Slide indicators */}
+                  {totalSlides > 1 && (
+                    <div className="flex items-center justify-center gap-1 mt-2">
+                      {Array.from({ length: totalSlides }).map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => advancePreview(i)}
+                          className={`rounded-full transition-all ${i === previewSlide ? 'w-3 h-1 bg-teal-500' : 'w-1 h-1 bg-slate-300'}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Mini stats mockup */}
+                <div className="grid grid-cols-3 gap-1 mt-1">
+                  {[
+                    { label: 'Slide actuel', val: `${previewSlide + 1} / ${totalSlides}` },
+                    { label: 'Modules total', val: `${previewModules.length}` },
+                    { label: 'Groupes de 3', val: `${totalSlides}` },
+                  ].map((s, i) => (
+                    <div key={i} className="rounded-lg p-1.5 bg-slate-50 border border-slate-100">
+                      <p className="text-[7px] text-slate-400 font-medium uppercase">{s.label}</p>
+                      <p className="text-[9px] font-black text-slate-700">{s.val}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Bouton sauvegarder */}
+      {/* Save button */}
       <div className="flex justify-end">
         <button
           onClick={save}

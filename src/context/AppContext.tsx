@@ -10,15 +10,14 @@ type AppState = {
   sites: Site[];
   currentSite: Site | null;
   setCurrentSite: (site: Site) => void;
+  /** Marks a site as the persistent default for this user (saved to DB, cross-device) */
+  setDefaultSite: (site: Site) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string, companyName: string, businessType: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
-  /** bumps whenever tenant-scoped data changes on the server (insert/update/delete). */
   dataTick: number;
-  /** subscribe to targeted change events for a specific table. Returns an unsubscribe. */
   onDataChange: (tables: string[], cb: () => void) => () => void;
-  /** POS cart state shared with Shell so the FAB becomes the cart button */
   posCartCount: number;
   posCartOpen: boolean;
   setPosCart: (count: number, open: boolean) => void;
@@ -57,10 +56,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('sites').select('*').eq('tenant_id', prof.tenant_id).eq('is_active', true).order('name'),
       ]);
       setTenant(ten || null);
-      setSites(s || []);
-      const stored = localStorage.getItem('currentSiteId');
-      const found = (s || []).find(x => x.id === stored) || (s || [])[0] || null;
+      const siteList = s || [];
+      setSites(siteList);
+
+      // Priority: DB default_site_id > localStorage fallback > first site
+      const defaultId: string | null = (prof as any).default_site_id || null;
+      const storedId = localStorage.getItem('currentSiteId');
+      const found =
+        (defaultId && siteList.find(x => x.id === defaultId)) ||
+        (storedId && siteList.find(x => x.id === storedId)) ||
+        siteList[0] ||
+        null;
       setCurrentSite(found);
+      if (found) localStorage.setItem('currentSiteId', found.id);
     }
     setLoading(false);
   }, []);
@@ -73,7 +81,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [loadSession]);
 
-  // ── Realtime: one channel per tenant, fans out to page-level listeners ─────
+  // ── Realtime: one channel per tenant ──────────────────────────────────────
   useEffect(() => {
     const tid = profile?.tenant_id;
     if (!tid) return;
@@ -87,26 +95,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ];
     const channel = supabase.channel(`tenant:${tid}`);
     tables.forEach(table => {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table },
-        () => {
-          setDataTick(t => t + 1);
-          listenersRef.current.forEach(l => {
-            if (l.tables.has(table) || l.tables.has('*')) {
-              try { l.cb(); } catch (_e) { /* ignore listener errors */ }
-            }
-          });
-        }
-      );
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+        setDataTick(t => t + 1);
+        listenersRef.current.forEach(l => {
+          if (l.tables.has(table) || l.tables.has('*')) {
+            try { l.cb(); } catch (_e) { /* ignore */ }
+          }
+        });
+      });
     });
     channel.subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [profile?.tenant_id]);
 
-  // Also refresh tenant/profile/sites opportunistically when dataTick moves
-  // so branding & module toggles propagate without a reload. Debounced to avoid
-  // a refetch burst when many tables change at once.
+  // Refresh tenant/profile/sites on dataTick (debounced)
   useEffect(() => {
     if (!profile?.tenant_id || dataTick === 0) return;
     const tid = profile.tenant_id;
@@ -131,9 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const onDataChange = useCallback((tables: string[], cb: () => void) => {
     const entry = { tables: new Set(tables), cb };
     listenersRef.current.push(entry);
-    return () => {
-      listenersRef.current = listenersRef.current.filter(l => l !== entry);
-    };
+    return () => { listenersRef.current = listenersRef.current.filter(l => l !== entry); };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -156,19 +156,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      setUser(null);
-      setProfile(null);
-      setTenant(null);
-      setSites([]);
-      setCurrentSite(null);
+      setUser(null); setProfile(null); setTenant(null); setSites([]); setCurrentSite(null);
       try { localStorage.removeItem('currentSiteId'); } catch {}
-
       await Promise.race([
         supabase.auth.signOut({ scope: 'local' }),
         new Promise(resolve => setTimeout(resolve, 1500)),
       ]);
     } catch {
-      // ignore - we still want to force a clean state
+      // ignore
     } finally {
       try {
         const keys: string[] = [];
@@ -188,6 +183,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('currentSiteId', site.id);
   };
 
+  const handleSetDefaultSite = async (site: Site) => {
+    setCurrentSite(site);
+    localStorage.setItem('currentSiteId', site.id);
+    if (profile?.id) {
+      await supabase
+        .from('profiles')
+        .update({ default_site_id: site.id } as any)
+        .eq('id', profile.id);
+      setProfile(prev => prev ? { ...prev, default_site_id: site.id } as any : prev);
+    }
+  };
+
   const setPosCart = useCallback((count: number, open: boolean) => {
     setPosCartCount(count);
     setPosCartOpenState(open);
@@ -197,6 +204,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{
       loading, user, profile, tenant, sites, currentSite,
       setCurrentSite: handleSetCurrentSite,
+      setDefaultSite: handleSetDefaultSite,
       signIn, signUp, signOut, refresh: loadSession,
       dataTick, onDataChange,
       posCartCount, posCartOpen, setPosCart,

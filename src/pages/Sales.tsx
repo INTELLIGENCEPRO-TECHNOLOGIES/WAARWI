@@ -3,7 +3,7 @@ import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, C
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
-import { Modal } from '../components/Modal';
+import { Modal, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printTicket80, printDocumentA4, type PrintTenant } from '../lib/print';
@@ -436,7 +436,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         onApply={(f, t) => { setCustomFrom(f); setCustomTo(t); setDateRange('custom'); setPickerOpen(false); }} />
 
       {/* ── Detail Modal ─────────────────────────────────────────── */}
-      <Modal open={open} onClose={() => setOpen(false)} title={selected ? `Vente ${selected.sale_number}` : ''} size="lg"
+      <DocPanel open={open} onClose={() => setOpen(false)} title={selected ? `Vente ${selected.sale_number}` : ''}
         footer={<>
           <button onClick={() => setOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Receipt className="w-4 h-4" /></button>
@@ -503,7 +503,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             </div>
           );
         })()}
-      </Modal>
+      </DocPanel>
     </div>
   );
 }

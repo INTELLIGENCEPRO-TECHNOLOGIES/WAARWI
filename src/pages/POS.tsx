@@ -19,6 +19,7 @@ import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
 import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, type PrintTenant } from '../lib/print';
 import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from '../lib/types';
+import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
 
 type ArticleLite = {
   id: string; internal_ref: string; name: string; oem_ref: string;
@@ -794,6 +795,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [discount, setDiscount] = useState(0);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [exceptionPrices, setExceptionPrices] = useState<Map<string, number>>(new Map());
+
+  // Load exception prices when customer changes
+  useEffect(() => {
+    if (!customer || !tenant) { setExceptionPrices(new Map()); return; }
+    supabase.from('customer_exception_prices')
+      .select('article_id, exception_price')
+      .eq('tenant_id', tenant.id)
+      .eq('customer_id', customer.id)
+      .then(({ data }) => {
+        const m = new Map<string, number>();
+        (data || []).forEach((r: any) => m.set(r.article_id, Number(r.exception_price)));
+        setExceptionPrices(m);
+        if (m.size > 0 && cart.length > 0) {
+          setCart(c => c.map(item => {
+            const ep = m.get(item.article_id);
+            return ep !== undefined ? { ...item, unit_price: ep } : item;
+          }));
+        }
+      });
+  }, [customer?.id]);
 
   // Sync cart state to Shell FAB
   useEffect(() => {
@@ -945,12 +967,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     // Only update screen if we're not already inside the POS (avoids resetting after a sale)
     setScreen(prev => {
       if (prev === 'pos') return 'pos';
+      // Check if caller requested direct POS access (skip resume)
+      const ctx = peekNavContext();
+      if (ctx?.target === 'directPos' && existingSession) {
+        consumeNavContext();
+        return 'pos';
+      }
       return existingSession ? 'resume' : 'open-form';
     });
     setLoadingData(false);
   }, [tenant?.id, currentSite?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Force-skip resume screen when coming from Dashboard "Ventes" button
+  useEffect(() => {
+    if (session && screen === 'resume') {
+      const ctx = peekNavContext();
+      if (ctx?.target === 'directPos') {
+        consumeNavContext();
+        setScreen('pos');
+      }
+    }
+  }, [session, screen]);
 
   const categoryMatchIds = useMemo(() => {
     if (!categoryId) return null;
@@ -987,9 +1026,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         return c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
       if (a.stock_available <= 0) { error('Article en rupture'); return c; }
+      const price = exceptionPrices.get(a.id) ?? a.sale_price;
       const next = [...c, {
         article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
-        quantity: 1, unit_price: a.sale_price, discount: 0,
+        quantity: 1, unit_price: price, discount: 0,
         stock_available: a.stock_available, purchase_cost: a.purchase_price,
       }];
       return next;
@@ -1078,6 +1118,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (!session || !currentSite) return;
     if (!customer) { error('Sélectionnez un client pour une vente à crédit'); return; }
     if (cart.length === 0) { error('Panier vide'); return; }
+    if ((customer as any).credit_blocked) { error('Ventes à crédit bloquées pour ce client'); return; }
+    const limit = Number((customer as any).credit_limit || 0);
+    const currentBalance = Number((customer as any).balance || 0);
+    if (limit > 0 && (currentBalance + total) > limit) {
+      error(`Plafond crédit dépassé (${formatFCFA(limit)}). Solde actuel : ${formatFCFA(currentBalance)}`);
+      return;
+    }
     setPaying(true);
     const saleItems = cart.map(i => ({
       article_id: i.article_id, name: i.name, quantity: i.quantity,
@@ -1669,6 +1716,19 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+        {customer && (() => {
+          const limit = Number((customer as any).credit_limit || 0);
+          const balance = Number((customer as any).balance || 0);
+          const blocked = (customer as any).credit_blocked;
+          if (blocked) return <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-red-600"><AlertTriangle className="w-3 h-3" />Crédit bloqué</div>;
+          if (limit > 0) {
+            const usage = Math.round((balance / limit) * 100);
+            const isOver = balance >= limit;
+            const isNear = usage >= 80;
+            if (isOver || isNear) return <div className={`mt-1 flex items-center gap-1 text-[10px] font-semibold ${isOver ? 'text-red-600' : 'text-amber-600'}`}><AlertTriangle className="w-3 h-3" />{isOver ? 'Plafond atteint' : `Crédit à ${usage}%`} ({formatFCFA(balance)}/{formatFCFA(limit)})</div>;
+          }
+          return null;
+        })()}
       </div>
 
       {/* Cart lines */}

@@ -3,7 +3,8 @@ import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
-  Plus, CreditCard, Wallet, ChevronRight, Truck, BarChart3, ClipboardList
+  Plus, CreditCard, Wallet, ChevronRight, Truck, BarChart3, ClipboardList, Star,
+  PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -34,7 +35,7 @@ const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any
   ]},
   { title: 'Tiers', items: [
     { key: 'tiers', label: 'Gestion des tiers', icon: Users },
-    { key: 'supplier_orders', label: 'Commandes fourn.', icon: ShoppingBag },
+    { key: 'supplier_orders', label: 'Commandes fournisseurs', icon: ShoppingBag },
   ]},
   { title: 'Comptabilité', items: [
     { key: 'acc_plan', label: 'Plan comptable', icon: BookOpen },
@@ -75,7 +76,7 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
 };
 
 export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r: Route) => void; children: ReactNode }) {
-  const { tenant, profile, signOut, sites, currentSite, setCurrentSite, posCartCount, posCartOpen, setPosCart } = useApp();
+  const { tenant, profile, signOut, sites, currentSite, setCurrentSite, setDefaultSite, posCartCount, posCartOpen, setPosCart } = useApp();
   const { can } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const enabledModules: string[] = Array.isArray((tenant as any)?.enabled_modules)
@@ -96,6 +97,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [mobileOpen, setMobileOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!tenant) return;
@@ -210,25 +212,28 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   }, [mobileOpen]);
 
   const NavList = () => (
-    <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+    <nav className={`flex-1 overflow-y-auto py-4 space-y-5 ${sidebarCollapsed ? 'px-1.5' : 'px-3'}`}>
       {isSuperAdmin ? (
         <div>
-          <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] uppercase text-slate-400">Plateforme</div>
+          {!sidebarCollapsed && <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] uppercase text-slate-400">Plateforme</div>}
           <button
             onClick={() => { onRoute('platform_admin'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'}`}
+            className={`nav-item ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            title={sidebarCollapsed ? 'Console plateforme' : undefined}
           >
-            <Crown className={`w-[18px] h-[18px] ${route === 'platform_admin' ? 'text-white' : 'text-amber-500'}`} />
-            <span className="truncate">Console plateforme</span>
+            <Crown className={`w-[18px] h-[18px] flex-shrink-0 ${route === 'platform_admin' ? 'text-white' : 'text-amber-500'}`} />
+            {!sidebarCollapsed && <span>Console plateforme</span>}
           </button>
         </div>
       ) : (
       <>
       {visibleNav.map(group => (
         <div key={group.title}>
-          <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] uppercase text-slate-400">
-            {group.title}
-          </div>
+          {!sidebarCollapsed && (
+            <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] uppercase text-slate-400">
+              {group.title}
+            </div>
+          )}
           <div className="space-y-0.5">
             {group.items.map(item => {
               const Icon = item.icon;
@@ -238,14 +243,18 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 <button
                   key={item.key}
                   onClick={() => { onRoute(item.key); setMobileOpen(false); }}
-                  className={`nav-item ${active ? 'nav-item-active' : 'nav-item-idle'}`}
+                  className={`nav-item ${active ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                  title={sidebarCollapsed ? item.label : undefined}
                 >
-                  <Icon className={`w-[18px] h-[18px] ${active ? 'text-white' : 'text-slate-400'}`} />
-                  <span className="truncate">{item.label}</span>
-                  {badge > 0 && (
+                  <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
+                  {!sidebarCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
+                  {!sidebarCollapsed && badge > 0 && (
                     <span className={`ml-auto min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-brand-800' : 'bg-rose-500 text-white animate-pulse'}`}>{badge > 99 ? '99+' : badge}</span>
                   )}
-                  {badge === 0 && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/80" />}
+                  {!sidebarCollapsed && badge === 0 && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/80" />}
+                  {sidebarCollapsed && badge > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-rose-500 text-white text-[8px] font-bold flex items-center justify-center">{badge > 9 ? '9+' : badge}</span>
+                  )}
                 </button>
               );
             })}
@@ -254,13 +263,14 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       ))}
       {routeVisible('settings') && (
         <div>
-          <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] uppercase text-slate-400">Système</div>
+          {!sidebarCollapsed && <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] uppercase text-slate-400">Système</div>}
           <button
             onClick={() => { onRoute('settings'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'}`}
+            className={`nav-item ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            title={sidebarCollapsed ? 'Paramètres' : undefined}
           >
-            <Settings className={`w-[18px] h-[18px] ${route === 'settings' ? 'text-white' : 'text-slate-400'}`} />
-            <span className="truncate">Paramètres</span>
+            <Settings className={`w-[18px] h-[18px] flex-shrink-0 ${route === 'settings' ? 'text-white' : 'text-slate-400'}`} />
+            {!sidebarCollapsed && <span className="whitespace-nowrap">Paramètres</span>}
           </button>
         </div>
       )}
@@ -270,31 +280,94 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   );
 
   return (
-    <div className="min-h-screen h-screen flex overflow-hidden">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col sticky top-0 h-screen border-r border-slate-200/70 glass">
-        <div className="h-16 flex items-center gap-2.5 px-5 border-b border-slate-100">
+    <div className="min-h-screen h-screen flex flex-col overflow-hidden">
+      {/* Unified desktop header — spans full width, logo area aligns with sidebar */}
+      <header
+        className="hidden lg:flex items-center h-16 border-b border-slate-200/60 bg-white sticky top-0 z-30 flex-shrink-0"
+        style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}
+      >
+        <div className={`flex items-center gap-2.5 px-5 h-full border-r border-slate-200/60 transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[260px]'}`}>
           {tenant?.logo_url ? (
             <img
               src={tenant.logo_url}
               alt={tenant.name}
-              className="w-10 h-10 object-contain header-logo-reveal drop-shadow-[0_4px_12px_rgba(15,23,42,0.12)]"
+              className="w-10 h-10 object-contain flex-shrink-0 header-logo-reveal drop-shadow-[0_4px_12px_rgba(15,23,42,0.12)]"
             />
           ) : (
             <img
-              src="/waarwi-mark.png"
+              src="/Picsart_26-05-30_02-43-37-384.png"
               alt="WAARWI"
-              className="w-10 h-10 object-contain header-logo-reveal drop-shadow-[0_4px_12px_rgba(15,23,42,0.12)]"
+              className="h-8 w-auto max-w-[130px] object-contain flex-shrink-0 header-logo-reveal"
             />
           )}
-          <div className="leading-tight min-w-0">
-            <div className="text-sm font-bold text-slate-900 tracking-tight truncate">{tenant?.name || 'WAARWI'}</div>
-            {tenant?.slogan && <div className="text-[10px] font-medium text-slate-500 leading-tight truncate">{tenant.slogan}</div>}
+          {!sidebarCollapsed && (
+            <div className="leading-tight min-w-0">
+              {tenant?.logo_url && (
+                <div className="text-sm font-bold text-slate-900 tracking-tight">{tenant?.name || 'WAARWI'}</div>
+              )}
+              {!tenant?.logo_url && (
+                <div className="text-[9px] font-semibold text-slate-400 leading-tight tracking-wide uppercase">Plateforme Business 2.0</div>
+              )}
+              {tenant?.slogan && <div className="text-[10px] font-medium text-slate-500 leading-tight">{tenant.slogan}</div>}
+            </div>
+          )}
+        </div>
+        <div className="flex-1 flex items-center gap-3 px-5">
+          <div className="flex-1" />
+          <div className="flex items-center gap-1.5 shrink-0">
+            {newOrdersCount > 0 && (
+              <button
+                onClick={() => onRoute('online_orders')}
+                className="relative w-10 h-10 rounded-2xl bg-white/70 hover:bg-white border border-slate-200/60 hover:border-rose-200 flex items-center justify-center transition-all active:scale-90 shadow-sm"
+                aria-label="Notifications"
+              >
+                <Bell className="w-[17px] h-[17px] text-slate-700" strokeWidth={2.2} />
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white animate-pulse num">
+                  {newOrdersCount > 9 ? '9+' : newOrdersCount}
+                </span>
+              </button>
+            )}
+            <div className="relative">
+              <button
+                onClick={() => setUserOpen(v => !v)}
+                className="flex items-center gap-2 pl-1 pr-1.5 h-10 rounded-2xl hover:bg-slate-50 transition-colors active:scale-95"
+              >
+                <div className="w-[34px] h-[34px] rounded-2xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-900 flex items-center justify-center text-white text-[13px] font-extrabold shadow-glow ring-2 ring-white/80">
+                  {(profile?.full_name || profile?.email || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="text-left leading-tight pr-1">
+                  <div className="text-[12px] font-bold text-slate-900 max-w-[120px] truncate">{profile?.full_name || profile?.email}</div>
+                  <div className="text-[9px] text-slate-400 uppercase tracking-wider font-bold leading-none">{profile?.role}</div>
+                </div>
+              </button>
+              {userOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setUserOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-2xl shadow-premium py-1.5 animate-slide-down z-20">
+                    <div className="px-3.5 py-2.5 border-b border-slate-100">
+                      <div className="text-sm font-semibold text-slate-900 truncate">{profile?.full_name}</div>
+                      <div className="text-xs text-slate-500 truncate">{profile?.email}</div>
+                    </div>
+                    <button onClick={() => { setUserOpen(false); onRoute('settings'); }} className="w-full text-left px-3.5 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 transition-colors">
+                      <Settings className="w-4 h-4 text-slate-400" /> Paramètres
+                    </button>
+                    <button onClick={signOut} className="w-full text-left px-3.5 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
+                      <LogOut className="w-4 h-4" /> Déconnexion
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
+      </header>
+
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Desktop sidebar — below unified header */}
+      <aside className={`hidden lg:flex flex-col flex-shrink-0 h-full border-r border-slate-200/60 bg-white/80 backdrop-blur-sm transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[260px]'}`}>
         <NavList />
         <div className="p-3 border-t border-slate-100 space-y-2">
-          {sites.length > 0 && (
+          {sites.length > 0 && !sidebarCollapsed && (
             <div className="relative">
               <div className="text-[10px] font-bold tracking-[0.08em] uppercase text-slate-400 px-1 mb-1">Point de vente</div>
               <button
@@ -310,22 +383,46 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setSiteOpen(false)} />
                   <div className="absolute left-0 right-0 bottom-[calc(100%+6px)] bg-white border border-slate-200 rounded-2xl shadow-premium py-1.5 animate-slide-down z-20 max-h-64 overflow-auto">
-                    {sites.map(s => (
-                      <button key={s.id}
-                        onClick={() => { setCurrentSite(s); setSiteOpen(false); onRoute('dashboard'); }}
-                        className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors ${currentSite?.id === s.id ? 'text-brand-800 bg-brand-50/70 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}
-                      >
-                        <Store className={`w-4 h-4 ${currentSite?.id === s.id ? 'text-brand-600' : 'text-slate-400'}`} />
-                        <span className="truncate">{s.name}</span>
-                      </button>
-                    ))}
+                    {sites.map(s => {
+                      const isDefault = (profile as any)?.default_site_id === s.id;
+                      return (
+                        <div key={s.id} className={`flex items-center gap-1 px-2 py-1 transition-colors ${currentSite?.id === s.id ? 'bg-brand-50/70' : 'hover:bg-slate-50'}`}>
+                          <button
+                            onClick={() => { setCurrentSite(s); setSiteOpen(false); onRoute('dashboard'); }}
+                            className={`flex-1 text-left flex items-center gap-2 px-1.5 py-1 text-sm rounded-lg transition-colors ${currentSite?.id === s.id ? 'text-brand-800 font-semibold' : 'text-slate-700'}`}
+                          >
+                            <Store className={`w-4 h-4 ${currentSite?.id === s.id ? 'text-brand-600' : 'text-slate-400'}`} />
+                            <span className="truncate">{s.name}</span>
+                          </button>
+                          <button
+                            title={isDefault ? 'Magasin par défaut' : 'Définir comme défaut'}
+                            onClick={() => { setDefaultSite(s); setSiteOpen(false); onRoute('dashboard'); }}
+                            className={`shrink-0 p-1.5 rounded-lg transition-colors ${isDefault ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}`}
+                          >
+                            <Star className="w-3.5 h-3.5" fill={isDefault ? 'currentColor' : 'none'} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <div className="px-3 pt-1.5 pb-0.5 border-t border-slate-100 mt-0.5">
+                      <p className="text-[9px] text-slate-400 flex items-center gap-1">
+                        <Star className="w-2.5 h-2.5 text-amber-400" fill="currentColor" /> = magasin par défaut (persiste entre connexions)
+                      </p>
+                    </div>
                   </div>
                 </>
               )}
             </div>
           )}
-          <button onClick={signOut} className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100 transition-colors">
-            <LogOut className="w-4 h-4" /> Déconnexion
+          <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100 transition-colors ${sidebarCollapsed ? 'justify-center' : ''}`}>
+            <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarCollapsed && 'Déconnexion'}
+          </button>
+          <button
+            onClick={() => setSidebarCollapsed(v => !v)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors justify-center"
+            title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
         </div>
       </aside>
@@ -357,14 +454,18 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     />
                   ) : (
                     <img
-                      src="/waarwi-mark.png"
+                      src="/Picsart_26-05-30_02-43-37-384.png"
                       alt="WAARWI"
-                      className="w-9 h-9 object-contain shrink-0 header-logo-reveal drop-shadow-[0_3px_10px_rgba(15,23,42,0.12)]"
+                      className="h-7 w-auto max-w-[110px] object-contain shrink-0 header-logo-reveal"
                     />
                   )}
                   <div className="min-w-0">
-                    <div className="text-[13px] font-bold text-slate-900 tracking-tight truncate leading-tight">{tenant?.name || 'WAARWI'}</div>
-                    <div className="text-[9px] text-slate-500 leading-tight font-medium truncate">{tenant?.slogan || profile?.email}</div>
+                    {tenant?.logo_url && (
+                      <div className="text-[13px] font-bold text-slate-900 tracking-tight truncate leading-tight">{tenant?.name || 'WAARWI'}</div>
+                    )}
+                    <div className="text-[9px] text-slate-500 leading-tight font-medium truncate">
+                      {tenant?.logo_url ? (tenant?.slogan || profile?.email) : 'Plateforme Business 2.0'}
+                    </div>
                   </div>
                 </div>
                 <button
@@ -424,16 +525,27 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   <div>
                     <div className="px-1 mb-1 text-[9px] font-bold tracking-[0.1em] uppercase text-slate-400">Point de vente</div>
                     <div className="max-h-32 overflow-auto space-y-0.5">
-                      {sites.map(s => (
-                        <button key={s.id}
-                          onClick={() => { setCurrentSite(s); onRoute('dashboard'); closeDrawer(); }}
-                          className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12.5px] font-medium transition-colors ${currentSite?.id === s.id ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'}`}
-                        >
-                          <Store className={`w-3.5 h-3.5 ${currentSite?.id === s.id ? 'text-brand-600' : 'text-slate-400'}`} />
-                          <span className="truncate flex-1 text-left">{s.name}</span>
-                          {currentSite?.id === s.id && <span className="w-1.5 h-1.5 rounded-full bg-brand-600 shrink-0" />}
-                        </button>
-                      ))}
+                      {sites.map(s => {
+                        const isDefault = (profile as any)?.default_site_id === s.id;
+                        return (
+                          <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors ${currentSite?.id === s.id ? 'bg-brand-50' : 'hover:bg-slate-50'}`}>
+                            <button
+                              onClick={() => { setCurrentSite(s); onRoute('dashboard'); closeDrawer(); }}
+                              className={`flex-1 flex items-center gap-2 px-2.5 py-1.5 text-[12.5px] font-medium transition-colors ${currentSite?.id === s.id ? 'text-brand-700 font-semibold' : 'text-slate-600'}`}
+                            >
+                              <Store className={`w-3.5 h-3.5 ${currentSite?.id === s.id ? 'text-brand-600' : 'text-slate-400'}`} />
+                              <span className="truncate flex-1 text-left">{s.name}</span>
+                            </button>
+                            <button
+                              onClick={() => { setDefaultSite(s); onRoute('dashboard'); closeDrawer(); }}
+                              title={isDefault ? 'Défaut' : 'Définir défaut'}
+                              className={`shrink-0 p-1.5 transition-colors ${isDefault ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}`}
+                            >
+                              <Star className="w-3 h-3" fill={isDefault ? 'currentColor' : 'none'} />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -474,7 +586,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </button>
 
         <header
-          className="sticky top-0 z-30 flex items-center gap-2 px-3 sm:px-5 border-b border-slate-200/40 pl-[60px] lg:pl-5"
+          className="lg:hidden sticky top-0 z-30 flex items-center gap-2 px-3 sm:px-5 border-b border-slate-200/40 pl-[60px]"
           style={{
             paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
             paddingBottom: '8px',
@@ -485,7 +597,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             boxShadow: '0 1px 0 rgba(15,23,42,0.03), 0 4px 20px -12px rgba(15,23,42,0.08)',
           }}
         >
-          <div className="lg:hidden flex flex-col min-w-0 flex-1">
+          <div className="flex flex-col min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
               {tenant?.logo_url ? (
                 <img
@@ -495,25 +607,28 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 />
               ) : (
                 <img
-                  src="/waarwi-mark.png"
+                  src="/Picsart_26-05-30_02-43-37-384.png"
                   alt="WAARWI"
-                  className="h-8 max-w-[40px] object-contain shrink-0 header-logo-reveal drop-shadow-[0_4px_12px_rgba(15,23,42,0.14)]"
+                  className="h-7 w-auto max-w-[100px] object-contain shrink-0 header-logo-reveal"
                 />
               )}
-              <div
-                className={`font-extrabold tracking-tight text-slate-900 leading-tight truncate ${(tenant?.name || '').length > 18 ? 'text-[12px]' : (tenant?.name || '').length > 12 ? 'text-[13px]' : 'text-[14.5px]'}`}
-              >
-                {tenant?.name || 'WAARWI'}
-              </div>
+              {tenant?.logo_url && (
+                <div
+                  className={`font-extrabold tracking-tight text-slate-900 leading-tight truncate ${(tenant?.name || '').length > 18 ? 'text-[12px]' : (tenant?.name || '').length > 12 ? 'text-[13px]' : 'text-[14.5px]'}`}
+                >
+                  {tenant?.name || 'WAARWI'}
+                </div>
+              )}
             </div>
+            {!tenant?.logo_url && (
+              <div className="text-[9px] font-semibold text-slate-400 leading-tight mt-0.5 uppercase tracking-wide">Plateforme Business 2.0</div>
+            )}
             {tenant?.slogan && (
               <div className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5 truncate">
                 {tenant.slogan}
               </div>
             )}
           </div>
-
-          <div className="hidden lg:block flex-1" />
 
           <div className="flex items-center gap-1.5 shrink-0">
           {newOrdersCount > 0 && (
@@ -528,7 +643,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               </span>
             </button>
           )}
-
           <div className="relative">
             <button
               onClick={() => setUserOpen(v => !v)}
@@ -536,10 +650,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             >
               <div className="w-[34px] h-[34px] rounded-2xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-900 flex items-center justify-center text-white text-[13px] font-extrabold shadow-glow ring-2 ring-white/80">
                 {(profile?.full_name || profile?.email || '?').charAt(0).toUpperCase()}
-              </div>
-              <div className="hidden md:block text-left leading-tight pr-1">
-                <div className="text-[12px] font-bold text-slate-900 max-w-[120px] truncate">{profile?.full_name || profile?.email}</div>
-                <div className="text-[9px] text-slate-400 uppercase tracking-wider font-bold leading-none">{profile?.role}</div>
               </div>
             </button>
             {userOpen && (
@@ -751,6 +861,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             <Plus className={`w-5 h-5 ${fabOpen ? 'text-white' : 'text-teal-900'}`} strokeWidth={fabOpen ? 2.5 : 2.8} />
           </button>
         )}
+      </div>
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
-import { Modal, ConfirmDialog } from '../components/Modal';
+import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
 
 type OrderStatus = 'nouvelle' | 'confirmee' | 'en_preparation' | 'prete' | 'livree' | 'annulee';
 type PaymentStatus = 'non_paye' | 'en_attente' | 'paye' | 'rembourse';
@@ -434,12 +434,11 @@ export function OnlineOrders() {
         </div>
       )}
 
-      {/* ── Modal détail ─────────────────────────────────────────── */}
-      <Modal
+      {/* ── Panel detail ─────────────────────────────────────────── */}
+      <DocPanel
         open={!!selected}
         onClose={() => setSelected(null)}
         title={selected ? `Commande ${selected.order_number}` : ''}
-        size="xl"
         footer={selected && (
           <div className="flex flex-wrap gap-1.5 w-full" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <button onClick={() => openWhatsApp(selected)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm active:scale-95 transition-all">
@@ -628,7 +627,7 @@ export function OnlineOrders() {
             </div>
           </div>
         )}
-      </Modal>
+      </DocPanel>
 
       <ConfirmDialog open={confirmCancel} onClose={() => setConfirmCancel(false)} onConfirm={doCancel}
         title="Annuler la commande" message="Confirmer l'annulation de cette commande ?" confirmLabel="Annuler la commande" danger />
