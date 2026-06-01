@@ -67,7 +67,7 @@ const ROUTE_MODULE: Record<string, string> = {
   dashboard: 'dashboard', pos: 'pos', sales: 'sales', cash_history: 'cash_history',
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting',
+  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting',
   settings: 'settings', reports: 'reports',
 };
 
@@ -80,6 +80,10 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
   acc_plan: 'view_accounting',
   acc_journals: 'view_accounting',
   acc_balance: 'view_accounting',
+  acc_grandlivre: 'view_accounting',
+  acc_tiers: 'view_accounting',
+  acc_search: 'view_accounting',
+  acc_cloture: 'view_accounting',
   settings: 'manage_settings',
 };
 
@@ -166,6 +170,10 @@ function Inner() {
         {route === 'acc_plan' && <Accounting section="plan" />}
         {route === 'acc_journals' && <Accounting section="journals" />}
         {route === 'acc_balance' && <Accounting section="balance" />}
+        {route === 'acc_grandlivre' && <Accounting section="grandlivre" />}
+        {route === 'acc_tiers' && <Accounting section="tiers" />}
+        {route === 'acc_search' && <Accounting section="search" />}
+        {route === 'acc_cloture' && <Accounting section="cloture" />}
         {route === 'settings' && <Settings />}
         {route === 'reports' && <Reports />}
         {route === 'platform_admin' && isSuperAdmin && <PlatformAdmin />}

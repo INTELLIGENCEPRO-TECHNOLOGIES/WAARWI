@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { desktopAutoFocus } from '../lib/device';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { consumeNavContext } from '../lib/navHighlight';
@@ -608,9 +609,12 @@ export function Stock() {
 
             <div>
               <label className="label">Article</label>
-              <select value={adjRow?.article_id || ''} onChange={e => { const r = rows.find(x => x.article_id === e.target.value); if (r) { setAdjRow(r); setAdjInventoryQty(r.quantity); } }} className="input">
-                {rows.map(r => <option key={r.article_id} value={r.article_id}>{r.name} ({r.internal_ref})</option>)}
-              </select>
+              <SearchableSelect
+                options={rows.map(r => ({ value: r.article_id, label: r.name, sublabel: r.internal_ref }))}
+                value={adjRow?.article_id || ''}
+                onChange={v => { const r = rows.find(x => x.article_id === v); if (r) { setAdjRow(r); setAdjInventoryQty(r.quantity); } }}
+                placeholder="Rechercher un article..."
+              />
             </div>
 
             {adjMode === 'inventory' ? (
@@ -623,10 +627,13 @@ export function Stock() {
               <>
                 <div>
                   <label className="label">Magasin de destination</label>
-                  <select value={adjTargetSite} onChange={e => setAdjTargetSite(e.target.value)} className="input">
-                    <option value="">— Choisir —</option>
-                    {sites.filter(s => s.id !== currentSite?.id).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    options={sites.filter(s => s.id !== currentSite?.id).map(s => ({ value: s.id, label: s.name }))}
+                    value={adjTargetSite}
+                    onChange={v => setAdjTargetSite(v)}
+                    placeholder="— Choisir —"
+                    searchable={false}
+                  />
                 </div>
                 <div>
                   <label className="label">Quantité à transférer</label>

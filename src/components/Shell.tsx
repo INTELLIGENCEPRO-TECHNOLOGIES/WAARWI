@@ -4,7 +4,7 @@ import {
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
   Plus, CreditCard, Wallet, ChevronRight, Truck, BarChart3, ClipboardList, Star,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Search, Lock,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -41,6 +41,10 @@ const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any
     { key: 'acc_plan', label: 'Plan comptable', icon: BookOpen },
     { key: 'acc_journals', label: 'Journaux', icon: FileText },
     { key: 'acc_balance', label: 'Balance', icon: TrendingUp },
+    { key: 'acc_grandlivre', label: 'Grand Livre', icon: BookOpen },
+    { key: 'acc_tiers', label: 'Tiers', icon: Users },
+    { key: 'acc_search', label: 'Recherche', icon: Search },
+    { key: 'acc_cloture', label: 'Clôtures', icon: Lock },
   ]},
   { title: 'Rapports', items: [
     { key: 'reports', label: 'États', icon: BarChart3 },
@@ -59,7 +63,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock',
   billing: 'billing', online_orders: 'online_orders',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
-  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting',
+  acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting',
   settings: 'settings', reports: 'reports',
 };
 
@@ -72,6 +76,10 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
   acc_plan: 'view_accounting',
   acc_journals: 'view_accounting',
   acc_balance: 'view_accounting',
+  acc_grandlivre: 'view_accounting',
+  acc_tiers: 'view_accounting',
+  acc_search: 'view_accounting',
+  acc_cloture: 'view_accounting',
   settings: 'manage_settings',
 };
 

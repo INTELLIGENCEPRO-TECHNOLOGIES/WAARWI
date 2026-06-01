@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
 
@@ -994,10 +995,12 @@ function BrandsTab() {
         footer={<><button onClick={() => setOpenModel(false)} className="btn-secondary">Annuler</button><button onClick={saveModel} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
         <div className="space-y-3">
           <div><label className="label">Marque *</label>
-            <select value={modelForm.brand_id || ''} onChange={e => setModelForm({ ...modelForm, brand_id: e.target.value })} className="input">
-              <option value="">—</option>
-              {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
+            <SearchableSelect
+              options={brands.map(b => ({ value: b.id, label: b.name }))}
+              value={modelForm.brand_id || ''}
+              onChange={v => setModelForm({ ...modelForm, brand_id: v })}
+              placeholder="— Choisir une marque —"
+            />
           </div>
           <div><label className="label">Nom du modèle *</label><input value={modelForm.name || ''} onChange={e => setModelForm({ ...modelForm, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div className="grid grid-cols-2 gap-2">

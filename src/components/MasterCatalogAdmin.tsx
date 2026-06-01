@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Plus, Pencil, Trash2, Loader2, Search, X, Download, Upload, FileText,
-  Package, Tag, ChevronRight, Check, AlertCircle, Power, PowerOff, Save, Folder
+  Plus, Pencil, Trash2, Loader2, Search, Download, Upload, FileText,
+  Package, Tag, ChevronRight, Save, Folder
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -21,30 +21,27 @@ type Item = {
 type Tab = 'activities' | 'catalogs' | 'categories' | 'items' | 'import';
 
 export function MasterCatalogAdmin() {
-  const { success, error: toastError } = useToast();
   const [tab, setTab] = useState<Tab>('catalogs');
 
   const [activities, setActivities] = useState<ActivityType[]>([]);
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedCatalogId, setSelectedCatalogId] = useState<string>('');
 
   const reload = async () => {
     setLoading(true);
-    const [a, c, cats, its] = await Promise.all([
+    const [a, c, cats] = await Promise.all([
       supabase.from('business_activity_types').select('*').order('name'),
       supabase.from('master_catalogs').select('*').order('name'),
       supabase.from('master_catalog_categories').select('*').order('sort_order'),
-      supabase.from('master_catalog_items').select('*').order('designation'),
     ]);
     setActivities((a.data || []) as ActivityType[]);
     setCatalogs((c.data || []) as Catalog[]);
     setCategories((cats.data || []) as Category[]);
-    setItems((its.data || []) as Item[]);
-    if (!selectedCatalogId && c.data && c.data.length > 0) setSelectedCatalogId(c.data[0].id);
+    const catId = selectedCatalogId || (c.data && c.data.length > 0 ? c.data[0].id : '');
+    if (!selectedCatalogId && catId) setSelectedCatalogId(catId);
     setLoading(false);
   };
 
@@ -80,8 +77,8 @@ export function MasterCatalogAdmin() {
           {tab === 'activities' && <ActivitiesTab activities={activities} onChange={reload} />}
           {tab === 'catalogs' && <CatalogsTab catalogs={catalogs} activities={activities} onChange={reload} selectedId={selectedCatalogId} onSelect={setSelectedCatalogId} />}
           {tab === 'categories' && <CategoriesTab catalogs={catalogs} categories={categories} selectedCatalogId={selectedCatalogId} onSelectCatalog={setSelectedCatalogId} onChange={reload} />}
-          {tab === 'items' && <ItemsTab catalogs={catalogs} categories={categories} items={items} selectedCatalogId={selectedCatalogId} onSelectCatalog={setSelectedCatalogId} onChange={reload} />}
-          {tab === 'import' && <ImportTab onChange={reload} />}
+          {tab === 'items' && <ItemsTab catalogs={catalogs} categories={categories} selectedCatalogId={selectedCatalogId} onSelectCatalog={setSelectedCatalogId} onChange={reload} />}
+          {tab === 'import' && <ImportTab catalogs={catalogs} selectedCatalogId={selectedCatalogId} onSelectCatalog={setSelectedCatalogId} onChange={reload} />}
         </>
       )}
     </div>
@@ -189,6 +186,21 @@ function CatalogsTab({ catalogs, activities, onChange, selectedId, onSelect }: {
   const { success, error: toastError } = useToast();
   const [editing, setEditing] = useState<Catalog | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    (async () => {
+      const results: Record<string, number> = {};
+      await Promise.all(catalogs.map(async (c) => {
+        const { count } = await supabase
+          .from('master_catalog_items')
+          .select('*', { count: 'exact', head: true })
+          .eq('master_catalog_id', c.id);
+        results[c.id] = count || 0;
+      }));
+      setCounts(results);
+    })();
+  }, [catalogs]);
 
   const openNew = () => {
     setIsNew(true);
@@ -237,6 +249,7 @@ function CatalogsTab({ catalogs, activities, onChange, selectedId, onSelect }: {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-bold text-slate-900 truncate">{c.name}</div>
                   <div className="text-[10px] font-semibold text-brand-700 mt-0.5 truncate">{activity?.name || '—'}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">{counts[c.id] !== undefined ? `${counts[c.id]} article${counts[c.id] > 1 ? 's' : ''}` : '...'}</div>
                   {c.description && <div className="text-[11px] text-slate-600 mt-1 break-words line-clamp-2">{c.description}</div>}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -395,22 +408,56 @@ function CategoriesTab({ catalogs, categories, selectedCatalogId, onSelectCatalo
 }
 
 /* ============== ITEMS ============== */
-function ItemsTab({ catalogs, categories, items, selectedCatalogId, onSelectCatalog, onChange }: { catalogs: Catalog[]; categories: Category[]; items: Item[]; selectedCatalogId: string; onSelectCatalog: (id: string) => void; onChange: () => void }) {
+const PAGE_SIZE = 50;
+
+function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, onChange }: { catalogs: Catalog[]; categories: Category[]; selectedCatalogId: string; onSelectCatalog: (id: string) => void; onChange: () => void }) {
   const { success, error: toastError } = useToast();
+  const [items, setItems] = useState<Item[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
+  const [loadingItems, setLoadingItems] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const [isNew, setIsNew] = useState(false);
-  const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteAllOpen, setBulkDeleteAllOpen] = useState(false);
 
-  const catalogItems = items.filter(i => i.master_catalog_id === selectedCatalogId);
   const catalogCats = categories.filter(c => c.master_catalog_id === selectedCatalogId);
   const rootCats = catalogCats.filter(c => !c.parent_id);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return catalogItems;
-    return catalogItems.filter(i => `${i.designation} ${i.brand} ${i.manufacturer_ref} ${i.model}`.toLowerCase().includes(q));
-  }, [catalogItems, search]);
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => { setSearchDebounced(search); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Load items with server-side pagination
+  const loadPage = async () => {
+    if (!selectedCatalogId) return;
+    setLoadingItems(true);
+    const from = page * PAGE_SIZE;
+    let query = supabase
+      .from('master_catalog_items')
+      .select('*', { count: 'exact' })
+      .eq('master_catalog_id', selectedCatalogId)
+      .order('designation')
+      .range(from, from + PAGE_SIZE - 1);
+    if (searchDebounced.trim()) {
+      query = query.or(`designation.ilike.%${searchDebounced.trim()}%,brand.ilike.%${searchDebounced.trim()}%,manufacturer_ref.ilike.%${searchDebounced.trim()}%`);
+    }
+    const { data, count } = await query;
+    setItems((data || []) as Item[]);
+    setTotalCount(count || 0);
+    setLoadingItems(false);
+  };
+
+  useEffect(() => { loadPage(); setSelected(new Set()); }, [selectedCatalogId, page, searchDebounced]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const openNew = () => {
     setIsNew(true);
@@ -448,7 +495,7 @@ function ItemsTab({ catalogs, categories, items, selectedCatalogId, onSelectCata
         success('Article mis à jour');
       }
       setEditing(null);
-      onChange();
+      loadPage();
     } catch (e: any) { toastError(e.message); }
   };
 
@@ -459,8 +506,56 @@ function ItemsTab({ catalogs, categories, items, selectedCatalogId, onSelectCata
       if (error) throw error;
       success('Article supprimé');
       setDeleteId(null);
-      onChange();
+      loadPage();
     } catch (e: any) { toastError(e.message); }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === items.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(items.map(i => i.id)));
+    }
+  };
+
+  const doBulkDelete = async () => {
+    if (selected.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selected);
+      const batchSize = 100;
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { error } = await supabase.from('master_catalog_items').delete().in('id', batch);
+        if (error) throw error;
+      }
+      success(`${ids.length} article${ids.length > 1 ? 's' : ''} supprimé${ids.length > 1 ? 's' : ''}`);
+      setSelected(new Set());
+      setBulkDeleteOpen(false);
+      loadPage();
+    } catch (e: any) { toastError(e.message); } finally { setBulkDeleting(false); }
+  };
+
+  const doBulkDeleteAll = async () => {
+    if (!selectedCatalogId) return;
+    setBulkDeleting(true);
+    try {
+      const { error } = await supabase.from('master_catalog_items').delete().eq('master_catalog_id', selectedCatalogId);
+      if (error) throw error;
+      success(`Tous les articles du catalogue ont été supprimés`);
+      setSelected(new Set());
+      setBulkDeleteAllOpen(false);
+      loadPage();
+      onChange();
+    } catch (e: any) { toastError(e.message); } finally { setBulkDeleting(false); }
   };
 
   if (!selectedCatalogId) return <div className="text-center py-12 text-sm text-slate-500">Sélectionnez d'abord un catalogue.</div>;
@@ -471,7 +566,7 @@ function ItemsTab({ catalogs, categories, items, selectedCatalogId, onSelectCata
     <div className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex-1 min-w-[200px]">
-          <select value={selectedCatalogId} onChange={e => onSelectCatalog(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
+          <select value={selectedCatalogId} onChange={e => { onSelectCatalog(e.target.value); setPage(0); }} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
             {catalogs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
@@ -484,33 +579,75 @@ function ItemsTab({ catalogs, categories, items, selectedCatalogId, onSelectCata
         </button>
       </div>
 
-      <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{filtered.length} / {catalogItems.length} article{catalogItems.length > 1 ? 's' : ''}</div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-        {filtered.map(i => (
-          <div key={i.id} className="card-premium p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-slate-900 break-words">{i.designation}</div>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {i.brand && <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}
-                  {i.manufacturer_ref && <span className="text-[10px] font-mono text-slate-500">{i.manufacturer_ref}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => openEdit(i)} className="p-1.5 rounded-lg hover:bg-slate-100"><Pencil className="w-3.5 h-3.5 text-slate-600" /></button>
-                <button onClick={() => setDeleteId(i.id)} className="p-1.5 rounded-lg hover:bg-red-50"><Trash2 className="w-3.5 h-3.5 text-red-600" /></button>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5 pt-1.5 mt-1.5 border-t border-slate-100">
-              <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Achat</div><div className="text-[11px] font-bold text-slate-800 num mt-0.5">{formatFCFA(i.purchase_price)}</div></div>
-              <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vente</div><div className="text-[11px] font-bold text-brand-700 num mt-0.5">{formatFCFA(i.sale_price)}</div></div>
-              <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">TVA</div><div className="text-[11px] font-semibold text-slate-600 num mt-0.5">{i.vat_rate}%</div></div>
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && <div className="col-span-full card-premium p-6 text-center text-sm text-slate-500">Aucun article.</div>}
+      {/* Bulk actions bar */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+            <input type="checkbox" checked={items.length > 0 && selected.size === items.length} onChange={toggleSelectAll} className="rounded" />
+            Tout sélectionner ({selected.size}/{items.length})
+          </label>
+          <span className="text-xs font-bold text-slate-500">{totalCount} article{totalCount > 1 ? 's' : ''} au total</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <button onClick={() => setBulkDeleteOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition">
+              <Trash2 className="w-3.5 h-3.5" /> Supprimer ({selected.size})
+            </button>
+          )}
+          {totalCount > 0 && (
+            <button onClick={() => setBulkDeleteAllOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 text-white hover:bg-red-700 transition">
+              <Trash2 className="w-3.5 h-3.5" /> Vider le catalogue
+            </button>
+          )}
+        </div>
       </div>
+
+      {loadingItems ? (
+        <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-600" /></div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+            {items.map(i => {
+              const isSel = selected.has(i.id);
+              return (
+                <div key={i.id} className={`card-premium p-3 transition ${isSel ? 'ring-2 ring-red-300 bg-red-50/30' : ''}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <input type="checkbox" checked={isSel} onChange={() => toggleSelect(i.id)} className="mt-1 rounded shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-slate-900 break-words">{i.designation}</div>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          {i.brand && <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}
+                          {i.manufacturer_ref && <span className="text-[10px] font-mono text-slate-500">{i.manufacturer_ref}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => openEdit(i)} className="p-1.5 rounded-lg hover:bg-slate-100"><Pencil className="w-3.5 h-3.5 text-slate-600" /></button>
+                      <button onClick={() => setDeleteId(i.id)} className="p-1.5 rounded-lg hover:bg-red-50"><Trash2 className="w-3.5 h-3.5 text-red-600" /></button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 mt-1.5 border-t border-slate-100">
+                    <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Achat</div><div className="text-[11px] font-bold text-slate-800 num mt-0.5">{formatFCFA(i.purchase_price)}</div></div>
+                    <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vente</div><div className="text-[11px] font-bold text-brand-700 num mt-0.5">{formatFCFA(i.sale_price)}</div></div>
+                    <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">TVA</div><div className="text-[11px] font-semibold text-slate-600 num mt-0.5">{i.vat_rate}%</div></div>
+                  </div>
+                </div>
+              );
+            })}
+            {items.length === 0 && <div className="col-span-full card-premium p-6 text-center text-sm text-slate-500">Aucun article.</div>}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-1 pt-2">
+              <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 disabled:opacity-40 hover:bg-slate-50 transition">Préc.</button>
+              <span className="px-3 py-1.5 text-xs font-bold text-slate-700">Page {page + 1} / {totalPages}</span>
+              <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 disabled:opacity-40 hover:bg-slate-50 transition">Suiv.</button>
+            </div>
+          )}
+        </>
+      )}
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? 'Nouvel article' : 'Modifier l\'article'} size="md"
         footer={<>
@@ -551,16 +688,28 @@ function ItemsTab({ catalogs, categories, items, selectedCatalogId, onSelectCata
         )}
       </Modal>
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={doDelete} title="Supprimer cet article ?" message="Cette action est irréversible. Les tenants qui l'ont déjà importé conservent leur copie." confirmLabel="Supprimer" />
+      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={doDelete} title="Supprimer cet article ?" message="Cette action est irréversible." confirmLabel="Supprimer" />
+      <ConfirmDialog open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} onConfirm={doBulkDelete} title={`Supprimer ${selected.size} article${selected.size > 1 ? 's' : ''} ?`} message="Cette action est irréversible. Les tenants qui les ont déjà importés conservent leur copie." confirmLabel={bulkDeleting ? 'Suppression…' : 'Supprimer'} />
+      <ConfirmDialog open={bulkDeleteAllOpen} onClose={() => setBulkDeleteAllOpen(false)} onConfirm={doBulkDeleteAll} title="Vider tout le catalogue ?" message={`Tous les ${totalCount} articles de ce catalogue seront supprimés définitivement. Les tenants qui les ont déjà importés conservent leur copie.`} confirmLabel={bulkDeleting ? 'Suppression…' : 'Tout supprimer'} />
     </div>
   );
 }
 
 /* ============== IMPORT EXCEL ============== */
-const EXCEL_HEADERS = [
-  'type_activite','catalogue','categorie','sous_categorie','marque','reference_constructeur',
-  'designation','modele','unite','prix_achat','prix_vente','taux_tva',
-  'code_barres','description','image_url','source_url','source_nom','niveau_fiabilite'
+const IMPORT_HEADERS = [
+  { key: 'designation', label: 'Désignation *', required: true },
+  { key: 'marque', label: 'Marque', required: false },
+  { key: 'reference', label: 'Référence constructeur', required: false },
+  { key: 'categorie', label: 'Catégorie', required: false },
+  { key: 'sous_categorie', label: 'Sous-catégorie', required: false },
+  { key: 'modele', label: 'Modèle', required: false },
+  { key: 'unite', label: 'Unité', required: false },
+  { key: 'prix_achat', label: 'Prix achat', required: false },
+  { key: 'prix_vente', label: 'Prix vente', required: false },
+  { key: 'taux_tva', label: 'TVA (%)', required: false },
+  { key: 'code_barres', label: 'Code-barres', required: false },
+  { key: 'description', label: 'Description', required: false },
+  { key: 'image_url', label: 'Image URL', required: false },
 ];
 
 async function parseExcel(buf: ArrayBuffer): Promise<any[]> {
@@ -570,16 +719,34 @@ async function parseExcel(buf: ArrayBuffer): Promise<any[]> {
   if (!sheetName) return [];
   const sheet = wb.Sheets[sheetName];
   const raw = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '', raw: false });
+
+  // Build label-to-key mapping from IMPORT_HEADERS
+  const labelToKey = new Map<string, string>();
+  IMPORT_HEADERS.forEach(h => {
+    labelToKey.set(normalizeHeader(h.label), h.key);
+  });
+
   return raw.map(r => {
     const row: any = {};
     for (const k of Object.keys(r)) {
-      row[k.trim().toLowerCase()] = String(r[k] ?? '').trim();
+      const norm = normalizeHeader(k);
+      const key = labelToKey.get(norm) || norm;
+      row[key] = String(r[k] ?? '').trim();
     }
     return row;
   });
 }
 
-function ImportTab({ onChange }: { onChange: () => void }) {
+function normalizeHeader(s: string): string {
+  return s.trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/_+$/, '')
+    .replace(/^_+/, '');
+}
+
+function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: { catalogs: Catalog[]; selectedCatalogId: string; onSelectCatalog: (id: string) => void; onChange: () => void }) {
   const { success, error: toastError } = useToast();
   const [rows, setRows] = useState<any[]>([]);
   const [filename, setFilename] = useState('');
@@ -588,63 +755,41 @@ function ImportTab({ onChange }: { onChange: () => void }) {
 
   const downloadTemplate = async () => {
     const XLSX = await import('xlsx');
-    const sample = [{
-      type_activite: 'electromenager',
-      catalogue: 'Catalogue Électroménager',
-      categorie: 'Gros électroménager',
-      sous_categorie: 'Réfrigérateurs',
-      marque: 'Samsung',
-      reference_constructeur: 'RT29K5030S8',
-      designation: 'Réfrigérateur 2 portes 300L',
-      modele: 'RT29K5030S8/EF',
-      unite: 'pièce',
-      prix_achat: 250000,
-      prix_vente: 310000,
-      taux_tva: 18,
-      code_barres: '8806088123456',
-      description: 'Réfrigérateur No Frost 300L',
-      image_url: '',
-      source_url: '',
-      source_nom: 'Samsung Sénégal',
-      niveau_fiabilite: 'fiable',
-    }];
-    const ws = XLSX.utils.json_to_sheet(sample, { header: EXCEL_HEADERS });
-    ws['!cols'] = EXCEL_HEADERS.map(h => ({ wch: Math.max(14, h.length + 2) }));
+    const headerRow = IMPORT_HEADERS.map(h => h.label);
+    const sampleRow = ['Plaquette de frein avant', 'Bosch', '0986AB1234', 'Freinage', 'Plaquettes', '', 'pièce', '15000', '25000', '18', '', 'Plaquette haute performance', ''];
+    const ws = XLSX.utils.aoa_to_sheet([headerRow, sampleRow]);
+    ws['!cols'] = headerRow.map(h => ({ wch: Math.max(16, h.length + 4) }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Catalogue');
-    XLSX.writeFile(wb, 'modele-catalogue-maitre.xlsx');
+
+    const catName = catalogs.find(c => c.id === selectedCatalogId)?.name || 'catalogue';
+    XLSX.writeFile(wb, `modele-import-${catName.toLowerCase().replace(/\s+/g, '-')}.xlsx`);
   };
 
-  const exportCurrent = async () => {
+  const exportCatalog = async () => {
+    if (!selectedCatalogId) { toastError('Sélectionnez un catalogue'); return; }
     const XLSX = await import('xlsx');
-    const { data, error } = await supabase.rpc('export_master_catalog_items');
-    const rowsToExport: any[] = error || !data
-      ? []
-      : (data as any[]).map(r => ({
-          type_activite: r.activity_slug || '',
-          catalogue: r.catalog_name || '',
-          categorie: r.category_name || '',
-          sous_categorie: r.subcategory_name || '',
-          marque: r.brand || '',
-          reference_constructeur: r.manufacturer_ref || '',
-          designation: r.designation || '',
-          modele: r.model || '',
-          unite: r.unit || '',
-          prix_achat: Number(r.purchase_price || 0),
-          prix_vente: Number(r.sale_price || 0),
-          taux_tva: Number(r.vat_rate || 0),
-          code_barres: r.barcode || '',
-          description: r.description || '',
-          image_url: r.image_url || '',
-          source_url: r.source_url || '',
-          source_nom: r.source_name || '',
-          niveau_fiabilite: r.reliability_level || '',
-        }));
-    const ws = XLSX.utils.json_to_sheet(rowsToExport, { header: EXCEL_HEADERS });
-    ws['!cols'] = EXCEL_HEADERS.map(h => ({ wch: Math.max(14, h.length + 2) }));
+    const { data, error } = await supabase.rpc('export_master_catalog_by_id', { p_catalog_id: selectedCatalogId });
+    if (error) { toastError(error.message); return; }
+    const rows = (data || []) as any[];
+    if (rows.length === 0) { toastError('Catalogue vide'); return; }
+
+    const headerRow = IMPORT_HEADERS.map(h => h.label);
+    const dataRows = rows.map((r: any) => [
+      r.designation || '', r.marque || '', r.reference || '',
+      r.categorie || '', r.sous_categorie || '',
+      r.modele || '', r.unite || '',
+      r.prix_achat || 0, r.prix_vente || 0, r.taux_tva || 0,
+      r.code_barres || '', r.description || '', r.image_url || '',
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+    ws['!cols'] = headerRow.map(h => ({ wch: Math.max(16, h.length + 4) }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Catalogue');
-    XLSX.writeFile(wb, 'export-catalogue-maitre.xlsx');
+
+    const catName = catalogs.find(c => c.id === selectedCatalogId)?.name || 'catalogue';
+    XLSX.writeFile(wb, `export-${catName.toLowerCase().replace(/\s+/g, '-')}.xlsx`);
+    success(`${rows.length} articles exportés`);
   };
 
   const handleFile = async (f: File) => {
@@ -652,18 +797,18 @@ function ImportTab({ onChange }: { onChange: () => void }) {
     const buf = await f.arrayBuffer();
     const parsed = await parseExcel(buf);
     if (parsed.length === 0) { toastError('Fichier vide ou invalide'); return; }
-    const first = parsed[0];
-    const missing = ['type_activite', 'designation'].filter(k => !(k in first));
-    if (missing.length > 0) { toastError(`Colonnes manquantes : ${missing.join(', ')}`); return; }
     setRows(parsed);
     setResult(null);
   };
 
   const runImport = async () => {
-    if (rows.length === 0) return;
+    if (rows.length === 0 || !selectedCatalogId) return;
     setImporting(true);
     try {
-      const { data, error } = await supabase.rpc('bulk_upsert_master_catalog_items', { p_rows: rows });
+      const { data, error } = await supabase.rpc('import_to_master_catalog', {
+        p_catalog_id: selectedCatalogId,
+        p_rows: rows,
+      });
       if (error) throw error;
       setResult(data as any);
       onChange();
@@ -677,55 +822,94 @@ function ImportTab({ onChange }: { onChange: () => void }) {
 
   return (
     <div className="space-y-3">
+      {/* Catalog selector */}
       <div className="card-premium p-4">
-        <div className="flex items-start gap-3">
-          <FileText className="w-5 h-5 text-brand-700 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <div className="text-sm font-bold text-slate-900">Modèle Excel</div>
-            <div className="text-xs text-slate-600 mt-0.5">Téléchargez un modèle vierge avec les bonnes colonnes et un exemple, ou exportez le catalogue actuel.</div>
-          </div>
-          <div className="flex gap-1.5 shrink-0">
-            <button onClick={downloadTemplate} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 hover:border-brand-300 text-slate-800 transition active:scale-95">
-              <Download className="w-3.5 h-3.5" /> Modèle Excel
-            </button>
-            <button onClick={exportCurrent} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition active:scale-95">
-              <Download className="w-3.5 h-3.5" /> Exporter tout
-            </button>
+        <div className="flex items-center gap-3">
+          <Folder className="w-5 h-5 text-brand-700 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-slate-900 mb-1">Catalogue cible</div>
+            <select value={selectedCatalogId} onChange={e => onSelectCatalog(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20">
+              {catalogs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
         </div>
       </div>
 
+      {/* Template + Export */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="card-premium p-4">
+          <div className="flex items-start gap-3">
+            <Download className="w-5 h-5 text-sky-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="text-sm font-bold text-slate-900">Modele Excel</div>
+              <div className="text-[11px] text-slate-500 mt-0.5 mb-2">Fichier avec les colonnes attendues et un exemple. Les champs marques * sont obligatoires.</div>
+              <button onClick={downloadTemplate} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 hover:border-sky-300 text-slate-800 transition active:scale-95">
+                <Download className="w-3.5 h-3.5" /> Telecharger le modele
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-premium p-4">
+          <div className="flex items-start gap-3">
+            <Upload className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="text-sm font-bold text-slate-900">Exporter le catalogue</div>
+              <div className="text-[11px] text-slate-500 mt-0.5 mb-2">Exporte tous les articles du catalogue selectionne au meme format que le modele (re-importable).</div>
+              <button onClick={exportCatalog} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition active:scale-95">
+                <Download className="w-3.5 h-3.5" /> Exporter
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Column reference */}
       <div className="card-premium p-4">
-        <div className="text-sm font-bold text-slate-900 mb-2">Fichier à importer</div>
+        <div className="text-xs font-bold text-slate-900 mb-2">Colonnes attendues</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-1.5">
+          {IMPORT_HEADERS.map(h => (
+            <div key={h.key} className={`text-[11px] px-2 py-1.5 rounded-lg ${h.required ? 'bg-brand-50 border border-brand-200 font-bold text-brand-800' : 'bg-slate-50 border border-slate-100 text-slate-600'}`}>
+              {h.label}
+            </div>
+          ))}
+        </div>
+        <div className="text-[10px] text-slate-400 mt-2">Les colonnes marquees * sont obligatoires. Les autres sont optionnelles.</div>
+      </div>
+
+      {/* File upload */}
+      <div className="card-premium p-4">
+        <div className="text-sm font-bold text-slate-900 mb-2">Importer un fichier</div>
         <label className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition">
           <Upload className="w-6 h-6 text-slate-400" />
-          <div className="text-xs text-slate-600">Cliquez pour sélectionner un fichier Excel (.xlsx, .xls)</div>
-          {filename && <div className="text-[11px] font-semibold text-brand-700">{filename} · {rows.length} ligne{rows.length > 1 ? 's' : ''}</div>}
-          <input type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+          <div className="text-xs text-slate-600 text-center">Cliquez ou glissez un fichier Excel (.xlsx, .xls)</div>
+          {filename && <div className="text-[11px] font-semibold text-brand-700">{filename} — {rows.length} ligne{rows.length > 1 ? 's' : ''} detectees</div>}
+          <input type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
         </label>
         {rows.length > 0 && (
-          <div className="mt-3 flex items-center justify-end gap-2">
+          <div className="mt-3 flex items-center justify-between">
             <button onClick={() => { setRows([]); setFilename(''); setResult(null); }} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
-            <button onClick={runImport} disabled={importing} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow disabled:opacity-50">
+            <button onClick={runImport} disabled={importing || !selectedCatalogId} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow disabled:opacity-50">
               {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              {importing ? 'Import…' : `Importer ${rows.length} ligne${rows.length > 1 ? 's' : ''}`}
+              {importing ? 'Import…' : `Importer ${rows.length} article${rows.length > 1 ? 's' : ''}`}
             </button>
           </div>
         )}
       </div>
 
+      {/* Results */}
       {result && (
         <div className="card-premium p-4 space-y-2">
           <div className="text-sm font-bold text-slate-900">Rapport d'import</div>
           <div className="grid grid-cols-3 gap-2">
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100"><div className="text-[10px] font-bold uppercase text-emerald-700">Créés</div><div className="text-2xl font-bold text-emerald-800 num mt-1">{result.imported}</div></div>
-            <div className="p-3 rounded-xl bg-sky-50 border border-sky-100"><div className="text-[10px] font-bold uppercase text-sky-700">Mis à jour</div><div className="text-2xl font-bold text-sky-800 num mt-1">{result.updated}</div></div>
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100"><div className="text-[10px] font-bold uppercase text-emerald-700">Crees</div><div className="text-2xl font-bold text-emerald-800 num mt-1">{result.imported}</div></div>
+            <div className="p-3 rounded-xl bg-sky-50 border border-sky-100"><div className="text-[10px] font-bold uppercase text-sky-700">Mis a jour</div><div className="text-2xl font-bold text-sky-800 num mt-1">{result.updated}</div></div>
             <div className="p-3 rounded-xl bg-red-50 border border-red-100"><div className="text-[10px] font-bold uppercase text-red-700">Erreurs</div><div className="text-2xl font-bold text-red-800 num mt-1">{result.errors?.length || 0}</div></div>
           </div>
           {result.errors && result.errors.length > 0 && (
             <div className="max-h-40 overflow-auto bg-slate-50 rounded-xl p-2 space-y-1">
               {result.errors.map((e: any, i: number) => (
-                <div key={i} className="text-[11px] text-slate-700 break-words">Ligne {e.row}: {e.error}</div>
+                <div key={i} className="text-[11px] text-red-700 break-words">Ligne {e.row}: {e.error}</div>
               ))}
             </div>
           )}

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Receipt, User, CreditCard } from 'lucide-react';
+import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Receipt, User, CreditCard, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
@@ -15,6 +16,7 @@ type Sale = {
   status: string; created_at: string; source: string;
   user_id: string;
   cash_session_id: string | null;
+  accounting_status: string;
   customers: { name: string } | null;
   sites: { name: string } | null;
   sale_payments?: { method_name: string }[];
@@ -47,6 +49,7 @@ function statusStyles(status: string) {
 
 export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, dataTick, profile } = useApp();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -54,6 +57,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [items, setItems] = useState<any[]>([]);
   const [pays, setPays] = useState<any[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
+  const [accounting, setAccounting] = useState(false);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -68,7 +72,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     let cancelled = false;
     (async () => {
       const { data } = await supabase.from('sales')
-        .select('*, customers(name, phone, address), sites(name), sale_payments(method_name)')
+        .select('*, customers(name, phone, address), sites(name), sale_payments(method_name), accounting_status')
         .eq('tenant_id', tenant.id)
         .eq('site_id', currentSite.id)
         .order('created_at', { ascending: false })
@@ -197,6 +201,20 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const activeFilterCount = (statusFilter ? 1 : 0) + (dateRange !== 'all' ? 1 : 0);
   const clearFilters = () => { setSearch(''); setStatusFilter(''); setDateRange('all'); setCustomFrom(''); setCustomTo(''); setFiltersOpen(false); };
 
+  const comptabiliserVente = async () => {
+    if (!selected || accounting) return;
+    setAccounting(true);
+    try {
+      const { data, error } = await supabase.rpc('comptabiliser_vente', { p_sale_id: selected.id });
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur inconnue');
+      toastSuccess(`Comptabilisé : ${(data as any).piece_number}`);
+      setSelected({ ...selected, accounting_status: 'accounted' });
+      setSales(prev => prev.map(s => s.id === selected.id ? { ...s, accounting_status: 'accounted' } : s));
+    } catch (e: any) { toastError(e.message); }
+    finally { setAccounting(false); }
+  };
+
   return (
     <div className="space-y-3 pb-6">
       {/* ── Unified premium header ───────────────────────────────── */}
@@ -296,6 +314,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${st.pill}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
                         </span>
+                        {s.accounting_status === 'accounted' && <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200">C</span>}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5 num">{formatDateTime(s.created_at)}</div>
                     </div>
@@ -332,6 +351,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                     <th className="px-4 py-3 text-left hidden lg:table-cell">Magasin</th>
                     <th className="px-4 py-3 text-left hidden xl:table-cell">Paiement</th>
                     <th className="px-4 py-3 text-center">Statut</th>
+                    <th className="px-4 py-3 text-center hidden lg:table-cell">Compta</th>
                     <th className="px-4 py-3 text-right">Total</th>
                     <th className="px-4 py-3 text-right w-16">Actions</th>
                   </tr>
@@ -352,6 +372,13 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${st.pill}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-center hidden lg:table-cell">
+                          {s.accounting_status === 'accounted' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />OK</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right font-bold text-slate-900 num whitespace-nowrap">{formatFCFA(s.total)}</td>
                         <td className="px-4 py-3 text-right">
@@ -439,6 +466,14 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       <DocPanel open={open} onClose={() => setOpen(false)} title={selected ? `Vente ${selected.sale_number}` : ''}
         footer={<>
           <button onClick={() => setOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          {selected && selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' && (
+            <button onClick={comptabiliserVente} disabled={accounting} className="btn-icon text-teal-700 hover:bg-teal-50" title="Comptabiliser">
+              {accounting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+            </button>
+          )}
+          {selected && selected.accounting_status === 'accounted' && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />Comptabilisé</span>
+          )}
           <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Receipt className="w-4 h-4" /></button>
           <button onClick={printInvoice} className="btn-icon-primary" title="Facture A4"><Printer className="w-4 h-4" /></button>
         </>}

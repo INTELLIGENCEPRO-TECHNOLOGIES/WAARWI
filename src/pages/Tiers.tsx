@@ -9,6 +9,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
@@ -1217,13 +1218,18 @@ function PaymentForm({
 
       <div>
         <label className="label">Imputer sur la facture</label>
-        <select value={paySale} onChange={e => { setPaySale(e.target.value); onSelectSale(e.target.value); }} className="input">
-          <option value="">— Sélectionner une facture non soldée —</option>
-          {unpaid.map((s: any) => {
-            const d = Math.max(0, Number(s.total) - Number(s.paid));
-            return <option key={s.id} value={s.id}>{s.sale_number} · dû {formatFCFA(d)}</option>;
-          })}
-        </select>
+        <SearchableSelect
+          options={[
+            { value: '', label: '— Selectionner une facture non soldee —' },
+            ...unpaid.map((s: any) => {
+              const d = Math.max(0, Number(s.total) - Number(s.paid));
+              return { value: s.id, label: `${s.sale_number} · du ${formatFCFA(d)}` };
+            })
+          ]}
+          value={paySale}
+          onChange={v => { setPaySale(v); onSelectSale(v); }}
+          placeholder="— Selectionner une facture —"
+        />
         {unpaid.length === 0 && <div className="text-xs text-emerald-700 mt-1.5 inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" />Toutes les factures sont soldées.</div>}
       </div>
 
@@ -1919,13 +1925,18 @@ function SupplierPaymentForm({
 
       <div>
         <label className="label">Imputer sur la commande</label>
-        <select value={payOrder} onChange={e => { setPayOrder(e.target.value); onSelectOrder(e.target.value); }} className="input">
-          <option value="">Acompte libre (sans commande)</option>
-          {unpaid.map((o: any) => {
-            const d = Math.max(0, Number(o.total) - Number(o.paid || 0));
-            return <option key={o.id} value={o.id}>{o.order_number} · dû {formatFCFA(d)}</option>;
-          })}
-        </select>
+        <SearchableSelect
+          options={[
+            { value: '', label: 'Acompte libre (sans commande)' },
+            ...unpaid.map((o: any) => {
+              const d = Math.max(0, Number(o.total) - Number(o.paid || 0));
+              return { value: o.id, label: `${o.order_number} · du ${formatFCFA(d)}` };
+            })
+          ]}
+          value={payOrder}
+          onChange={v => { setPayOrder(v); onSelectOrder(v); }}
+          placeholder="Acompte libre (sans commande)"
+        />
         {unpaid.length === 0 && <div className="text-xs text-emerald-700 mt-1.5 inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" />Toutes les commandes sont soldées.</div>}
       </div>
 
@@ -2215,16 +2226,16 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_1fr_auto] gap-2 items-end">
           <div>
             <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Article</label>
-            <select value={newArticleId} onChange={e => {
-              setNewArticleId(e.target.value);
-              const art = articles.find(a => a.id === e.target.value);
-              if (art && newPrice === '') setNewPrice(art.sale_price);
-            }} className="input text-xs">
-              <option value="">— Choisir un article —</option>
-              {filteredAvailable.slice(0, 100).map(a => (
-                <option key={a.id} value={a.id}>{a.name} ({a.internal_ref}) — {formatFCFA(a.sale_price)}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={filteredAvailable.map(a => ({ value: a.id, label: a.name, sublabel: `${a.internal_ref} — ${formatFCFA(a.sale_price)}` }))}
+              value={newArticleId}
+              onChange={v => {
+                setNewArticleId(v);
+                const art = articles.find(a => a.id === v);
+                if (art && newPrice === '') setNewPrice(art.sale_price);
+              }}
+              placeholder="— Choisir un article —"
+            />
           </div>
           <div>
             <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Prix spécial</label>

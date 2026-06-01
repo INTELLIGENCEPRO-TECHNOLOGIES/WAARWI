@@ -13,7 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
-import { ConfirmDialog } from '../components/Modal';
+import { ConfirmDialog, Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 import { isAutoParts, BUSINESS_TYPE_LABELS } from '../lib/types';
@@ -46,6 +46,11 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [importExportOpen, setImportExportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [importFilename, setImportFilename] = useState('');
+  const [importingArticles, setImportingArticles] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; updated: number; errors: any[] } | null>(null);
   const [form, setForm] = useState<Form>({});
   const [compats, setCompats] = useState<Compat[]>([]);
   const [saving, setSaving] = useState(false);
@@ -303,6 +308,119 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
 
+  // ── Import / Export ──
+  const TENANT_IMPORT_HEADERS = [
+    { key: 'designation', label: 'Désignation *', required: true },
+    { key: 'reference_interne', label: 'Référence interne', required: false },
+    { key: 'categorie', label: 'Catégorie', required: false },
+    { key: 'marque', label: 'Marque', required: false },
+    { key: 'ref_oem', label: 'Réf OEM', required: false },
+    { key: 'ref_fournisseur', label: 'Réf fournisseur', required: false },
+    { key: 'code_barres', label: 'Code-barres', required: false },
+    { key: 'unite', label: 'Unité', required: false },
+    { key: 'prix_achat', label: 'Prix achat', required: false },
+    { key: 'prix_vente', label: 'Prix vente', required: false },
+    { key: 'prix_minimum', label: 'Prix minimum', required: false },
+    { key: 'prix_gros', label: 'Prix gros', required: false },
+    { key: 'taux_tva', label: 'TVA (%)', required: false },
+    { key: 'stock_min', label: 'Stock min', required: false },
+    { key: 'stock_max', label: 'Stock max', required: false },
+    { key: 'emplacement', label: 'Emplacement', required: false },
+    { key: 'description', label: 'Description', required: false },
+  ];
+
+  const downloadArticleTemplate = async () => {
+    const XLSX = await import('xlsx');
+    const headerRow = TENANT_IMPORT_HEADERS.map(h => h.label);
+    const sampleRow = ['Plaquette de frein avant', 'ART-0001', 'Freinage', 'Bosch', '0986AB1234', '', '', 'pièce', '15000', '25000', '20000', '22000', '18', '5', '50', 'Rayon A1', ''];
+    const ws = XLSX.utils.aoa_to_sheet([headerRow, sampleRow]);
+    ws['!cols'] = headerRow.map(h => ({ wch: Math.max(16, h.length + 4) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Articles');
+    XLSX.writeFile(wb, 'modele-import-articles.xlsx');
+  };
+
+  const exportArticles = async () => {
+    const XLSX = await import('xlsx');
+    const { data, error: expErr } = await supabase.rpc('export_tenant_articles');
+    if (expErr) { error(expErr.message); return; }
+    const rows = (data || []) as any[];
+    if (rows.length === 0) { error('Aucun article à exporter'); return; }
+    const headerRow = TENANT_IMPORT_HEADERS.map(h => h.label);
+    const dataRows = rows.map((r: any) => [
+      r.designation || '', r.reference_interne || '', r.categorie || '',
+      r.marque || '', r.ref_oem || '', r.ref_fournisseur || '',
+      r.code_barres || '', r.unite || '',
+      r.prix_achat || 0, r.prix_vente || 0, r.prix_minimum || 0, r.prix_gros || 0,
+      r.taux_tva || 0, r.stock_min || 0, r.stock_max || 0,
+      r.emplacement || '', r.description || '',
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+    ws['!cols'] = headerRow.map(h => ({ wch: Math.max(16, h.length + 4) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Articles');
+    XLSX.writeFile(wb, `export-articles-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    success(`${rows.length} articles exportés`);
+  };
+
+  const handleImportFile = async (f: File) => {
+    setImportFilename(f.name);
+    const XLSX = await import('xlsx');
+    const buf = await f.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const sheetName = wb.SheetNames[0];
+    if (!sheetName) { error('Fichier vide'); return; }
+    const sheet = wb.Sheets[sheetName];
+    const raw = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '', raw: false });
+
+    const labelToKey = new Map<string, string>();
+    TENANT_IMPORT_HEADERS.forEach(h => {
+      const norm = h.label.trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_')
+        .replace(/_+$/, '').replace(/^_+/, '');
+      labelToKey.set(norm, h.key);
+    });
+
+    const parsed = raw.map(r => {
+      const row: any = {};
+      for (const k of Object.keys(r)) {
+        const norm = k.trim().toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_')
+          .replace(/_+$/, '').replace(/^_+/, '');
+        const key = labelToKey.get(norm) || norm;
+        row[key] = String(r[k] ?? '').trim();
+      }
+      return row;
+    });
+    if (parsed.length === 0) { error('Aucune ligne trouvée'); return; }
+    setImportRows(parsed);
+    setImportResult(null);
+  };
+
+  const runArticleImport = async () => {
+    if (importRows.length === 0) return;
+    setImportingArticles(true);
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('bulk_import_tenant_articles', { p_rows: importRows });
+      if (rpcErr) throw rpcErr;
+      setImportResult(data as any);
+      success('Import terminé');
+      await load();
+    } catch (e: any) {
+      error(e.message);
+    } finally {
+      setImportingArticles(false);
+    }
+  };
+
+  const resetImport = () => {
+    setImportRows([]);
+    setImportFilename('');
+    setImportResult(null);
+  };
+
   // ── Guide catalogue maître (bannière interactive dismissible) ──
   const guideKey = tenant ? `waarwi:articles_guide_dismissed:${tenant.id}` : '';
   const [guideDismissed, setGuideDismissed] = useState<boolean>(() => {
@@ -379,6 +497,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           >
             <CheckSquare className="w-3.5 h-3.5" />
             <span className="hidden md:inline">{selectionMode ? 'Quitter' : 'Sélectionner'}</span>
+          </button>
+          <button
+            onClick={() => setImportExportOpen(true)}
+            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100 transition-all"
+            aria-label="Import / Export"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Excel</span>
           </button>
           <button
             onClick={openCreate}
@@ -722,6 +848,100 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         confirmLabel={bulkDeleting ? 'Suppression…' : 'Supprimer la sélection'}
         danger
       />
+
+      {/* ── Import / Export Modal ────────────────────────────────────── */}
+      <Modal
+        open={importExportOpen}
+        onClose={() => { setImportExportOpen(false); resetImport(); }}
+        title="Import / Export Excel"
+        size="md"
+        footer={
+          importRows.length > 0 ? (
+            <>
+              <button onClick={resetImport} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
+              <button onClick={runArticleImport} disabled={importingArticles} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5 disabled:opacity-50">
+                {importingArticles ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                {importingArticles ? 'Import...' : `Importer ${importRows.length} article${importRows.length > 1 ? 's' : ''}`}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => { setImportExportOpen(false); resetImport(); }} className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white">Fermer</button>
+          )
+        }
+      >
+        <div className="space-y-4">
+          {/* Actions */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button onClick={downloadArticleTemplate} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition text-left">
+              <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center shrink-0">
+                <Download className="w-4 h-4 text-sky-600" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-900">Modele Excel</div>
+                <div className="text-[10px] text-slate-500">Fichier vierge avec un exemple</div>
+              </div>
+            </button>
+            <button onClick={exportArticles} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition text-left">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                <Upload className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-900">Exporter mes articles</div>
+                <div className="text-[10px] text-slate-500">{articles.length} articles (format re-importable)</div>
+              </div>
+            </button>
+          </div>
+
+          {/* Column reference */}
+          <div className="bg-slate-50 rounded-xl p-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Colonnes attendues</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+              {TENANT_IMPORT_HEADERS.map(h => (
+                <div key={h.key} className={`text-[10px] px-2 py-1 rounded-md ${h.required ? 'bg-brand-50 border border-brand-200 font-bold text-brand-800' : 'bg-white border border-slate-100 text-slate-600'}`}>
+                  {h.label}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* File upload */}
+          <div>
+            <label className="flex flex-col items-center justify-center gap-2 p-5 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition">
+              <Upload className="w-5 h-5 text-slate-400" />
+              <div className="text-xs text-slate-600 text-center">Cliquez ou glissez un fichier Excel (.xlsx)</div>
+              {importFilename && <div className="text-[11px] font-semibold text-brand-700">{importFilename} — {importRows.length} ligne{importRows.length > 1 ? 's' : ''}</div>}
+              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = ''; }} />
+            </label>
+          </div>
+
+          {/* Import result */}
+          {importResult && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-center">
+                  <div className="text-[9px] font-bold uppercase text-emerald-700">Crees</div>
+                  <div className="text-lg font-bold text-emerald-800 num">{importResult.imported}</div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-100 text-center">
+                  <div className="text-[9px] font-bold uppercase text-sky-700">Mis a jour</div>
+                  <div className="text-lg font-bold text-sky-800 num">{importResult.updated}</div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-center">
+                  <div className="text-[9px] font-bold uppercase text-red-700">Erreurs</div>
+                  <div className="text-lg font-bold text-red-800 num">{importResult.errors?.length || 0}</div>
+                </div>
+              </div>
+              {importResult.errors && importResult.errors.length > 0 && (
+                <div className="max-h-32 overflow-auto bg-slate-50 rounded-xl p-2 space-y-0.5">
+                  {importResult.errors.map((e: any, i: number) => (
+                    <div key={i} className="text-[10px] text-red-700">Ligne {e.row}: {e.error}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

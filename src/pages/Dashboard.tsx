@@ -5,6 +5,7 @@ import { usePermissions } from '../lib/permissions';
 import { formatFCFA, formatCompactFCFA } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { Modal } from '../components/Modal';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { desktopAutoFocus } from '../lib/device';
 import {
   TrendingUp, TrendingDown, AlertTriangle, Package, Loader2,
@@ -403,7 +404,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).lte('quantity', 0),
         supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).gt('quantity', 0),
         supabase.from('stock_movements').select('id, movement_type, quantity, note, created_at, articles(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['adjustment_in', 'adjustment_out']).order('created_at', { ascending: false }).limit(5),
-        supabase.from('sales').select('id, sale_number, total, updated_at, created_at, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('updated_at', { ascending: false }).limit(10),
+        supabase.from('sales').select('id, sale_number, total, created_at, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(10),
       ]);
 
       const alerts: AlertItem[] = [];
@@ -447,9 +448,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       }
 
       const modifiedSales = (alertModifiedSales.data || []).filter((s: any) => {
-        const created = new Date(s.created_at).getTime();
-        const updated = new Date(s.updated_at).getTime();
-        return (updated - created) > 60000;
+        return false;
       });
       for (const s of modifiedSales.slice(0, 3) as any[]) {
         alerts.push({
@@ -457,7 +456,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           severity: 'info',
           title: `Facture modifiee : ${s.sale_number}`,
           detail: `${s.customers?.name || 'Client'} · ${formatCompactFCFA(s.total)}`,
-          time: s.updated_at,
+          time: s.created_at,
           route: 'sales',
         });
       }
@@ -1543,9 +1542,12 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           )}
           <div>
             <label className="label">Article</label>
-            <select value={adjArticleId} onChange={e => setAdjArticleId(e.target.value)} className="input">
-              {stockRows.map(r => <option key={r.article_id} value={r.article_id}>{r.name} ({r.internal_ref})</option>)}
-            </select>
+            <SearchableSelect
+              options={stockRows.map(r => ({ value: r.article_id, label: r.name, sublabel: r.internal_ref }))}
+              value={adjArticleId}
+              onChange={v => setAdjArticleId(v)}
+              placeholder="Rechercher un article..."
+            />
           </div>
           <div>
             <label className="label">Quantité</label>
@@ -1564,16 +1566,22 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         <div className="space-y-3">
           <div>
             <label className="label">Article</label>
-            <select value={adjArticleId} onChange={e => setAdjArticleId(e.target.value)} className="input">
-              {stockRows.map(r => <option key={r.article_id} value={r.article_id}>{r.name} ({r.internal_ref})</option>)}
-            </select>
+            <SearchableSelect
+              options={stockRows.map(r => ({ value: r.article_id, label: r.name, sublabel: r.internal_ref }))}
+              value={adjArticleId}
+              onChange={v => setAdjArticleId(v)}
+              placeholder="Rechercher un article..."
+            />
           </div>
           <div>
             <label className="label">Magasin de destination</label>
-            <select value={adjTargetSite} onChange={e => setAdjTargetSite(e.target.value)} className="input">
-              <option value="">— Choisir —</option>
-              {sites.filter((s: any) => s.id !== currentSite?.id).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <SearchableSelect
+              options={sites.filter((s: any) => s.id !== currentSite?.id).map((s: any) => ({ value: s.id, label: s.name }))}
+              value={adjTargetSite}
+              onChange={v => setAdjTargetSite(v)}
+              placeholder="— Choisir —"
+              searchable={false}
+            />
           </div>
           <div>
             <label className="label">Quantité à transférer</label>
@@ -1763,10 +1771,10 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       </div>
 
       {/* ══ ROW 2: Centre de commandes | Vue synthétique | Activité en temps réel ══ */}
-      <div className="grid grid-cols-12 gap-3 items-stretch" style={{ height: '380px' }}>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
 
         {/* Centre de commandes - intelligent */}
-        <div className="col-span-12 xl:col-span-4 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
           <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
@@ -1866,7 +1874,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         </div>
 
         {/* Vue synthétique - interactive */}
-        <div className="col-span-12 xl:col-span-4 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
           <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center">
@@ -1911,7 +1919,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         </div>
 
         {/* Activité en temps réel */}
-        <div className="col-span-12 xl:col-span-4 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
           <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center">

@@ -13,6 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
 import { isAutoParts } from '../lib/types';
@@ -1709,13 +1710,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* Customer selector — compact */}
       <div className="px-3 py-1.5 border-b border-slate-200/70 bg-white">
-        <div className="relative">
-          <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <select value={customer?.id || ''} onChange={e => setCustomer(customers.find(c => c.id === e.target.value) || null)} className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:border-brand-400 text-slate-700">
-            <option value="">Client comptoir</option>
-            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
+        <SearchableSelect
+          options={[{ value: '', label: 'Client comptoir' }, ...customers.map(c => ({ value: c.id, label: c.name }))]}
+          value={customer?.id || ''}
+          onChange={v => setCustomer(customers.find(c => c.id === v) || null)}
+          placeholder="Client comptoir"
+        />
         {customer && (() => {
           const limit = Number((customer as any).credit_limit || 0);
           const balance = Number((customer as any).balance || 0);
@@ -2251,22 +2251,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <>
                     <div>
                       <label className="label">Imputation</label>
-                      <select value={custPaySaleId} onChange={e => {
-                        setCustPaySaleId(e.target.value);
-                        if (e.target.value) {
-                          const s = custPayUnpaid.find(x => x.id === e.target.value);
-                          if (s) setCustPayAmount(s.total - s.paid);
-                        } else {
-                          setCustPayAmount(custPayUnpaid.reduce((a, s) => a + (s.total - s.paid), 0));
-                        }
-                      }} className="input">
-                        <option value="">Répartir automatiquement (plus ancienne d'abord)</option>
-                        {custPayUnpaid.map(s => (
-                          <option key={s.id} value={s.id}>
-                            {s.sale_number} · dû {formatFCFA(s.total - s.paid)} · {new Date(s.created_at).toLocaleDateString('fr-FR')}
-                          </option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        options={[
+                          { value: '', label: 'Repartir automatiquement (plus ancienne d\'abord)' },
+                          ...custPayUnpaid.map(s => ({
+                            value: s.id,
+                            label: `${s.sale_number} · du ${formatFCFA(s.total - s.paid)}`,
+                            sublabel: new Date(s.created_at).toLocaleDateString('fr-FR'),
+                          }))
+                        ]}
+                        value={custPaySaleId}
+                        onChange={v => {
+                          setCustPaySaleId(v);
+                          if (v) {
+                            const s = custPayUnpaid.find(x => x.id === v);
+                            if (s) setCustPayAmount(s.total - s.paid);
+                          } else {
+                            setCustPayAmount(custPayUnpaid.reduce((a, s) => a + (s.total - s.paid), 0));
+                          }
+                        }}
+                        placeholder="Repartir automatiquement"
+                      />
                     </div>
 
                     <div>

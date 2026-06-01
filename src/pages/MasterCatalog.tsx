@@ -87,23 +87,38 @@ export function MasterCatalog() {
         return;
       }
 
-      const [{ data: cats }, { data: its }, { data: arts }] = await Promise.all([
+      const [{ data: cats }, { data: arts }] = await Promise.all([
         supabase.from('master_catalog_categories').select('id, name, slug, parent_id')
           .eq('master_catalog_id', catalogRow.id).eq('is_active', true).order('sort_order'),
-        supabase.from('master_catalog_items')
-          .select('id, designation, brand, model, manufacturer_ref, unit, purchase_price, sale_price, vat_rate, barcode, description, image_url, category_id, subcategory_id, is_active')
-          .eq('master_catalog_id', catalogRow.id).eq('is_active', true).order('designation'),
         supabase.from('articles')
           .select('master_catalog_item_id')
           .eq('tenant_id', tenant.id)
           .not('master_catalog_item_id', 'is', null),
       ]);
 
+      // Load all items with pagination (PostgREST default limit is 1000)
+      const allItems: Item[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const { data: page } = await supabase
+          .from('master_catalog_items')
+          .select('id, designation, brand, model, manufacturer_ref, unit, purchase_price, sale_price, vat_rate, barcode, description, image_url, category_id, subcategory_id, is_active')
+          .eq('master_catalog_id', catalogRow.id).eq('is_active', true)
+          .order('designation')
+          .range(from, from + pageSize - 1);
+        const rows = (page || []) as Item[];
+        allItems.push(...rows);
+        hasMore = rows.length === pageSize;
+        from += pageSize;
+      }
+
       if (cancelled) return;
       setActivity(activityRow);
       setCatalog(catalogRow);
       setCategories((cats || []) as Category[]);
-      setItems((its || []) as Item[]);
+      setItems(allItems);
       setImportedIds(new Set((arts || []).map((a: any) => a.master_catalog_item_id).filter(Boolean)));
       setLoading(false);
     })();

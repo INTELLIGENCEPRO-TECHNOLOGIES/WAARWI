@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   Plus, FileText, Loader2, Eye, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, User,
-  CreditCard, ShoppingCart, ArrowRight, Banknote, MessageCircle, Link2, Search, GripVertical, Lock
+  CreditCard, ShoppingCart, ArrowRight, Banknote, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -40,6 +40,7 @@ type Invoice = {
   customer_id: string | null;
   created_at: string;
   public_code?: string | null;
+  accounting_status?: string;
   customers: { name: string } | null;
 };
 type SaleReturn = {
@@ -138,6 +139,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [invoiceDetail, setInvoiceDetail] = useState<Invoice | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
   const [invoicePays, setInvoicePays] = useState<any[]>([]);
+  const [accountingBusy, setAccountingBusy] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [payMethod, setPayMethod] = useState('');
   const [payAmount, setPayAmount] = useState('');
@@ -451,6 +453,20 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       paid: Number(invoiceDetail.paid),
       issuedBy: profile?.full_name || undefined,
     });
+  };
+
+  const comptabiliserFacture = async () => {
+    if (!invoiceDetail || accountingBusy) return;
+    setAccountingBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('comptabiliser_vente', { p_sale_id: invoiceDetail.id });
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur inconnue');
+      success(`Comptabilisé : ${(data as any).piece_number}`);
+      setInvoiceDetail({ ...invoiceDetail, accounting_status: 'accounted' });
+      setInvoices(prev => prev.map(i => i.id === invoiceDetail.id ? { ...i, accounting_status: 'accounted' } : i));
+    } catch (e: any) { error(e.message); }
+    finally { setAccountingBusy(false); }
   };
 
   const invoiceUrl = (inv: Invoice | null) => {
@@ -911,6 +927,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                           <th className="px-4 py-3 text-right hidden lg:table-cell">Payé</th>
                           <th className="px-4 py-3 text-right hidden lg:table-cell">Solde</th>
                           <th className="px-4 py-3 text-center">Statut</th>
+                          <th className="px-4 py-3 text-center hidden xl:table-cell">Compta</th>
                           <th className="px-4 py-3 text-right w-16">Actions</th>
                         </tr>
                       </thead>
@@ -930,6 +947,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${st.pill}`}>
                                   <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
                                 </span>
+                              </td>
+                              <td className="px-4 py-3 text-center hidden xl:table-cell">
+                                {inv.accounting_status === 'accounted' ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200">OK</span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400">—</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <div className="flex items-center justify-end gap-0.5">
@@ -1289,6 +1313,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           <div className="flex gap-1.5 mr-auto">
             {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Banknote className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
+            {invoiceDetail && invoiceDetail.accounting_status !== 'accounted' && invoiceDetail.status !== 'cancelled' && (
+              <button onClick={comptabiliserFacture} disabled={accountingBusy} className="btn-icon text-teal-700 hover:bg-teal-50" title="Comptabiliser">
+                {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+              </button>
+            )}
+            {invoiceDetail && invoiceDetail.accounting_status === 'accounted' && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />Comptabilisé</span>
+            )}
           </div>
           <button onClick={() => copyInvoiceLink()} className="btn-icon" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
           {invoiceDetail?.customers && (

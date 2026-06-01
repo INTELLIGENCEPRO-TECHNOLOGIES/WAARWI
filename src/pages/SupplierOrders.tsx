@@ -9,6 +9,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate } from '../lib/format';
@@ -647,10 +648,12 @@ export function SupplierOrders() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className="label">Fournisseur *</label>
-              <select value={form.supplier_id} onChange={e => setForm(f => ({ ...f, supplier_id: e.target.value }))} className="input">
-                <option value="">— Sélectionnez —</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <SearchableSelect
+                options={suppliers.map(s => ({ value: s.id, label: s.name }))}
+                value={form.supplier_id}
+                onChange={v => setForm(f => ({ ...f, supplier_id: v }))}
+                placeholder="— Selectionner un fournisseur —"
+              />
             </div>
             <div>
               <label className="label">Livraison prévue</label>
@@ -666,10 +669,14 @@ export function SupplierOrders() {
               {orderItems.map((it, idx) => (
                 <div key={idx} className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5 space-y-2">
                   <div className="flex items-start gap-2">
-                    <select value={it.article_id} onChange={e => updateItem(idx, 'article_id', e.target.value)} className="input text-xs flex-1 min-w-0">
-                      <option value="">— Choisir un article —</option>
-                      {articles.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
+                    <div className="flex-1 min-w-0">
+                      <SearchableSelect
+                        options={articles.map(a => ({ value: a.id, label: a.name }))}
+                        value={it.article_id}
+                        onChange={v => updateItem(idx, 'article_id', v)}
+                        placeholder="— Choisir un article —"
+                      />
+                    </div>
                     {orderItems.length > 1 && <button onClick={() => setOrderItems(p => p.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg bg-white hover:bg-red-50 border border-slate-200 text-red-500 transition shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
                   <input value={it.name} onChange={e => updateItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
