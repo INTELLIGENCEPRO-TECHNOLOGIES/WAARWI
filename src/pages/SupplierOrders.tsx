@@ -633,26 +633,24 @@ export function SupplierOrders() {
         size="lg"
         footer={
           <>
-            <div className="flex-1 min-w-0 text-left">
+            <div className="min-w-0 text-left mr-auto">
               <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Total</div>
-              <div className="text-base font-extrabold text-slate-900 num truncate">{formatFCFA(subtotal)}</div>
+              <div className="text-sm font-extrabold text-slate-900 num whitespace-nowrap">{formatFCFA(subtotal)}</div>
             </div>
-            <button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button>
-            <button onClick={save} disabled={saving} className="btn-primary">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}Créer
-            </button>
+            <button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <button onClick={save} disabled={saving} className="btn-icon-primary" title="Créer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
           </>
         }
       >
         <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="label">Fournisseur *</label>
               <SearchableSelect
                 options={suppliers.map(s => ({ value: s.id, label: s.name }))}
                 value={form.supplier_id}
                 onChange={v => setForm(f => ({ ...f, supplier_id: v }))}
-                placeholder="— Selectionner un fournisseur —"
+                placeholder="Selectionner..."
               />
             </div>
             <div>
@@ -660,6 +658,7 @@ export function SupplierOrders() {
               <input type="date" value={form.expected_date} onChange={e => setForm(f => ({ ...f, expected_date: e.target.value }))} className="input" />
             </div>
           </div>
+
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold text-slate-700">Articles</span>
@@ -674,21 +673,28 @@ export function SupplierOrders() {
                         options={articles.map(a => ({ value: a.id, label: a.name }))}
                         value={it.article_id}
                         onChange={v => updateItem(idx, 'article_id', v)}
-                        placeholder="— Choisir un article —"
+                        placeholder="Choisir un article..."
                       />
                     </div>
                     {orderItems.length > 1 && <button onClick={() => setOrderItems(p => p.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg bg-white hover:bg-red-50 border border-slate-200 text-red-500 transition shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
                   <input value={it.name} onChange={e => updateItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="number" value={it.quantity_ordered} onChange={e => updateItem(idx, 'quantity_ordered', Math.max(1, Number(e.target.value) || 1))} min="1" className="input text-xs h-9 num" placeholder="Qte" />
-                    <input type="number" value={it.unit_price} onChange={e => updateItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))} min="0" className="input text-xs h-9 num" placeholder="Prix" />
+                    <div>
+                      <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Quantité</div>
+                      <input type="number" value={it.quantity_ordered} onChange={e => updateItem(idx, 'quantity_ordered', Math.max(1, Number(e.target.value) || 1))} min="1" className="input text-xs h-9 num" />
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Prix unitaire</div>
+                      <input type="number" value={it.unit_price} onChange={e => updateItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))} min="0" className="input text-xs h-9 num" />
+                    </div>
                   </div>
                   <div className="text-right text-[11px] font-bold text-slate-900 num">{formatFCFA(it.total)}</div>
                 </div>
               ))}
             </div>
           </div>
+
           <div>
             <label className="label">Note</label>
             <textarea value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} className="input resize-none" rows={2} placeholder="Optionnelle..." />

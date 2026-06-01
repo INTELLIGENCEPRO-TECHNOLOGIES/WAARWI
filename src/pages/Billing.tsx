@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
@@ -1149,57 +1150,73 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {quoteOpen && !isDesktop && (
         <Modal open={true} onClose={closeQuotePanel} title="Nouveau devis" size="lg"
           footer={<>
-            <button onClick={closeQuotePanel} className="btn-secondary">Annuler</button>
-            <button onClick={() => saveQuote()} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button>
+            <div className="min-w-0 text-left mr-auto">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Total</div>
+              <div className="text-sm font-extrabold text-slate-900 num whitespace-nowrap">{formatFCFA(quoteSubtotal)}</div>
+            </div>
+            <button onClick={closeQuotePanel} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <button onClick={() => saveQuote()} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
           </>}>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="label">Client</label>
-                <select value={quoteForm.customer_id} onChange={e => setQuoteForm((f: any) => ({ ...f, customer_id: e.target.value }))} className="input">
-                  <option value="">— Client comptoir —</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <SearchableSelect
+                  options={customers.map(c => ({ value: c.id, label: c.name }))}
+                  value={quoteForm.customer_id}
+                  onChange={v => setQuoteForm((f: any) => ({ ...f, customer_id: v }))}
+                  placeholder="Client comptoir"
+                />
               </div>
               <div>
                 <label className="label">Valide jusqu'au</label>
                 <input type="date" value={quoteForm.valid_until} onChange={e => setQuoteForm((f: any) => ({ ...f, valid_until: e.target.value }))} className="input" />
               </div>
             </div>
+
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="label mb-0">Articles</label>
-                <button onClick={() => setQuoteItems(p => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 transition-all"><Plus className="w-3 h-3" />Ajouter</button>
+                <span className="text-sm font-semibold text-slate-700">Articles</span>
+                <button onClick={() => setQuoteItems(p => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])} className="text-[11px] text-white bg-brand-700 hover:bg-brand-800 rounded-lg px-2 py-1 flex items-center gap-1 transition"><Plus className="w-3 h-3" />Ajouter</button>
               </div>
-              <div className="space-y-2 max-h-[45vh] overflow-y-auto -mx-1 px-1 pb-1">
+              <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-1">
                 {quoteItems.map((it, idx) => (
-                  <div key={idx} className="p-3 rounded-2xl bg-slate-50/60 border border-slate-200/80">
+                  <div key={idx} className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5 space-y-2">
                     <div className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <select value={it.article_id || ''} onChange={e => updateQuoteItem(idx, 'article_id', e.target.value)} className="input text-xs h-9">
-                          <option value="">— Article —</option>
-                          {articles.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                        <input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs h-9" />
-                        <div className="grid grid-cols-3 gap-1.5">
-                          <input type="number" value={it.quantity} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs h-9" placeholder="Qte" />
-                          <input type="number" value={it.unit_price} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs h-9" placeholder="Prix" />
-                          <input type="number" value={it.discount} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs h-9" placeholder="Remise" />
-                        </div>
-                        <div className="text-right text-[11px] font-bold text-slate-900 num">Total {formatFCFA(it.total)}</div>
+                      <div className="flex-1 min-w-0">
+                        <SearchableSelect
+                          options={articles.map(a => ({ value: a.id, label: a.name, sublabel: a.internal_ref }))}
+                          value={it.article_id || ''}
+                          onChange={v => updateQuoteItem(idx, 'article_id', v)}
+                          placeholder="Choisir un article..."
+                        />
                       </div>
-                      <button onClick={() => setQuoteItems(p => p.filter((_, i) => i !== idx))} disabled={quoteItems.length === 1} className="p-2 rounded-lg hover:bg-red-50 text-red-400 disabled:opacity-30"><Trash2 className="w-3.5 h-3.5" /></button>
+                      {quoteItems.length > 1 && <button onClick={() => setQuoteItems(p => p.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg bg-white hover:bg-red-50 border border-slate-200 text-red-500 transition shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>}
                     </div>
+                    <input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div>
+                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Qté</div>
+                        <input type="number" value={it.quantity} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs h-9 num" />
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Prix unit.</div>
+                        <input type="number" value={it.unit_price} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs h-9 num" />
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Remise</div>
+                        <input type="number" value={it.discount} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs h-9 num" />
+                      </div>
+                    </div>
+                    <div className="text-right text-[11px] font-bold text-slate-900 num">{formatFCFA(it.total)}</div>
                   </div>
                 ))}
               </div>
-              <div className="mt-3 pt-3 border-t border-slate-100 flex justify-end">
-                <span className="font-bold text-slate-900 num">Total : {formatFCFA(quoteSubtotal)}</span>
-              </div>
             </div>
+
             <div>
               <label className="label">Note</label>
-              <textarea value={quoteForm.note} onChange={e => setQuoteForm((f: any) => ({ ...f, note: e.target.value }))} className="input resize-none" rows={2} />
+              <textarea value={quoteForm.note} onChange={e => setQuoteForm((f: any) => ({ ...f, note: e.target.value }))} className="input resize-none" rows={2} placeholder="Optionnelle..." />
             </div>
           </div>
         </Modal>
