@@ -59,6 +59,7 @@ export function PublicSupplierOrder({ token }: { token: string }) {
       discount: Number(data.order.discount),
       total: Number(data.order.total),
       footerNote: data.order.note || undefined,
+      docHeader: (data.order as any).doc_header ?? null,
     });
   };
 

@@ -3,8 +3,8 @@ import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
   ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, Pause, RotateCcw,
-  FileText, List, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote,
-  Globe, Truck, ShoppingBag, Sparkles, Clock as ClockIcon, Phone, MapPin, AlertCircle
+  FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote,
+  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, MapPin, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -21,6 +21,7 @@ import { desktopAutoFocus } from '../lib/device';
 import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, type PrintTenant } from '../lib/print';
 import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from '../lib/types';
 import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
+import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 
 type ArticleLite = {
   id: string; internal_ref: string; name: string; oem_ref: string;
@@ -57,7 +58,8 @@ type SessionSale = {
   customer_phone: string | null;
   customer_address: string | null;
   status: string;
-  items: { name: string; quantity: number; unit_price: number }[];
+  items: { article_id: string; name: string; quantity: number; unit_price: number; returned?: number }[];
+  fullyReturned?: boolean;
 };
 
 function printXReport(
@@ -116,26 +118,31 @@ function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
     if (!tenantId || !siteId || !sessionId) return;
     setLoading(true);
     (async () => {
-      const { data: sales } = await supabase
-        .from('sales')
-        .select('id, total')
-        .eq('tenant_id', tenantId)
-        .eq('cash_session_id', sessionId)
-        .neq('status', 'cancelled');
-      const { data: payments } = await supabase
-        .from('sale_payments')
-        .select('method_name, amount, sales!inner(cash_session_id, status)')
-        .eq('sales.cash_session_id', sessionId)
-        .neq('sales.status', 'cancelled');
+      const [{ data: sales }, { data: payments }] = await Promise.all([
+        supabase
+          .from('sales')
+          .select('id, total')
+          .eq('tenant_id', tenantId)
+          .eq('cash_session_id', sessionId)
+          .neq('status', 'cancelled'),
+        supabase
+          .from('sale_payments')
+          .select('method_name, amount')
+          .eq('tenant_id', tenantId)
+          .eq('cash_session_id', sessionId),
+      ]);
       const salesArr = sales || [];
       const paymentsArr = (payments || []) as { method_name: string; amount: number }[];
       const byMethod: Record<string, number> = {};
+      let totalPaid = 0;
       for (const p of paymentsArr) {
-        byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount);
+        const amt = Number(p.amount);
+        byMethod[p.method_name] = (byMethod[p.method_name] || 0) + amt;
+        totalPaid += amt;
       }
       setSummary({
         salesCount: salesArr.length,
-        salesTotal: salesArr.reduce((s, r) => s + Number(r.total), 0),
+        salesTotal: totalPaid,
         byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
       });
       setLoading(false);
@@ -195,7 +202,7 @@ function POSLandingOpen({
   return (
     <div className="space-y-3 pb-6">
       {/* ── Unified header bar (same style as Sales/Articles pages) ── */}
-      <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
             <div className="leading-tight">
@@ -448,7 +455,7 @@ function POSLandingResume({
   return (
     <div className="space-y-3 pb-6">
       {/* ── Unified header bar (same style as Sales/Articles pages) ── */}
-      <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
             <div className="leading-tight">
@@ -580,7 +587,7 @@ function POSLandingResume({
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
             <div className="flex items-center gap-2 mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"><Sparkles className="w-4 h-4" /></div>
+              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"><Zap className="w-4 h-4" /></div>
               <h3 className="text-sm font-bold text-slate-800">Actions rapides</h3>
             </div>
             <div className="space-y-1.5">
@@ -789,6 +796,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [sortMode, setSortMode] = useState<'top' | 'alpha'>('top');
   const [categoryId, setCategoryId] = useState<string>('');
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [articleView, setArticleView] = useState<'grid' | 'list'>('grid');
 
   // Cart
   const [search, setSearch] = useState('');
@@ -876,7 +884,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [returnSales, setReturnSales] = useState<SessionSale[]>([]);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnSelected, setReturnSelected] = useState<SessionSale | null>(null);
-  const [returnLines, setReturnLines] = useState<{ name: string; quantity: number; unit_price: number; maxQty: number; selected: boolean }[]>([]);
+  const [returnLines, setReturnLines] = useState<{ article_id: string; name: string; quantity: number; unit_price: number; maxQty: number; selected: boolean }[]>([]);
 
   // Session tickets list
   const [ticketsOpen, setTicketsOpen] = useState(false);
@@ -895,11 +903,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
     movements: { kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    invoicePayments: { sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string; user_name: string | null }[];
     movExpense: number; movIncome: number; movPrepay: number;
     netTotal: number;
   } | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | null>(null);
 
   // Vehicle picker
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
@@ -933,21 +943,47 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [savingReg, setSavingReg] = useState(false);
   const [sessionRegs, setSessionRegs] = useState<{ reg_type: string; amount: number; reason: string; note: string }[]>([]);
 
+  // Lot picker for sale
+  const [lotPickerOpen, setLotPickerOpen] = useState(false);
+
   const load = useCallback(async () => {
     if (!tenant || !currentSite) return;
     setLoadingData(true);
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    const [{ data: arts }, { data: stk }, { data: pm }, { data: cs }, { data: cust }, { data: cats }, { data: topRows }] = await Promise.all([
-      supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url').eq('tenant_id', tenant.id).eq('is_active', true),
+    const isShared = (tenant as any)?.settings?.shared_articles !== false;
+    const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
+
+    // Fetch all articles in batches (Supabase default limit is 1000)
+    let allArts: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    while (true) {
+      let query = supabase
+        .from('articles')
+        .select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url')
+        .eq('tenant_id', tenant.id)
+        .eq('is_active', true)
+        .range(from, from + batchSize - 1);
+      if (!isShared && currentSite) {
+        query = query.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+      }
+      const { data, error: e } = await query;
+      if (e || !data) break;
+      allArts = allArts.concat(data);
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+
+    const [{ data: stk }, { data: pm }, { data: cs }, { data: cust }, { data: cats }, { data: topRows }] = await Promise.all([
       supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
       supabase.from('payment_methods').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('cash_sessions').select('*').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
-      supabase.from('customers').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300),
+      (() => { let q = supabase.from('customers').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`); return q; })(),
       supabase.from('part_categories').select('id, name, parent_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
       supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
     ]);
     const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-    setArticles((arts || []).map((a: any) => ({
+    setArticles((allArts).map((a: any) => ({
       id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
       sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
       stock_available: qmap.get(a.id) || 0,
@@ -1020,13 +1056,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // ─── Cart operations ──────────────────────────────────────────────────────
 
   const addToCart = (a: ArticleLite) => {
+    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
     setCart(c => {
       const existing = c.find(i => i.article_id === a.id);
       if (existing) {
-        if (existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return c; }
+        if (!allowNeg && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return c; }
         return c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      if (a.stock_available <= 0) { error('Article en rupture'); return c; }
+      if (!allowNeg && a.stock_available <= 0) { error('Article en rupture'); return c; }
       const price = exceptionPrices.get(a.id) ?? a.sale_price;
       const next = [...c, {
         article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
@@ -1038,17 +1075,19 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const updateQty = (id: string, delta: number) => {
+    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
     setCart(c => c.flatMap(i => {
       if (i.article_id !== id) return [i];
       const q = i.quantity + delta;
       if (q <= 0) return [];
-      if (q > i.stock_available) { error(`Stock insuffisant (${i.stock_available})`); return [i]; }
+      if (!allowNeg && q > i.stock_available) { error(`Stock insuffisant (${i.stock_available})`); return [i]; }
       return [{ ...i, quantity: q }];
     }));
   };
 
   const setQty = (id: string, q: number) => {
-    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: Math.max(1, Math.min(q, i.stock_available)) } : i));
+    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: Math.max(1, allowNeg ? q : Math.min(q, i.stock_available)) } : i));
   };
 
   const setPrice = (id: string, p: number) => {
@@ -1245,8 +1284,24 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const validateSale = async () => {
-    if (!session || !currentSite) return;
+    if (!session || !currentSite || !tenant) return;
     if (totalPaid < total && !customer) { error('Sélectionnez un client pour un paiement partiel'); return; }
+
+    const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
+
+    // If lot mode, close payment modal and open lot picker for manual selection
+    if (stockMethod === 'lot') {
+      setPayOpen(false);
+      setLotPickerOpen(true);
+      return;
+    }
+
+    await executeSale(null);
+  };
+
+  const executeSale = async (lotSelections: ArticleLotSelection[] | null) => {
+    if (!session || !currentSite) return;
+    setLotPickerOpen(false);
     setPaying(true);
     const saleItems = cart.map(i => ({
       article_id: i.article_id, name: i.name, quantity: i.quantity,
@@ -1256,7 +1311,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       payment_method_id: p.payment_method_id, method_name: p.method_name,
       amount: p.amount, reference: p.reference,
     }));
-    const { data, error: e } = await supabase.rpc('create_pos_sale', {
+    const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
+    const rpcName = stockMethod === 'lot' ? 'create_pos_sale_lot' : 'create_pos_sale';
+
+    // Build lot assignments map for manual selection
+    let lotAssignments: Record<string, { lot_id: string; quantity: number }[]> | null = null;
+    if (lotSelections) {
+      lotAssignments = {};
+      for (const s of lotSelections) {
+        const assigned = s.assignments.filter(a => a.quantity > 0).map(a => ({ lot_id: a.lot_id, quantity: a.quantity }));
+        if (assigned.length > 0) lotAssignments[s.article_id] = assigned;
+      }
+    }
+
+    const params: any = {
       p_site_id: currentSite.id,
       p_cash_session_id: session.id,
       p_customer_id: customer?.id || null,
@@ -1264,7 +1332,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       p_payments: salePayments,
       p_discount: discount,
       p_note: '',
-    });
+    };
+    if (rpcName === 'create_pos_sale_lot' && lotAssignments && Object.keys(lotAssignments).length > 0) {
+      params.p_lot_assignments = lotAssignments;
+    }
+
+    const { data, error: e } = await supabase.rpc(rpcName, params);
     setPaying(false);
     if (e) { error(e.message); return; }
     const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
@@ -1297,33 +1370,135 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setReturnLoading(true);
     const { data } = await supabase
       .from('sales')
-      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(name, quantity, unit_price)')
+      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price)')
       .eq('tenant_id', tenant!.id)
       .eq('cash_session_id', session!.id)
       .neq('status', 'cancelled')
       .order('created_at', { ascending: false });
-    setReturnSales((data || []).map((s: any) => ({
-      id: s.id, sale_number: s.sale_number, total: Number(s.total),
-      created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
-      items: (s.sale_items || []).map((i: any) => ({ name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
-    })));
+
+    // Fetch already-returned quantities for these sales
+    const saleIds = (data || []).map((s: any) => s.id);
+    let returnedMap: Record<string, Record<string, number>> = {};
+    if (saleIds.length > 0) {
+      const { data: retData } = await supabase
+        .from('sale_returns')
+        .select('sale_id, sale_return_items(article_id, quantity)')
+        .eq('tenant_id', tenant!.id)
+        .in('sale_id', saleIds);
+      for (const ret of retData || []) {
+        if (!returnedMap[ret.sale_id]) returnedMap[ret.sale_id] = {};
+        for (const ri of (ret as any).sale_return_items || []) {
+          returnedMap[ret.sale_id][ri.article_id] = (returnedMap[ret.sale_id][ri.article_id] || 0) + Number(ri.quantity);
+        }
+      }
+    }
+
+    setReturnSales((data || []).map((s: any) => {
+      const items = (s.sale_items || []).map((i: any) => {
+        const alreadyReturned = returnedMap[s.id]?.[i.article_id] || 0;
+        return { article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), returned: alreadyReturned };
+      });
+      const fullyReturned = items.every((i: any) => i.returned >= i.quantity);
+      return {
+        id: s.id, sale_number: s.sale_number, total: Number(s.total),
+        created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
+        items, fullyReturned,
+      };
+    }));
     setReturnLoading(false);
   };
 
   const selectReturnSale = (s: SessionSale) => {
     setReturnSelected(s);
     setReturnSearch('');
-    setReturnLines(s.items.map(i => ({ ...i, maxQty: i.quantity, selected: true })));
+    setReturnLines(s.items.map(i => {
+      const remaining = i.quantity - (i.returned || 0);
+      return { ...i, quantity: remaining, maxQty: remaining, selected: remaining > 0 };
+    }));
   };
 
-  const printReturn = () => {
-    if (!returnSelected) return;
+  const [returnProcessing, setReturnProcessing] = useState(false);
+
+  const processReturn = async () => {
+    if (!returnSelected || !tenant || !currentSite || !session) return;
     const lines = returnLines.filter(l => l.selected && l.quantity > 0);
     if (lines.length === 0) { error('Aucun article sélectionné'); return; }
-    const total = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
-    printReturnTicket80Shared(returnSelected.sale_number, lines, total, tenantForPrint, cashierName);
-    setReturnOpen(false);
-    success('Ticket de retour imprimé');
+    const returnTotal = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
+
+    setReturnProcessing(true);
+    try {
+      // 1. Adjust stock (increase for each returned item)
+      for (const item of lines) {
+        if (!item.article_id) continue;
+        await supabase.rpc('adjust_stock', {
+          p_article_id: item.article_id,
+          p_site_id: currentSite.id,
+          p_quantity: item.quantity,
+          p_movement_type: 'return_customer',
+          p_note: `Retour POS - ${returnSelected.sale_number}`,
+        });
+      }
+
+      // 2. Create a sale_returns record for traceability
+      const retNum = `RET-${returnSelected.sale_number}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+      const { data: retInserted } = await supabase.from('sale_returns').insert({
+        tenant_id: tenant.id,
+        site_id: currentSite.id,
+        sale_id: returnSelected.id,
+        cash_session_id: session.id,
+        return_number: retNum,
+        total: returnTotal,
+        refund_method: 'cash',
+        reason: 'Retour au POS',
+        restock: true,
+        status: 'approved',
+      }).select('id').single();
+
+      // 3. Insert sale_return_items for each returned line
+      if (retInserted?.id) {
+        await supabase.from('sale_return_items').insert(
+          lines.map(l => ({
+            tenant_id: tenant.id,
+            return_id: retInserted.id,
+            article_id: l.article_id || null,
+            name: l.name,
+            quantity: l.quantity,
+            unit_price: l.unit_price,
+            total: l.quantity * l.unit_price,
+          }))
+        );
+      }
+
+      // 4. Record cash movement (expense) with article names in label
+      const articleNames = lines.map(l => `${l.name}${l.quantity > 1 ? ' x' + l.quantity : ''}`).join(', ');
+      await supabase.from('cash_movements').insert({
+        tenant_id: tenant.id,
+        site_id: currentSite.id,
+        cash_session_id: session.id,
+        user_id: profile?.id || null,
+        kind: 'expense',
+        amount: returnTotal,
+        reason: `Retour ${retNum}: ${articleNames}`,
+        note: `Réf. vente: ${returnSelected.sale_number}`,
+        reference: retNum,
+      });
+
+      // 5. Decrease cash session theoretical_amount
+      await supabase.from('cash_sessions').update({
+        theoretical_amount: Math.max(0, (session as any).theoretical_amount - returnTotal),
+      }).eq('id', session.id);
+
+      // 6. Print the return ticket
+      printReturnTicket80Shared(returnSelected.sale_number, lines, returnTotal, tenantForPrint, cashierName, retNum);
+
+      setReturnOpen(false);
+      success(`Retour effectue: -${formatFCFA(returnTotal)} rembourse`);
+      load();
+    } catch (e: any) {
+      error(e.message || 'Erreur lors du retour');
+    } finally {
+      setReturnProcessing(false);
+    }
   };
 
   const filteredReturnSales = useMemo(() => {
@@ -1336,17 +1511,31 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openTickets = async () => {
     setTicketsOpen(true); setLoadingTickets(true);
-    const { data } = await supabase
-      .from('sales')
-      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(name, quantity, unit_price)')
-      .eq('tenant_id', tenant!.id)
-      .eq('cash_session_id', session!.id)
-      .order('created_at', { ascending: false });
-    setSessionSales((data || []).map((s: any) => ({
+    const [{ data }, { data: retData }] = await Promise.all([
+      supabase
+        .from('sales')
+        .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price)')
+        .eq('tenant_id', tenant!.id)
+        .eq('cash_session_id', session!.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('sale_returns')
+        .select('id, return_number, total, created_at, sale_id')
+        .eq('tenant_id', tenant!.id)
+        .eq('cash_session_id', session!.id)
+        .order('created_at', { ascending: false }),
+    ]);
+    const sales: SessionSale[] = (data || []).map((s: any) => ({
       id: s.id, sale_number: s.sale_number, total: Number(s.total),
       created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
-      items: (s.sale_items || []).map((i: any) => ({ name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
-    })));
+      items: (s.sale_items || []).map((i: any) => ({ article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
+    }));
+    const returns: SessionSale[] = (retData || []).map((r: any) => ({
+      id: r.id, sale_number: r.return_number, total: -Number(r.total),
+      created_at: r.created_at, customer_name: null, customer_phone: null, customer_address: null, status: 'return',
+      items: [],
+    }));
+    setSessionSales([...sales, ...returns].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     setLoadingTickets(false);
   };
 
@@ -1393,7 +1582,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     for (const it of webOrderItems) {
       const a = articles.find(x => x.id === it.article_id);
       if (!a) { missing.push(it.article_name); continue; }
-      if (a.stock_available < it.quantity) {
+      const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+      if (!allowNeg && a.stock_available < it.quantity) {
         error(`Stock insuffisant pour "${a.name}" (${a.stock_available} dispo / ${it.quantity} requis)`);
         return;
       }
@@ -1468,13 +1658,23 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setStatsOpen(true); setLoadingStats(true);
     const [{ data: sales }, { data: pmtRows }, { data: mvRows }] = await Promise.all([
       supabase.from('sales').select('id, total, sale_items(name, quantity, total)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).neq('status', 'cancelled'),
-      supabase.from('sale_payments').select('method_name, amount').eq('tenant_id', tenant.id).eq('cash_session_id', session.id),
+      supabase.from('sale_payments').select('method_name, amount, created_at, reference, sale_id, sales(sale_number, cash_session_id, customers(name))').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
       supabase.from('cash_movements').select('kind, amount, reason, method_name, customers(name)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
     ]);
     const salesList = sales || [];
     const pmtList = pmtRows || [];
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
+    const invoicePayments = pmtList
+      .filter((p: any) => !p.sales || p.sales.cash_session_id !== session.id)
+      .map((p: any) => ({
+        sale_number: p.sales?.sale_number || '',
+        amount: Number(p.amount),
+        method_name: p.method_name || '',
+        customer_name: p.sales?.customers?.name || null,
+        created_at: p.created_at || '',
+        user_name: profile?.full_name || profile?.email || null,
+      }));
     const articleMap: Record<string, { name: string; qty: number; total: number }> = {};
     salesList.forEach((s: any) => {
       (s.sale_items || []).forEach((item: any) => {
@@ -1488,19 +1688,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    }));
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
     const movExpense = movs.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
     const movIncome = movs.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movs.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-    const total = salesList.reduce((s: number, r: any) => s + Number(r.total), 0);
+    const totalPayments = pmtList.reduce((s: number, p: any) => s + Number(p.amount), 0);
     setStatsData({
       count: salesList.length,
-      total,
+      total: totalPayments,
       byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
       topArticles,
       movements: movs,
+      invoicePayments,
       movExpense, movIncome, movPrepay,
-      netTotal: total + movIncome + movPrepay - movExpense,
+      netTotal: totalPayments + movIncome + movPrepay - movExpense,
     });
     setLoadingStats(false);
   };
@@ -1514,7 +1715,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setCloseOpen(true);
 
     const [{ data: pmts }, { data: regs }, salesResult, { data: mvs }] = await Promise.all([
-      supabase.from('sale_payments').select('payment_method_id, method_name, amount').eq('tenant_id', tenant.id).eq('cash_session_id', session.id),
+      supabase.from('sale_payments').select('payment_method_id, method_name, amount, created_at, sales(sale_number, cash_session_id, customers(name))').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
       supabase.from('cash_regularizations').select('reg_type, amount, reason, note').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
       supabase.from('sales').select('id, total, sale_items(name, quantity, total)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).neq('status', 'cancelled'),
       supabase.from('cash_movements').select('kind, amount, payment_method_id, method_name, reason, customers(name)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
@@ -1529,6 +1730,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       theoretical[key].amount += Number(p.amount);
     });
     (mvs || []).forEach((m: any) => {
+      if (m.kind === 'income' && m.reason && m.reason.startsWith('Reglement ')) return;
       const key = m.method_name || (m.kind === 'expense' ? 'Espèces' : '—');
       if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
       if (m.kind === 'expense') {
@@ -1555,6 +1757,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const salesList = salesResult.data || [];
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
+    const invoicePayments = pmtList
+      .filter((p: any) => !p.sales || p.sales.cash_session_id !== session.id)
+      .map((p: any) => ({
+        sale_number: p.sales?.sale_number || '',
+        amount: Number(p.amount),
+        method_name: p.method_name || '',
+        customer_name: p.sales?.customers?.name || null,
+        created_at: p.created_at || '',
+        user_name: profile?.full_name || profile?.email || null,
+      }));
     const articleMap: Record<string, { name: string; qty: number; total: number }> = {};
     salesList.forEach((s: any) => {
       (s.sale_items || []).forEach((item: any) => {
@@ -1567,19 +1779,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    }));
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
     const movExpense = movList.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
     const movIncome = movList.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movList.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
     const totalSales = salesList.reduce((s: number, r: any) => s + Number(r.total), 0);
+    const totalPayments = pmtList.reduce((s: number, p: any) => s + Number(p.amount), 0);
     setStatsData({
       count: salesList.length,
       total: totalSales,
       byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
       topArticles: Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10),
       movements: movList,
+      invoicePayments,
       movExpense, movIncome, movPrepay,
-      netTotal: totalSales + movIncome + movPrepay - movExpense,
+      netTotal: totalPayments + movIncome + movPrepay - movExpense,
     });
 
     setControlLines(lines);
@@ -1764,7 +1978,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     <input type="number" value={i.quantity} onChange={e => setQty(i.article_id, Number(e.target.value))} className="w-7 text-center bg-transparent text-xs font-bold num leading-none py-0" />
                     <button onClick={() => updateQty(i.article_id, 1)} className="w-6 h-6 flex items-center justify-center hover:bg-slate-200 rounded-r-lg active:scale-95 transition-all text-slate-600"><Plus className="w-3 h-3" /></button>
                   </div>
-                  <input type="number" value={i.unit_price} onChange={e => setPrice(i.article_id, Number(e.target.value))} className="flex-1 min-w-0 px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] text-right num focus:outline-none focus:border-brand-500" title="Prix unitaire" />
+                  <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, Number(e.target.value))} className="flex-1 min-w-0 px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] text-right num focus:outline-none focus:border-brand-500" title="Prix unitaire" />
                   <div className="text-xs font-bold text-slate-900 num whitespace-nowrap min-w-[52px] text-right">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
                 </div>
               </div>
@@ -1888,6 +2102,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   {sortMode === 'top' ? <Flame className="w-3.5 h-3.5 text-amber-500" /> : <ArrowDownAZ className="w-3.5 h-3.5 text-brand-700" />}
                   <span className="hidden md:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
                 </button>
+                <button
+                  onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')}
+                  className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all border ${articleView === 'list' ? 'bg-brand-600 border-brand-700 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                  title={articleView === 'grid' ? 'Vue liste' : 'Vue grille'}
+                >
+                  {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+                </button>
               </div>
               {autoMode && (
                 <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-brand-50 hover:border-brand-400 text-slate-800 transition-all text-sm font-semibold active:scale-95 shadow-sm" title="Recherche par véhicule">
@@ -1920,10 +2141,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             <div className="p-3 sm:p-4 w-full max-w-full mx-auto">
             {filtered.length === 0 ? (
               <EmptyState icon={Package} title="Aucun article" description="Créez des articles dans le catalogue." />
-            ) : (
+            ) : articleView === 'grid' ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5 w-full justify-center">
                 {filtered.map(a => {
-                  const out = a.stock_available <= 0;
+                  const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+                  const out = !allowNeg && a.stock_available <= 0;
                   const low = a.stock_available > 0 && a.stock_available <= 3;
                   return (
                     <button key={a.id} onClick={() => addToCart(a)} disabled={out}
@@ -1935,8 +2157,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                         ) : (
                           <Package className="w-7 h-7 text-slate-300" />
                         )}
-                        <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${out ? 'bg-red-500 text-white' : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-slate-700 border border-slate-200'} shadow-sm num`}>
-                          {out ? 'Rupture' : `×${a.stock_available}`}
+                        <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-slate-700 border border-slate-200'} shadow-sm num`}>
+                          {a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
                         </span>
                       </div>
                       <div className="text-[9px] font-mono text-slate-400 truncate tracking-wide">{a.internal_ref}</div>
@@ -1947,6 +2169,51 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           <Plus className="w-3.5 h-3.5" />
                         </span>
                       </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col divide-y divide-slate-100">
+                {filtered.map(a => {
+                  const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+                  const out = !allowNeg && a.stock_available <= 0;
+                  const low = a.stock_available > 0 && a.stock_available <= 3;
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => addToCart(a)}
+                      disabled={out}
+                      className={`w-full flex items-center gap-2.5 px-2 py-1.5 hover:bg-brand-50/60 active:bg-brand-100/60 transition-colors text-left group disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'bg-red-50/30' : ''}`}
+                    >
+                      {/* Stock badge */}
+                      <span className={`shrink-0 min-w-[42px] text-center text-[10px] font-bold px-1.5 py-0.5 rounded-md num ${
+                        a.stock_available <= 0
+                          ? (allowNeg ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700')
+                          : low
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-emerald-50 text-emerald-700'
+                      }`}>
+                        {a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
+                      </span>
+
+                      {/* Name */}
+                      <span className="flex-1 min-w-0 text-[12px] font-semibold text-slate-900 truncate">{a.name}</span>
+
+                      {/* Brand / OEM */}
+                      {(a.brand || a.oem_ref) && (
+                        <span className="shrink-0 hidden md:block text-[10px] text-slate-400 truncate max-w-[100px]">
+                          {a.brand}{a.brand && a.oem_ref ? ' · ' : ''}{a.oem_ref}
+                        </span>
+                      )}
+
+                      {/* Price */}
+                      <span className="shrink-0 text-[13px] font-extrabold text-slate-900 num w-[90px] text-right">{formatFCFA(a.sale_price)}</span>
+
+                      {/* Add button */}
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-brand-600 group-hover:bg-brand-700 text-white flex items-center justify-center shadow-sm transition-colors">
+                        <Plus className="w-3.5 h-3.5" />
+                      </span>
                     </button>
                   );
                 })}
@@ -2355,7 +2622,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* Held carts */}
       <Modal open={holdOpen} onClose={() => setHoldOpen(false)} title={`Tickets en attente (${heldCarts.length})`} size="md"
-        footer={<button onClick={() => setHoldOpen(false)} className="btn-secondary">Fermer</button>}
+        footer={<button onClick={() => setHoldOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}
       >
         {heldCarts.length === 0 ? (
           <div className="py-8 text-center text-sm text-slate-500">Aucun ticket en attente.</div>
@@ -2385,10 +2652,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* Return ticket */}
       <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title="Ticket de retour" size="lg"
         footer={<>
-          <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="btn-secondary">Fermer</button>
+          <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           {returnSelected && (
-            <button onClick={printReturn} className="btn-primary">
-              <Printer className="w-4 h-4" /> Imprimer le retour
+            <button onClick={processReturn} disabled={returnProcessing} className="btn-icon-success" title="Valider le retour">
+              {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
             </button>
           )}
         </>}
@@ -2406,11 +2673,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto">
                 {filteredReturnSales.map(s => (
-                  <button key={s.id} onClick={() => selectReturnSale(s)} className="w-full text-left p-3 border border-slate-200 rounded-xl hover:bg-brand-50 hover:border-brand-200 transition-colors">
+                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left p-3 border rounded-xl transition-colors ${s.fullyReturned ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed' : 'border-slate-200 hover:bg-brand-50 hover:border-brand-200'}`}>
                     <div className="flex items-center justify-between">
-                      <div>
+                      <div className="flex items-center gap-2">
                         <span className="font-mono font-semibold text-sm text-brand-700">{s.sale_number}</span>
-                        {s.customer_name && <span className="text-xs text-slate-500 ml-2">· {s.customer_name}</span>}
+                        {s.customer_name && <span className="text-xs text-slate-500">· {s.customer_name}</span>}
+                        {s.fullyReturned && <span className="text-[10px] font-bold uppercase text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">Retourne</span>}
                       </div>
                       <span className="font-bold text-sm">{formatFCFA(s.total)}</span>
                     </div>
@@ -2475,9 +2743,19 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         )}
       </Modal>
 
+      {/* Lot picker modal for manual lot selection */}
+      <LotPickerModal
+        open={lotPickerOpen}
+        onClose={() => setLotPickerOpen(false)}
+        items={cart.map(c => ({ article_id: c.article_id, name: c.name, quantity: c.quantity }))}
+        onConfirm={(selections) => executeSale(selections)}
+        title="Selection des lots a consommer"
+        confirmLabel="Confirmer la vente"
+      />
+
       {/* Session tickets list */}
       <Modal open={ticketsOpen} onClose={() => setTicketsOpen(false)} title="Tickets de la session" size="lg"
-        footer={<button onClick={() => setTicketsOpen(false)} className="btn-secondary">Fermer</button>}
+        footer={<button onClick={() => setTicketsOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}
       >
         {loadingTickets ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
@@ -2487,25 +2765,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-3">
               <div className="card p-3 text-center">
-                <div className="text-xs text-slate-500">Ventes</div>
-                <div className="text-xl font-bold mt-0.5">{sessionSales.length}</div>
+                <div className="text-xs text-slate-500">Tickets</div>
+                <div className="text-xl font-bold mt-0.5">{sessionSales.filter(x => x.status !== 'return').length}</div>
               </div>
               <div className="card p-3 text-center col-span-2">
-                <div className="text-xs text-slate-500">CA Total</div>
+                <div className="text-xs text-slate-500">CA Net</div>
                 <div className="text-xl font-bold text-brand-800 mt-0.5">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</div>
               </div>
             </div>
             <div className="space-y-2 max-h-[55vh] overflow-y-auto -mx-1 px-1 pb-1">
               {sessionSales.map(s => (
-                <div key={s.id} className="card p-3 flex items-center gap-3 hover:shadow-elevated transition-all">
+                <div key={s.id} className={`card p-3 flex items-center gap-3 hover:shadow-elevated transition-all ${s.status === 'return' ? 'border-red-200 bg-red-50/30' : ''}`}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold text-brand-700">{s.sale_number}</span>
+                      <span className={`font-mono text-xs font-bold ${s.status === 'return' ? 'text-red-600' : 'text-brand-700'}`}>{s.sale_number}</span>
                       <span className="text-[11px] text-slate-400 num">{new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                      {s.status === 'return' && <span className="text-[10px] font-bold uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Retour</span>}
                     </div>
-                    <div className="text-xs text-slate-600 article-text line-clamp-1 mt-0.5">{s.customer_name || 'Client comptoir'}</div>
+                    <div className="text-xs text-slate-600 article-text line-clamp-1 mt-0.5">{s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}</div>
                   </div>
-                  <div className="num font-bold text-slate-900 shrink-0">{formatFCFA(s.total)}</div>
+                  <div className={`num font-bold shrink-0 ${s.total < 0 ? 'text-red-600' : 'text-slate-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</div>
+                  {s.status !== 'return' && (
                   <div className="flex items-center gap-1 shrink-0">
                     <button title="Ticket 80mm" onClick={() => {
                             const fakeSale = {
@@ -2530,6 +2810,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             <FileText className="w-4 h-4" />
                           </button>
                   </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -2538,9 +2819,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       </Modal>
 
       {/* Stats */}
-      <Modal open={statsOpen} onClose={() => setStatsOpen(false)} title="Statistiques de la session" size="lg"
+      <Modal open={statsOpen} onClose={() => setStatsOpen(false)} title="Statistiques de la session" size="md"
         footer={<>
-          <button onClick={() => setStatsOpen(false)} className="btn-secondary">Fermer</button>
+          <button onClick={() => setStatsOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           {statsData && (
             <button onClick={() => printXReport(
               session as any,
@@ -2548,8 +2829,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               statsData, sessionRegs,
               { name: tenant!.name, ninea: (tenant as any).ninea, rccm: (tenant as any).rccm, address: (tenant as any).address },
               profile?.full_name || profile?.email || '', currentSite?.name || ''
-            )} className="btn-primary">
-              <Printer className="w-4 h-4" /> Imprimer rapport
+            )} className="btn-icon-primary" title="Imprimer rapport">
+              <Printer className="w-4 h-4" />
             </button>
           )}
         </>}
@@ -2557,70 +2838,147 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         {loadingStats ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         ) : statsData ? (
-          <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="card p-4"><div className="text-xs text-slate-500">Ventes</div><div className="text-2xl font-bold mt-1">{statsData.count}</div></div>
-              <div className="card p-4"><div className="text-xs text-slate-500">CA Total</div><div className="text-2xl font-bold text-brand-800 mt-1">{formatFCFA(statsData.total)}</div></div>
+          <div className="space-y-3">
+            {/* KPI strip */}
+            <div className="flex items-stretch gap-2 p-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
+              <div className="flex-1 text-center px-2 py-1.5">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ventes</div>
+                <div className="text-lg font-bold text-slate-900 num leading-tight">{statsData.count}</div>
+              </div>
+              <div className="w-px bg-slate-200" />
+              <div className="flex-1 text-center px-2 py-1.5">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-brand-600">CA Total</div>
+                <div className="text-lg font-bold text-brand-900 num leading-tight">{formatFCFA(statsData.total)}</div>
+              </div>
+              {statsData.movements.length > 0 && <>
+                <div className="w-px bg-slate-200" />
+                <div className="flex-1 text-center px-2 py-1.5">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-brand-700">Net</div>
+                  <div className="text-lg font-bold text-brand-900 num leading-tight">{formatFCFA(statsData.netTotal)}</div>
+                </div>
+              </>}
             </div>
-            {(statsData.movements.length > 0) && (
-              <div className="grid grid-cols-3 gap-3">
-                <div className="card p-3"><div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Entrées</div><div className="text-lg font-bold text-emerald-700 num mt-0.5">+{formatFCFA(statsData.movIncome + statsData.movPrepay)}</div></div>
-                <div className="card p-3"><div className="text-[10px] font-bold uppercase tracking-wider text-red-700">Dépenses</div><div className="text-lg font-bold text-red-700 num mt-0.5">-{formatFCFA(statsData.movExpense)}</div></div>
-                <div className="card p-3 bg-gradient-to-br from-brand-50 to-brand-100/40 border-brand-200"><div className="text-[10px] font-bold uppercase tracking-wider text-brand-800">Net caisse</div><div className="text-lg font-bold text-brand-900 num mt-0.5">{formatFCFA(statsData.netTotal)}</div></div>
-              </div>
-            )}
+
+            {/* Movements mini-summary */}
             {statsData.movements.length > 0 && (
-              <div>
-                <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Mouvements de caisse</div>
-                <div className="space-y-1.5">
-                  {statsData.movements.map((m, i) => {
-                    const isExp = m.kind === 'expense';
-                    const label = isExp ? 'Dépense' : m.kind === 'customer_prepayment' ? 'Acompte client' : 'Entrée';
-                    const parts = [m.customer_name, m.reason].filter(Boolean).join(' · ');
-                    return (
-                      <div key={i} className={`flex items-center justify-between p-3 rounded-lg text-sm border ${isExp ? 'bg-red-50/50 border-red-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
-                        <div className="min-w-0 truncate">
-                          <span className="font-semibold">{label}</span>
-                          {parts && <span className="text-slate-600 ml-2">— {parts}</span>}
-                          {m.method_name && <span className="text-slate-400 ml-2 text-xs">({m.method_name})</span>}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold num">+{formatFCFA(statsData.movIncome + statsData.movPrepay)}</span>
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-700 font-semibold num">-{formatFCFA(statsData.movExpense)}</span>
+                {statsData.movements.map((m, i) => {
+                  const isExp = m.kind === 'expense';
+                  return (
+                    <span key={i} className={`hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium ${isExp ? 'bg-red-50/60 text-red-600' : 'bg-emerald-50/60 text-emerald-600'}`}>
+                      {m.reason || (isExp ? 'Sortie' : 'Entree')}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Collapsible sections */}
+            <div className="space-y-1.5">
+              {/* Reglements */}
+              {statsData.invoicePayments.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'reglements' ? 'border-sky-300 bg-sky-50/40 order-first' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'reglements' ? 'bg-sky-200 text-sky-800' : 'bg-sky-100 text-sky-700'}`}>
+                        <Wallet className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Reglements factures</div>
+                        <div className="text-[10px] text-slate-500">{statsData.invoicePayments.length} reglement{statsData.invoicePayments.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-sky-800 num">{formatFCFA(statsData.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'reglements' && (
+                    <div className="px-3 pb-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.invoicePayments.map((p, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-sky-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900">
+                              <span className="font-mono">{p.sale_number}</span>
+                              {p.customer_name && <span className="text-slate-600 font-medium ml-1">- {p.customer_name}</span>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                              <span>{new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} {new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{p.method_name}</span>
+                              {p.user_name && <span className="inline-flex items-center gap-0.5"><User className="w-2.5 h-2.5" />{p.user_name}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-emerald-700 num shrink-0">+{formatFCFA(p.amount)}</span>
                         </div>
-                        <span className={`font-bold num shrink-0 ml-2 ${isExp ? 'text-red-700' : 'text-emerald-700'}`}>{isExp ? '-' : '+'}{formatFCFA(m.amount)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            {statsData.byMethod.length > 0 && (
-              <div>
-                <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Encaissements par mode</div>
-                <div className="space-y-2">
-                  {statsData.byMethod.map(m => (
-                    <div key={m.method_name} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm">
-                      <span className="font-medium">{m.method_name}</span>
-                      <span className="font-bold">{formatFCFA(m.amount)}</span>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            )}
-            {statsData.topArticles.length > 0 && (
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Top articles</div>
-                <div className="space-y-2">
-                  {statsData.topArticles.map((a, i) => (
-                    <div key={a.name} className="card p-3 flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-brand-50 flex items-center justify-center shrink-0 text-xs font-bold text-brand-700 num">#{i + 1}</div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold text-slate-900 article-text line-clamp-2">{a.name}</div>
-                        <div className="text-[11px] text-slate-500 num mt-0.5">Qté {a.qty}</div>
+              )}
+
+              {/* Encaissements par mode */}
+              {statsData.byMethod.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'modes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
+                        <CreditCard className="w-3.5 h-3.5" />
                       </div>
-                      <div className="num font-bold text-slate-900 shrink-0">{formatFCFA(a.total)}</div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Encaissements par mode</div>
+                        <div className="text-[10px] text-slate-500">{statsData.byMethod.length} mode{statsData.byMethod.length > 1 ? 's' : ''}</div>
+                      </div>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-brand-800 num">{formatFCFA(statsData.total)}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'modes' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'modes' && (
+                    <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.byMethod.map(m => (
+                        <div key={m.method_name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 text-xs">
+                          <span className="font-medium text-slate-700">{m.method_name}</span>
+                          <span className="font-bold text-slate-900 num">{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Top articles */}
+              {statsData.topArticles.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'articles' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'articles' ? null : 'articles')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'articles' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
+                        <Package className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Top articles</div>
+                        <div className="text-[10px] text-slate-500">{statsData.topArticles.length} article{statsData.topArticles.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'articles' ? 'rotate-90' : ''}`} />
+                  </button>
+                  {statsExpanded === 'articles' && (
+                    <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.topArticles.map((a, i) => (
+                        <div key={a.name} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-white border border-slate-100">
+                          <div className="w-5 h-5 rounded-md bg-brand-50 flex items-center justify-center text-[9px] font-bold text-brand-700 num shrink-0">#{i + 1}</div>
+                          <div className="min-w-0 flex-1 text-xs font-medium text-slate-800 truncate">{a.name}</div>
+                          <div className="text-[10px] text-slate-500 num shrink-0">x{a.qty}</div>
+                          <div className="text-xs font-bold text-slate-900 num shrink-0">{formatFCFA(a.total)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         ) : null}
       </Modal>
@@ -2808,12 +3166,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* Web orders modal */}
       <Modal open={webOrdersOpen} onClose={() => { setWebOrdersOpen(false); setWebOrderDetail(null); }} title="Commandes web" size="lg"
-        footer={<button onClick={() => { setWebOrdersOpen(false); setWebOrderDetail(null); }} className="btn-secondary">Fermer</button>}>
+        footer={<button onClick={() => { setWebOrdersOpen(false); setWebOrderDetail(null); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
         {!webOrderDetail ? (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-1.5">
               {([
-                { k: 'a_transformer', label: 'À transformer', count: webOrdersCounts.a_transformer, icon: Sparkles },
+                { k: 'a_transformer', label: 'À transformer', count: webOrdersCounts.a_transformer, icon: ArrowRightCircle },
                 { k: 'livraison', label: 'Livraison', count: webOrdersCounts.livraison, icon: Truck },
                 { k: 'attente_paiement', label: 'Attente paiement', count: webOrdersCounts.attente_paiement, icon: ClockIcon },
                 { k: 'all', label: 'Toutes', count: webOrders.length, icon: Globe },

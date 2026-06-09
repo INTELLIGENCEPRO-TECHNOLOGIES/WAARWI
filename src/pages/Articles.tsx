@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Search, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
-  CreditCard as Edit2, Filter, ChevronDown, Sparkles, Tag, TrendingUp, TrendingDown,
+  CreditCard as Edit2, Filter, ChevronDown, Tag, TrendingUp, TrendingDown,
   Barcode, Layers, MapPin, Hash, CheckCircle2, AlertTriangle, AlertCircle,
   Image as ImageIcon, Upload, Camera, CheckSquare, Square,
   Library, ArrowRight, Lightbulb, MousePointerClick, Download, ChevronRight,
@@ -37,8 +37,18 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchInput = (val: string) => {
+    setSearchInput(val);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(val), 200);
+  };
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Article | null>(null);
   const [toDelete, setToDelete] = useState<Article | null>(null);
@@ -65,18 +75,42 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     : 0;
   const marginStr = marginValue.toFixed(1);
 
+  const sharedArticles = (tenant as any)?.settings?.shared_articles !== false;
+
   const load = async (silent = false) => {
     if (!tenant) return;
     if (!silent) setLoading(true);
-    const [{ data: arts }, { data: cats }, { data: stk }, { data: b }, { data: m }, { data: sup }] = await Promise.all([
-      supabase.from('articles').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+
+    // Fetch all articles in batches (Supabase default limit is 1000)
+    let allArts: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    while (true) {
+      let query = supabase
+        .from('articles')
+        .select('*')
+        .eq('tenant_id', tenant.id)
+        .eq('is_active', true)
+        .order('name')
+        .range(from, from + batchSize - 1);
+      if (!sharedArticles && currentSite) {
+        query = query.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+      }
+      const { data, error: e } = await query;
+      if (e || !data) break;
+      allArts = allArts.concat(data);
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+
+    const [{ data: cats }, { data: stk }, { data: b }, { data: m }, { data: sup }] = await Promise.all([
       supabase.from('part_categories').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
       supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id),
       supabase.from('vehicle_brands').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
       supabase.from('vehicle_models').select('*').eq('tenant_id', tenant.id).order('name'),
       supabase.from('suppliers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
     ]);
-    setArticles(arts || []);
+    setArticles(allArts);
     setCategories(cats || []);
     setBrands(b || []);
     setModels(m || []);
@@ -87,7 +121,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     if (!silent) setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id, sharedArticles]);
   useEffect(() => { if (dataTick > 0) load(true); /* eslint-disable-next-line */ }, [dataTick]);
 
   useEffect(() => {
@@ -105,6 +139,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         || (a.barcode || '').toLowerCase().includes(q);
     });
   }, [articles, search, categoryFilter]);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [search, categoryFilter]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
+
+  const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
 
   const stats = useMemo(() => {
     let inStock = 0, low = 0, out = 0;
@@ -178,7 +220,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         finalImageUrl = urlData.publicUrl + `?t=${Date.now()}`;
       }
 
-      const payload = {
+      const payload: any = {
         tenant_id: tenant.id,
         internal_ref: form.internal_ref.trim(),
         name: form.name.trim(),
@@ -201,6 +243,9 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         location: form.location || '',
         image_url: finalImageUrl,
       };
+      if (!sharedArticles && currentSite && !editing) {
+        payload.site_id = currentSite.id;
+      }
 
       let articleId = editing?.id;
       if (editing) {
@@ -325,6 +370,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     { key: 'taux_tva', label: 'TVA (%)', required: false },
     { key: 'stock_min', label: 'Stock min', required: false },
     { key: 'stock_max', label: 'Stock max', required: false },
+    { key: 'stock_initial', label: 'Stock initial', required: false },
     { key: 'emplacement', label: 'Emplacement', required: false },
     { key: 'description', label: 'Description', required: false },
   ];
@@ -332,7 +378,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const downloadArticleTemplate = async () => {
     const XLSX = await import('xlsx');
     const headerRow = TENANT_IMPORT_HEADERS.map(h => h.label);
-    const sampleRow = ['Plaquette de frein avant', 'ART-0001', 'Freinage', 'Bosch', '0986AB1234', '', '', 'pièce', '15000', '25000', '20000', '22000', '18', '5', '50', 'Rayon A1', ''];
+    const sampleRow = ['Plaquette de frein avant', 'ART-0001', 'Freinage', 'Bosch', '0986AB1234', '', '', 'pièce', '15000', '25000', '20000', '22000', '18', '5', '50', '10', 'Rayon A1', ''];
     const ws = XLSX.utils.aoa_to_sheet([headerRow, sampleRow]);
     ws['!cols'] = headerRow.map(h => ({ wch: Math.max(16, h.length + 4) }));
     const wb = XLSX.utils.book_new();
@@ -353,6 +399,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       r.code_barres || '', r.unite || '',
       r.prix_achat || 0, r.prix_vente || 0, r.prix_minimum || 0, r.prix_gros || 0,
       r.taux_tva || 0, r.stock_min || 0, r.stock_max || 0,
+      r.stock_initial || 0,
       r.emplacement || '', r.description || '',
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
@@ -455,7 +502,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header premium unifié (title + search + filters) ────────── */}
-      <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
             <div className="leading-tight">
@@ -465,8 +512,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             </div>
           </div>
           <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={e => handleSearchInput(e.target.value)}
             placeholder="Rechercher…"
             className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
           />
@@ -596,11 +643,11 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         <>
           {/* Mobile: cartes */}
           <div className="md:hidden space-y-2.5">
-            {filtered.map(a => (
+            {paginated.map(a => (
               <ArticleCard
                 key={a.id}
                 article={a}
-                category={categories.find(c => c.id === a.category_id)}
+                category={categoryMap.get(a.category_id || '')}
                 qty={stockMap[a.id] || 0}
                 onEdit={() => selectionMode ? toggleSelected(a.id) : openEdit(a)}
                 onDelete={() => setToDelete(a)}
@@ -639,8 +686,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map(a => {
-                  const cat = categories.find(c => c.id === a.category_id);
+                {paginated.map(a => {
+                  const cat = categoryMap.get(a.category_id || '');
                   const qty = stockMap[a.id] || 0;
                   const mStatus = stockStatus(qty, Number(a.stock_min || 0));
                   const mg = a.sale_price > 0 ? ((a.sale_price - a.purchase_price) / a.sale_price) * 100 : 0;
@@ -704,6 +751,22 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-card mt-3">
+              <div className="text-xs text-slate-500">
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length} articles
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">1</button>
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">Prec</button>
+                <span className="px-3 py-1 rounded-lg text-xs font-bold bg-brand-50 text-brand-700 border border-brand-200">{page + 1}/{totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">Suiv</button>
+                <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1} className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">{totalPages}</button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -725,7 +788,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             {/* Header */}
             <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-slate-100 shrink-0">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 flex items-center justify-center shadow-glow shrink-0">
-                {editing ? <Edit2 className="w-5 h-5 text-white" /> : <Sparkles className="w-5 h-5 text-white" />}
+                {editing ? <Edit2 className="w-5 h-5 text-white" /> : <Plus className="w-5 h-5 text-white" />}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/80">
@@ -923,7 +986,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                   <div className="text-lg font-bold text-emerald-800 num">{importResult.imported}</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-100 text-center">
-                  <div className="text-[9px] font-bold uppercase text-sky-700">Mis a jour</div>
+                  <div className="text-[9px] font-bold uppercase text-sky-700">Mis à jour</div>
                   <div className="text-lg font-bold text-sky-800 num">{importResult.updated}</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-center">
@@ -1796,7 +1859,7 @@ function MasterCatalogGuide({ step, articleCount, onStep, onDismiss, onGo }: {
 
             {current === 0 && articleCount === 0 && (
               <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-[11px] font-semibold">
-                <Sparkles className="w-3 h-3" />
+                <Tag className="w-3 h-3" />
                 Catalogue vide — c'est le moment idéal !
               </div>
             )}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Receipt, User, CreditCard, BookOpen } from 'lucide-react';
+import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Scroll, User, CreditCard, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -189,6 +189,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       payments: pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: paidTotal,
       issuedBy: profile?.full_name || undefined,
+      docHeader: (selected as any).doc_header ?? null,
     });
   };
 
@@ -218,6 +219,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Unified premium header ───────────────────────────────── */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
@@ -282,6 +284,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         >
           <ShoppingCart className="w-3.5 h-3.5" />Nouvelle vente
         </button>
+      </div>
       </div>
 
       {/* ── List ─────────────────────────────────────────────────── */}
@@ -474,7 +477,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           {selected && selected.accounting_status === 'accounted' && (
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />Comptabilisé</span>
           )}
-          <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Receipt className="w-4 h-4" /></button>
+          <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Scroll className="w-4 h-4" /></button>
           <button onClick={printInvoice} className="btn-icon-primary" title="Facture A4"><Printer className="w-4 h-4" /></button>
         </>}
       >

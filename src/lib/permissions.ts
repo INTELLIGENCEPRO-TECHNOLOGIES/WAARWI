@@ -3,6 +3,13 @@ import { supabase } from './supabase';
 import { useApp } from '../context/AppContext';
 
 export const PERMISSION_KEYS = [
+  'access_pos',
+  'access_billing',
+  'access_articles',
+  'access_tiers',
+  'access_dashboard',
+  'access_reports',
+  'access_master_catalog',
   'view_purchase_prices',
   'view_margins',
   'view_stock_levels',
@@ -30,6 +37,13 @@ export type PermissionKey = typeof PERMISSION_KEYS[number];
 export type PermissionMap = Record<PermissionKey, boolean>;
 
 export const PERMISSION_LABELS: Record<PermissionKey, string> = {
+  access_pos: 'Accéder à la caisse (POS)',
+  access_billing: 'Accéder à la facturation',
+  access_articles: 'Accéder aux articles',
+  access_tiers: 'Accéder à la gestion des tiers',
+  access_dashboard: 'Accéder au tableau de bord',
+  access_reports: 'Accéder aux rapports et états',
+  access_master_catalog: 'Accéder au catalogue maître',
   view_purchase_prices: "Voir les prix d'achat",
   view_margins: 'Voir les marges',
   view_stock_levels: 'Voir les niveaux de stock',
@@ -54,6 +68,10 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
 
 export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] = [
   {
+    label: 'Accès aux pages',
+    keys: ['access_pos', 'access_billing', 'access_articles', 'access_tiers', 'access_dashboard', 'access_reports', 'access_master_catalog'],
+  },
+  {
     label: 'Données financières',
     keys: ['view_purchase_prices', 'view_margins', 'view_dashboard_stats', 'view_accounting'],
   },
@@ -66,7 +84,7 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
     keys: ['view_sales_history', 'manage_cash_sessions', 'view_cash_sessions', 'apply_discounts', 'sell_below_min_price', 'create_quotes'],
   },
   {
-    label: 'Commandes',
+    label: 'Commandes & Tiers',
     keys: ['manage_online_orders', 'manage_supplier_orders', 'manage_customers'],
   },
   {
@@ -106,7 +124,9 @@ export function usePermissions(): { permissions: PermissionMap; loading: boolean
       if (data?.permissions) {
         const map = { ...ALL_TRUE };
         for (const k of PERMISSION_KEYS) {
-          map[k] = data.permissions[k] === true;
+          if (k in data.permissions) {
+            map[k] = data.permissions[k] === true;
+          }
         }
         setPermissions(map);
       } else {

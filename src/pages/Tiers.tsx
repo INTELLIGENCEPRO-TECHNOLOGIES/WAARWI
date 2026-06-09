@@ -25,14 +25,16 @@ type Supplier = {
   delivery_days: number; payment_terms: string; credit_limit: number; credit_blocked: boolean; is_active: boolean;
 };
 
-type TabKey = 'all' | 'customers' | 'suppliers';
+type TabKey = 'customers' | 'suppliers';
 type CustomerOptionKey = 'info' | 'payment' | 'docs' | 'pricing' | null;
 type SupplierOptionKey = 'info' | 'payment' | 'docs' | 'articles' | null;
 
 export function Tiers() {
-  const { tenant, currentSite, profile } = useApp();
+  const { tenant, currentSite, sites, profile } = useApp();
   const { success, error } = useToast();
-  const [tab, setTab] = useState<TabKey>('all');
+  const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
+  const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
+  const [tab, setTab] = useState<TabKey>('customers');
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -71,9 +73,17 @@ export function Tiers() {
   const load = async () => {
     if (!tenant) return;
     setLoading(true);
+    let custQuery = supabase.from('customers').select('*').eq('tenant_id', tenant.id).order('name');
+    if (!sharedCustomers && currentSite) {
+      custQuery = custQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+    }
+    let supQuery = supabase.from('suppliers').select('*').eq('tenant_id', tenant.id).order('name');
+    if (!sharedSuppliers && currentSite) {
+      supQuery = supQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+    }
     const [cRes, sRes, salesRes, soRes, supPayRes] = await Promise.all([
-      supabase.from('customers').select('*').eq('tenant_id', tenant.id).order('name'),
-      supabase.from('suppliers').select('*').eq('tenant_id', tenant.id).order('name'),
+      custQuery,
+      supQuery,
       supabase.from('sales').select('customer_id, total, paid, status').eq('tenant_id', tenant.id).not('customer_id', 'is', null).neq('status', 'cancelled'),
       supabase.from('supplier_orders').select('supplier_id, total, paid, status').eq('tenant_id', tenant.id).neq('status', 'cancelled'),
       supabase.from('supplier_payments').select('supplier_id, amount').eq('tenant_id', tenant.id),
@@ -110,7 +120,7 @@ export function Tiers() {
 
     setLoading(false);
   };
-  useEffect(() => { load(); }, [tenant?.id]);
+  useEffect(() => { load(); }, [tenant?.id, currentSite?.id, sharedCustomers, sharedSuppliers]);
 
   const [flashTarget, setFlashTarget] = useState<'customers' | 'suppliers' | null>(null);
   useEffect(() => {
@@ -174,6 +184,9 @@ export function Tiers() {
       credit_blocked: custForm.credit_blocked === true,
       is_active: custEdit ? custForm.is_active !== false : true,
     };
+    if (!sharedCustomers && currentSite && !custEdit) {
+      payload.site_id = currentSite.id;
+    }
     const { error: e } = custEdit
       ? await supabase.from('customers').update(payload).eq('id', custEdit.id)
       : await supabase.from('customers').insert(payload);
@@ -205,6 +218,9 @@ export function Tiers() {
       credit_blocked: (supForm as any).credit_blocked === true,
       is_active: supEdit ? supForm.is_active : true,
     };
+    if (!sharedSuppliers && currentSite && !supEdit) {
+      payload.site_id = currentSite.id;
+    }
     const { error: e } = supEdit
       ? await supabase.from('suppliers').update(payload).eq('id', supEdit.id)
       : await supabase.from('suppliers').insert(payload);
@@ -230,6 +246,7 @@ export function Tiers() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Embedded header: title + search + filter trigger (like Billing) ── */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
             <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
@@ -272,11 +289,9 @@ export function Tiers() {
         </div>
       </div>
 
-      {/* ── Tabs + action buttons (sticky) ── */}
-      <div className="sticky top-0 z-20 -mx-1 px-1 pt-1 pb-1 bg-gradient-to-b from-[#f6f8fb] to-[#f6f8fb]/80 backdrop-blur">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {[
-            { k: 'all' as TabKey, l: 'Tous', c: customers.length + suppliers.length, Icon: Users },
+      {/* ── Tabs + action buttons ── */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        {[
             { k: 'customers' as TabKey, l: 'Clients', c: activeCustCount, Icon: Users },
             { k: 'suppliers' as TabKey, l: 'Fournisseurs', c: activeSupCount, Icon: Truck },
           ].map(t => {
@@ -304,7 +319,7 @@ export function Tiers() {
       {/* ── Filter chips panel (expandable) ── */}
       {filtersOpen && (
         <div className="card p-2.5 flex flex-col sm:flex-row gap-2 animate-slide-down">
-          {(tab === 'all' || tab === 'customers') && (
+          {tab === 'customers' && (
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="input sm:w-44">
               <option value="">Tous types</option>
               <option value="particulier">Particulier</option>
@@ -332,14 +347,9 @@ export function Tiers() {
       {loading ? (
         <div className="card py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : (
-        <div className="space-y-6">
-          {(tab === 'all' || tab === 'customers') && (
+        <div className="space-y-3">
+          {tab === 'customers' && (
             <section className={flashTarget === 'customers' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
-              {tab === 'all' && (
-                <h2 className="text-xs font-bold tracking-[0.08em] uppercase text-slate-400 px-1 mb-2 flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5" />Clients <span className="text-slate-300">· {filteredCustomers.length}</span>
-                </h2>
-              )}
               <CustomerList
                 list={filteredCustomers} total={customers.length}
                 dueMap={dueMap} paidMap={paidMap} totalMap={totalMap}
@@ -349,13 +359,8 @@ export function Tiers() {
             </section>
           )}
 
-          {(tab === 'all' || tab === 'suppliers') && (
+          {tab === 'suppliers' && (
             <section className={flashTarget === 'suppliers' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
-              {tab === 'all' && (
-                <h2 className="text-xs font-bold tracking-[0.08em] uppercase text-slate-400 px-1 mb-2 flex items-center gap-1.5">
-                  <Truck className="w-3.5 h-3.5" />Fournisseurs <span className="text-slate-300">· {filteredSuppliers.length}</span>
-                </h2>
-              )}
               <SupplierList
                 list={filteredSuppliers} total={suppliers.length}
                 dueMap={supDueMap}
@@ -371,12 +376,12 @@ export function Tiers() {
       <div className="fixed bottom-20 right-4 z-30">
         {fabOpen && (
           <div className="absolute bottom-16 right-0 flex flex-col gap-2 animate-slide-down">
-            <button onClick={openCustCreate} className="flex items-center gap-2 pr-4 pl-2 py-2 rounded-full bg-white border border-slate-200 shadow-premium text-sm font-semibold text-slate-800">
-              <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center"><Users className="w-4 h-4" /></span>
+            <button onClick={openCustCreate} className="flex items-center gap-2 pr-4 pl-2 py-2 rounded-full bg-white border border-slate-200 shadow-premium text-sm font-semibold text-slate-800 whitespace-nowrap">
+              <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"><Users className="w-4 h-4" /></span>
               Nouveau client
             </button>
-            <button onClick={openSupCreate} className="flex items-center gap-2 pr-4 pl-2 py-2 rounded-full bg-white border border-slate-200 shadow-premium text-sm font-semibold text-slate-800">
-              <span className="w-8 h-8 rounded-full bg-sky-50 text-sky-700 flex items-center justify-center"><Truck className="w-4 h-4" /></span>
+            <button onClick={openSupCreate} className="flex items-center gap-2 pr-4 pl-2 py-2 rounded-full bg-white border border-slate-200 shadow-premium text-sm font-semibold text-slate-800 whitespace-nowrap">
+              <span className="w-8 h-8 rounded-full bg-sky-50 text-sky-700 flex items-center justify-center shrink-0"><Truck className="w-4 h-4" /></span>
               Nouveau fournisseur
             </button>
           </div>
@@ -427,7 +432,7 @@ export function Tiers() {
           </FieldSection>
           <FieldSection title="Solvabilité / Crédit">
             <Field label="Plafond crédit (FCFA)">
-              <input type="number" min={0} value={custForm.credit_limit ?? 0} onChange={e => setCustForm((f: any) => ({ ...f, credit_limit: Number(e.target.value) }))} className="input" placeholder="0 = illimité" />
+              <input type="number" min={0} value={custForm.credit_limit || ''} onChange={e => setCustForm((f: any) => ({ ...f, credit_limit: Number(e.target.value) }))} className="input" placeholder="0 = illimité" />
             </Field>
             <Field label="Bloquer le crédit">
               <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
@@ -464,7 +469,7 @@ export function Tiers() {
             <Field label="Délai livraison (jours)"><input type="number" value={supForm.delivery_days ?? ''} onChange={e => setSupForm(f => ({ ...f, delivery_days: Number(e.target.value) }))} className="input" min={0} /></Field>
             <Field label="Conditions de paiement"><input value={supForm.payment_terms || ''} onChange={e => setSupForm(f => ({ ...f, payment_terms: e.target.value }))} className="input" placeholder="30 jours, comptant…" /></Field>
             <Field label="Plafond crédit (FCFA)">
-              <input type="number" min={0} value={(supForm as any).credit_limit ?? 0} onChange={e => setSupForm(f => ({ ...f, credit_limit: Number(e.target.value) } as any))} className="input" placeholder="0 = illimité" />
+              <input type="number" min={0} value={(supForm as any).credit_limit || ''} onChange={e => setSupForm(f => ({ ...f, credit_limit: Number(e.target.value) } as any))} className="input" placeholder="0 = illimité" />
             </Field>
             <Field label="Bloquer le crédit">
               <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
@@ -599,30 +604,33 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClic
           <button
             key={c.id}
             onClick={() => onClickRow(c)}
-            className={`w-full text-left flex items-center gap-3 px-3.5 py-3 rounded-xl bg-white border border-slate-200/80 hover:border-brand-300 hover:shadow-sm active:scale-[0.99] transition-all ${inactive ? 'opacity-50' : ''}`}
+            className={`w-full text-left bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-brand-300 active:scale-[0.99] transition-all px-3.5 py-2.5 ${inactive ? 'opacity-50' : ''}`}
           >
-            <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold">
-              {c.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
-                {c.name}
-                {blocked && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
-                {!blocked && overLimit && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
-                {!blocked && nearLimit && !overLimit && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
+            {/* Row 1: name + badges */}
+            <div className="flex items-start gap-2 mb-1.5">
+              <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
+                {c.name.charAt(0).toUpperCase()}
               </div>
-              {c.phone && (
-                <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-                  <Phone className="w-3 h-3 shrink-0" />{c.phone}
-                </div>
-              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-bold text-slate-900 leading-snug">{c.name}</p>
+                {c.phone && (
+                  <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                    <Phone className="w-2.5 h-2.5 shrink-0" />{c.phone}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {blocked && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
+                {!blocked && overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
+                {!blocked && nearLimit && !overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
+                {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200">Inactif</span>}
+              </div>
             </div>
-            <div className="text-right shrink-0">
-              <div className={`text-sm font-bold tabular-nums ${due > 0 ? 'text-amber-700' : 'text-slate-300'}`}>{formatFCFA(due)}</div>
-              {due > 0 && <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">solde dû</div>}
+            {/* Row 2: solde label + amount */}
+            <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde dû</span>
+              <span className={`text-[12px] font-black tabular-nums ${due > 0 ? 'text-amber-600' : 'text-slate-300'}`}>{formatFCFA(due)}</span>
             </div>
-            {inactive && <Badge tone="slate">Inactif</Badge>}
-            <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
           </button>
         );
       })}
@@ -649,25 +657,28 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
           <button
             key={s.id}
             onClick={() => onClickRow(s)}
-            className={`w-full text-left flex items-center gap-3 px-3.5 py-3 rounded-xl bg-white border border-slate-200/80 hover:border-sky-300 hover:shadow-sm active:scale-[0.99] transition-all ${!s.is_active ? 'opacity-50' : ''}`}
+            className={`w-full text-left bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-sky-300 active:scale-[0.99] transition-all px-3.5 py-2.5 ${!s.is_active ? 'opacity-50' : ''}`}
           >
-            <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-sky-50 to-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold">
-              {s.name.charAt(0).toUpperCase()}
+            {/* Row 1: name + inactive badge */}
+            <div className="flex items-start gap-2 mb-1.5">
+              <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-sky-50 to-sky-100 text-sky-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
+                {s.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-bold text-slate-900 leading-snug">{s.name}</p>
+                {s.phone && (
+                  <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                    <Phone className="w-2.5 h-2.5 shrink-0" />{s.phone}
+                  </div>
+                )}
+              </div>
+              {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200 shrink-0">Inactif</span>}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-slate-900">{s.name}</div>
-              {s.phone && (
-                <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-                  <Phone className="w-3 h-3 shrink-0" />{s.phone}
-                </div>
-              )}
+            {/* Row 2: dette label + amount */}
+            <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Dette</span>
+              <span className={`text-[12px] font-black tabular-nums ${d.due > 0 ? 'text-red-600' : 'text-slate-300'}`}>{formatFCFA(d.due)}</span>
             </div>
-            <div className="text-right shrink-0">
-              <div className={`text-sm font-bold tabular-nums ${d.due > 0 ? 'text-red-700' : 'text-slate-300'}`}>{formatFCFA(d.due)}</div>
-              {d.due > 0 && <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">dette</div>}
-            </div>
-            {!s.is_active && <Badge tone="slate">Inactif</Badge>}
-            <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
           </button>
         );
       })}
@@ -940,7 +951,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
 
   return (
     <Modal open onClose={onClose} title={modalTitle} size="lg" layer="top"
-      footer={<button onClick={onClose} className="btn-secondary">Fermer</button>}>
+      footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
 
       {/* Premium embedded title bar */}
       <div className="mb-3 rounded-2xl bg-white border border-slate-200 shadow-sm p-3">
@@ -1220,7 +1231,7 @@ function PaymentForm({
         <label className="label">Imputer sur la facture</label>
         <SearchableSelect
           options={[
-            { value: '', label: '— Selectionner une facture non soldee —' },
+            { value: '', label: '— Sélectionner une facture non soldée —' },
             ...unpaid.map((s: any) => {
               const d = Math.max(0, Number(s.total) - Number(s.paid));
               return { value: s.id, label: `${s.sale_number} · du ${formatFCFA(d)}` };
@@ -1228,7 +1239,7 @@ function PaymentForm({
           ]}
           value={paySale}
           onChange={v => { setPaySale(v); onSelectSale(v); }}
-          placeholder="— Selectionner une facture —"
+          placeholder="— Sélectionner une facture —"
         />
         {unpaid.length === 0 && <div className="text-xs text-emerald-700 mt-1.5 inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" />Toutes les factures sont soldées.</div>}
       </div>
@@ -1635,7 +1646,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 
   return (
     <Modal open onClose={onClose} title={modalTitle} size="lg" layer="top"
-      footer={<button onClick={onClose} className="btn-secondary">Fermer</button>}>
+      footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
 
       <div className="mb-3 rounded-2xl bg-white border border-slate-200 shadow-sm p-3">
         <div className="flex items-center gap-2 mb-2">

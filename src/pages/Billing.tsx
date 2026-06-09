@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   Plus, FileText, Loader2, Eye, Printer, CheckCircle, X, Trash2, Car,
-  Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, User,
-  CreditCard, ShoppingCart, ArrowRight, Banknote, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen
+  Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, CalendarDays, User,
+  CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen,
+  Tag, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -17,6 +18,9 @@ import { printDocumentA4, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
 import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
+import { MobileBillingWizard, type WizardHeaderField } from '../components/MobileBillingWizard';
+import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
+import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
 
 const tenantForPrint = (t: any): PrintTenant => ({
   name: t?.name || '', legal_name: t?.legal_name, ninea: t?.ninea, rccm: t?.rccm,
@@ -120,7 +124,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quoteDetail, setQuoteDetail] = useState<Quote | null>(null);
   const [quoteItemsDetail, setQuoteItemsDetail] = useState<any[]>([]);
-  const [quoteForm, setQuoteForm] = useState<{ customer_id: string; valid_until: string; note: string }>({ customer_id: '', valid_until: '', note: '' });
+  const [quoteForm, setQuoteForm] = useState<{ customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string }>({ customer_id: '', valid_until: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '' });
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
   const [quoteToCancel, setQuoteToCancel] = useState<Quote | null>(null);
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
@@ -135,6 +139,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [convertPayMethod, setConvertPayMethod] = useState('');
   const [convertPayAmount, setConvertPayAmount] = useState('');
   const [converting, setConverting] = useState(false);
+  const [convertItems, setConvertItems] = useState<{ article_id: string; name: string; quantity: number }[]>([]);
+  const [lotPickerConvertOpen, setLotPickerConvertOpen] = useState(false);
+  const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
 
   // Invoice detail + payment
   const [invoiceDetail, setInvoiceDetail] = useState<Invoice | null>(null);
@@ -159,6 +166,18 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', refund_method: 'cash' as string, restock: true });
   const [returnLines, setReturnLines] = useState<{ item_id: string; article_id: string; name: string; max_qty: number; quantity: number; unit_price: number; selected: boolean }[]>([]);
 
+  // Direct invoice creation
+  const [invoiceEditorOpen, setInvoiceEditorOpen] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState<{ customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string }>({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '' });
+  const [invoiceEditorItems, setInvoiceEditorItems] = useState<QuoteItem[]>([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
+  const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
+  const [invoiceIsCredit, setInvoiceIsCredit] = useState(false);
+  const [savingInvoice, setSavingInvoice] = useState(false);
+
+  // Document settings
+  const [docSettings, setDocSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
+  const [quoteDocSettings, setQuoteDocSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
+
   const [saving, setSaving] = useState(false);
 
   const load = async (silent = false) => {
@@ -167,7 +186,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const siteId = currentSite.id;
     const [q, s, r] = await Promise.all([
       supabase.from('quotes').select('*, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
-      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
+      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, doc_header, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
       supabase.from('sale_returns').select('*, customers(name, phone, address), sales(sale_number)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
     ]);
     setQuotes((q.data as any) || []);
@@ -177,6 +196,27 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id]);
+
+  // Load document settings (per doc type)
+  useEffect(() => {
+    if (!tenant) return;
+    const parseSettings = (data: any): DocSettings => ({
+      show_delivery_date:  data.show_delivery_date  ?? false,
+      show_reference:      data.show_reference      ?? false,
+      show_warranty:       data.show_warranty       ?? false,
+      show_representative: data.show_representative ?? false,
+      default_representative: data.default_representative ?? '',
+      require_header_lock: data.require_header_lock ?? false,
+      columns_config:      mergeColumns(data.columns_config ?? []),
+    });
+    supabase.from('document_settings').select('*').eq('tenant_id', tenant.id).in('doc_type', ['invoice', 'quote']).then(({ data }) => {
+      if (!data) return;
+      const inv = data.find((r: any) => r.doc_type === 'invoice');
+      const quo = data.find((r: any) => r.doc_type === 'quote');
+      if (inv) setDocSettings(parseSettings(inv));
+      if (quo) setQuoteDocSettings(parseSettings(quo));
+    });
+  }, [tenant?.id]);
 
   const [flashTab, setFlashTab] = useState<Tab | null>(null);
   useEffect(() => {
@@ -191,9 +231,19 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   useEffect(() => {
     if (!tenant) return;
+    const isShared = (tenant as any)?.settings?.shared_articles !== false;
+    const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
+    let articlesQuery = supabase.from('articles').select('id, name, sale_price, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(500);
+    if (!isShared && currentSite) {
+      articlesQuery = articlesQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+    }
+    let custQuery = supabase.from('customers').select('id, name, phone').eq('tenant_id', tenant.id).eq('is_active', true).order('name');
+    if (!isSharedCust && currentSite) {
+      custQuery = custQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+    }
     Promise.all([
-      supabase.from('customers').select('id, name, phone').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
-      supabase.from('articles').select('id, name, sale_price, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(500),
+      custQuery,
+      articlesQuery,
       supabase.from('sales').select('id, sale_number, customer_id, customers(name)').eq('tenant_id', tenant.id).eq('status', 'paid').order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
     ]).then(([c, a, sl, pm]) => {
@@ -298,12 +348,16 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setSaving(true);
     const valid = quoteItems.filter(i => i.name.trim());
     const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
+    const docHeader = (quoteForm.delivery_date || quoteForm.reference || quoteForm.warranty || quoteForm.representative)
+      ? { delivery_date: quoteForm.delivery_date || null, reference: quoteForm.reference || null, warranty: quoteForm.warranty || null, representative: quoteForm.representative || null }
+      : null;
 
     if (editingQuoteId) {
       await supabase.from('quotes').update({
         customer_id: quoteForm.customer_id || null,
         subtotal, discount: 0, total: subtotal,
         valid_until: quoteForm.valid_until || null, note: quoteForm.note,
+        doc_header: docHeader,
       }).eq('id', editingQuoteId);
       await supabase.from('quote_items').delete().eq('quote_id', editingQuoteId);
       await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: editingQuoteId, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
@@ -319,6 +373,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         customer_id: quoteForm.customer_id || null,
         quote_number: qNum, subtotal, discount: 0, total: subtotal,
         valid_until: quoteForm.valid_until || null, note: quoteForm.note, status: 'draft',
+        doc_header: docHeader,
       }).select().single();
       if (e || !q) { error(e?.message || 'Erreur'); setSaving(false); return; }
       await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
@@ -339,14 +394,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setEditingQuoteId(null);
     setEditingQuote(null);
     setQuoteItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
-    setQuoteForm({ customer_id: '', valid_until: '', note: '' });
+    setQuoteForm({ customer_id: '', valid_until: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '' });
   };
 
   const openQuoteForEdit = async (q: Quote) => {
     const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
     setEditingQuoteId(q.id);
     setEditingQuote(q);
-    setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '' });
+    setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '', delivery_date: q.doc_header?.delivery_date || '', reference: q.doc_header?.reference || '', warranty: q.doc_header?.warranty || '', representative: q.doc_header?.representative || '' });
     setQuoteItems((data || []).map((i: any) => ({
       article_id: i.article_id, name: i.name,
       quantity: Number(i.quantity), unit_price: Number(i.unit_price),
@@ -385,17 +440,210 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       items, subtotal, total: Number(quoteDetail.total),
       footerNote: 'Devis valable 30 jours à compter de la date d\'émission.',
       issuedBy: profile?.full_name || undefined,
+      docHeader: (quoteDetail as any).doc_header ?? null,
     });
   };
 
+  // ── Direct invoice creation ──────────────────────────────────
+  const updateInvoiceItem = (idx: number, field: keyof QuoteItem, val: any) => {
+    setInvoiceEditorItems(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: val };
+      if (field === 'article_id') {
+        const art = articles.find(a => a.id === val);
+        if (art) {
+          next[idx].name = art.name;
+          next[idx].unit_price = art.sale_price;
+          if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
+        }
+      }
+      const it = next[idx];
+      next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
+      return next;
+    });
+  };
+  const invoiceEditorSubtotal = invoiceEditorItems.reduce((s, i) => s + Number(i.total), 0);
+  const invoiceEditorPaid = invoicePayList.reduce((s, p) => s + p.amount, 0);
+
+  const openInvoiceEditor = () => {
+    setInvoiceEditorOpen(true);
+    setInvoiceForm({ customer_id: '', note: '' });
+    setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
+    setInvoicePayList([]);
+    setInvoiceIsCredit(false);
+  };
+  const closeInvoiceEditor = () => {
+    setInvoiceEditorOpen(false);
+    setInvoiceForm({ customer_id: '', note: '' });
+    setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
+    setInvoicePayList([]);
+    setInvoiceIsCredit(false);
+  };
+
+  const saveInvoice = async () => {
+    if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
+    const valid = invoiceEditorItems.filter(i => i.name.trim());
+    if (valid.length === 0) { error('Ajoutez au moins un article'); return; }
+
+    const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
+    const totalPaid = invoiceIsCredit ? 0 : invoicePayList.reduce((s, p) => s + p.amount, 0);
+    if (!invoiceIsCredit && totalPaid > subtotal) { error('Le montant payé dépasse le total'); return; }
+
+    if (invoiceIsCredit && !invoiceForm.customer_id) {
+      error('Un client est requis pour une facture à crédit');
+      return;
+    }
+
+    // Stock check if negative stock not allowed
+    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    const articleItems = valid.filter(i => i.article_id);
+    if (!allowNeg && articleItems.length > 0) {
+      const { data: stk } = await supabase.from('stock_levels')
+        .select('article_id, quantity')
+        .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
+        .in('article_id', articleItems.map(i => i.article_id!));
+      const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
+      const insufficient = articleItems.filter(i => (stockMap.get(i.article_id!) || 0) < i.quantity);
+      if (insufficient.length > 0) {
+        error(`Stock insuffisant: ${insufficient.map(i => i.name).join(', ')}`);
+        return;
+      }
+    }
+
+    setSavingInvoice(true);
+    try {
+      const { data: numData } = await supabase.rpc('next_doc_number', {
+        p_tenant_id: tenant.id, p_kind: 'invoice', p_prefix: 'F',
+      });
+      const invNum = (numData as string) || ('F-' + Date.now());
+
+      let sessionId: string | null = null;
+      if (!invoiceIsCredit) {
+        const { data: sess } = await supabase.from('cash_sessions')
+          .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
+          .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
+        sessionId = sess?.id || null;
+      }
+
+      const status = invoiceIsCredit ? 'partial' : (totalPaid >= subtotal ? 'paid' : 'partial');
+
+      const { data: sale, error: e } = await supabase.from('sales').insert({
+        tenant_id: tenant.id, site_id: currentSite.id,
+        customer_id: invoiceForm.customer_id || null,
+        user_id: profile?.id || null,
+        sale_number: invNum, subtotal, discount: 0, total: subtotal,
+        paid: totalPaid, status,
+        source: 'billing', note: invoiceForm.note || '',
+        cash_session_id: sessionId,
+        doc_header: (invoiceForm.delivery_date || invoiceForm.reference || invoiceForm.warranty || invoiceForm.representative)
+          ? { delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invoiceForm.representative || null }
+          : null,
+      }).select('id').single();
+      if (e || !sale) { error(e?.message || 'Erreur'); return; }
+
+      await supabase.from('sale_items').insert(valid.map(i => ({
+        tenant_id: tenant.id, sale_id: sale.id,
+        article_id: i.article_id, name: i.name,
+        quantity: i.quantity, unit_price: i.unit_price,
+        discount: i.discount, total: i.total,
+      })));
+
+      // Insert payments (skip if credit)
+      if (!invoiceIsCredit) {
+        let sessionPayTotal = 0;
+        for (const p of invoicePayList) {
+          await supabase.from('sale_payments').insert({
+            tenant_id: tenant.id, sale_id: sale.id,
+            cash_session_id: sessionId,
+            payment_method_id: p.method_id || null,
+            method_name: p.method_name, amount: p.amount,
+            reference: p.reference || '',
+          });
+          if (sessionId) sessionPayTotal += p.amount;
+        }
+        if (sessionId && sessionPayTotal > 0) {
+          await supabase.rpc('increment_session_theoretical', {
+            p_session_id: sessionId,
+            p_amount: sessionPayTotal,
+          });
+        }
+      }
+
+      // Update customer balance if credit
+      if (invoiceIsCredit && invoiceForm.customer_id) {
+        const { data: cust } = await supabase.from('customers').select('balance').eq('id', invoiceForm.customer_id).single();
+        await supabase.from('customers').update({ balance: Number(cust?.balance || 0) + subtotal }).eq('id', invoiceForm.customer_id);
+      }
+
+      // Deduct stock
+      for (const item of articleItems) {
+        if (!item.article_id) continue;
+        await supabase.rpc('adjust_stock', {
+          p_article_id: item.article_id,
+          p_site_id: currentSite.id,
+          p_quantity: -item.quantity,
+          p_movement_type: 'sale',
+          p_note: `Facture ${invNum}${invoiceIsCredit ? ' (credit)' : ''}`,
+        });
+      }
+
+      success(`Facture ${invNum} créée${invoiceIsCredit ? ' (à crédit)' : ''}`);
+      closeInvoiceEditor();
+      load();
+    } catch (err: any) {
+      error(err.message || 'Erreur');
+    } finally {
+      setSavingInvoice(false);
+    }
+  };
+
   // ── Convert quote → sale ─────────────────────────────────────
-  const openConvert = (q: Quote) => {
+  const openConvert = async (q: Quote) => {
     setConvertFrom(q); setConvertPayNow(false); setConvertPayMethod(paymentMethods[0]?.id || '');
     setConvertPayAmount(String(q.total));
+    const { data } = await supabase.from('quote_items').select('article_id, name, quantity').eq('quote_id', q.id);
+    setConvertItems((data || []).filter((i: any) => i.article_id).map((i: any) => ({ article_id: i.article_id, name: i.name, quantity: Number(i.quantity) })));
   };
   const confirmConvert = async () => {
     if (!convertFrom || !currentSite) return;
+
+    // Stock check: block if insufficient stock and negative stock not allowed
+    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    if (!allowNeg && convertItems.length > 0) {
+      const { data: stk } = await supabase
+        .from('stock_levels')
+        .select('article_id, quantity')
+        .eq('tenant_id', tenant!.id)
+        .eq('site_id', currentSite.id)
+        .in('article_id', convertItems.map(i => i.article_id));
+      const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
+      const insufficient = convertItems.filter(i => (stockMap.get(i.article_id) || 0) < i.quantity);
+      if (insufficient.length > 0) {
+        error(`Stock insuffisant pour: ${insufficient.map(i => i.name).join(', ')}. Conversion impossible.`);
+        return;
+      }
+    }
+
+    if (stockMethod === 'lot' && convertItems.length > 0) {
+      setLotPickerConvertOpen(true);
+      return;
+    }
+    await executeConvert(null);
+  };
+
+  const executeConvert = async (lotSelections: ArticleLotSelection[] | null) => {
+    if (!convertFrom || !currentSite) return;
     setConverting(true);
+
+    // Find active cash session for payment tracking
+    let convertSessionId: string | null = null;
+    if (currentSite && tenant) {
+      const { data: sess } = await supabase.from('cash_sessions')
+        .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
+        .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
+      convertSessionId = sess?.id || null;
+    }
+
     const payments: any[] = [];
     if (convertPayNow && Number(convertPayAmount) > 0 && convertPayMethod) {
       const pm = paymentMethods.find(p => p.id === convertPayMethod);
@@ -409,11 +657,37 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const { data, error: e } = await supabase.rpc('convert_quote_to_sale', {
       p_quote_id: convertFrom.id,
       p_site_id: currentSite.id,
-      p_cash_session_id: null,
+      p_cash_session_id: convertSessionId,
       p_payments: payments,
     });
+    if (e) { setConverting(false); error(e.message); return; }
+
+    if (lotSelections && lotSelections.length > 0) {
+      for (const sel of lotSelections) {
+        const assignments = sel.assignments.filter(a => a.quantity > 0).map(a => ({ lot_id: a.lot_id, quantity: a.quantity }));
+        if (assignments.length > 0) {
+          await supabase.rpc('deduct_stock_manual_lots', {
+            p_article_id: sel.article_id,
+            p_site_id: currentSite.id,
+            p_total_quantity: assignments.reduce((s, a) => s + a.quantity, 0),
+            p_lot_assignments: assignments,
+          });
+        }
+      }
+    } else if (convertItems.length > 0) {
+      const saleNum = (data as any)?.sale_number || '';
+      for (const item of convertItems) {
+        await supabase.rpc('adjust_stock', {
+          p_article_id: item.article_id,
+          p_site_id: currentSite.id,
+          p_quantity: -item.quantity,
+          p_movement_type: 'sale',
+          p_note: `Facture ${saleNum} (devis converti)`,
+        });
+      }
+    }
+
     setConverting(false);
-    if (e) { error(e.message); return; }
     success(`Facture ${(data as any)?.sale_number || ''} créée`);
     setConvertFrom(null); setQuoteDetail(null);
     setTab('invoices'); load();
@@ -430,7 +704,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
 
   const reloadInvoice = async (id: string) => {
-    const { data } = await supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, customers(name, phone, address)').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, doc_header, customers(name, phone, address)').eq('id', id).maybeSingle();
     if (data) {
       setInvoiceDetail(data as any);
       const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', id);
@@ -453,6 +727,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       payments: invoicePays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(invoiceDetail.paid),
       issuedBy: profile?.full_name || undefined,
+      docHeader: (invoiceDetail as any).doc_header ?? null,
     });
   };
 
@@ -693,17 +968,18 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const primaryAction = () => {
     if (tab === 'quotes') setQuoteOpen(true);
-    else if (tab === 'invoices') onNavigate?.('pos');
+    else if (tab === 'invoices') openInvoiceEditor();
     else setReturnOpen(true);
   };
   const primaryLabel = tab === 'quotes' ? 'Nouveau devis' : tab === 'invoices' ? 'Nouvelle facture' : tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir';
-  const PIcon = tab === 'invoices' ? ShoppingCart : Plus;
+  const PIcon = Plus;
 
   const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header ───────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
@@ -747,8 +1023,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 -mx-1 px-1 pt-1 pb-1 bg-gradient-to-b from-[#f6f8fb] to-[#f6f8fb]/80 backdrop-blur">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {TABS.map(t => {
             const Icon = t.icon;
             const active = tab === t.key;
@@ -881,7 +1156,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
           {tab === 'invoices' && (
             filteredInvoices.length === 0 ? (
-              <div className="card-premium"><EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={() => onNavigate?.('pos')} className="btn-primary"><ShoppingCart className="w-4 h-4" />Aller à la caisse</button>} /></div>
+              <div className="card-premium"><EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="btn-primary"><Plus className="w-4 h-4" />Nouvelle facture</button>} /></div>
             ) : (
               <>
                 <div className="md:hidden space-y-2 count-up">
@@ -1107,7 +1382,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           </div>
 
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Banknote className="w-3.5 h-3.5" />Montant (FCFA)</div>
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Coins className="w-3.5 h-3.5" />Montant (FCFA)</div>
             <div className="grid grid-cols-2 gap-2">
               <input type="number" placeholder="Min" value={minAmount} onChange={e => setMinAmount(e.target.value)} className="input" />
               <input type="number" placeholder="Max" value={maxAmount} onChange={e => setMaxAmount(e.target.value)} className="input" />
@@ -1115,6 +1390,61 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           </div>
         </div>
       </Modal>
+
+      {/* ── Direct invoice full-screen panel ──────────────────────────────── */}
+      {invoiceEditorOpen && isDesktop && (
+        <InvoiceFullPanel
+          articles={articles}
+          customers={customers}
+          invoiceForm={invoiceForm}
+          setInvoiceForm={setInvoiceForm}
+          invoiceItems={invoiceEditorItems}
+          setInvoiceItems={setInvoiceEditorItems}
+          updateInvoiceItem={updateInvoiceItem}
+          invoiceSubtotal={invoiceEditorSubtotal}
+          paymentMethods={paymentMethods}
+          payments={invoicePayList}
+          setPayments={setInvoicePayList}
+          totalPaid={invoiceIsCredit ? 0 : invoiceEditorPaid}
+          saving={savingInvoice}
+          saveInvoice={saveInvoice}
+          onClose={closeInvoiceEditor}
+          autoMode={autoMode}
+          isCredit={invoiceIsCredit}
+          setIsCredit={setInvoiceIsCredit}
+          docSettings={docSettings}
+          onVehiclePicker={(idx: number | null) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
+        />
+      )}
+      {invoiceEditorOpen && !isDesktop && (
+        <MobileBillingWizard
+          open={true}
+          onClose={closeInvoiceEditor}
+          title="Nouvelle facture"
+          headerFields={[
+            { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
+            { key: 'reference', label: 'Référence', type: 'text', placeholder: 'REF-...' },
+            { key: 'delivery_date', label: 'Date de livraison', type: 'date' },
+            { key: 'warranty', label: 'Garantie', type: 'text', placeholder: 'Ex: 6 mois' },
+            { key: 'note', label: 'Note', type: 'text', placeholder: 'Note optionnelle...' },
+          ]}
+          headerValues={invoiceForm}
+          onHeaderChange={(k, v) => setInvoiceForm(f => ({ ...f, [k]: v }))}
+          items={invoiceEditorItems}
+          onAddItem={(articleId) => {
+            const art = articles.find(a => a.id === articleId);
+            if (!art) return;
+            setInvoiceEditorItems(p => [...p, { article_id: articleId, name: art.name, quantity: 1, unit_price: art.sale_price || 0, discount: 0, total: art.sale_price || 0 }]);
+          }}
+          onUpdateItem={(idx, field, val) => updateInvoiceItem(idx, field as any, val)}
+          onRemoveItem={(idx) => setInvoiceEditorItems(p => p.filter((_, i) => i !== idx))}
+          articles={articles}
+          saving={savingInvoice}
+          onSave={saveInvoice}
+          total={invoiceEditorSubtotal}
+          saveLabel="Enregistrer facture"
+        />
+      )}
 
       {/* ── Quote create/edit full-screen panel (desktop only) ──────────────────────────────── */}
       {quoteOpen && isDesktop && (
@@ -1137,89 +1467,46 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           editingQuote={editingQuote}
           onChangeStatus={(status: string) => { if (editingQuote) { changeQuoteStatus(editingQuote, status); setEditingQuote({ ...editingQuote, status }); } }}
           onConvert={() => { if (editingQuote) openConvert(editingQuote); }}
+          docSettings={quoteDocSettings}
           onPrint={() => {
             if (!editingQuote || !tenant) return;
             const items = quoteItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
             const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-            printDocumentA4({ tenant: tenantForPrint(tenant), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0 });
+            printDocumentA4({ tenant: tenantForPrint(tenant), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0, docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || quoteForm.representative ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: quoteForm.representative || null } : null });
           }}
         />
       )}
 
       {/* ── Quote create modal (mobile only) ──────────────────────────────── */}
       {quoteOpen && !isDesktop && (
-        <Modal open={true} onClose={closeQuotePanel} title="Nouveau devis" size="lg"
-          footer={<>
-            <div className="min-w-0 text-left mr-auto">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Total</div>
-              <div className="text-sm font-extrabold text-slate-900 num whitespace-nowrap">{formatFCFA(quoteSubtotal)}</div>
-            </div>
-            <button onClick={closeQuotePanel} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-            <button onClick={() => saveQuote()} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
-          </>}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="label">Client</label>
-                <SearchableSelect
-                  options={customers.map(c => ({ value: c.id, label: c.name }))}
-                  value={quoteForm.customer_id}
-                  onChange={v => setQuoteForm((f: any) => ({ ...f, customer_id: v }))}
-                  placeholder="Client comptoir"
-                />
-              </div>
-              <div>
-                <label className="label">Valide jusqu'au</label>
-                <input type="date" value={quoteForm.valid_until} onChange={e => setQuoteForm((f: any) => ({ ...f, valid_until: e.target.value }))} className="input" />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-slate-700">Articles</span>
-                <button onClick={() => setQuoteItems(p => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])} className="text-[11px] text-white bg-brand-700 hover:bg-brand-800 rounded-lg px-2 py-1 flex items-center gap-1 transition"><Plus className="w-3 h-3" />Ajouter</button>
-              </div>
-              <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-1">
-                {quoteItems.map((it, idx) => (
-                  <div key={idx} className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5 space-y-2">
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <SearchableSelect
-                          options={articles.map(a => ({ value: a.id, label: a.name, sublabel: a.internal_ref }))}
-                          value={it.article_id || ''}
-                          onChange={v => updateQuoteItem(idx, 'article_id', v)}
-                          placeholder="Choisir un article..."
-                        />
-                      </div>
-                      {quoteItems.length > 1 && <button onClick={() => setQuoteItems(p => p.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg bg-white hover:bg-red-50 border border-slate-200 text-red-500 transition shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>}
-                    </div>
-                    <input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <div>
-                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Qté</div>
-                        <input type="number" value={it.quantity} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs h-9 num" />
-                      </div>
-                      <div>
-                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Prix unit.</div>
-                        <input type="number" value={it.unit_price} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs h-9 num" />
-                      </div>
-                      <div>
-                        <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Remise</div>
-                        <input type="number" value={it.discount} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs h-9 num" />
-                      </div>
-                    </div>
-                    <div className="text-right text-[11px] font-bold text-slate-900 num">{formatFCFA(it.total)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="label">Note</label>
-              <textarea value={quoteForm.note} onChange={e => setQuoteForm((f: any) => ({ ...f, note: e.target.value }))} className="input resize-none" rows={2} placeholder="Optionnelle..." />
-            </div>
-          </div>
-        </Modal>
+        <MobileBillingWizard
+          open={true}
+          onClose={closeQuotePanel}
+          title={editingQuoteId ? 'Edition devis' : 'Nouveau devis'}
+          headerFields={[
+            { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
+            { key: 'valid_until', label: 'Valide jusqu\'au', type: 'date' },
+            { key: 'reference', label: 'Référence', type: 'text', placeholder: 'REF-...' },
+            { key: 'delivery_date', label: 'Date de livraison', type: 'date' },
+            { key: 'warranty', label: 'Garantie', type: 'text', placeholder: 'Ex: 6 mois' },
+            { key: 'note', label: 'Note', type: 'text', placeholder: 'Note optionnelle...' },
+          ]}
+          headerValues={quoteForm}
+          onHeaderChange={(k, v) => setQuoteForm((f: any) => ({ ...f, [k]: v }))}
+          items={quoteItems}
+          onAddItem={(articleId) => {
+            const art = articles.find(a => a.id === articleId);
+            if (!art) return;
+            setQuoteItems(p => [...p, { article_id: articleId, name: art.name, quantity: 1, unit_price: art.sale_price || 0, discount: 0, total: art.sale_price || 0 }]);
+          }}
+          onUpdateItem={(idx, field, val) => updateQuoteItem(idx, field as any, val)}
+          onRemoveItem={(idx) => setQuoteItems(p => p.filter((_, i) => i !== idx))}
+          articles={articles}
+          saving={saving}
+          onSave={() => saveQuote()}
+          total={quoteSubtotal}
+          saveLabel="Enregistrer devis"
+        />
       )}
 
       {/* ── Quote detail ─────────────────────────────────────── */}
@@ -1246,6 +1533,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                 customerName={quoteDetail.customers?.name ?? null}
                 date={formatDate(quoteDetail.created_at)}
                 extra={quoteDetail.valid_until ? `Valide ${formatDate(quoteDetail.valid_until)}` : undefined}
+                docHeader={(quoteDetail as any).doc_header ?? null}
               />
               <div className="space-y-3">
                 <DocSectionTitle title="Articles" count={quoteItemsDetail.length} />
@@ -1324,11 +1612,20 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         )}
       </Modal>
 
+      <LotPickerModal
+        open={lotPickerConvertOpen}
+        onClose={() => setLotPickerConvertOpen(false)}
+        items={convertItems}
+        onConfirm={(selections) => { setLotPickerConvertOpen(false); executeConvert(selections); }}
+        title="Sélection des lots (Facturation)"
+        confirmLabel="Confirmer & Facturer"
+      />
+
       {/* ── Invoice detail ───────────────────────────────────── */}
       <DocPanel open={!!invoiceDetail} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
         footer={<>
           <div className="flex gap-1.5 mr-auto">
-            {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Banknote className="w-4 h-4" /></button>}
+            {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Coins className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDetail.accounting_status !== 'accounted' && invoiceDetail.status !== 'cancelled' && (
               <button onClick={comptabiliserFacture} disabled={accountingBusy} className="btn-icon text-teal-700 hover:bg-teal-50" title="Comptabiliser">
@@ -1358,6 +1655,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                 status={slimStatus}
                 customerName={invoiceDetail.customers?.name ?? null}
                 date={formatDateTime(invoiceDetail.created_at)}
+                docHeader={(invoiceDetail as any).doc_header ?? null}
               />
               <div className="space-y-3">
                 <DocSectionTitle title="Articles" count={invoiceItems.length} />
@@ -1403,7 +1701,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       <Modal open={payOpen} onClose={() => !paying && setPayOpen(false)} title="Encaisser la facture" size="sm"
         footer={<>
           <button onClick={() => setPayOpen(false)} className="btn-secondary" disabled={paying}>Annuler</button>
-          <button onClick={registerPayment} disabled={paying} className="btn-primary">{paying && <Loader2 className="w-4 h-4 animate-spin" />}<Banknote className="w-4 h-4" />Enregistrer</button>
+          <button onClick={registerPayment} disabled={paying} className="btn-primary">{paying && <Loader2 className="w-4 h-4 animate-spin" />}<Coins className="w-4 h-4" />Enregistrer</button>
         </>}>
         {invoiceDetail && (
           <div className="space-y-3">
@@ -1471,7 +1769,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </Modal>
 
       {/* ── Return create modal ─────────────────────────────── */}
-      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title={tab === 'credits' ? 'Nouvel avoir client' : 'Nouveau retour client'} size="lg"
+      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title={tab === 'credits' ? 'Nouvel avoir client' : 'Nouveau retour client'} size="lg" fullMobile
         footer={<>
           <button onClick={() => setReturnOpen(false)} className="btn-secondary">Annuler</button>
           {tab === 'credits' ? (
@@ -1480,89 +1778,86 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             <button onClick={() => saveReturn(false)} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer retour</button>
           )}
         </>}>
-        <div className="space-y-4">
+        <div className="space-y-2 sm:space-y-4">
           <div>
-            <label className="label">Vente d'origine *</label>
-            <select value={returnForm.sale_id} onChange={e => handleSaleChange(e.target.value)} className="input">
-              <option value="">— Sélectionnez une vente —</option>
-              {sales.map(s => <option key={s.id} value={s.id}>{s.sale_number}{s.customers ? ` — ${s.customers.name}` : ''}</option>)}
+            <label className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Vente d'origine *</label>
+            <select value={returnForm.sale_id} onChange={e => handleSaleChange(e.target.value)} className="input text-xs sm:text-sm h-[34px] sm:h-auto">
+              <option value="">-- Sélectionnez une vente --</option>
+              {sales.map(s => <option key={s.id} value={s.id}>{s.sale_number}{s.customers ? ` - ${s.customers.name}` : ''}</option>)}
             </select>
           </div>
 
           {returnLines.length > 0 && (
             <div>
-              <label className="label">Articles à retourner</label>
-              <div className="space-y-2 max-h-[40vh] overflow-y-auto -mx-1 px-1 pb-1">
+              <label className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">Articles a retourner</label>
+              <div className="space-y-1 sm:space-y-2 overflow-y-auto -mx-0.5 px-0.5" style={{ maxHeight: 'calc(100vh - 350px)' }}>
                 {returnLines.map((it, idx) => {
                   const toggle = (v: boolean) => setReturnLines(p => p.map((x, i) => i === idx ? { ...x, selected: v } : x));
                   const setQty = (q: number) => setReturnLines(p => p.map((x, i) => i === idx ? { ...x, quantity: Math.min(it.max_qty, Math.max(1, q)) } : x));
                   return (
-                    <div key={idx} className={`rounded-2xl border p-3 transition-all ${it.selected ? 'border-brand-300 bg-brand-50/30 shadow-sm' : 'border-slate-200 bg-white'}`}>
-                      <div className="flex items-start gap-3">
-                        <button type="button" onClick={() => toggle(!it.selected)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${it.selected ? 'bg-brand-600 border-brand-600' : 'bg-white border-slate-300'}`}>
-                          {it.selected && <CheckCircle className="w-4 h-4 text-white" />}
+                    <div key={idx} className={`rounded-xl border p-2 sm:p-3 transition-all ${it.selected ? 'border-brand-300 bg-brand-50/30' : 'border-slate-200 bg-white'}`}>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => toggle(!it.selected)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${it.selected ? 'bg-brand-600 border-brand-600' : 'bg-white border-slate-300'}`}>
+                          {it.selected && <CheckCircle className="w-3 h-3 text-white" />}
                         </button>
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-slate-900 line-clamp-2">{it.name}</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 num">{formatFCFA(it.unit_price)} · max {it.max_qty}</div>
+                          <div className="text-[11px] font-semibold text-slate-900 leading-tight truncate">{it.name}</div>
+                          <div className="text-[9px] text-slate-500 num">{formatFCFA(it.unit_price)} x max {it.max_qty}</div>
                         </div>
-                        <div className="num font-bold text-slate-900 shrink-0 text-right">
-                          {it.selected ? formatFCFA(it.quantity * it.unit_price) : <span className="text-slate-300">—</span>}
-                        </div>
-                      </div>
-                      {it.selected && (
-                        <div className="mt-3 flex items-center gap-2">
-                          <span className="text-xs font-semibold text-slate-500">Qté</span>
-                          <div className="ml-auto flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl p-1">
-                            <button type="button" onClick={() => setQty(it.quantity - 1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
-                            <input type="number" value={it.quantity} onChange={e => setQty(Number(e.target.value))} min="1" max={it.max_qty} className="w-12 text-center text-sm font-bold num bg-transparent outline-none" />
-                            <button type="button" onClick={() => setQty(it.quantity + 1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
+                        {it.selected && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button type="button" onClick={() => setQty(it.quantity - 1)} className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center"><Minus className="w-3 h-3" /></button>
+                            <input type="number" value={it.quantity} onChange={e => setQty(Number(e.target.value))} min="1" max={it.max_qty} className="w-8 text-center text-[11px] font-bold num bg-transparent outline-none" />
+                            <button type="button" onClick={() => setQty(it.quantity + 1)} className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center"><Plus className="w-3 h-3" /></button>
                           </div>
-                        </div>
-                      )}
+                        )}
+                        <span className="num text-[11px] font-bold text-slate-800 shrink-0 w-16 text-right">
+                          {it.selected ? formatFCFA(it.quantity * it.unit_price) : '--'}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
               {returnLines.filter(i => i.selected).length > 0 && (
-                <div className="mt-3 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white p-4 flex items-center justify-between">
+                <div className="mt-2 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white p-3 flex items-center justify-between">
                   <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-white/50">{tab === 'credits' ? 'Total avoir' : 'Total remboursement'}</div>
-                    <div className="text-xs text-white/70 mt-0.5">{returnLines.filter(i => i.selected).length} article{returnLines.filter(i => i.selected).length > 1 ? 's' : ''}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-white/50">{tab === 'credits' ? 'Total avoir' : 'Total remboursement'}</div>
+                    <div className="text-[10px] text-white/70">{returnLines.filter(i => i.selected).length} article{returnLines.filter(i => i.selected).length > 1 ? 's' : ''}</div>
                   </div>
-                  <div className="num text-2xl font-bold">{formatFCFA(returnTotal)}</div>
+                  <div className="num text-lg font-bold">{formatFCFA(returnTotal)}</div>
                 </div>
               )}
             </div>
           )}
 
           {tab !== 'credits' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-1.5">
               <div>
-                <label className="label">Mode de remboursement</label>
-                <select value={returnForm.refund_method} onChange={e => setReturnForm(f => ({ ...f, refund_method: e.target.value }))} className="input">
-                  <option value="cash">Espèces</option>
+                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Remboursement</label>
+                <select value={returnForm.refund_method} onChange={e => setReturnForm(f => ({ ...f, refund_method: e.target.value }))} className="input text-xs h-[34px]">
+                  <option value="cash">Especes</option>
                   <option value="wave">Wave</option>
                   <option value="orange_money">Orange Money</option>
                 </select>
               </div>
               <div>
-                <label className="label">Motif du retour</label>
-                <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="input" placeholder="Défectueux, mauvaise référence…" />
+                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Motif</label>
+                <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="input text-xs h-[34px]" placeholder="Motif..." />
               </div>
             </div>
           )}
 
           {tab === 'credits' && (
             <div>
-              <label className="label">Motif</label>
-              <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="input" placeholder="Raison de l'avoir…" />
+              <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Motif</label>
+              <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="input text-xs h-[34px]" placeholder="Raison de l'avoir..." />
             </div>
           )}
 
-          <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100 transition-colors">
-            <input type="checkbox" checked={returnForm.restock} onChange={e => setReturnForm(f => ({ ...f, restock: e.target.checked }))} className="w-4 h-4 rounded" />
-            <span className="text-sm font-medium text-slate-700">Remettre les articles en stock automatiquement</span>
+          <label className="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/70">
+            <input type="checkbox" checked={returnForm.restock} onChange={e => setReturnForm(f => ({ ...f, restock: e.target.checked }))} className="w-3.5 h-3.5 rounded" />
+            <span className="text-[11px] font-medium text-slate-700">Remettre en stock automatiquement</span>
           </label>
         </div>
       </Modal>
@@ -1622,10 +1917,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           open={vehiclePickerOpen}
           onClose={() => setVehiclePickerOpen(false)}
           onSelect={a => {
+            const targetUpdate = invoiceEditorOpen ? updateInvoiceItem : updateQuoteItem;
+            const targetSet = invoiceEditorOpen ? setInvoiceEditorItems : setQuoteItems;
             if (vehiclePickerTargetIdx !== null) {
-              updateQuoteItem(vehiclePickerTargetIdx, 'article_id', a.id);
+              targetUpdate(vehiclePickerTargetIdx, 'article_id', a.id);
             } else {
-              setQuoteItems(p => [...p, { article_id: a.id, name: a.name, quantity: 1, unit_price: a.sale_price, discount: 0, total: a.sale_price }]);
+              targetSet((p: QuoteItem[]) => [...p, { article_id: a.id, name: a.name, quantity: 1, unit_price: a.sale_price, discount: 0, total: a.sale_price }]);
             }
           }}
           priceMode="sale"
@@ -1805,10 +2102,10 @@ function CustomerSearchInput({ customers, value, onSelect, placeholder }: {
   );
 }
 
-function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint }: {
+function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint, docSettings }: {
   articles: any[];
   customers: any[];
-  quoteForm: { customer_id: string; valid_until: string; note: string };
+  quoteForm: { customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string };
   setQuoteForm: (fn: any) => void;
   quoteItems: QuoteItem[];
   setQuoteItems: (fn: any) => void;
@@ -1825,8 +2122,10 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
   onChangeStatus: (status: string) => void;
   onConvert: () => void;
   onPrint: () => void;
+  docSettings: DocSettings;
 }) {
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
+  const [headerValidated, setHeaderValidated] = useState(!docSettings.require_header_lock);
   const panelRef = useRef<HTMLDivElement>(null);
   const resizing = useRef(false);
   const readOnly = editingQuote ? ['converted', 'rejected'].includes(editingQuote.status) : false;
@@ -1929,118 +2228,154 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
           </div>
         </div>
 
-        {/* Meta bar - client search, date, note */}
-        <div className={`flex items-center gap-4 px-5 py-3 border-b border-slate-100 bg-white flex-shrink-0 ${readOnly ? 'pointer-events-none opacity-70' : ''}`}>
-          <CustomerSearchInput
-            customers={customers}
-            value={quoteForm.customer_id}
-            onSelect={(c) => setQuoteForm((f: any) => ({ ...f, customer_id: c?.id || '' }))}
-            placeholder="Rechercher client..."
-          />
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <input type="date" value={quoteForm.valid_until} onChange={e => setQuoteForm((f: any) => ({ ...f, valid_until: e.target.value }))} className="input text-xs h-8 w-36" disabled={readOnly} />
-          </div>
-          <div className="flex items-center gap-2 flex-1 max-w-[240px]">
-            <MessageCircle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <input value={quoteForm.note} onChange={e => setQuoteForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note..." className="input text-xs h-8" disabled={readOnly} />
-          </div>
-          {autoMode && !readOnly && (
-            <button onClick={() => onVehiclePicker(null)} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:border-teal-300 hover:bg-teal-50/50 transition-all">
-              <Car className="w-3 h-3" />Par véhicule
-            </button>
-          )}
-        </div>
-
-        {/* Table header */}
-        <div className="grid grid-cols-[1fr_1.2fr_80px_120px_100px_80px_40px] gap-2 px-5 py-2 border-b border-slate-200 bg-slate-50/50 flex-shrink-0">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Article</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Désignation</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Qte</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Prix unit.</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Remise</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Total</span>
-          <span></span>
-        </div>
-
-        {/* Scrollable rows area */}
-        <div className={`flex-1 overflow-y-auto min-h-0 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
-          {quoteItems.map((it, idx) => (
-            <div
-              key={idx}
-              data-row-idx={idx}
-              className={`grid grid-cols-[1fr_1.2fr_80px_120px_100px_80px_40px] gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === quoteItems.length - 1 ? 'bg-teal-50/30' : ''}`}
-              onKeyDown={e => handleRowKeyDown(e, idx)}
-            >
-              <div>
-                <ArticleSearchInput
-                  articles={articles}
-                  value={it.article_id ? (articles.find(a => a.id === it.article_id)?.name || '') : ''}
-                  onSelect={a => updateQuoteItem(idx, 'article_id', a.id)}
-                  onNameChange={() => {}}
-                  placeholder="Rechercher..."
-                />
+        {/* Header lock / optional fields */}
+        {headerValidated ? (
+          <div className="px-5 py-2.5 border-b border-slate-100 bg-emerald-50/60 flex-shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center flex-wrap gap-x-4 gap-y-1 min-w-0">
+                <Lock className="w-3 h-3 text-emerald-600" />
+                <span className="text-[11px] font-bold text-emerald-700">En-tête validé</span>
+                {quoteForm.customer_id && customers.find(c => c.id === quoteForm.customer_id) && (
+                  <span className="text-[11px] text-slate-600">{customers.find(c => c.id === quoteForm.customer_id)?.name}</span>
+                )}
+                {quoteForm.valid_until && <span className="text-[11px] text-slate-500">Validité : {new Date(quoteForm.valid_until).toLocaleDateString('fr-FR')}</span>}
+                {quoteForm.reference && <span className="text-[11px] text-slate-500">Réf : {quoteForm.reference}</span>}
+                {quoteForm.delivery_date && <span className="text-[11px] text-slate-500">Livraison : {new Date(quoteForm.delivery_date).toLocaleDateString('fr-FR')}</span>}
+                {quoteForm.warranty && <span className="text-[11px] text-slate-500">Garantie : {quoteForm.warranty}</span>}
+                {quoteForm.representative && <span className="text-[11px] text-slate-500">Représentant : {quoteForm.representative}</span>}
               </div>
-              <div>
-                <input
-                  value={it.name}
-                  onChange={e => updateQuoteItem(idx, 'name', e.target.value)}
-                  placeholder="Désignation"
-                  className="input text-xs"
-                />
-              </div>
-              <div>
-                <input
-                  type="number"
-                  value={it.quantity}
-                  onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))}
-                  min="1"
-                  className="input text-xs text-center"
-                />
-              </div>
-              <div>
-                <input
-                  type="number"
-                  value={it.unit_price}
-                  onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))}
-                  min="0"
-                  className="input text-xs text-right num"
-                />
-              </div>
-              <div>
-                <input
-                  type="number"
-                  value={it.discount}
-                  onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))}
-                  min="0"
-                  className="input text-xs text-right num"
-                />
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span>
-              </div>
-              <div className="flex justify-center">
-                <button
-                  onClick={() => setQuoteItems((p: QuoteItem[]) => p.filter((_, i) => i !== idx))}
-                  disabled={quoteItems.length === 1}
-                  className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <button onClick={() => setHeaderValidated(false)} className="shrink-0 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors">Modifier</button>
             </div>
-          ))}
-
-          {/* Add line button */}
-          <div className="px-5 py-2">
-            <button
-              onClick={() => setQuoteItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-800 hover:bg-teal-50 px-3 py-2 rounded-lg transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />Ajouter une ligne
-            </button>
           </div>
-        </div>
+        ) : (
+          <div className={`px-5 py-3 border-b flex-shrink-0 ${docSettings.require_header_lock ? 'border-teal-200 bg-teal-50/40' : 'border-slate-100 bg-white'} ${readOnly ? 'pointer-events-none opacity-70' : ''}`}>
+            <div className="flex items-center flex-wrap gap-2">
+              <CustomerSearchInput
+                customers={customers}
+                value={quoteForm.customer_id}
+                onSelect={(c) => setQuoteForm((f: any) => ({ ...f, customer_id: c?.id || '' }))}
+                placeholder="Rechercher client..."
+              />
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <input type="date" value={quoteForm.valid_until} onChange={e => setQuoteForm((f: any) => ({ ...f, valid_until: e.target.value }))} className="input text-xs h-8 w-36" disabled={readOnly} />
+              </div>
+              <div className="flex items-center gap-1.5 flex-1 max-w-[200px]">
+                <MessageCircle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                <input value={quoteForm.note} onChange={e => setQuoteForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note..." className="input text-xs h-8" disabled={readOnly} />
+              </div>
+              {docSettings.show_reference && (
+                <div className="flex items-center gap-1.5 min-w-[130px] flex-1 max-w-[180px]">
+                  <Tag className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <input value={quoteForm.reference} onChange={e => setQuoteForm((f: any) => ({ ...f, reference: e.target.value }))} placeholder="Référence…" className="input text-xs h-8 flex-1" />
+                </div>
+              )}
+              {docSettings.show_delivery_date && (
+                <div className="flex items-center gap-1.5 min-w-[130px]">
+                  <CalendarDays className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <input type="date" value={quoteForm.delivery_date} onChange={e => setQuoteForm((f: any) => ({ ...f, delivery_date: e.target.value }))} className="input text-xs h-8" />
+                </div>
+              )}
+              {docSettings.show_warranty && (
+                <div className="flex items-center gap-1.5 min-w-[140px] flex-1 max-w-[200px]">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <input value={quoteForm.warranty} onChange={e => setQuoteForm((f: any) => ({ ...f, warranty: e.target.value }))} placeholder="Garantie…" className="input text-xs h-8 flex-1" />
+                </div>
+              )}
+              {docSettings.show_representative && (
+                <div className="flex items-center gap-1.5 min-w-[130px] flex-1 max-w-[180px]">
+                  <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <input value={quoteForm.representative} onChange={e => setQuoteForm((f: any) => ({ ...f, representative: e.target.value }))} placeholder="Représentant…" className="input text-xs h-8 flex-1" />
+                </div>
+              )}
+              {autoMode && !readOnly && (
+                <button onClick={() => onVehiclePicker(null)} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:border-teal-300 hover:bg-teal-50/50 transition-all shrink-0">
+                  <Car className="w-3 h-3" />Par véhicule
+                </button>
+              )}
+              {docSettings.require_header_lock && !readOnly && (
+                <button
+                  onClick={() => setHeaderValidated(true)}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm"
+                >
+                  <Lock className="w-3 h-3" /> Valider l'en-tête
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Table header + rows — colonnes dynamiques */}
+        {(() => {
+          const cols = (docSettings.columns_config.length ? docSettings.columns_config : DEFAULT_COLUMNS)
+            .filter(c => c.visible).sort((a, b) => a.order - b.order);
+          const gridTemplate = cols.map(c => c.width).join(' ') + ' 40px';
+          const itemsLocked = docSettings.require_header_lock && !headerValidated;
+          return (
+            <>
+              <div className="grid gap-2 px-5 py-2 border-b border-slate-200 bg-slate-50/50 flex-shrink-0" style={{ gridTemplateColumns: gridTemplate }}>
+                {cols.map(col => (
+                  <span key={col.key} className={`text-[10px] font-bold text-slate-500 uppercase tracking-wide ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}>{col.label}</span>
+                ))}
+                <span />
+              </div>
+
+              <div className={`flex-1 overflow-y-auto min-h-0 relative ${itemsLocked ? 'pointer-events-none' : ''} ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
+                {itemsLocked && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/90 backdrop-blur-sm">
+                    <Lock className="w-8 h-8 text-slate-300 mb-3" />
+                    <p className="text-sm font-bold text-slate-500">En-tête non validé</p>
+                    <p className="text-xs text-slate-400 mt-1">Validez les informations d'en-tête pour saisir les articles</p>
+                  </div>
+                )}
+                {quoteItems.map((it, idx) => (
+                  <div key={idx} data-row-idx={idx}
+                    className={`grid gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === quoteItems.length - 1 ? 'bg-teal-50/30' : ''}`}
+                    style={{ gridTemplateColumns: gridTemplate }}
+                    onKeyDown={e => handleRowKeyDown(e, idx)}
+                  >
+                    {cols.map(col => {
+                      switch (col.key) {
+                        case 'article': return (
+                          <div key="article">
+                            <ArticleSearchInput articles={articles} value={it.article_id ? (articles.find(a => a.id === it.article_id)?.name || '') : ''} onSelect={a => updateQuoteItem(idx, 'article_id', a.id)} onNameChange={() => {}} placeholder="Rechercher..." />
+                          </div>
+                        );
+                        case 'designation': return (
+                          <div key="designation"><input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" /></div>
+                        );
+                        case 'qty': return (
+                          <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs text-center" /></div>
+                        );
+                        case 'unit_price': return (
+                          <div key="unit_price"><input type="number" value={it.unit_price || ''} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs text-right num" /></div>
+                        );
+                        case 'discount': return (
+                          <div key="discount"><input type="number" value={it.discount || ''} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs text-right num" /></div>
+                        );
+                        case 'total': return (
+                          <div key="total" className="text-right"><span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span></div>
+                        );
+                        default: return null;
+                      }
+                    })}
+                    <div className="flex justify-center">
+                      <button onClick={() => setQuoteItems((p: QuoteItem[]) => p.filter((_, i) => i !== idx))} disabled={quoteItems.length === 1} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="px-5 py-2">
+                  <button onClick={() => setQuoteItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-800 hover:bg-teal-50 px-3 py-2 rounded-lg transition-colors">
+                    <Plus className="w-3.5 h-3.5" />Ajouter une ligne
+                  </button>
+                </div>
+              </div>
+            </>
+          );
+        })()}
 
         {/* Footer totals */}
         <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between flex-shrink-0">
@@ -2051,6 +2386,354 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
             <div className="text-right">
               <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">Total HT</span>
               <span className="text-lg font-black text-slate-900 num">{formatFCFA(quoteSubtotal)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Invoice Full Panel ─────────────────────────────────────────
+function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, invoiceItems, setInvoiceItems, updateInvoiceItem, invoiceSubtotal, paymentMethods, payments, setPayments, totalPaid, saving, saveInvoice, onClose, autoMode, onVehiclePicker, isCredit, setIsCredit, docSettings }: {
+  articles: any[];
+  customers: any[];
+  invoiceForm: { customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string };
+  setInvoiceForm: (fn: any) => void;
+  invoiceItems: QuoteItem[];
+  setInvoiceItems: (fn: any) => void;
+  updateInvoiceItem: (idx: number, field: keyof QuoteItem, val: any) => void;
+  invoiceSubtotal: number;
+  paymentMethods: any[];
+  payments: { method_id: string; method_name: string; amount: number; reference: string }[];
+  setPayments: (fn: any) => void;
+  totalPaid: number;
+  saving: boolean;
+  saveInvoice: () => void;
+  onClose: () => void;
+  autoMode: boolean;
+  onVehiclePicker: (idx: number | null) => void;
+  isCredit: boolean;
+  setIsCredit: (v: boolean) => void;
+  docSettings: DocSettings;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelWidth, setPanelWidth] = useState<number | null>(null);
+  const resizing = useRef(false);
+  const [payMethodId, setPayMethodId] = useState(paymentMethods[0]?.id || '');
+  const [payAmt, setPayAmt] = useState('');
+  const [headerValidated, setHeaderValidated] = useState(!docSettings.require_header_lock);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
+  }, [onClose]);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizing.current = true;
+    const startX = e.clientX;
+    const startWidth = panelRef.current?.offsetWidth || window.innerWidth - 256;
+    const onMove = (ev: MouseEvent) => { if (!resizing.current) return; setPanelWidth(Math.max(600, Math.min(window.innerWidth - 64, startWidth + (startX - ev.clientX)))); };
+    const onUp = () => { resizing.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
+
+  const handleRowKeyDown = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const item = invoiceItems[idx];
+      if (item.name.trim() && item.unit_price > 0 && idx === invoiceItems.length - 1) {
+        setInvoiceItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
+        setTimeout(() => {
+          const rows = panelRef.current?.querySelectorAll('[data-row-idx]');
+          const lastRow = rows?.[rows.length - 1];
+          (lastRow?.querySelector('input') as HTMLInputElement)?.focus();
+        }, 50);
+      }
+    }
+  };
+
+  const addPayment = () => {
+    const amt = Number(payAmt);
+    if (!amt || amt <= 0) return;
+    const pm = paymentMethods.find((m: any) => m.id === payMethodId);
+    if (!pm) return;
+    setPayments((prev: any[]) => [...prev, { method_id: pm.id, method_name: pm.name, amount: amt, reference: '' }]);
+    setPayAmt('');
+  };
+
+  const balance = invoiceSubtotal - totalPaid;
+
+  return (
+    <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
+      <div
+        className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-blue-100 transition-colors group flex-shrink-0 relative z-10"
+        style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
+        onMouseDown={startResize}
+      >
+        <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-blue-500 transition-colors" />
+      </div>
+
+      <div ref={panelRef} className="bg-white h-full flex flex-col shadow-2xl flex-1 w-full" style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center">
+              <Receipt className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Nouvelle facture</h2>
+              <p className="text-[11px] text-slate-500">Entree valide la ligne et ajoute une suivante</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {saving && <span className="text-[10px] text-blue-600 font-medium animate-pulse">Sauvegarde...</span>}
+            <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">Fermer</button>
+            <button onClick={saveInvoice} disabled={saving} className="btn-primary text-xs px-4 py-1.5">
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Enregistrer
+            </button>
+          </div>
+        </div>
+
+        {/* Meta bar — client, note, champs optionnels, verrou */}
+        {headerValidated ? (
+          /* ── En-tête verrouillé ── */
+          <div className="px-5 py-2.5 border-b border-slate-100 bg-emerald-50/60 flex-shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center flex-wrap gap-x-4 gap-y-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <Lock className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span className="text-[11px] font-bold text-emerald-700">En-tête validé</span>
+                </div>
+                {invoiceForm.customer_id && <span className="text-[11px] text-slate-600 font-medium truncate max-w-[140px]"><User className="w-3 h-3 inline mr-0.5 text-slate-400" />{customers.find(c => c.id === invoiceForm.customer_id)?.name || ''}</span>}
+                {invoiceForm.reference && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Réf:</span> {invoiceForm.reference}</span>}
+                {invoiceForm.delivery_date && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Livraison:</span> {invoiceForm.delivery_date}</span>}
+                {invoiceForm.warranty && <span className="text-[11px] text-slate-500 truncate max-w-[120px]"><span className="text-slate-400">Garantie:</span> {invoiceForm.warranty}</span>}
+                {invoiceForm.representative && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Rep.:</span> {invoiceForm.representative}</span>}
+                {invoiceForm.note && <span className="text-[11px] text-slate-400 italic truncate max-w-[160px]">"{invoiceForm.note}"</span>}
+              </div>
+              <button
+                onClick={() => setHeaderValidated(false)}
+                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-100 border border-slate-200 transition-colors"
+              >
+                <Lock className="w-3 h-3" /> Modifier
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ── Formulaire d'en-tête ── */
+          <div className={`px-5 py-3 border-b flex-shrink-0 ${docSettings.require_header_lock ? 'border-blue-200 bg-blue-50/40' : 'border-slate-100 bg-white'}`}>
+            {docSettings.require_header_lock && (
+              <div className="flex items-center gap-1.5 mb-2">
+                <Lock className="w-3 h-3 text-blue-500" />
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Informations de l'en-tête — à valider avant la saisie</span>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <CustomerSearchInput
+                customers={customers}
+                value={invoiceForm.customer_id}
+                onSelect={(c) => setInvoiceForm((f: any) => ({ ...f, customer_id: c?.id || '' }))}
+                placeholder="Rechercher client..."
+              />
+              <div className="flex items-center gap-1.5 min-w-[160px] flex-1 max-w-[220px]">
+                <MessageCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <input value={invoiceForm.note} onChange={e => setInvoiceForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note…" className="input text-xs h-8 flex-1" />
+              </div>
+              {docSettings.show_reference && (
+                <div className="flex items-center gap-1.5 min-w-[130px] flex-1 max-w-[180px]">
+                  <Tag className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <input value={invoiceForm.reference} onChange={e => setInvoiceForm((f: any) => ({ ...f, reference: e.target.value }))} placeholder="Référence…" className="input text-xs h-8 flex-1" />
+                </div>
+              )}
+              {docSettings.show_delivery_date && (
+                <div className="flex items-center gap-1.5 min-w-[130px]">
+                  <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <input type="date" value={invoiceForm.delivery_date} onChange={e => setInvoiceForm((f: any) => ({ ...f, delivery_date: e.target.value }))} className="input text-xs h-8" />
+                </div>
+              )}
+              {docSettings.show_warranty && (
+                <div className="flex items-center gap-1.5 min-w-[140px] flex-1 max-w-[200px]">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <input value={invoiceForm.warranty} onChange={e => setInvoiceForm((f: any) => ({ ...f, warranty: e.target.value }))} placeholder="Garantie…" className="input text-xs h-8 flex-1" />
+                </div>
+              )}
+              {docSettings.show_representative && (
+                <div className="flex items-center gap-1.5 min-w-[130px] flex-1 max-w-[180px]">
+                  <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <input value={invoiceForm.representative} onChange={e => setInvoiceForm((f: any) => ({ ...f, representative: e.target.value }))} placeholder="Représentant…" className="input text-xs h-8 flex-1" />
+                </div>
+              )}
+              {autoMode && (
+                <button onClick={() => onVehiclePicker(null)} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/50 transition-all shrink-0">
+                  <Car className="w-3 h-3" />Par véhicule
+                </button>
+              )}
+              {docSettings.require_header_lock && (
+                <button
+                  onClick={() => setHeaderValidated(true)}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  <Lock className="w-3 h-3" /> Valider l'en-tête
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Table header — colonnes dynamiques */}
+        {(() => {
+          const cols = (docSettings.columns_config.length ? docSettings.columns_config : DEFAULT_COLUMNS)
+            .filter(c => c.visible).sort((a, b) => a.order - b.order);
+          const gridTemplate = cols.map(c => c.width).join(' ') + ' 40px';
+          const itemsLocked = docSettings.require_header_lock && !headerValidated;
+          return (
+            <>
+              <div className="grid gap-2 px-5 py-2 border-b border-slate-200 bg-slate-50/50 flex-shrink-0" style={{ gridTemplateColumns: gridTemplate }}>
+                {cols.map(col => (
+                  <span key={col.key} className={`text-[10px] font-bold text-slate-500 uppercase tracking-wide ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}>{col.label}</span>
+                ))}
+                <span />
+              </div>
+
+              {/* Scrollable rows */}
+              <div className={`flex-1 overflow-y-auto min-h-0 relative ${itemsLocked ? 'pointer-events-none' : ''}`}>
+                {itemsLocked && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/90 backdrop-blur-sm">
+                    <Lock className="w-8 h-8 text-slate-300 mb-3" />
+                    <p className="text-sm font-bold text-slate-500">En-tête non validé</p>
+                    <p className="text-xs text-slate-400 mt-1">Validez les informations d'en-tête pour saisir les articles</p>
+                  </div>
+                )}
+                {invoiceItems.map((it, idx) => (
+                  <div key={idx} data-row-idx={idx}
+                    className={`grid gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === invoiceItems.length - 1 ? 'bg-blue-50/30' : ''}`}
+                    style={{ gridTemplateColumns: gridTemplate }}
+                    onKeyDown={e => handleRowKeyDown(e, idx)}
+                  >
+                    {cols.map(col => {
+                      switch (col.key) {
+                        case 'article': return (
+                          <div key="article">
+                            <ArticleSearchInput
+                              articles={articles}
+                              value={it.article_id ? (articles.find(a => a.id === it.article_id)?.name || '') : ''}
+                              onSelect={a => updateInvoiceItem(idx, 'article_id', a.id)}
+                              onNameChange={() => {}}
+                              placeholder="Rechercher..."
+                            />
+                          </div>
+                        );
+                        case 'designation': return (
+                          <div key="designation"><input value={it.name} onChange={e => updateInvoiceItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" /></div>
+                        );
+                        case 'qty': return (
+                          <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateInvoiceItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs text-center" /></div>
+                        );
+                        case 'unit_price': return (
+                          <div key="unit_price"><input type="number" value={it.unit_price || ''} onChange={e => updateInvoiceItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs text-right num" /></div>
+                        );
+                        case 'discount': return (
+                          <div key="discount"><input type="number" value={it.discount || ''} onChange={e => updateInvoiceItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs text-right num" /></div>
+                        );
+                        case 'total': return (
+                          <div key="total" className="text-right"><span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span></div>
+                        );
+                        default: return null;
+                      }
+                    })}
+                    <div className="flex justify-center">
+                      <button onClick={() => setInvoiceItems((p: QuoteItem[]) => p.filter((_, i) => i !== idx))} disabled={invoiceItems.length === 1} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                ))}
+                <div className="px-5 py-2">
+                  <button onClick={() => setInvoiceItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-2 rounded-lg transition-colors">
+                    <Plus className="w-3.5 h-3.5" />Ajouter une ligne
+                  </button>
+                </div>
+
+                {/* Payment section */}
+                <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Reglement</div>
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={isCredit} onChange={e => setIsCredit(e.target.checked)} className="sr-only peer" />
+                      <div className="relative w-9 h-5 bg-slate-200 peer-checked:bg-amber-500 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4"></div>
+                      <span className={`text-xs font-semibold ${isCredit ? 'text-amber-700' : 'text-slate-500'}`}>A credit</span>
+                    </label>
+                  </div>
+                  {!isCredit && (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <select value={payMethodId} onChange={e => setPayMethodId(e.target.value)} className="shrink-0 text-sm font-semibold text-slate-800 bg-transparent border-none outline-none cursor-pointer py-1 pr-6 appearance-none">
+                          {paymentMethods.map((m: any) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                        <input type="number" value={payAmt} onChange={e => setPayAmt(e.target.value)} placeholder={formatFCFA(balance > 0 ? balance : 0)} min="0" className="input text-xs h-8 w-32 text-right num" onFocus={() => { if (!payAmt && balance > 0) setPayAmt(String(balance)); }} />
+                        <button onClick={addPayment} disabled={!payAmt || Number(payAmt) <= 0} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors whitespace-nowrap">
+                          <Plus className="w-3 h-3 inline" /> Ajouter
+                        </button>
+                      </div>
+                      {payments.length > 0 && (
+                        <div className="space-y-1">
+                          {payments.map((p, i) => (
+                            <div key={i} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs">
+                              <div className="flex items-center gap-2">
+                                <Coins className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="font-semibold text-slate-700">{p.method_name}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-emerald-700 num">{formatFCFA(p.amount)}</span>
+                                <button onClick={() => setPayments((prev: any[]) => prev.filter((_: any, j: number) => j !== i))} className="p-1 rounded hover:bg-red-50 text-red-400"><X className="w-3 h-3" /></button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {isCredit && (
+                    <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 font-medium">
+                      <CreditCard className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      Cette facture sera enregistrée à crédit. Le client devra régler ultérieurement.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          );
+        })()}
+
+        {/* Footer */}
+        <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between flex-shrink-0">
+          <div className="text-xs text-slate-500">
+            {invoiceItems.filter(i => i.name.trim()).length} ligne{invoiceItems.filter(i => i.name.trim()).length > 1 ? 's' : ''}
+            {payments.length > 0 && <span className="ml-2">· {payments.length} reglement{payments.length > 1 ? 's' : ''}</span>}
+          </div>
+          <div className="flex items-center gap-6">
+            {totalPaid > 0 && (
+              <div className="text-right">
+                <span className="text-[10px] text-emerald-500 uppercase font-bold tracking-wide block">Payé</span>
+                <span className="text-sm font-bold text-emerald-700 num">{formatFCFA(totalPaid)}</span>
+              </div>
+            )}
+            {balance > 0 && totalPaid > 0 && (
+              <div className="text-right">
+                <span className="text-[10px] text-amber-500 uppercase font-bold tracking-wide block">Reste</span>
+                <span className="text-sm font-bold text-amber-700 num">{formatFCFA(balance)}</span>
+              </div>
+            )}
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">Total</span>
+              <span className="text-lg font-black text-slate-900 num">{formatFCFA(invoiceSubtotal)}</span>
             </div>
           </div>
         </div>

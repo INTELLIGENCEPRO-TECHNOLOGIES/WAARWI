@@ -17,6 +17,7 @@ import { printDocumentA4, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
 import { DocItems, DocTotals, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocStatusConfig } from '../components/DocLayout';
+import { MobileBillingWizard } from '../components/MobileBillingWizard';
 
 type SupplierOrder = {
   id: string; order_number: string; total: number; status: string;
@@ -47,9 +48,11 @@ const FILTERS: { key: string; label: string }[] = [
 ];
 
 export function SupplierOrders() {
-  const { tenant, currentSite, dataTick, profile } = useApp();
+  const { tenant, currentSite, sites, dataTick, profile } = useApp();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
+  const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
+  const isMultiSiteDispatch = sharedSuppliers && sites.length > 1;
   const [list, setList] = useState<SupplierOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,6 +69,10 @@ export function SupplierOrders() {
   const [editItems, setEditItems] = useState<any[]>([]);
   const [receiveMode, setReceiveMode] = useState(false);
   const [receiveQty, setReceiveQty] = useState<Record<string, number>>({});
+  const [receiveLotData, setReceiveLotData] = useState<Record<string, { batch_number: string; expiry_date: string }>>({});
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+  const [dispatchData, setDispatchData] = useState<Record<string, Record<string, number>>>({});
+  const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
   const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
   const [flashList, setFlashList] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -109,11 +116,21 @@ export function SupplierOrders() {
   }, []);
   useEffect(() => {
     if (!tenant) return;
+    const isShared = (tenant as any)?.settings?.shared_articles !== false;
+    const isSharedSup = (tenant as any)?.settings?.shared_suppliers !== false;
+    let artQuery = supabase.from('articles').select('id, name, purchase_price, supplier_ref, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(500);
+    if (!isShared && currentSite) {
+      artQuery = artQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+    }
+    let supQuery = supabase.from('suppliers').select('id, name, phone, balance, credit_limit, credit_blocked').eq('tenant_id', tenant.id).eq('is_active', true).order('name');
+    if (!isSharedSup && currentSite) {
+      supQuery = supQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+    }
     Promise.all([
-      supabase.from('suppliers').select('id, name, phone, balance, credit_limit, credit_blocked').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
-      supabase.from('articles').select('id, name, purchase_price, supplier_ref, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(500),
+      supQuery,
+      artQuery,
     ]).then(([{ data: s }, { data: a }]) => { setSuppliers(s || []); setArticles(a || []); });
-  }, [tenant?.id]);
+  }, [tenant?.id, currentSite?.id]);
 
   const filtered = useMemo(() => {
     let r = list;
@@ -302,6 +319,7 @@ export function SupplierOrders() {
       subtotal: Number(selected.total), total: Number(selected.total),
       footerNote: 'Merci de confirmer réception et délai de livraison.',
       issuedBy: profile?.full_name || undefined,
+      docHeader: selected.doc_header ?? null,
     });
   };
 
@@ -398,6 +416,90 @@ export function SupplierOrders() {
     load(true);
   };
 
+  const initiateReceive = () => {
+    if (!isMultiSiteDispatch) {
+      receivePartial();
+      return;
+    }
+    // Build dispatch data: for each item with qty > 0, distribute across sites
+    const dd: Record<string, Record<string, number>> = {};
+    for (const item of detailItems) {
+      const addQty = Number(receiveQty[item.id] || 0);
+      if (addQty > 0 && item.article_id) {
+        dd[item.id] = {};
+        if (sites.length === 1) {
+          dd[item.id][sites[0].id] = addQty;
+        } else {
+          // Default: assign all to current site
+          dd[item.id][currentSite!.id] = addQty;
+        }
+      }
+    }
+    if (Object.keys(dd).length === 0) {
+      error('Aucune quantité à réceptionner');
+      return;
+    }
+    setDispatchData(dd);
+    if (sites.length === 1) {
+      receiveWithDispatch(dd);
+    } else {
+      setDispatchOpen(true);
+    }
+  };
+
+  const receiveWithDispatch = async (dd: Record<string, Record<string, number>>) => {
+    if (!selected || !tenant || !currentSite) return;
+    setSaving(true);
+    let anyReceived = 0;
+    let fullyReceived = true;
+    for (const item of detailItems) {
+      const siteAlloc = dd[item.id];
+      if (!siteAlloc || !item.article_id) {
+        const ordered = Number(item.quantity_ordered || 0);
+        const alreadyReceived = Number(item.quantity_received || 0);
+        if (alreadyReceived < ordered) fullyReceived = false;
+        continue;
+      }
+      const totalAddQty = Object.values(siteAlloc).reduce((s, v) => s + v, 0);
+      const alreadyReceived = Number(item.quantity_received || 0);
+      const ordered = Number(item.quantity_ordered || 0);
+      const newTotalReceived = alreadyReceived + totalAddQty;
+
+      for (const [siteId, qty] of Object.entries(siteAlloc)) {
+        if (qty <= 0) continue;
+        if (stockMethod === 'lot') {
+          const lotData = receiveLotData[item.id] || { batch_number: '', expiry_date: '' };
+          await supabase.rpc('adjust_stock_lot', {
+            p_article_id: item.article_id, p_site_id: siteId,
+            p_quantity: qty, p_batch_number: lotData.batch_number || `LOT-${Date.now()}`,
+            p_expiry_date: lotData.expiry_date || null,
+            p_purchase_price: Number(item.unit_price || 0),
+            p_note: `Réception commande ${selected.order_number}`,
+          });
+        } else {
+          await supabase.rpc('adjust_stock', {
+            p_article_id: item.article_id, p_site_id: siteId,
+            p_quantity: qty, p_movement_type: 'purchase',
+            p_note: `Réception commande ${selected.order_number}`,
+          });
+        }
+        anyReceived += qty;
+      }
+      await supabase.from('supplier_order_items').update({ quantity_received: newTotalReceived }).eq('id', item.id);
+      if (newTotalReceived < ordered) fullyReceived = false;
+    }
+    const newStatus = fullyReceived ? 'received' : 'partial';
+    const update: any = { status: newStatus };
+    if (fullyReceived) update.received_date = new Date().toISOString().slice(0, 10);
+    await supabase.from('supplier_orders').update(update).eq('id', selected.id);
+    success(fullyReceived ? 'Commande entièrement réceptionnée' : `Réception partielle enregistrée (+${anyReceived})`);
+    setSaving(false);
+    setReceiveMode(false);
+    setDispatchOpen(false);
+    setDetailOpen(false);
+    load();
+  };
+
   const receivePartial = async () => {
     if (!selected || !tenant || !currentSite) return;
     setSaving(true);
@@ -409,11 +511,22 @@ export function SupplierOrders() {
       const ordered = Number(item.quantity_ordered || 0);
       const newTotalReceived = alreadyReceived + addQty;
       if (addQty > 0 && item.article_id) {
-        await supabase.rpc('adjust_stock', {
-          p_article_id: item.article_id, p_site_id: currentSite.id,
-          p_quantity: addQty, p_movement_type: 'purchase',
-          p_note: `Réception commande ${selected.order_number}`,
-        });
+        if (stockMethod === 'lot') {
+          const lotData = receiveLotData[item.id] || { batch_number: '', expiry_date: '' };
+          await supabase.rpc('adjust_stock_lot', {
+            p_article_id: item.article_id, p_site_id: currentSite.id,
+            p_quantity: addQty, p_batch_number: lotData.batch_number || `LOT-${Date.now()}`,
+            p_expiry_date: lotData.expiry_date || null,
+            p_purchase_price: Number(item.unit_price || 0),
+            p_note: `Réception commande ${selected.order_number}`,
+          });
+        } else {
+          await supabase.rpc('adjust_stock', {
+            p_article_id: item.article_id, p_site_id: currentSite.id,
+            p_quantity: addQty, p_movement_type: 'purchase',
+            p_note: `Réception commande ${selected.order_number}`,
+          });
+        }
         await supabase.from('supplier_order_items').update({ quantity_received: newTotalReceived }).eq('id', item.id);
         anyReceived += addQty;
       }
@@ -441,9 +554,10 @@ export function SupplierOrders() {
   return (
     <div className="space-y-3">
       {/* Header: title + search integrated */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2 bg-white border border-slate-200/70 rounded-2xl shadow-card px-3 py-2">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-sm shrink-0">
-          <ShoppingBag className="w-4.5 h-4.5 text-white" strokeWidth={2.2} />
+          <Truck className="w-4.5 h-4.5 text-white" strokeWidth={2.2} />
         </div>
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -504,6 +618,7 @@ export function SupplierOrders() {
             </button>
           );
         })}
+      </div>
       </div>
 
       {/* List */}
@@ -618,7 +733,7 @@ export function SupplierOrders() {
           onPrint={() => {
             if (!editingOrder || !tenant) return;
             const items = orderItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: i.supplier_ref || null, oem_ref: null, quantity: Number(i.quantity_ordered), unit_price: Number(i.unit_price), discount: 0 }));
-            printDocumentA4({ tenant: tenantForPrint(), docLabel: 'BON DE COMMANDE', docNumber: editingOrder.order_number, docDate: formatDate(editingOrder.created_at), customer: editingOrder.suppliers ? { name: editingOrder.suppliers.name } : null, items, subtotal: items.reduce((s, i) => s + i.quantity * i.unit_price, 0), total: items.reduce((s, i) => s + i.quantity * i.unit_price, 0), footerNote: 'Merci de confirmer réception et délai de livraison.' });
+            printDocumentA4({ tenant: tenantForPrint(), docLabel: 'BON DE COMMANDE', docNumber: editingOrder.order_number, docDate: formatDate(editingOrder.created_at), customer: editingOrder.suppliers ? { name: editingOrder.suppliers.name } : null, items, subtotal: items.reduce((s, i) => s + i.quantity * i.unit_price, 0), total: items.reduce((s, i) => s + i.quantity * i.unit_price, 0), footerNote: 'Merci de confirmer réception et délai de livraison.', docHeader: editingOrder.doc_header ?? null });
           }}
           onChangeStatus={(status: string) => { if (editingOrder) { changeStatus(editingOrder, status); setEditingOrder({ ...editingOrder, status }); } }}
         />
@@ -626,81 +741,46 @@ export function SupplierOrders() {
 
       {/* Create modal - mobile only */}
       {open && !isDesktop && (
-      <Modal
-        open={true}
-        onClose={() => setOpen(false)}
-        title="Nouvelle commande fournisseur"
-        size="lg"
-        footer={
-          <>
-            <div className="min-w-0 text-left mr-auto">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Total</div>
-              <div className="text-sm font-extrabold text-slate-900 num whitespace-nowrap">{formatFCFA(subtotal)}</div>
-            </div>
-            <button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-            <button onClick={save} disabled={saving} className="btn-icon-primary" title="Créer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="label">Fournisseur *</label>
-              <SearchableSelect
-                options={suppliers.map(s => ({ value: s.id, label: s.name }))}
-                value={form.supplier_id}
-                onChange={v => setForm(f => ({ ...f, supplier_id: v }))}
-                placeholder="Selectionner..."
-              />
-            </div>
-            <div>
-              <label className="label">Livraison prévue</label>
-              <input type="date" value={form.expected_date} onChange={e => setForm(f => ({ ...f, expected_date: e.target.value }))} className="input" />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-slate-700">Articles</span>
-              <button onClick={() => setOrderItems(p => [...p, { article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }])} className="text-[11px] text-white bg-brand-700 hover:bg-brand-800 rounded-lg px-2 py-1 flex items-center gap-1 transition"><Plus className="w-3 h-3" />Ajouter</button>
-            </div>
-            <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-1">
-              {orderItems.map((it, idx) => (
-                <div key={idx} className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-2.5 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      <SearchableSelect
-                        options={articles.map(a => ({ value: a.id, label: a.name }))}
-                        value={it.article_id}
-                        onChange={v => updateItem(idx, 'article_id', v)}
-                        placeholder="Choisir un article..."
-                      />
-                    </div>
-                    {orderItems.length > 1 && <button onClick={() => setOrderItems(p => p.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg bg-white hover:bg-red-50 border border-slate-200 text-red-500 transition shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>}
-                  </div>
-                  <input value={it.name} onChange={e => updateItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Quantité</div>
-                      <input type="number" value={it.quantity_ordered} onChange={e => updateItem(idx, 'quantity_ordered', Math.max(1, Number(e.target.value) || 1))} min="1" className="input text-xs h-9 num" />
-                    </div>
-                    <div>
-                      <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Prix unitaire</div>
-                      <input type="number" value={it.unit_price} onChange={e => updateItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))} min="0" className="input text-xs h-9 num" />
-                    </div>
-                  </div>
-                  <div className="text-right text-[11px] font-bold text-slate-900 num">{formatFCFA(it.total)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="label">Note</label>
-            <textarea value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} className="input resize-none" rows={2} placeholder="Optionnelle..." />
-          </div>
-        </div>
-      </Modal>
+        <MobileBillingWizard
+          open={true}
+          onClose={() => setOpen(false)}
+          title="Nouvelle commande fournisseur"
+          headerFields={[
+            { key: 'supplier_id', label: 'Fournisseur', type: 'select', required: true, options: suppliers.map(s => ({ value: s.id, label: s.name })), placeholder: 'Sélectionner...' },
+            { key: 'expected_date', label: 'Livraison prévue', type: 'date' },
+            { key: 'note', label: 'Note', type: 'text', placeholder: 'Note optionnelle...' },
+          ]}
+          headerValues={form}
+          onHeaderChange={(k, v) => setForm(f => ({ ...f, [k]: v }))}
+          items={orderItems.map(i => ({
+            article_id: i.article_id || null,
+            name: i.name,
+            quantity: i.quantity_ordered,
+            unit_price: i.unit_price,
+            discount: 0,
+            total: i.total,
+            supplier_ref: i.supplier_ref,
+          }))}
+          onAddItem={(articleId) => {
+            const art = articles.find(a => a.id === articleId);
+            if (!art) return;
+            setOrderItems(p => [...p, { article_id: articleId, name: art.name, supplier_ref: art.supplier_ref || '', quantity_ordered: 1, unit_price: art.purchase_price || 0, total: art.purchase_price || 0 }]);
+          }}
+          onUpdateItem={(idx, field, val) => {
+            if (field === 'quantity') {
+              updateItem(idx, 'quantity_ordered', val);
+            } else {
+              updateItem(idx, field, val);
+            }
+          }}
+          onRemoveItem={(idx) => setOrderItems(p => p.filter((_, i) => i !== idx))}
+          articles={articles}
+          saving={saving}
+          onSave={save}
+          total={subtotal}
+          saveLabel="Créer commande"
+          itemPriceField="purchase_price"
+        />
       )}
 
       {/* Detail panel */}
@@ -736,7 +816,7 @@ export function SupplierOrders() {
             {selected && receiveMode && (
               <>
                 <button onClick={() => setReceiveMode(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-                <button onClick={receivePartial} disabled={saving} className="btn-icon-success" title="Confirmer réception">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}</button>
+                <button onClick={initiateReceive} disabled={saving} className="btn-icon-success" title="Confirmer réception">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}</button>
               </>
             )}
           </>
@@ -782,12 +862,12 @@ export function SupplierOrders() {
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-0.5">Quantité</div>
-                            <input type="number" min={minReceived} value={it.quantity_ordered} onChange={e => updateEditItem(idx, 'quantity_ordered', Math.max(minReceived, Number(e.target.value) || 0))} className="input text-xs num" />
+                            <input type="number" min={minReceived} value={it.quantity_ordered || ''} onChange={e => updateEditItem(idx, 'quantity_ordered', Math.max(minReceived, Number(e.target.value) || 0))} className="input text-xs num" />
                             {minReceived > 0 && <div className="text-[10px] text-slate-400 mt-0.5">Min: {minReceived} (déjà reçus)</div>}
                           </div>
                           <div>
                             <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-0.5">P.U. (FCFA)</div>
-                            <input type="number" min={0} value={it.unit_price} onChange={e => updateEditItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))} className="input text-xs num" />
+                            <input type="number" min={0} value={it.unit_price || ''} onChange={e => updateEditItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))} className="input text-xs num" />
                           </div>
                         </div>
                         <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
@@ -833,6 +913,29 @@ export function SupplierOrders() {
                             className="input text-xs num w-24"
                           />
                         </div>
+                        {stockMethod === 'lot' && (receiveQty[i.id] ?? 0) > 0 && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <div className="flex-1">
+                              <label className="text-[10px] text-slate-500 font-medium">N° Lot</label>
+                              <input
+                                type="text"
+                                placeholder="Batch..."
+                                value={receiveLotData[i.id]?.batch_number || ''}
+                                onChange={e => setReceiveLotData(p => ({ ...p, [i.id]: { ...(p[i.id] || { batch_number: '', expiry_date: '' }), batch_number: e.target.value } }))}
+                                className="input text-xs mt-0.5"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="text-[10px] text-slate-500 font-medium">Date d'expiration</label>
+                              <input
+                                type="date"
+                                value={receiveLotData[i.id]?.expiry_date || ''}
+                                onChange={e => setReceiveLotData(p => ({ ...p, [i.id]: { ...(p[i.id] || { batch_number: '', expiry_date: '' }), expiry_date: e.target.value } }))}
+                                className="input text-xs mt-0.5"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -877,6 +980,91 @@ export function SupplierOrders() {
         message={`La commande "${toCancel?.order_number}" sera annulée.`}
         danger
       />
+
+      {/* Dispatch modal for multi-site reception */}
+      <Modal
+        open={dispatchOpen}
+        onClose={() => setDispatchOpen(false)}
+        title="Dispatcher la réception entre magasins"
+        size="lg"
+        footer={
+          <>
+            <button onClick={() => setDispatchOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <button
+              onClick={() => receiveWithDispatch(dispatchData)}
+              disabled={saving}
+              className="btn-icon-success"
+              title="Confirmer la réception"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200">
+            <Package className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-blue-800">
+              Le mode fournisseurs partagés est actif. Répartissez les quantités reçues entre vos {sites.length} magasins.
+            </p>
+          </div>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {detailItems.filter(i => (receiveQty[i.id] || 0) > 0 && i.article_id).map(item => {
+              const totalQty = Number(receiveQty[item.id] || 0);
+              const allocated = Object.values(dispatchData[item.id] || {}).reduce((s, v) => s + v, 0);
+              const isValid = allocated === totalQty;
+              return (
+                <div key={item.id} className="bg-white border border-slate-200/70 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{item.name}</div>
+                      {item.supplier_ref && <div className="text-[10px] text-slate-400 font-mono">{item.supplier_ref}</div>}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-500">Qte reçue</div>
+                      <div className="text-sm font-bold text-slate-900 num">{totalQty}</div>
+                    </div>
+                  </div>
+                  <div className="grid gap-1.5">
+                    {sites.map(site => {
+                      const val = dispatchData[item.id]?.[site.id] || 0;
+                      return (
+                        <div key={site.id} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-600 font-medium flex-1 truncate">{site.name}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={totalQty}
+                            value={val}
+                            onChange={e => {
+                              const v = Math.max(0, Math.min(totalQty, Number(e.target.value) || 0));
+                              setDispatchData(prev => ({
+                                ...prev,
+                                [item.id]: { ...prev[item.id], [site.id]: v },
+                              }));
+                            }}
+                            className="input text-xs num w-20 text-center"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {!isValid && (
+                    <div className="text-[10px] text-amber-600 font-medium">
+                      Alloué : {allocated}/{totalQty} — {allocated < totalQty ? `${totalQty - allocated} restant(s)` : 'surplus'}
+                    </div>
+                  )}
+                  {isValid && (
+                    <div className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Répartition correcte
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Modal>
 
       {autoMode && tenant && currentSite && (
         <VehicleArticlePicker
@@ -1227,7 +1415,7 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
               <div>
                 <input
                   type="number"
-                  value={it.quantity_ordered}
+                  value={it.quantity_ordered || ''}
                   onChange={e => updateItem(idx, 'quantity_ordered', Math.max(1, Number(e.target.value) || 1))}
                   min="1"
                   className="input text-xs text-center"
@@ -1236,7 +1424,7 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
               <div>
                 <input
                   type="number"
-                  value={it.unit_price}
+                  value={it.unit_price || ''}
                   onChange={e => updateItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))}
                   min="0"
                   className="input text-xs text-right num"

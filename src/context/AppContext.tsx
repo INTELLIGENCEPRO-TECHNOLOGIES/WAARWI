@@ -56,7 +56,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('sites').select('*').eq('tenant_id', prof.tenant_id).eq('is_active', true).order('name'),
       ]);
       setTenant(ten || null);
-      const siteList = s || [];
+      const allSites = s || [];
+      const assignedIds: string[] | null = (prof as any).assigned_site_ids;
+      const siteList = (assignedIds && assignedIds.length > 0)
+        ? allSites.filter(x => assignedIds.includes(x.id))
+        : allSites;
       setSites(siteList);
 
       // Priority: DB default_site_id > localStorage fallback > first site
@@ -120,7 +124,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('profiles').select('*').eq('id', pid).maybeSingle(),
       ]);
       if (ten) setTenant(ten as Tenant);
-      if (s) {
+      if (s && prof) {
+        const assignedIds: string[] | null = (prof as any).assigned_site_ids;
+        const filteredSites = (assignedIds && assignedIds.length > 0)
+          ? s.filter(x => assignedIds.includes(x.id))
+          : s;
+        setSites(filteredSites);
+        setCurrentSite(prev => prev ? (filteredSites.find(x => x.id === prev.id) || filteredSites[0] || null) : (filteredSites[0] || null));
+      } else if (s) {
         setSites(s);
         setCurrentSite(prev => prev ? (s.find(x => x.id === prev.id) || s[0] || null) : (s[0] || null));
       }

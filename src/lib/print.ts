@@ -317,9 +317,9 @@ ${returnNumber ? `<div class="doc-num">N° ${esc(returnNumber)}</div>` : ''}
 <hr class="hr" />
 ${itemsHtml}
 <hr class="hr-solid" />
-<div class="row total"><span>AVOIR</span><span>${fmtMoney(total)} FCFA</span></div>
+<div class="row total"><span>REMBOURSEMENT</span><span>- ${fmtMoney(total)} FCFA</span></div>
 <hr class="hr" />
-<div class="footer"><div class="thanks">Avoir à valoir sur prochain achat</div></div>
+<div class="footer"><div class="thanks">Montant déduit de la caisse</div></div>
 ${waarwiFooter80()}
 </body></html>`);
   w.document.close();
@@ -735,6 +735,7 @@ export function printDocumentA4(opts: {
   paid?: number;
   cashier?: string;
   issuedBy?: string;
+  docHeader?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; representative?: string | null } | null;
 }) {
   const w = window.open('', '_blank', 'width=840,height=1180');
   if (!w) return;
@@ -796,9 +797,13 @@ export function printDocumentA4(opts: {
       </div>`
     : '';
 
-  const extraMeta = (opts.extraMeta || [])
-    .map(m => `<p>${esc(m.label)} : ${esc(m.value)}</p>`)
-    .join('');
+  const extraMeta = [
+    ...(opts.extraMeta || []),
+    ...(opts.docHeader?.reference ? [{ label: 'Référence', value: opts.docHeader.reference }] : []),
+    ...(opts.docHeader?.delivery_date ? [{ label: 'Date de livraison', value: new Date(opts.docHeader.delivery_date).toLocaleDateString('fr-FR') }] : []),
+    ...(opts.docHeader?.warranty ? [{ label: 'Garantie', value: opts.docHeader.warranty }] : []),
+    ...(opts.docHeader?.representative ? [{ label: 'Représentant', value: opts.docHeader.representative }] : []),
+  ].map(m => `<p>${esc(m.label)} : ${esc(m.value)}</p>`).join('');
 
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.docLabel)} ${esc(opts.docNumber)}</title>
 <style>${a4Style}</style></head><body>

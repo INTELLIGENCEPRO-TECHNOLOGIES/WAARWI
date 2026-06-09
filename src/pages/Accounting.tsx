@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, BookOpen, FileText, CheckCircle, PlayCircle, Users, Lock } from 'lucide-react';
+import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, BookOpen, FileText, CheckCircle, PlayCircle, Users, Lock, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -28,7 +28,7 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
   const meta = titles[section];
   return (
     <div className="space-y-5">
-      <div>
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm">
         <h1 className="text-2xl font-bold text-slate-900">{meta.t}</h1>
         <p className="text-sm text-slate-500 mt-1">{meta.s}</p>
       </div>
@@ -345,7 +345,7 @@ function JournalsTab() {
 
       {/* Detail modal */}
       <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title={selected ? `Écriture ${selected.entry_number}` : ''} size="lg"
-        footer={<button onClick={() => setDetailOpen(false)} className="btn-secondary">Fermer</button>}>
+        footer={<button onClick={() => setDetailOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
         {selected && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">

@@ -855,7 +855,7 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
             <Upload className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="text-sm font-bold text-slate-900">Exporter le catalogue</div>
-              <div className="text-[11px] text-slate-500 mt-0.5 mb-2">Exporte tous les articles du catalogue selectionne au meme format que le modele (re-importable).</div>
+              <div className="text-[11px] text-slate-500 mt-0.5 mb-2">Exporte tous les articles du catalogue sélectionné au même format que le modèle (ré-importable).</div>
               <button onClick={exportCatalog} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition active:scale-95">
                 <Download className="w-3.5 h-3.5" /> Exporter
               </button>
@@ -902,8 +902,8 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
         <div className="card-premium p-4 space-y-2">
           <div className="text-sm font-bold text-slate-900">Rapport d'import</div>
           <div className="grid grid-cols-3 gap-2">
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100"><div className="text-[10px] font-bold uppercase text-emerald-700">Crees</div><div className="text-2xl font-bold text-emerald-800 num mt-1">{result.imported}</div></div>
-            <div className="p-3 rounded-xl bg-sky-50 border border-sky-100"><div className="text-[10px] font-bold uppercase text-sky-700">Mis a jour</div><div className="text-2xl font-bold text-sky-800 num mt-1">{result.updated}</div></div>
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100"><div className="text-[10px] font-bold uppercase text-emerald-700">Créés</div><div className="text-2xl font-bold text-emerald-800 num mt-1">{result.imported}</div></div>
+            <div className="p-3 rounded-xl bg-sky-50 border border-sky-100"><div className="text-[10px] font-bold uppercase text-sky-700">Mis à jour</div><div className="text-2xl font-bold text-sky-800 num mt-1">{result.updated}</div></div>
             <div className="p-3 rounded-xl bg-red-50 border border-red-100"><div className="text-[10px] font-bold uppercase text-red-700">Erreurs</div><div className="text-2xl font-bold text-red-800 num mt-1">{result.errors?.length || 0}</div></div>
           </div>
           {result.errors && result.errors.length > 0 && (

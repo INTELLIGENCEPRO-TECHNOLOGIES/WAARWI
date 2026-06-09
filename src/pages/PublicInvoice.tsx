@@ -16,6 +16,7 @@ type PublicPayload = {
     total: number;
     paid: number;
     note: string | null;
+    doc_header?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; representative?: string | null } | null;
   };
   customer: { name: string; phone: string | null; email: string | null; address: string | null } | null;
   tenant: PrintTenant;
@@ -59,6 +60,7 @@ export function PublicInvoice({ token }: { token: string }) {
       total: Number(data.sale.total),
       payments: data.payments.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(data.sale.paid),
+      docHeader: data.sale.doc_header ?? null,
     });
   };
 
@@ -130,6 +132,10 @@ export function PublicInvoice({ token }: { token: string }) {
               extra={[
                 { label: 'Total', value: `${Number(sale.total).toLocaleString('fr-FR')} FCFA` },
                 ...(due > 0 ? [{ label: 'Reste dû', value: `${due.toLocaleString('fr-FR')} FCFA` }] : []),
+                ...(sale.doc_header?.reference ? [{ label: 'Référence', value: sale.doc_header.reference }] : []),
+                ...(sale.doc_header?.delivery_date ? [{ label: 'Livraison prévue', value: new Date(sale.doc_header.delivery_date).toLocaleDateString('fr-FR') }] : []),
+                ...(sale.doc_header?.warranty ? [{ label: 'Garantie', value: sale.doc_header.warranty }] : []),
+                ...(sale.doc_header?.representative ? [{ label: 'Représentant', value: sale.doc_header.representative }] : []),
               ]}
             />
 

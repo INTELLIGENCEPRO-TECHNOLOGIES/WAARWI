@@ -9,9 +9,10 @@ type Props = {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   footer?: ReactNode;
   layer?: 'base' | 'top';
+  fullMobile?: boolean;
 };
 
-export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base' }: Props) {
+export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false }: Props) {
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -27,16 +28,16 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
   return (
     <div className={`fixed inset-0 ${z} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`}>
       <div className="scrim" onClick={onClose} />
-      <div className={`relative w-full ${w} bg-white rounded-t-3xl sm:rounded-3xl shadow-premium animate-sheet-up sm:animate-scale-in max-h-[92vh] flex flex-col`}>
-        <div className="sm:hidden sheet-handle" />
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">{title}</h3>
+      <div className={`relative w-full ${w} bg-white ${fullMobile ? 'rounded-none sm:rounded-3xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-3xl sm:rounded-3xl max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col`}>
+        {!fullMobile && <div className="sm:hidden sheet-handle" />}
+        <div className={`flex items-center justify-between border-b border-slate-100 ${fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4' : 'px-5 py-4'}`}>
+          <h3 className={`font-bold text-slate-900 tracking-tight ${fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>
           <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="px-4 sm:px-5 py-3 border-t border-slate-100 bg-slate-50/70 sm:rounded-b-3xl flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full pb-safe">{footer}</div>}
+        <div className={`flex-1 overflow-y-auto ${fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-4' : 'px-5 py-4'}`}>{children}</div>
+        {footer && <div className={`border-t border-slate-100 bg-slate-50/70 sm:rounded-b-3xl flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full pb-safe ${fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-3' : 'px-4 sm:px-5 py-3'}`}>{footer}</div>}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, Search, Package, Truck, CheckCircle2, ShoppingBag, Sparkles,
+  ArrowLeft, Search, Package, Truck, CheckCircle2, ShoppingBag,
   Ban, Phone, MapPin, Loader2, AlertCircle, Clock,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -18,7 +18,7 @@ type TrackedOrder = {
 };
 
 const STEPS: { key: string; label: string; icon: any }[] = [
-  { key: 'nouvelle',       label: 'Commande reçue', icon: Sparkles },
+  { key: 'nouvelle',       label: 'Commande reçue', icon: ShoppingBag },
   { key: 'confirmee',      label: 'Confirmée',      icon: CheckCircle2 },
   { key: 'en_preparation', label: 'En préparation', icon: Package },
   { key: 'prete',          label: 'Prête',          icon: ShoppingBag },

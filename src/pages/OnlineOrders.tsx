@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Filter, Globe, Phone, MessageCircle, Printer, X, Clock, CheckCircle2,
   Package, Truck, Ban, RefreshCw, ChevronRight, MapPin, CreditCard,
-  ShoppingBag, FileText, Sparkles,
+  ShoppingBag, FileText,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -27,7 +27,7 @@ type OrderItem = { id: string; article_name: string; internal_ref: string; quant
 type HistoryEntry = { id: string; old_status: string; new_status: string; note: string; created_at: string };
 
 const STATUS_META: Record<OrderStatus, { label: string; short: string; cls: string; dot: string; text: string; bg: string; icon: any }> = {
-  nouvelle:       { label: 'Nouvelle',       short: 'Nouvelles',  cls: 'bg-amber-50 text-amber-800 border-amber-200',       dot: 'bg-amber-500',   text: 'text-amber-600',   bg: 'bg-amber-50',   icon: Sparkles },
+  nouvelle:       { label: 'Nouvelle',       short: 'Nouvelles',  cls: 'bg-amber-50 text-amber-800 border-amber-200',       dot: 'bg-amber-500',   text: 'text-amber-600',   bg: 'bg-amber-50',   icon: ShoppingBag },
   confirmee:      { label: 'Confirmée',      short: 'Confirmées', cls: 'bg-sky-50 text-sky-800 border-sky-200',             dot: 'bg-sky-500',     text: 'text-sky-600',     bg: 'bg-sky-50',     icon: CheckCircle2 },
   en_preparation: { label: 'En préparation', short: 'En prépa',   cls: 'bg-blue-50 text-blue-800 border-blue-200',          dot: 'bg-blue-500',    text: 'text-blue-600',    bg: 'bg-blue-50',    icon: Package },
   prete:          { label: 'Prête',          short: 'Prêtes',     cls: 'bg-teal-50 text-teal-800 border-teal-200',          dot: 'bg-teal-500',    text: 'text-teal-600',    bg: 'bg-teal-50',    icon: ShoppingBag },
@@ -275,7 +275,7 @@ export function OnlineOrders() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header unifié : titre intégré + recherche + filtre + refresh ─── */}
-      <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
             <div className="leading-tight">

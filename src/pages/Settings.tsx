@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database } from 'lucide-react';
+import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
 import { PermissionsTab } from '../components/PermissionsTab';
+import { DocumentSettingsTab } from '../components/DocumentSettingsTab';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -10,43 +11,96 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
 
-type TabKey = 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'backup';
+type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'backup' | 'documents';
+
+type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
 
 export function Settings() {
-  const { refresh, profile, tenant } = useApp();
+  const { refresh, profile, tenant, sites } = useApp();
   const autoMode = (tenant?.business_type || 'auto_parts') === 'auto_parts';
-  const [tab, setTab] = useState<TabKey>('company');
+  const [tab, setTab] = useState<TabKey>('home');
 
-  const tabs: { k: TabKey; l: string; icon: any }[] = [
-    { k: 'company', l: 'Entreprise', icon: Building2 },
-    { k: 'boutique', l: 'Boutique en ligne', icon: ShoppingBag },
-    { k: 'users', l: 'Utilisateurs', icon: Users },
-    { k: 'permissions', l: 'Permissions', icon: Shield },
-    { k: 'sites', l: 'Magasins', icon: Store },
-    { k: 'payments', l: 'Paiements', icon: CreditCard },
-    { k: 'categories', l: 'Catégories', icon: Tag },
-    ...(autoMode ? [{ k: 'brands' as TabKey, l: 'Marques véhicules', icon: Car }] : []),
-    { k: 'accounting', l: 'Comptabilité', icon: BookOpen },
-    { k: 'backup', l: 'Sauvegarde', icon: Database },
+  const groups: { title: string; tiles: TileConfig[] }[] = [
+    {
+      title: 'Votre entreprise',
+      tiles: [
+        { k: 'company', label: 'Identification', icon: Building2, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' },
+        { k: 'users', label: 'Utilisateurs', icon: Users, color: 'text-blue-700', bg: 'bg-blue-50/80 border-blue-200' },
+        { k: 'permissions', label: 'Permissions', icon: Shield, color: 'text-rose-700', bg: 'bg-rose-50/80 border-rose-200' },
+        { k: 'sites', label: 'Magasins', icon: Store, color: 'text-emerald-700', bg: 'bg-emerald-50/80 border-emerald-200' },
+      ],
+    },
+    {
+      title: 'Données de structure',
+      tiles: [
+        { k: 'categories', label: 'Catégories', icon: Tag, color: 'text-amber-700', bg: 'bg-amber-50/80 border-amber-200' },
+        ...(autoMode ? [{ k: 'brands' as TabKey, label: 'Marques véhicules', icon: Car, color: 'text-sky-700', bg: 'bg-sky-50/80 border-sky-200' }] : []),
+        { k: 'payments', label: 'Modes de paiement', icon: CreditCard, color: 'text-teal-700', bg: 'bg-teal-50/80 border-teal-200' },
+        { k: 'stock', label: 'Gestion des stocks', icon: Package, color: 'text-orange-700', bg: 'bg-orange-50/80 border-orange-200' },
+        { k: 'tiers', label: 'Tiers', icon: Users, color: 'text-lime-700', bg: 'bg-lime-50/80 border-lime-200' },
+      ],
+    },
+    {
+      title: 'Configuration avancée',
+      tiles: [
+        { k: 'accounting', label: 'Comptabilité', icon: BookOpen, color: 'text-cyan-700', bg: 'bg-cyan-50/80 border-cyan-200' },
+        { k: 'boutique', label: 'Boutique en ligne', icon: ShoppingBag, color: 'text-pink-700', bg: 'bg-pink-50/80 border-pink-200' },
+        { k: 'documents', label: 'Paramètres documents', icon: FileText, color: 'text-blue-700', bg: 'bg-blue-50/80 border-blue-200' },
+        { k: 'backup', label: 'Sauvegarde', icon: Database, color: 'text-green-700', bg: 'bg-green-50/80 border-green-200' },
+      ],
+    },
   ];
 
-  return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Paramètres</h1>
-        <p className="text-sm text-slate-500 mt-1">Configuration de votre entreprise et des référentiels.</p>
-      </div>
+  if (tab === 'home') {
+    return (
+      <div className="space-y-5">
+        <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200/80 flex items-center justify-center shadow-sm">
+            <SettingsIcon className="w-4.5 h-4.5 text-slate-600" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Paramètres</h1>
+            <p className="text-[11px] text-slate-500">Configuration de votre entreprise et référentiels</p>
+          </div>
+        </div>
 
-      <div className="flex overflow-x-auto border-b border-slate-200">
-        {tabs.map(t => {
-          const Icon = t.icon;
-          return (
-            <button key={t.k} onClick={() => setTab(t.k)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap transition-colors ${tab === t.k ? 'border-brand-700 text-brand-800' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-              <Icon className="w-4 h-4" />{t.l}
-            </button>
-          );
-        })}
+        {groups.map(g => (
+          <div key={g.title}>
+            <div className="flex items-center gap-3 mb-2.5">
+              <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{g.title}</h2>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+              {g.tiles.map(t => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.k}
+                    onClick={() => setTab(t.k)}
+                    className="group flex flex-col items-center gap-1.5 p-3 rounded-xl border border-slate-100 bg-white hover:border-slate-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                  >
+                    <div className={`w-10 h-10 rounded-lg border flex items-center justify-center ${t.bg} group-hover:scale-105 transition-transform`}>
+                      <Icon className={`w-[18px] h-[18px] ${t.color}`} />
+                    </div>
+                    <span className="text-[10px] sm:text-[11px] font-semibold text-slate-600 text-center leading-tight">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const currentLabel = groups.flatMap(g => g.tiles).find(t => t.k === tab)?.label || 'Paramètres';
+
+  return (
+    <div className="space-y-4">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 py-2 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm">
+      <button onClick={() => setTab('home')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900 transition-colors">
+        <ArrowLeft className="w-3.5 h-3.5" />Paramètres / {currentLabel}
+      </button>
       </div>
 
       {tab === 'company' && <CompanyTab onRefresh={refresh} />}
@@ -58,7 +112,10 @@ export function Settings() {
       {tab === 'categories' && <CategoriesTab />}
       {tab === 'brands' && autoMode && <BrandsTab />}
       {tab === 'accounting' && <AccountingTab />}
+      {tab === 'stock' && <StockSettingsTab onRefresh={refresh} />}
+      {tab === 'tiers' && <TiersSettingsTab onRefresh={refresh} />}
       {tab === 'backup' && <BackupTab />}
+      {tab === 'documents' && <DocumentSettingsTab />}
     </div>
   );
 }
@@ -110,87 +167,109 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
   };
 
   return (
-    <div className="card p-5 sm:p-6 max-w-2xl">
-      {/* Logo upload */}
-      <div className="mb-5 pb-5 border-b border-slate-100">
-        <label className="label mb-2">Logo de l'entreprise</label>
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
-            {form.logo_url ? (
-              <img src={form.logo_url} alt="Logo" className="w-full h-full object-contain" />
-            ) : (
-              <ImageIcon className="w-7 h-7 text-slate-300" />
-            )}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Colonne gauche : identité + légal */}
+      <div className="space-y-3">
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-slate-400" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Identité visuelle</span>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-500 mb-2">
-              Le logo s'affiche dans l'en-tête, la boutique, les tickets et factures. PNG, JPG, WebP ou SVG. Max 2 Mo.
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }}
-              />
-              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-secondary text-xs">
-                {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                {form.logo_url ? 'Remplacer' : 'Téléverser'}
-              </button>
-              {form.logo_url && (
-                <button onClick={removeLogo} className="text-xs text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg flex items-center gap-1">
-                  <Trash2 className="w-3.5 h-3.5" />Retirer
-                </button>
-              )}
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+              {form.logo_url ? <img src={form.logo_url} alt="Logo" className="w-full h-full object-contain" /> : <ImageIcon className="w-5 h-5 text-slate-300" />}
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-slate-500 mb-1.5">PNG, JPG, WebP ou SVG — max 2 Mo</p>
+              <div className="flex items-center gap-2">
+                <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }} />
+                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-secondary text-[11px] py-1.5 px-2.5">
+                  {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                  {form.logo_url ? 'Remplacer' : 'Téléverser'}
+                </button>
+                {form.logo_url && (
+                  <button onClick={removeLogo} className="text-[11px] text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg flex items-center gap-1 transition">
+                    <Trash2 className="w-3 h-3" />Retirer
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          <div><label className="label">Nom commercial *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
+          <div><label className="label">Slogan</label><input value={form.slogan || ''} onChange={e => setForm({ ...form, slogan: e.target.value })} className="input" placeholder="Ex : Pièces auto de qualité, livrées rapidement." /></div>
+        </div>
+
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-slate-400" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Informations légales</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="label">Raison sociale</label><input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="input" /></div>
+            <div><label className="label">NINEA</label><input value={form.ninea || ''} onChange={e => setForm({ ...form, ninea: e.target.value })} className="input" /></div>
+            <div><label className="label">RCCM</label><input value={form.rccm || ''} onChange={e => setForm({ ...form, rccm: e.target.value })} className="input" /></div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="sm:col-span-2"><label className="label">Nom commercial *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
-        <div><label className="label">Raison sociale</label><input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="input" /></div>
-        <div><label className="label">NINEA</label><input value={form.ninea || ''} onChange={e => setForm({ ...form, ninea: e.target.value })} className="input" /></div>
-        <div><label className="label">RCCM</label><input value={form.rccm || ''} onChange={e => setForm({ ...form, rccm: e.target.value })} className="input" /></div>
-        <div><label className="label">Téléphone</label><input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
-        <div className="sm:col-span-2"><label className="label">Email</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="input" /></div>
-        <div className="sm:col-span-2"><label className="label">Site web</label><input value={form.website || ''} onChange={e => setForm({ ...form, website: e.target.value })} className="input" placeholder="https://…" /></div>
-        <div className="sm:col-span-2"><label className="label">Adresse</label><textarea value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} className="input resize-none" rows={2} /></div>
-        <div className="sm:col-span-2"><label className="label">Slogan</label><input value={form.slogan || ''} onChange={e => setForm({ ...form, slogan: e.target.value })} className="input" placeholder="Ex: Pièces auto de qualité, livrées rapidement." /></div>
-      </div>
-
-      {/* Reports preferences */}
-      <div className="mt-5 border-t border-slate-200 pt-5">
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Préférences des états & rapports</div>
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-          <div>
-            <div className="text-sm font-semibold text-slate-700">Afficher les marges dans les rapports</div>
-            <div className="text-xs text-slate-400 mt-0.5">Inclut la marge brute et le taux de marge dans les états de ventes</div>
+      {/* Colonne droite : contact + préférences */}
+      <div className="space-y-3">
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-brand-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Coordonnées</span>
           </div>
-          <button
-            type="button"
-            onClick={async () => {
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="label">Téléphone</label><input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
+            <div><label className="label">Email</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="input" /></div>
+            <div className="col-span-2"><label className="label">Site web</label><input value={form.website || ''} onChange={e => setForm({ ...form, website: e.target.value })} className="input" placeholder="https://…" /></div>
+            <div className="col-span-2"><label className="label">Adresse</label><textarea value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} className="input resize-none" rows={2} /></div>
+          </div>
+        </div>
+
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-slate-400" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Préférences des rapports</span>
+          </div>
+          <SettingsToggle
+            label="Afficher les marges dans les rapports"
+            desc="Inclut la marge brute et le taux de marge dans les états de ventes"
+            active={!!(tenant as any)?.settings?.show_margin_in_reports}
+            onToggle={async () => {
               if (!tenant) return;
               const cur = (tenant as any)?.settings || {};
               const newVal = !cur.show_margin_in_reports;
               await supabase.from('tenants').update({ settings: { ...cur, show_margin_in_reports: newVal } }).eq('id', tenant.id);
               onRefresh();
             }}
-            className="shrink-0 ml-4"
-          >
-            {(tenant as any)?.settings?.show_margin_in_reports
-              ? <ToggleRight className="w-8 h-8 text-brand-600" />
-              : <ToggleLeft className="w-8 h-8 text-slate-400" />}
+          />
+        </div>
+
+        <div className="flex justify-end">
+          <button onClick={save} disabled={saving} className="btn-primary text-sm">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Enregistrer
           </button>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-5 flex justify-end">
-        <button onClick={save} disabled={saving} className="btn-primary">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Enregistrer
-        </button>
+/* ===================== TOGGLE COMPONENT ===================== */
+function SettingsToggle({ label, desc, active, onToggle }: { label: string; desc: string; active: boolean; onToggle: () => void }) {
+  return (
+    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+      <div className="flex-1 min-w-0 mr-3">
+        <div className="text-xs font-semibold text-slate-700">{label}</div>
+        <div className="text-[11px] text-slate-500 mt-0.5">{desc}</div>
       </div>
+      <button type="button" onClick={onToggle} className="shrink-0">
+        {active
+          ? <ToggleRight className="w-8 h-8 text-brand-600" />
+          : <ToggleLeft className="w-8 h-8 text-slate-300" />}
+      </button>
     </div>
   );
 }
@@ -287,176 +366,117 @@ function BoutiqueTab() {
 
   const openShop = () => window.open(shopUrl, '_blank');
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>;
 
   if (!settings) return (
-    <div className="card p-8 text-center text-slate-500">
-      <AlertCircle className="w-8 h-8 mx-auto mb-3 text-amber-400" />
-      <p className="font-medium">Paramètres boutique introuvables.</p>
-      <p className="text-sm mt-1">Rechargez la page ou contactez le support.</p>
+    <div className="card p-6 text-center text-slate-500">
+      <AlertCircle className="w-7 h-7 mx-auto mb-2 text-amber-400" />
+      <p className="font-medium text-sm">Paramètres boutique introuvables.</p>
     </div>
   );
 
   return (
-    <div className="space-y-6 max-w-2xl">
-
-      {/* Status banner */}
-      <div className={`rounded-2xl p-5 border ${settings.is_active ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${settings.is_active ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-              <Globe className={`w-5 h-5 ${settings.is_active ? 'text-emerald-700' : 'text-amber-700'}`} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-bold ${settings.is_active ? 'text-emerald-800' : 'text-amber-800'}`}>
-                  Boutique {settings.is_active ? 'ACTIVE' : 'INACTIVE'}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${settings.is_active ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'}`}>
-                  {settings.is_active ? 'En ligne' : 'Hors ligne'}
-                </span>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Colonne gauche : statut + URL */}
+      <div className="space-y-3">
+        {/* Statut */}
+        <div className={`card p-4 border-l-4 ${settings.is_active ? 'border-l-emerald-500' : 'border-l-amber-400'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${settings.is_active ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                <Globe className={`w-4 h-4 ${settings.is_active ? 'text-emerald-600' : 'text-amber-600'}`} />
               </div>
-              <p className={`text-xs mt-1 ${settings.is_active ? 'text-emerald-700' : 'text-amber-700'}`}>
-                {settings.is_active
-                  ? 'Votre boutique est visible par tous vos clients.'
-                  : 'Activez la boutique pour la rendre visible au public.'}
-              </p>
+              <div>
+                <span className={`text-xs font-bold ${settings.is_active ? 'text-emerald-800' : 'text-amber-800'}`}>
+                  Boutique {settings.is_active ? 'active' : 'inactive'}
+                </span>
+                <p className={`text-[11px] mt-0.5 ${settings.is_active ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {settings.is_active ? 'Visible par vos clients en ligne.' : 'Activez pour la rendre publique.'}
+                </p>
+              </div>
             </div>
+            <button onClick={toggleActive} disabled={saving}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition ${
+                settings.is_active ? 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : settings.is_active ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+              {settings.is_active ? 'Désactiver' : 'Activer'}
+            </button>
           </div>
-          <button
-            onClick={toggleActive}
-            disabled={saving}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-              settings.is_active
-                ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700'
-            }`}
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : settings.is_active ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-            {settings.is_active ? 'Désactiver' : 'Activer la boutique'}
-          </button>
-        </div>
-      </div>
-
-      {/* URL publique */}
-      <div className="card p-5 space-y-4">
-        <h3 className="font-semibold text-slate-900 flex items-center gap-2"><Globe className="w-4 h-4 text-brand-700" />Adresse publique de la boutique</h3>
-
-        {/* Slug editor */}
-        <div>
-          <label className="label">Slug URL (identifiant unique)</label>
-          {editingSlug ? (
-            <div className="flex gap-2">
-              <div className="flex-1 flex items-center border border-slate-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500">
-                <span className="px-3 py-2.5 text-sm text-slate-400 bg-slate-50 border-r border-slate-200 whitespace-nowrap">/shop/</span>
-                <input
-                  value={slugInput}
-                  onChange={e => setSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
-                  className="flex-1 px-3 py-2.5 text-sm outline-none font-mono"
-                  placeholder="mon-entreprise"
-                  autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') saveSlug(); if (e.key === 'Escape') setEditingSlug(false); }}
-                />
-              </div>
-              <button onClick={saveSlug} disabled={saving} className="btn-primary py-2.5 px-4">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-              <button onClick={() => setEditingSlug(false)} className="btn-secondary py-2.5 px-4"><X className="w-4 h-4" /></button>
-            </div>
-          ) : (
-            <div className="flex gap-2 items-center">
-              <div className="flex-1 flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
-                <span className="px-3 py-2.5 text-sm text-slate-400 border-r border-slate-200 whitespace-nowrap">/shop/</span>
-                <span className="flex-1 px-3 py-2.5 text-sm font-mono text-slate-800">{slug || '—'}</span>
-              </div>
-              <button
-                onClick={() => { setSlugInput(slug); setEditingSlug(true); }}
-                className="btn-secondary py-2.5 px-4 text-sm"
-              >
-                <Edit2 className="w-4 h-4" />Modifier
-              </button>
-            </div>
-          )}
-          <p className="text-xs text-slate-400 mt-1.5">Minuscules, chiffres et tirets uniquement. Ex: <code className="bg-slate-100 px-1 rounded">sad-pieces-auto</code></p>
         </div>
 
-        {/* Full URL + actions */}
-        {slug && (
-          <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium uppercase tracking-wide">URL complète</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-sm text-brand-800 font-mono break-all bg-white border border-slate-200 rounded-lg px-3 py-2.5">{shopUrl}</code>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={copyLink} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-semibold transition-colors">
-                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copié !' : 'Copier le lien'}
-              </button>
-              <button
-                onClick={openShop}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                  settings.is_active
-                    ? 'bg-brand-700 hover:bg-brand-800 text-white'
-                    : 'bg-slate-200 hover:bg-slate-300 text-slate-600'
-                }`}
-              >
-                <ExternalLink className="w-4 h-4" />
-                Voir la boutique
-              </button>
-            </div>
-            {!settings.is_active && (
-              <p className="text-xs text-amber-700 flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                La boutique est inactive — activez-la ci-dessus pour que vos clients puissent y accéder.
-              </p>
+        {/* URL publique */}
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-brand-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Adresse publique</span>
+          </div>
+          <div>
+            <label className="label">Slug URL</label>
+            {editingSlug ? (
+              <div className="flex gap-2">
+                <div className="flex-1 flex items-center border border-brand-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/30">
+                  <span className="px-2.5 py-2 text-[11px] text-slate-400 bg-slate-50 border-r border-slate-200">/shop/</span>
+                  <input value={slugInput} onChange={e => setSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                    className="flex-1 px-2.5 py-2 text-sm outline-none font-mono" placeholder="mon-entreprise" autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') saveSlug(); if (e.key === 'Escape') setEditingSlug(false); }} />
+                </div>
+                <button onClick={saveSlug} disabled={saving} className="btn-primary py-2 px-3">{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}</button>
+                <button onClick={() => setEditingSlug(false)} className="btn-secondary py-2 px-3"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            ) : (
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
+                  <span className="px-2.5 py-2 text-[11px] text-slate-400 border-r border-slate-200">/shop/</span>
+                  <span className="flex-1 px-2.5 py-2 text-sm font-mono text-slate-800">{slug || '—'}</span>
+                </div>
+                <button onClick={() => { setSlugInput(slug); setEditingSlug(true); }} className="btn-secondary py-2 px-3 text-[11px]">
+                  <Edit2 className="w-3.5 h-3.5" />Modifier
+                </button>
+              </div>
             )}
           </div>
-        )}
-      </div>
-
-      {/* Shop settings form */}
-      <div className="card p-5 space-y-4">
-        <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ShoppingBag className="w-4 h-4 text-brand-700" />Informations de la boutique</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
-            <label className="label">Nom affiché dans la boutique</label>
-            <input value={settings.shop_name || ''} onChange={e => setSettings({ ...settings, shop_name: e.target.value })} className="input" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label">Accroche (tagline)</label>
-            <input value={settings.tagline || ''} onChange={e => setSettings({ ...settings, tagline: e.target.value })} className="input" placeholder="Ex: Pièces auto de qualité, livrées rapidement." />
-          </div>
-          <div>
-            <label className="label">Téléphone boutique</label>
-            <input value={settings.phone || ''} onChange={e => setSettings({ ...settings, phone: e.target.value })} className="input" placeholder="+221 77 000 00 00" />
-          </div>
-          <div>
-            <label className="label">Numéro WhatsApp</label>
-            <input value={settings.whatsapp || ''} onChange={e => setSettings({ ...settings, whatsapp: e.target.value })} className="input" placeholder="+221 77 000 00 00" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label">Adresse</label>
-            <input value={settings.address || ''} onChange={e => setSettings({ ...settings, address: e.target.value })} className="input" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label">Message d'accueil</label>
-            <textarea value={settings.welcome_msg || ''} onChange={e => setSettings({ ...settings, welcome_msg: e.target.value })} className="input resize-none" rows={2} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label">Texte de pied de page</label>
-            <input value={settings.footer_text || ''} onChange={e => setSettings({ ...settings, footer_text: e.target.value })} className="input" />
-          </div>
-        </div>
-        <div className="flex justify-end pt-2">
-          <button onClick={saveSettings} disabled={saving} className="btn-primary">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Enregistrer
-          </button>
+          {slug && (
+            <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+              <code className="text-xs text-brand-800 font-mono break-all block">{shopUrl}</code>
+              <div className="flex gap-2">
+                <button onClick={copyLink} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-[11px] font-semibold transition">
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Copié !' : 'Copier le lien'}
+                </button>
+                <button onClick={openShop}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition ${
+                    settings.is_active ? 'bg-brand-700 hover:bg-brand-800 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-600'}`}>
+                  <ExternalLink className="w-3.5 h-3.5" />Voir la boutique
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Colonne droite : infos boutique */}
+      <div className="space-y-3">
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-pink-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Informations boutique</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2"><label className="label">Nom affiché</label><input value={settings.shop_name || ''} onChange={e => setSettings({ ...settings, shop_name: e.target.value })} className="input" /></div>
+            <div className="col-span-2"><label className="label">Accroche</label><input value={settings.tagline || ''} onChange={e => setSettings({ ...settings, tagline: e.target.value })} className="input" placeholder="Ex : Pièces auto de qualité" /></div>
+            <div><label className="label">Téléphone</label><input value={settings.phone || ''} onChange={e => setSettings({ ...settings, phone: e.target.value })} className="input" /></div>
+            <div><label className="label">WhatsApp</label><input value={settings.whatsapp || ''} onChange={e => setSettings({ ...settings, whatsapp: e.target.value })} className="input" /></div>
+            <div className="col-span-2"><label className="label">Adresse</label><input value={settings.address || ''} onChange={e => setSettings({ ...settings, address: e.target.value })} className="input" /></div>
+            <div className="col-span-2"><label className="label">Message d'accueil</label><textarea value={settings.welcome_msg || ''} onChange={e => setSettings({ ...settings, welcome_msg: e.target.value })} className="input resize-none" rows={2} /></div>
+            <div className="col-span-2"><label className="label">Pied de page</label><input value={settings.footer_text || ''} onChange={e => setSettings({ ...settings, footer_text: e.target.value })} className="input" /></div>
+          </div>
+          <div className="flex justify-end pt-1">
+            <button onClick={saveSettings} disabled={saving} className="btn-primary text-sm">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Enregistrer
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -494,21 +514,21 @@ function SitesTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end"><button onClick={openCreate} className="btn-primary"><Plus className="w-4 h-4" />Nouveau magasin</button></div>
+      <div className="flex justify-end"><button onClick={openCreate} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouveau magasin</button></div>
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-600">
-            <tr><th className="px-4 py-3 text-left">Nom</th><th className="px-4 py-3 text-left">Code</th><th className="px-4 py-3 text-left hidden sm:table-cell">Téléphone</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Statut</th><th className="px-4 py-3"></th></tr>
+          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+            <tr><th className="px-3 py-2.5 text-left">Nom</th><th className="px-3 py-2.5 text-left">Code</th><th className="px-3 py-2.5 text-left hidden sm:table-cell">Téléphone</th><th className="px-3 py-2.5 text-center">Type</th><th className="px-3 py-2.5 text-center">Statut</th><th className="px-3 py-2.5"></th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {list.map(s => (
               <tr key={s.id} className="hover:bg-slate-50/60">
-                <td className="px-4 py-3 font-medium">{s.name}</td>
-                <td className="px-4 py-3 font-mono text-xs">{s.code}</td>
-                <td className="px-4 py-3 hidden sm:table-cell text-slate-500">{s.phone || '—'}</td>
-                <td className="px-4 py-3 text-center"><span className="badge bg-slate-100 text-slate-700">{s.is_warehouse ? 'Dépôt' : 'Magasin'}</span></td>
-                <td className="px-4 py-3 text-center"><span className={`badge ${s.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{s.is_active ? 'Actif' : 'Inactif'}</span></td>
-                <td className="px-4 py-3 text-right"><button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-slate-100"><Edit2 className="w-4 h-4" /></button></td>
+                <td className="px-3 py-2.5 font-medium text-sm">{s.name}</td>
+                <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500">{s.code}</td>
+                <td className="px-3 py-2.5 hidden sm:table-cell text-xs text-slate-500">{s.phone || '—'}</td>
+                <td className="px-3 py-2.5 text-center"><span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{s.is_warehouse ? 'Dépôt' : 'Magasin'}</span></td>
+                <td className="px-3 py-2.5 text-center"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{s.is_active ? 'Actif' : 'Inactif'}</span></td>
+                <td className="px-3 py-2.5 text-right"><button onClick={() => openEdit(s)} className="p-1 rounded hover:bg-slate-100"><Edit2 className="w-3.5 h-3.5 text-slate-400" /></button></td>
               </tr>
             ))}
           </tbody>
@@ -521,18 +541,8 @@ function SitesTab() {
           <div><label className="label">Code court</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="input" placeholder="EX: DAKAR-1" /></div>
           <div><label className="label">Téléphone</label><input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
           <div><label className="label">Adresse</label><input value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} className="input" /></div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={!!form.is_warehouse} onChange={e => setForm({ ...form, is_warehouse: e.target.checked })} className="w-4 h-4 rounded" />
-              <span className="text-sm">Inclut un dépôt/entrepôt</span>
-            </label>
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" />
-              <span className="text-sm">Actif</span>
-            </label>
-          </div>
+          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={!!form.is_warehouse} onChange={e => setForm({ ...form, is_warehouse: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Inclut un dépôt/entrepôt</span></label>
+          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Actif</span></label>
         </div>
       </Modal>
     </div>
@@ -575,27 +585,26 @@ function PaymentsTab() {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <button onClick={() => { setEditing(null); setForm({ payment_type: 'cash', is_active: true, sort_order: list.length + 1 }); setOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />Nouveau mode</button>
+        <button onClick={() => { setEditing(null); setForm({ payment_type: 'cash', is_active: true, sort_order: list.length + 1 }); setOpen(true); }} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouveau mode</button>
       </div>
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-600">
-            <tr><th className="px-4 py-3 text-left">Nom</th><th className="px-4 py-3 text-left hidden sm:table-cell">Code</th><th className="px-4 py-3 text-left hidden md:table-cell">Type</th><th className="px-4 py-3 text-left hidden lg:table-cell">Compte</th><th className="px-4 py-3 text-center">Statut</th><th className="px-4 py-3"></th></tr>
+          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+            <tr><th className="px-3 py-2.5 text-left">Nom</th><th className="px-3 py-2.5 text-left hidden sm:table-cell">Code</th><th className="px-3 py-2.5 text-left hidden md:table-cell">Type</th><th className="px-3 py-2.5 text-left hidden lg:table-cell">Compte</th><th className="px-3 py-2.5 text-center">Statut</th><th className="px-3 py-2.5"></th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {list.map(m => (
               <tr key={m.id} className="hover:bg-slate-50/60">
-                <td className="px-4 py-3 font-medium">{m.name}</td>
-                <td className="px-4 py-3 hidden sm:table-cell font-mono text-xs">{m.code}</td>
-                <td className="px-4 py-3 hidden md:table-cell capitalize text-slate-600">{m.payment_type}</td>
-                <td className="px-4 py-3 hidden lg:table-cell font-mono text-xs text-slate-500">{m.account_code}</td>
-                <td className="px-4 py-3 text-center">
-                  <button onClick={() => toggleActive(m)} role="switch" aria-checked={m.is_active} title={m.is_active ? 'Cliquer pour désactiver' : 'Cliquer pour activer'} className={`relative inline-flex items-center w-11 h-6 rounded-full transition-all duration-300 ${m.is_active ? 'bg-gradient-to-r from-brand-500 to-brand-600 shadow-glow' : 'bg-slate-200'}`}>
-                    <span className={`inline-block w-5 h-5 rounded-full bg-white shadow-md transform transition-all duration-300 ${m.is_active ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                <td className="px-3 py-2.5 font-medium">{m.name}</td>
+                <td className="px-3 py-2.5 hidden sm:table-cell font-mono text-[11px] text-slate-500">{m.code}</td>
+                <td className="px-3 py-2.5 hidden md:table-cell capitalize text-xs text-slate-500">{m.payment_type}</td>
+                <td className="px-3 py-2.5 hidden lg:table-cell font-mono text-[11px] text-slate-400">{m.account_code}</td>
+                <td className="px-3 py-2.5 text-center">
+                  <button onClick={() => toggleActive(m)} className={`relative inline-flex items-center w-9 h-5 rounded-full transition-all ${m.is_active ? 'bg-brand-500' : 'bg-slate-200'}`}>
+                    <span className={`inline-block w-4 h-4 rounded-full bg-white shadow transform transition-all ${m.is_active ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
                   </button>
-                  <div className={`text-[9px] font-bold uppercase tracking-wider mt-1 ${m.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>{m.is_active ? 'Actif' : 'Inactif'}</div>
                 </td>
-                <td className="px-4 py-3 text-right"><button onClick={() => { setEditing(m); setForm({ ...m }); setOpen(true); }} className="p-1.5 rounded hover:bg-slate-100"><Edit2 className="w-4 h-4" /></button></td>
+                <td className="px-3 py-2.5 text-right"><button onClick={() => { setEditing(m); setForm({ ...m }); setOpen(true); }} className="p-1 rounded hover:bg-slate-100"><Edit2 className="w-3.5 h-3.5 text-slate-400" /></button></td>
               </tr>
             ))}
           </tbody>
@@ -668,38 +677,38 @@ function CategoriesTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end"><button onClick={() => openCreate()} className="btn-primary"><Plus className="w-4 h-4" />Nouvelle catégorie</button></div>
+      <div className="flex justify-end"><button onClick={() => openCreate()} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouvelle catégorie</button></div>
       <div className="card overflow-hidden">
         <div className="max-h-[520px] overflow-y-auto">
-          {roots.length === 0 ? <div className="py-10 text-center text-sm text-slate-500">Aucune catégorie</div> : (
+          {roots.length === 0 ? <div className="py-8 text-center text-sm text-slate-500">Aucune catégorie</div> : (
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-600 sticky top-0">
-                <tr><th className="px-4 py-3 text-left">Catégorie</th><th className="px-4 py-3 text-left hidden sm:table-cell">Code</th><th className="px-4 py-3 text-center">Statut</th><th className="px-4 py-3 text-right">Actions</th></tr>
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold sticky top-0">
+                <tr><th className="px-3 py-2.5 text-left">Catégorie</th><th className="px-3 py-2.5 text-left hidden sm:table-cell">Code</th><th className="px-3 py-2.5 text-center">Statut</th><th className="px-3 py-2.5 text-right">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {roots.map(cat => (
-                  <>
+                  <>{/* Fragment per root */}
                     <tr key={cat.id} className="bg-slate-50/60 hover:bg-slate-100/60">
-                      <td className="px-4 py-2.5 font-semibold text-slate-800">{cat.name}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs hidden sm:table-cell">{cat.code}</td>
-                      <td className="px-4 py-2.5 text-center"><span className={`badge ${cat.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{cat.is_active ? 'Active' : 'Inactive'}</span></td>
-                      <td className="px-4 py-2.5 text-right">
-                        <div className="inline-flex gap-1">
-                          <button onClick={() => openCreate(cat.id)} className="p-1.5 rounded hover:bg-brand-50 text-brand-700" title="Sous-catégorie"><Plus className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => openEdit(cat)} className="p-1.5 rounded hover:bg-slate-200"><Edit2 className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => setToDelete(cat)} className="p-1.5 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <td className="px-3 py-2 font-semibold text-slate-800 text-sm">{cat.name}</td>
+                      <td className="px-3 py-2 font-mono text-[11px] hidden sm:table-cell text-slate-500">{cat.code}</td>
+                      <td className="px-3 py-2 text-center"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{cat.is_active ? 'Active' : 'Inactive'}</span></td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="inline-flex gap-0.5">
+                          <button onClick={() => openCreate(cat.id)} className="p-1 rounded hover:bg-brand-50 text-brand-700" title="Sous-catégorie"><Plus className="w-3 h-3" /></button>
+                          <button onClick={() => openEdit(cat)} className="p-1 rounded hover:bg-slate-200"><Edit2 className="w-3 h-3" /></button>
+                          <button onClick={() => setToDelete(cat)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3 h-3" /></button>
                         </div>
                       </td>
                     </tr>
                     {children(cat.id).map(sub => (
                       <tr key={sub.id} className="hover:bg-slate-50/60">
-                        <td className="px-4 py-2 pl-8 text-slate-700">↳ {sub.name}</td>
-                        <td className="px-4 py-2 font-mono text-xs hidden sm:table-cell text-slate-400">{sub.code}</td>
-                        <td className="px-4 py-2 text-center"><span className={`badge ${sub.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{sub.is_active ? 'Active' : 'Inactive'}</span></td>
-                        <td className="px-4 py-2 text-right">
-                          <div className="inline-flex gap-1">
-                            <button onClick={() => openEdit(sub)} className="p-1.5 rounded hover:bg-slate-200"><Edit2 className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => setToDelete(sub)} className="p-1.5 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <td className="px-3 py-2 pl-7 text-slate-600 text-sm">↳ {sub.name}</td>
+                        <td className="px-3 py-2 font-mono text-[11px] hidden sm:table-cell text-slate-400">{sub.code}</td>
+                        <td className="px-3 py-2 text-center"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sub.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{sub.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="inline-flex gap-0.5">
+                            <button onClick={() => openEdit(sub)} className="p-1 rounded hover:bg-slate-200"><Edit2 className="w-3 h-3" /></button>
+                            <button onClick={() => setToDelete(sub)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3 h-3" /></button>
                           </div>
                         </td>
                       </tr>
@@ -712,7 +721,7 @@ function CategoriesTab() {
         </div>
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier la catégorie' : (form.parent_id ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie principale')} size="sm"
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier la catégorie' : (form.parent_id ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie')} size="sm"
         footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
         <div className="space-y-3">
           <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
@@ -723,10 +732,7 @@ function CategoriesTab() {
               {list.filter(c => !c.parent_id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" />
-            <span className="text-sm">Active</span>
-          </label>
+          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Active</span></label>
         </div>
       </Modal>
 
@@ -750,8 +756,6 @@ function BrandsTab() {
   const [modelForm, setModelForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<string>('');
-
-  // Logo upload state
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -790,9 +794,7 @@ function BrandsTab() {
     setUploadingLogo(true);
     const ext = logoFile.name.split('.').pop();
     const path = `${tenant.id}/${brandId}.${ext}`;
-    const { error: upErr } = await supabase.storage
-      .from('brand-logos')
-      .upload(path, logoFile, { upsert: true, contentType: logoFile.type });
+    const { error: upErr } = await supabase.storage.from('brand-logos').upload(path, logoFile, { upsert: true, contentType: logoFile.type });
     setUploadingLogo(false);
     if (upErr) { error('Erreur upload: ' + upErr.message); return null; }
     const { data } = supabase.storage.from('brand-logos').getPublicUrl(path);
@@ -809,37 +811,19 @@ function BrandsTab() {
   const saveBrand = async () => {
     if (!tenant || !brandForm.name) { error('Nom obligatoire'); return; }
     setSaving(true);
-
     let logoUrl = brandForm.logo_url || null;
-
     if (editingBrand) {
-      // Upload logo first if new file selected
-      if (logoFile) {
-        logoUrl = await uploadLogo(editingBrand.id);
-        if (logoUrl === null && logoFile) { setSaving(false); return; }
-      } else if (logoPreview === '') {
-        logoUrl = null;
-      }
-      const { error: e } = await supabase.from('vehicle_brands').update({
-        name: brandForm.name, is_active: brandForm.is_active !== false, logo_url: logoUrl,
-      }).eq('id', editingBrand.id);
+      if (logoFile) { logoUrl = await uploadLogo(editingBrand.id); if (logoUrl === null && logoFile) { setSaving(false); return; } }
+      else if (logoPreview === '') { logoUrl = null; }
+      const { error: e } = await supabase.from('vehicle_brands').update({ name: brandForm.name, is_active: brandForm.is_active !== false, logo_url: logoUrl }).eq('id', editingBrand.id);
       setSaving(false);
       if (e) { error(e.message); return; }
     } else {
-      // Create brand first, then upload logo with the new id
-      const { data: newBrand, error: e } = await supabase.from('vehicle_brands').insert({
-        tenant_id: tenant.id, name: brandForm.name, is_active: brandForm.is_active !== false, logo_url: null,
-      }).select().single();
+      const { data: newBrand, error: e } = await supabase.from('vehicle_brands').insert({ tenant_id: tenant.id, name: brandForm.name, is_active: brandForm.is_active !== false, logo_url: null }).select().single();
       if (e || !newBrand) { setSaving(false); error(e?.message || 'Erreur'); return; }
-      if (logoFile) {
-        logoUrl = await uploadLogo(newBrand.id);
-        if (logoUrl) {
-          await supabase.from('vehicle_brands').update({ logo_url: logoUrl }).eq('id', newBrand.id);
-        }
-      }
+      if (logoFile) { logoUrl = await uploadLogo(newBrand.id); if (logoUrl) { await supabase.from('vehicle_brands').update({ logo_url: logoUrl }).eq('id', newBrand.id); } }
       setSaving(false);
     }
-
     success(editingBrand ? 'Modifiée' : 'Créée');
     setOpenBrand(false);
     load();
@@ -860,35 +844,29 @@ function BrandsTab() {
   const brandName = brands.find(b => b.id === selectedBrand)?.name;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Marques */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900">Marques ({brands.length})</h3>
-          <button onClick={() => openBrandModal()} className="btn-primary text-sm py-2"><Plus className="w-3.5 h-3.5" />Nouvelle marque</button>
+          <h3 className="text-sm font-bold text-slate-900">Marques ({brands.length})</h3>
+          <button onClick={() => openBrandModal()} className="btn-primary text-[11px] py-1.5"><Plus className="w-3 h-3" />Ajouter</button>
         </div>
-        <div className="card overflow-hidden max-h-[520px] overflow-y-auto">
-          {brands.length === 0 ? <div className="py-8 text-center text-sm text-slate-500">Aucune marque</div> : (
+        <div className="card overflow-hidden max-h-[480px] overflow-y-auto">
+          {brands.length === 0 ? <div className="py-6 text-center text-xs text-slate-500">Aucune marque</div> : (
             <div className="divide-y divide-slate-100">
               {brands.map(b => (
                 <div key={b.id} onClick={() => setSelectedBrand(b.id)}
-                  className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${selectedBrand === b.id ? 'bg-brand-50' : 'hover:bg-slate-50'}`}>
-                  <div className="flex items-center gap-3">
-                    {/* Logo thumbnail */}
-                    <div className="w-10 h-8 flex items-center justify-center overflow-hidden shrink-0">
-                      {(() => {
-                        const logo = getBrandLogo(b.name);
-                        return logo
-                          ? <div className="w-full h-full">{logo}</div>
-                          : <Car className="w-5 h-5 text-slate-300" />;
-                      })()}
+                  className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${selectedBrand === b.id ? 'bg-brand-50' : 'hover:bg-slate-50'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-7 flex items-center justify-center overflow-hidden shrink-0">
+                      {(() => { const logo = getBrandLogo(b.name); return logo ? <div className="w-full h-full">{logo}</div> : <Car className="w-4 h-4 text-slate-300" />; })()}
                     </div>
                     <div>
-                      <span className={`text-sm font-medium block ${selectedBrand === b.id ? 'text-brand-800' : 'text-slate-800'}`}>{b.name}</span>
-                      <span className={`text-xs ${b.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>{b.is_active ? 'Active' : 'Inactive'}</span>
+                      <span className={`text-xs font-medium block ${selectedBrand === b.id ? 'text-brand-800' : 'text-slate-800'}`}>{b.name}</span>
+                      <span className={`text-[10px] ${b.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>{b.is_active ? 'Active' : 'Inactive'}</span>
                     </div>
                   </div>
-                  <button onClick={ev => { ev.stopPropagation(); openBrandModal(b); }} className="p-1.5 rounded hover:bg-slate-200 text-slate-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={ev => { ev.stopPropagation(); openBrandModal(b); }} className="p-1 rounded hover:bg-slate-200 text-slate-400"><Edit2 className="w-3 h-3" /></button>
                 </div>
               ))}
             </div>
@@ -897,21 +875,21 @@ function BrandsTab() {
       </div>
 
       {/* Modèles */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900">Modèles {brandName ? `— ${brandName}` : ''} ({filteredModels.length})</h3>
-          <button onClick={() => { setEditingModel(null); setModelForm({ brand_id: selectedBrand, fuel: 'essence' }); setOpenModel(true); }} disabled={!selectedBrand} className="btn-primary text-sm py-2"><Plus className="w-3.5 h-3.5" />Nouveau modèle</button>
+          <h3 className="text-sm font-bold text-slate-900">Modèles {brandName ? `— ${brandName}` : ''} ({filteredModels.length})</h3>
+          <button onClick={() => { setEditingModel(null); setModelForm({ brand_id: selectedBrand, fuel: 'essence' }); setOpenModel(true); }} disabled={!selectedBrand} className="btn-primary text-[11px] py-1.5"><Plus className="w-3 h-3" />Ajouter</button>
         </div>
-        <div className="card overflow-hidden max-h-[520px] overflow-y-auto">
-          {filteredModels.length === 0 ? <div className="py-8 text-center text-sm text-slate-500">Sélectionnez une marque</div> : (
+        <div className="card overflow-hidden max-h-[480px] overflow-y-auto">
+          {filteredModels.length === 0 ? <div className="py-6 text-center text-xs text-slate-500">Sélectionnez une marque</div> : (
             <div className="divide-y divide-slate-100">
               {filteredModels.map(m => (
-                <div key={m.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50">
+                <div key={m.id} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50">
                   <div>
-                    <div className="text-sm font-medium">{m.name}</div>
-                    <div className="text-xs text-slate-500">{m.year_start > 0 ? `${m.year_start}–${m.year_end || '…'}` : ''} {m.engine} {m.fuel}</div>
+                    <div className="text-xs font-medium">{m.name}</div>
+                    <div className="text-[10px] text-slate-500">{m.year_start > 0 ? `${m.year_start}–${m.year_end || '…'}` : ''} {m.engine} {m.fuel}</div>
                   </div>
-                  <button onClick={() => { setEditingModel(m); setModelForm({ ...m }); setOpenModel(true); }} className="p-1.5 rounded hover:bg-slate-200 text-slate-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => { setEditingModel(m); setModelForm({ ...m }); setOpenModel(true); }} className="p-1 rounded hover:bg-slate-200 text-slate-400"><Edit2 className="w-3 h-3" /></button>
                 </div>
               ))}
             </div>
@@ -919,74 +897,31 @@ function BrandsTab() {
         </div>
       </div>
 
-      {/* Modal marque avec upload logo */}
+      {/* Modal marque */}
       <Modal open={openBrand} onClose={() => setOpenBrand(false)} title={editingBrand ? 'Modifier la marque' : 'Nouvelle marque'} size="sm"
-        footer={<>
-          <button onClick={() => setOpenBrand(false)} className="btn-secondary">Annuler</button>
-          <button onClick={saveBrand} disabled={saving || uploadingLogo} className="btn-primary">
-            {(saving || uploadingLogo) && <Loader2 className="w-4 h-4 animate-spin" />}
-            Enregistrer
-          </button>
-        </>}>
-        <div className="space-y-4">
+        footer={<><button onClick={() => setOpenBrand(false)} className="btn-secondary">Annuler</button><button onClick={saveBrand} disabled={saving || uploadingLogo} className="btn-primary">{(saving || uploadingLogo) && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
+        <div className="space-y-3">
           <div><label className="label">Nom de la marque *</label><input value={brandForm.name || ''} onChange={e => setBrandForm({ ...brandForm, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
-
-          {/* Logo upload zone */}
           <div>
             <label className="label">Logo</label>
             <div className="flex items-start gap-3">
-              {/* Preview */}
-              <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 relative group">
+              <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 relative group">
                 {logoPreview ? (
                   <>
-                    <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-2" />
-                    <button
-                      onClick={removeLogo}
-                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-xl"
-                    >
-                      <X className="w-5 h-5 text-white" />
-                    </button>
+                    <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-1.5" />
+                    <button onClick={removeLogo} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-xl"><X className="w-4 h-4 text-white" /></button>
                   </>
-                ) : (() => {
-                  const inlineLogo = getBrandLogo(brandForm.name || '');
-                  return inlineLogo ? (
-                    <div className="w-full h-full p-2">{inlineLogo}</div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-1 text-slate-300">
-                      <ImageOff className="w-6 h-6" />
-                      <span className="text-[10px]">Aucun logo</span>
-                    </div>
-                  );
-                })()}
+                ) : (() => { const inlineLogo = getBrandLogo(brandForm.name || ''); return inlineLogo ? <div className="w-full h-full p-1.5">{inlineLogo}</div> : <ImageOff className="w-5 h-5 text-slate-300" />; })()}
               </div>
-              {/* Upload controls */}
-              <div className="flex-1 space-y-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
-                  onChange={handleLogoChange}
-                  className="hidden"
-                  id="brand-logo-upload"
-                />
-                <label htmlFor="brand-logo-upload" className="btn-secondary cursor-pointer w-full flex items-center justify-center gap-2 text-sm py-2">
-                  <Upload className="w-4 h-4" />
-                  {logoPreview ? 'Changer le logo' : 'Choisir un fichier'}
-                </label>
-                <p className="text-xs text-slate-400">JPG, PNG, WebP, SVG — max 2 Mo</p>
-                {logoPreview && (
-                  <button onClick={removeLogo} className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                    <X className="w-3 h-3" />Supprimer le logo
-                  </button>
-                )}
+              <div className="flex-1 space-y-1.5">
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={handleLogoChange} className="hidden" id="brand-logo-upload" />
+                <label htmlFor="brand-logo-upload" className="btn-secondary cursor-pointer w-full flex items-center justify-center gap-1.5 text-[11px] py-1.5"><Upload className="w-3.5 h-3.5" />{logoPreview ? 'Changer' : 'Choisir'}</label>
+                <p className="text-[10px] text-slate-400">JPG, PNG, WebP, SVG — max 2 Mo</p>
+                {logoPreview && <button onClick={removeLogo} className="text-[10px] text-red-500 hover:underline flex items-center gap-0.5"><X className="w-2.5 h-2.5" />Supprimer</button>}
               </div>
             </div>
           </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={brandForm.is_active !== false} onChange={e => setBrandForm({ ...brandForm, is_active: e.target.checked })} className="w-4 h-4 rounded" />
-            <span className="text-sm">Active</span>
-          </label>
+          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={brandForm.is_active !== false} onChange={e => setBrandForm({ ...brandForm, is_active: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Active</span></label>
         </div>
       </Modal>
 
@@ -995,19 +930,14 @@ function BrandsTab() {
         footer={<><button onClick={() => setOpenModel(false)} className="btn-secondary">Annuler</button><button onClick={saveModel} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
         <div className="space-y-3">
           <div><label className="label">Marque *</label>
-            <SearchableSelect
-              options={brands.map(b => ({ value: b.id, label: b.name }))}
-              value={modelForm.brand_id || ''}
-              onChange={v => setModelForm({ ...modelForm, brand_id: v })}
-              placeholder="— Choisir une marque —"
-            />
+            <SearchableSelect options={brands.map(b => ({ value: b.id, label: b.name }))} value={modelForm.brand_id || ''} onChange={v => setModelForm({ ...modelForm, brand_id: v })} placeholder="— Choisir —" />
           </div>
           <div><label className="label">Nom du modèle *</label><input value={modelForm.name || ''} onChange={e => setModelForm({ ...modelForm, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div className="grid grid-cols-2 gap-2">
             <div><label className="label">Année début</label><input type="number" value={modelForm.year_start || ''} onChange={e => setModelForm({ ...modelForm, year_start: Number(e.target.value) })} className="input" placeholder="2005" /></div>
             <div><label className="label">Année fin</label><input type="number" value={modelForm.year_end || ''} onChange={e => setModelForm({ ...modelForm, year_end: Number(e.target.value) })} className="input" placeholder="2015" /></div>
           </div>
-          <div><label className="label">Motorisation</label><input value={modelForm.engine || ''} onChange={e => setModelForm({ ...modelForm, engine: e.target.value })} className="input" placeholder="1.6 VVTi, 2.5D 1KD..." /></div>
+          <div><label className="label">Motorisation</label><input value={modelForm.engine || ''} onChange={e => setModelForm({ ...modelForm, engine: e.target.value })} className="input" placeholder="1.6 VVTi, 2.5D..." /></div>
           <div><label className="label">Carburant</label>
             <select value={modelForm.fuel || 'essence'} onChange={e => setModelForm({ ...modelForm, fuel: e.target.value })} className="input">
               <option value="essence">Essence</option><option value="diesel">Diesel</option>
@@ -1056,25 +986,25 @@ function AccountingTab() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{list.length} compte{list.length > 1 ? 's' : ''} — SYSCOHADA révisé (codes 7 chiffres)</p>
-        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />Nouveau compte</button>
+        <p className="text-xs text-slate-500">{list.length} compte{list.length > 1 ? 's' : ''} — SYSCOHADA révisé</p>
+        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouveau compte</button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {byClass.map(({ cl, label, items }) => (
           <div key={cl} className="card overflow-hidden">
-            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-              <span className="w-6 h-6 rounded bg-brand-100 text-brand-800 text-xs font-bold flex items-center justify-center">{cl}</span>
-              <span className="text-sm font-semibold text-slate-800">Classe {cl} — {label}</span>
-              <span className="ml-auto text-xs text-slate-400">{items.length} comptes</span>
+            <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+              <span className="w-5 h-5 rounded bg-brand-100 text-brand-800 text-[10px] font-bold flex items-center justify-center">{cl}</span>
+              <span className="text-xs font-semibold text-slate-800">Classe {cl} — {label}</span>
+              <span className="ml-auto text-[10px] text-slate-400">{items.length}</span>
             </div>
             <table className="w-full text-sm">
               <tbody className="divide-y divide-slate-100">
                 {items.map(a => (
                   <tr key={a.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-2.5 font-mono text-xs w-24">{a.code}</td>
-                    <td className="px-4 py-2.5 font-medium">{a.name}</td>
-                    <td className="px-4 py-2.5 text-right"><button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1 rounded hover:bg-slate-100"><Edit2 className="w-3.5 h-3.5 text-slate-400" /></button></td>
+                    <td className="px-3 py-2 font-mono text-[11px] w-20 text-slate-600">{a.code}</td>
+                    <td className="px-3 py-2 text-xs font-medium">{a.name}</td>
+                    <td className="px-3 py-2 text-right"><button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1 rounded hover:bg-slate-100"><Edit2 className="w-3 h-3 text-slate-400" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1089,7 +1019,7 @@ function AccountingTab() {
           <div>
             <label className="label">Code comptable (7 chiffres) *</label>
             <input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="5710000" maxLength={7} disabled={!!editing} />
-            {form.code?.length === 7 && <p className="text-xs text-slate-500 mt-1">Classe {form.code.charAt(0)}</p>}
+            {form.code?.length === 7 && <p className="text-[10px] text-slate-500 mt-0.5">Classe {form.code.charAt(0)}</p>}
           </div>
           <div><label className="label">Intitulé *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
         </div>
@@ -1100,10 +1030,10 @@ function AccountingTab() {
 
 /* ===================== USERS ===================== */
 const ROLE_LABELS: Record<string, string> = {
-  super_admin: 'Super admin',
-  admin: 'Admin',
-  manager: 'Manager',
-  cashier: 'Caissier',
+  super_admin: 'Super administrateur',
+  admin: 'Administrateur',
+  manager: 'Responsable',
+  cashier: 'Caissier(ère)',
   viewer: 'Consultation',
 };
 
@@ -1121,29 +1051,34 @@ async function callAdminUsers(action: string, payload: Record<string, unknown> =
 }
 
 function UsersTab() {
-  const { profile } = useApp();
+  const { profile, tenant } = useApp();
   const { success, error } = useToast();
   const [list, setList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState<any>({ email: '', password: '', full_name: '', role: 'cashier' });
+  const [form, setForm] = useState<any>({ email: '', password: '', full_name: '', role: 'cashier', assigned_site_ids: [] });
   const [saving, setSaving] = useState(false);
   const [resetFor, setResetFor] = useState<any>(null);
   const [newPass, setNewPass] = useState('');
   const [toDelete, setToDelete] = useState<any>(null);
+  const [allSites, setAllSites] = useState<any[]>([]);
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   const load = async () => {
     setLoading(true);
     try {
-      const { users } = await callAdminUsers('list');
+      const [{ users }, { data: sitesData }] = await Promise.all([
+        callAdminUsers('list'),
+        supabase.from('sites').select('id, name, code, is_active').eq('tenant_id', tenant!.id).order('name'),
+      ]);
       setList(users || []);
+      setAllSites(sitesData || []);
     } catch (e: any) { error(e.message); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (tenant) load(); }, [tenant?.id]);
 
   const save = async () => {
     if (!form.email) { error('Email requis'); return; }
@@ -1151,13 +1086,15 @@ function UsersTab() {
     try {
       if (editing) {
         await callAdminUsers('update', { user_id: editing.id, full_name: form.full_name, role: form.role, is_active: form.is_active });
+        const siteIds = (form.assigned_site_ids && form.assigned_site_ids.length > 0) ? form.assigned_site_ids : null;
+        await supabase.from('profiles').update({ assigned_site_ids: siteIds } as any).eq('id', editing.id);
         success('Utilisateur mis à jour');
       } else {
         if (!form.password || form.password.length < 6) { error('Mot de passe min 6 caractères'); setSaving(false); return; }
         await callAdminUsers('create', { email: form.email, password: form.password, full_name: form.full_name, role: form.role });
         success('Utilisateur créé');
       }
-      setOpen(false); setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier' });
+      setOpen(false); setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier', assigned_site_ids: [] });
       load();
     } catch (e: any) { error(e.message); }
     setSaving(false);
@@ -1182,52 +1119,46 @@ function UsersTab() {
   };
 
   if (!isAdmin) return (
-    <div className="card p-8 text-center">
-      <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-      <p className="text-sm text-slate-600 font-semibold">Accès réservé aux administrateurs</p>
+    <div className="card p-6 text-center">
+      <Shield className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+      <p className="text-xs text-slate-600 font-semibold">Accès réservé aux administrateurs</p>
     </div>
   );
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{list.length} utilisateur{list.length > 1 ? 's' : ''}</p>
-        <button
-          onClick={() => { setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier' }); setOpen(true); }}
-          className="btn-primary"
-        ><Plus className="w-4 h-4" />Nouvel utilisateur</button>
+        <p className="text-xs text-slate-500">{list.length} utilisateur{list.length > 1 ? 's' : ''}</p>
+        <button onClick={() => { setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier', assigned_site_ids: [] }); setOpen(true); }} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouvel utilisateur</button>
       </div>
 
       {loading ? (
-        <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+        <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {list.map(u => (
-            <div key={u.id} className="bg-white border border-slate-200/70 rounded-2xl shadow-card p-3 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center font-extrabold shrink-0">
+            <div key={u.id} className="bg-white border border-slate-200/70 rounded-xl p-2.5 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center text-xs font-bold shrink-0">
                 {(u.full_name || u.email).charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-900 truncate">{u.full_name || u.email}</span>
-                  {!u.is_active && <span className="text-[10px] bg-red-50 text-red-700 px-1.5 py-0.5 rounded">Inactif</span>}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-slate-900 truncate">{u.full_name || u.email}</span>
+                  {!u.is_active && <span className="text-[9px] bg-red-50 text-red-700 px-1 py-0.5 rounded">Inactif</span>}
                 </div>
-                <div className="text-xs text-slate-500 truncate">{u.email}</div>
+                <div className="text-[10px] text-slate-500 truncate">{u.email}</div>
               </div>
-              <span className="shrink-0 text-[10px] uppercase tracking-wider font-bold text-brand-700 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-full">
+              <span className="shrink-0 text-[9px] uppercase tracking-wider font-bold text-brand-700 bg-brand-50 border border-brand-100 px-1.5 py-0.5 rounded-full">
                 {ROLE_LABELS[u.role] || u.role}
               </span>
-              <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => { setEditing(u); setForm({ ...u }); setOpen(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600" title="Modifier">
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => { setResetFor(u); setNewPass(''); }} className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" title="Réinitialiser mot de passe">
-                  <KeyRound className="w-3.5 h-3.5" />
-                </button>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button onClick={async () => {
+                  const { data: prof } = await supabase.from('profiles').select('assigned_site_ids').eq('id', u.id).maybeSingle();
+                  setEditing(u); setForm({ ...u, assigned_site_ids: (prof as any)?.assigned_site_ids || [] }); setOpen(true);
+                }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500" title="Modifier"><Edit2 className="w-3 h-3" /></button>
+                <button onClick={() => { setResetFor(u); setNewPass(''); }} className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" title="Mot de passe"><KeyRound className="w-3 h-3" /></button>
                 {u.id !== profile?.id && (
-                  <button onClick={() => setToDelete(u)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500" title="Supprimer">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <button onClick={() => setToDelete(u)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500" title="Supprimer"><Trash2 className="w-3 h-3" /></button>
                 )}
               </div>
             </div>
@@ -1235,72 +1166,325 @@ function UsersTab() {
         </div>
       )}
 
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={editing ? 'Modifier utilisateur' : 'Nouvel utilisateur'}
-        size="md"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{editing ? 'Enregistrer' : 'Créer'}</button></>}
-      >
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'} size="md"
+        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{editing ? 'Enregistrer' : 'Créer'}</button></>}>
         <div className="space-y-3">
-          <div>
-            <label className="label">Email *</label>
-            <input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} disabled={!!editing} className="input" placeholder="user@exemple.com" />
-          </div>
-          <div>
-            <label className="label">Nom complet</label>
-            <input value={form.full_name || ''} onChange={e => setForm({ ...form, full_name: e.target.value })} className="input" />
-          </div>
+          <div><label className="label">Email *</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} disabled={!!editing} className="input" placeholder="utilisateur@exemple.com" /></div>
+          <div><label className="label">Nom complet</label><input value={form.full_name || ''} onChange={e => setForm({ ...form, full_name: e.target.value })} className="input" /></div>
           {!editing && (
-            <div>
-              <label className="label">Mot de passe *</label>
-              <input type="password" value={form.password || ''} onChange={e => setForm({ ...form, password: e.target.value })} className="input" placeholder="Min. 6 caractères" />
-            </div>
+            <div><label className="label">Mot de passe *</label><input type="password" value={form.password || ''} onChange={e => setForm({ ...form, password: e.target.value })} className="input" placeholder="Min. 6 caractères" /></div>
           )}
-          <div>
-            <label className="label">Rôle</label>
+          <div><label className="label">Rôle</label>
             <select value={form.role || 'cashier'} onChange={e => setForm({ ...form, role: e.target.value })} className="input">
               {Object.entries(ROLE_LABELS).filter(([k]) => profile?.role === 'super_admin' || k !== 'super_admin').map(([k, l]) => (
                 <option key={k} value={k}>{l}</option>
               ))}
             </select>
           </div>
+          {allSites.length > 1 && (
+            <div>
+              <label className="label">Magasins assignés</label>
+              <p className="text-[10px] text-slate-500 mb-1.5">Si aucun n'est sélectionné, l'utilisateur a accès à tous les magasins.</p>
+              <div className="space-y-0.5 max-h-36 overflow-y-auto rounded-lg border border-slate-200 p-1.5">
+                {allSites.filter(s => s.is_active).map(site => {
+                  const checked = (form.assigned_site_ids || []).includes(site.id);
+                  return (
+                    <label key={site.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                      <input type="checkbox" checked={checked}
+                        onChange={e => {
+                          const ids = form.assigned_site_ids || [];
+                          setForm({ ...form, assigned_site_ids: e.target.checked ? [...ids, site.id] : ids.filter((x: string) => x !== site.id) });
+                        }}
+                        className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                      <span className="text-xs text-slate-800 font-medium">{site.name}</span>
+                      {site.code && <span className="text-[9px] text-slate-400 font-mono">{site.code}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {editing && (
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded" />
-              Actif
+              <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded" /> Actif
             </label>
           )}
         </div>
       </Modal>
 
-      <Modal
-        open={!!resetFor}
-        onClose={() => { setResetFor(null); setNewPass(''); }}
-        title="Réinitialiser mot de passe"
-        size="sm"
-        footer={<><button onClick={() => { setResetFor(null); setNewPass(''); }} className="btn-secondary">Annuler</button><button onClick={doReset} className="btn-primary"><KeyRound className="w-4 h-4" />Réinitialiser</button></>}
-      >
+      <Modal open={!!resetFor} onClose={() => { setResetFor(null); setNewPass(''); }} title="Réinitialiser le mot de passe" size="sm"
+        footer={<><button onClick={() => { setResetFor(null); setNewPass(''); }} className="btn-secondary">Annuler</button><button onClick={doReset} className="btn-primary"><KeyRound className="w-3.5 h-3.5" />Réinitialiser</button></>}>
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">
-            Définir un nouveau mot de passe pour <strong>{resetFor?.full_name || resetFor?.email}</strong>.
-          </p>
-          <div>
-            <label className="label">Nouveau mot de passe *</label>
-            <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="input" placeholder="Min. 6 caractères" />
-          </div>
+          <p className="text-xs text-slate-600">Nouveau mot de passe pour <strong>{resetFor?.full_name || resetFor?.email}</strong>.</p>
+          <div><label className="label">Nouveau mot de passe *</label><input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="input" placeholder="Min. 6 caractères" /></div>
         </div>
       </Modal>
 
-      <ConfirmDialog
-        open={!!toDelete}
-        onClose={() => setToDelete(null)}
-        onConfirm={doDelete}
-        title="Supprimer l'utilisateur ?"
-        message={`Le compte "${toDelete?.email}" sera définitivement supprimé.`}
-        danger
-      />
+      <ConfirmDialog open={!!toDelete} onClose={() => setToDelete(null)} onConfirm={doDelete}
+        title="Supprimer l'utilisateur ?" message={`Le compte "${toDelete?.email}" sera définitivement supprimé.`} danger />
     </div>
   );
 }
 
+/* ===================== STOCK SETTINGS ===================== */
+type StockMethod = 'none' | 'cmup' | 'lot';
+
+const STOCK_METHODS: { value: StockMethod; label: string; desc: string }[] = [
+  { value: 'none', label: 'Aucune valorisation', desc: 'Le coût d\'achat est saisi manuellement par article. Pas de calcul automatique.' },
+  { value: 'cmup', label: 'CMUP (Coût Moyen Unitaire Pondéré)', desc: 'Le prix d\'achat moyen est recalculé automatiquement à chaque entrée en stock.' },
+  { value: 'lot', label: 'Suivi par lot', desc: 'Traçabilité par lot avec dates de péremption. Idéal pour pharmacies, alimentaire et cosmétiques.' },
+];
+
+function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
+  const { tenant, sites } = useApp();
+  const { success } = useToast();
+
+  const settings = (tenant as any)?.settings || {};
+  const allowNegative = !!settings.allow_negative_stock;
+  const stockMethod: StockMethod = settings.stock_method || 'none';
+  const sharedArticles = settings.shared_articles !== false;
+  const isMultiSite = sites.length > 1;
+
+  const updateSetting = async (key: string, value: any) => {
+    if (!tenant) return;
+    const cur = (tenant as any)?.settings || {};
+    await supabase.from('tenants').update({ settings: { ...cur, [key]: value } }).eq('id', tenant.id);
+    onRefresh();
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Colonne gauche : contrôle + méthode */}
+      <div className="space-y-3">
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-orange-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Contrôle du stock</span>
+          </div>
+          <SettingsToggle
+            label="Autoriser les stocks négatifs"
+            desc="Permet de vendre des articles même si le stock est à zéro ou insuffisant."
+            active={allowNegative}
+            onToggle={async () => {
+              await updateSetting('allow_negative_stock', !allowNegative);
+              success(!allowNegative ? 'Stock négatif autorisé' : 'Stock négatif désactivé');
+            }}
+          />
+          {allowNegative && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-800">Les ventes ne seront plus bloquées par le stock. Régularisez les entrées pour éviter les écarts.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-orange-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Méthode de valorisation</span>
+          </div>
+          <p className="text-[11px] text-slate-500">Définit comment calculer la valeur du stock et les marges.</p>
+          <div className="space-y-2">
+            {STOCK_METHODS.map(m => {
+              const active = stockMethod === m.value;
+              return (
+                <button key={m.value}
+                  onClick={() => { updateSetting('stock_method', m.value); success('Méthode mise à jour'); }}
+                  className={`w-full text-left p-2.5 rounded-xl border-2 transition-all ${active ? 'border-brand-500 bg-brand-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-3 h-3 rounded-full border-2 shrink-0 flex items-center justify-center ${active ? 'border-brand-600' : 'border-slate-300'}`}>
+                      {active && <div className="w-1.5 h-1.5 rounded-full bg-brand-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-xs font-semibold ${active ? 'text-brand-800' : 'text-slate-700'}`}>{m.label}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">{m.desc}</div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {stockMethod === 'lot' && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+              <AlertCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-800">Suivi par lot actif — dates de péremption et alertes disponibles.</p>
+            </div>
+          )}
+          {stockMethod === 'cmup' && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-teal-50 border border-teal-200">
+              <AlertCircle className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-teal-800">CMUP actif — le prix moyen est recalculé automatiquement à chaque entrée.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Colonne droite : catalogue multi-magasins */}
+      <div className="space-y-3">
+        {isMultiSite ? (
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <div className="w-1 h-4 rounded-full bg-brand-500" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Catalogue articles</span>
+              <span className="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{sites.length} magasins</span>
+            </div>
+            <p className="text-[11px] text-slate-500">Partagé entre tous les magasins ou catalogue indépendant par site.</p>
+            <div className="space-y-2">
+              {[
+                { val: true, label: 'Catalogue partagé', desc: 'Même catalogue pour tous. Transfert de stock possible.' },
+                { val: false, label: 'Catalogues indépendants', desc: 'Chaque magasin gère ses propres articles. Pas de transfert.' },
+              ].map(opt => {
+                const active = sharedArticles === opt.val;
+                return (
+                  <button key={String(opt.val)}
+                    onClick={() => { updateSetting('shared_articles', opt.val); success(opt.val ? 'Catalogue partagé activé' : 'Catalogues indépendants activés'); }}
+                    className={`w-full text-left p-2.5 rounded-xl border-2 transition-all ${active ? 'border-brand-500 bg-brand-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-3 h-3 rounded-full border-2 shrink-0 flex items-center justify-center ${active ? 'border-brand-600' : 'border-slate-300'}`}>
+                        {active && <div className="w-1.5 h-1.5 rounded-full bg-brand-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-xs font-semibold ${active ? 'text-brand-800' : 'text-slate-700'}`}>{opt.label}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{opt.desc}</div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className={`flex items-start gap-2 p-2.5 rounded-lg ${sharedArticles ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
+              <Share2 className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedArticles ? 'text-emerald-600' : 'text-slate-400'}`} />
+              <p className={`text-[11px] ${sharedArticles ? 'text-emerald-800' : 'text-slate-600'}`}>
+                {sharedArticles
+                  ? `Transferts de stock activés entre vos ${sites.length} magasins (page Stock).`
+                  : 'Articles isolés par magasin. Créés dans un site, invisibles dans les autres.'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="card p-4 flex items-start gap-3 bg-slate-50/50">
+            <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-slate-600">Options multi-magasins</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Disponibles dès que vous ajoutez un deuxième magasin dans Paramètres → Magasins.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== TIERS SETTINGS ===================== */
+function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
+  const { tenant, sites } = useApp();
+  const { success } = useToast();
+
+  const settings = (tenant as any)?.settings || {};
+  const sharedCustomers = settings.shared_customers !== false;
+  const sharedSuppliers = settings.shared_suppliers !== false;
+  const isMultiSite = sites.length > 1;
+
+  const updateSetting = async (key: string, value: any) => {
+    if (!tenant) return;
+    const cur = (tenant as any)?.settings || {};
+    await supabase.from('tenants').update({ settings: { ...cur, [key]: value } }).eq('id', tenant.id);
+    onRefresh();
+  };
+
+  const RadioBlock = ({ value, selected, label, desc, onSelect }: { value: boolean; selected: boolean; label: string; desc: string; onSelect: () => void }) => (
+    <button
+      onClick={onSelect}
+      className={`w-full text-left p-2.5 rounded-xl border-2 transition-all ${selected ? 'border-brand-500 bg-brand-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+      <div className="flex items-center gap-2.5">
+        <div className={`w-3 h-3 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? 'border-brand-600' : 'border-slate-300'}`}>
+          {selected && <div className="w-1.5 h-1.5 rounded-full bg-brand-600" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={`text-xs font-semibold ${selected ? 'text-brand-800' : 'text-slate-700'}`}>{label}</div>
+          <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">{desc}</div>
+        </div>
+      </div>
+    </button>
+  );
+
+  if (!isMultiSite) {
+    return (
+      <div className="card p-5 flex items-start gap-3 max-w-xl">
+        <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-xs font-semibold text-slate-600">Options multi-magasins</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Ces paramètres deviennent disponibles dès que vous ajoutez un deuxième magasin dans <strong>Paramètres → Magasins</strong>.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Clients */}
+      <div className="card p-4 space-y-3">
+        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+          <div className="w-1 h-4 rounded-full bg-blue-500" />
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Clients</span>
+          <span className="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{sites.length} magasins</span>
+        </div>
+        <p className="text-[11px] text-slate-500">Définissez si les clients sont partagés entre tous les magasins ou gérés séparément.</p>
+        <div className="space-y-2">
+          <RadioBlock
+            value={true} selected={sharedCustomers}
+            label="Clients partagés"
+            desc="Tous les magasins voient et partagent la même base clients."
+            onSelect={() => { updateSetting('shared_customers', true); success('Clients partagés activés'); }}
+          />
+          <RadioBlock
+            value={false} selected={!sharedCustomers}
+            label="Clients indépendants"
+            desc="Chaque magasin gère sa propre base clients, invisible dans les autres."
+            onSelect={() => { updateSetting('shared_customers', false); success('Clients indépendants activés'); }}
+          />
+        </div>
+        <div className={`flex items-start gap-2 p-2.5 rounded-lg ${sharedCustomers ? 'bg-blue-50 border border-blue-200' : 'bg-slate-50 border border-slate-200'}`}>
+          <Users className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedCustomers ? 'text-blue-600' : 'text-slate-400'}`} />
+          <p className={`text-[11px] ${sharedCustomers ? 'text-blue-800' : 'text-slate-600'}`}>
+            {sharedCustomers
+              ? 'Base clients commune — un client créé dans un magasin est visible partout.'
+              : 'Clients isolés — un client créé dans un magasin reste invisible dans les autres.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Fournisseurs */}
+      <div className="card p-4 space-y-3">
+        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+          <div className="w-1 h-4 rounded-full bg-orange-500" />
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Fournisseurs</span>
+          <span className="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{sites.length} magasins</span>
+        </div>
+        <p className="text-[11px] text-slate-500">Définissez si les fournisseurs et commandes sont partagés ou gérés par site.</p>
+        <div className="space-y-2">
+          <RadioBlock
+            value={true} selected={sharedSuppliers}
+            label="Fournisseurs partagés"
+            desc="Base fournisseurs commune. Réception d'une commande = dispatch entre magasins."
+            onSelect={() => { updateSetting('shared_suppliers', true); success('Fournisseurs partagés activés'); }}
+          />
+          <RadioBlock
+            value={false} selected={!sharedSuppliers}
+            label="Fournisseurs indépendants"
+            desc="Chaque magasin gère ses propres fournisseurs et commandes."
+            onSelect={() => { updateSetting('shared_suppliers', false); success('Fournisseurs indépendants activés'); }}
+          />
+        </div>
+        <div className={`flex items-start gap-2 p-2.5 rounded-lg ${sharedSuppliers ? 'bg-orange-50 border border-orange-200' : 'bg-slate-50 border border-slate-200'}`}>
+          <Package className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedSuppliers ? 'text-orange-600' : 'text-slate-400'}`} />
+          <p className={`text-[11px] ${sharedSuppliers ? 'text-orange-800' : 'text-slate-600'}`}>
+            {sharedSuppliers
+              ? 'Fournisseurs communs — lors de la réception, vous pouvez dispatcher le stock entre vos magasins.'
+              : 'Fournisseurs isolés par magasin — commandes et stocks indépendants.'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

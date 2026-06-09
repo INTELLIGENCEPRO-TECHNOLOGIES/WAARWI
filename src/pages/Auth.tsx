@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Loader2, ArrowRight, ArrowLeft, Mail, Lock, Building2, User, Eye, EyeOff,
-  CheckCircle2, ChevronDown, Sparkles, Shield, Package, Receipt, BarChart3,
+  CheckCircle2, ChevronDown, Briefcase, Shield, Package, Receipt, BarChart3,
   Globe, Monitor, FileText, Zap, ShoppingCart, Users, TrendingUp,
   Truck, CreditCard, Wallet, Layers, Settings, BookOpen,
 } from 'lucide-react';
@@ -339,7 +339,7 @@ export function Auth() {
         )}
       </div>
       {businessType === '__other__' && (
-        <InputField icon={Sparkles} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Pharmacie..." required />
+        <InputField icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Pharmacie..." required />
       )}
       <div className="flex gap-3">
         <SecondaryBtn onClick={() => setStep(1)}>Retour</SecondaryBtn>

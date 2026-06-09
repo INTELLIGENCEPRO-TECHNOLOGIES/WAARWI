@@ -13,7 +13,8 @@ import { supabase } from '../lib/supabase';
 export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'articles' | 'stock' | 'tiers'
   | 'sales' | 'billing' | 'supplier_orders' | 'online_orders' | 'master_catalog'
-  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'settings' | 'platform_admin' | 'reports';
+  | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture'
+  | 'settings' | 'platform_admin' | 'reports';
 
 const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any }[] }[] = [
   { title: 'Pilotage', items: [
@@ -68,6 +69,13 @@ const ROUTE_MODULE: Record<string, string> = {
 };
 
 const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
+  dashboard: 'access_dashboard',
+  pos: 'access_pos',
+  articles: 'access_articles',
+  master_catalog: 'access_master_catalog',
+  billing: 'access_billing',
+  tiers: 'access_tiers',
+  reports: 'access_reports',
   sales: 'view_sales_history',
   cash_history: 'view_cash_sessions',
   stock: 'view_stock_levels',

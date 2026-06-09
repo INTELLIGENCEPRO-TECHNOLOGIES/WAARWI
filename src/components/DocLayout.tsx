@@ -10,7 +10,7 @@
  *   DocStatusBadge   — Badge de statut premium cohérent
  */
 
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, CalendarDays, Tag, ShieldCheck, User } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -71,28 +71,54 @@ export function DocStatusBadge({ label, color, pulse }: DocStatusConfig) {
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * DocSlimHeader — en-tête compact pour modals
- * Une seule ligne : badge statut | nom client | date
  * ─────────────────────────────────────────────────────────────────────────── */
+export interface DocHeaderMeta {
+  delivery_date?: string | null;
+  reference?: string | null;
+  warranty?: string | null;
+  representative?: string | null;
+}
+
 interface DocSlimHeaderProps {
   status?: DocStatusConfig;
   customerName?: string | null;
   date?: string;
   extra?: string;
+  docHeader?: DocHeaderMeta | null;
 }
 
-export function DocSlimHeader({ status, customerName, date, extra }: DocSlimHeaderProps) {
+export function DocSlimHeader({ status, customerName, date, extra, docHeader }: DocSlimHeaderProps) {
+  const metaPills: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; color: string }[] = [];
+  if (docHeader?.reference)      metaPills.push({ icon: Tag,          label: 'Réf.',         value: docHeader.reference, color: 'bg-amber-50 border-amber-200 text-amber-800' });
+  if (docHeader?.delivery_date)  metaPills.push({ icon: CalendarDays, label: 'Livraison',     value: new Date(docHeader.delivery_date).toLocaleDateString('fr-FR'), color: 'bg-blue-50 border-blue-200 text-blue-800' });
+  if (docHeader?.warranty)       metaPills.push({ icon: ShieldCheck,  label: 'Garantie',      value: docHeader.warranty, color: 'bg-emerald-50 border-emerald-200 text-emerald-800' });
+  if (docHeader?.representative) metaPills.push({ icon: User,         label: 'Représentant',  value: docHeader.representative, color: 'bg-slate-50 border-slate-200 text-slate-700' });
+
   return (
-    <div className="flex items-center gap-2 flex-wrap py-1">
-      {status && <DocStatusBadge {...status} />}
-      {customerName !== undefined && (
-        <span className="text-[12px] font-semibold text-slate-700 truncate max-w-[140px]">
-          {customerName || 'Comptoir'}
-        </span>
-      )}
-      {(date || extra) && (
-        <span className="ml-auto text-[11px] text-slate-400 font-medium whitespace-nowrap num">
-          {extra ? `${extra} · ` : ''}{date}
-        </span>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap py-1">
+        {status && <DocStatusBadge {...status} />}
+        {customerName !== undefined && (
+          <span className="text-[12px] font-semibold text-slate-700 break-words">
+            {customerName || 'Comptoir'}
+          </span>
+        )}
+        {(date || extra) && (
+          <span className="ml-auto text-[11px] text-slate-400 font-medium whitespace-nowrap num">
+            {extra ? `${extra} · ` : ''}{date}
+          </span>
+        )}
+      </div>
+      {metaPills.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {metaPills.map(({ icon: Icon, label, value, color }) => (
+            <span key={label} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium ${color}`}>
+              <Icon className="w-3 h-3 shrink-0 opacity-70" />
+              <span className="font-semibold opacity-60">{label} :</span>
+              <span>{value}</span>
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );

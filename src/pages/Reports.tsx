@@ -734,7 +734,7 @@ export function Reports() {
     <div className="flex flex-col gap-3" style={{ minHeight: 'calc(100vh - 200px)' }}>
 
       {/* ── Row 1 : titre + boutons ── */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2 shrink-0">
         <div className="flex-1 min-w-0 flex items-center gap-2 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm">
           {/* Title */}
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">

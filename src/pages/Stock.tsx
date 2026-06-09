@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -11,6 +11,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { desktopAutoFocus } from '../lib/device';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { consumeNavContext } from '../lib/navHighlight';
+import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 
 type Row = {
   article_id: string;
@@ -25,6 +26,20 @@ type Row = {
 
 type AdjustMode = 'in' | 'out' | 'transfer' | 'inventory';
 type FilterKey = 'all' | 'low' | 'out';
+type StockMethod = 'none' | 'cmup' | 'lot';
+
+type LotRow = {
+  id: string;
+  article_id: string;
+  article_name: string;
+  article_ref: string;
+  batch_number: string;
+  expiry_date: string | null;
+  remaining_quantity: number;
+  initial_quantity: number;
+  purchase_price: number;
+  received_at: string;
+};
 
 export function Stock() {
   const { tenant, currentSite, sites, dataTick } = useApp();
@@ -34,11 +49,17 @@ export function Stock() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [tab, setTab] = useState<'stocks' | 'movements'>('stocks');
+  const [tab, setTab] = useState<'stocks' | 'movements' | 'lots'>('stocks');
   const [moves, setMoves] = useState<any[]>([]);
   const [mvDateFrom, setMvDateFrom] = useState<string>('');
   const [mvDateTo, setMvDateTo] = useState<string>('');
   const [mvPickerOpen, setMvPickerOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [listEditMode, setListEditMode] = useState<'in' | 'out' | 'inventory'>('in');
+  type ListEditEntry = { article_id: string; qty: number | ''; note: string; lot_number: string; };
+  const [listEdits, setListEdits] = useState<Map<string, ListEditEntry>>(new Map());
+  const [listSaving, setListSaving] = useState(false);
+  const listInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   const [adjOpen, setAdjOpen] = useState(false);
   const [adjRow, setAdjRow] = useState<Row | null>(null);
@@ -49,11 +70,47 @@ export function Stock() {
   const [adjInventoryQty, setAdjInventoryQty] = useState<number | ''>('');
   const [saving, setSaving] = useState(false);
 
+  // Lot-specific fields
+  const [adjBatchNumber, setAdjBatchNumber] = useState('');
+  const [adjExpiryDate, setAdjExpiryDate] = useState('');
+  const [adjPurchasePrice, setAdjPurchasePrice] = useState<number | ''>('');
+  const [lots, setLots] = useState<LotRow[]>([]);
+
+  const stockMethod: StockMethod = ((tenant as any)?.settings?.stock_method as StockMethod) || 'none';
+  const sharedArticles = (tenant as any)?.settings?.shared_articles !== false;
+  const canTransfer = sites.length > 1 && sharedArticles;
+
+  // Lot picker for sortie
+  const [lotPickerOutOpen, setLotPickerOutOpen] = useState(false);
+  const [lotPickerOutRow, setLotPickerOutRow] = useState<Row | null>(null);
+  const [lotPickerOutQty, setLotPickerOutQty] = useState(0);
+
   const load = async (silent = false) => {
     if (!tenant || !currentSite) return;
     if (!silent) setLoading(true);
-    const [{ data: arts }, { data: stk }, { data: mv }] = await Promise.all([
-      supabase.from('articles').select('id, name, internal_ref, purchase_price, stock_min, stock_max, location').eq('tenant_id', tenant.id).eq('is_active', true),
+
+    // Fetch all articles in batches (Supabase default limit is 1000)
+    let allArts: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    while (true) {
+      let query = supabase
+        .from('articles')
+        .select('id, name, internal_ref, purchase_price, stock_min, stock_max, location')
+        .eq('tenant_id', tenant.id)
+        .eq('is_active', true)
+        .range(from, from + batchSize - 1);
+      if (!sharedArticles && currentSite) {
+        query = query.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+      }
+      const { data, error: e } = await query;
+      if (e || !data) break;
+      allArts = allArts.concat(data);
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+
+    const [{ data: stk }, { data: mv }] = await Promise.all([
       supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
       supabase.from('stock_movements')
         .select('id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, articles(name, internal_ref)')
@@ -61,12 +118,31 @@ export function Stock() {
         .order('created_at', { ascending: false }).limit(150),
     ]);
     const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-    setRows((arts || []).map((a: any) => ({
+    setRows(allArts.map((a: any) => ({
       article_id: a.id, name: a.name, internal_ref: a.internal_ref,
       purchase_price: Number(a.purchase_price), stock_min: Number(a.stock_min),
       stock_max: Number(a.stock_max), quantity: qmap.get(a.id) ?? 0, location: a.location || '',
     })).sort((a, b) => a.name.localeCompare(b.name)));
     setMoves(mv || []);
+
+    // Load lots if lot mode
+    if (stockMethod === 'lot') {
+      const { data: lotData } = await supabase
+        .from('stock_lots')
+        .select('id, article_id, batch_number, expiry_date, remaining_quantity, initial_quantity, purchase_price, received_at, articles(name, internal_ref)')
+        .eq('tenant_id', tenant.id)
+        .eq('site_id', currentSite.id)
+        .gt('remaining_quantity', 0)
+        .order('expiry_date', { ascending: true });
+      setLots((lotData || []).map((l: any) => ({
+        id: l.id, article_id: l.article_id,
+        article_name: l.articles?.name || '', article_ref: l.articles?.internal_ref || '',
+        batch_number: l.batch_number, expiry_date: l.expiry_date,
+        remaining_quantity: Number(l.remaining_quantity), initial_quantity: Number(l.initial_quantity),
+        purchase_price: Number(l.purchase_price), received_at: l.received_at,
+      })));
+    }
+
     if (!silent) setLoading(false);
   };
 
@@ -245,6 +321,7 @@ export function Stock() {
     setAdjRow(r); setAdjMode(mode); setAdjQty(''); setAdjNote('');
     setAdjTargetSite(sites.filter(s => s.id !== currentSite?.id)[0]?.id || '');
     setAdjInventoryQty(r.quantity);
+    setAdjBatchNumber(''); setAdjExpiryDate(''); setAdjPurchasePrice(r.purchase_price || '');
     setAdjOpen(true);
   };
 
@@ -254,6 +331,7 @@ export function Stock() {
     setAdjRow(first); setAdjMode(mode); setAdjQty(''); setAdjNote('');
     setAdjTargetSite(sites.filter(s => s.id !== currentSite?.id)[0]?.id || '');
     setAdjInventoryQty(first.quantity);
+    setAdjBatchNumber(''); setAdjExpiryDate(''); setAdjPurchasePrice(first.purchase_price || '');
     setAdjOpen(true);
   };
 
@@ -287,6 +365,46 @@ export function Stock() {
         });
         if (e2) throw e2;
         success('Transfert effectué');
+      } else if (adjMode === 'in' && stockMethod === 'lot') {
+        // Lot mode: create a lot record
+        if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
+        if (!adjBatchNumber.trim()) { error('Numéro de lot requis'); setSaving(false); return; }
+        const { error: e } = await supabase.rpc('adjust_stock_lot', {
+          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_quantity: qty, p_batch_number: adjBatchNumber.trim(),
+          p_expiry_date: adjExpiryDate || null,
+          p_purchase_price: Number(adjPurchasePrice) || adjRow.purchase_price,
+          p_note: adjNote || `Lot ${adjBatchNumber.trim()}`,
+        });
+        if (e) throw e;
+        success('Lot enregistré');
+      } else if (adjMode === 'in' && stockMethod === 'cmup') {
+        // CMUP mode: entry + recalculate average
+        if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
+        const price = Number(adjPurchasePrice) || adjRow.purchase_price;
+        // First do the stock adjustment
+        const { error: e } = await supabase.rpc('adjust_stock', {
+          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_quantity: qty, p_movement_type: 'adjustment_in',
+          p_note: adjNote || 'Entrée stock (CMUP)',
+        });
+        if (e) throw e;
+        // Recalculate CMUP
+        const { error: e2 } = await supabase.rpc('recalculate_cmup', {
+          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_new_quantity: qty, p_new_purchase_price: price,
+        });
+        if (e2) throw e2;
+        success('Stock et CMUP mis à jour');
+      } else if (adjMode === 'out' && stockMethod === 'lot') {
+        // Lot mode sortie: open lot picker
+        if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
+        setLotPickerOutRow(adjRow);
+        setLotPickerOutQty(qty);
+        setAdjOpen(false);
+        setSaving(false);
+        setLotPickerOutOpen(true);
+        return;
       } else {
         if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
         const signedQty = adjMode === 'in' ? qty : -qty;
@@ -323,6 +441,7 @@ export function Stock() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Unified premium header (title + search + filter) ────────── */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
@@ -365,10 +484,28 @@ export function Stock() {
               )}
             </button>
           )}
+          {stockMethod === 'lot' && (
+            <button
+              onClick={() => setTab(t => t === 'lots' ? 'stocks' : 'lots')}
+              className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${tab === 'lots' ? 'bg-orange-600 shadow-glow' : 'bg-white border border-slate-200 hover:border-orange-300'}`}
+              aria-label="Voir les lots"
+            >
+              <PackageOpen className={`w-3.5 h-3.5 ${tab === 'lots' ? 'text-white' : 'text-orange-600'}`} />
+            </button>
+          )}
+          {tab === 'stocks' && (
+            <button
+              onClick={() => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); }}
+              className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${viewMode === 'list' ? 'bg-blue-600 shadow-glow' : 'bg-white border border-slate-200 hover:border-blue-300'}`}
+              aria-label={viewMode === 'cards' ? 'Vue liste editable' : 'Vue cartes'}
+            >
+              {viewMode === 'cards' ? <List className="w-3.5 h-3.5 text-blue-600" /> : <LayoutGrid className="w-3.5 h-3.5 text-white" />}
+            </button>
+          )}
           <button
             onClick={() => setTab(t => t === 'stocks' ? 'movements' : 'stocks')}
-            className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
+            className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${tab === 'movements' ? 'shadow-glow' : 'shadow-glow hover:shadow-premium'}`}
+            style={{ background: tab === 'movements' ? 'linear-gradient(135deg, #064e3b 0%, #0f766e 100%)' : 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
             aria-label={tab === 'stocks' ? 'Voir les mouvements' : 'Voir l\'inventaire'}
           >
             <History className="w-3.5 h-3.5 text-white" />
@@ -420,7 +557,7 @@ export function Stock() {
           <button onClick={() => openAdjNew('out')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 transition-all active:scale-95">
             <ArrowUpCircle className="w-3.5 h-3.5 text-red-500" />Sortie
           </button>
-          {sites.length > 1 && (
+          {canTransfer && (
             <button onClick={() => openAdjNew('transfer')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-all active:scale-95">
               <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />Transfert
             </button>
@@ -433,12 +570,30 @@ export function Stock() {
           </button>
         </div>
       )}
+      </div>
 
       {tab === 'stocks' ? (
         loading ? (
           <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         ) : filtered.length === 0 ? (
           <div className="card-premium"><EmptyState icon={Boxes} title="Aucun article" description="Créez des articles dans le module Articles." /></div>
+        ) : viewMode === 'list' ? (
+          <StockListEditView
+            filtered={filtered}
+            listEditMode={listEditMode}
+            setListEditMode={setListEditMode}
+            listEdits={listEdits}
+            setListEdits={setListEdits}
+            listSaving={listSaving}
+            setListSaving={setListSaving}
+            listInputRefs={listInputRefs}
+            currentSite={currentSite}
+            canViewPrices={can('view_purchase_prices')}
+            onSaved={async () => { await load(); setListEdits(new Map()); }}
+            successToast={success}
+            errorToast={error}
+            stockMethod={stockMethod}
+          />
         ) : (
           <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 count-up ${flashKey === 'out' || flashKey === 'low' || flashKey === 'articles' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
             {filtered.map(r => {
@@ -511,7 +666,7 @@ export function Stock() {
                     <button onClick={() => openAdj(r, 'out')} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-red-50 text-red-700 hover:bg-red-100 transition-all active:scale-95" title="Sortie">
                       <Minus className="w-3 h-3" />Sortie
                     </button>
-                    {sites.length > 1 && (
+                    {canTransfer && (
                       <button onClick={() => openAdj(r, 'transfer')} className="shrink-0 w-8 h-[26px] inline-flex items-center justify-center rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all active:scale-95" title="Transfert">
                         <ArrowRightLeft className="w-3 h-3" />
                       </button>
@@ -526,7 +681,7 @@ export function Stock() {
             })}
           </div>
         )
-      ) : (
+      ) : tab === 'movements' ? (
         <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
             <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filteredMoves.length} / {moves.length}</span>
@@ -581,6 +736,10 @@ export function Stock() {
           </div>
           )}
         </>
+      ) : null}
+
+      {tab === 'lots' && (
+        <LotsView lots={lots} stockMethod={stockMethod} />
       )}
 
       <PremiumDateRangePicker
@@ -620,7 +779,7 @@ export function Stock() {
             {adjMode === 'inventory' ? (
               <div>
                 <label className="label">Quantité réelle comptée</label>
-                <input type="number" min={0} value={adjInventoryQty} onChange={e => setAdjInventoryQty(Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
+                <input type="number" min={0} value={adjInventoryQty} onChange={e => setAdjInventoryQty(e.target.value === '' ? '' : Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
                 {adjInventoryQty !== '' && <p className="text-xs mt-1 text-slate-500">Écart : {Number(adjInventoryQty) - adjRow.quantity > 0 ? '+' : ''}{Number(adjInventoryQty) - adjRow.quantity}</p>}
               </div>
             ) : adjMode === 'transfer' ? (
@@ -637,14 +796,39 @@ export function Stock() {
                 </div>
                 <div>
                   <label className="label">Quantité à transférer</label>
-                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input" autoFocus={desktopAutoFocus} />
+                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="input" autoFocus={desktopAutoFocus} />
                 </div>
               </>
             ) : (
-              <div>
-                <label className="label">Quantité</label>
-                <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
-              </div>
+              <>
+                <div>
+                  <label className="label">Quantité</label>
+                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
+                </div>
+                {adjMode === 'in' && stockMethod === 'lot' && (
+                  <>
+                    <div>
+                      <label className="label">N° de lot *</label>
+                      <input value={adjBatchNumber} onChange={e => setAdjBatchNumber(e.target.value)} className="input" placeholder="Ex: LOT-2026-001" />
+                    </div>
+                    <div>
+                      <label className="label">Date de péremption</label>
+                      <input type="date" value={adjExpiryDate} onChange={e => setAdjExpiryDate(e.target.value)} className="input" />
+                    </div>
+                    <div>
+                      <label className="label">Prix d'achat (lot)</label>
+                      <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="input" placeholder="FCFA" />
+                    </div>
+                  </>
+                )}
+                {adjMode === 'in' && stockMethod === 'cmup' && (
+                  <div>
+                    <label className="label">Prix d'achat (cette entrée)</label>
+                    <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="input" placeholder="FCFA" />
+                    <p className="text-[10px] text-slate-500 mt-1">Le CMUP sera recalculé automatiquement</p>
+                  </div>
+                )}
+              </>
             )}
 
             <div>
@@ -654,6 +838,397 @@ export function Stock() {
           </div>
         )}
       </Modal>
+
+      {/* Lot picker for sortie */}
+      <LotPickerModal
+        open={lotPickerOutOpen}
+        onClose={() => setLotPickerOutOpen(false)}
+        items={lotPickerOutRow ? [{ article_id: lotPickerOutRow.article_id, name: lotPickerOutRow.name, quantity: lotPickerOutQty }] : []}
+        onConfirm={async (selections) => {
+          if (!currentSite || !selections[0]) return;
+          setLotPickerOutOpen(false);
+          const s = selections[0];
+          const assignments = s.assignments.filter(a => a.quantity > 0).map(a => ({ lot_id: a.lot_id, quantity: a.quantity }));
+          try {
+            await supabase.rpc('deduct_stock_manual_lots', {
+              p_article_id: s.article_id,
+              p_site_id: currentSite.id,
+              p_total_quantity: lotPickerOutQty,
+              p_lot_assignments: assignments,
+              p_movement_type: 'adjustment_out',
+              p_note: adjNote || 'Sortie stock (lot)',
+            });
+            success('Sortie de stock effectuée');
+            await load();
+          } catch (e: any) {
+            error(e.message || 'Erreur');
+          }
+        }}
+        title="Choisir les lots pour la sortie"
+        confirmLabel="Confirmer la sortie"
+      />
+    </div>
+  );
+}
+
+/* ===================== LOTS VIEW ===================== */
+function LotsView({ lots, stockMethod }: { lots: LotRow[]; stockMethod: StockMethod }) {
+  const [search, setSearch] = useState('');
+
+  if (stockMethod !== 'lot') {
+    return (
+      <div className="card-premium py-10 text-center">
+        <PackageOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+        <p className="text-sm font-semibold text-slate-600">Suivi par lot non activé</p>
+        <p className="text-xs text-slate-400 mt-1">Activez la méthode "Par lot" dans Paramètres &gt; Gestion des stocks.</p>
+      </div>
+    );
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const soon = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+
+  const filtered = lots.filter(l => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return l.article_name.toLowerCase().includes(q) || l.article_ref.toLowerCase().includes(q) || l.batch_number.toLowerCase().includes(q);
+  });
+
+  const expired = filtered.filter(l => l.expiry_date && l.expiry_date <= today);
+  const expiringSoon = filtered.filter(l => l.expiry_date && l.expiry_date > today && l.expiry_date <= soon);
+  const ok = filtered.filter(l => !l.expiry_date || l.expiry_date > soon);
+
+  const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const daysUntil = (d: string | null) => {
+    if (!d) return null;
+    const diff = Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+    return diff;
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Expiry alerts */}
+      {expired.length > 0 && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+          <div className="flex items-center gap-2 text-xs font-bold text-red-700 mb-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" />{expired.length} lot{expired.length > 1 ? 's' : ''} périmé{expired.length > 1 ? 's' : ''}
+          </div>
+          <div className="space-y-1">
+            {expired.slice(0, 5).map(l => (
+              <div key={l.id} className="text-[11px] text-red-600 flex items-center gap-2">
+                <span className="font-semibold">{l.batch_number}</span>
+                <span className="text-red-500">{l.article_name}</span>
+                <span className="ml-auto font-mono">{formatDate(l.expiry_date)}</span>
+              </div>
+            ))}
+            {expired.length > 5 && <div className="text-[10px] text-red-500">+{expired.length - 5} autres...</div>}
+          </div>
+        </div>
+      )}
+
+      {expiringSoon.length > 0 && (
+        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+          <div className="flex items-center gap-2 text-xs font-bold text-amber-700 mb-1.5">
+            <Clock className="w-3.5 h-3.5" />{expiringSoon.length} lot{expiringSoon.length > 1 ? 's' : ''} expire{expiringSoon.length > 1 ? 'nt' : ''} dans les 30 jours
+          </div>
+          <div className="space-y-1">
+            {expiringSoon.slice(0, 5).map(l => (
+              <div key={l.id} className="text-[11px] text-amber-700 flex items-center gap-2">
+                <span className="font-semibold">{l.batch_number}</span>
+                <span className="text-amber-600">{l.article_name}</span>
+                <span className="ml-auto font-mono">{daysUntil(l.expiry_date)}j</span>
+              </div>
+            ))}
+            {expiringSoon.length > 5 && <div className="text-[10px] text-amber-500">+{expiringSoon.length - 5} autres...</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="flex items-center gap-2">
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher lot, article..."
+          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+        />
+        <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">{filtered.length} lot{filtered.length > 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Lots list */}
+      {filtered.length === 0 ? (
+        <div className="card-premium py-8 text-center">
+          <PackageOpen className="w-7 h-7 text-slate-300 mx-auto mb-2" />
+          <p className="text-sm font-semibold text-slate-600">Aucun lot en stock</p>
+          <p className="text-xs text-slate-400 mt-1">Les lots apparaitront ici après une entrée de stock en mode lot.</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {filtered.map(l => {
+            const days = daysUntil(l.expiry_date);
+            const isExpired = l.expiry_date && l.expiry_date <= today;
+            const isSoon = l.expiry_date && !isExpired && l.expiry_date <= soon;
+            return (
+              <div key={l.id} className={`p-3 rounded-xl border bg-white ${isExpired ? 'border-red-200 bg-red-50/50' : isSoon ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'}`}>
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900 truncate">{l.article_name}</span>
+                      <span className="text-[10px] font-mono text-slate-400">{l.article_ref}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-[11px]">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold">
+                        <PackageOpen className="w-3 h-3" />{l.batch_number}
+                      </span>
+                      {l.expiry_date && (
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-semibold ${isExpired ? 'bg-red-100 text-red-700' : isSoon ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                          <Calendar className="w-3 h-3" />{formatDate(l.expiry_date)}
+                          {days !== null && <span className="font-bold">({days}j)</span>}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-bold text-slate-900 num">{l.remaining_quantity}</div>
+                    <div className="text-[9px] text-slate-400">/ {l.initial_quantity}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ *  STOCK LIST EDIT VIEW — Bulk inline editing
+ * ════════════════════════════════════════════════════════════════════════════ */
+type ListEditEntry = { article_id: string; qty: number | ''; note: string; lot_number: string };
+
+function StockListEditView({
+  filtered, listEditMode, setListEditMode, listEdits, setListEdits,
+  listSaving, setListSaving, listInputRefs, currentSite,
+  canViewPrices, onSaved, successToast, errorToast, stockMethod,
+}: {
+  filtered: Row[];
+  listEditMode: 'in' | 'out' | 'inventory';
+  setListEditMode: (m: 'in' | 'out' | 'inventory') => void;
+  listEdits: Map<string, ListEditEntry>;
+  setListEdits: (m: Map<string, ListEditEntry>) => void;
+  listSaving: boolean;
+  setListSaving: (s: boolean) => void;
+  listInputRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
+  currentSite: any;
+  canViewPrices: boolean;
+  onSaved: () => Promise<void>;
+  successToast: (m: string) => void;
+  errorToast: (m: string) => void;
+  stockMethod: string;
+}) {
+  const lotMode = stockMethod === 'lot';
+  const editCount = Array.from(listEdits.values()).filter(e => e.qty !== '' && Number(e.qty) !== 0).length;
+
+  const updateEdit = (articleId: string, qty: number | '', note?: string, lot_number?: string) => {
+    const next = new Map(listEdits);
+    const existing = next.get(articleId);
+    next.set(articleId, {
+      article_id: articleId,
+      qty,
+      note: note ?? existing?.note ?? '',
+      lot_number: lot_number ?? existing?.lot_number ?? '',
+    });
+    setListEdits(next);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextRow = filtered[index + 1];
+      if (nextRow) listInputRefs.current.get(nextRow.article_id)?.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevRow = filtered[index - 1];
+      if (prevRow) listInputRefs.current.get(prevRow.article_id)?.focus();
+    }
+  };
+
+  const saveBulk = async () => {
+    if (!currentSite) return;
+    const entries = Array.from(listEdits.values()).filter(e => e.qty !== '' && Number(e.qty) !== 0);
+    if (entries.length === 0) { errorToast('Aucune modification à enregistrer'); return; }
+    if (lotMode && listEditMode === 'in') {
+      const missing = entries.find(e => !e.lot_number?.trim());
+      if (missing) { errorToast('Numéro de lot requis pour toutes les entrées'); return; }
+    }
+    setListSaving(true);
+    let savedCount = 0;
+    try {
+      for (const entry of entries) {
+        const qty = Number(entry.qty);
+        if (listEditMode === 'inventory') {
+          const row = filtered.find(r => r.article_id === entry.article_id);
+          if (!row) continue;
+          const diff = qty - row.quantity;
+          if (diff === 0) continue;
+          const { error: e } = await supabase.rpc('adjust_stock', {
+            p_article_id: entry.article_id, p_site_id: currentSite.id,
+            p_quantity: diff, p_movement_type: 'inventory',
+            p_note: entry.note || `Inventaire: ${row.quantity} -> ${qty}`,
+          });
+          if (e) throw e;
+        } else if (listEditMode === 'in' && lotMode) {
+          const { error: e } = await supabase.rpc('adjust_stock_lot', {
+            p_article_id: entry.article_id, p_site_id: currentSite.id,
+            p_quantity: qty, p_batch_number: entry.lot_number.trim(),
+            p_expiry_date: null,
+            p_purchase_price: filtered.find(r => r.article_id === entry.article_id)?.purchase_price ?? 0,
+            p_note: entry.note || `Lot ${entry.lot_number.trim()}`,
+          });
+          if (e) throw e;
+        } else {
+          const signedQty = listEditMode === 'in' ? qty : -qty;
+          const type = listEditMode === 'in' ? 'adjustment_in' : 'adjustment_out';
+          const { error: e } = await supabase.rpc('adjust_stock', {
+            p_article_id: entry.article_id, p_site_id: currentSite.id,
+            p_quantity: signedQty, p_movement_type: type,
+            p_note: entry.note || (listEditMode === 'in' ? 'Entree stock (masse)' : 'Sortie stock (masse)'),
+          });
+          if (e) throw e;
+        }
+        savedCount++;
+      }
+      successToast(`${savedCount} article${savedCount > 1 ? 's' : ''} mis à jour`);
+      await onSaved();
+    } catch (e: any) {
+      errorToast(e.message || 'Erreur lors de la sauvegarde');
+    } finally {
+      setListSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Mode selector + save button */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <button
+            onClick={() => { setListEditMode('in'); setListEdits(new Map()); }}
+            className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'in' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
+          >
+            <ArrowDownCircle className="w-3.5 h-3.5 inline mr-1" />Entree
+          </button>
+          <button
+            onClick={() => { setListEditMode('out'); setListEdits(new Map()); }}
+            className={`px-3 py-1.5 text-[11px] font-bold border-x border-slate-200 transition-all ${listEditMode === 'out' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-red-50'}`}
+          >
+            <ArrowUpCircle className="w-3.5 h-3.5 inline mr-1" />Sortie
+          </button>
+          <button
+            onClick={() => { setListEditMode('inventory'); setListEdits(new Map()); }}
+            className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'inventory' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-blue-50'}`}
+          >
+            <ClipboardList className="w-3.5 h-3.5 inline mr-1" />Inventaire
+          </button>
+        </div>
+
+        <button
+          onClick={saveBulk}
+          disabled={editCount === 0 || listSaving}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow hover:shadow-premium disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+        >
+          {listSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          Enregistrer{editCount > 0 && ` (${editCount})`}
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/80">
+                <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[30%]">Article</th>
+                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[80px]">Stock</th>
+                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[60px]">Min</th>
+                {canViewPrices && <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right w-[100px]">P.Achat</th>}
+                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[100px]">
+                  {listEditMode === 'in' ? 'Qte entree' : listEditMode === 'out' ? 'Qte sortie' : 'Nvelle qte'}
+                </th>
+                {lotMode && listEditMode === 'in' && (
+                  <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[110px]">N° Lot *</th>
+                )}
+                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[120px] hidden md:table-cell">Note</th>
+                <th className="px-2 py-2 w-[30px]"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r, idx) => {
+                const edit = listEdits.get(r.article_id);
+                const hasValue = edit && edit.qty !== '' && Number(edit.qty) !== 0;
+                const out = r.quantity <= 0;
+                const low = !out && r.quantity <= r.stock_min;
+                return (
+                  <tr key={r.article_id} className={`border-b border-slate-50 transition-colors ${hasValue ? 'bg-brand-50/30' : 'hover:bg-slate-50/50'}`}>
+                    <td className="px-3 py-1.5">
+                      <div className="text-[11px] font-semibold text-slate-900 leading-tight">{r.name}</div>
+                      <div className="text-[9px] text-slate-400 font-mono">{r.internal_ref}</div>
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      <span className={`inline-block text-xs font-bold num px-1.5 py-0.5 rounded ${out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-700' : 'text-slate-800'}`}>
+                        {r.quantity}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5 text-center text-[11px] text-slate-500 num">{r.stock_min}</td>
+                    {canViewPrices && <td className="px-2 py-1.5 text-right text-[11px] text-slate-600 num">{formatFCFA(r.purchase_price)}</td>}
+                    <td className="px-2 py-1.5">
+                      <input
+                        ref={el => { if (el) listInputRefs.current.set(r.article_id, el); }}
+                        type="number"
+                        min={0}
+                        placeholder={listEditMode === 'inventory' ? String(r.quantity) : '0'}
+                        value={edit?.qty ?? ''}
+                        onChange={e => updateEdit(r.article_id, e.target.value === '' ? '' : Number(e.target.value), edit?.note, edit?.lot_number)}
+                        onKeyDown={e => handleKeyDown(e, idx)}
+                        className="w-full text-center text-xs font-bold num px-2 py-1.5 rounded-lg border border-slate-200 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all bg-white"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5 hidden md:table-cell">
+                      <input
+                        type="text"
+                        placeholder="..."
+                        value={edit?.note ?? ''}
+                        onChange={e => updateEdit(r.article_id, edit?.qty ?? '', e.target.value, edit?.lot_number)}
+                        className="w-full text-[10px] px-2 py-1.5 rounded-lg border border-slate-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-500/20 outline-none transition-all bg-white"
+                      />
+                    </td>
+                    {lotMode && listEditMode === 'in' && (
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="text"
+                          placeholder="LOT-…"
+                          value={edit?.lot_number ?? ''}
+                          onChange={e => updateEdit(r.article_id, edit?.qty ?? '', edit?.note, e.target.value)}
+                          className={`w-full text-[10px] px-2 py-1.5 rounded-lg border focus:ring-1 outline-none transition-all bg-white ${
+                            hasValue && !edit?.lot_number?.trim()
+                              ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20'
+                              : 'border-slate-200 focus:border-brand-400 focus:ring-brand-500/20'
+                          }`}
+                        />
+                      </td>
+                    )}
+                    <td className="px-2 py-1.5">
+                      {hasValue && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  X, ChevronRight, ChevronLeft, Lightbulb, CheckCircle2, Sparkles,
+  X, ChevronRight, ChevronLeft, Lightbulb, CheckCircle2,
   KeyRound, Search, ShoppingCart, Wallet, RotateCcw, ArrowDownRight,
   List, Lock, Receipt, User, Globe, HelpCircle,
 } from 'lucide-react';
@@ -209,7 +209,7 @@ export function POSGuide({ tenantId, hasSession, businessType, autoOpenOnFirstVi
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] font-bold uppercase tracking-wider text-white/70 mb-0.5 inline-flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3" />
+                <Lightbulb className="w-3 h-3" />
                 Guide caisse — Étape {current + 1} / {total}
               </div>
               <h3 className="text-base font-bold leading-tight">{S.title}</h3>
@@ -250,7 +250,7 @@ export function POSGuide({ tenantId, hasSession, businessType, autoOpenOnFirstVi
 
           {!hasSession && current === 0 && (
             <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-800">
-              <Sparkles className="w-3 h-3" />
+              <Lightbulb className="w-3 h-3" />
               Aucune session ouverte — commencez ici !
             </div>
           )}

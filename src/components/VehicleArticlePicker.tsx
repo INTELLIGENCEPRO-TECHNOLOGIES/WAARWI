@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, Search, Car, Package, X, ArrowLeft, Loader2, Grid3x3 as Grid3X3, Cog, Filter as FilterIcon, Disc, Wrench, Navigation, Zap, Lightbulb, PaintBucket, Armchair, Sparkles, Circle, Droplet, Hammer, Box, Settings2 } from 'lucide-react';
+import { ChevronRight, Search, Car, Package, X, ArrowLeft, Loader2, Grid3x3 as Grid3X3, Cog, Filter as FilterIcon, Disc, Wrench, Navigation, Zap, Lightbulb, PaintBucket, Armchair, Circle, Droplet, Hammer, Box, Settings2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getBrandLogo } from '../lib/brandLogos';
 import { formatFCFA } from '../lib/format';
@@ -26,7 +26,7 @@ const MAIN_CATEGORIES: MainCategory[] = [
   { key: 'eclairage', label: 'Éclairage', icon: <Lightbulb className="w-5 h-5" />, keywords: ['éclairage', 'eclairage', 'phare', 'ampoule', 'feu', 'led', 'xenon', 'xénon', 'clignotant', 'antibrouillard', 'optique'] },
   { key: 'carrosserie', label: 'Carrosserie', icon: <PaintBucket className="w-5 h-5" />, keywords: ['carrosserie', 'pare-choc', 'pare choc', 'parechoc', 'aile', 'capot', 'portiere', 'portière', 'retroviseur', 'rétroviseur', 'pare-brise', 'pare brise', 'vitre', 'calandre', 'coffre', 'hayon'] },
   { key: 'interieur', label: 'Intérieur', icon: <Armchair className="w-5 h-5" />, keywords: ['interieur', 'intérieur', 'siege', 'siège', 'tapis', 'moquette', 'ciel de toit', 'garniture', 'tableau bord', 'planche bord', 'sellerie'] },
-  { key: 'accessoires', label: 'Accessoires', icon: <Sparkles className="w-5 h-5" />, keywords: ['accessoire', 'accessoires', 'porte-bagage', 'attelage', 'barre toit', 'film', 'antivol'] },
+  { key: 'accessoires', label: 'Accessoires', icon: <Box className="w-5 h-5" />, keywords: ['accessoire', 'accessoires', 'porte-bagage', 'attelage', 'barre toit', 'film', 'antivol'] },
   { key: 'pneumatiques', label: 'Pneumatiques', icon: <Circle className="w-5 h-5" />, keywords: ['pneu', 'pneumatique', 'jante', 'roue', 'chambre air', 'valve', 'equilibrage', 'équilibrage'] },
   { key: 'lubrifiants', label: 'Lubrifiants', icon: <Droplet className="w-5 h-5" />, keywords: ['huile', 'lubrifiant', 'graisse', 'liquide', 'antigel', 'lave glace', 'lave-glace', 'adblue', 'additif'] },
   { key: 'outillage', label: 'Outillage', icon: <Hammer className="w-5 h-5" />, keywords: ['outil', 'outillage', 'cle', 'clé', 'cric', 'chandelle', 'tournevis', 'pince'] },

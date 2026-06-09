@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Loader2, Package, Check, Download, X, Filter,
-  ChevronRight, ChevronDown, AlertCircle, Sparkles, CheckCircle2
+  ChevronRight, ChevronDown, AlertCircle, CheckCircle2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -24,8 +24,10 @@ type Item = {
 type FilterStatus = 'all' | 'imported' | 'available';
 
 export function MasterCatalog() {
-  const { tenant } = useApp();
+  const { tenant, currentSite, sites } = useApp();
   const { success, error: toastError } = useToast();
+  const sharedArticles = (tenant as any)?.settings?.shared_articles !== false;
+  const isMultiSite = sites.length > 1;
 
   const [activity, setActivity] = useState<ActivityType | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -35,11 +37,21 @@ export function MasterCatalog() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [subcategoryId, setSubcategoryId] = useState<string>('');
   const [brandFilter, setBrandFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 60;
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchInput = (val: string) => {
+    setSearchInput(val);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(val), 200);
+  };
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
@@ -90,10 +102,17 @@ export function MasterCatalog() {
       const [{ data: cats }, { data: arts }] = await Promise.all([
         supabase.from('master_catalog_categories').select('id, name, slug, parent_id')
           .eq('master_catalog_id', catalogRow.id).eq('is_active', true).order('sort_order'),
-        supabase.from('articles')
-          .select('master_catalog_item_id')
-          .eq('tenant_id', tenant.id)
-          .not('master_catalog_item_id', 'is', null),
+        (() => {
+          let q = supabase.from('articles')
+            .select('master_catalog_item_id')
+            .eq('tenant_id', tenant.id)
+            .not('master_catalog_item_id', 'is', null);
+          const isShared = (tenant as any)?.settings?.shared_articles !== false;
+          if (!isShared && currentSite) {
+            q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+          }
+          return q;
+        })(),
       ]);
 
       // Load all items with pagination (PostgREST default limit is 1000)
@@ -123,7 +142,7 @@ export function MasterCatalog() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [tenant?.id, activityTypeId]);
+  }, [tenant?.id, activityTypeId, currentSite?.id, sharedArticles]);
 
   const rootCategories = useMemo(() => categories.filter(c => !c.parent_id), [categories]);
   const subcategories = useMemo(
@@ -152,6 +171,10 @@ export function MasterCatalog() {
     });
   }, [items, search, categoryId, subcategoryId, brandFilter, statusFilter, importedIds]);
 
+  useEffect(() => { setPage(0); }, [search, categoryId, subcategoryId, brandFilter, statusFilter]);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
+
   const selectableFiltered = filtered.filter(i => !importedIds.has(i.id));
   const allFilteredSelected = selectableFiltered.length > 0 && selectableFiltered.every(i => selected.has(i.id));
 
@@ -176,7 +199,7 @@ export function MasterCatalog() {
   };
 
   const clearFilters = () => {
-    setSearch(''); setCategoryId(''); setSubcategoryId(''); setBrandFilter(''); setStatusFilter('all');
+    setSearch(''); setSearchInput(''); setCategoryId(''); setSubcategoryId(''); setBrandFilter(''); setStatusFilter('all');
     setFiltersOpen(false);
   };
 
@@ -190,6 +213,7 @@ export function MasterCatalog() {
         p_category_id: null,
         p_subcategory_id: null,
         p_import_all: false,
+        p_site_id: (!sharedArticles && currentSite) ? currentSite.id : null,
       };
       if (mode === 'selected') {
         payload.p_item_ids = Array.from(selected);
@@ -211,10 +235,14 @@ export function MasterCatalog() {
 
       // Refresh imported IDs
       if (tenant) {
-        const { data: arts } = await supabase.from('articles')
+        let q = supabase.from('articles')
           .select('master_catalog_item_id')
           .eq('tenant_id', tenant.id)
           .not('master_catalog_item_id', 'is', null);
+        if (!sharedArticles && currentSite) {
+          q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+        }
+        const { data: arts } = await q;
         setImportedIds(new Set((arts || []).map((a: any) => a.master_catalog_item_id).filter(Boolean)));
       }
 
@@ -255,6 +283,7 @@ export function MasterCatalog() {
   return (
     <div className="space-y-3 pb-6">
       {/* Header */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
@@ -266,8 +295,8 @@ export function MasterCatalog() {
             </div>
           </div>
           <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={e => handleSearchInput(e.target.value)}
             placeholder="Désignation, marque, référence…"
             className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
           />
@@ -343,7 +372,7 @@ export function MasterCatalog() {
           }}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-ink-900 text-white hover:bg-slate-800 transition active:scale-95 disabled:opacity-50"
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Download className="w-3.5 h-3.5" />
           Importer tout le catalogue
         </button>
         {selectableFiltered.length > 0 && (
@@ -355,13 +384,15 @@ export function MasterCatalog() {
           </button>
         )}
       </div>
+      </div>
 
       {/* Items grid */}
       {filtered.length === 0 ? (
         <div className="card-premium"><EmptyState icon={Package} title="Aucun article" description="Ajustez vos filtres ou votre recherche." /></div>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
-          {filtered.map(i => {
+          {paginated.map(i => {
             const isImported = importedIds.has(i.id);
             const isSelected = selected.has(i.id);
             return (
@@ -410,6 +441,21 @@ export function MasterCatalog() {
             );
           })}
         </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-card mt-3">
+            <div className="text-xs text-slate-500">
+              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length} articles
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">1</button>
+              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">Prec</button>
+              <span className="px-3 py-1 rounded-lg text-xs font-bold bg-brand-50 text-brand-700 border border-brand-200">{page + 1}/{totalPages}</span>
+              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">Suiv</button>
+              <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1} className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">{totalPages}</button>
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {/* Filters modal */}
@@ -475,13 +521,21 @@ export function MasterCatalog() {
                 Vous êtes sur le point d'importer {confirmOpen.label}. <span className="font-semibold">{confirmOpen.count}</span> article{confirmOpen.count !== 1 ? 's' : ''} seront ajoutés à votre catalogue. Les articles déjà importés seront ignorés automatiquement.
               </div>
             </div>
+            {isMultiSite && !sharedArticles && currentSite && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-800">
+                  <span className="font-bold">Mode catalogues indépendants actif.</span> Les articles seront importés uniquement dans le magasin <span className="font-semibold">« {currentSite.name} »</span>. Pour importer les articles dans vos {sites.length} magasins simultanément, activez le mode « Catalogue partagé » dans Paramètres &gt; Gestion des stocks.
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Modal>
 
       {/* Last result modal */}
       <Modal open={!!lastResult} onClose={() => setLastResult(null)} title="Résultat de l'import" size="sm"
-        footer={<button onClick={() => setLastResult(null)} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow">Fermer</button>}
+        footer={<button onClick={() => setLastResult(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}
       >
         {lastResult && (
           <div className="space-y-2">

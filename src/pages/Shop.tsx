@@ -4,7 +4,7 @@ import {
   Tag, Car, CheckCircle2, AlertCircle, MapPin, Zap, ArrowLeft, Info,
   ShoppingCart, Plus, Minus, Trash2, Loader2, ChevronRight, Store,
   ClipboardCheck, User, Truck, CreditCard, PartyPopper, ClipboardList,
-  Shield, Sparkles, ShoppingBag, Wrench, Shirt, Cookie, Mail, Globe as GlobeIcon,
+  Shield, Star, ShoppingBag, Wrench, Shirt, Cookie, Mail, Globe as GlobeIcon,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatFCFA } from '../lib/format';
@@ -100,7 +100,7 @@ function activityTheme(businessType: string): ActivityTheme {
         icon: Shirt,
         tagline: 'Les dernières tendances · Tailles complètes · Style éditorial',
         perks: [
-          { icon: Sparkles, label: 'Nouveautés', sub: 'Chaque semaine' },
+          { icon: Star, label: 'Nouveautés', sub: 'Chaque semaine' },
           { icon: Shirt, label: 'Toutes les tailles', sub: 'XS au XXL' },
           { icon: Truck, label: 'Livraison soignée', sub: 'Emballage premium' },
         ],
@@ -505,7 +505,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
               {shopSettings?.welcome_msg && (
                 <div className="mt-4 inline-flex items-start gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm max-w-xl">
-                  <Sparkles className="w-4 h-4 shrink-0 mt-0.5" style={{ color: theme.heroAccent }} />
+                  <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: theme.heroAccent }} />
                   <span className="text-[12.5px] font-medium text-white/95 leading-snug">{shopSettings.welcome_msg}</span>
                 </div>
               )}

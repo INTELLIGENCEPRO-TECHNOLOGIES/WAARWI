@@ -14,8 +14,9 @@ import {
   CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowDownRight,
   ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, X,
   Share2, Copy, Check as CheckIcon, MessageCircle, RefreshCw,
-  ClipboardList, Banknote, RotateCcw,
-  ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3,
+  ClipboardList, Coins, RotateCcw,
+  ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3, Store,
+  Network, Palette,
 } from 'lucide-react';
 
 type ShopInfo = { slug: string | null; isActive: boolean };
@@ -454,7 +455,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         alerts.push({
           id: `mod-sale-${s.id}`,
           severity: 'info',
-          title: `Facture modifiee : ${s.sale_number}`,
+          title: `Facture modifiée : ${s.sale_number}`,
           detail: `${s.customers?.name || 'Client'} · ${formatCompactFCFA(s.total)}`,
           time: s.created_at,
           route: 'sales',
@@ -616,6 +617,37 @@ function MobileDashboard({
   stats, shopInfo, dayDelta, marginPct, dayMarginPct, nav,
   balanceHidden, toggleBalanceHidden,
 }: any) {
+  const { tenant, currentSite, sites, setCurrentSite } = useApp();
+
+  // ── Multi-site overview ────────────────────────────────────────────────
+  type SiteStat = { id: string; name: string; todaySales: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
+  const [multiSiteStats, setMultiSiteStats] = useState<SiteStat[]>([]);
+  const hasMultiSites = sites.length > 1;
+
+  useEffect(() => {
+    if (!hasMultiSites || !tenant) return;
+    let cancelled = false;
+    (async () => {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const results: SiteStat[] = [];
+      for (const site of sites) {
+        const [{ data: salesData }, { data: sessData }, { data: pmtData }] = await Promise.all([
+          supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
+          supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1),
+          supabase.from('sale_payments').select('amount, cash_session_id').eq('tenant_id', tenant.id).in('cash_session_id', (await supabase.from('cash_sessions').select('id').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open')).data?.map((s: any) => s.id) || []),
+        ]);
+        const salesCount = (salesData || []).length;
+        const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
+        const session = (sessData || [])[0];
+        const openingAmount = session ? Number(session.opening_amount || 0) : 0;
+        const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+        const cashBalance = session ? openingAmount + sessionPayTotal : 0;
+        results.push({ id: site.id, name: site.name, todaySales, salesCount, cashBalance, openingAmount, sessionOpen: !!session });
+      }
+      if (!cancelled) setMultiSiteStats(results);
+    })();
+    return () => { cancelled = true; };
+  }, [hasMultiSites, tenant?.id, sites.length, stats.todaySales]);
 
   // ── Web order notification (blink + sound) ──────────────────────────────
   const prevWebNew = useRef(stats.webNew);
@@ -627,6 +659,17 @@ function MobileDashboard({
   const [waNumber, setWaNumber] = useState('');
   const [copied, setCopied] = useState(false);
   const shopUrl = shopInfo?.slug ? `${window.location.origin}/shop/${shopInfo.slug}` : '';
+
+  // ── Hero card theme toggle ─────────────────────────────────────────────
+  const [heroLight, setHeroLight] = useState(() => {
+    try { return localStorage.getItem('dashboard_hero_light') === '1'; } catch { return false; }
+  });
+  const toggleHeroTheme = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !heroLight;
+    setHeroLight(next);
+    try { localStorage.setItem('dashboard_hero_light', next ? '1' : '0'); } catch {}
+  };
 
   const copyLink = () => {
     navigator.clipboard.writeText(shopUrl).then(() => {
@@ -671,139 +714,154 @@ function MobileDashboard({
       {/* ── HERO CARD ── */}
       <button
         onClick={() => nav('sales')}
-        className="w-full text-left relative overflow-hidden rounded-[18px] p-3.5 active:scale-[0.985] transition-transform duration-200"
-        style={{
-          background: 'linear-gradient(160deg, #021e2f 0%, #053d47 35%, #0a5e58 65%, #0d8f82 100%)',
-          boxShadow: '0 16px 32px -8px rgba(5, 61, 71, 0.55), 0 6px 12px -4px rgba(13, 148, 136, 0.25)',
-        }}
+        className={`w-full text-left relative overflow-hidden rounded-[18px] p-3.5 active:scale-[0.985] transition-transform duration-200 ${heroLight ? '' : ''}`}
+        style={heroLight
+          ? { background: '#ffffff', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }
+          : { background: 'linear-gradient(160deg, #021e2f 0%, #053d47 35%, #0a5e58 65%, #0d8f82 100%)', boxShadow: '0 16px 32px -8px rgba(5, 61, 71, 0.55), 0 6px 12px -4px rgba(13, 148, 136, 0.25)' }
+        }
       >
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-teal-300/15 to-transparent blur-3xl animate-pulse-slow" />
-          <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-cyan-300/8 to-transparent blur-3xl" />
-        </div>
+        {!heroLight && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-teal-300/15 to-transparent blur-3xl animate-pulse-slow" />
+            <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-cyan-300/8 to-transparent blur-3xl" />
+          </div>
+        )}
 
         <div className="relative">
           {/* Header row */}
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-teal-300 animate-pulse" />
-              <span className="text-[9px] font-bold text-teal-200/70 uppercase tracking-[0.15em]">Encaissement du jour</span>
+              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${heroLight ? 'bg-teal-500' : 'bg-teal-300'}`} />
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-slate-400' : 'text-teal-200/70'}`}>Encaissement du jour</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-teal-400/15 text-teal-200">
-                <span className="w-1 h-1 rounded-full bg-teal-400 animate-pulse" />LIVE
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${heroLight ? 'bg-teal-50 text-teal-600 border border-teal-100' : 'bg-teal-400/15 text-teal-200'}`}>
+                <span className={`w-1 h-1 rounded-full animate-pulse ${heroLight ? 'bg-teal-500' : 'bg-teal-400'}`} />LIVE
               </span>
               {shopInfo?.isActive && shopUrl && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShareOpen(true); }}
-                  className="w-5 h-5 rounded-full bg-white/10 border border-white/15 flex items-center justify-center active:scale-90 transition-transform"
+                  className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-slate-100 border border-slate-200' : 'bg-white/10 border border-white/15'}`}
                   aria-label="Partager la boutique"
                 >
-                  <Share2 className="w-2.5 h-2.5 text-white/70" />
+                  <Share2 className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-500' : 'text-white/70'}`} />
                 </button>
               )}
               <button
                 onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
-                className="w-5 h-5 rounded-full bg-white/8 border border-white/10 flex items-center justify-center active:scale-90 transition-transform"
+                className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-slate-100 border border-slate-200' : 'bg-white/8 border border-white/10'}`}
               >
-                {balanceHidden ? <Eye className="w-2.5 h-2.5 text-white/60" /> : <EyeOff className="w-2.5 h-2.5 text-white/60" />}
+                {balanceHidden
+                  ? <Eye className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-500' : 'text-white/60'}`} />
+                  : <EyeOff className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-500' : 'text-white/60'}`} />}
+              </button>
+              <button
+                onClick={toggleHeroTheme}
+                className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-slate-100 border border-slate-200' : 'bg-white/8 border border-white/10'}`}
+                aria-label="Changer le thème"
+              >
+                <Palette className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-500' : 'text-white/60'}`} />
               </button>
             </div>
           </div>
 
           {/* Main amount + delta */}
           <div className="flex items-end gap-3 mb-2.5">
-            <div className="num font-black text-white leading-none tracking-tight" style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
+            <div className={`num font-black leading-none tracking-tight ${heroLight ? 'text-slate-900' : 'text-white'}`} style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
               {balanceHidden ? '••••••' : formatFCFA(stats.todaySales)}
             </div>
             <div className="flex items-center gap-1.5 mb-0.5">
-              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${dayDelta >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${
+                heroLight
+                  ? (dayDelta >= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100')
+                  : (dayDelta >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200')
+              }`}>
                 {dayDelta >= 0 ? <TrendingUp className="w-2 h-2" /> : <TrendingDown className="w-2 h-2" />}
                 {dayDelta >= 0 ? '+' : ''}{dayDelta}%
               </span>
-              <span className="text-[8px] text-white/35">vs hier</span>
-              <span className="text-[8px] text-white/35">·</span>
-              <span className="text-[8px] text-white/45 num">{stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}</span>
+              <span className={`text-[8px] ${heroLight ? 'text-slate-400' : 'text-white/35'}`}>vs hier</span>
+              <span className={`text-[8px] ${heroLight ? 'text-slate-300' : 'text-white/35'}`}>·</span>
+              <span className={`text-[8px] num ${heroLight ? 'text-slate-500' : 'text-white/45'}`}>{stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}</span>
             </div>
           </div>
 
           {/* Stats rows list */}
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }} className="pt-2 space-y-0">
+          <div style={{ borderTop: heroLight ? '1px solid rgba(226,232,240,0.8)' : '1px solid rgba(255,255,255,0.08)' }} className="pt-2 space-y-0">
 
             {/* Session info */}
             {stats.sessionInfo && (
-              <div className="flex items-center gap-1 mb-1.5 text-[8px] text-teal-200/40 font-semibold uppercase tracking-[0.1em]">
+              <div className={`flex items-center gap-1 mb-1.5 text-[8px] font-semibold uppercase tracking-[0.1em] ${heroLight ? 'text-teal-600/60' : 'text-teal-200/40'}`}>
                 <Clock className="w-2.5 h-2.5" />
                 Session depuis {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
               </div>
             )}
 
             {/* CAISSE row */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                  <Wallet className="w-2.5 h-2.5 text-white/70" />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(20,184,166,0.08)' : 'rgba(255,255,255,0.07)' }}>
+                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-teal-600' : 'text-white/70'}`} />
                 </div>
-                <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Solde caisse</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Solde caisse</span>
               </div>
-              <span className="num text-[10px] font-black text-teal-300">
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-teal-700' : 'text-teal-300'}`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.cashBalance)}
               </span>
             </div>
 
-            {/* DÉPENSES row */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            {/* DEPENSES row */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
-                  <ArrowUpLeft className="w-2.5 h-2.5 text-rose-300" />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.15)' }}>
+                  <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
                 </div>
-                <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Dépenses</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Dépenses</span>
               </div>
-              <span className="num text-[10px] font-black text-white/80">
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-slate-800' : 'text-white/80'}`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.sessionExpenses)}
               </span>
             </div>
 
-            {/* ENTRÉES row */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            {/* ENTREES row */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
-                  <ArrowDownRight className="w-2.5 h-2.5 text-emerald-300" />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.15)' }}>
+                  <ArrowDownRight className={`w-2.5 h-2.5 ${heroLight ? 'text-emerald-500' : 'text-emerald-300'}`} />
                 </div>
-                <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Entrées</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Entrées</span>
               </div>
-              <span className="num text-[10px] font-black text-white/80">
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-slate-800' : 'text-white/80'}`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.sessionCashIn)}
               </span>
             </div>
 
             {/* NET CAISSE row */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(20,184,166,0.15)' }}>
-                  <ArrowUpRight className="w-2.5 h-2.5 text-teal-300" />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(20,184,166,0.08)' : 'rgba(20,184,166,0.15)' }}>
+                  <ArrowUpRight className={`w-2.5 h-2.5 ${heroLight ? 'text-teal-600' : 'text-teal-300'}`} />
                 </div>
-                <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Net caisse</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Net caisse</span>
               </div>
-              <span className={`num text-[10px] font-black ${netCaisse >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <span className={`num text-[13px] font-black ${heroLight ? (netCaisse >= 0 ? 'text-emerald-600' : 'text-rose-600') : (netCaisse >= 0 ? 'text-emerald-300' : 'text-rose-300')}`}>
                 {balanceHidden ? '•••' : formatFCFA(netCaisse)}
               </span>
             </div>
 
             {/* MARGE DU JOUR row */}
             {!balanceHidden && dayMarginPct > 0 && (
-              <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(52,211,153,0.15)' }}>
-                    <TrendingUp className="w-2.5 h-2.5 text-emerald-300" />
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(52,211,153,0.08)' : 'rgba(52,211,153,0.15)' }}>
+                    <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-emerald-500' : 'text-emerald-300'}`} />
                   </div>
-                  <span className="text-[9px] font-bold text-white/70 uppercase tracking-[0.07em]">Marge jour</span>
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Marge jour</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="num text-[10px] font-black text-emerald-300">
+                  <span className={`num text-[13px] font-black ${heroLight ? 'text-emerald-600' : 'text-emerald-300'}`}>
                     {formatFCFA(stats.todayMargin)}
                   </span>
-                  <span className="text-[8px] font-bold text-emerald-400/60 num">{dayMarginPct}%</span>
+                  <span className={`text-[8px] font-bold num ${heroLight ? 'text-emerald-500/60' : 'text-emerald-400/60'}`}>{dayMarginPct}%</span>
                 </div>
               </div>
             )}
@@ -812,14 +870,14 @@ function MobileDashboard({
             {!balanceHidden && (
               <div className="flex items-center justify-between py-1.5">
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <Receipt className="w-2.5 h-2.5 text-white/50" />
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(226,232,240,0.5)' : 'rgba(255,255,255,0.06)' }}>
+                    <BarChart3 className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-400' : 'text-white/50'}`} />
                   </div>
-                  <span className="text-[9px] font-bold text-white/50 uppercase tracking-[0.07em]">CA du mois</span>
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-400' : 'text-white/50'}`}>CA du mois</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="num text-[10px] font-black text-white/70">{formatCompactFCFA(stats.monthSales)}</span>
-                  {marginPct > 0 && <span className="text-[8px] font-bold text-emerald-400/60 num">marge {marginPct}%</span>}
+                  <span className={`num text-[13px] font-black ${heroLight ? 'text-slate-700' : 'text-white/70'}`}>{formatCompactFCFA(stats.monthSales)}</span>
+                  {marginPct > 0 && <span className={`text-[8px] font-bold num ${heroLight ? 'text-emerald-500/60' : 'text-emerald-400/60'}`}>marge {marginPct}%</span>}
                 </div>
               </div>
             )}
@@ -827,9 +885,50 @@ function MobileDashboard({
         </div>
       </button>
 
+      {/* ── MULTI-SITE STRIP (mobile) ── */}
+      {sites.length > 1 && multiSiteStats.length > 0 && (
+        <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
+          <div className="flex items-center justify-between px-3 py-2 border-b border-brand-100/50 bg-gradient-to-r from-brand-50/80 to-white">
+            <div className="flex items-center gap-1.5">
+              <Network className="w-3.5 h-3.5 text-brand-600" />
+              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Magasins</span>
+            </div>
+            <span className="text-[9px] font-bold text-slate-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + x.todaySales, 0))}</span>
+          </div>
+          <div className="flex overflow-x-auto gap-1.5 p-2 no-scrollbar">
+            {multiSiteStats.map(site => {
+              const isCurrent = site.id === currentSite?.id;
+              return (
+                <button
+                  key={site.id}
+                  onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
+                  className={`shrink-0 p-2.5 rounded-xl border min-w-[135px] text-left transition-all ${isCurrent ? 'border-brand-300 bg-brand-50/50' : 'border-slate-200 bg-white active:bg-slate-50'}`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${site.sessionOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    <span className="text-[10px] font-bold text-slate-800">{site.name}</span>
+                  </div>
+                  <div className="text-[13px] font-black num text-slate-900 mb-1">{formatCompactFCFA(site.todaySales)}</div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] text-slate-400 font-semibold">Tickets</span>
+                      <span className="text-[9px] font-bold text-slate-700 num">{site.salesCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] text-slate-400 font-semibold">Caisse</span>
+                      <span className={`text-[9px] font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermee'}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── FINANCES ── */}
-      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.06)', border: '1px solid rgba(226,232,240,0.8)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-blue-100/50 bg-gradient-to-r from-blue-50/80 to-white">
           <div className="flex items-center gap-1.5">
             <CreditCard className="w-3.5 h-3.5 text-blue-500" />
             <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Finances</span>
@@ -860,7 +959,7 @@ function MobileDashboard({
 
       {/* ── ALERTES ── */}
       {(stats.lowStockCount > 0 || stats.outOfStockCount > 0 || stats.pendingQuotes > 0) && (
-        <div className="rounded-xl overflow-hidden" style={{ background: '#fffbf0', border: '1px solid rgba(245,158,11,0.2)' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: '#fffbf0', border: '1px solid rgba(245,158,11,0.2)', boxShadow: '0 2px 8px rgba(245,158,11,0.08), 0 8px 24px rgba(245,158,11,0.05)' }}>
           <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'rgba(245,158,11,0.15)' }}>
             <div className="flex items-center gap-1.5">
               <Bell className="w-3.5 h-3.5 text-amber-500" />
@@ -912,8 +1011,8 @@ function MobileDashboard({
       )}
 
       {/* ── ACTIVITÉ ── */}
-      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.06)', border: '1px solid rgba(226,232,240,0.8)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-emerald-100/50 bg-gradient-to-r from-emerald-50/80 to-white">
           <div className="flex items-center gap-1.5">
             <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Activité</span>
@@ -922,41 +1021,44 @@ function MobileDashboard({
             Voir tout <ChevronRight className="w-2.5 h-2.5" />
           </button>
         </div>
-        <div className="grid grid-cols-3 divide-x divide-slate-100">
-          <button onClick={() => nav('stock')} className="px-2 py-2 text-left active:bg-slate-50 transition-colors">
-            <div className="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center mb-1">
-              <Package className="w-3 h-3 text-emerald-600" />
+        <div className="grid grid-cols-3 gap-2 p-2">
+          <button onClick={() => nav('stock')} className="flex flex-col p-3 rounded-xl text-left active:scale-95 transition-all" style={{ background: 'linear-gradient(135deg,#f0fdf4 0%,#ffffff 100%)', boxShadow: '0 4px 14px rgba(16,185,129,0.13),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(16,185,129,0.18)' }}>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mb-2 shadow-sm">
+              <Package className="w-4 h-4 text-white" />
             </div>
-            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Stock</div>
-            <div className="num text-[13px] font-black text-slate-900 leading-tight">{stats.articlesInStockCount}</div>
+            <div className="text-[8px] font-bold text-emerald-700/70 mb-0.5 uppercase tracking-wide">Stock</div>
+            <div className="num text-[15px] font-black text-slate-900 leading-tight">{stats.articlesInStockCount}</div>
             <div className="text-[8px] text-slate-400 mt-0.5 leading-tight">{stats.stockValue > 0 ? formatCompactFCFA(stats.stockValue) : `+${stats.stockInToday} aujourd'hui`}</div>
           </button>
           <button
             ref={webCardRef}
             onClick={() => { setWebBlink(false); nav('online_orders'); }}
-            className={`px-2 py-2 text-left transition-colors ${webBlink ? 'animate-pulse bg-teal-50' : 'active:bg-slate-50'}`}
+            className="flex flex-col p-3 rounded-xl text-left transition-all active:scale-95"
+            style={webBlink
+              ? { background: 'linear-gradient(135deg,#ccfbf1 0%,#f0fdfa 100%)', boxShadow: '0 4px 20px rgba(20,184,166,0.30),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(20,184,166,0.40)' }
+              : { background: 'linear-gradient(135deg,#f0fdfa 0%,#ffffff 100%)', boxShadow: '0 4px 14px rgba(20,184,166,0.12),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(20,184,166,0.18)' }}
           >
-            <div className={`w-6 h-6 rounded-md flex items-center justify-center mb-1 ${webBlink ? 'bg-teal-500' : 'bg-teal-50'}`}>
-              <Globe className={`w-3 h-3 ${webBlink ? 'text-white' : 'text-teal-600'}`} />
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-2 shadow-sm ${webBlink ? 'bg-gradient-to-br from-teal-400 to-teal-600 animate-pulse' : 'bg-gradient-to-br from-teal-400 to-teal-600'}`}>
+              <Globe className="w-4 h-4 text-white" />
             </div>
-            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Web</div>
-            <div className={`num text-[13px] font-black leading-tight ${webBlink ? 'text-teal-600' : 'text-slate-900'}`}>{stats.webNew}</div>
+            <div className="text-[8px] font-bold text-teal-700/70 mb-0.5 uppercase tracking-wide">Web</div>
+            <div className={`num text-[15px] font-black leading-tight ${webBlink ? 'text-teal-600' : 'text-slate-900'}`}>{stats.webNew}</div>
             <div className="text-[8px] text-slate-400 mt-0.5">{stats.webNew === 0 ? 'Aucune commande' : `${stats.webNew} nouvelle${stats.webNew > 1 ? 's' : ''}`}</div>
           </button>
-          <button onClick={() => nav('billing', { target: 'quotes' })} className="px-2 py-2 text-left active:bg-slate-50 transition-colors">
-            <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center mb-1">
-              <FileText className="w-3 h-3 text-blue-600" />
+          <button onClick={() => nav('billing', { target: 'quotes' })} className="flex flex-col p-3 rounded-xl text-left active:scale-95 transition-all" style={{ background: 'linear-gradient(135deg,#eff6ff 0%,#ffffff 100%)', boxShadow: '0 4px 14px rgba(59,130,246,0.12),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(59,130,246,0.18)' }}>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center mb-2 shadow-sm">
+              <FileText className="w-4 h-4 text-white" />
             </div>
-            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Devis</div>
-            <div className="num text-[13px] font-black text-slate-900 leading-tight">{stats.pendingQuotes}</div>
+            <div className="text-[8px] font-bold text-blue-700/70 mb-0.5 uppercase tracking-wide">Devis</div>
+            <div className="num text-[15px] font-black text-slate-900 leading-tight">{stats.pendingQuotes}</div>
             <div className="text-[8px] text-slate-400 mt-0.5">{stats.pendingQuotes === 0 ? 'Aucun devis' : `${stats.pendingQuotes} en attente`}</div>
           </button>
         </div>
       </div>
 
       {/* ── SANTÉ BUSINESS ── */}
-      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.06)', border: '1px solid rgba(226,232,240,0.8)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-teal-100/50 bg-gradient-to-r from-teal-50/80 to-white">
           <div className="flex items-center gap-1.5">
             <Activity className="w-3.5 h-3.5 text-teal-500" />
             <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Santé business</span>
@@ -1285,9 +1387,39 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
 }
 
 function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav }: any) {
-  const { tenant, currentSite, sites } = useApp();
+  const { tenant, currentSite, sites, setCurrentSite } = useApp();
   const netFlux = stats.cashBalance - stats.sessionExpenses;
 
+  // ── Multi-site overview ────────────────────────────────────────────────
+  type SiteStat = { id: string; name: string; todaySales: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
+  const [multiSiteStats, setMultiSiteStats] = useState<SiteStat[]>([]);
+  const [multiSiteView, setMultiSiteView] = useState<'all' | string>('current');
+  const hasMultiSites = sites.length > 1;
+
+  useEffect(() => {
+    if (!hasMultiSites || !tenant) return;
+    let cancelled = false;
+    (async () => {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const results: SiteStat[] = [];
+      for (const site of sites) {
+        const [{ data: salesData }, { data: sessData }, { data: pmtData }] = await Promise.all([
+          supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
+          supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1),
+          supabase.from('sale_payments').select('amount, cash_session_id').eq('tenant_id', tenant.id).in('cash_session_id', (await supabase.from('cash_sessions').select('id').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open')).data?.map((s: any) => s.id) || []),
+        ]);
+        const salesCount = (salesData || []).length;
+        const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
+        const session = (sessData || [])[0];
+        const openingAmount = session ? Number(session.opening_amount || 0) : 0;
+        const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+        const cashBalance = session ? openingAmount + sessionPayTotal : 0;
+        results.push({ id: site.id, name: site.name, todaySales, salesCount, cashBalance, openingAmount, sessionOpen: !!session });
+      }
+      if (!cancelled) setMultiSiteStats(results);
+    })();
+    return () => { cancelled = true; };
+  }, [hasMultiSites, tenant?.id, sites.length, stats.todaySales]);
   // ── Quick-action modal state ─────────────────────────────────────────────
   type QAModal = 'customer' | 'supplier' | 'stock_in' | 'stock_out' | 'stock_transfer' | null;
   const [qaModal, setQAModal] = useState<QAModal>(null);
@@ -1695,7 +1827,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               <div className="flex items-center justify-between px-4 py-2">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <Receipt className="w-3 h-3 text-white/50" />
+                    <BarChart3 className="w-3 h-3 text-white/50" />
                   </div>
                   <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">CA du mois</span>
                 </div>
@@ -1711,11 +1843,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         <div className="col-span-12 xl:col-span-4 relative">
           {/* Alertes & priorités - intelligent */}
           <div className="xl:absolute xl:inset-0 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-rose-100/50 -mx-5 -mt-5 px-5 pt-4 rounded-t-2xl bg-gradient-to-r from-rose-50 via-orange-50/60 to-white">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center">
-                  <Bell className="w-3.5 h-3.5 text-white" />
-                </div>
+                <Bell className="w-5 h-5 text-rose-500" />
                 <h3 className="text-sm font-bold text-slate-800">Alertes & priorités</h3>
               </div>
               {stats.alerts.length > 0 && (
@@ -1770,16 +1900,75 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         </div>
       </div>
 
+      {/* ══ MULTI-SITE OVERVIEW (only when user has multiple sites) ══ */}
+      {hasMultiSites && multiSiteStats.length > 0 && (
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 overflow-hidden">
+          <div className="flex items-center justify-between -mx-5 -mt-5 px-5 pt-4 pb-3 mb-4 border-b border-brand-100/50 bg-gradient-to-r from-brand-50 via-brand-50/40 to-white rounded-t-2xl">
+            <div className="flex items-center gap-2">
+              <Network className="w-5 h-5 text-brand-600" />
+              <h3 className="text-sm font-bold text-slate-800">Vue multi-magasins</h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 font-bold border border-brand-200/50">{sites.length} sites</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px]">
+              <span className="text-slate-400 font-medium">Total jour:</span>
+              <span className="font-bold text-slate-900 num">{formatFCFA(multiSiteStats.reduce((s, x) => s + x.todaySales, 0))}</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
+            {multiSiteStats.map(site => {
+              const isCurrent = site.id === currentSite?.id;
+              const avgTicket = site.salesCount > 0 ? Math.round(site.todaySales / site.salesCount) : 0;
+              return (
+                <button
+                  key={site.id}
+                  onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
+                  className={`relative p-3 rounded-xl border text-left transition-all duration-200 group ${isCurrent ? 'border-brand-300 bg-brand-50/40 ring-1 ring-brand-200' : 'border-slate-200 bg-white hover:border-brand-200 hover:bg-brand-50/20'}`}
+                >
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${site.sessionOpen ? 'bg-emerald-500 pulse-glow' : 'bg-slate-300'}`} />
+                    <span className="text-xs font-bold text-slate-800">{site.name}</span>
+                    {isCurrent && <span className="ml-auto text-[8px] font-bold text-brand-600 bg-brand-100 px-1.5 py-0.5 rounded shrink-0">Actif</span>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">CA jour</span>
+                      <span className="text-xs font-bold text-slate-900 num">{formatCompactFCFA(site.todaySales)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Tickets</span>
+                      <span className="text-xs font-bold text-slate-700 num">{site.salesCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Ticket moy.</span>
+                      <span className="text-xs font-bold text-slate-700 num">{avgTicket > 0 ? formatCompactFCFA(avgTicket) : '--'}</span>
+                    </div>
+                    <div className="pt-1.5 mt-1 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Caisse</span>
+                        <span className={`text-xs font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermee'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {!isCurrent && (
+                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-white/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[10px] font-bold text-brand-700">Basculer</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ══ ROW 2: Centre de commandes | Vue synthétique | Activité en temps réel ══ */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
 
         {/* Centre de commandes - intelligent */}
         <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
-          <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between -mx-5 -mt-5 px-5 pt-4 pb-3 mb-3 border-b border-cyan-100/50 bg-gradient-to-r from-cyan-50 via-teal-50/60 to-white rounded-t-2xl">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
-                <ShoppingCart className="w-3.5 h-3.5 text-white" />
-              </div>
+              <ShoppingCart className="w-5 h-5 text-teal-600" />
               <h3 className="text-sm font-bold text-slate-800">Centre de commandes</h3>
             </div>
             <button onClick={() => nav('online_orders')} className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-0.5">
@@ -1788,17 +1977,17 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           </div>
           {/* Status pills */}
           <div className="grid grid-cols-3 gap-2 mb-3">
-            <div className="text-center py-2 px-1 rounded-lg bg-teal-50 border border-teal-100">
+            <div className="text-center py-3 px-1 rounded-xl bg-gradient-to-br from-teal-50 to-white border border-teal-100 shadow-[0_4px_12px_rgba(20,184,166,0.12)]">
               <p className="text-lg font-black text-teal-600 num">{stats.webNew}</p>
-              <p className="text-[8px] font-bold text-teal-600 uppercase">Nouvelles</p>
+              <p className="text-[8px] font-bold text-teal-600 uppercase tracking-wide">Nouvelles</p>
             </div>
-            <div className="text-center py-2 px-1 rounded-lg bg-amber-50 border border-amber-100">
+            <div className="text-center py-3 px-1 rounded-xl bg-gradient-to-br from-amber-50 to-white border border-amber-100 shadow-[0_4px_12px_rgba(245,158,11,0.12)]">
               <p className="text-lg font-black text-amber-500 num">{stats.webPrep}</p>
-              <p className="text-[8px] font-bold text-amber-500 uppercase">Préparation</p>
+              <p className="text-[8px] font-bold text-amber-500 uppercase tracking-wide">Préparation</p>
             </div>
-            <div className="text-center py-2 px-1 rounded-lg bg-emerald-50 border border-emerald-100">
+            <div className="text-center py-3 px-1 rounded-xl bg-gradient-to-br from-emerald-50 to-white border border-emerald-100 shadow-[0_4px_12px_rgba(16,185,129,0.12)]">
               <p className="text-lg font-black text-emerald-500 num">{stats.webReady}</p>
-              <p className="text-[8px] font-bold text-emerald-500 uppercase">Prêtes</p>
+              <p className="text-[8px] font-bold text-emerald-500 uppercase tracking-wide">Prêtes</p>
             </div>
           </div>
           {/* Order list with details */}
@@ -1875,11 +2064,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
         {/* Vue synthétique - interactive */}
         <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
-          <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between -mx-5 -mt-5 px-5 pt-4 pb-3 mb-3 border-b border-slate-200/50 bg-gradient-to-r from-slate-100 via-slate-50/60 to-white rounded-t-2xl">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center">
-                <Activity className="w-3.5 h-3.5 text-white" />
-              </div>
+              <Activity className="w-5 h-5 text-slate-600" />
               <h3 className="text-sm font-bold text-slate-800">Vue synthétique</h3>
             </div>
             <span className="text-[10px] font-medium text-slate-400">Aujourd'hui</span>
@@ -1920,11 +2107,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
         {/* Activité en temps réel */}
         <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
-          <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between -mx-5 -mt-5 px-5 pt-4 pb-3 mb-3 border-b border-teal-100/50 bg-gradient-to-r from-teal-50 via-emerald-50/50 to-white rounded-t-2xl">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center">
-                <Clock className="w-3.5 h-3.5 text-white" />
-              </div>
+              <Clock className="w-5 h-5 text-teal-600" />
               <h3 className="text-sm font-bold text-slate-800">Activité en temps réel</h3>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1938,7 +2123,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 sale: { icon: Receipt, bg: 'bg-emerald-50', fg: 'text-emerald-600' },
                 quote: { icon: ClipboardList, bg: 'bg-sky-50', fg: 'text-sky-600' },
                 supplier_order: { icon: Truck, bg: 'bg-orange-50', fg: 'text-orange-600' },
-                payment_received: { icon: Banknote, bg: 'bg-teal-50', fg: 'text-teal-600' },
+                payment_received: { icon: Coins, bg: 'bg-teal-50', fg: 'text-teal-600' },
                 online_order: { icon: Globe, bg: 'bg-cyan-50', fg: 'text-cyan-600' },
                 stock_movement: { icon: RefreshCw, bg: 'bg-slate-100', fg: 'text-slate-600' },
                 return: { icon: RotateCcw, bg: 'bg-rose-50', fg: 'text-rose-500' },

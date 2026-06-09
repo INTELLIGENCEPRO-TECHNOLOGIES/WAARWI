@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, Loader2, Search, X, Eye, Printer, ChevronDown, ChevronUp, Check, TrendingUp, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight } from 'lucide-react';
+import { Clock, Loader2, Search, X, Eye, Printer, Check, TrendingUp, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
@@ -59,8 +59,7 @@ export function CashHistory() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [expandedSales, setExpandedSales] = useState(false);
-  const [expandedControls, setExpandedControls] = useState(false);
+  const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'mouvements' | 'ventes' | 'controle' | null>(null);
 
   const load = async () => {
     if (!tenant || !currentSite) return;
@@ -98,7 +97,7 @@ export function CashHistory() {
   }, [sessions, search, dateFrom, dateTo]);
 
   const openDetail = async (s: SessionRow) => {
-    setDetail(null); setDetailOpen(true); setLoadingDetail(true); setExpandedSales(false);
+    setDetail(null); setDetailOpen(true); setLoadingDetail(true); setDetailExpanded(null);
     const [{ data: salesData }, { data: ctrlData }, { data: regData }, { data: pmtData }, { data: mvData }] = await Promise.all([
       supabase.from('sales').select('id, sale_number, total, created_at, customers(name)').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id).order('created_at'),
       supabase.from('cash_control_lines').select('method_name, theoretical_amount, counted_amount, difference_amount').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id),
@@ -109,7 +108,7 @@ export function CashHistory() {
     const byMethodMap: Record<string, number> = {};
     (pmtData || []).forEach((p: any) => { byMethodMap[p.method_name] = (byMethodMap[p.method_name] || 0) + Number(p.amount); });
     const invoicePayments: InvoicePayment[] = (pmtData || [])
-      .filter((p: any) => p.sales && p.sales.cash_session_id && p.sales.cash_session_id !== s.id)
+      .filter((p: any) => !p.sales || p.sales.cash_session_id !== s.id)
       .map((p: any) => ({
         id: p.id, amount: Number(p.amount), method_name: p.method_name,
         created_at: p.created_at, reference: p.reference || '',
@@ -118,6 +117,16 @@ export function CashHistory() {
         sale_date: p.sales?.created_at || '',
       }))
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const allMovements = (mvData || []).map((m: any) => ({
+      id: m.id, kind: m.kind as CashMovementRow['kind'], amount: Number(m.amount),
+      reason: m.reason || '', note: m.note || '', reference: m.reference || '',
+      method_name: m.method_name || '',
+      customer_name: m.customers?.name || null,
+      created_at: m.created_at,
+    }));
+    const movements = allMovements.filter(m =>
+      !(m.kind === 'income' && m.reason.startsWith('Reglement '))
+    );
     setDetail({
       session: s,
       sales: (salesData || []).map((x: any) => ({ id: x.id, sale_number: x.sale_number, total: Number(x.total), created_at: x.created_at, customer_name: x.customers?.name || null })),
@@ -125,19 +134,14 @@ export function CashHistory() {
       regularizations: regData || [],
       byMethod: Object.entries(byMethodMap).map(([method_name, amount]) => ({ method_name, amount })),
       invoicePayments,
-      movements: (mvData || []).map((m: any) => ({
-        id: m.id, kind: m.kind, amount: Number(m.amount),
-        reason: m.reason || '', note: m.note || '', reference: m.reference || '',
-        method_name: m.method_name || '',
-        customer_name: m.customers?.name || null,
-        created_at: m.created_at,
-      })),
+      movements,
     });
     setLoadingDetail(false);
   };
 
   const printReport = (d: SessionDetail) => {
     const salesTotal = d.sales.reduce((s, x) => s + x.total, 0);
+    const invoicePayTotal = d.invoicePayments.reduce((s, p) => s + p.amount, 0);
     printXReport80({
       tenant: {
         name: tenant?.name || '',
@@ -158,7 +162,7 @@ export function CashHistory() {
       closedAt: d.session.closed_at,
       openingAmount: Number(d.session.opening_amount),
       salesCount: d.sales.length,
-      salesTotal,
+      salesTotal: salesTotal + invoicePayTotal,
       byMethod: d.byMethod,
       movements: d.movements,
       controls: d.controls.map(c => ({
@@ -184,7 +188,7 @@ export function CashHistory() {
   return (
     <div className="space-y-3">
       {/* Premium unified search bar with embedded title + date picker */}
-      <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
             <div className="leading-tight">
@@ -278,10 +282,10 @@ export function CashHistory() {
       {/* Detail modal — fintech ultra compact */}
       <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="Détail de la session" size="md"
         footer={<>
-          <button onClick={() => setDetailOpen(false)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Fermer</button>
+          <button onClick={() => setDetailOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           {detail && (
-            <button onClick={() => printReport(detail)} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition inline-flex items-center gap-1.5 active:scale-95">
-              <Printer className="w-3.5 h-3.5" /> X de caisse
+            <button onClick={() => printReport(detail)} className="btn-icon-primary" title="Imprimer X de caisse">
+              <Printer className="w-4 h-4" />
             </button>
           )}
         </>}
@@ -289,267 +293,302 @@ export function CashHistory() {
         {loadingDetail ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
         ) : detail ? (
-          <div className="space-y-3 count-up">
-            {/* One-line KPI strip */}
-            <div className="grid grid-cols-4 gap-1.5 p-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
-              <div className="text-center">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Session</div>
-                <div className="font-mono text-[11px] font-bold text-brand-700 mt-0.5 truncate">{detail.session.id.slice(0, 8).toUpperCase()}</div>
-              </div>
-              <div className="text-center border-l border-slate-200">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Statut</div>
-                <div className={`text-[11px] font-bold mt-0.5 inline-flex items-center gap-1 ${detail.session.status === 'open' ? 'text-emerald-700' : 'text-slate-700'}`}>
-                  {detail.session.status === 'open' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-glow" />}
-                  {detail.session.status === 'open' ? 'Ouverte' : 'Clôturée'}
-                </div>
-              </div>
-              <div className="text-center border-l border-slate-200">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">FO</div>
-                <div className="text-[11px] font-bold text-slate-800 num mt-0.5 truncate">{formatFCFA(detail.session.opening_amount)}</div>
-              </div>
-              <div className="text-center border-l border-slate-200">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Écart</div>
-                <div className={`text-[11px] font-bold num mt-0.5 truncate ${(detail.session.variance || 0) === 0 ? 'text-emerald-700' : (detail.session.variance || 0) < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                  {detail.session.variance != null ? (detail.session.variance === 0 ? 'OK' : `${detail.session.variance > 0 ? '+' : ''}${formatFCFA(detail.session.variance)}`) : '—'}
-                </div>
-              </div>
-            </div>
-
-            {/* Ouverture / clôture — visual timeline */}
-            <div className="relative p-3 rounded-2xl bg-gradient-to-br from-ink-900 to-slate-800 text-white overflow-hidden">
-              <div className="absolute inset-0 shimmer-bg opacity-30" />
-              <div className="relative flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="text-[9px] font-bold uppercase tracking-[0.15em] text-emerald-400">Ouverture</div>
-                  <div className="text-sm font-bold mt-1 num">{formatDateTime(detail.session.opened_at)}</div>
-                </div>
-                <div className="shrink-0 px-2 text-slate-500">
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-                <div className="flex-1 text-right">
-                  <div className={`text-[9px] font-bold uppercase tracking-[0.15em] ${detail.session.closed_at ? 'text-amber-400' : 'text-slate-500'}`}>Clôture</div>
-                  <div className="text-sm font-bold mt-1 num">{detail.session.closed_at ? formatDateTime(detail.session.closed_at) : 'En cours'}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment methods */}
-            {detail.byMethod.length > 0 && (
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Encaissements par mode</div>
-                <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
-                  {detail.byMethod.map(m => {
-                    const total = detail.byMethod.reduce((s, x) => s + x.amount, 0);
-                    const pct = total > 0 ? (m.amount / total) * 100 : 0;
-                    return (
-                      <div key={m.method_name} className="relative p-2.5">
-                        <div className="absolute inset-0 bg-gradient-to-r from-brand-50/60 to-transparent" style={{ width: `${pct}%` }} />
-                        <div className="relative flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold text-slate-800 truncate">{m.method_name}</span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[10px] font-bold text-slate-400 num">{pct.toFixed(0)}%</span>
-                            <span className="text-xs font-bold num text-slate-900">{formatFCFA(m.amount)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className="p-2.5 bg-gradient-to-r from-brand-50 to-brand-100/50 flex items-center justify-between">
-                    <span className="text-xs font-bold text-brand-800 uppercase tracking-wider">Total CA</span>
-                    <span className="text-sm font-bold text-brand-800 num">{formatFCFA(detail.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Net caisse incluant mouvements */}
-            {detail.movements.length > 0 && (() => {
+          <div className="space-y-2.5 count-up">
+            {/* Compact KPI strip */}
+            {(() => {
               const mvExp = detail.movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
               const mvIn = detail.movements.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
               const mvPre = detail.movements.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
               const salesTotal = detail.sales.reduce((s, x) => s + x.total, 0);
-              const net = salesTotal + mvIn + mvPre - mvExp;
+              const invoicePayTotal = detail.invoicePayments.reduce((s, p) => s + p.amount, 0);
+              const net = salesTotal + invoicePayTotal + mvIn + mvPre - mvExp;
               return (
-                <div className="rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 to-white p-3">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700 mb-2">Net caisse</div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ventes</span>
-                      <span className="text-sm font-bold text-slate-800 num">{formatFCFA(salesTotal)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Entrées</span>
-                      <span className="text-sm font-bold text-emerald-700 num">+{formatFCFA(mvIn + mvPre)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-red-700">Sorties</span>
-                      <span className="text-sm font-bold text-red-700 num">-{formatFCFA(mvExp)}</span>
-                    </div>
-                    <div className="border-t border-brand-200 pt-1.5 flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-brand-800">Net</span>
-                      <span className="text-base font-bold text-brand-900 num">{formatFCFA(net)}</span>
+                <div className="flex items-stretch gap-px rounded-xl overflow-hidden border border-slate-200 bg-slate-200">
+                  <div className="flex-1 bg-white p-2 text-center">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ventes</div>
+                    <div className="text-sm font-bold text-slate-900 num mt-0.5">{detail.sales.length}</div>
+                  </div>
+                  <div className="flex-1 bg-white p-2 text-center">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">CA Total</div>
+                    <div className="text-sm font-bold text-slate-900 num mt-0.5">{formatFCFA(salesTotal + invoicePayTotal)}</div>
+                  </div>
+                  <div className="flex-1 bg-white p-2 text-center">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Net</div>
+                    <div className="text-sm font-bold text-brand-800 num mt-0.5">{formatFCFA(net)}</div>
+                  </div>
+                  <div className="flex-1 bg-white p-2 text-center">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ecart</div>
+                    <div className={`text-sm font-bold num mt-0.5 ${(detail.session.variance || 0) === 0 ? 'text-emerald-700' : (detail.session.variance || 0) < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                      {detail.session.variance != null ? (detail.session.variance === 0 ? 'OK' : `${detail.session.variance > 0 ? '+' : ''}${formatFCFA(detail.session.variance)}`) : '--'}
                     </div>
                   </div>
                 </div>
               );
             })()}
 
-            {/* Cash movements */}
+            {/* Timeline compact */}
+            <div className="relative p-2.5 rounded-xl bg-gradient-to-br from-ink-900 to-slate-800 text-white overflow-hidden">
+              <div className="absolute inset-0 shimmer-bg opacity-30" />
+              <div className="relative flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[8px] font-bold uppercase tracking-[0.15em] text-emerald-400">Ouverture</div>
+                  <div className="text-xs font-bold mt-0.5 num truncate">{formatDateTime(detail.session.opened_at)}</div>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <div className="flex-1 min-w-0 text-right">
+                  <div className={`text-[8px] font-bold uppercase tracking-[0.15em] ${detail.session.closed_at ? 'text-amber-400' : 'text-slate-500'}`}>Cloture</div>
+                  <div className="text-xs font-bold mt-0.5 num truncate">{detail.session.closed_at ? formatDateTime(detail.session.closed_at) : 'En cours'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Movement chips inline */}
             {detail.movements.length > 0 && (
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Mouvements de caisse ({detail.movements.length})
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
-                  {detail.movements.map(m => {
-                    const isExp = m.kind === 'expense';
-                    const isPrepay = m.kind === 'customer_prepayment';
-                    const label = isExp ? 'Dépense' : isPrepay ? 'Acompte client' : 'Entrée';
-                    return (
-                      <div key={m.id} className="p-2.5 flex items-start gap-2">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${isExp ? 'bg-red-50 text-red-600' : isPrepay ? 'bg-brand-50 text-brand-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                          {isExp ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-bold text-slate-900 break-words">
-                            {label}{isPrepay && m.customer_name ? ` · ${m.customer_name}` : ''}
-                            {m.reason ? ` · ${m.reason}` : ''}
-                          </div>
-                          <div className="text-[10px] text-slate-500 break-words">
-                            {m.method_name || '—'} · {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                            {m.reference ? ` · ${m.reference}` : ''}
-                          </div>
-                        </div>
-                        <div className={`text-sm font-bold num shrink-0 whitespace-nowrap ${isExp ? 'text-red-700' : 'text-emerald-700'}`}>
-                          {isExp ? '-' : '+'}{formatFCFA(m.amount)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Invoice payments (non-POS, facture encaissée sur caisse du jour) */}
-            {detail.invoicePayments.length > 0 && (
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Règlements de factures ({detail.invoicePayments.length})
-                </div>
-                <div className="rounded-2xl border border-sky-200 bg-sky-50/30 overflow-hidden divide-y divide-sky-100">
-                  {detail.invoicePayments.map(p => (
-                    <div key={p.id} className="p-2.5 flex items-start gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 mt-0.5">
-                        <Wallet className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold text-slate-900 break-words">
-                          Règlement facture <span className="font-mono">{p.sale_number}</span>
-                          {p.customer_name && <> · <span className="text-slate-700">{p.customer_name}</span></>}
-                        </div>
-                        <div className="text-[10px] text-slate-500 break-words">
-                          Facture du {p.sale_date ? new Date(p.sale_date).toLocaleDateString('fr-FR') : '—'} · {p.method_name} · {new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                      <div className="text-sm font-bold text-emerald-700 num shrink-0 whitespace-nowrap">+{formatFCFA(p.amount)}</div>
-                    </div>
-                  ))}
-                  <div className="p-2.5 bg-sky-100/50 flex items-center justify-between">
-                    <span className="text-xs font-bold text-sky-800 uppercase tracking-wider">Total règlements factures</span>
-                    <span className="text-sm font-bold text-sky-800 num">+{formatFCFA(detail.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Control lines — collapsible */}
-            {detail.controls.length > 0 && (
-              <div>
-                <button onClick={() => setExpandedControls(v => !v)} className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-brand-300 transition">
-                  {expandedControls ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
-                  <span className="text-xs font-bold text-slate-800">Contrôle de caisse</span>
-                  <span className="ml-auto text-[10px] font-bold text-slate-400 num">{detail.controls.length}</span>
-                </button>
-                {expandedControls && (
-                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 count-up">
-                    {detail.controls.map((c, i) => {
-                      const diff = Number(c.difference_amount);
-                      const balanced = diff === 0;
-                      return (
-                        <div key={i} className={`rounded-xl border p-2.5 ${balanced ? 'border-slate-200 bg-white' : diff < 0 ? 'border-red-200 bg-red-50/40' : 'border-amber-200 bg-amber-50/40'}`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-xs font-bold text-slate-800 truncate">{c.method_name}</div>
-                            <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold num shrink-0 ${balanced ? 'text-emerald-700' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                              {balanced ? <><Check className="w-3 h-3" /> OK</> : <>{diff > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(diff))}</>}
-                            </span>
-                          </div>
-                          <div className="mt-1.5 flex items-center justify-between text-[10px]">
-                            <div><span className="text-slate-400">Th.</span> <span className="num font-semibold text-slate-700">{formatFCFA(c.theoretical_amount)}</span></div>
-                            <div><span className="text-slate-400">Cpt.</span> <span className="num font-semibold text-slate-800">{formatFCFA(c.counted_amount)}</span></div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {detail.movements.slice(0, 4).map(m => {
+                  const isExp = m.kind === 'expense';
+                  return (
+                    <span key={m.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium ${isExp ? 'bg-red-50/60 text-red-600' : 'bg-emerald-50/60 text-emerald-600'}`}>
+                      {isExp ? '-' : '+'}{formatFCFA(m.amount)}
+                      <span className="text-[9px] opacity-70 truncate max-w-[60px]">{m.reason || (isExp ? 'Sortie' : 'Entree')}</span>
+                    </span>
+                  );
+                })}
+                {detail.movements.length > 4 && (
+                  <span className="text-[10px] text-slate-400 font-medium">+{detail.movements.length - 4}</span>
                 )}
               </div>
             )}
 
-            {/* Regularizations */}
-            {detail.regularizations.length > 0 && (
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Régularisations ({detail.regularizations.length})</div>
-                <div className="space-y-1">
-                  {detail.regularizations.map((r, i) => (
-                    <div key={i} className={`flex items-center justify-between p-2 rounded-xl text-xs ${r.reg_type === 'manquant' ? 'bg-red-50 border border-red-100' : r.reg_type === 'excedent' ? 'bg-amber-50 border border-amber-100' : 'bg-slate-50 border border-slate-100'}`}>
-                      <div className="min-w-0 truncate">
-                        <span className="font-semibold capitalize">{r.reg_type}</span>
-                        {r.reason && <span className="text-slate-600 ml-2">— {r.reason}</span>}
+            {/* Collapsible accordion sections */}
+            <div className="space-y-1.5">
+              {/* Encaissements par mode */}
+              {detail.byMethod.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setDetailExpanded(detailExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'modes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
+                        <CreditCard className="w-3.5 h-3.5" />
                       </div>
-                      <span className="font-bold num shrink-0 ml-2">{formatFCFA(r.amount)}</span>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Encaissements par mode</div>
+                        <div className="text-[10px] text-slate-500">{detail.byMethod.length} mode{detail.byMethod.length > 1 ? 's' : ''}</div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Sales — collapsible */}
-            <div>
-              <button onClick={() => setExpandedSales(v => !v)} className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-brand-300 transition">
-                {expandedSales ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
-                <span className="text-xs font-bold text-slate-800">Ventes de la session</span>
-                <span className="ml-auto text-[10px] font-bold text-slate-400 num">{detail.sales.length}</span>
-              </button>
-              {expandedSales && (
-                <div className="mt-2 space-y-1 count-up">
-                  {detail.sales.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-slate-500">Aucune vente.</div>
-                  ) : (
-                    <>
-                      {detail.sales.map(s => (
-                        <div key={s.id} className="p-2 rounded-xl bg-white border border-slate-200 flex items-center gap-2 hover:border-brand-300 transition">
-                          <div className="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
-                            <Wallet className="w-3.5 h-3.5 text-brand-700" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-[10px] font-bold text-brand-700">{s.sale_number}</span>
-                              <span className="text-[10px] text-slate-500 truncate">{s.customer_name || 'Comptoir'}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-brand-800 num">{formatFCFA(detail.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'modes' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {detailExpanded === 'modes' && (
+                    <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {detail.byMethod.map(m => {
+                        const total = detail.byMethod.reduce((s, x) => s + x.amount, 0);
+                        const pct = total > 0 ? (m.amount / total) * 100 : 0;
+                        return (
+                          <div key={m.method_name} className="relative flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 text-xs overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-r from-brand-50/60 to-transparent" style={{ width: `${pct}%` }} />
+                            <span className="relative font-medium text-slate-700">{m.method_name}</span>
+                            <div className="relative flex items-center gap-2 shrink-0">
+                              <span className="text-[10px] font-bold text-slate-400 num">{pct.toFixed(0)}%</span>
+                              <span className="font-bold text-slate-900 num">{formatFCFA(m.amount)}</span>
                             </div>
-                            <div className="text-[9px] text-slate-400 num leading-none mt-0.5">{formatDateTime(s.created_at)}</div>
                           </div>
-                          <div className="num font-bold text-xs text-slate-900 shrink-0">{formatFCFA(s.total)}</div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Reglements factures */}
+              {detail.invoicePayments.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'reglements' ? 'border-sky-300 bg-sky-50/40 order-first' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setDetailExpanded(detailExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'reglements' ? 'bg-sky-200 text-sky-800' : 'bg-sky-100 text-sky-700'}`}>
+                        <Wallet className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Reglements factures</div>
+                        <div className="text-[10px] text-slate-500">{detail.invoicePayments.length} reglement{detail.invoicePayments.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-sky-800 num">+{formatFCFA(detail.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'reglements' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {detailExpanded === 'reglements' && (
+                    <div className="px-3 pb-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {detail.invoicePayments.map(p => (
+                        <div key={p.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-sky-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900">
+                              <span className="font-mono">{p.sale_number}</span>
+                              {p.customer_name && <span className="text-slate-600 font-medium ml-1">- {p.customer_name}</span>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                              <span>{new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} {new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{p.method_name}</span>
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-emerald-700 num shrink-0">+{formatFCFA(p.amount)}</span>
                         </div>
                       ))}
-                      <div className="p-2 rounded-xl bg-gradient-to-r from-brand-50 to-brand-100/50 border border-brand-200 flex items-center justify-between">
-                        <span className="text-xs font-bold text-brand-800">{detail.sales.length} vente{detail.sales.length !== 1 ? 's' : ''}</span>
-                        <span className="text-xs font-bold text-brand-800 num">{formatFCFA(detail.sales.reduce((s, x) => s + x.total, 0))}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Mouvements de caisse */}
+              {detail.movements.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'mouvements' ? 'border-emerald-300 bg-emerald-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setDetailExpanded(detailExpanded === 'mouvements' ? null : 'mouvements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'mouvements' ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <ArrowDownRight className="w-3.5 h-3.5" />
                       </div>
-                    </>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Mouvements de caisse</div>
+                        <div className="text-[10px] text-slate-500">{detail.movements.length} mouvement{detail.movements.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'mouvements' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {detailExpanded === 'mouvements' && (
+                    <div className="px-3 pb-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {detail.movements.map(m => {
+                        const isExp = m.kind === 'expense';
+                        const isPrepay = m.kind === 'customer_prepayment';
+                        return (
+                          <div key={m.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-slate-100">
+                            <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${isExp ? 'bg-red-50 text-red-600' : isPrepay ? 'bg-brand-50 text-brand-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                              {isExp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-bold text-slate-900 break-words">
+                                {isExp ? 'Depense' : isPrepay ? 'Acompte client' : 'Entree'}
+                                {isPrepay && m.customer_name ? ` · ${m.customer_name}` : ''}
+                                {m.reason ? ` · ${m.reason}` : ''}
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                {m.method_name || '--'} · {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                            <span className={`text-xs font-bold num shrink-0 ${isExp ? 'text-red-700' : 'text-emerald-700'}`}>
+                              {isExp ? '-' : '+'}{formatFCFA(m.amount)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Ventes */}
+              <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'ventes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                <button onClick={() => setDetailExpanded(detailExpanded === 'ventes' ? null : 'ventes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'ventes' ? 'bg-brand-200 text-brand-800' : 'bg-slate-100 text-slate-700'}`}>
+                      <Package className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-800">Ventes de la session</div>
+                      <div className="text-[10px] text-slate-500">{detail.sales.length} vente{detail.sales.length > 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-slate-800 num">{formatFCFA(detail.sales.reduce((s, x) => s + x.total, 0))}</span>
+                    <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'ventes' ? 'rotate-90' : ''}`} />
+                  </div>
+                </button>
+                {detailExpanded === 'ventes' && (
+                  <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                    {detail.sales.length === 0 ? (
+                      <div className="py-3 text-center text-xs text-slate-500">Aucune vente.</div>
+                    ) : detail.sales.map(s => (
+                      <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-100 hover:border-brand-200 transition">
+                        <div className="w-6 h-6 rounded-md bg-brand-50 flex items-center justify-center shrink-0">
+                          <Wallet className="w-3 h-3 text-brand-700" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[10px] font-bold text-brand-700">{s.sale_number}</span>
+                            <span className="text-[10px] text-slate-500 truncate">{s.customer_name || 'Comptoir'}</span>
+                          </div>
+                          <div className="text-[9px] text-slate-400 num leading-none mt-0.5">{formatDateTime(s.created_at)}</div>
+                        </div>
+                        <div className="num font-bold text-xs text-slate-900 shrink-0">{formatFCFA(s.total)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Controle de caisse */}
+              {detail.controls.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'controle' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setDetailExpanded(detailExpanded === 'controle' ? null : 'controle')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'controle' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
+                        <Check className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Controle de caisse</div>
+                        <div className="text-[10px] text-slate-500">{detail.controls.length} methode{detail.controls.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'controle' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {detailExpanded === 'controle' && (
+                    <div className="px-3 pb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {detail.controls.map((c, i) => {
+                          const diff = Number(c.difference_amount);
+                          const balanced = diff === 0;
+                          return (
+                            <div key={i} className={`rounded-lg border p-2.5 ${balanced ? 'border-slate-100 bg-white' : diff < 0 ? 'border-red-100 bg-red-50/40' : 'border-amber-100 bg-amber-50/40'}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-xs font-bold text-slate-800 truncate">{c.method_name}</div>
+                                <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold num shrink-0 ${balanced ? 'text-emerald-700' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                                  {balanced ? <><Check className="w-3 h-3" /> OK</> : <>{diff > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(diff))}</>}
+                                </span>
+                              </div>
+                              <div className="mt-1.5 flex items-center justify-between text-[10px]">
+                                <div><span className="text-slate-400">Th.</span> <span className="num font-semibold text-slate-700">{formatFCFA(c.theoretical_amount)}</span></div>
+                                <div><span className="text-slate-400">Cpt.</span> <span className="num font-semibold text-slate-800">{formatFCFA(c.counted_amount)}</span></div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
             </div>
+
+            {/* Regularizations inline if any */}
+            {detail.regularizations.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Regularisations ({detail.regularizations.length})</div>
+                {detail.regularizations.map((r, i) => (
+                  <div key={i} className={`flex items-center justify-between p-2 rounded-lg text-xs ${r.reg_type === 'manquant' ? 'bg-red-50 border border-red-100' : r.reg_type === 'excedent' ? 'bg-amber-50 border border-amber-100' : 'bg-slate-50 border border-slate-100'}`}>
+                    <div className="min-w-0 truncate">
+                      <span className="font-semibold capitalize">{r.reg_type}</span>
+                      {r.reason && <span className="text-slate-600 ml-2">-- {r.reason}</span>}
+                    </div>
+                    <span className="font-bold num shrink-0 ml-2">{formatFCFA(r.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Notes */}
             {(detail.session.opening_note || detail.session.closing_note) && (
@@ -562,7 +601,7 @@ export function CashHistory() {
                 )}
                 {detail.session.closing_note && (
                   <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Note clôture</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Note cloture</div>
                     <div className="text-slate-700">{detail.session.closing_note}</div>
                   </div>
                 )}

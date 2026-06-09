@@ -72,6 +72,13 @@ const ROUTE_MODULE: Record<string, string> = {
 };
 
 const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
+  dashboard: 'access_dashboard',
+  pos: 'access_pos',
+  articles: 'access_articles',
+  master_catalog: 'access_master_catalog',
+  billing: 'access_billing',
+  tiers: 'access_tiers',
+  reports: 'access_reports',
   sales: 'view_sales_history',
   cash_history: 'view_cash_sessions',
   stock: 'view_stock_levels',
@@ -112,9 +119,16 @@ function Inner() {
     if (!tenant && isSuperAdmin) { setRoute('platform_admin'); return; }
     if (isSuperAdmin) return;
     const mod = ROUTE_MODULE[route];
-    if (mod && !enabled.includes(mod)) { setRoute('dashboard'); return; }
+    if (mod && !enabled.includes(mod)) { setRoute('pos'); return; }
     const perm = ROUTE_PERMISSION[route];
-    if (perm && !can(perm)) setRoute('dashboard');
+    if (perm && !can(perm)) {
+      const fallbackRoutes: Route[] = ['pos', 'dashboard', 'articles', 'billing', 'tiers', 'sales'];
+      const fallback = fallbackRoutes.find(r => {
+        const rp = ROUTE_PERMISSION[r];
+        return !rp || can(rp as any);
+      }) || 'pos';
+      if (route !== fallback) setRoute(fallback);
+    }
   }, [tenant, isSuperAdmin, route, enabled.join(','), can]);
 
   if (loading) {

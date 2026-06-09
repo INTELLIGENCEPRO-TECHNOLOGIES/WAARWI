@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowUpRight, Ban, Building2, Check, CircleDollarSign, Clock,
   CreditCard as Edit2, Gauge, Layers, LineChart, Loader2, Mail, MessageSquare, Pause, Plus,
-  Power, Search, Send, Shield, Sparkles, Trash2, TrendingUp, Users, Zap, X,
+  Power, Search, Send, Shield, RotateCcw, Trash2, TrendingUp, Users, Zap, X,
   Wrench as Wrench_, Store as Store_, ShoppingBag as ShoppingBag_, Shirt as Shirt_, Cpu as Cpu_,
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
@@ -233,7 +233,7 @@ function KpiCard({ icon: Icon, label, value, sub, color }: any) {
 function EventRow({ ev }: { ev: any }) {
   const icons: Record<string, any> = {
     'tenant.suspend': Ban, 'tenant.reactivate': Power, 'tenant.update': Edit2,
-    'subscription.create': Sparkles, 'subscription.cancel': X,
+    'subscription.create': Plus, 'subscription.cancel': X,
     'plan.upsert': Layers, 'plan.delete': Trash2,
     'message.create': MessageSquare, 'message.delete': X,
   };
@@ -460,13 +460,13 @@ function TenantsSection() {
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-red-900">Supprimer definitivement</h3>
+                <h3 className="text-lg font-bold text-red-900">Supprimer définitivement</h3>
                 <p className="text-sm text-red-700">Cette action est irreversible !</p>
               </div>
             </div>
 
             <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
-              <p className="text-sm text-red-800 font-semibold">Toutes les donnees suivantes seront supprimees :</p>
+              <p className="text-sm text-red-800 font-semibold">Toutes les données suivantes seront supprimées :</p>
               <ul className="text-xs text-red-700 space-y-1 ml-4 list-disc">
                 <li>Tous les articles, categories et compatibilites</li>
                 <li>Toutes les ventes, factures, devis et avoirs</li>
@@ -515,7 +515,7 @@ function TenantsSection() {
                 className="px-4 py-2 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
               >
                 {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                Supprimer definitivement
+                Supprimer définitivement
               </button>
             </div>
           </div>
@@ -544,11 +544,11 @@ const ACTIVITY_ICONS: Record<string, any> = {
   alimentaire: ShoppingBag_,
   electromenager: Cpu_,
   textile: Shirt_,
-  cosmetique: Sparkles,
+  cosmetique: ShoppingBag_,
   librairie: BookOpen_,
   mercerie: Package_,
   quincaillerie: Wrench_,
-  services: Sparkles,
+  services: Layers,
   generic: Store_,
 };
 
@@ -622,7 +622,7 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
         </div>
         {form.business_activity_type_id || form.business_type === 'auto_parts' ? (
           <div className="mt-2 flex items-start gap-2 text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-2.5">
-            <Sparkles className="w-4 h-4 shrink-0 mt-px text-amber-600" />
+            <Info_ className="w-4 h-4 shrink-0 mt-px text-amber-600" />
             <span>Le tenant pourra importer depuis le catalogue maître correspondant. Les articles ne sont copiés que sur action du tenant.</span>
           </div>
         ) : (
@@ -857,7 +857,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                           <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
                           <div>
                             <div className="text-sm font-bold text-red-900">Zone de danger</div>
-                            <div className="text-xs text-red-700">Supprimer definitivement ce tenant et toutes ses donnees.</div>
+                            <div className="text-xs text-red-700">Supprimer définitivement ce tenant et toutes ses données.</div>
                           </div>
                         </div>
                         <button
@@ -1260,7 +1260,7 @@ function MessagesSection() {
       </Modal>
 
       {preview && (
-        <Modal open onClose={() => setPreview(null)} title="Prévisualisation" size="sm" footer={<button onClick={() => setPreview(null)} className="btn-secondary">Fermer</button>}>
+        <Modal open onClose={() => setPreview(null)} title="Prévisualisation" size="sm" footer={<button onClick={() => setPreview(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
           <MessagePreview m={preview} />
         </Modal>
       )}
@@ -1535,7 +1535,7 @@ function LoginConfigSection() {
                     onClick={useAllDefaults}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200 transition-colors"
                   >
-                    <Sparkles className="w-3 h-3" /> Tout rétablir
+                    <RotateCcw className="w-3 h-3" /> Tout rétablir
                   </button>
                   <button
                     onClick={addModule}
