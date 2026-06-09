@@ -466,7 +466,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         alerts.push({
           id: 'no-session',
           severity: 'warning',
-          title: 'Session caisse fermee',
+          title: 'Session caisse fermée',
           detail: 'Aucune session de caisse n\'est ouverte',
           time: null,
           route: 'pos',
@@ -916,7 +916,7 @@ function MobileDashboard({
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-[8px] text-slate-400 font-semibold">Caisse</span>
-                      <span className={`text-[9px] font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermee'}</span>
+                      <span className={`text-[9px] font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
                     </div>
                   </div>
                 </button>
@@ -1945,7 +1945,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                     <div className="pt-1.5 mt-1 border-t border-slate-100">
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Caisse</span>
-                        <span className={`text-xs font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermee'}</span>
+                        <span className={`text-xs font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
                       </div>
                     </div>
                   </div>
