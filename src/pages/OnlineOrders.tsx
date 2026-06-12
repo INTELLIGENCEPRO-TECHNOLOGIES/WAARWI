@@ -46,7 +46,7 @@ const STATUS_FLOW: OrderStatus[] = ['nouvelle', 'confirmee', 'en_preparation', '
 const STATUS_ORDER: OrderStatus[] = ['nouvelle', 'confirmee', 'en_preparation', 'prete', 'livree', 'annulee'];
 
 export function OnlineOrders() {
-  const { tenant } = useApp();
+  const { tenant, dataTick } = useApp();
   const { success, error } = useToast();
 
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
@@ -75,6 +75,7 @@ export function OnlineOrders() {
   }, [tenant, error]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (dataTick > 0) load(true); }, [dataTick]);
 
   const [flashList, setFlashList] = useState(false);
   useEffect(() => {

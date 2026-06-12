@@ -733,7 +733,7 @@ function POSLandingResume({
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite, profile, setPosCart, posCartOpen } = useApp();
+  const { tenant, currentSite, profile, setPosCart, posCartOpen, dataTick } = useApp();
   const { can } = usePermissions();
   const tenantForPrint: PrintTenant = tenant ? {
     name: tenant.name, legal_name: (tenant as any).legal_name,
@@ -1016,6 +1016,22 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   }, [tenant?.id, currentSite?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: silently refresh stock + customers when another user makes changes
+  useEffect(() => {
+    if (dataTick === 0 || !tenant || !currentSite) return;
+    (async () => {
+      const [{ data: stk }, { data: cust }] = await Promise.all([
+        supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
+        supabase.from('customers').select('*').eq('tenant_id', tenant.id).order('name'),
+      ]);
+      if (stk) {
+        const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
+        setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.get(a.id) || 0 })));
+      }
+      if (cust) setCustomers(cust);
+    })();
+  }, [dataTick]);
 
   // Force-skip resume screen when coming from Dashboard "Ventes" button
   useEffect(() => {
@@ -2868,7 +2884,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   const isExp = m.kind === 'expense';
                   return (
                     <span key={i} className={`hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium ${isExp ? 'bg-red-50/60 text-red-600' : 'bg-emerald-50/60 text-emerald-600'}`}>
-                      {m.reason || (isExp ? 'Sortie' : 'Entree')}
+                      {m.reason || (isExp ? 'Sortie' : 'Entrée')}
                     </span>
                   );
                 })}

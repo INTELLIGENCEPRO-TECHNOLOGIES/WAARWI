@@ -39,6 +39,26 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action as string;
 
+    // Public action: auto-approve by token (any authenticated user can call)
+    if (action === "auto_approve_by_token") {
+      const { token } = body;
+      if (!token) return json({ error: "token requis" }, 400);
+      const { data: result, error: rpcErr } = await admin.rpc("auto_approve_tenant_by_token", { p_token: token });
+      if (rpcErr) return json({ error: rpcErr.message }, 400);
+      if (!result?.success) return json({ error: result?.error || "Echec" }, 400);
+      // Send approval email to the tenant
+      const { data: approvedTenant } = await admin.from("tenants").select("id").eq("name", result.tenant_name).eq("email", result.tenant_email).maybeSingle();
+      if (approvedTenant) {
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+        fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "approval", tenant_id: approvedTenant.id }),
+        }).catch(() => {});
+      }
+      return json({ success: true, tenant_name: result.tenant_name });
+    }
+
     const logEvent = async (a: string, tenantId: string | null, payload: Record<string, unknown> = {}) => {
       await admin.from("platform_events").insert({
         actor_id: caller.id,
@@ -396,6 +416,33 @@ Deno.serve(async (req: Request) => {
         .order("created_at", { ascending: false })
         .limit(limit || 100);
       return json({ events: data || [] });
+    }
+
+    if (action === "tenant_activity_overview") {
+      const { data: tenants } = await admin.from("tenants")
+        .select("id, name, plan, created_at, last_active_at")
+        .eq("approval_status", "approved")
+        .order("created_at", { ascending: false });
+
+      const activity = [];
+      for (const t of (tenants || [])) {
+        const [salesRes, articlesRes, usersRes] = await Promise.all([
+          admin.from("sales").select("id", { count: "exact", head: true }).eq("tenant_id", t.id),
+          admin.from("articles").select("id", { count: "exact", head: true }).eq("tenant_id", t.id),
+          admin.from("profiles").select("id", { count: "exact", head: true }).eq("tenant_id", t.id),
+        ]);
+        activity.push({
+          tenant_id: t.id,
+          tenant_name: t.name,
+          plan: t.plan || "starter",
+          last_active_at: t.last_active_at || null,
+          total_sales: salesRes.count || 0,
+          total_articles: articlesRes.count || 0,
+          total_users: usersRes.count || 0,
+          created_at: t.created_at,
+        });
+      }
+      return json({ activity });
     }
 
     // ============ LOGIN CONFIG ============

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { usePermissions, type PermissionKey } from './lib/permissions';
 import { ToastProvider } from './context/ToastContext';
@@ -58,6 +58,86 @@ function getPublicOrderToken(): string | null {
 function getPublicInvoiceToken(): string | null {
   const m = window.location.pathname.match(/^\/inv\/([A-Za-z0-9]+)/);
   return m ? m[1] : null;
+}
+
+function getApproveToken(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('approve_token');
+}
+
+function ApproveTokenPage({ token }: { token: string }) {
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [message, setMessage] = useState('');
+  const ran = useRef(false);
+
+  useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+    (async () => {
+      try {
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'auto_approve_by_token', token }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setStatus('success');
+          setMessage(data.tenant_name ? `Le tenant "${data.tenant_name}" a ete approuve avec succes.` : 'Tenant approuve avec succes.');
+        } else {
+          setStatus('error');
+          setMessage(data.error || 'Ce lien est invalide ou a deja ete utilise.');
+        }
+      } catch {
+        setStatus('error');
+        setMessage('Erreur de connexion au serveur.');
+      }
+    })();
+  }, [token]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <span className="text-2xl font-extrabold tracking-[0.2em] text-slate-800">WAARWI</span>
+        </div>
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-premium p-8 text-center">
+          {status === 'loading' && (
+            <div className="space-y-4">
+              <Loader2 className="w-10 h-10 animate-spin text-brand-700 mx-auto" />
+              <p className="text-slate-600 font-medium">Approbation en cours...</p>
+            </div>
+          )}
+          {status === 'success' && (
+            <div className="space-y-4">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                <CheckCircle className="w-9 h-9 text-emerald-600" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900">Tenant approuve !</h2>
+              <p className="text-slate-600 text-sm">{message}</p>
+              <p className="text-xs text-slate-400">Un email de bienvenue a ete envoye au tenant.</p>
+              <a href="/" className="inline-block mt-4 px-6 py-2.5 rounded-xl bg-brand-700 text-white font-semibold text-sm hover:bg-brand-800 transition-colors">
+                Acceder a la plateforme
+              </a>
+            </div>
+          )}
+          {status === 'error' && (
+            <div className="space-y-4">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+                <XCircle className="w-9 h-9 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900">Approbation impossible</h2>
+              <p className="text-slate-600 text-sm">{message}</p>
+              <a href="/" className="inline-block mt-4 px-6 py-2.5 rounded-xl bg-slate-700 text-white font-semibold text-sm hover:bg-slate-800 transition-colors">
+                Retour a l'accueil
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const PublicSupplierOrder = lazyWithRetry(() => import('./pages/PublicSupplierOrder').then(m => ({ default: m.PublicSupplierOrder })));
@@ -202,6 +282,11 @@ export default function App() {
   const shopRoute = getShopRoute();
   const poToken = getPublicOrderToken();
   const invToken = getPublicInvoiceToken();
+  const approveToken = getApproveToken();
+
+  if (approveToken) {
+    return <ApproveTokenPage token={approveToken} />;
+  }
 
   if (poToken) {
     return (

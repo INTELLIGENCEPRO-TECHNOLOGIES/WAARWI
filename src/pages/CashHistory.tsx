@@ -49,7 +49,7 @@ type SessionDetail = {
 };
 
 export function CashHistory() {
-  const { tenant, currentSite, profile } = useApp();
+  const { tenant, currentSite, profile, dataTick } = useApp();
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -61,9 +61,9 @@ export function CashHistory() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'mouvements' | 'ventes' | 'controle' | null>(null);
 
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!tenant || !currentSite) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const { data } = await supabase
       .from('cash_sessions')
       .select('*')
@@ -72,10 +72,11 @@ export function CashHistory() {
       .order('opened_at', { ascending: false })
       .limit(200);
     setSessions(data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => { load(); }, [tenant?.id, currentSite?.id]);
+  useEffect(() => { if (dataTick > 0) load(true); }, [dataTick]);
 
   const filtered = useMemo(() => {
     let r = sessions;
@@ -350,7 +351,7 @@ export function CashHistory() {
                   return (
                     <span key={m.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium ${isExp ? 'bg-red-50/60 text-red-600' : 'bg-emerald-50/60 text-emerald-600'}`}>
                       {isExp ? '-' : '+'}{formatFCFA(m.amount)}
-                      <span className="text-[9px] opacity-70 truncate max-w-[60px]">{m.reason || (isExp ? 'Sortie' : 'Entree')}</span>
+                      <span className="text-[9px] opacity-70 truncate max-w-[60px]">{m.reason || (isExp ? 'Sortie' : 'Entrée')}</span>
                     </span>
                   );
                 })}
@@ -470,7 +471,7 @@ export function CashHistory() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="text-xs font-bold text-slate-900 break-words">
-                                {isExp ? 'Depense' : isPrepay ? 'Acompte client' : 'Entree'}
+                                {isExp ? 'Depense' : isPrepay ? 'Acompte client' : 'Entrée'}
                                 {isPrepay && m.customer_name ? ` · ${m.customer_name}` : ''}
                                 {m.reason ? ` · ${m.reason}` : ''}
                               </div>

@@ -101,6 +101,7 @@ export function SupplierOrders() {
   };
 
   useEffect(() => { load(); }, [tenant?.id, currentSite?.id]);
+  useEffect(() => { if (dataTick > 0) load(true); }, [dataTick]);
 
   useEffect(() => {
     const ctx = consumeNavContext();

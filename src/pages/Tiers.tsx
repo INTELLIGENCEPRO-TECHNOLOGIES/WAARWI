@@ -30,7 +30,7 @@ type CustomerOptionKey = 'info' | 'payment' | 'docs' | 'pricing' | null;
 type SupplierOptionKey = 'info' | 'payment' | 'docs' | 'articles' | null;
 
 export function Tiers() {
-  const { tenant, currentSite, sites, profile } = useApp();
+  const { tenant, currentSite, sites, profile, dataTick } = useApp();
   const { success, error } = useToast();
   const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
@@ -70,9 +70,9 @@ export function Tiers() {
   const [custView, setCustView] = useState<{ c: Customer; key: CustomerOptionKey } | null>(null);
   const [supView, setSupView] = useState<{ s: Supplier; key: SupplierOptionKey } | null>(null);
 
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!tenant) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     let custQuery = supabase.from('customers').select('*').eq('tenant_id', tenant.id).order('name');
     if (!sharedCustomers && currentSite) {
       custQuery = custQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
@@ -118,9 +118,10 @@ export function Tiers() {
     Object.keys(sm).forEach(k => { sm[k].due = Math.max(0, sm[k].total - sm[k].paid); });
     setSupDueMap(sm);
 
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
   useEffect(() => { load(); }, [tenant?.id, currentSite?.id, sharedCustomers, sharedSuppliers]);
+  useEffect(() => { if (dataTick > 0) load(true); }, [dataTick]);
 
   const [flashTarget, setFlashTarget] = useState<'customers' | 'suppliers' | null>(null);
   useEffect(() => {

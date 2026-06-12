@@ -1094,7 +1094,7 @@ function StockListEditView({
           const { error: e } = await supabase.rpc('adjust_stock', {
             p_article_id: entry.article_id, p_site_id: currentSite.id,
             p_quantity: signedQty, p_movement_type: type,
-            p_note: entry.note || (listEditMode === 'in' ? 'Entree stock (masse)' : 'Sortie stock (masse)'),
+            p_note: entry.note || (listEditMode === 'in' ? 'Entrée stock (masse)' : 'Sortie stock (masse)'),
           });
           if (e) throw e;
         }
@@ -1118,7 +1118,7 @@ function StockListEditView({
             onClick={() => { setListEditMode('in'); setListEdits(new Map()); }}
             className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'in' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
           >
-            <ArrowDownCircle className="w-3.5 h-3.5 inline mr-1" />Entree
+            <ArrowDownCircle className="w-3.5 h-3.5 inline mr-1" />Entrée
           </button>
           <button
             onClick={() => { setListEditMode('out'); setListEdits(new Map()); }}

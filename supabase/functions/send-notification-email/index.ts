@@ -166,6 +166,68 @@ function rejectionEmail(
   return emailLayout(content, year);
 }
 
+function newSignupAdminEmail(
+  tenantName: string,
+  tenantEmail: string,
+  businessType: string,
+  approveUrl: string,
+  platformUrl: string,
+  year: number
+) {
+  const content = `
+    <h1 style="margin:0 0 20px;color:#0f172a;font-size:22px;font-weight:800;">
+      Nouvelle inscription !
+    </h1>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.7;">
+      Un nouveau tenant vient de s'inscrire sur la plateforme WAARWI et attend votre validation.
+    </p>
+
+    <!-- Tenant info box -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f9ff;border-radius:12px;border:1px solid #bae6fd;margin:24px 0;">
+      <tr><td style="padding:20px 24px;">
+        <p style="margin:0 0 10px;color:#0369a1;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
+          D\u00e9tails du tenant
+        </p>
+        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
+          <strong>Entreprise :</strong> ${tenantName}
+        </p>
+        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
+          <strong>Email :</strong> ${tenantEmail}
+        </p>
+        <p style="margin:0;color:#334155;font-size:14px;">
+          <strong>Type d'activit\u00e9 :</strong> ${businessType}
+        </p>
+      </td></tr>
+    </table>
+
+    <!-- CTA: Approve directly -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 16px;">
+      <tr><td align="center">
+        <a href="${approveUrl}" style="display:inline-block;padding:14px 40px;background-color:#059669;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:700;letter-spacing:0.3px;">
+          Approuver ce tenant
+        </a>
+      </td></tr>
+    </table>
+
+    <p style="margin:0 0 20px;color:#94a3b8;font-size:12px;text-align:center;">
+      Cliquez sur le bouton ci-dessus pour activer directement le compte.
+    </p>
+
+    <!-- Secondary: Go to platform -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td align="center">
+        <a href="${platformUrl}" style="display:inline-block;padding:10px 28px;background-color:#f1f5f9;color:#475569;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;border:1px solid #e2e8f0;">
+          Ouvrir la console WAARWI
+        </a>
+      </td></tr>
+    </table>
+
+    <p style="margin:0;color:#475569;font-size:13px;line-height:1.7;color:#94a3b8;">
+      Si vous ne souhaitez pas approuver ce tenant, connectez-vous sur la console pour le rejeter avec un motif.
+    </p>`;
+  return emailLayout(content, year);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -177,27 +239,9 @@ Deno.serve(async (req: Request) => {
       return json({ error: "RESEND_API_KEY non configur\u00e9e" }, 500);
     }
 
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace("Bearer ", "");
-    if (!token) return json({ error: "Unauthorized" }, 401);
-
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-
-    const { data: userData, error: userErr } = await admin.auth.getUser(
-      token
-    );
-    if (userErr || !userData.user)
-      return json({ error: "Unauthorized" }, 401);
-
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("role")
-      .eq("id", userData.user.id)
-      .maybeSingle();
-    if (!profile || profile.role !== "super_admin")
-      return json({ error: "Forbidden" }, 403);
 
     const body = await req.json().catch(() => ({}));
     const { type, tenant_id } = body;
@@ -206,9 +250,44 @@ Deno.serve(async (req: Request) => {
       return json({ error: "type et tenant_id requis" }, 400);
     }
 
+    // For new_signup type, we use internal service key auth (called by the system)
+    // For approval/rejection, we validate super_admin
+    if (type !== "new_signup") {
+      const authHeader = req.headers.get("Authorization") || "";
+      const token = authHeader.replace("Bearer ", "");
+      if (!token) return json({ error: "Unauthorized" }, 401);
+
+      const { data: userData, error: userErr } = await admin.auth.getUser(token);
+      if (userErr || !userData.user)
+        return json({ error: "Unauthorized" }, 401);
+
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("role")
+        .eq("id", userData.user.id)
+        .maybeSingle();
+      if (!profile || profile.role !== "super_admin")
+        return json({ error: "Forbidden" }, 403);
+    } else {
+      // Validate internal call via service role key or apikey header
+      const apikey = req.headers.get("Apikey") || req.headers.get("apikey") || "";
+      const authHeader = req.headers.get("Authorization") || "";
+      if (!apikey && !authHeader.includes(SERVICE_KEY)) {
+        // Allow if called with a valid user token too
+        const token = authHeader.replace("Bearer ", "");
+        if (token) {
+          const { data: userData, error: userErr } = await admin.auth.getUser(token);
+          if (userErr || !userData.user)
+            return json({ error: "Unauthorized" }, 401);
+        } else {
+          return json({ error: "Unauthorized" }, 401);
+        }
+      }
+    }
+
     const { data: tenant } = await admin
       .from("tenants")
-      .select("name, email")
+      .select("name, email, business_type, approval_token")
       .eq("id", tenant_id)
       .maybeSingle();
 
@@ -217,6 +296,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const APP_URL = Deno.env.get("APP_URL") || "https://app.waarwi.com";
+    const ADMIN_EMAIL = Deno.env.get("ADMIN_NOTIFICATION_EMAIL") || "papadoudousall@gmail.com";
     const fromEmail =
       Deno.env.get("NOTIFICATION_FROM_EMAIL") ||
       "WAARWI <noreply@waarwi.com>";
@@ -224,6 +304,7 @@ Deno.serve(async (req: Request) => {
 
     let subject = "";
     let htmlBody = "";
+    let toEmail = tenant.email;
 
     if (type === "approval") {
       subject = `${tenant.name}, votre compte WAARWI est actif !`;
@@ -232,12 +313,21 @@ Deno.serve(async (req: Request) => {
       const reason = body.reason || "";
       subject = "Information concernant votre inscription WAARWI";
       htmlBody = rejectionEmail(tenant.name, reason, year);
+    } else if (type === "new_signup") {
+      toEmail = ADMIN_EMAIL;
+      subject = `Nouvelle inscription : ${tenant.name} (${tenant.email})`;
+      const approveUrl = `${APP_URL}?approve_token=${tenant.approval_token}`;
+      htmlBody = newSignupAdminEmail(
+        tenant.name,
+        tenant.email,
+        tenant.business_type || "non specifie",
+        approveUrl,
+        APP_URL,
+        year
+      );
     } else {
       return json(
-        {
-          error:
-            "Type de notification inconnu. Utilisez 'approval' ou 'rejection'.",
-        },
+        { error: "Type de notification inconnu. Utilisez 'approval', 'rejection' ou 'new_signup'." },
         400
       );
     }
@@ -250,7 +340,7 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         from: fromEmail,
-        to: [tenant.email],
+        to: [toEmail],
         subject,
         html: htmlBody,
       }),

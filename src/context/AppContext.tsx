@@ -73,6 +73,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         null;
       setCurrentSite(found);
       if (found) localStorage.setItem('currentSiteId', found.id);
+
+      // Track tenant activity
+      supabase.rpc('touch_tenant_activity').then(() => {});
     }
     setLoading(false);
   }, []);
@@ -90,12 +93,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const tid = profile?.tenant_id;
     if (!tid) return;
     const tables = [
-      'articles','part_categories','stock_levels','stock_movements',
+      'articles','part_categories','stock_levels','stock_movements','stock_lots',
       'vehicle_brands','vehicle_models','article_compatibilities',
-      'payment_methods','cash_sessions','sales','sale_items','sale_payments',
+      'payment_methods','cash_sessions','cash_movements','sales','sale_items','sale_payments',
       'quotes','quote_items','sale_returns','sale_return_items',
       'customers','suppliers','supplier_orders','supplier_order_items','supplier_payments',
       'online_orders','online_order_items','shop_settings','tenants','sites','profiles','tenant_messages',
+      'journal_entries',
     ];
     const channel = supabase.channel(`tenant:${tid}`);
     tables.forEach(table => {
@@ -136,7 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentSite(prev => prev ? (s.find(x => x.id === prev.id) || s[0] || null) : (s[0] || null));
       }
       if (prof) setProfile(prof);
-    }, 400);
+    }, 150);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataTick]);
@@ -162,6 +166,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_business_type: businessType,
     });
     if (rpcErr) throw rpcErr;
+
+    // Notify admin of new signup (fire-and-forget)
+    const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('id', data.user.id).maybeSingle();
+    if (prof?.tenant_id) {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification-email`;
+      const { data: sess } = await supabase.auth.getSession();
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${sess.session?.access_token || ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'new_signup', tenant_id: prof.tenant_id }),
+      }).catch(() => {});
+    }
+
     await loadSession();
   };
 
