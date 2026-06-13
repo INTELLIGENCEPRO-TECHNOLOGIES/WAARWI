@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Scroll, User, CreditCard, BookOpen } from 'lucide-react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Scroll, User, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
+import { usePermissions } from '../lib/permissions';
 import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
@@ -50,6 +51,7 @@ function statusStyles(status: string) {
 export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, dataTick, profile } = useApp();
   const { success: toastSuccess, error: toastError } = useToast();
+  const { can } = usePermissions();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -58,6 +60,9 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [pays, setPays] = useState<any[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [accounting, setAccounting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [docSettings, setDocSettings] = useState<{ allow_edit: boolean; allow_delete: boolean; loaded: boolean }>({ allow_edit: false, allow_delete: false, loaded: false });
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -67,12 +72,30 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Load document settings for invoice
+  useEffect(() => {
+    if (!tenant) return;
+    supabase
+      .from('document_settings')
+      .select('allow_edit, allow_delete')
+      .eq('tenant_id', tenant.id)
+      .eq('doc_type', 'invoice')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setDocSettings({ allow_edit: data.allow_edit ?? false, allow_delete: data.allow_delete ?? false, loaded: true });
+        } else {
+          setDocSettings({ allow_edit: true, allow_delete: true, loaded: true });
+        }
+      });
+  }, [tenant?.id, dataTick]);
+
   useEffect(() => {
     if (!tenant || !currentSite) return;
     let cancelled = false;
     (async () => {
       const { data } = await supabase.from('sales')
-        .select('*, customers(name, phone, address), sites(name), sale_payments(method_name), accounting_status')
+        .select('*, customers(name, phone, address), sites(name), sale_payments(method_name)')
         .eq('tenant_id', tenant.id)
         .eq('site_id', currentSite.id)
         .order('created_at', { ascending: false })
@@ -201,6 +224,74 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const hasFilters = search || statusFilter || dateRange !== 'all';
   const activeFilterCount = (statusFilter ? 1 : 0) + (dateRange !== 'all' ? 1 : 0);
   const clearFilters = () => { setSearch(''); setStatusFilter(''); setDateRange('all'); setCustomFrom(''); setCustomTo(''); setFiltersOpen(false); };
+
+  const canEditSale = can('edit_invoices') && (docSettings.allow_edit || !docSettings.loaded);
+  const canDeleteSale = can('delete_invoices') && (docSettings.allow_delete || !docSettings.loaded);
+  const [editing, setEditing] = useState(false);
+  const [editItems, setEditItems] = useState<any[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const startEdit = () => {
+    if (!selected || !canEditSale) return;
+    setEditItems(items.map(i => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0) })));
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    if (!selected || !tenant || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      const payload = editItems.map(i => ({
+        article_id: i.article_id,
+        name: i.name,
+        quantity: Number(i.quantity),
+        unit_price: Number(i.unit_price),
+        discount: Number(i.discount ?? 0),
+        vat_rate: Number(i.vat_rate ?? 0),
+        imei: i.imei || null,
+      }));
+      const { data, error } = await supabase.rpc('update_sale_items_and_totals', {
+        p_sale_id: selected.id,
+        p_tenant_id: tenant.id,
+        p_items: payload,
+      });
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur');
+      const newTotal = Number((data as any).new_total);
+      toastSuccess('Vente modifiee');
+      setSelected({ ...selected, total: newTotal });
+      setSales(prev => prev.map(s => s.id === selected.id ? { ...s, total: newTotal } : s));
+      setItems(editItems.map(i => ({ ...i, total: i.quantity * i.unit_price - (i.discount || 0) })));
+      setEditing(false);
+    } catch (e: any) { toastError(e.message); }
+    finally { setSavingEdit(false); }
+  };
+
+  const updateEditItem = (idx: number, field: string, value: any) => {
+    setEditItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
+
+  const removeEditItem = (idx: number) => {
+    setEditItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const deleteSale = useCallback(async () => {
+    if (!selected || !tenant || deleting) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.rpc('delete_sale_and_recalculate', {
+        p_sale_id: selected.id,
+        p_tenant_id: tenant.id,
+      });
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur');
+      toastSuccess('Vente supprimee, stock restaure');
+      setSales(prev => prev.filter(s => s.id !== selected.id));
+      setOpen(false);
+      setConfirmDelete(false);
+    } catch (e: any) { toastError(e.message); }
+    finally { setDeleting(false); }
+  }, [selected, tenant, deleting]);
 
   const comptabiliserVente = async () => {
     if (!selected || accounting) return;
@@ -466,19 +557,37 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         onApply={(f, t) => { setCustomFrom(f); setCustomTo(t); setDateRange('custom'); setPickerOpen(false); }} />
 
       {/* ── Detail Modal ─────────────────────────────────────────── */}
-      <DocPanel open={open} onClose={() => setOpen(false)} title={selected ? `Vente ${selected.sale_number}` : ''}
+      <DocPanel open={open} onClose={() => { setOpen(false); setEditing(false); }} title={selected ? `Vente ${selected.sale_number}` : ''}
         footer={<>
-          <button onClick={() => setOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          {selected && selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' && (
+          <button onClick={() => { setOpen(false); setEditing(false); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          {selected && canDeleteSale && selected.accounting_status !== 'accounted' && !editing && (
+            <button onClick={() => setConfirmDelete(true)} className="btn-icon text-red-600 hover:bg-red-50" title="Supprimer">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          {selected && canEditSale && selected.accounting_status !== 'accounted' && !editing && (
+            <button onClick={startEdit} className="btn-icon text-blue-600 hover:bg-blue-50" title="Modifier">
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
+          {editing && (
+            <>
+              <button onClick={() => setEditing(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={saveEdit} disabled={savingEdit} className="btn-icon-primary" title="Enregistrer">
+                {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              </button>
+            </>
+          )}
+          {!editing && selected && selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' && (
             <button onClick={comptabiliserVente} disabled={accounting} className="btn-icon text-teal-700 hover:bg-teal-50" title="Comptabiliser">
               {accounting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
             </button>
           )}
-          {selected && selected.accounting_status === 'accounted' && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />Comptabilisé</span>
+          {!editing && selected && selected.accounting_status === 'accounted' && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />Comptabilise</span>
           )}
-          <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Scroll className="w-4 h-4" /></button>
-          <button onClick={printInvoice} className="btn-icon-primary" title="Facture A4"><Printer className="w-4 h-4" /></button>
+          {!editing && <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Scroll className="w-4 h-4" /></button>}
+          {!editing && <button onClick={printInvoice} className="btn-icon-primary" title="Facture A4"><Printer className="w-4 h-4" /></button>}
         </>}
       >
         {selected && (() => {
@@ -497,6 +606,55 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
               {itemsLoading ? (
                 <div className="py-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
+              ) : editing ? (
+                /* ── EDIT MODE ── */
+                <div className="space-y-3">
+                  <DocSectionTitle title="Modifier les articles" count={editItems.length} />
+                  <div className="space-y-2">
+                    {editItems.map((item, idx) => (
+                      <div key={idx} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-slate-800 truncate flex-1">{item.name}</span>
+                          <button onClick={() => removeEditItem(idx)} className="p-1 rounded-lg hover:bg-red-50 text-red-500" title="Retirer">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase">Qte</label>
+                            <input type="number" min="1" value={item.quantity}
+                              onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
+                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-center focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase">Prix unit.</label>
+                            <input type="number" min="0" value={item.unit_price}
+                              onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
+                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase">Remise</label>
+                            <input type="number" min="0" value={item.discount}
+                              onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
+                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                            />
+                          </div>
+                        </div>
+                        <div className="text-right text-[11px] font-bold text-slate-700">
+                          Sous-total : {formatFCFA(item.quantity * item.unit_price - (item.discount || 0))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 text-right">
+                    <span className="text-xs text-slate-500">Nouveau total : </span>
+                    <span className="text-sm font-bold text-slate-900">
+                      {formatFCFA(editItems.reduce((s, i) => s + (i.quantity * i.unit_price - (i.discount || 0)), 0))}
+                    </span>
+                  </div>
+                </div>
               ) : (
                 <>
                   {/* Articles */}
@@ -542,6 +700,29 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           );
         })()}
       </DocPanel>
+
+      {/* Delete confirmation */}
+      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Confirmer la suppression" size="sm"
+        footer={<>
+          <button onClick={() => setConfirmDelete(false)} className="btn-secondary text-sm">Annuler</button>
+          <button onClick={deleteSale} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-700 text-sm flex items-center gap-2">
+            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            Supprimer
+          </button>
+        </>}
+      >
+        <div className="flex flex-col items-center gap-3 py-4 text-center">
+          <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+            <AlertTriangle className="w-6 h-6 text-red-500" />
+          </div>
+          <p className="text-sm text-slate-700 font-medium">
+            Supprimer la vente <span className="font-bold">{selected?.sale_number}</span> ?
+          </p>
+          <p className="text-xs text-slate-500 max-w-xs">
+            Le stock sera restaure et le solde du client recalcule. Cette action est irreversible.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }

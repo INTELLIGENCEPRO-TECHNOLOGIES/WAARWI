@@ -13,7 +13,7 @@ type AppState = {
   /** Marks a site as the persistent default for this user (saved to DB, cross-device) */
   setDefaultSite: (site: Site) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, companyName: string, businessType: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   dataTick: number;
@@ -156,7 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  const signUp = async (email: string, password: string, fullName: string, companyName: string, businessType: string) => {
+  const signUp = async (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
     if (!data.user) throw new Error('Inscription impossible');
@@ -164,6 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_company_name: companyName,
       p_user_full_name: fullName,
       p_business_type: businessType,
+      p_activity_type_id: activityTypeId || null,
     });
     if (rpcErr) throw rpcErr;
 

@@ -18,15 +18,37 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace("Bearer ", "");
-    if (!token) return json({ error: "Unauthorized" }, 401);
-
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    const { data: userData, error: userErr } = await admin.auth.getUser(token);
+    const body = await req.json().catch(() => ({}));
+    const action = body.action as string;
+
+    // Public action: auto-approve by token (no auth required, token is the secret)
+    if (action === "auto_approve_by_token") {
+      const { token } = body;
+      if (!token) return json({ error: "token requis" }, 400);
+      const { data: result, error: rpcErr } = await admin.rpc("auto_approve_tenant_by_token", { p_token: token });
+      if (rpcErr) return json({ error: rpcErr.message }, 400);
+      if (!result?.success) return json({ error: result?.error || "Echec" }, 400);
+      const { data: approvedTenant } = await admin.from("tenants").select("id").eq("name", result.tenant_name).eq("email", result.tenant_email).maybeSingle();
+      if (approvedTenant) {
+        fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "approval", tenant_id: approvedTenant.id }),
+        }).catch(() => {});
+      }
+      return json({ success: true, tenant_name: result.tenant_name });
+    }
+
+    // All other actions require authentication
+    const authHeader = req.headers.get("Authorization") || "";
+    const authToken = authHeader.replace("Bearer ", "");
+    if (!authToken) return json({ error: "Unauthorized" }, 401);
+
+    const { data: userData, error: userErr } = await admin.auth.getUser(authToken);
     if (userErr || !userData.user) return json({ error: "Unauthorized" }, 401);
     const caller = userData.user;
 
@@ -35,29 +57,6 @@ Deno.serve(async (req: Request) => {
 
     const isSuperAdmin = callerProfile.role === "super_admin";
     const isAdmin = callerProfile.role === "admin" || isSuperAdmin;
-
-    const body = await req.json().catch(() => ({}));
-    const action = body.action as string;
-
-    // Public action: auto-approve by token (any authenticated user can call)
-    if (action === "auto_approve_by_token") {
-      const { token } = body;
-      if (!token) return json({ error: "token requis" }, 400);
-      const { data: result, error: rpcErr } = await admin.rpc("auto_approve_tenant_by_token", { p_token: token });
-      if (rpcErr) return json({ error: rpcErr.message }, 400);
-      if (!result?.success) return json({ error: result?.error || "Echec" }, 400);
-      // Send approval email to the tenant
-      const { data: approvedTenant } = await admin.from("tenants").select("id").eq("name", result.tenant_name).eq("email", result.tenant_email).maybeSingle();
-      if (approvedTenant) {
-        const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-        fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "approval", tenant_id: approvedTenant.id }),
-        }).catch(() => {});
-      }
-      return json({ success: true, tenant_name: result.tenant_name });
-    }
 
     const logEvent = async (a: string, tenantId: string | null, payload: Record<string, unknown> = {}) => {
       await admin.from("platform_events").insert({

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Loader2, Package, Check, Download, X, Filter,
-  ChevronRight, ChevronDown, AlertCircle, CheckCircle2
+  ChevronRight, ChevronDown, AlertCircle, CheckCircle2, Layers, RefreshCw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -55,8 +55,11 @@ export function MasterCatalog() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState<null | { mode: 'selected' | 'category' | 'subcategory' | 'all'; label: string; count: number }>(null);
   const [lastResult, setLastResult] = useState<{ imported: number; skipped: number; errors: any[] } | null>(null);
+
+  const MAX_IMPORT = 500;
 
   const activityTypeId = (tenant as any)?.business_activity_type_id || null;
 
@@ -99,23 +102,34 @@ export function MasterCatalog() {
         return;
       }
 
-      const [{ data: cats }, { data: arts }] = await Promise.all([
-        supabase.from('master_catalog_categories').select('id, name, slug, parent_id')
-          .eq('master_catalog_id', catalogRow.id).eq('is_active', true).order('sort_order'),
-        (() => {
+      const { data: cats } = await supabase
+        .from('master_catalog_categories').select('id, name, slug, parent_id')
+        .eq('master_catalog_id', catalogRow.id).eq('is_active', true).order('sort_order');
+
+      // Paginate imported IDs — PostgREST caps at 1000 rows per request
+      const allImportedIds: string[] = [];
+      {
+        let from = 0;
+        const batchSize = 1000;
+        let hasMore = true;
+        while (hasMore) {
           let q = supabase.from('articles')
             .select('master_catalog_item_id')
             .eq('tenant_id', tenant.id)
-            .not('master_catalog_item_id', 'is', null);
-          const isShared = (tenant as any)?.settings?.shared_articles !== false;
-          if (!isShared && currentSite) {
+            .not('master_catalog_item_id', 'is', null)
+            .range(from, from + batchSize - 1);
+          if (!sharedArticles && currentSite) {
             q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
           }
-          return q;
-        })(),
-      ]);
+          const { data: batch } = await q;
+          const rows = batch || [];
+          allImportedIds.push(...rows.map((a: any) => a.master_catalog_item_id).filter(Boolean));
+          hasMore = rows.length === batchSize;
+          from += batchSize;
+        }
+      }
 
-      // Load all items with pagination (PostgREST default limit is 1000)
+      // Load all catalog items with pagination (PostgREST default limit is 1000)
       const allItems: Item[] = [];
       let from = 0;
       const pageSize = 1000;
@@ -138,11 +152,65 @@ export function MasterCatalog() {
       setCatalog(catalogRow);
       setCategories((cats || []) as Category[]);
       setItems(allItems);
-      setImportedIds(new Set((arts || []).map((a: any) => a.master_catalog_item_id).filter(Boolean)));
+      setImportedIds(new Set(allImportedIds));
       setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [tenant?.id, activityTypeId, currentSite?.id, sharedArticles]);
+
+  // Helper to re-fetch just the importedIds (lightweight, paginated)
+  const refreshImportedIds = async (silent = false) => {
+    if (!tenant) return;
+    if (!silent) setRefreshing(true);
+    const allIds: string[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+    while (hasMore) {
+      let q = supabase.from('articles')
+        .select('master_catalog_item_id')
+        .eq('tenant_id', tenant.id)
+        .not('master_catalog_item_id', 'is', null)
+        .range(from, from + batchSize - 1);
+      if (!sharedArticles && currentSite) {
+        q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+      }
+      const { data } = await q;
+      const rows = data || [];
+      allIds.push(...rows.map((a: any) => a.master_catalog_item_id).filter(Boolean));
+      hasMore = rows.length === batchSize;
+      from += batchSize;
+    }
+    setImportedIds(new Set(allIds));
+    if (!silent) setRefreshing(false);
+  };
+
+  // Realtime: auto-update importedIds when articles are inserted/deleted for this tenant
+  useEffect(() => {
+    if (!tenant?.id) return;
+    const channel = supabase
+      .channel(`master-catalog-imported-${tenant.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'articles',
+        filter: `tenant_id=eq.${tenant.id}`,
+      }, (payload) => {
+        const id = (payload.new as any)?.master_catalog_item_id;
+        if (id) setImportedIds(prev => new Set([...prev, id]));
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'articles',
+        filter: `tenant_id=eq.${tenant.id}`,
+      }, () => {
+        // On delete, do a full refresh to stay consistent
+        refreshImportedIds(true);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [tenant?.id]);
 
   const rootCategories = useMemo(() => categories.filter(c => !c.parent_id), [categories]);
   const subcategories = useMemo(
@@ -179,12 +247,21 @@ export function MasterCatalog() {
   const allFilteredSelected = selectableFiltered.length > 0 && selectableFiltered.every(i => selected.has(i.id));
 
   const toggleSelect = (id: string) => {
+    if (importedIds.has(id)) return;
     setSelected(s => {
       const n = new Set(s);
       if (n.has(id)) n.delete(id); else n.add(id);
       return n;
     });
   };
+
+  // Remove from selection any item that becomes imported (e.g. after an import runs)
+  useEffect(() => {
+    setSelected(s => {
+      const cleaned = new Set([...s].filter(id => !importedIds.has(id)));
+      return cleaned.size === s.size ? s : cleaned;
+    });
+  }, [importedIds]);
 
   const toggleAllFiltered = () => {
     setSelected(s => {
@@ -198,6 +275,26 @@ export function MasterCatalog() {
     });
   };
 
+  const selectBatch = (n: number) => {
+    setSelected(s => {
+      const n2 = new Set(s);
+      let added = 0;
+      for (const i of selectableFiltered) {
+        if (added >= n) break;
+        if (!n2.has(i.id)) { n2.add(i.id); added++; }
+      }
+      return n2;
+    });
+  };
+
+  const selectPage = () => {
+    setSelected(s => {
+      const n2 = new Set(s);
+      paginated.forEach(i => { if (!importedIds.has(i.id)) n2.add(i.id); });
+      return n2;
+    });
+  };
+
   const clearFilters = () => {
     setSearch(''); setSearchInput(''); setCategoryId(''); setSubcategoryId(''); setBrandFilter(''); setStatusFilter('all');
     setFiltersOpen(false);
@@ -206,6 +303,11 @@ export function MasterCatalog() {
   const activeFilterCount = [categoryId, subcategoryId, brandFilter, statusFilter !== 'all' ? statusFilter : ''].filter(Boolean).length;
 
   const runImport = async (mode: 'selected' | 'category' | 'subcategory' | 'all') => {
+    if (!confirmOpen) return;
+    if (confirmOpen.count > MAX_IMPORT) {
+      toastError(`Maximum ${MAX_IMPORT} articles par import. Sélectionnez un lot plus petit.`);
+      return;
+    }
     setImporting(true);
     try {
       const payload: any = {
@@ -234,20 +336,10 @@ export function MasterCatalog() {
       setConfirmOpen(null);
 
       // Refresh imported IDs
-      if (tenant) {
-        let q = supabase.from('articles')
-          .select('master_catalog_item_id')
-          .eq('tenant_id', tenant.id)
-          .not('master_catalog_item_id', 'is', null);
-        if (!sharedArticles && currentSite) {
-          q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
-        }
-        const { data: arts } = await q;
-        setImportedIds(new Set((arts || []).map((a: any) => a.master_catalog_item_id).filter(Boolean)));
-      }
+      await refreshImportedIds(true);
 
       if (result.imported > 0) success(`${result.imported} article${result.imported > 1 ? 's' : ''} importé${result.imported > 1 ? 's' : ''}`);
-      if (result.skipped > 0 && result.imported === 0) toastError(`${result.skipped} article(s) déjà existants`);
+      if (result.skipped > 0 && result.imported === 0) toastError(`${result.skipped} article(s) déjà importé${result.skipped > 1 ? 's' : ''} (statut actualisé)`);
     } catch (e: any) {
       toastError(e.message || 'Erreur lors de l\'import');
       setConfirmOpen(null);
@@ -316,24 +408,74 @@ export function MasterCatalog() {
         </div>
       </div>
 
-      {/* Stats chips */}
+      {/* Selection stats */}
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
         <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filtered.length} / {items.length}</span>
         <span className="shrink-0 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{importedIds.size} importé{importedIds.size > 1 ? 's' : ''}</span>
-        {selected.size > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-brand-50 text-brand-700">{selected.size} sélectionné{selected.size > 1 ? 's' : ''}</span>}
+        {selected.size > 0 && (
+          <span className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 font-bold ${selected.size > MAX_IMPORT ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-brand-50 text-brand-700'}`}>
+            {selected.size > MAX_IMPORT && <AlertCircle className="w-3 h-3" />}
+            {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
+            {selected.size > MAX_IMPORT && ` (max ${MAX_IMPORT})`}
+          </span>
+        )}
         {activeFilterCount > 0 && <button onClick={clearFilters} className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-400 hover:text-slate-600 inline-flex items-center gap-1">Effacer <X className="w-3 h-3" /></button>}
+        <button
+          onClick={() => refreshImportedIds()}
+          disabled={refreshing}
+          className="shrink-0 ml-auto px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-300 inline-flex items-center gap-1 transition-all disabled:opacity-50"
+          title="Actualiser le statut des articles importés"
+        >
+          <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Actualisation…' : 'Actualiser'}
+        </button>
       </div>
 
-      {/* Action buttons */}
+      {/* Batch selection tools */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm text-[11px]">
+          <span className="px-2.5 py-1.5 text-slate-500 font-semibold border-r border-slate-100 flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5" />Sélectionner par lot
+          </span>
+          {[100, 200, 300, 400, 500].map(n => (
+            <button key={n} onClick={() => selectBatch(n)}
+              className="px-2.5 py-1.5 font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition border-r border-slate-100 last:border-r-0">
+              {n}
+            </button>
+          ))}
+        </div>
+        {paginated.some(i => !importedIds.has(i.id)) && (
+          <button onClick={selectPage}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-600 hover:border-brand-300 hover:text-brand-700 transition shadow-sm">
+            <Check className="w-3.5 h-3.5" />
+            Sélectionner la page
+          </button>
+        )}
+        {selected.size > 0 && (
+          <button onClick={() => setSelected(new Set())}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-slate-500 hover:bg-slate-100 transition">
+            <X className="w-3 h-3" />Désélectionner tout
+          </button>
+        )}
+        {selectableFiltered.length > 0 && (
+          <button onClick={toggleAllFiltered}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-slate-600 hover:bg-slate-100 transition">
+            {allFilteredSelected ? 'Désélectionner filtrés' : `Tout sélectionner (${selectableFiltered.length})`}
+          </button>
+        )}
+      </div>
+
+      {/* Import action buttons */}
       <div className="flex flex-wrap items-center gap-1.5">
         {selected.size > 0 && (
           <button
             disabled={importing}
             onClick={() => setConfirmOpen({ mode: 'selected', label: 'la sélection', count: selected.size })}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition active:scale-95 disabled:opacity-50"
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold shadow-glow hover:shadow-lg transition active:scale-95 disabled:opacity-50 ${selected.size > MAX_IMPORT ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white'}`}
           >
             <Download className="w-3.5 h-3.5" />
             Importer la sélection ({selected.size})
+            {selected.size > MAX_IMPORT && ` — TROP`}
           </button>
         )}
         {categoryId && !subcategoryId && (
@@ -375,14 +517,6 @@ export function MasterCatalog() {
           <Download className="w-3.5 h-3.5" />
           Importer tout le catalogue
         </button>
-        {selectableFiltered.length > 0 && (
-          <button
-            onClick={toggleAllFiltered}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
-          >
-            {allFilteredSelected ? 'Désélectionner tout' : 'Sélectionner tout'}
-          </button>
-        )}
       </div>
       </div>
 
@@ -507,7 +641,11 @@ export function MasterCatalog() {
       <Modal open={!!confirmOpen} onClose={() => !importing && setConfirmOpen(null)} title="Confirmer l'import" size="sm"
         footer={<>
           <button onClick={() => setConfirmOpen(null)} disabled={importing} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Annuler</button>
-          <button onClick={() => confirmOpen && runImport(confirmOpen.mode)} disabled={importing} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5 disabled:opacity-50">
+          <button
+            onClick={() => confirmOpen && runImport(confirmOpen.mode)}
+            disabled={importing || (confirmOpen?.count ?? 0) > MAX_IMPORT}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
             {importing ? 'Import en cours…' : 'Confirmer l\'import'}
           </button>
@@ -515,19 +653,37 @@ export function MasterCatalog() {
       >
         {confirmOpen && (
           <div className="space-y-3">
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-brand-50/60 border border-brand-100">
-              <AlertCircle className="w-4 h-4 text-brand-700 mt-0.5 shrink-0" />
-              <div className="text-xs text-slate-700">
-                Vous êtes sur le point d'importer {confirmOpen.label}. <span className="font-semibold">{confirmOpen.count}</span> article{confirmOpen.count !== 1 ? 's' : ''} seront ajoutés à votre catalogue. Les articles déjà importés seront ignorés automatiquement.
-              </div>
-            </div>
-            {isMultiSite && !sharedArticles && currentSite && (
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                <div className="text-xs text-amber-800">
-                  <span className="font-bold">Mode catalogues indépendants actif.</span> Les articles seront importés uniquement dans le magasin <span className="font-semibold">« {currentSite.name} »</span>. Pour importer les articles dans vos {sites.length} magasins simultanément, activez le mode « Catalogue partagé » dans Paramètres &gt; Gestion des stocks.
+            {confirmOpen.count > MAX_IMPORT ? (
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+                <div className="space-y-1.5">
+                  <div className="text-sm font-bold text-red-800">Limite d'import dépassée</div>
+                  <div className="text-xs text-red-700">
+                    Vous ne pouvez importer que <span className="font-bold">{MAX_IMPORT} articles maximum</span> par opération.
+                    Vous en avez sélectionné <span className="font-bold">{confirmOpen.count}</span>.
+                  </div>
+                  <div className="text-xs text-red-600 mt-1 font-medium">
+                    Utilisez les boutons <strong>"Sélectionner par lot"</strong> (100, 200, 300, 400 ou 500) pour importer progressivement.
+                  </div>
                 </div>
               </div>
+            ) : (
+              <>
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-brand-50/60 border border-brand-100">
+                  <AlertCircle className="w-4 h-4 text-brand-700 mt-0.5 shrink-0" />
+                  <div className="text-xs text-slate-700">
+                    Vous êtes sur le point d'importer {confirmOpen.label}. <span className="font-semibold">{confirmOpen.count}</span> article{confirmOpen.count !== 1 ? 's' : ''} seront ajoutés à votre catalogue. Les articles déjà importés seront ignorés automatiquement.
+                  </div>
+                </div>
+                {isMultiSite && !sharedArticles && currentSite && (
+                  <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div className="text-xs text-amber-800">
+                      <span className="font-bold">Mode catalogues indépendants actif.</span> Les articles seront importés uniquement dans le magasin <span className="font-semibold">« {currentSite.name} »</span>. Pour importer les articles dans vos {sites.length} magasins simultanément, activez le mode « Catalogue partagé » dans Paramètres &gt; Gestion des stocks.
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

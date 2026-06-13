@@ -258,7 +258,8 @@ export function Auth() {
         const typeForProvision = businessType === '__other__'
           ? 'generic'
           : (selectedActivity?.legacy_business_type || businessType);
-        await signUp(email, password, fullName, companyName, typeForProvision);
+        const activityTypeId = businessType !== '__other__' ? selectedActivity?.id : null;
+        await signUp(email, password, fullName, companyName, typeForProvision, activityTypeId);
         setSubmitted(true);
       }
     } catch (err: any) {
@@ -371,7 +372,7 @@ export function Auth() {
   );
 
   /* ── Logo ─────────────────────────────────────────────────────────────── */
-  const logoSrc = isTenantBranded && branding?.logo_url ? branding.logo_url : '/Picsart_26-05-30_02-43-37-384.png';
+  const logoSrc = isTenantBranded && branding?.logo_url ? branding.logo_url : '/waarwi.png';
 
   const loginBgUrl = config?.login_bg_url;
 

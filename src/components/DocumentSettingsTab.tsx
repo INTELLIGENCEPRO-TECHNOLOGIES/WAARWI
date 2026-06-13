@@ -3,6 +3,7 @@ import {
   Loader2, ChevronUp, ChevronDown, Eye, EyeOff, Lock,
   Save, CalendarDays, Tag, ShieldCheck, User as User2,
   GripVertical, Check, FileText, ClipboardList, RotateCcw, Truck, LayoutGrid,
+  Pencil, Trash2, Smartphone,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -24,9 +25,12 @@ export type DocSettings = {
   show_delivery_date: boolean;
   show_reference: boolean;
   show_warranty: boolean;
+  show_imei: boolean;
   show_representative: boolean;
   default_representative: string;
   require_header_lock: boolean;
+  allow_edit: boolean;
+  allow_delete: boolean;
   columns_config: DocColumn[];
 };
 
@@ -43,9 +47,12 @@ export const DEFAULT_DOC_SETTINGS: DocSettings = {
   show_delivery_date:  false,
   show_reference:      false,
   show_warranty:       false,
+  show_imei:           false,
   show_representative: false,
   default_representative: '',
   require_header_lock: false,
+  allow_edit:          false,
+  allow_delete:        false,
   columns_config:      DEFAULT_COLUMNS,
 };
 
@@ -100,10 +107,11 @@ function Toggle({ on, onChange, label, sub }: { on: boolean; onChange: (v: boole
 }
 
 const FIELD_META = [
-  { key: 'show_delivery_date' as const, label: 'Date de livraison', sub: 'Date de livraison prévue',     icon: CalendarDays, iconBg: 'bg-blue-50 border-blue-100',       iconColor: 'text-blue-500' },
-  { key: 'show_reference'     as const, label: 'Référence',         sub: 'Réf. commande / dossier',      icon: Tag,          iconBg: 'bg-amber-50 border-amber-100',     iconColor: 'text-amber-500' },
+  { key: 'show_delivery_date' as const, label: 'Date de livraison', sub: 'Date de livraison prevue',     icon: CalendarDays, iconBg: 'bg-blue-50 border-blue-100',       iconColor: 'text-blue-500' },
+  { key: 'show_reference'     as const, label: 'Reference',         sub: 'Ref. commande / dossier',      icon: Tag,          iconBg: 'bg-amber-50 border-amber-100',     iconColor: 'text-amber-500' },
   { key: 'show_warranty'      as const, label: 'Garantie',          sub: 'Conditions de garantie',       icon: ShieldCheck,  iconBg: 'bg-emerald-50 border-emerald-100', iconColor: 'text-emerald-500' },
-  { key: 'show_representative' as const, label: 'Représentant',     sub: 'Commercial en charge',          icon: User2,        iconBg: 'bg-slate-50 border-slate-200',     iconColor: 'text-slate-500' },
+  { key: 'show_imei'          as const, label: 'IMEI / Telephone',  sub: 'Numero IMEI ou serie appareil', icon: Smartphone,   iconBg: 'bg-violet-50 border-violet-100',   iconColor: 'text-violet-500' },
+  { key: 'show_representative' as const, label: 'Representant',     sub: 'Commercial en charge',          icon: User2,        iconBg: 'bg-slate-50 border-slate-200',     iconColor: 'text-slate-500' },
 ];
 
 export function DocumentSettingsTab() {
@@ -129,9 +137,12 @@ export function DocumentSettingsTab() {
         show_delivery_date:  data.show_delivery_date  ?? false,
         show_reference:      data.show_reference      ?? false,
         show_warranty:       data.show_warranty       ?? false,
+        show_imei:           data.show_imei           ?? false,
         show_representative: data.show_representative ?? false,
         default_representative: data.default_representative ?? '',
         require_header_lock: data.require_header_lock ?? false,
+        allow_edit:          data.allow_edit          ?? false,
+        allow_delete:        data.allow_delete        ?? false,
         columns_config:      mergeColumns(data.columns_config ?? []),
       });
     } else {
@@ -153,9 +164,12 @@ export function DocumentSettingsTab() {
         show_delivery_date:  s.show_delivery_date,
         show_reference:      s.show_reference,
         show_warranty:       s.show_warranty,
+        show_imei:           s.show_imei,
         show_representative: s.show_representative,
         default_representative: s.default_representative,
         require_header_lock: s.require_header_lock,
+        allow_edit:          s.allow_edit,
+        allow_delete:        s.allow_delete,
         columns_config:      s.columns_config,
         updated_at:          new Date().toISOString(),
       }, { onConflict: 'tenant_id,doc_type' });
@@ -285,7 +299,7 @@ export function DocumentSettingsTab() {
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
             <div className="flex items-center gap-2 px-4 pt-4 pb-2">
               <div className="w-0.5 h-4 rounded-full bg-rose-400" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Validation en-tête</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Validation en-tete</span>
             </div>
             <div className="flex items-center gap-2.5 px-3 pb-2">
               <div className="w-7 h-7 rounded-lg border border-rose-100 bg-rose-50 flex items-center justify-center shrink-0 ml-1">
@@ -296,17 +310,51 @@ export function DocumentSettingsTab() {
                   on={settings.require_header_lock}
                   onChange={v => set({ require_header_lock: v })}
                   label="Exiger la validation"
-                  sub="L'en-tête doit être validé avant la saisie des articles"
+                  sub="L'en-tete doit etre valide avant la saisie des articles"
                 />
               </div>
             </div>
             {settings.require_header_lock && (
               <div className="mx-4 mb-4 flex items-start gap-2 text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2.5">
                 <Lock className="w-3 h-3 shrink-0 mt-0.5 text-amber-600" />
-                <span>Un bouton <strong>Valider l'en-tête</strong> sera affiché lors de la création.</span>
+                <span>Un bouton <strong>Valider l'en-tete</strong> sera affiche lors de la creation.</span>
               </div>
             )}
             {!settings.require_header_lock && <div className="pb-2" />}
+          </div>
+
+          {/* Edition & Suppression */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+              <div className="w-0.5 h-4 rounded-full bg-orange-400" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Edition & Suppression</span>
+            </div>
+            <p className="text-[11px] text-slate-400 px-4 pb-2 leading-relaxed">Autoriser la modification ou suppression des documents (hors documents comptabilises).</p>
+            <div className="divide-y divide-slate-50 px-2">
+              <div className="flex items-center gap-2.5 py-1">
+                <div className="w-7 h-7 rounded-lg border border-blue-100 bg-blue-50 flex items-center justify-center shrink-0 ml-1">
+                  <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Toggle on={settings.allow_edit} onChange={v => set({ allow_edit: v })} label="Autoriser la modification" sub="Modifier les articles et montants du document" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 py-1">
+                <div className="w-7 h-7 rounded-lg border border-red-100 bg-red-50 flex items-center justify-center shrink-0 ml-1">
+                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Toggle on={settings.allow_delete} onChange={v => set({ allow_delete: v })} label="Autoriser la suppression" sub="Supprimer le document et restaurer le stock" />
+                </div>
+              </div>
+            </div>
+            {(settings.allow_edit || settings.allow_delete) && (
+              <div className="mx-4 mb-4 mt-2 flex items-start gap-2 text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2.5">
+                <Pencil className="w-3 h-3 shrink-0 mt-0.5 text-amber-600" />
+                <span>Les documents deja <strong>comptabilises</strong> ne pourront pas etre modifies ou supprimes.</span>
+              </div>
+            )}
+            {!settings.allow_edit && !settings.allow_delete && <div className="pb-2" />}
           </div>
 
           {/* Columns config */}

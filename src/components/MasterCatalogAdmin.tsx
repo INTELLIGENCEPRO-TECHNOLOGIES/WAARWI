@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Plus, Pencil, Trash2, Loader2, Search, Download, Upload, FileText,
-  Package, Tag, ChevronRight, Save, Folder
+  Package, Tag, ChevronRight, Save, Folder, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -751,7 +751,10 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
   const [rows, setRows] = useState<any[]>([]);
   const [filename, setFilename] = useState('');
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number; elapsed: number; lotsDone: number; lotsTotal: number } | null>(null);
   const [result, setResult] = useState<{ imported: number; updated: number; errors: any[]; total: number } | null>(null);
+
+  const CHUNK_SIZE = 1000;
 
   const downloadTemplate = async () => {
     const XLSX = await import('xlsx');
@@ -804,19 +807,38 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
   const runImport = async () => {
     if (rows.length === 0 || !selectedCatalogId) return;
     setImporting(true);
+    const startTime = Date.now();
+    const lotsTotal = Math.ceil(rows.length / CHUNK_SIZE);
+    setImportProgress({ done: 0, total: rows.length, elapsed: 0, lotsDone: 0, lotsTotal });
+    const totalImported = { imported: 0, updated: 0, errors: [] as any[] };
     try {
-      const { data, error } = await supabase.rpc('import_to_master_catalog', {
-        p_catalog_id: selectedCatalogId,
-        p_rows: rows,
-      });
-      if (error) throw error;
-      setResult(data as any);
+      for (let i = 0, lotsDone = 0; i < rows.length; i += CHUNK_SIZE, lotsDone++) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
+        const { data, error } = await supabase.rpc('import_to_master_catalog', {
+          p_catalog_id: selectedCatalogId,
+          p_rows: chunk,
+        });
+        if (error) throw error;
+        const r = data as any;
+        totalImported.imported += r.imported || 0;
+        totalImported.updated += r.updated || 0;
+        if (r.errors?.length) totalImported.errors.push(...r.errors);
+        setImportProgress({
+          done: Math.min(i + CHUNK_SIZE, rows.length),
+          total: rows.length,
+          elapsed: Math.round((Date.now() - startTime) / 1000),
+          lotsDone: lotsDone + 1,
+          lotsTotal,
+        });
+      }
+      setResult({ ...totalImported, total: rows.length });
       onChange();
-      success('Import terminé');
+      success(`Import terminé — ${totalImported.imported} créés, ${totalImported.updated} mis à jour`);
     } catch (e: any) {
       toastError(e.message);
     } finally {
       setImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -886,14 +908,49 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
           {filename && <div className="text-[11px] font-semibold text-brand-700">{filename} — {rows.length} ligne{rows.length > 1 ? 's' : ''} detectees</div>}
           <input type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
         </label>
+
         {rows.length > 0 && (
-          <div className="mt-3 flex items-center justify-between">
-            <button onClick={() => { setRows([]); setFilename(''); setResult(null); }} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
-            <button onClick={runImport} disabled={importing || !selectedCatalogId} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow disabled:opacity-50">
-              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              {importing ? 'Import…' : `Importer ${rows.length} article${rows.length > 1 ? 's' : ''}`}
-            </button>
-          </div>
+          <>
+            {rows.length > CHUNK_SIZE && (
+              <div className="mt-3 flex items-start gap-2 p-3 rounded-xl bg-sky-50 border border-sky-200">
+                <AlertCircle className="w-4 h-4 text-sky-600 mt-0.5 shrink-0" />
+                <div className="text-[11px] text-sky-800">
+                  <span className="font-bold">{rows.length} articles détectés.</span> Import en{' '}
+                  <span className="font-bold">{Math.ceil(rows.length / CHUNK_SIZE)} lot{Math.ceil(rows.length / CHUNK_SIZE) > 1 ? 's' : ''} de {CHUNK_SIZE}</span> — traitement ensembliste optimisé, pas de timeout attendu.
+                </div>
+              </div>
+            )}
+
+            {/* Progress bar */}
+            {importProgress && (
+              <div className="mt-3 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
+                  <span>Lot <span className="num">{importProgress.lotsDone}</span> / <span className="num">{importProgress.lotsTotal}</span></span>
+                  <span className="num text-slate-500">{importProgress.done.toLocaleString()} / {importProgress.total.toLocaleString()} articles • {importProgress.elapsed}s</span>
+                </div>
+                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-brand-500 via-brand-500 to-emerald-500 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.round((importProgress.done / importProgress.total) * 100)}%` }}
+                  />
+                </div>
+                <div className="text-[10px] text-slate-400 text-center font-semibold">
+                  {Math.round((importProgress.done / importProgress.total) * 100)}% — Ne fermez pas cette page…
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 flex items-center justify-between">
+              <button onClick={() => { setRows([]); setFilename(''); setResult(null); }} disabled={importing} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Annuler</button>
+              <button onClick={runImport} disabled={importing || !selectedCatalogId} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow disabled:opacity-50">
+                {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                {importing
+                  ? `Lot ${importProgress?.lotsDone ?? 0} / ${importProgress?.lotsTotal ?? Math.ceil(rows.length / CHUNK_SIZE)}…`
+                  : `Importer ${rows.length.toLocaleString()} article${rows.length > 1 ? 's' : ''}${rows.length > CHUNK_SIZE ? ` (${Math.ceil(rows.length / CHUNK_SIZE)} lots)` : ''}`
+                }
+              </button>
+            </div>
+          </>
         )}
       </div>
 
