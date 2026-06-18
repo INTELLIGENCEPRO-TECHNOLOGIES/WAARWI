@@ -68,13 +68,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSites(storeList);
       setDepots(depotList);
 
-      // Priority: DB default_site_id > localStorage fallback > first store
+      // Priority: DB default_site_id > localStorage fallback > first store > first depot (legacy fallback)
       const defaultId: string | null = (prof as any).default_site_id || null;
       const storedId = localStorage.getItem('currentSiteId');
       const found =
         (defaultId && storeList.find(x => x.id === defaultId)) ||
         (storedId && storeList.find(x => x.id === storedId)) ||
         storeList[0] ||
+        depotList[0] ||
         null;
       setCurrentSite(found);
       if (found) localStorage.setItem('currentSiteId', found.id);
@@ -142,13 +143,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const depotList = filtered.filter(x => x.is_warehouse);
         setSites(storeList);
         setDepots(depotList);
-        setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || null) : (storeList[0] || null));
+        setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || depotList[0] || null) : (storeList[0] || depotList[0] || null));
       } else if (s) {
         const storeList = s.filter(x => !x.is_warehouse);
         const depotList = s.filter(x => x.is_warehouse);
         setSites(storeList);
         setDepots(depotList);
-        setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || null) : (storeList[0] || null));
+        setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || depotList[0] || null) : (storeList[0] || depotList[0] || null));
       }
       if (prof) setProfile(prof);
     }, 150);

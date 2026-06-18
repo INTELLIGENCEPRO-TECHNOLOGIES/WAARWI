@@ -17,7 +17,7 @@ import {
   Share2, Copy, Check as CheckIcon, MessageCircle, RefreshCw,
   ClipboardList, Coins, RotateCcw,
   ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3, Store,
-  Network, Palette,
+  Network, Palette, Award,
 } from 'lucide-react';
 
 type ShopInfo = { slug: string | null; isActive: boolean };
@@ -60,6 +60,8 @@ type OrderDetail = {
 type Stats = {
   todaySales: number;
   todayCount: number;
+  todayPaid: number;
+  todayReceivable: number;
   yesterdaySales: number;
   monthSales: number;
   monthMargin: number;
@@ -170,7 +172,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const siteId = currentSite.id;
 
-      const periodQuery = supabase.from('sales').select('total, created_at, sale_items(unit_price, quantity, discount, purchase_cost)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString()).neq('status', 'cancelled');
+      const periodQuery = supabase.from('sales').select('total, paid, status, created_at, sale_items(unit_price, quantity, discount, purchase_cost)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString()).neq('status', 'cancelled');
       if (periodEnd) periodQuery.lt('created_at', periodEnd.toISOString());
 
       const [
@@ -208,6 +210,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       }
 
       const todaySales = (todayData.data || []).reduce((s, r) => s + Number(r.total), 0);
+      const todayPaid = (todayData.data || []).reduce((s: number, r: any) => s + Math.min(Number(r.total || 0), Number(r.paid || 0)), 0);
+      const todayReceivable = Math.max(0, todaySales - todayPaid);
       let todayMargin = 0;
       for (const sale of (todayData.data || []) as any[]) {
         for (const item of (sale.sale_items || [])) {
@@ -558,6 +562,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       const next: Stats = {
         todaySales, todayCount: todayData.data?.length || 0,
+        todayPaid, todayReceivable,
         yesterdaySales,
         monthSales, monthMargin,
         todayMargin,
@@ -640,7 +645,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       <div className="hidden lg:block">
         <DesktopDashboard
-          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0 }}
+          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, todayPaid: 0, todayReceivable: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0 }}
           shopInfo={shopInfo}
           greet={hourGreet}
           firstName={firstName}
@@ -1448,7 +1453,6 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
 
 function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel }: any) {
   const { tenant, currentSite, sites, setCurrentSite, profile } = useApp();
-  const netFlux = stats.cashBalance - stats.sessionExpenses;
   const { can } = usePermissions();
 
   // ── Multi-site overview ────────────────────────────────────────────────
@@ -1481,6 +1485,84 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
     })();
     return () => { cancelled = true; };
   }, [hasMultiSites, tenant?.id, sites.length, stats.todaySales]);
+
+  // ── Top articles du jour (single-site fallback) ─────────────────────────
+  type TopArticle = { article_id: string; name: string; quantity: number; total: number };
+  const [topArticles, setTopArticles] = useState<TopArticle[]>([]);
+  const [topArticlesLoading, setTopArticlesLoading] = useState(false);
+  useEffect(() => {
+    if (hasMultiSites || !tenant || !currentSite) return;
+    let cancelled = false;
+    (async () => {
+      setTopArticlesLoading(true);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+      let periodStart: Date;
+      let periodEnd: Date | null;
+      if (period === 'yesterday') {
+        periodStart = yest;
+        periodEnd = today;
+      } else if (period === 'this_week') {
+        periodStart = new Date(today);
+        const dow = periodStart.getDay();
+        periodStart.setDate(periodStart.getDate() - (dow === 0 ? 6 : dow - 1));
+        periodEnd = null;
+      } else if (period === 'last_week') {
+        periodStart = new Date(today);
+        const dow = periodStart.getDay();
+        periodStart.setDate(periodStart.getDate() - (dow === 0 ? 6 : dow - 1) - 7);
+        periodEnd = new Date(periodStart);
+        periodEnd.setDate(periodEnd.getDate() + 7);
+      } else if (period === 'this_month') {
+        periodStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        periodEnd = null;
+      } else if (period === 'last_month') {
+        periodStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        periodEnd = new Date(today.getFullYear(), today.getMonth(), 1);
+      } else {
+        periodStart = today;
+        periodEnd = null;
+      }
+      const salesQ = supabase
+        .from('sales')
+        .select('id')
+        .eq('tenant_id', tenant.id)
+        .eq('site_id', currentSite.id)
+        .gte('created_at', periodStart.toISOString())
+        .neq('status', 'cancelled');
+      if (periodEnd) salesQ.lt('created_at', periodEnd.toISOString());
+      const { data: salesRows } = await salesQ;
+      const saleIds = (salesRows || []).map((r: any) => r.id);
+      if (saleIds.length === 0) {
+        if (!cancelled) { setTopArticles([]); setTopArticlesLoading(false); }
+        return;
+      }
+      const { data: items } = await supabase
+        .from('sale_items')
+        .select('article_id, name, quantity, total')
+        .eq('tenant_id', tenant.id)
+        .in('sale_id', saleIds);
+      const agg = new Map<string, TopArticle>();
+      for (const it of items || []) {
+        const key = String(it.article_id);
+        const prev = agg.get(key);
+        if (prev) {
+          prev.quantity += Number(it.quantity || 0);
+          prev.total += Number(it.total || 0);
+        } else {
+          agg.set(key, {
+            article_id: key,
+            name: String(it.name || '—'),
+            quantity: Number(it.quantity || 0),
+            total: Number(it.total || 0),
+          });
+        }
+      }
+      const list = Array.from(agg.values()).sort((a, b) => b.total - a.total).slice(0, 50);
+      if (!cancelled) { setTopArticles(list); setTopArticlesLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [hasMultiSites, tenant?.id, currentSite?.id, stats.todaySales, period]);
   // ── Quick-action modal state ─────────────────────────────────────────────
   type QAModal = 'customer' | 'supplier' | 'stock_in' | 'stock_out' | 'stock_transfer' | null;
   const [qaModal, setQAModal] = useState<QAModal>(null);
@@ -1708,12 +1790,20 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
             {/* Main amount */}
             <div className="mb-4">
-              <p className="text-[11px] text-slate-400 font-medium mb-1">Encaissements {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
+              <p className="text-[11px] text-slate-400 font-medium mb-1">Chiffre d&apos;affaires {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
               <p className="text-3xl font-black text-slate-900 num tracking-tight leading-none">{formatFCFA(stats.todaySales)}</p>
             </div>
 
             {/* KPI Grid */}
             <div className="grid grid-cols-3 gap-3 flex-1">
+              <div className="rounded-xl bg-emerald-50/60 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-emerald-700/70 uppercase tracking-wide mb-1">Net encaissé</p>
+                <p className="text-lg font-bold text-emerald-700 num leading-tight">{formatCompactFCFA(stats.todayPaid)}</p>
+              </div>
+              <div className="rounded-xl bg-amber-50/60 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-amber-700/70 uppercase tracking-wide mb-1">Reste à percevoir</p>
+                <p className="text-lg font-bold text-amber-700 num leading-tight">{formatCompactFCFA(stats.todayReceivable)}</p>
+              </div>
               <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Ventes</p>
                 <p className="text-lg font-bold text-slate-900 num leading-tight">{stats.todayCount}</p>
@@ -1722,17 +1812,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Solde caisse</p>
                 <p className="text-lg font-bold text-slate-900 num leading-tight">{formatCompactFCFA(stats.cashBalance)}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Net du jour</p>
-                <p className="text-lg font-bold text-teal-700 num leading-tight">{formatCompactFCFA(netFlux)}</p>
-              </div>
               <div className="rounded-xl bg-rose-50/60 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Dépenses</p>
+                <p className="text-[10px] font-semibold text-rose-700/70 uppercase tracking-wide mb-1">Dépenses</p>
                 <p className="text-lg font-bold text-rose-600 num leading-tight">{formatCompactFCFA(stats.sessionExpenses)}</p>
-              </div>
-              <div className="rounded-xl bg-emerald-50/60 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Encaissements nets</p>
-                <p className="text-lg font-bold text-emerald-700 num leading-tight">{formatCompactFCFA(stats.sessionCashIn)}</p>
               </div>
               <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Ticket moyen</p>
@@ -1824,8 +1906,8 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           </div>
         </div>
 
-        {/* ── ROW 2: Vue multi-magasins (only if 2+ sites) ── */}
-        {hasMultiSites && multiSiteStats.length > 0 && (
+        {/* ── ROW 2: Vue multi-magasins (2+ sites) ou Top articles du jour (1 site) ── */}
+        {hasMultiSites ? (multiSiteStats.length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -1877,6 +1959,79 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 );
               })}
             </div>
+          </div>
+        )) : (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Award className="w-5 h-5 text-teal-600" />
+                <h3 className="text-base font-bold text-slate-900">Top articles</h3>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-bold border border-teal-100">{periodLabel}</span>
+                {topArticles.length > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold border border-slate-200">{topArticles.length}</span>
+                )}
+              </div>
+              <button
+                onClick={() => nav('/sales')}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-teal-700 transition-colors"
+              >
+                Voir le journal des ventes
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {topArticlesLoading ? (
+              <div className="flex items-center justify-center py-12 text-slate-400">
+                <Loader2 className="w-5 h-5 animate-spin" />
+              </div>
+            ) : topArticles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+                  <Package className="w-5 h-5 text-slate-300" />
+                </div>
+                <p className="text-sm font-semibold text-slate-700">Aucune vente sur la periode</p>
+                <p className="text-xs text-slate-400 mt-1">Les articles vendus apparaitront ici en temps reel.</p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-slate-100">
+                <div className="max-h-[330px] overflow-y-auto">
+                  <table className="w-full">
+                    <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-10">#</th>
+                        <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Article</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-28">Quantite</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-32">Chiffre d&apos;affaires</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(() => {
+                        const maxTotal = Math.max(...topArticles.map(a => a.total), 1);
+                        return topArticles.map((art, idx) => {
+                          const pct = Math.round((art.total / maxTotal) * 100);
+                          return (
+                            <tr key={art.article_id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${idx === 0 ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                  {idx + 1}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm font-semibold text-slate-900 truncate max-w-md">{art.name}</div>
+                                <div className="mt-1.5 h-1 rounded-full bg-slate-100 overflow-hidden">
+                                  <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right text-sm font-bold text-slate-800 num">{art.quantity}</td>
+                              <td className="px-4 py-3 text-right text-sm font-bold text-teal-700 num">{formatFCFA(art.total)}</td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

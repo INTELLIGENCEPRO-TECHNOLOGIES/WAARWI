@@ -202,202 +202,190 @@ function POSLandingOpen({
   const { sessions, loading: loadingSessions } = useRecentSessions(tenantId, currentSite?.id);
 
   return (
-    <div className="space-y-3 pb-6">
-      {/* ── Unified header bar (same style as Sales/Articles pages) ── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Caisse</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">Nouvelle session</div>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Ouvrir</div>
-            </div>
-          </div>
-          <div className="flex-1 flex items-center gap-2 min-w-0">
-            {currentSite && (
-              <span className="text-[11px] text-slate-500 truncate flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                {currentSite.name}
-              </span>
-            )}
-          </div>
-          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider">
-            <Lock className="w-2.5 h-2.5" />
-            Fermée
-          </span>
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-glow shrink-0" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
-            <Wallet className="w-3.5 h-3.5 text-white" />
-          </div>
+    <div className="pb-4">
+      {/* ── Header (matches resume screen) ── */}
+      <div className="px-1 sm:px-2 lg:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Caisse</h1>
+          {currentSite && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-slate-200 bg-white text-[11px] sm:text-xs font-medium text-slate-600">
+              <MapPin className="w-3 h-3 text-slate-400" />
+              {currentSite.name}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+          <span className="text-xs sm:text-sm font-medium text-slate-500">Caisse fermée</span>
+          <span className="hidden sm:inline text-xs sm:text-sm text-slate-400 ml-1">Aucune session en cours sur ce point de vente</span>
         </div>
       </div>
 
-      {/* ── Desktop: 2-column grid ── */}
-      <div className="hidden lg:grid lg:grid-cols-5 gap-4">
-        {/* Left: open form */}
-        <div className="col-span-3">
-          <div className="relative overflow-hidden rounded-2xl border border-brand-200/60 bg-white shadow-card">
-            <div className="absolute -top-24 -right-24 w-56 h-56 rounded-full bg-brand-400/8 blur-3xl pointer-events-none" />
-            <div className="relative p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-2xl text-white flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
-                  <ShoppingCart className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">Ouvrir la caisse</h2>
-                  <p className="text-xs text-slate-500">Démarrez une nouvelle session de vente</p>
-                </div>
-              </div>
+      {/* ── Desktop grid (mirrors resume) ── */}
+      <div className="hidden lg:grid lg:grid-cols-[1fr_320px] gap-4 px-6">
+        {/* Left: Ouvrir la caisse */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col">
+          <h2 className="text-lg font-bold text-slate-900 mb-5">Ouvrir la caisse</h2>
 
-              <div className="space-y-4 max-w-sm">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">Fond de caisse initial (FCFA)</label>
-                  <input
-                    type="number"
-                    value={openingAmount || ''}
-                    onChange={e => setOpeningAmount(Number(e.target.value))}
-                    className="w-full h-12 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-base font-bold tabular-nums transition-all"
-                    placeholder="0"
-                    min="0"
-                    autoFocus
-                    inputMode="numeric"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 block">Note (optionnel)</label>
-                  <input
-                    value={openingNote}
-                    onChange={e => setOpeningNote(e.target.value)}
-                    className="w-full h-10 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition-all"
-                    placeholder="Ex: monnaie disponible..."
-                  />
-                </div>
-                {cashierName && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
-                    <User className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="text-xs text-slate-500">Vendeur :</span>
-                    <span className="text-xs font-semibold text-slate-700">{cashierName}</span>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={openSessionSubmit}
-                disabled={openingSubmitting}
-                className="group mt-6 w-full max-w-sm relative overflow-hidden rounded-xl disabled:opacity-60 text-white font-bold text-sm py-3.5 px-5 shadow-[0_6px_20px_-8px_rgba(6,78,59,0.55)] hover:shadow-[0_8px_28px_-6px_rgba(6,78,59,0.7)] active:scale-[0.99] transition-all"
-                style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
-                <span className="relative flex items-center justify-center gap-2">
-                  {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-                  Ouvrir la caisse
-                </span>
-              </button>
+          <div className="space-y-4 flex-1">
+            <div>
+              <label className="text-[11px] text-slate-400 leading-none mb-1.5 block">Fond de caisse initial (FCFA)</label>
+              <input
+                type="number"
+                value={openingAmount || ''}
+                onChange={e => setOpeningAmount(Number(e.target.value))}
+                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15 outline-none text-sm font-semibold text-slate-900 tabular-nums transition-all"
+                placeholder="0"
+                min="0"
+                autoFocus
+                inputMode="numeric"
+              />
             </div>
+
+            <div>
+              <label className="text-[11px] text-slate-400 leading-none mb-1.5 block">Note (optionnel)</label>
+              <input
+                value={openingNote}
+                onChange={e => setOpeningNote(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15 outline-none text-sm text-slate-900 transition-all"
+                placeholder="Ex: monnaie disponible..."
+              />
+            </div>
+
+            {cashierName && (
+              <div className="flex items-center gap-3 py-3 px-3.5 rounded-xl border border-slate-100 bg-slate-50/60">
+                <div className="w-7 h-7 rounded-full border border-slate-200 bg-white flex items-center justify-center shrink-0">
+                  <User className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-slate-500">Vendeur :</span>
+                  <span className="font-semibold text-slate-900 uppercase">{cashierName}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Submit button — same gabarit as "Reprendre la session" */}
+          <div className="mt-5 pt-4 border-t border-slate-100">
+            <button
+              onClick={openSessionSubmit}
+              disabled={openingSubmitting}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm"
+            >
+              {openingSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShoppingCart className="w-3.5 h-3.5" />}
+              Ouvrir la caisse
+            </button>
           </div>
         </div>
 
-        {/* Right: tips */}
-        <div className="col-span-2 space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center"><AlertCircle className="w-4 h-4" /></div>
-              <h3 className="text-sm font-bold text-slate-800">Rappel</h3>
+        {/* Right column — same spirit as resume */}
+        <div className="flex flex-col gap-4">
+          {/* Rappel */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-teal-600" /></div>
+              <h3 className="text-sm font-bold text-slate-900">Rappel</h3>
             </div>
             <ul className="space-y-2 text-xs text-slate-600 leading-relaxed">
-              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Comptez les espèces dans votre tiroir-caisse avant d'ouvrir.</li>
-              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Le fond de caisse initial sera vérifié à la clôture.</li>
-              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-brand-500 mt-1.5 shrink-0" />Vous pouvez quitter la caisse et y revenir sans la fermer.</li>
+              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-slate-300 mt-1.5 shrink-0" />Comptez les espèces dans votre tiroir-caisse avant d'ouvrir.</li>
+              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-slate-300 mt-1.5 shrink-0" />Le fond de caisse initial sera vérifié à la clôture.</li>
+              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-slate-300 mt-1.5 shrink-0" />Vous pouvez quitter la caisse et y revenir sans la fermer.</li>
             </ul>
           </div>
+
+          {/* Point de vente */}
           {currentSite && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"><MapPin className="w-4 h-4" /></div>
-                <h3 className="text-sm font-bold text-slate-800">Point de vente</h3>
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 flex-1">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><MapPin className="w-4 h-4 text-slate-500" /></div>
+                <h3 className="text-sm font-bold text-slate-900">Point de vente</h3>
               </div>
               <p className="text-sm font-semibold text-slate-900">{currentSite.name}</p>
-              <p className="text-xs text-slate-500 mt-0.5">La session sera liée à ce point de vente.</p>
+              <p className="text-[11px] text-slate-400 mt-1">La session sera liée à ce point de vente.</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Mobile: open form card ── */}
-      <div className="lg:hidden">
-        <div className="rounded-2xl border border-brand-200/70 bg-white shadow-card overflow-hidden">
-          <div className="p-4">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
-                <ShoppingCart className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">Ouvrir la caisse</h2>
-                {cashierName && <p className="text-[10px] text-slate-500">{cashierName}</p>}
-              </div>
+      {/* ── Mobile layout ── */}
+      <div className="lg:hidden px-2 sm:px-3 space-y-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-3.5">
+          <h2 className="text-sm font-bold text-slate-900 mb-3">Ouvrir la caisse</h2>
+          <div className="space-y-2.5">
+            <div>
+              <label className="text-[10px] text-slate-400 mb-1 block">Fond de caisse (FCFA)</label>
+              <input
+                type="number"
+                value={openingAmount || ''}
+                onChange={e => setOpeningAmount(Number(e.target.value))}
+                className="w-full h-11 px-3 rounded-lg border border-slate-200 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15 outline-none text-sm font-semibold tabular-nums"
+                placeholder="0"
+                min="0"
+                autoFocus={desktopAutoFocus}
+                inputMode="numeric"
+              />
             </div>
-
-            <div className="space-y-2.5">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 block">Fond de caisse (FCFA)</label>
-                <input
-                  type="number"
-                  value={openingAmount || ''}
-                  onChange={e => setOpeningAmount(Number(e.target.value))}
-                  className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-base font-bold tabular-nums"
-                  placeholder="0"
-                  min="0"
-                  autoFocus={desktopAutoFocus}
-                  inputMode="numeric"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1 block">Note (optionnel)</label>
-                <input
-                  value={openingNote}
-                  onChange={e => setOpeningNote(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-xs"
-                  placeholder="Ex: monnaie disponible..."
-                />
-              </div>
+            <div>
+              <label className="text-[10px] text-slate-400 mb-1 block">Note (optionnel)</label>
+              <input
+                value={openingNote}
+                onChange={e => setOpeningNote(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15 outline-none text-xs"
+                placeholder="Ex: monnaie disponible..."
+              />
             </div>
-
-            <button
-              onClick={openSessionSubmit}
-              disabled={openingSubmitting}
-              className="group mt-3 w-full rounded-xl disabled:opacity-60 text-white font-bold text-sm py-3 px-4 shadow-[0_6px_20px_-8px_rgba(6,78,59,0.55)] active:scale-[0.99] transition-all"
-              style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
-            >
-              <span className="flex items-center justify-center gap-2">
-                {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-                Ouvrir la caisse
-              </span>
-            </button>
+            {cashierName && (
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <div className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><User className="w-3 h-3 text-slate-400" /></div>
+                <div><p className="text-[9px] text-slate-400">Vendeur</p><p className="text-[11px] font-semibold text-slate-800 uppercase">{cashierName}</p></div>
+              </div>
+            )}
           </div>
         </div>
+
+        <button
+          onClick={openSessionSubmit}
+          disabled={openingSubmitting}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm"
+        >
+          {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
+          Ouvrir la caisse
+        </button>
+
+        {currentSite && (
+          <div className="bg-white rounded-xl border border-slate-200 p-3.5">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center"><MapPin className="w-3 h-3 text-slate-500" /></div>
+              <h3 className="text-xs font-bold text-slate-900">Point de vente</h3>
+            </div>
+            <p className="text-xs font-semibold text-slate-900">{currentSite.name}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">La session sera liée à ce point de vente.</p>
+          </div>
+        )}
       </div>
 
-      {/* ── Recent sessions ── */}
+      {/* ── Recent sessions (cleaner, aligned with the rest) ── */}
       {!loadingSessions && sessions.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-1.5 px-1">
+        <div className="mt-5 px-2 sm:px-3 lg:px-6">
+          <div className="flex items-center justify-between mb-2 px-1">
             <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernières sessions</h3>
             {onSeeAll && (
-              <button onClick={onSeeAll} className="text-[11px] font-semibold text-brand-700 inline-flex items-center gap-0.5">
+              <button onClick={onSeeAll} className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 inline-flex items-center gap-0.5 transition-colors">
                 Voir tout <ChevronRight className="w-3 h-3" />
               </button>
             )}
           </div>
           {/* Desktop table */}
-          <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-card">
+          <div className="hidden lg:block bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <table className="w-full">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Date</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Ouverture</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fermeture</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fond</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Encaissé</th>
-                  <th className="text-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Statut</th>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Date</th>
+                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ouverture</th>
+                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fermeture</th>
+                  <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fond</th>
+                  <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Encaissé</th>
+                  <th className="text-center px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -405,13 +393,13 @@ function POSLandingOpen({
                   const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3 text-xs font-semibold text-slate-800">{fmtDateFull(s.opened_at)}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-slate-600">{fmtTimeLanding(s.opened_at)}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-slate-600">{s.closed_at ? fmtTimeLanding(s.closed_at) : '-'}</td>
-                      <td className="px-4 py-3 text-xs font-semibold text-slate-800 tabular-nums text-right">{formatFCFA(Number(s.opening_amount))}</td>
-                      <td className="px-4 py-3 text-xs font-bold text-brand-800 tabular-nums text-right">{collected != null ? formatFCFA(collected) : '-'}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase">
+                      <td className="px-5 py-3 text-xs font-semibold text-slate-900">{fmtDateFull(s.opened_at)}</td>
+                      <td className="px-5 py-3 text-xs tabular-nums text-slate-600">{fmtTimeLanding(s.opened_at)}</td>
+                      <td className="px-5 py-3 text-xs tabular-nums text-slate-600">{s.closed_at ? fmtTimeLanding(s.closed_at) : '-'}</td>
+                      <td className="px-5 py-3 text-xs font-semibold text-slate-800 tabular-nums text-right">{formatFCFA(Number(s.opening_amount))}</td>
+                      <td className="px-5 py-3 text-xs font-bold text-teal-600 tabular-nums text-right">{collected != null ? formatFCFA(collected) : '-'}</td>
+                      <td className="px-5 py-3 text-center">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border border-slate-200 bg-slate-50 text-slate-600">
                           <Lock className="w-2 h-2" /> Clôturée
                         </span>
                       </td>
@@ -426,7 +414,7 @@ function POSLandingOpen({
             {sessions.slice(0, 3).map(s => {
               const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
               return (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-slate-200">
+                <div key={s.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white border border-slate-200">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center shrink-0"><Lock className="w-2.5 h-2.5 text-slate-500" /></div>
                     <div className="min-w-0">
@@ -434,7 +422,7 @@ function POSLandingOpen({
                       <span className="text-[10px] text-slate-400 ml-1.5 tabular-nums">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
                     </div>
                   </div>
-                  <span className="text-[11px] font-bold text-brand-800 tabular-nums shrink-0">{collected != null ? formatFCFA(collected) : '-'}</span>
+                  <span className="text-[11px] font-bold text-teal-600 tabular-nums shrink-0">{collected != null ? formatFCFA(collected) : '-'}</span>
                 </div>
               );
             })}
