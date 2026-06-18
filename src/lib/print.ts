@@ -876,3 +876,341 @@ ${waarwiFooterA4()}
   w.document.close();
   setTimeout(() => w.print(), 400);
 }
+
+// ── Stock Movement Print (A4) ─────────────────────────────────────────────────
+export type StockMovementPrintItem = {
+  ref: string;
+  name: string;
+  quantity: number;
+  note?: string;
+};
+
+export type StockMovementPrintOpts = {
+  tenant: PrintTenant;
+  movementType: string;
+  movementLabel: string;
+  reference: string;
+  date: string;
+  user: string;
+  siteOrigin?: string;
+  siteDestination?: string;
+  items: StockMovementPrintItem[];
+  observation?: string;
+  siteName?: string;
+};
+
+const MOVEMENT_TYPE_TITLES: Record<string, string> = {
+  adjustment_in: 'BON D\'ENTRÉE DE STOCK',
+  adjustment_out: 'BON DE SORTIE DE STOCK',
+  transfer_in: 'BON DE TRANSFERT',
+  transfer_out: 'BON DE TRANSFERT',
+  transfer: 'BON DE TRANSFERT',
+  inventory: 'FICHE D\'INVENTAIRE',
+  bulk_in: 'BON D\'ENTRÉE EN MASSE',
+  bulk_out: 'BON DE SORTIE EN MASSE',
+  bulk_transfer: 'BON DE TRANSFERT EN MASSE',
+  bulk_inventory: 'FICHE D\'INVENTAIRE EN MASSE',
+};
+
+export function printStockMovementA4(opts: StockMovementPrintOpts) {
+  const w = window.open('', '_blank', 'width=900,height=1200');
+  if (!w) return;
+  const t = opts.tenant;
+  const title = MOVEMENT_TYPE_TITLES[opts.movementType] || 'BON DE MOUVEMENT DE STOCK';
+  const totalQty = opts.items.reduce((s, i) => s + Math.abs(i.quantity), 0);
+
+  const rowsHtml = opts.items.map((item, i) => `
+    <tr>
+      <td style="text-align:center;font-weight:600;color:#64748b;">${i + 1}</td>
+      <td style="font-family:'Courier New',monospace;font-size:9pt;font-weight:600;">${esc(item.ref)}</td>
+      <td style="font-weight:600;">${esc(item.name)}</td>
+      <td style="text-align:center;font-weight:700;font-variant-numeric:tabular-nums;">${Math.abs(item.quantity)}</td>
+      <td style="font-size:9pt;color:#64748b;">${esc(item.note || '')}</td>
+    </tr>`).join('');
+
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)} - ${esc(opts.reference)}</title>
+<style>
+  @page { size: A4; margin: 15mm 12mm; }
+  @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; font-size: 10pt; line-height: 1.5; background: #fff; }
+  .doc { max-width: 186mm; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 6mm; margin-bottom: 5mm; border-bottom: 2px solid #0f766e; }
+  .header .left { }
+  .header .logo { max-height: 16mm; max-width: 40mm; object-fit: contain; margin-bottom: 2mm; display: block; }
+  .header .company { font-size: 14pt; font-weight: 800; color: #0f172a; }
+  .header .info { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
+  .header .right { text-align: right; }
+  .header .ref { font-family: 'Courier New', monospace; font-size: 11pt; font-weight: 800; color: #0f766e; }
+  .header .date { font-size: 9pt; color: #475569; margin-top: 1mm; }
+  .title { text-align: center; font-size: 14pt; font-weight: 800; letter-spacing: 1px; color: #0f766e; margin: 5mm 0 3mm; text-transform: uppercase; }
+  .meta-bar { display: flex; gap: 4mm; flex-wrap: wrap; margin-bottom: 5mm; padding: 3mm 4mm; border: 1px solid #e2e8f0; border-radius: 2mm; background: #f8fafc; }
+  .meta-bar .cell { flex: 1; min-width: 35mm; }
+  .meta-bar .cell .lbl { font-size: 7.5pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
+  .meta-bar .cell .val { font-size: 10pt; font-weight: 700; color: #0f172a; margin-top: 0.5mm; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 5mm; }
+  thead tr { background: #f1f5f9; }
+  thead th { text-align: left; font-size: 8pt; padding: 2.5mm 3mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #475569; border-bottom: 1.5px solid #cbd5e1; }
+  thead th.center { text-align: center; }
+  tbody tr { border-bottom: 1px solid #e2e8f0; }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+  tbody td { padding: 2.5mm 3mm; font-size: 9.5pt; vertical-align: top; }
+  .total-row { background: #f1f5f9 !important; border-top: 1.5px solid #cbd5e1; }
+  .total-row td { font-weight: 800; font-size: 10pt; padding: 3mm; }
+  .observation { margin: 5mm 0; padding: 3mm 4mm; border: 1px solid #e2e8f0; border-radius: 2mm; background: #f8fafc; }
+  .observation .lbl { font-size: 8pt; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 1mm; }
+  .observation .txt { font-size: 9.5pt; color: #1e293b; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 12mm; padding-top: 5mm; }
+  .sig-block { width: 55mm; text-align: center; }
+  .sig-block .line { height: 15mm; border-bottom: 1px solid #94a3b8; }
+  .sig-block .cap { margin-top: 2mm; font-size: 8pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
+  .footer-brand { margin-top: 8mm; padding-top: 3mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 8pt; color: #94a3b8; }
+</style></head><body>
+<div class="doc">
+  <div class="header">
+    <div class="left">
+      ${t.logo_url ? `<img class="logo" src="${esc(t.logo_url)}" onerror="this.style.display='none'"/>` : ''}
+      <div class="company">${esc(t.name)}</div>
+      ${t.address ? `<div class="info">${esc(t.address)}</div>` : ''}
+      ${t.phone ? `<div class="info">Tél : ${esc(t.phone)}</div>` : ''}
+    </div>
+    <div class="right">
+      <div class="ref">${esc(opts.reference)}</div>
+      <div class="date">${esc(opts.date)}</div>
+    </div>
+  </div>
+
+  <div class="title">${esc(title)}</div>
+
+  <div class="meta-bar">
+    ${opts.siteName ? `<div class="cell"><div class="lbl">Dépôt</div><div class="val">${esc(opts.siteName)}</div></div>` : ''}
+    ${opts.siteOrigin ? `<div class="cell"><div class="lbl">Origine</div><div class="val">${esc(opts.siteOrigin)}</div></div>` : ''}
+    ${opts.siteDestination ? `<div class="cell"><div class="lbl">Destination</div><div class="val">${esc(opts.siteDestination)}</div></div>` : ''}
+    <div class="cell"><div class="lbl">Opérateur</div><div class="val">${esc(opts.user)}</div></div>
+    <div class="cell"><div class="lbl">Articles</div><div class="val">${opts.items.length}</div></div>
+    <div class="cell"><div class="lbl">Qté totale</div><div class="val">${totalQty}</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="center" style="width:10mm;">#</th>
+        <th style="width:28mm;">Référence</th>
+        <th>Désignation</th>
+        <th class="center" style="width:18mm;">Quantité</th>
+        <th style="width:40mm;">Observation</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+      <tr class="total-row">
+        <td colspan="3" style="text-align:right;">TOTAL</td>
+        <td style="text-align:center;">${totalQty}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+  ${opts.observation ? `<div class="observation"><div class="lbl">Observation</div><div class="txt">${esc(opts.observation)}</div></div>` : ''}
+
+  <div class="signatures">
+    <div class="sig-block"><div class="line"></div><div class="cap">Magasinier</div></div>
+    <div class="sig-block"><div class="line"></div><div class="cap">Responsable</div></div>
+  </div>
+
+  <div class="footer-brand">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
+</div>
+</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}
+
+// ── Stock Movement Print (80mm Ticket) ────────────────────────────────────────
+export function printStockMovement80(opts: StockMovementPrintOpts) {
+  const w = window.open('', '_blank', 'width=350,height=600');
+  if (!w) return;
+  const t = opts.tenant;
+  const title = MOVEMENT_TYPE_TITLES[opts.movementType] || 'MOUVEMENT STOCK';
+  const totalQty = opts.items.reduce((s, i) => s + Math.abs(i.quantity), 0);
+
+  const itemsHtml = opts.items.map(item => `
+    <tr>
+      <td style="font-weight:600;padding:1.5mm 0;">${esc(item.name)}</td>
+      <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:1.5mm 0;">${Math.abs(item.quantity)}</td>
+    </tr>`).join('');
+
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+<style>
+  @page { margin: 0; size: 80mm auto; }
+  @media print { body { margin: 0 !important; padding: 2mm !important; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; width: 72mm; padding: 3mm; color: #000; line-height: 1.4; background: #fff; }
+  .center { text-align: center; }
+  .shop-name { text-align: center; font-weight: 900; font-size: 16px; margin-bottom: 2px; }
+  .meta { text-align: center; font-size: 10px; color: #000; }
+  .title { text-align: center; font-weight: 900; font-size: 14px; margin: 4mm 0 2mm; letter-spacing: 0.5px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 2mm 0; }
+  .info { font-size: 10px; margin: 2mm 0; }
+  .info span { font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0; }
+  table td { font-size: 11px; border-bottom: 1px dotted #ccc; }
+  .total { border-top: 1.5px solid #000; margin-top: 1mm; padding-top: 2mm; font-weight: 900; font-size: 13px; display: flex; justify-content: space-between; }
+  .footer { margin-top: 4mm; padding-top: 2mm; border-top: 1px dashed #000; text-align: center; font-size: 9px; color: #000; }
+</style></head><body>
+  <div class="shop-name">${esc(t.name)}</div>
+  ${t.address ? `<div class="meta">${esc(t.address)}</div>` : ''}
+  ${t.phone ? `<div class="meta">Tél: ${esc(t.phone)}</div>` : ''}
+
+  <div class="title">${esc(title)}</div>
+
+  <div class="info">Réf : <span>${esc(opts.reference)}</span></div>
+  <div class="info">Date : <span>${esc(opts.date)}</span></div>
+  <div class="info">Opérateur : <span>${esc(opts.user)}</span></div>
+  ${opts.siteOrigin ? `<div class="info">Origine : <span>${esc(opts.siteOrigin)}</span></div>` : ''}
+  ${opts.siteDestination ? `<div class="info">Destination : <span>${esc(opts.siteDestination)}</span></div>` : ''}
+  ${opts.siteName ? `<div class="info">Dépôt : <span>${esc(opts.siteName)}</span></div>` : ''}
+
+  <table>${itemsHtml}</table>
+
+  <div class="total"><span>TOTAL</span><span>${totalQty} article${totalQty > 1 ? 's' : ''}</span></div>
+
+  ${opts.observation ? `<div class="info" style="margin-top:3mm;font-style:italic;">Obs: ${esc(opts.observation)}</div>` : ''}
+
+  <div class="footer">Propulsée par <strong>WAARWI</strong><br/>Plateforme Business 2.0</div>
+</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}
+
+// ── Inventory Book Print (new design - light, professional) ───────────────────
+export type InventoryBookOpts = {
+  tenant: PrintTenant;
+  siteName: string;
+  items: { ref: string; name: string; location: string; qty_theoretical: number; qty_real: number; purchase_price: number }[];
+  date: string;
+  reference: string;
+};
+
+export function printInventoryBookA4(opts: InventoryBookOpts) {
+  const w = window.open('', '_blank', 'width=900,height=1200');
+  if (!w) return;
+  const t = opts.tenant;
+  const totalQty = opts.items.reduce((s, i) => s + i.qty_real, 0);
+  const totalValue = opts.items.reduce((s, i) => s + i.qty_real * i.purchase_price, 0);
+  const totalEcart = opts.items.reduce((s, i) => s + (i.qty_real - i.qty_theoretical), 0);
+  const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' F';
+
+  const rowsHtml = opts.items.map((r, i) => {
+    const ecart = r.qty_real - r.qty_theoretical;
+    const ecartClass = ecart > 0 ? 'color:#059669;' : ecart < 0 ? 'color:#dc2626;' : 'color:#64748b;';
+    return `
+    <tr>
+      <td style="text-align:center;font-weight:600;color:#94a3b8;font-size:8.5pt;">${i + 1}</td>
+      <td style="font-family:'Courier New',monospace;font-size:8.5pt;font-weight:600;">${esc(r.ref)}</td>
+      <td style="font-weight:600;">${esc(r.name)}</td>
+      <td style="text-align:center;font-size:8.5pt;">${esc(r.location || '')}</td>
+      <td style="text-align:center;font-variant-numeric:tabular-nums;">${r.qty_theoretical}</td>
+      <td style="text-align:center;font-weight:700;font-variant-numeric:tabular-nums;">${r.qty_real}</td>
+      <td style="text-align:center;font-weight:700;font-variant-numeric:tabular-nums;${ecartClass}">${ecart > 0 ? '+' : ''}${ecart}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-size:8.5pt;">${fmt(r.qty_real * r.purchase_price)}</td>
+    </tr>`;
+  }).join('');
+
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Livre d'inventaire — ${esc(opts.reference)}</title>
+<style>
+  @page { size: A4; margin: 12mm 10mm 14mm 10mm; }
+  @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; font-size: 9pt; line-height: 1.4; background: #fff; }
+  .doc { max-width: 190mm; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 4mm; margin-bottom: 4mm; border-bottom: 2px solid #0f766e; }
+  .header .logo { max-height: 14mm; max-width: 35mm; object-fit: contain; margin-bottom: 1.5mm; display: block; }
+  .header .company { font-size: 13pt; font-weight: 800; color: #0f172a; }
+  .header .sub { font-size: 8pt; color: #475569; margin-top: 0.5mm; }
+  .header .right { text-align: right; }
+  .header .ref { font-family: 'Courier New', monospace; font-size: 10pt; font-weight: 800; color: #0f766e; }
+  .header .date { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
+  .doc-title { text-align: center; font-size: 13pt; font-weight: 800; letter-spacing: 1px; color: #0f766e; margin: 4mm 0 2mm; text-transform: uppercase; }
+  .doc-subtitle { text-align: center; font-size: 8.5pt; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4mm; }
+  .summary { display: flex; gap: 3mm; margin-bottom: 4mm; }
+  .summary .card { flex: 1; padding: 2.5mm 3mm; border: 1px solid #e2e8f0; border-radius: 1.5mm; background: #f8fafc; }
+  .summary .card .lbl { font-size: 7pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
+  .summary .card .val { font-size: 10pt; font-weight: 800; color: #0f172a; margin-top: 0.3mm; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  thead tr { background: #f1f5f9; }
+  thead th { text-align: left; font-size: 7.5pt; padding: 2mm 2.5mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; border-bottom: 1.5px solid #cbd5e1; }
+  thead th.c { text-align: center; }
+  thead th.r { text-align: right; }
+  tbody tr { page-break-inside: avoid; border-bottom: 0.5px solid #e2e8f0; }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+  tbody td { padding: 1.8mm 2.5mm; font-size: 8.5pt; vertical-align: top; }
+  .tfoot-row { background: #f1f5f9; border-top: 1.5px solid #cbd5e1; }
+  .tfoot-row td { padding: 2.5mm; font-weight: 800; font-size: 9pt; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 10mm; }
+  .sig-block { width: 50mm; text-align: center; }
+  .sig-block .line { height: 13mm; border-bottom: 1px solid #94a3b8; }
+  .sig-block .cap { margin-top: 1.5mm; font-size: 7.5pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
+  .brand-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 7.5pt; color: #94a3b8; }
+</style></head><body>
+<div class="doc">
+  <div class="header">
+    <div>
+      ${t.logo_url ? `<img class="logo" src="${esc(t.logo_url)}" onerror="this.style.display='none'"/>` : ''}
+      <div class="company">${esc(t.name)}</div>
+      ${t.address ? `<div class="sub">${esc(t.address)}</div>` : ''}
+      ${t.phone ? `<div class="sub">Tél : ${esc(t.phone)}</div>` : ''}
+    </div>
+    <div class="right">
+      <div class="ref">${esc(opts.reference)}</div>
+      <div class="date">${esc(opts.date)}</div>
+    </div>
+  </div>
+
+  <div class="doc-title">Livre d'inventaire</div>
+  <div class="doc-subtitle">État du stock disponible — ${esc(opts.siteName)}</div>
+
+  <div class="summary">
+    <div class="card"><div class="lbl">Dépôt</div><div class="val">${esc(opts.siteName)}</div></div>
+    <div class="card"><div class="lbl">Références</div><div class="val">${opts.items.length}</div></div>
+    <div class="card"><div class="lbl">Qté totale</div><div class="val">${totalQty.toLocaleString('fr-FR')}</div></div>
+    <div class="card"><div class="lbl">Écart total</div><div class="val" style="${totalEcart > 0 ? 'color:#059669' : totalEcart < 0 ? 'color:#dc2626' : ''}">${totalEcart > 0 ? '+' : ''}${totalEcart}</div></div>
+    <div class="card"><div class="lbl">Valeur stock</div><div class="val">${fmt(totalValue)}</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="c" style="width:8mm;">#</th>
+        <th style="width:22mm;">Réf.</th>
+        <th>Désignation</th>
+        <th class="c" style="width:16mm;">Empl.</th>
+        <th class="c" style="width:14mm;">Théo.</th>
+        <th class="c" style="width:14mm;">Réel</th>
+        <th class="c" style="width:14mm;">Écart</th>
+        <th class="r" style="width:24mm;">Valeur</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+      <tr class="tfoot-row">
+        <td colspan="4" style="text-align:right;">TOTAL</td>
+        <td style="text-align:center;">${opts.items.reduce((s, r) => s + r.qty_theoretical, 0)}</td>
+        <td style="text-align:center;">${totalQty}</td>
+        <td style="text-align:center;${totalEcart > 0 ? 'color:#059669' : totalEcart < 0 ? 'color:#dc2626' : ''}">${totalEcart > 0 ? '+' : ''}${totalEcart}</td>
+        <td style="text-align:right;">${fmt(totalValue)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="signatures">
+    <div class="sig-block"><div class="line"></div><div class="cap">Magasinier</div></div>
+    <div class="sig-block"><div class="line"></div><div class="cap">Responsable</div></div>
+    <div class="sig-block"><div class="line"></div><div class="cap">Directeur</div></div>
+  </div>
+
+  <div class="brand-footer">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
+</div>
+</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -12,6 +12,7 @@ import { desktopAutoFocus } from '../lib/device';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
+import { printStockMovementA4, printStockMovement80, printInventoryBookA4, type PrintTenant } from '../lib/print';
 
 type Row = {
   article_id: string;
@@ -42,7 +43,7 @@ type LotRow = {
 };
 
 export function Stock() {
-  const { tenant, currentSite, sites, dataTick } = useApp();
+  const { tenant, currentSite, sites, depots, dataTick, profile } = useApp();
   const { can } = usePermissions();
   const { success, error } = useToast();
   const [rows, setRows] = useState<Row[]>([]);
@@ -55,11 +56,13 @@ export function Stock() {
   const [mvDateTo, setMvDateTo] = useState<string>('');
   const [mvPickerOpen, setMvPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
-  const [listEditMode, setListEditMode] = useState<'in' | 'out' | 'inventory'>('in');
+  const [listEditMode, setListEditMode] = useState<'in' | 'out' | 'inventory' | 'transfer'>('in');
   type ListEditEntry = { article_id: string; qty: number | ''; note: string; lot_number: string; };
   const [listEdits, setListEdits] = useState<Map<string, ListEditEntry>>(new Map());
   const [listSaving, setListSaving] = useState(false);
   const listInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const [listTransferTarget, setListTransferTarget] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const [adjOpen, setAdjOpen] = useState(false);
   const [adjRow, setAdjRow] = useState<Row | null>(null);
@@ -67,6 +70,7 @@ export function Stock() {
   const [adjQty, setAdjQty] = useState<number | ''>('');
   const [adjNote, setAdjNote] = useState('');
   const [adjTargetSite, setAdjTargetSite] = useState('');
+  const [adjSiteId, setAdjSiteId] = useState('');
   const [adjInventoryQty, setAdjInventoryQty] = useState<number | ''>('');
   const [saving, setSaving] = useState(false);
 
@@ -78,12 +82,47 @@ export function Stock() {
 
   const stockMethod: StockMethod = ((tenant as any)?.settings?.stock_method as StockMethod) || 'none';
   const sharedArticles = (tenant as any)?.settings?.shared_articles !== false;
-  const canTransfer = sites.length > 1 && sharedArticles;
+  const interDepotTransfer = !!(tenant as any)?.settings?.inter_depot_transfer;
+
+  // Transfer targets logic:
+  // - Own depots (parent_site_id === currentSite.id): ALWAYS accessible
+  // - Other stores: only if sharedArticles
+  // - Depots of other stores: only if sharedArticles AND interDepotTransfer
+  const allTransferTargets = (() => {
+    const targets: typeof sites = [];
+    // Own depots are always reachable
+    for (const d of depots) {
+      if (d.parent_site_id === currentSite?.id) targets.push(d);
+    }
+    if (sharedArticles) {
+      // Other stores
+      for (const s of sites) {
+        if (s.id !== currentSite?.id) targets.push(s);
+      }
+      // Depots of other stores (inter-depot)
+      if (interDepotTransfer) {
+        for (const d of depots) {
+          if (d.parent_site_id !== currentSite?.id) targets.push(d);
+        }
+      }
+    }
+    return targets;
+  })();
+  const canTransfer = allTransferTargets.length > 0;
 
   // Lot picker for sortie
   const [lotPickerOutOpen, setLotPickerOutOpen] = useState(false);
   const [lotPickerOutRow, setLotPickerOutRow] = useState<Row | null>(null);
   const [lotPickerOutQty, setLotPickerOutQty] = useState(0);
+
+  // After a successful individual adjustment, show print options
+  const [adjDone, setAdjDone] = useState(false);
+  const [adjDoneData, setAdjDoneData] = useState<{ articleName: string; articleRef: string; qty: number; type: string; label: string } | null>(null);
+
+  // After a successful bulk operation, show print modal
+  const [bulkDoneOpen, setBulkDoneOpen] = useState(false);
+  const [bulkDoneItems, setBulkDoneItems] = useState<{ ref: string; name: string; quantity: number }[]>([]);
+  const [bulkDoneMode, setBulkDoneMode] = useState('');
 
   const load = async (silent = false) => {
     if (!tenant || !currentSite) return;
@@ -181,130 +220,46 @@ export function Stock() {
   }, [moves, mvDateFrom, mvDateTo]);
 
   const printInventoryBook = () => {
-    const w = window.open('', '_blank', 'width=900,height=1200');
-    if (!w) return;
+    if (!tenant || !currentSite) return;
     const avail = [...rows].filter(r => r.quantity > 0).sort((a, b) => a.name.localeCompare(b.name));
-    const totalQty = avail.reduce((s, r) => s + r.quantity, 0);
-    const totalValue = avail.reduce((s, r) => s + r.quantity * r.purchase_price, 0);
     const now = new Date();
-    const nowStr = now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const ref = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-    const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
-    const escapeHtml = (s: string) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
-    const rowsHtml = avail.map((r, i) => `
-      <tr>
-        <td class="c-num">${i + 1}</td>
-        <td class="c-ref">${escapeHtml(r.internal_ref)}</td>
-        <td class="c-name">${escapeHtml(r.name)}</td>
-        <td class="c-loc">${escapeHtml(r.location || '')}</td>
-        <td class="c-qty">${r.quantity}</td>
-        <td class="c-unit">${fmt(r.purchase_price)}</td>
-        <td class="c-val">${fmt(r.quantity * r.purchase_price)}</td>
-      </tr>`).join('');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Livre d'inventaire — ${ref}</title>
-<style>
-  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
-  @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #000000; font-size: 9.5pt; line-height: 1.4; background: #fff; }
-  .doc { max-width: 186mm; margin: 0 auto; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5px solid #000000; padding-bottom: 8mm; margin-bottom: 6mm; }
-  .head .brand { font-size: 15pt; font-weight: 900; letter-spacing: 0.5px; color: #000000; }
-  .head .sub { font-size: 8.5pt; font-weight: 700; color: #000000; margin-top: 1mm; text-transform: uppercase; letter-spacing: 1.2px; }
-  .head .meta { text-align: right; font-size: 8.5pt; font-weight: 600; color: #000000; }
-  .head .meta .ref { font-family: 'Courier New', monospace; font-weight: 900; color: #000000; font-size: 10.5pt; }
-  .title { text-align: center; font-size: 16pt; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 2mm; color: #000000; }
-  .title-sub { text-align: center; font-size: 9pt; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 7mm; }
-  .info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; margin-bottom: 6mm; border: 1.5px solid #000000; border-radius: 2mm; padding: 3mm 4mm; background: #f5f5f5; }
-  .info .cell .l { font-size: 7pt; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 1px; }
-  .info .cell .v { font-size: 10.5pt; font-weight: 900; color: #000000; margin-top: 0.5mm; font-variant-numeric: tabular-nums; }
-  table { width: 100%; border-collapse: collapse; }
-  thead { display: table-header-group; }
-  thead tr { background: #000000; color: #ffffff; }
-  thead th { text-align: left; font-size: 8pt; padding: 2.5mm 2mm; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #ffffff; }
-  thead th.right { text-align: right; }
-  tbody tr { page-break-inside: avoid; border-bottom: 1px solid #000000; }
-  tbody tr:nth-child(even) { background: #f5f5f5; }
-  tbody td { padding: 2mm 2mm; font-size: 9pt; font-weight: 500; color: #000000; vertical-align: top; }
-  .c-num { width: 10mm; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; color: #000000; }
-  .c-ref { width: 26mm; font-family: 'Courier New', monospace; font-size: 8.5pt; font-weight: 700; color: #000000; }
-  .c-name { font-weight: 600; color: #000000; }
-  .c-loc { width: 22mm; font-size: 8.5pt; font-weight: 600; color: #000000; }
-  .c-qty { width: 14mm; text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; color: #000000; }
-  .c-unit { width: 28mm; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: #000000; }
-  .c-val { width: 32mm; text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; color: #000000; }
-  tfoot tr { background: #000000; color: #ffffff; }
-  tfoot td { padding: 3mm 2mm; font-size: 9.5pt; font-weight: 800; color: #ffffff; }
-  tfoot .lbl { text-transform: uppercase; letter-spacing: 1.2px; font-size: 8.5pt; font-weight: 900; }
-  .foot { margin-top: 10mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 8.5pt; font-weight: 600; color: #000000; border-top: 1.5px solid #000000; padding-top: 4mm; }
-  .sig { width: 55mm; text-align: center; }
-  .sig .line { height: 14mm; border-bottom: 1.5px solid #000000; }
-  .sig .cap { margin-top: 1.5mm; text-transform: uppercase; letter-spacing: 1px; font-size: 7.5pt; font-weight: 800; color: #000000; }
-  .pagenum::after { content: "Page " counter(page); }
-  .waarwi { margin-top: 8mm; padding-top: 3mm; border-top: 1px dashed #000000; text-align: center; font-size: 9px; font-weight: 600; color: #000000; letter-spacing: 0.3px; }
-</style>
-</head><body>
-<div class="doc">
-  <div class="head">
-    <div>
-      <div class="brand">${escapeHtml(tenant?.name || 'Entreprise')}</div>
-      <div class="sub">${escapeHtml(currentSite?.name || '')}</div>
-    </div>
-    <div class="meta">
-      <div class="ref">N° ${ref}</div>
-      <div>Émis le ${nowStr}</div>
-    </div>
-  </div>
+    printInventoryBookA4({
+      tenant: {
+        name: tenant.name, logo_url: (tenant as any)?.logo_url,
+        address: (tenant as any)?.address, phone: (tenant as any)?.phone,
+      },
+      siteName: currentSite.name || '',
+      items: avail.map(r => ({
+        ref: r.internal_ref, name: r.name, location: r.location,
+        qty_theoretical: r.quantity, qty_real: r.quantity, purchase_price: r.purchase_price,
+      })),
+      date: now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      reference: ref,
+    });
+  };
 
-  <div class="title">Livre d'inventaire</div>
-  <div class="title-sub">État du stock disponible</div>
+  const tenantPrint: PrintTenant = {
+    name: tenant?.name || '', logo_url: (tenant as any)?.logo_url,
+    address: (tenant as any)?.address, phone: (tenant as any)?.phone,
+    email: (tenant as any)?.email,
+  };
 
-  <div class="info">
-    <div class="cell"><div class="l">Site</div><div class="v">${escapeHtml(currentSite?.name || '—')}</div></div>
-    <div class="cell"><div class="l">Références</div><div class="v">${avail.length}</div></div>
-    <div class="cell"><div class="l">Quantité totale</div><div class="v">${totalQty.toLocaleString('fr-FR')}</div></div>
-    <div class="cell"><div class="l">Valeur d'achat</div><div class="v">${fmt(totalValue)}</div></div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th class="right">#</th>
-        <th>Référence</th>
-        <th>Désignation</th>
-        <th>Emplacement</th>
-        <th class="right">Qté</th>
-        <th class="right">P.U. Achat</th>
-        <th class="right">Valeur</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rowsHtml || '<tr><td colspan="7" style="padding:10mm;text-align:center;font-weight:600;color:#000000;">Aucun article disponible en stock.</td></tr>'}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="4" class="lbl">Total général</td>
-        <td style="text-align:right;">${totalQty.toLocaleString('fr-FR')}</td>
-        <td></td>
-        <td style="text-align:right;">${fmt(totalValue)}</td>
-      </tr>
-    </tfoot>
-  </table>
-
-  <div class="foot">
-    <div class="sig"><div class="line"></div><div class="cap">Magasinier</div></div>
-    <div class="sig"><div class="line"></div><div class="cap">Responsable</div></div>
-    <div style="text-align:right;">
-      <div class="pagenum"></div>
-      <div style="margin-top:1mm;">Document généré automatiquement</div>
-    </div>
-  </div>
-  <div class="waarwi">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
-</div>
-</body></html>`);
-    w.document.close();
-    setTimeout(() => w.print(), 400);
+  const printMovement = (m: any, format: 'a4' | '80') => {
+    if (!tenant || !currentSite) return;
+    const opts = {
+      tenant: tenantPrint,
+      movementType: m.movement_type,
+      movementLabel: mvTypeLabel[m.movement_type] || m.movement_type,
+      reference: `MVT-${String(m.id).substring(0, 8).toUpperCase()}`,
+      date: new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      user: profile?.full_name || profile?.email || '',
+      siteName: currentSite.name,
+      items: [{ ref: (m.articles as any)?.internal_ref || '', name: (m.articles as any)?.name || '', quantity: Number(m.quantity) }],
+      observation: m.note || undefined,
+    };
+    if (format === 'a4') printStockMovementA4(opts);
+    else printStockMovement80(opts);
   };
 
   const filtered = useMemo(() => {
@@ -317,11 +272,31 @@ export function Stock() {
     });
   }, [rows, search, filter]);
 
+  // Progressive rendering: only show N items at a time for performance with 10k+ articles
+  const PAGE_SIZE = 60;
+  const [displayLimit, setDisplayLimit] = useState(PAGE_SIZE);
+  useEffect(() => { setDisplayLimit(PAGE_SIZE); }, [search, filter]);
+  const visibleItems = useMemo(() => filtered.slice(0, displayLimit), [filtered, displayLimit]);
+  const hasMore = displayLimit < filtered.length;
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelCallback = useCallback((node: HTMLDivElement | null) => {
+    if (observerRef.current) observerRef.current.disconnect();
+    if (!node) return;
+    observerRef.current = new IntersectionObserver(entries => {
+      if (entries[0]?.isIntersecting) {
+        setDisplayLimit(prev => Math.min(prev + PAGE_SIZE, filtered.length));
+      }
+    }, { rootMargin: '200px' });
+    observerRef.current.observe(node);
+  }, [filtered.length]);
+
   const openAdj = (r: Row, mode: AdjustMode) => {
     setAdjRow(r); setAdjMode(mode); setAdjQty(''); setAdjNote('');
-    setAdjTargetSite(sites.filter(s => s.id !== currentSite?.id)[0]?.id || '');
+    setAdjTargetSite(allTransferTargets[0]?.id || '');
+    setAdjSiteId(currentSite?.id || '');
     setAdjInventoryQty(r.quantity);
     setAdjBatchNumber(''); setAdjExpiryDate(''); setAdjPurchasePrice(r.purchase_price || '');
+    setAdjDone(false); setAdjDoneData(null);
     setAdjOpen(true);
   };
 
@@ -329,33 +304,40 @@ export function Stock() {
     if (rows.length === 0) return;
     const first = rows[0];
     setAdjRow(first); setAdjMode(mode); setAdjQty(''); setAdjNote('');
-    setAdjTargetSite(sites.filter(s => s.id !== currentSite?.id)[0]?.id || '');
+    setAdjTargetSite(allTransferTargets[0]?.id || '');
+    setAdjSiteId(currentSite?.id || '');
     setAdjInventoryQty(first.quantity);
     setAdjBatchNumber(''); setAdjExpiryDate(''); setAdjPurchasePrice(first.purchase_price || '');
+    setAdjDone(false); setAdjDoneData(null);
     setAdjOpen(true);
   };
 
   const saveAdj = async () => {
     if (!adjRow || !currentSite) return;
+    if (!can('manage_stock')) { error('Vous n\'avez pas la permission de gerer le stock'); return; }
     const qty = Number(adjQty);
+    const targetSite = adjSiteId || currentSite.id;
     setSaving(true);
     try {
+      let savedType = adjMode === 'in' ? 'adjustment_in' : adjMode === 'out' ? 'adjustment_out' : adjMode;
+      let savedQty = qty;
       if (adjMode === 'inventory') {
         const realQty = Number(adjInventoryQty);
         const diff = realQty - adjRow.quantity;
         if (diff === 0) { setAdjOpen(false); setSaving(false); return; }
         const { error: e } = await supabase.rpc('adjust_stock', {
-          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_article_id: adjRow.article_id, p_site_id: targetSite,
           p_quantity: diff, p_movement_type: 'inventory',
           p_note: adjNote || `Inventaire: ${adjRow.quantity} → ${realQty}`,
         });
         if (e) throw e;
+        savedType = 'inventory'; savedQty = Math.abs(diff);
         success('Inventaire enregistré');
       } else if (adjMode === 'transfer') {
         if (!adjTargetSite) { error('Choisissez un magasin de destination'); setSaving(false); return; }
         if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
         const { error: e1 } = await supabase.rpc('adjust_stock', {
-          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_article_id: adjRow.article_id, p_site_id: targetSite,
           p_quantity: -qty, p_movement_type: 'transfer_out', p_note: adjNote || 'Transfert sortie',
         });
         if (e1) throw e1;
@@ -364,13 +346,13 @@ export function Stock() {
           p_quantity: qty, p_movement_type: 'transfer_in', p_note: adjNote || 'Transfert entrée',
         });
         if (e2) throw e2;
+        savedType = 'transfer_out';
         success('Transfert effectué');
       } else if (adjMode === 'in' && stockMethod === 'lot') {
-        // Lot mode: create a lot record
         if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
         if (!adjBatchNumber.trim()) { error('Numéro de lot requis'); setSaving(false); return; }
         const { error: e } = await supabase.rpc('adjust_stock_lot', {
-          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_article_id: adjRow.article_id, p_site_id: targetSite,
           p_quantity: qty, p_batch_number: adjBatchNumber.trim(),
           p_expiry_date: adjExpiryDate || null,
           p_purchase_price: Number(adjPurchasePrice) || adjRow.purchase_price,
@@ -379,25 +361,21 @@ export function Stock() {
         if (e) throw e;
         success('Lot enregistré');
       } else if (adjMode === 'in' && stockMethod === 'cmup') {
-        // CMUP mode: entry + recalculate average
         if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
         const price = Number(adjPurchasePrice) || adjRow.purchase_price;
-        // First do the stock adjustment
         const { error: e } = await supabase.rpc('adjust_stock', {
-          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_article_id: adjRow.article_id, p_site_id: targetSite,
           p_quantity: qty, p_movement_type: 'adjustment_in',
           p_note: adjNote || 'Entrée stock (CMUP)',
         });
         if (e) throw e;
-        // Recalculate CMUP
         const { error: e2 } = await supabase.rpc('recalculate_cmup', {
-          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_article_id: adjRow.article_id, p_site_id: targetSite,
           p_new_quantity: qty, p_new_purchase_price: price,
         });
         if (e2) throw e2;
         success('Stock et CMUP mis à jour');
       } else if (adjMode === 'out' && stockMethod === 'lot') {
-        // Lot mode sortie: open lot picker
         if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
         setLotPickerOutRow(adjRow);
         setLotPickerOutQty(qty);
@@ -410,14 +388,15 @@ export function Stock() {
         const signedQty = adjMode === 'in' ? qty : -qty;
         const type = adjMode === 'in' ? 'adjustment_in' : 'adjustment_out';
         const { error: e } = await supabase.rpc('adjust_stock', {
-          p_article_id: adjRow.article_id, p_site_id: currentSite.id,
+          p_article_id: adjRow.article_id, p_site_id: targetSite,
           p_quantity: signedQty, p_movement_type: type,
           p_note: adjNote || (adjMode === 'in' ? 'Entrée stock' : 'Sortie stock'),
         });
         if (e) throw e;
         success('Stock mis à jour');
       }
-      setAdjOpen(false);
+      setAdjDoneData({ articleName: adjRow.name, articleRef: adjRow.internal_ref, qty: savedQty, type: savedType, label: mvTypeLabel[savedType] || savedType });
+      setAdjDone(true);
       await load();
     } catch (e: any) {
       error(e.message || 'Erreur');
@@ -497,7 +476,7 @@ export function Stock() {
             <button
               onClick={() => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); }}
               className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${viewMode === 'list' ? 'bg-blue-600 shadow-glow' : 'bg-white border border-slate-200 hover:border-blue-300'}`}
-              aria-label={viewMode === 'cards' ? 'Vue liste editable' : 'Vue cartes'}
+              aria-label={viewMode === 'cards' ? 'Vue liste éditable' : 'Vue cartes'}
             >
               {viewMode === 'cards' ? <List className="w-3.5 h-3.5 text-blue-600" /> : <LayoutGrid className="w-3.5 h-3.5 text-white" />}
             </button>
@@ -565,6 +544,9 @@ export function Stock() {
           <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-all active:scale-95">
             <ClipboardList className="w-3.5 h-3.5 text-blue-600" />Inventaire
           </button>
+          <button onClick={() => setHelpOpen(true)} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95">
+            <Info className="w-3.5 h-3.5" />Guide
+          </button>
           <button onClick={printInventoryBook} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-gradient-to-br from-ink-900 to-slate-800 text-white hover:shadow-glow transition-all active:scale-95 ml-auto">
             <BookOpen className="w-3.5 h-3.5" />Livre d'inventaire
           </button>
@@ -589,14 +571,27 @@ export function Stock() {
             listInputRefs={listInputRefs}
             currentSite={currentSite}
             canViewPrices={can('view_purchase_prices')}
-            onSaved={async () => { await load(); setListEdits(new Map()); }}
+            canManageStock={can('manage_stock')}
+            onSaved={async (bulkItems?: { ref: string; name: string; quantity: number }[], bulkMode?: string) => {
+              if (bulkItems && bulkMode) {
+                setBulkDoneItems(bulkItems);
+                setBulkDoneMode(bulkMode);
+                setBulkDoneOpen(true);
+              }
+              await load(true);
+              setListEdits(new Map());
+            }}
             successToast={success}
             errorToast={error}
             stockMethod={stockMethod}
+            sites={allTransferTargets}
+            listTransferTarget={listTransferTarget}
+            setListTransferTarget={setListTransferTarget}
           />
         ) : (
+          <>
           <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 count-up ${flashKey === 'out' || flashKey === 'low' || flashKey === 'articles' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
-            {filtered.map(r => {
+            {visibleItems.map(r => {
               const out = r.quantity <= 0;
               const low = !out && r.quantity <= r.stock_min;
               const value = r.quantity * r.purchase_price;
@@ -680,6 +675,15 @@ export function Stock() {
               );
             })}
           </div>
+          {hasMore && (
+            <div ref={sentinelCallback} className="flex justify-center py-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                {visibleItems.length} / {filtered.length} articles
+              </div>
+            </div>
+          )}
+          </>
         )
       ) : tab === 'movements' ? (
         <>
@@ -724,11 +728,21 @@ export function Stock() {
                     </div>
                     {m.note && <div className="text-[10px] text-slate-400 break-words mt-0.5">{m.note}</div>}
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className={`text-[13px] font-bold num ${positive ? 'text-emerald-700' : 'text-red-600'}`}>
-                      {positive ? '+' : ''}{qty}
+                  <div className="text-right shrink-0 flex items-center gap-2">
+                    <div>
+                      <div className={`text-[13px] font-bold num ${positive ? 'text-emerald-700' : 'text-red-600'}`}>
+                        {positive ? '+' : ''}{qty}
+                      </div>
+                      <div className="text-[9px] text-slate-400 num mt-0.5">{m.previous_qty} → {m.new_qty}</div>
                     </div>
-                    <div className="text-[9px] text-slate-400 num mt-0.5">{m.previous_qty} → {m.new_qty}</div>
+                    <div className="flex flex-col gap-0.5">
+                      <button onClick={() => printMovement(m, 'a4')} className="w-6 h-6 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all active:scale-90" title="Imprimer A4">
+                        <Printer className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => printMovement(m, '80')} className="w-6 h-6 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all active:scale-90" title="Imprimer 80mm">
+                        <Scroll className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -751,12 +765,64 @@ export function Stock() {
       />
 
       {/* Adjust modal */}
-      <Modal open={adjOpen} onClose={() => setAdjOpen(false)}
-        title={{ in: 'Entrée de stock', out: 'Sortie de stock', transfer: 'Transfert de stock', inventory: 'Saisie d\'inventaire' }[adjMode]}
+      <Modal open={adjOpen} onClose={() => { setAdjOpen(false); setAdjDone(false); }}
+        title={adjDone ? 'Opération effectuée' : { in: 'Entrée de stock', out: 'Sortie de stock', transfer: 'Transfert de stock', inventory: 'Saisie d\'inventaire' }[adjMode]}
         size="sm"
-        footer={<><button onClick={() => setAdjOpen(false)} className="btn-secondary">Annuler</button><button onClick={saveAdj} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Valider</button></>}
+        footer={adjDone ? (
+          <div className="flex items-center gap-2 w-full">
+            <button onClick={() => { setAdjOpen(false); setAdjDone(false); }} className="btn-secondary">Fermer</button>
+            <div className="flex-1" />
+            <button
+              onClick={() => {
+                if (!adjDoneData || !currentSite) return;
+                const now = new Date();
+                printStockMovement80({
+                  tenant: tenantPrint, movementType: adjDoneData.type, movementLabel: adjDoneData.label,
+                  reference: `MVT-${now.getTime().toString(36).toUpperCase().slice(-8)}`,
+                  date: now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                  user: profile?.full_name || profile?.email || '', siteName: currentSite.name,
+                  items: [{ ref: adjDoneData.articleRef, name: adjDoneData.articleName, quantity: adjDoneData.qty }],
+                  observation: adjNote || undefined,
+                });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95"
+            >
+              <Scroll className="w-3.5 h-3.5" />80mm
+            </button>
+            <button
+              onClick={() => {
+                if (!adjDoneData || !currentSite) return;
+                const now = new Date();
+                printStockMovementA4({
+                  tenant: tenantPrint, movementType: adjDoneData.type, movementLabel: adjDoneData.label,
+                  reference: `MVT-${now.getTime().toString(36).toUpperCase().slice(-8)}`,
+                  date: now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                  user: profile?.full_name || profile?.email || '', siteName: currentSite.name,
+                  items: [{ ref: adjDoneData.articleRef, name: adjDoneData.articleName, quantity: adjDoneData.qty }],
+                  observation: adjNote || undefined,
+                });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-ink-900 to-slate-800 text-white hover:shadow-glow transition-all active:scale-95"
+            >
+              <Printer className="w-3.5 h-3.5" />A4
+            </button>
+          </div>
+        ) : (
+          <><button onClick={() => setAdjOpen(false)} className="btn-secondary">Annuler</button><button onClick={saveAdj} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Valider</button></>
+        )}
       >
-        {adjRow && (
+        {adjDone && adjDoneData ? (
+          <div className="py-4 text-center space-y-3">
+            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
+              <Check className="w-7 h-7 text-emerald-600" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-slate-900">{adjDoneData.articleName}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{adjDoneData.label} : {adjDoneData.qty} unité{adjDoneData.qty > 1 ? 's' : ''}</div>
+            </div>
+            <p className="text-[11px] text-slate-400">Vous pouvez imprimer le bon de mouvement.</p>
+          </div>
+        ) : adjRow && (
           <div className="space-y-3">
             <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
               <div className="text-[12px] font-semibold text-slate-900 truncate">{adjRow.name}</div>
@@ -765,6 +831,22 @@ export function Stock() {
                 Stock actuel : <span className="num">{adjRow.quantity}</span>
               </div>
             </div>
+
+            {adjMode !== 'transfer' && depots.filter(d => d.parent_site_id === currentSite?.id).length > 0 && (
+              <div>
+                <label className="label">Emplacement</label>
+                <select
+                  value={adjSiteId}
+                  onChange={e => setAdjSiteId(e.target.value)}
+                  className="input"
+                >
+                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                  {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
+                    <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="label">Article</label>
@@ -785,9 +867,9 @@ export function Stock() {
             ) : adjMode === 'transfer' ? (
               <>
                 <div>
-                  <label className="label">Magasin de destination</label>
+                  <label className="label">Destination</label>
                   <SearchableSelect
-                    options={sites.filter(s => s.id !== currentSite?.id).map(s => ({ value: s.id, label: s.name }))}
+                    options={allTransferTargets.map(s => ({ value: s.id, label: `${s.name}${s.is_warehouse ? ' (Dépôt)' : ''}` }))}
                     value={adjTargetSite}
                     onChange={v => setAdjTargetSite(v)}
                     placeholder="— Choisir —"
@@ -837,6 +919,107 @@ export function Stock() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Bulk operation success modal with print */}
+      <Modal open={bulkDoneOpen} onClose={() => setBulkDoneOpen(false)}
+        title="Opération en masse effectuée"
+        size="sm"
+        footer={
+          <div className="flex items-center gap-2 w-full">
+            <button onClick={() => setBulkDoneOpen(false)} className="btn-secondary">Fermer</button>
+            <div className="flex-1" />
+            <button
+              onClick={() => {
+                const now = new Date();
+                printStockMovement80({
+                  tenant: tenantPrint, movementType: bulkDoneMode,
+                  movementLabel: bulkDoneMode === 'adjustment_in' ? 'Entrée (masse)' : bulkDoneMode === 'adjustment_out' ? 'Sortie (masse)' : bulkDoneMode === 'transfer_out' ? 'Transfert (masse)' : 'Inventaire (masse)',
+                  reference: `BULK-${now.getTime().toString(36).toUpperCase().slice(-8)}`,
+                  date: now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                  user: profile?.full_name || profile?.email || '', siteName: currentSite?.name || '',
+                  items: bulkDoneItems,
+                });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95"
+            >
+              <Scroll className="w-3.5 h-3.5" />80mm
+            </button>
+            <button
+              onClick={() => {
+                const now = new Date();
+                printStockMovementA4({
+                  tenant: tenantPrint, movementType: bulkDoneMode,
+                  movementLabel: bulkDoneMode === 'adjustment_in' ? 'Entrée (masse)' : bulkDoneMode === 'adjustment_out' ? 'Sortie (masse)' : bulkDoneMode === 'transfer_out' ? 'Transfert (masse)' : 'Inventaire (masse)',
+                  reference: `BULK-${now.getTime().toString(36).toUpperCase().slice(-8)}`,
+                  date: now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                  user: profile?.full_name || profile?.email || '', siteName: currentSite?.name || '',
+                  items: bulkDoneItems,
+                });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-ink-900 to-slate-800 text-white hover:shadow-glow transition-all active:scale-95"
+            >
+              <Printer className="w-3.5 h-3.5" />A4
+            </button>
+          </div>
+        }
+      >
+        <div className="py-4 text-center space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
+            <Check className="w-7 h-7 text-emerald-600" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-slate-900">
+              {bulkDoneItems.length} article{bulkDoneItems.length > 1 ? 's' : ''} mis à jour
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              {bulkDoneMode === 'adjustment_in' ? 'Entrée (masse)' : bulkDoneMode === 'adjustment_out' ? 'Sortie (masse)' : bulkDoneMode === 'transfer_out' ? 'Transfert (masse)' : 'Inventaire (masse)'}
+            </div>
+          </div>
+          {bulkDoneItems.length <= 10 && (
+            <div className="text-left mt-3 space-y-1 max-h-40 overflow-y-auto">
+              {bulkDoneItems.map((item, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-50 text-[11px]">
+                  <span className="font-semibold text-slate-800 truncate mr-2">{item.name}</span>
+                  <span className="shrink-0 font-bold text-slate-600 num">{item.quantity}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-slate-400">Vous pouvez imprimer le bon de mouvement groupé.</p>
+        </div>
+      </Modal>
+
+      {/* Help/Guide modal */}
+      <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Guide de gestion du stock" size="md">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+          <HelpSection icon={<ArrowDownCircle className="w-4 h-4 text-emerald-600" />} title="Entrée de stock" color="emerald">
+            Enregistre une réception de marchandise (achat, retour fournisseur, production). Le stock de l'article augmente de la quantité saisie.
+          </HelpSection>
+          <HelpSection icon={<ArrowUpCircle className="w-4 h-4 text-red-500" />} title="Sortie de stock" color="red">
+            Enregistre une sortie manuelle (perte, casse, don, consommation interne). Le stock diminue de la quantité saisie. Les ventes déduisent automatiquement le stock.
+          </HelpSection>
+          {canTransfer && (
+            <HelpSection icon={<ArrowRightLeft className="w-4 h-4 text-amber-600" />} title="Transfert" color="amber">
+              Déplace une quantité d'un dépôt/site vers un autre. Le stock sort du site d'origine et entre dans le site de destination. Utile pour équilibrer les stocks entre magasins.
+            </HelpSection>
+          )}
+          <HelpSection icon={<ClipboardList className="w-4 h-4 text-blue-600" />} title="Inventaire" color="blue">
+            Permet de corriger le stock réel après un comptage physique. Vous saisissez la quantité réellement comptée et le système calcule automatiquement l'écart (positif ou négatif).
+          </HelpSection>
+          <HelpSection icon={<BookOpen className="w-4 h-4 text-ink-900" />} title="Livre d'inventaire" color="slate">
+            Génère un document imprimable A4 listant tous les articles en stock avec leurs quantités, emplacements et valeurs. Idéal pour les contrôles périodiques et les audits.
+          </HelpSection>
+          <HelpSection icon={<List className="w-4 h-4 text-blue-600" />} title="Vue liste éditable" color="blue">
+            Basculez en vue liste pour saisir rapidement des entrées, sorties ou inventaires en masse. Parcourez les articles avec les flèches du clavier, puis cliquez « Enregistrer » pour valider toutes les modifications en une seule fois.
+          </HelpSection>
+          <HelpSection icon={<History className="w-4 h-4 text-teal-700" />} title="Historique des mouvements" color="teal">
+            Consultez la trace chronologique de toutes les opérations de stock (entrées, sorties, ventes, transferts, inventaires). Filtrable par période. Chaque mouvement peut être imprimé en A4 ou en ticket 80mm.
+          </HelpSection>
+          <HelpSection icon={<Printer className="w-4 h-4 text-slate-600" />} title="Impression mouvement" color="slate">
+            Chaque mouvement dispose de deux formats d'impression : A4 (bon professionnel complet) et 80mm (ticket thermique compact). Le bon A4 inclut l'en-tête entreprise, les détails du mouvement et une zone signature.
+          </HelpSection>
+        </div>
       </Modal>
 
       {/* Lot picker for sortie */}
@@ -961,7 +1144,7 @@ function LotsView({ lots, stockMethod }: { lots: LotRow[]; stockMethod: StockMet
         <div className="card-premium py-8 text-center">
           <PackageOpen className="w-7 h-7 text-slate-300 mx-auto mb-2" />
           <p className="text-sm font-semibold text-slate-600">Aucun lot en stock</p>
-          <p className="text-xs text-slate-400 mt-1">Les lots apparaitront ici après une entrée de stock en mode lot.</p>
+          <p className="text-xs text-slate-400 mt-1">Les lots apparaîtront ici après une entrée de stock en mode lot.</p>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -1011,11 +1194,12 @@ type ListEditEntry = { article_id: string; qty: number | ''; note: string; lot_n
 function StockListEditView({
   filtered, listEditMode, setListEditMode, listEdits, setListEdits,
   listSaving, setListSaving, listInputRefs, currentSite,
-  canViewPrices, onSaved, successToast, errorToast, stockMethod,
+  canViewPrices, canManageStock, onSaved, successToast, errorToast, stockMethod,
+  sites, listTransferTarget, setListTransferTarget,
 }: {
   filtered: Row[];
-  listEditMode: 'in' | 'out' | 'inventory';
-  setListEditMode: (m: 'in' | 'out' | 'inventory') => void;
+  listEditMode: 'in' | 'out' | 'inventory' | 'transfer';
+  setListEditMode: (m: 'in' | 'out' | 'inventory' | 'transfer') => void;
   listEdits: Map<string, ListEditEntry>;
   setListEdits: (m: Map<string, ListEditEntry>) => void;
   listSaving: boolean;
@@ -1023,13 +1207,32 @@ function StockListEditView({
   listInputRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
   currentSite: any;
   canViewPrices: boolean;
-  onSaved: () => Promise<void>;
+  canManageStock: boolean;
+  onSaved: (bulkItems?: { ref: string; name: string; quantity: number }[], bulkMode?: string) => Promise<void>;
   successToast: (m: string) => void;
   errorToast: (m: string) => void;
   stockMethod: string;
+  sites: any[];
+  listTransferTarget: string;
+  setListTransferTarget: (v: string) => void;
 }) {
   const lotMode = stockMethod === 'lot';
   const editCount = Array.from(listEdits.values()).filter(e => e.qty !== '' && Number(e.qty) !== 0).length;
+
+  // Progressive rendering for table with many rows
+  const TABLE_PAGE = 100;
+  const [tableLimit, setTableLimit] = useState(TABLE_PAGE);
+  const tableVisibleRows = useMemo(() => filtered.slice(0, tableLimit), [filtered, tableLimit]);
+  const tableHasMore = tableLimit < filtered.length;
+  const tableObsRef = useRef<IntersectionObserver | null>(null);
+  const tableSentinelRef = useCallback((node: HTMLDivElement | null) => {
+    if (tableObsRef.current) tableObsRef.current.disconnect();
+    if (!node) return;
+    tableObsRef.current = new IntersectionObserver(entries => {
+      if (entries[0]?.isIntersecting) setTableLimit(prev => Math.min(prev + TABLE_PAGE, filtered.length));
+    }, { rootMargin: '200px' });
+    tableObsRef.current.observe(node);
+  }, [filtered.length]);
 
   const updateEdit = (articleId: string, qty: number | '', note?: string, lot_number?: string) => {
     const next = new Map(listEdits);
@@ -1057,18 +1260,35 @@ function StockListEditView({
 
   const saveBulk = async () => {
     if (!currentSite) return;
+    if (!canManageStock) { errorToast('Vous n\'avez pas la permission de gerer le stock'); return; }
     const entries = Array.from(listEdits.values()).filter(e => e.qty !== '' && Number(e.qty) !== 0);
     if (entries.length === 0) { errorToast('Aucune modification à enregistrer'); return; }
     if (lotMode && listEditMode === 'in') {
       const missing = entries.find(e => !e.lot_number?.trim());
       if (missing) { errorToast('Numéro de lot requis pour toutes les entrées'); return; }
     }
+    if (listEditMode === 'transfer' && !listTransferTarget) {
+      errorToast('Choisissez un site de destination'); return;
+    }
     setListSaving(true);
     let savedCount = 0;
     try {
       for (const entry of entries) {
         const qty = Number(entry.qty);
-        if (listEditMode === 'inventory') {
+        if (listEditMode === 'transfer') {
+          const { error: e1 } = await supabase.rpc('adjust_stock', {
+            p_article_id: entry.article_id, p_site_id: currentSite.id,
+            p_quantity: -qty, p_movement_type: 'transfer_out',
+            p_note: entry.note || 'Transfert sortie (masse)',
+          });
+          if (e1) throw e1;
+          const { error: e2 } = await supabase.rpc('adjust_stock', {
+            p_article_id: entry.article_id, p_site_id: listTransferTarget,
+            p_quantity: qty, p_movement_type: 'transfer_in',
+            p_note: entry.note || 'Transfert entrée (masse)',
+          });
+          if (e2) throw e2;
+        } else if (listEditMode === 'inventory') {
           const row = filtered.find(r => r.article_id === entry.article_id);
           if (!row) continue;
           const diff = qty - row.quantity;
@@ -1101,7 +1321,12 @@ function StockListEditView({
         savedCount++;
       }
       successToast(`${savedCount} article${savedCount > 1 ? 's' : ''} mis à jour`);
-      await onSaved();
+      const modeType = listEditMode === 'transfer' ? 'transfer_out' : listEditMode === 'inventory' ? 'inventory' : listEditMode === 'in' ? 'adjustment_in' : 'adjustment_out';
+      const items = entries.map(e => {
+        const row = filtered.find(r => r.article_id === e.article_id);
+        return { ref: row?.internal_ref || '', name: row?.name || '', quantity: Number(e.qty) };
+      });
+      await onSaved(items, modeType);
     } catch (e: any) {
       errorToast(e.message || 'Erreur lors de la sauvegarde');
     } finally {
@@ -1115,19 +1340,27 @@ function StockListEditView({
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
           <button
-            onClick={() => { setListEditMode('in'); setListEdits(new Map()); }}
+            onClick={() => { setListEditMode('in'); setListEdits(new Map()); setBulkSavedItems([]); }}
             className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'in' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
           >
             <ArrowDownCircle className="w-3.5 h-3.5 inline mr-1" />Entrée
           </button>
           <button
-            onClick={() => { setListEditMode('out'); setListEdits(new Map()); }}
+            onClick={() => { setListEditMode('out'); setListEdits(new Map()); setBulkSavedItems([]); }}
             className={`px-3 py-1.5 text-[11px] font-bold border-x border-slate-200 transition-all ${listEditMode === 'out' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-red-50'}`}
           >
             <ArrowUpCircle className="w-3.5 h-3.5 inline mr-1" />Sortie
           </button>
+          {sites.length > 0 && (
+            <button
+              onClick={() => { setListEditMode('transfer'); setListEdits(new Map()); setBulkSavedItems([]); }}
+              className={`px-3 py-1.5 text-[11px] font-bold border-r border-slate-200 transition-all ${listEditMode === 'transfer' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-amber-50'}`}
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 inline mr-1" />Transfert
+            </button>
+          )}
           <button
-            onClick={() => { setListEditMode('inventory'); setListEdits(new Map()); }}
+            onClick={() => { setListEditMode('inventory'); setListEdits(new Map()); setBulkSavedItems([]); }}
             className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'inventory' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-blue-50'}`}
           >
             <ClipboardList className="w-3.5 h-3.5 inline mr-1" />Inventaire
@@ -1144,6 +1377,24 @@ function StockListEditView({
         </button>
       </div>
 
+      {/* Transfer destination picker */}
+      {listEditMode === 'transfer' && (
+        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+          <ArrowRightLeft className="w-4 h-4 text-amber-600 shrink-0" />
+          <span className="text-[11px] font-semibold text-amber-800 shrink-0">Destination :</span>
+          <select
+            value={listTransferTarget}
+            onChange={e => setListTransferTarget(e.target.value)}
+            className="flex-1 min-w-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+          >
+            <option value="">-- Choisir la destination --</option>
+            {sites.map(s => (
+              <option key={s.id} value={s.id}>{s.name}{s.is_warehouse ? ' (Dépôt)' : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -1155,7 +1406,7 @@ function StockListEditView({
                 <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[60px]">Min</th>
                 {canViewPrices && <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right w-[100px]">P.Achat</th>}
                 <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[100px]">
-                  {listEditMode === 'in' ? 'Qte entree' : listEditMode === 'out' ? 'Qte sortie' : 'Nvelle qte'}
+                  {listEditMode === 'in' ? 'Qté entrée' : listEditMode === 'out' ? 'Qté sortie' : listEditMode === 'transfer' ? 'Qté transf.' : 'Nvelle qté'}
                 </th>
                 {lotMode && listEditMode === 'in' && (
                   <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[110px]">N° Lot *</th>
@@ -1165,7 +1416,7 @@ function StockListEditView({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r, idx) => {
+              {tableVisibleRows.map((r, idx) => {
                 const edit = listEdits.get(r.article_id);
                 const hasValue = edit && edit.qty !== '' && Number(edit.qty) !== 0;
                 const out = r.quantity <= 0;
@@ -1192,7 +1443,9 @@ function StockListEditView({
                         value={edit?.qty ?? ''}
                         onChange={e => updateEdit(r.article_id, e.target.value === '' ? '' : Number(e.target.value), edit?.note, edit?.lot_number)}
                         onKeyDown={e => handleKeyDown(e, idx)}
-                        className="w-full text-center text-xs font-bold num px-2 py-1.5 rounded-lg border border-slate-200 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all bg-white"
+                        className={`w-full text-center text-xs font-bold num px-2 py-1.5 rounded-lg border focus:ring-2 outline-none transition-all bg-white ${
+                          listEditMode === 'transfer' ? 'border-amber-200 focus:border-amber-400 focus:ring-amber-500/20' : 'border-slate-200 focus:border-brand-400 focus:ring-brand-500/20'
+                        }`}
                       />
                     </td>
                     <td className="px-2 py-1.5 hidden md:table-cell">
@@ -1229,6 +1482,30 @@ function StockListEditView({
           </table>
         </div>
       </div>
+      {tableHasMore && (
+        <div ref={tableSentinelRef} className="flex justify-center py-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            {tableVisibleRows.length} / {filtered.length} articles
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ *  HELP SECTION — Reusable row for the guide modal
+ * ════════════════════════════════════════════════════════════════════════════ */
+function HelpSection({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
+  const bgMap: Record<string, string> = { emerald: 'bg-emerald-50 border-emerald-200', red: 'bg-red-50 border-red-200', amber: 'bg-amber-50 border-amber-200', blue: 'bg-blue-50 border-blue-200', slate: 'bg-slate-50 border-slate-200', teal: 'bg-teal-50 border-teal-200' };
+  return (
+    <div className={`p-3 rounded-xl border ${bgMap[color] || 'bg-slate-50 border-slate-200'}`}>
+      <div className="flex items-center gap-2 mb-1">
+        {icon}
+        <span className="text-xs font-bold text-slate-900">{title}</span>
+      </div>
+      <p className="text-[11px] text-slate-600 leading-relaxed">{children}</p>
     </div>
   );
 }

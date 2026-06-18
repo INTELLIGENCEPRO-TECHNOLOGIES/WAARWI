@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
@@ -49,6 +50,7 @@ const FILTERS: { key: string; label: string }[] = [
 
 export function SupplierOrders() {
   const { tenant, currentSite, sites, dataTick, profile } = useApp();
+  const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
@@ -175,6 +177,7 @@ export function SupplierOrders() {
 
   const save = async () => {
     if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
+    if (!can('manage_supplier_orders')) { error('Vous n\'avez pas la permission de gerer les commandes fournisseurs'); return; }
     if (!form.supplier_id) { error('Sélectionnez un fournisseur'); return; }
     if (orderItems.every(i => !i.name.trim())) { error('Ajoutez au moins un article'); return; }
     const validItems = orderItems.filter(i => i.name.trim());
@@ -391,6 +394,7 @@ export function SupplierOrders() {
 
   const saveEdit = async () => {
     if (!selected || !tenant) return;
+    if (!can('edit_supplier_orders')) { error('Vous n\'avez pas la permission de modifier les commandes fournisseurs'); return; }
     setSaving(true);
     const kept = editItems.filter(i => (i.name || '').trim());
     const deletedIds = detailItems
@@ -450,6 +454,7 @@ export function SupplierOrders() {
 
   const receiveWithDispatch = async (dd: Record<string, Record<string, number>>) => {
     if (!selected || !tenant || !currentSite) return;
+    if (!can('manage_supplier_orders')) { error('Vous n\'avez pas la permission de réceptionner les commandes'); return; }
     setSaving(true);
     let anyReceived = 0;
     let fullyReceived = true;
@@ -503,6 +508,7 @@ export function SupplierOrders() {
 
   const receivePartial = async () => {
     if (!selected || !tenant || !currentSite) return;
+    if (!can('manage_supplier_orders')) { error('Vous n\'avez pas la permission de réceptionner les commandes'); return; }
     setSaving(true);
     let anyReceived = 0;
     let fullyReceived = true;
@@ -545,6 +551,7 @@ export function SupplierOrders() {
   };
 
   const changeStatus = async (o: SupplierOrder, status: string) => {
+    if (!can('edit_supplier_orders')) { error('Vous n\'avez pas la permission de modifier les commandes fournisseurs'); return; }
     await supabase.from('supplier_orders').update({ status }).eq('id', o.id);
     success('Statut mis à jour'); load();
     if (selected?.id === o.id) setSelected({ ...o, status });

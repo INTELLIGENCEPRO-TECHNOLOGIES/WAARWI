@@ -29,6 +29,8 @@ type ArticleLite = {
   category_id: string | null; image_url: string | null;
 };
 
+type ArticleTier = { article_id: string; tier_name: string; price: number };
+
 type CategoryLite = { id: string; name: string; parent_id: string | null };
 
 type ControlLine = {
@@ -443,289 +445,297 @@ function POSLandingOpen({
   );
 }
 
+function LandingActionBtn({ icon: Icon, label, onClick, disabled, variant, badge }: {
+  icon: typeof Wallet; label: string; onClick: () => void; disabled?: boolean;
+  variant?: 'primary' | 'dark'; badge?: number;
+}) {
+  const base = variant === 'primary'
+    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+    : variant === 'dark'
+    ? 'bg-slate-900 border-slate-800 text-white hover:bg-slate-800'
+    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50';
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl border text-center transition-all active:scale-[0.97] ${base} ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
+    >
+      <Icon className="w-4 h-4" />
+      <span className="text-[10px] font-semibold leading-tight">{label}</span>
+      {badge != null && badge > 0 && (
+        <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{badge}</span>
+      )}
+    </button>
+  );
+}
+
+function ActionIconBtn({ icon: Icon, label, onClick, disabled }: {
+  icon: typeof Wallet; label: string; onClick: () => void; disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex flex-col items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-all active:scale-[0.97] ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
+    >
+      <Icon className="w-4.5 h-4.5" />
+      <span className="text-[10px] font-medium leading-tight text-slate-600 whitespace-nowrap">{label}</span>
+    </button>
+  );
+}
+
 function POSLandingResume({
   session, currentSite, onResume, tenantId, onSeeAll, cashierName,
+  actions,
 }: {
   session: CashSession; currentSite: LandingSite;
   onResume: () => void; tenantId?: string; onSeeAll?: () => void; cashierName: string;
+  actions?: {
+    onStats: () => void;
+    onTickets: () => void;
+    onReturn: () => void;
+    onCustomerPayment: () => void;
+    onMovement: () => void;
+    onWebOrders: () => void;
+    onClose: () => void;
+    canReturn: boolean;
+    canMovement: boolean;
+    canClose: boolean;
+    webOrdersBadge?: number;
+    sessionOpen: boolean;
+  };
 }) {
   const { summary, loading: loadingSummary } = useDaySummary(tenantId, currentSite?.id, session.id);
-  const { sessions, loading: loadingSessions } = useRecentSessions(tenantId, currentSite?.id, session.id);
+  const isOpen = actions?.sessionOpen !== false;
+
+  const actionBtns = actions ? [
+    { icon: Wallet, label: 'Encaisser', onClick: actions.onCustomerPayment, show: true },
+    { icon: ArrowDownRight, label: 'Mouvement', onClick: actions.onMovement, show: actions.canMovement },
+    { icon: RotateCcw, label: 'Retour client', onClick: actions.onReturn, show: actions.canReturn },
+    { icon: List, label: 'Tickets', onClick: actions.onTickets, show: true },
+    { icon: Lock, label: 'Clôturer', onClick: actions.onClose, show: actions.canClose },
+  ].filter(b => b.show) : [];
 
   return (
-    <div className="space-y-3 pb-6">
-      {/* ── Unified header bar (same style as Sales/Articles pages) ── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Caisse</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">Session active</div>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Ouverte</div>
-            </div>
-          </div>
-          <div className="flex-1 flex items-center gap-2 min-w-0">
-            {currentSite && (
-              <span className="text-[11px] text-slate-500 truncate flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                {currentSite.name}
-              </span>
-            )}
-          </div>
-          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-emerald-500 text-white text-[9px] font-bold uppercase tracking-wider">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            Ouverte
-          </span>
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-glow shrink-0" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
-            <Wallet className="w-3.5 h-3.5 text-white" />
-          </div>
+    <div className="pb-4">
+      {/* ── Header ── */}
+      <div className="px-1 sm:px-2 lg:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Caisse</h1>
+          {currentSite && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-slate-200 bg-white text-[11px] sm:text-xs font-medium text-slate-600">
+              <MapPin className="w-3 h-3 text-slate-400" />
+              {currentSite.name}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+          <span className="text-xs sm:text-sm font-medium text-emerald-600">Session ouverte</span>
+          <span className="hidden sm:inline text-xs sm:text-sm text-slate-400 ml-1">Ouverte le {new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {fmtTimeLanding(session.opened_at)}</span>
         </div>
       </div>
 
-      {/* ── Desktop: 2-column grid ── */}
-      <div className="hidden lg:grid lg:grid-cols-5 gap-4">
-        {/* Left: session details */}
-        <div className="col-span-3">
-          <div className="relative overflow-hidden rounded-2xl border border-emerald-200/60 bg-white shadow-card">
-            <div className="absolute -top-24 -right-24 w-56 h-56 rounded-full bg-emerald-400/8 blur-3xl pointer-events-none" />
-            <div className="relative p-6">
-              <div className="flex items-start gap-3 mb-5">
-                <div className="w-12 h-12 rounded-2xl text-white flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
-                  <Wallet className="w-5 h-5" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-slate-900">Session en cours</h2>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold uppercase tracking-wider">
-                      <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
-                      Active
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">Caisse ouverte et prête pour les ventes</p>
-                </div>
-              </div>
+      {/* ── Desktop grid ── */}
+      <div className="hidden lg:grid lg:grid-cols-[1fr_320px] gap-4 px-6">
+        {/* Left: Session de caisse */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col">
+          <h2 className="text-lg font-bold text-slate-900 mb-5">Session de caisse</h2>
 
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><MapPin className="w-3.5 h-3.5" /></div>
-                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Point de vente</div><div className="text-xs font-semibold text-slate-800">{currentSite?.name || '-'}</div></div>
-                </div>
-                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><ClockIcon className="w-3.5 h-3.5" /></div>
-                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Ouverte le</div><div className="text-xs font-semibold text-slate-800">{fmtDateFull(session.opened_at)} à {fmtTimeLanding(session.opened_at)}</div></div>
-                </div>
-                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <div className="w-7 h-7 rounded-lg bg-white border border-emerald-200 flex items-center justify-center text-emerald-600"><Banknote className="w-3.5 h-3.5" /></div>
-                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-emerald-600">Fond initial</div><div className="text-xs font-bold text-emerald-800 tabular-nums">{formatFCFA(Number(session.opening_amount))}</div></div>
-                </div>
-                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><ClockIcon className="w-3.5 h-3.5" /></div>
-                  <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Durée</div><div className="text-xs font-semibold text-slate-800">{sessionDuration(session.opened_at)}</div></div>
-                </div>
-                {cashierName && (
-                  <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100 col-span-2">
-                    <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500"><User className="w-3.5 h-3.5" /></div>
-                    <div><div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Vendeur</div><div className="text-xs font-semibold text-slate-800">{cashierName}</div></div>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={onResume}
-                className="group w-full max-w-sm relative overflow-hidden rounded-xl text-white font-bold text-sm py-3.5 px-5 shadow-[0_6px_20px_-8px_rgba(6,78,59,0.55)] hover:shadow-[0_8px_28px_-6px_rgba(6,78,59,0.7)] active:scale-[0.99] transition-all"
-                style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
-                <span className="relative flex items-center justify-center gap-2">
-                  <Play className="w-4 h-4 fill-current" />
-                  Reprendre la session
-                  <ChevronRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />
-                </span>
-              </button>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-0 flex-1">
+            <div className="flex items-center gap-3 py-4 border-b border-slate-100">
+              <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><MapPin className="w-4 h-4 text-slate-400" /></div>
+              <div><p className="text-[11px] text-slate-400 leading-none mb-1">Point de vente</p><p className="text-sm font-semibold text-slate-900">{currentSite?.name || '-'}</p></div>
             </div>
+            <div className="flex items-center gap-3 py-4 border-b border-slate-100">
+              <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><ClockIcon className="w-4 h-4 text-slate-400" /></div>
+              <div><p className="text-[11px] text-slate-400 leading-none mb-1">Ouverte le</p><p className="text-sm font-semibold text-slate-900">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {fmtTimeLanding(session.opened_at)}</p></div>
+            </div>
+            <div className="flex items-center gap-3 py-4 border-b border-slate-100">
+              <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><ClockIcon className="w-4 h-4 text-slate-400" /></div>
+              <div><p className="text-[11px] text-slate-400 leading-none mb-1">Durée</p><p className="text-sm font-semibold text-slate-900">{sessionDuration(session.opened_at)}</p></div>
+            </div>
+            <div className="flex items-center gap-3 py-4 border-b border-slate-100">
+              <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><Banknote className="w-4 h-4 text-slate-400" /></div>
+              <div><p className="text-[11px] text-slate-400 leading-none mb-1">Fond initial</p><p className="text-sm font-semibold text-emerald-600">{formatFCFA(Number(session.opening_amount))}</p></div>
+            </div>
+            <div className="flex items-center gap-3 py-4">
+              <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><User className="w-4 h-4 text-slate-400" /></div>
+              <div><p className="text-[11px] text-slate-400 leading-none mb-1">Vendeur</p><p className="text-sm font-semibold text-slate-900 uppercase">{cashierName || '-'}</p></div>
+            </div>
+            <div className="flex items-center gap-3 py-4">
+              <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><CheckCircle2 className="w-4 h-4 text-slate-400" /></div>
+              <div><p className="text-[11px] text-slate-400 leading-none mb-1">Statut</p><span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border border-emerald-200 bg-emerald-50 text-emerald-700">OUVERTE</span></div>
+            </div>
+          </div>
+
+          {/* Buttons */}
+          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100">
+            <button onClick={onResume} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm">
+              <Play className="w-3.5 h-3.5 fill-current" /> Reprendre la session
+            </button>
+            {actionBtns.map(btn => (
+              <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center w-[72px] h-[62px] rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
+                <btn.icon className="w-4 h-4 mb-1" />
+                <span className="text-[9px] font-medium leading-tight text-center">{btn.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Right: summary + actions */}
-        <div className="col-span-2 space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center"><BarChart2 className="w-4 h-4" /></div>
-              <h3 className="text-sm font-bold text-slate-800">Résumé de la session</h3>
+        {/* Right column — stretch to match left */}
+        <div className="flex flex-col gap-4">
+          {/* Résumé de session */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center"><BarChart2 className="w-4 h-4 text-teal-600" /></div>
+              <h3 className="text-sm font-bold text-slate-900">Résumé de session</h3>
             </div>
             {loadingSummary ? (
-              <div className="space-y-2.5 animate-pulse"><div className="h-10 bg-slate-100 rounded-xl" /><div className="h-10 bg-slate-100 rounded-xl" /></div>
+              <div className="space-y-2 animate-pulse"><div className="h-10 bg-slate-100 rounded-lg" /><div className="h-10 bg-slate-100 rounded-lg" /></div>
             ) : summary ? (
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-brand-50 border border-brand-100">
-                  <span className="text-xs font-semibold text-brand-700">Total encaissé</span>
-                  <span className="text-base font-bold text-brand-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between py-2.5 border-b border-slate-100">
+                  <span className="text-xs text-teal-700 font-medium">Total encaissé</span>
+                  <span className="text-sm font-bold text-teal-600 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
                 </div>
-                <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-xs font-semibold text-slate-600">Nombre de ventes</span>
-                  <span className="text-base font-bold text-slate-800 tabular-nums">{summary.salesCount}</span>
+                <div className="flex items-center justify-between py-2.5 border-b border-slate-100">
+                  <span className="text-xs text-slate-600 font-medium">Nombre de ventes</span>
+                  <span className="text-sm font-bold text-slate-800 tabular-nums">{summary.salesCount}</span>
                 </div>
                 {summary.byMethod.length > 0 && (
-                  <div className="border-t border-slate-100 pt-2.5 mt-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Par mode de paiement</div>
-                    <div className="space-y-1.5">
-                      {summary.byMethod.map(m => (
-                        <div key={m.method_name} className="flex items-center justify-between">
-                          <span className="text-xs text-slate-600">{m.method_name}</span>
-                          <span className="text-xs font-bold text-slate-800 tabular-nums">{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="pt-1">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Par mode de paiement</p>
+                    {summary.byMethod.map(m => (
+                      <div key={m.method_name} className="flex items-center justify-between py-1.5">
+                        <span className="text-[11px] text-slate-500">{m.method_name}</span>
+                        <span className="text-[11px] font-bold text-slate-700 tabular-nums">{formatFCFA(m.amount)}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
-                {summary.salesCount === 0 && <p className="text-xs text-slate-500 text-center py-2">Aucune vente enregistrée.</p>}
               </div>
             ) : (
-              <p className="text-xs text-slate-500 text-center py-3">Données non disponibles</p>
+              <p className="text-xs text-slate-400 text-center py-2">Aucune donnée</p>
             )}
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-            <div className="flex items-center gap-2 mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"><Zap className="w-4 h-4" /></div>
-              <h3 className="text-sm font-bold text-slate-800">Actions rapides</h3>
+          {/* Accès rapides */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex-1">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><ClockIcon className="w-4 h-4 text-slate-500" /></div>
+              <h3 className="text-sm font-bold text-slate-900">Accès rapides</h3>
             </div>
-            <div className="space-y-1.5">
-              <button onClick={onResume} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-emerald-50 border border-slate-100 hover:border-emerald-200 text-left transition-colors">
-                <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="text-xs font-medium text-slate-700">Accéder au point de vente</span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400 ml-auto" />
-              </button>
+            <div className="space-y-1">
               {onSeeAll && (
-                <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-colors">
-                  <BarChart2 className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="text-xs font-medium text-slate-700">Historique des sessions</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 ml-auto" />
+                <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-colors group">
+                  <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center shrink-0"><ClockIcon className="w-3.5 h-3.5 text-teal-600" /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-800">Historique des sessions</p>
+                    <p className="text-[10px] text-slate-400">Consulter les sessions précédentes</p>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 shrink-0" />
                 </button>
               )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Mobile: session card ── */}
-      <div className="lg:hidden">
-        <div className="rounded-2xl border border-emerald-200/70 bg-white shadow-card overflow-hidden">
-          <div className="p-4">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}>
-                <Wallet className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-sm font-bold text-slate-900">Caisse ouverte</h2>
-                <p className="text-[10px] text-slate-500 truncate">{fmtDateFull(session.opened_at)} à {fmtTimeLanding(session.opened_at)}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100">
-                <div className="text-[9px] font-bold uppercase text-emerald-600">Fond</div>
-                <div className="text-xs font-bold text-emerald-800 tabular-nums">{formatFCFA(Number(session.opening_amount))}</div>
-              </div>
-              <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
-                <div className="text-[9px] font-bold uppercase text-slate-400">Durée</div>
-                <div className="text-xs font-bold text-slate-700 tabular-nums">{sessionDuration(session.opened_at)}</div>
-              </div>
-            </div>
-
-            {!loadingSummary && summary && summary.salesCount > 0 && (
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand-50 border border-brand-100 mb-3">
-                <div>
-                  <div className="text-[9px] font-bold uppercase text-brand-600">Encaissé</div>
-                  <div className="text-sm font-bold text-brand-900 tabular-nums">{formatFCFA(summary.salesTotal)}</div>
+              <button onClick={onResume} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-colors group">
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0"><ShoppingCart className="w-3.5 h-3.5 text-emerald-600" /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-800">Point de vente</p>
+                  <p className="text-[10px] text-slate-400">Accéder à la caisse</p>
                 </div>
-                <div className="ml-auto text-right">
-                  <div className="text-[9px] font-bold uppercase text-brand-600">Ventes</div>
-                  <div className="text-sm font-bold text-brand-900 tabular-nums">{summary.salesCount}</div>
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={onResume}
-              className="group w-full rounded-xl text-white font-bold text-sm py-3 px-4 shadow-[0_6px_20px_-8px_rgba(6,78,59,0.55)] active:scale-[0.99] transition-all"
-              style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
-            >
-              <span className="flex items-center justify-center gap-2">
-                <Play className="w-4 h-4 fill-current" />
-                Reprendre la session
-                <ChevronRight className="w-4 h-4 opacity-70" />
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Recent sessions ── */}
-      {!loadingSessions && sessions.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-1.5 px-1">
-            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernières sessions</h3>
-            {onSeeAll && (
-              <button onClick={onSeeAll} className="text-[11px] font-semibold text-brand-700 inline-flex items-center gap-0.5">
-                Voir tout <ChevronRight className="w-3 h-3" />
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 shrink-0" />
               </button>
-            )}
-          </div>
-          {/* Desktop table */}
-          <div className="hidden lg:block rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-card">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Date</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Ouverture</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fermeture</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Fond</th>
-                  <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Encaissé</th>
-                  <th className="text-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Statut</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sessions.map(s => {
-                  const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
-                  return (
-                    <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3 text-xs font-semibold text-slate-800">{fmtDateFull(s.opened_at)}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-slate-600">{fmtTimeLanding(s.opened_at)}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-slate-600">{s.closed_at ? fmtTimeLanding(s.closed_at) : '-'}</td>
-                      <td className="px-4 py-3 text-xs font-semibold text-slate-800 tabular-nums text-right">{formatFCFA(Number(s.opening_amount))}</td>
-                      <td className="px-4 py-3 text-xs font-bold text-brand-800 tabular-nums text-right">{collected != null ? formatFCFA(collected) : '-'}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase">
-                          <Lock className="w-2 h-2" /> Clôturée
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {/* Mobile list */}
-          <div className="lg:hidden space-y-1.5">
-            {sessions.slice(0, 3).map(s => {
-              const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
-              return (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-slate-200">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center shrink-0"><Lock className="w-2.5 h-2.5 text-slate-500" /></div>
-                    <div className="min-w-0">
-                      <span className="text-[11px] font-bold text-slate-800">{fmtDateShort(s.opened_at)}</span>
-                      <span className="text-[10px] text-slate-400 ml-1.5 tabular-nums">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-bold text-brand-800 tabular-nums shrink-0">{collected != null ? formatFCFA(collected) : '-'}</span>
-                </div>
-              );
-            })}
+            </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ── Mobile layout ── */}
+      <div className="lg:hidden px-2 sm:px-3 space-y-3">
+        {/* Session info card */}
+        <div className="bg-white rounded-xl border border-slate-200 p-3.5">
+          <h2 className="text-sm font-bold text-slate-900 mb-3">Session de caisse</h2>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><MapPin className="w-3 h-3 text-slate-400" /></div>
+              <div><p className="text-[9px] text-slate-400">Point de vente</p><p className="text-[11px] font-semibold text-slate-800 truncate">{currentSite?.name || '-'}</p></div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><ClockIcon className="w-3 h-3 text-slate-400" /></div>
+              <div><p className="text-[9px] text-slate-400">Durée</p><p className="text-[11px] font-semibold text-slate-800">{sessionDuration(session.opened_at)}</p></div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><Banknote className="w-3 h-3 text-slate-400" /></div>
+              <div><p className="text-[9px] text-slate-400">Fond initial</p><p className="text-[11px] font-semibold text-emerald-600">{formatFCFA(Number(session.opening_amount))}</p></div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><CheckCircle2 className="w-3 h-3 text-slate-400" /></div>
+              <div><p className="text-[9px] text-slate-400">Statut</p><span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase border border-emerald-200 bg-emerald-50 text-emerald-700">OUVERTE</span></div>
+            </div>
+          </div>
+          {cashierName && (
+            <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-slate-100">
+              <div className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center shrink-0"><User className="w-3 h-3 text-slate-400" /></div>
+              <div><p className="text-[9px] text-slate-400">Vendeur</p><p className="text-[11px] font-semibold text-slate-800 uppercase">{cashierName}</p></div>
+            </div>
+          )}
+        </div>
+
+        {/* Resume button */}
+        <button onClick={onResume} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm">
+          <Play className="w-4 h-4 fill-current" /> Reprendre la session
+        </button>
+
+        {/* Action buttons grid */}
+        {actions && (
+          <div className="grid grid-cols-5 gap-1.5">
+            {actionBtns.map(btn => (
+              <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center py-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 transition-all active:scale-[0.95] disabled:opacity-40 disabled:pointer-events-none">
+                <btn.icon className="w-4 h-4 mb-0.5" />
+                <span className="text-[8px] font-medium leading-tight text-center">{btn.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Summary card */}
+        {!loadingSummary && summary && (
+          <div className="bg-white rounded-xl border border-slate-200 p-3.5">
+            <div className="flex items-center gap-2 mb-2.5">
+              <div className="w-6 h-6 rounded-md bg-teal-50 flex items-center justify-center"><BarChart2 className="w-3 h-3 text-teal-600" /></div>
+              <h3 className="text-xs font-bold text-slate-900">Résumé</h3>
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-[11px] text-slate-500">Total encaissé</span>
+              <span className="text-xs font-bold text-teal-600 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between py-1.5 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">Ventes</span>
+              <span className="text-xs font-bold text-slate-800 tabular-nums">{summary.salesCount}</span>
+            </div>
+            {summary.byMethod.length > 0 && summary.byMethod.map(m => (
+              <div key={m.method_name} className="flex items-center justify-between py-1 border-t border-slate-50">
+                <span className="text-[10px] text-slate-400">{m.method_name}</span>
+                <span className="text-[10px] font-bold text-slate-600 tabular-nums">{formatFCFA(m.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Quick links */}
+        <div className="flex gap-2">
+          {onSeeAll && (
+            <button onClick={onSeeAll} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-left active:bg-slate-50 transition-colors">
+              <ClockIcon className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+              <span className="text-[11px] font-medium text-slate-700">Historique</span>
+            </button>
+          )}
+          <button onClick={onResume} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-left active:bg-slate-50 transition-colors">
+            <ShoppingCart className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="text-[11px] font-medium text-slate-700">Point de vente</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -733,7 +743,7 @@ function POSLandingResume({
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite, profile, setPosCart, posCartOpen, dataTick } = useApp();
+  const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, dataTick } = useApp();
   const { can } = usePermissions();
   const tenantForPrint: PrintTenant = tenant ? {
     name: tenant.name, legal_name: (tenant as any).legal_name,
@@ -805,6 +815,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [discount, setDiscount] = useState(0);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [exceptionPrices, setExceptionPrices] = useState<Map<string, number>>(new Map());
+  const [articleTiers, setArticleTiers] = useState<ArticleTier[]>([]);
+  const [tierPickerOpen, setTierPickerOpen] = useState(false);
+  const [tierPickerArticle, setTierPickerArticle] = useState<ArticleLite | null>(null);
+
+  // Source site/depot selector for stock deduction
+  const [saleSourceSiteId, setSaleSourceSiteId] = useState<string>('');
 
   // Load exception prices when customer changes
   useEffect(() => {
@@ -841,6 +857,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     return () => { setPosCart(0, false); };
   }, [setPosCart]);
 
+  // Init saleSourceSiteId from currentSite
+  useEffect(() => {
+    if (currentSite && !saleSourceSiteId) setSaleSourceSiteId(currentSite.id);
+  }, [currentSite?.id]);
+
   // Held carts (mise en attente)
   const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
   const [holdOpen, setHoldOpen] = useState(false);
@@ -854,6 +875,30 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     items: CartItem[]; payments: SalePayment[]; customer: Customer | null;
   } | null>(null);
   const [printInvoice, setPrintInvoice] = useState(false);
+
+  // Document settings fields for POS payment modal
+  type PosDocSettings = { show_delivery_date: boolean; show_reference: boolean; show_warranty: boolean; show_representative: boolean; default_representative: string };
+  const [posDocSettings, setPosDocSettings] = useState<PosDocSettings>({ show_delivery_date: false, show_reference: false, show_warranty: false, show_representative: false, default_representative: '' });
+  const [docDeliveryDate, setDocDeliveryDate] = useState('');
+  const [docReference, setDocReference] = useState('');
+  const [docWarranty, setDocWarranty] = useState('');
+  const [docRepresentative, setDocRepresentative] = useState('');
+
+  useEffect(() => {
+    if (!tenant) return;
+    supabase.from('document_settings').select('*').eq('tenant_id', tenant.id).eq('doc_type', 'invoice').maybeSingle().then(({ data }) => {
+      if (data) {
+        setPosDocSettings({
+          show_delivery_date: data.show_delivery_date ?? false,
+          show_reference: data.show_reference ?? false,
+          show_warranty: data.show_warranty ?? false,
+          show_representative: data.show_representative ?? false,
+          default_representative: data.default_representative ?? '',
+        });
+        if (data.default_representative) setDocRepresentative(data.default_representative);
+      }
+    });
+  }, [tenant?.id]);
 
   // Cash movement (expense / income / customer prepayment)
   const [mvOpen, setMvOpen] = useState(false);
@@ -948,6 +993,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const load = useCallback(async () => {
     if (!tenant || !currentSite) return;
+    const stockSiteId = saleSourceSiteId || currentSite.id;
     setLoadingData(true);
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
     const isShared = (tenant as any)?.settings?.shared_articles !== false;
@@ -974,13 +1020,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       from += batchSize;
     }
 
-    const [{ data: stk }, { data: pm }, { data: cs }, { data: cust }, { data: cats }, { data: topRows }] = await Promise.all([
-      supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
+    const [{ data: stk }, { data: pm }, { data: cs }, { data: cust }, { data: cats }, { data: topRows }, { data: tiers }] = await Promise.all([
+      supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId),
       supabase.from('payment_methods').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('cash_sessions').select('*').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
       (() => { let q = supabase.from('customers').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`); return q; })(),
       supabase.from('part_categories').select('id, name, parent_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
       supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
+      supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
     ]);
     const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
     setArticles((allArts).map((a: any) => ({
@@ -999,6 +1046,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       scores[r.article_id] = (scores[r.article_id] || 0) + Number(r.quantity || 0);
     }
     setTopScores(scores);
+    setArticleTiers((tiers || []) as ArticleTier[]);
     const existingSession = cs || null;
     setSession(existingSession);
     // Only update screen if we're not already inside the POS (avoids resetting after a sale)
@@ -1013,16 +1061,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       return existingSession ? 'resume' : 'open-form';
     });
     setLoadingData(false);
-  }, [tenant?.id, currentSite?.id]);
+  }, [tenant?.id, currentSite?.id, saleSourceSiteId]);
 
   useEffect(() => { load(); }, [load]);
 
   // Realtime: silently refresh stock + customers when another user makes changes
   useEffect(() => {
     if (dataTick === 0 || !tenant || !currentSite) return;
+    const stockSiteId = saleSourceSiteId || currentSite.id;
     (async () => {
       const [{ data: stk }, { data: cust }] = await Promise.all([
-        supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
+        supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId),
         supabase.from('customers').select('*').eq('tenant_id', tenant.id).order('name'),
       ]);
       if (stk) {
@@ -1073,21 +1122,44 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const addToCart = (a: ArticleLite) => {
     const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
-    setCart(c => {
-      const existing = c.find(i => i.article_id === a.id);
-      if (existing) {
-        if (!allowNeg && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return c; }
-        return c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      if (!allowNeg && a.stock_available <= 0) { error('Article en rupture'); return c; }
-      const price = exceptionPrices.get(a.id) ?? a.sale_price;
-      const next = [...c, {
-        article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
-        quantity: 1, unit_price: price, discount: 0,
-        stock_available: a.stock_available, purchase_cost: a.purchase_price,
-      }];
-      return next;
-    });
+    // If already in cart, just increment qty
+    const existing = cart.find(i => i.article_id === a.id);
+    if (existing) {
+      if (!allowNeg && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return; }
+      setCart(c => c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i));
+      return;
+    }
+    if (!allowNeg && a.stock_available <= 0) { error('Article en rupture'); return; }
+
+    // Check pricing tiers for this article (exception price always takes priority)
+    const hasException = exceptionPrices.has(a.id);
+    const tiers = articleTiers.filter(t => t.article_id === a.id);
+    if (tiers.length > 1 && !hasException) {
+      setTierPickerArticle(a);
+      setTierPickerOpen(true);
+      return;
+    }
+
+    const price = hasException ? exceptionPrices.get(a.id)! : (tiers.length === 1 ? tiers[0].price : a.sale_price);
+    const tierName = !hasException && tiers.length === 1 ? tiers[0].tier_name : undefined;
+    setCart(c => [...c, {
+      article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
+      quantity: 1, unit_price: price, discount: 0,
+      stock_available: a.stock_available, purchase_cost: a.purchase_price,
+      tier_name: tierName,
+    }]);
+  };
+
+  const addToCartWithTier = (a: ArticleLite, tierName: string, tierPrice: number) => {
+    const price = exceptionPrices.get(a.id) ?? tierPrice;
+    setCart(c => [...c, {
+      article_id: a.id, name: a.name, internal_ref: a.internal_ref, oem_ref: a.oem_ref,
+      quantity: 1, unit_price: price, discount: 0,
+      stock_available: a.stock_available, purchase_cost: a.purchase_price,
+      tier_name: tierName,
+    }]);
+    setTierPickerOpen(false);
+    setTierPickerArticle(null);
   };
 
   const updateQty = (id: string, delta: number) => {
@@ -1145,6 +1217,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openSessionSubmit = async () => {
     if (!tenant || !currentSite || !profile) return;
+    if (!can('pos_open_session')) { error('Vous n\'avez pas la permission d\'ouvrir une session'); return; }
     setOpeningSubmitting(true);
     const { data, error: e } = await supabase.from('cash_sessions').insert({
       tenant_id: tenant.id, site_id: currentSite.id, user_id: profile.id,
@@ -1248,6 +1321,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const submitMovement = async () => {
     if (!session || !currentSite) return;
+    if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
     if (mvAmount <= 0) { error('Montant invalide'); return; }
     if (mvKind !== 'expense' && !mvMethod) { error('Mode de règlement requis'); return; }
     if (mvKind === 'customer_prepayment' && !mvCustomer) { error('Client obligatoire'); return; }
@@ -1301,6 +1375,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const validateSale = async () => {
     if (!session || !currentSite || !tenant) return;
+    if (discount > 0 && !can('apply_discounts')) { error('Vous n\'avez pas la permission d\'appliquer des remises'); return; }
     if (totalPaid < total && !customer) { error('Sélectionnez un client pour un paiement partiel'); return; }
 
     const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
@@ -1341,7 +1416,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }
 
     const params: any = {
-      p_site_id: currentSite.id,
+      p_site_id: saleSourceSiteId || currentSite.id,
       p_cash_session_id: session.id,
       p_customer_id: customer?.id || null,
       p_items: saleItems,
@@ -1358,6 +1433,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (e) { error(e.message); return; }
     const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
     const saleId = (data as any)?.sale_id || (data as any)?.id || null;
+
+    // Save document header fields if any were filled
+    if (saleId && (docDeliveryDate || docReference || docWarranty || docRepresentative)) {
+      const docHeader: Record<string, string | null> = {};
+      if (docDeliveryDate) docHeader.delivery_date = docDeliveryDate;
+      if (docReference) docHeader.reference = docReference;
+      if (docWarranty) docHeader.warranty = docWarranty;
+      if (docRepresentative) docHeader.representative = docRepresentative;
+      supabase.from('sales').update({ doc_header: docHeader }).eq('id', saleId).then(() => {});
+    }
+
     setLastSale({
       sale_number: saleNum, created_at: new Date().toISOString(),
       total, discount, items: [...cart], payments: [...payments], customer,
@@ -1374,14 +1460,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       }).then(() => {}).catch(() => {});
       (window as any).__pendingWebOrderId = undefined;
     }
+    // Auto-apply available avoirs for this customer
+    if (customer?.id && saleId) {
+      await supabase.rpc('auto_apply_customer_avoirs', { p_sale_id: saleId });
+    }
     success('Vente enregistrée');
     setCart([]); setDiscount(0); setCustomer(null); setPayments([]); setPayOpen(false); setMobileCartOpen(false);
+    setDocDeliveryDate(''); setDocReference(''); setDocWarranty(''); setDocRepresentative(posDocSettings.default_representative || '');
     load();
   };
 
   // ─── Return ticket ────────────────────────────────────────────────────────
 
   const openReturn = async () => {
+    if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
     setReturnOpen(true); setReturnSelected(null); setReturnLines([]);
     setReturnLoading(true);
     const { data } = await supabase
@@ -1437,6 +1529,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const processReturn = async () => {
     if (!returnSelected || !tenant || !currentSite || !session) return;
+    if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
     const lines = returnLines.filter(l => l.selected && l.quantity > 0);
     if (lines.length === 0) { error('Aucun article sélectionné'); return; }
     const returnTotal = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
@@ -1726,6 +1819,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openCloseWorkflow = async () => {
     if (!session || !tenant) return;
+    if (!can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
     setCloseStep('control');
     setLoadingControl(true);
     setCloseOpen(true);
@@ -1836,6 +1930,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const confirmClose = async () => {
     if (!session || !tenant) return;
+    if (!can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
     setClosing(true);
     const ctrlRows = controlLines.map(c => ({
       tenant_id: tenant.id, cash_session_id: session.id,
@@ -1896,23 +1991,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   }
 
   // Screen: resume (active session found — opened by someone else or after "Quitter")
-  if (screen === 'resume' && session) {
-    return (
-      <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[92px] lg:pb-8">
-          <POSGuide tenantId={tenant?.id} hasSession={true} businessType={(tenant as any)?.business_type} />
-          <POSLandingResume
-            session={session}
-            currentSite={currentSite}
-            onResume={() => setScreen('pos')}
-            tenantId={tenant?.id}
-            onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
-            cashierName={cashierName}
-          />
-        </div>
-      </div>
-    );
-  }
+  const isResumeScreen = screen === 'resume' && !!session;
 
   // ─── Main POS screen ──────────────────────────────────────────────────────
 
@@ -1982,6 +2061,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="flex items-center gap-1.5">
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold text-slate-900 leading-snug truncate">{i.name}</div>
+                    {i.tier_name && <div className="text-[9px] font-medium text-brand-600 leading-tight">{i.tier_name}</div>}
                   </div>
                   <button onClick={() => removeLine(i.article_id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-red-400 transition-all shrink-0">
                     <Trash2 className="w-3 h-3" />
@@ -2029,24 +2109,54 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   return (
     <>
+    {isResumeScreen && session ? (
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[92px] lg:pb-8">
+          <POSGuide tenantId={tenant?.id} hasSession={true} businessType={(tenant as any)?.business_type} />
+          <POSLandingResume
+            session={session}
+            currentSite={currentSite}
+            onResume={() => setScreen('pos')}
+            tenantId={tenant?.id}
+            onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
+            cashierName={cashierName}
+            actions={{
+              onStats: openStats,
+              onTickets: openTickets,
+              onReturn: openReturn,
+              onCustomerPayment: openCustomerPayment,
+              onMovement: openMovement,
+              onWebOrders: openWebOrders,
+              onClose: openCloseWorkflow,
+              canReturn: can('pos_returns'),
+              canMovement: can('pos_cash_movement'),
+              canClose: can('pos_close_session'),
+              webOrdersBadge: webOrdersCounts.a_transformer,
+              sessionOpen: session.status === 'open',
+            }}
+          />
+        </div>
+      </div>
+    ) : (
+    <>
     <POSGuide tenantId={tenant?.id} hasSession={!!session} businessType={(tenant as any)?.business_type} />
     <div className="flex-1 flex flex-col overflow-hidden w-full min-h-0" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-top))' }}>
       {/* Action bar */}
       <div className="px-2 py-1.5 border-b border-slate-200/70 glass shrink-0">
-        {/* Mobile: single compact row — no EN SERVICE dot, panier always visible at far right */}
+        {/* Mobile: single compact row */}
         <div className="flex items-center gap-1 lg:hidden">
           <button onClick={openStats} className="pos-btn hidden sm:flex" title="Stats"><BarChart2 className="w-4 h-4" /></button>
           <button onClick={openTickets} className="pos-btn" title="Tickets"><List className="w-4 h-4" /></button>
-          <button onClick={openReturn} className="pos-btn" title="Retour"><RotateCcw className="w-4 h-4" /></button>
+          {can('pos_returns') && <button onClick={openReturn} className="pos-btn" title="Retour"><RotateCcw className="w-4 h-4" /></button>}
           <button onClick={openCustomerPayment} className="pos-btn" title="Encaisser"><Wallet className="w-4 h-4" /></button>
-          <button onClick={openMovement} className="pos-btn" title="Mouvement"><ArrowDownRight className="w-4 h-4" /></button>
+          {can('pos_cash_movement') && <button onClick={openMovement} className="pos-btn" title="Mouvement"><ArrowDownRight className="w-4 h-4" /></button>}
           <button onClick={openWebOrders} className="pos-btn relative" title="Commandes web">
             <Globe className="w-4 h-4 text-brand-700" />
             {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[8px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}
           </button>
           <button onClick={holdCart} className="pos-btn" title="Pause"><Pause className="w-4 h-4" /></button>
           <button onClick={leaveSession} className="pos-btn" title="Quitter"><LogOut className="w-4 h-4" /></button>
-          <button onClick={openCloseWorkflow} className="pos-btn-dark ml-0.5" title="Clôturer"><Lock className="w-4 h-4" /></button>
+          {can('pos_close_session') && <button onClick={openCloseWorkflow} className="pos-btn-dark ml-0.5" title="Clôturer"><Lock className="w-4 h-4" /></button>}
         </div>
         {/* Desktop: EN SERVICE indicator + labeled chips */}
         <div className="hidden lg:flex items-center gap-1.5">
@@ -2061,18 +2171,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="flex-1" />
           <button onClick={openStats} className="chip"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button>
           <button onClick={openTickets} className="chip"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
-          <button onClick={openReturn} className="chip"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>
+          {can('pos_returns') && <button onClick={openReturn} className="chip"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
           <button onClick={openCustomerPayment} className="chip"><Wallet className="w-3.5 h-3.5" /><span className="hidden xl:inline">Encaisser</span></button>
-          <button onClick={openMovement} className="chip"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button>
+          {can('pos_cash_movement') && <button onClick={openMovement} className="chip"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button>}
           <button onClick={openWebOrders} className="chip relative">
             <Globe className="w-3.5 h-3.5 text-brand-700" /><span className="hidden xl:inline">Commandes web</span>
             {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border border-white">{webOrdersCounts.a_transformer}</span>}
           </button>
           <button onClick={holdCart} className="chip"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
           <button onClick={leaveSession} className="chip"><LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Quitter</span></button>
-          <button onClick={openCloseWorkflow} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold bg-ink-900 text-white hover:bg-ink-800 transition-all active:scale-95 shadow-sm">
+          {can('pos_close_session') && <button onClick={openCloseWorkflow} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold bg-ink-900 text-white hover:bg-ink-800 transition-all active:scale-95 shadow-sm">
             <Lock className="w-3.5 h-3.5" /><span>Clôturer</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -2152,6 +2262,30 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <span className="text-slate-400 num">· {filtered.length} article{filtered.length > 1 ? 's' : ''}</span>
               </div>
             )}
+            {(() => {
+              const sharedCatalog = (tenant as any)?.settings?.shared_articles !== false;
+              const interDepot = !!(tenant as any)?.settings?.inter_depot_transfer;
+              // Own depots always accessible; other depots only if shared catalog + inter-depot enabled
+              const availableDepots = depots.filter(d =>
+                d.parent_site_id === currentSite?.id || (sharedCatalog && interDepot)
+              );
+              if (availableDepots.length === 0) return null;
+              return (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock depuis :</span>
+                  <select
+                    value={saleSourceSiteId}
+                    onChange={e => { setSaleSourceSiteId(e.target.value); }}
+                    className="text-[11px] font-semibold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400/30"
+                  >
+                    {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                    {availableDepots.map(d => (
+                      <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <div className="p-3 sm:p-4 w-full max-w-full mx-auto">
@@ -2190,7 +2324,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 })}
               </div>
             ) : (
-              <div className="flex flex-col divide-y divide-slate-100">
+              <div className="flex flex-col gap-1">
                 {filtered.map(a => {
                   const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
                   const out = !allowNeg && a.stock_available <= 0;
@@ -2200,36 +2334,24 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       key={a.id}
                       onClick={() => addToCart(a)}
                       disabled={out}
-                      className={`w-full flex items-center gap-2.5 px-2 py-1.5 hover:bg-brand-50/60 active:bg-brand-100/60 transition-colors text-left group disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'bg-red-50/30' : ''}`}
+                      className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-red-200/60 bg-red-50/30' : 'border-slate-200 bg-white hover:border-brand-300 hover:bg-brand-50/40 hover:shadow-sm'}`}
                     >
-                      {/* Stock badge */}
-                      <span className={`shrink-0 min-w-[42px] text-center text-[10px] font-bold px-1.5 py-0.5 rounded-md num ${
-                        a.stock_available <= 0
-                          ? (allowNeg ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700')
-                          : low
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-50 text-emerald-700'
-                      }`}>
-                        {a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
-                      </span>
-
-                      {/* Name */}
-                      <span className="flex-1 min-w-0 text-[12px] font-semibold text-slate-900 truncate">{a.name}</span>
-
-                      {/* Brand / OEM */}
-                      {(a.brand || a.oem_ref) && (
-                        <span className="shrink-0 hidden md:block text-[10px] text-slate-400 truncate max-w-[100px]">
-                          {a.brand}{a.brand && a.oem_ref ? ' · ' : ''}{a.oem_ref}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-semibold text-slate-900 leading-snug">{a.name}</div>
+                        {a.internal_ref && <div className="text-[10px] font-mono text-slate-400 mt-0.5">{a.internal_ref}</div>}
+                      </div>
+                      <div className="shrink-0 flex flex-col items-end gap-0.5">
+                        <span className="text-[13px] font-bold text-slate-900 num">{formatFCFA(a.sale_price)}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md num ${
+                          a.stock_available <= 0
+                            ? (allowNeg ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700')
+                            : low
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-emerald-50 text-emerald-700'
+                        }`}>
+                          {a.stock_available <= 0 ? (allowNeg ? '0' : 'Rupture') : `x${a.stock_available}`}
                         </span>
-                      )}
-
-                      {/* Price */}
-                      <span className="shrink-0 text-[13px] font-extrabold text-slate-900 num w-[90px] text-right">{formatFCFA(a.sale_price)}</span>
-
-                      {/* Add button */}
-                      <span className="shrink-0 w-6 h-6 rounded-full bg-brand-600 group-hover:bg-brand-700 text-white flex items-center justify-center shadow-sm transition-colors">
-                        <Plus className="w-3.5 h-3.5" />
-                      </span>
+                      </div>
                     </button>
                   );
                 })}
@@ -2346,6 +2468,37 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         tenantId={tenant!.id}
         siteId={currentSite!.id}
       />}
+
+      {/* Tier picker modal */}
+      {tierPickerOpen && tierPickerArticle && (() => {
+        const tiers = articleTiers.filter(t => t.article_id === tierPickerArticle.id);
+        const defaultPrice = tierPickerArticle.sale_price;
+        return (
+          <Modal open={tierPickerOpen} onClose={() => { setTierPickerOpen(false); setTierPickerArticle(null); }} title="Choisir le tarif" size="sm">
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 mb-3">Sélectionnez le tarif à appliquer pour <span className="font-semibold text-slate-700">{tierPickerArticle.name}</span></p>
+              <button onClick={() => addToCartWithTier(tierPickerArticle, '', defaultPrice)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all group">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-900">Prix standard</span>
+                  <span className="text-sm font-bold text-slate-900 num">{formatFCFA(defaultPrice)}</span>
+                </div>
+              </button>
+              {tiers.map(t => (
+                <button key={t.tier_name} onClick={() => addToCartWithTier(tierPickerArticle, t.tier_name, t.price)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all group">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-slate-900">{t.tier_name}</span>
+                    <span className="text-sm font-bold text-brand-700 num">{formatFCFA(t.price)}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Modal>
+        );
+      })()}
+
+    </div>
+    </>
+    )}
 
       {/* Cash movement (expense / income / customer prepayment) */}
       {mvOpen && (
@@ -2599,6 +2752,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           onClose={() => setPayOpen(false)}
           onValidate={validateSale}
           onValidateCredit={validateCreditSale}
+          docSettings={posDocSettings}
+          docFields={{ deliveryDate: docDeliveryDate, reference: docReference, warranty: docWarranty, representative: docRepresentative }}
+          setDocFields={{ setDeliveryDate: setDocDeliveryDate, setReference: setDocReference, setWarranty: setDocWarranty, setRepresentative: setDocRepresentative }}
         />
       )}
 
@@ -3328,7 +3484,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         )}
       </Modal>
-    </div>
     </>
   );
 }
@@ -3338,6 +3493,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 function PaymentScreen({
   total, customer, methods, payments, setPayments, paying,
   onClose, onValidate, onValidateCredit,
+  docSettings, docFields, setDocFields,
 }: {
   total: number;
   customer: Customer | null;
@@ -3348,11 +3504,16 @@ function PaymentScreen({
   onClose: () => void;
   onValidate: () => void;
   onValidateCredit: () => void;
+  docSettings: { show_delivery_date: boolean; show_reference: boolean; show_warranty: boolean; show_representative: boolean; default_representative: string };
+  docFields: { deliveryDate: string; reference: string; warranty: string; representative: string };
+  setDocFields: { setDeliveryDate: (v: string) => void; setReference: (v: string) => void; setWarranty: (v: string) => void; setRepresentative: (v: string) => void };
 }) {
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = total - totalPaid;
   const enough = totalPaid >= total && total > 0;
   const canPartial = customer && totalPaid > 0 && totalPaid < total;
+
+  const hasDocFields = docSettings.show_delivery_date || docSettings.show_reference || docSettings.show_warranty || docSettings.show_representative;
 
   const modeStyle = (name: string): { tint: string; emoji: string } => {
     const n = name.toLowerCase();
@@ -3395,100 +3556,182 @@ function PaymentScreen({
         <div className="absolute -bottom-40 -left-40 w-[520px] h-[520px] rounded-full bg-brand-700/20 blur-3xl" />
       </div>
 
-      {/* Header */}
-      <div className="relative flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
-        <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/10 transition-colors" disabled={paying}>
-          <X className="w-5 h-5" />
-        </button>
-        <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Encaissement</div>
-        <div className="w-9" />
-      </div>
-
-      {/* Total */}
-      <div className="relative px-4 pt-4 pb-3 shrink-0">
-        <div className="max-w-md mx-auto text-center">
-          <div className="text-4xl sm:text-5xl font-bold tracking-tight num leading-none">{formatFCFA(total)}</div>
-          {customer && <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 text-xs"><User className="w-3 h-3" /> {customer.name}</div>}
-          {totalPaid > 0 && (
-            <div className="mt-2 flex items-center justify-center gap-3 text-[11px]">
-              <span className="text-white/60">Reçu <span className="num font-bold text-white">{formatFCFA(totalPaid)}</span></span>
-              {remaining > 0 ? <span className="text-amber-300 font-semibold">Reste <span className="num">{formatFCFA(remaining)}</span></span>
-              : <span className="text-emerald-300 font-semibold">Monnaie <span className="num">{formatFCFA(-remaining)}</span></span>}
-            </div>
-          )}
+      {/* Header with total + buttons */}
+      <div className="relative shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/10 transition-colors" disabled={paying}>
+            <X className="w-5 h-5" />
+          </button>
+          <div className="text-center flex-1 min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Encaissement</div>
+            <div className="text-2xl sm:text-3xl font-bold tracking-tight num leading-none mt-0.5">{formatFCFA(total)}</div>
+          </div>
+          <div className="w-9" />
+        </div>
+        {/* Summary bar */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-white/[0.02]">
+          <div className="flex items-center gap-3 text-[11px]">
+            {customer && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10"><User className="w-3 h-3" /> {customer.name}</span>}
+            {totalPaid > 0 && (
+              <>
+                <span className="text-white/60">Recu <span className="num font-bold text-white">{formatFCFA(totalPaid)}</span></span>
+                {remaining > 0 ? <span className="text-amber-300 font-semibold">Reste <span className="num">{formatFCFA(remaining)}</span></span>
+                : <span className="text-emerald-300 font-semibold">Monnaie <span className="num">{formatFCFA(-remaining)}</span></span>}
+              </>
+            )}
+          </div>
+          {/* Action buttons moved up */}
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-3 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 font-semibold text-[11px] transition-colors" disabled={paying}>
+              Annuler
+            </button>
+            {enough ? (
+              <button onClick={onValidate} disabled={paying}
+                className="h-8 px-4 rounded-xl font-bold text-[11px] flex items-center gap-1.5 bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[0_8px_24px_-8px_rgb(16_185_129_/0.5)] active:scale-[0.98] whitespace-nowrap">
+                {paying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                {paying ? '...' : `Valider · ${formatFCFA(total)}`}
+              </button>
+            ) : canPartial ? (
+              <button onClick={onValidate} disabled={paying}
+                className="h-8 px-3 rounded-xl font-bold text-[11px] flex items-center gap-1.5 bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-[0_8px_24px_-8px_rgb(217_119_6_/0.4)] active:scale-[0.98] whitespace-nowrap">
+                {paying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                {paying ? '...' : `Partiel · ${formatFCFA(remaining)} credit`}
+              </button>
+            ) : (
+              <div className="h-8 px-3 rounded-xl bg-white/10 text-white/40 font-semibold text-[11px] flex items-center whitespace-nowrap">
+                {totalPaid === 0 ? 'Choisir un mode' : `Reste ${formatFCFA(remaining)}`}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="relative flex-1 min-h-0 overflow-y-auto px-4 pb-3">
-        <div className="max-w-md mx-auto space-y-4">
-          {/* Payment lines */}
-          {payments.length > 0 && (
-            <div className="space-y-2">
-              {payments.map((p, idx) => {
-                const { emoji } = modeStyle(p.method_name);
-                return (
-                  <div key={idx} className="flex items-center gap-2 p-2.5 rounded-2xl bg-white/5 border border-white/10">
-                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0">{emoji}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] text-white/50 leading-tight mb-0.5">{p.method_name}</div>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={p.amount || ''}
-                        onChange={e => updateAmount(idx, e.target.value)}
-                        className="w-full bg-transparent text-lg font-bold num outline-none border-none p-0 leading-tight [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        placeholder="0"
-                      />
+      {/* Content: 2 columns on desktop, stacked on mobile */}
+      <div className="relative flex-1 min-h-0 overflow-y-auto px-4 py-4">
+        <div className={`mx-auto ${hasDocFields ? 'max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-6' : 'max-w-md space-y-4'}`}>
+          {/* Left column: payment methods */}
+          <div className="space-y-4">
+            {/* Payment lines */}
+            {payments.length > 0 && (
+              <div className="space-y-2">
+                {payments.map((p, idx) => {
+                  const { emoji } = modeStyle(p.method_name);
+                  return (
+                    <div key={idx} className="flex items-center gap-2 p-2.5 rounded-2xl bg-white/5 border border-white/10">
+                      <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0">{emoji}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] text-white/50 leading-tight mb-0.5">{p.method_name}</div>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={p.amount || ''}
+                          onChange={e => updateAmount(idx, e.target.value)}
+                          className="w-full bg-transparent text-lg font-bold num outline-none border-none p-0 leading-tight [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          placeholder="0"
+                        />
+                      </div>
+                      <button onClick={() => setExact(idx)} className="px-2 py-1 rounded-lg bg-brand-500/30 text-brand-100 text-[10px] font-bold hover:bg-brand-500/50 transition-colors shrink-0">
+                        Exact
+                      </button>
+                      <button onClick={() => removePayment(idx)} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300 shrink-0">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <button onClick={() => setExact(idx)} className="px-2 py-1 rounded-lg bg-brand-500/30 text-brand-100 text-[10px] font-bold hover:bg-brand-500/50 transition-colors shrink-0">
-                      Exact
-                    </button>
-                    <button onClick={() => removePayment(idx)} className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300 shrink-0">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
 
-          {/* Payment methods — inline tokens */}
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">
-              {payments.length > 0 ? 'Ajouter un autre mode' : 'Mode de paiement'}
+            {/* Payment methods tokens */}
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">
+                {payments.length > 0 ? 'Ajouter un autre mode' : 'Mode de paiement'}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {methods.filter(m => !payments.some(p => p.payment_method_id === m.id)).map(m => {
+                  const { emoji } = modeStyle(m.name);
+                  return (
+                    <button key={m.id} onClick={() => selectMethod(m)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/8 border border-white/12 hover:bg-white/15 active:scale-95 transition-all">
+                      <span className="text-[11px] font-black tracking-wider text-white/80 font-mono leading-none">{emoji}</span>
+                      <span className="text-[12px] font-semibold text-white/90 leading-none">{m.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {methods.filter(m => !payments.some(p => p.payment_method_id === m.id)).map(m => {
-                const { emoji } = modeStyle(m.name);
-                return (
-                  <button key={m.id} onClick={() => selectMethod(m)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/8 border border-white/12 hover:bg-white/15 active:scale-95 transition-all">
-                    <span className="text-[11px] font-black tracking-wider text-white/80 font-mono leading-none">{emoji}</span>
-                    <span className="text-[12px] font-semibold text-white/90 leading-none">{m.name}</span>
-                  </button>
-                );
-              })}
-            </div>
+
+            {/* Credit sale option */}
+            {customer && totalPaid === 0 && (
+              <div className="pt-2 border-t border-white/10">
+                <button onClick={onValidateCredit} disabled={paying}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-100 hover:bg-amber-500/25 transition-all text-sm font-bold">
+                  {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  Tout a credit · {customer.name}
+                </button>
+                <div className="text-[10px] text-white/50 mt-1.5 text-center">Facture impayee dans le compte client</div>
+              </div>
+            )}
           </div>
 
-          {/* Credit sale option */}
-          {customer && totalPaid === 0 && (
-            <div className="pt-2 border-t border-white/10">
-              <button onClick={onValidateCredit} disabled={paying}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-100 hover:bg-amber-500/25 transition-all text-sm font-bold">
-                {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                Tout à crédit · {customer.name}
-              </button>
-              <div className="text-[10px] text-white/50 mt-1.5 text-center">Facture impayée dans le compte client</div>
+          {/* Right column: document fields (only if any enabled) */}
+          {hasDocFields && (
+            <div className="space-y-3">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">Informations document</div>
+              <div className="space-y-2.5">
+                {docSettings.show_reference && (
+                  <div>
+                    <label className="text-[10px] font-semibold text-white/60 mb-1 block">Reference client</label>
+                    <input
+                      value={docFields.reference}
+                      onChange={e => setDocFields.setReference(e.target.value)}
+                      placeholder="Ref. commande / dossier"
+                      className="w-full h-9 rounded-xl bg-white/8 border border-white/12 px-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-brand-400/50 focus:bg-white/10 transition-colors"
+                    />
+                  </div>
+                )}
+                {docSettings.show_delivery_date && (
+                  <div>
+                    <label className="text-[10px] font-semibold text-white/60 mb-1 block">Date de livraison</label>
+                    <input
+                      type="date"
+                      value={docFields.deliveryDate}
+                      onChange={e => setDocFields.setDeliveryDate(e.target.value)}
+                      className="w-full h-9 rounded-xl bg-white/8 border border-white/12 px-3 text-sm text-white outline-none focus:border-brand-400/50 focus:bg-white/10 transition-colors [color-scheme:dark]"
+                    />
+                  </div>
+                )}
+                {docSettings.show_warranty && (
+                  <div>
+                    <label className="text-[10px] font-semibold text-white/60 mb-1 block">Garantie</label>
+                    <input
+                      value={docFields.warranty}
+                      onChange={e => setDocFields.setWarranty(e.target.value)}
+                      placeholder="Ex: 6 mois, 1 an"
+                      className="w-full h-9 rounded-xl bg-white/8 border border-white/12 px-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-brand-400/50 focus:bg-white/10 transition-colors"
+                    />
+                  </div>
+                )}
+                {docSettings.show_representative && (
+                  <div>
+                    <label className="text-[10px] font-semibold text-white/60 mb-1 block">Representant</label>
+                    <input
+                      value={docFields.representative}
+                      onChange={e => setDocFields.setRepresentative(e.target.value)}
+                      placeholder="Nom du commercial"
+                      className="w-full h-9 rounded-xl bg-white/8 border border-white/12 px-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-brand-400/50 focus:bg-white/10 transition-colors"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="relative border-t border-white/10 px-4 py-3 bg-ink-900/80 backdrop-blur-xl shrink-0 safe-bottom">
-        <div className="max-w-md mx-auto flex gap-2">
+      {/* Mobile-only bottom action bar (hidden on md+) */}
+      <div className="relative border-t border-white/10 px-4 py-3 bg-ink-900/80 backdrop-blur-xl shrink-0 safe-bottom md:hidden">
+        <div className="flex gap-2">
           <button onClick={onClose} className="px-4 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-colors" disabled={paying}>
             Annuler
           </button>
@@ -3502,7 +3745,7 @@ function PaymentScreen({
             <button onClick={onValidate} disabled={paying}
               className="flex-1 min-w-0 h-12 rounded-2xl font-bold text-[13px] flex items-center justify-center gap-1.5 bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-[0_12px_40px_-12px_rgb(217_119_6_/0.4)] active:scale-[0.98] whitespace-nowrap px-3">
               {paying ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />}
-              <span className="truncate">{paying ? 'Traitement...' : `Partiel · ${formatFCFA(remaining)} à crédit`}</span>
+              <span className="truncate">{paying ? 'Traitement...' : `Partiel · ${formatFCFA(remaining)} credit`}</span>
             </button>
           ) : (
             <div className="flex-1 min-w-0 h-12 rounded-2xl bg-white/10 text-white/40 font-semibold text-sm flex items-center justify-center whitespace-nowrap">

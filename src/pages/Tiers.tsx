@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
@@ -31,6 +32,7 @@ type SupplierOptionKey = 'info' | 'payment' | 'docs' | 'articles' | null;
 
 export function Tiers() {
   const { tenant, currentSite, sites, profile, dataTick } = useApp();
+  const { can } = usePermissions();
   const { success, error } = useToast();
   const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
@@ -175,6 +177,7 @@ export function Tiers() {
   const openCustEdit = (c: Customer) => { setCustEdit(c); setCustForm(c); setCustOpen(true); };
   const saveCust = async () => {
     if (!tenant || !custForm.name?.trim()) { error('Nom obligatoire'); return; }
+    if (!can('manage_customers')) { error('Vous n\'avez pas la permission de gerer les clients'); return; }
     setSaving(true);
     const payload: any = {
       tenant_id: tenant.id, name: custForm.name.trim(), phone: custForm.phone || '',
@@ -196,6 +199,7 @@ export function Tiers() {
   };
   const deactivateCust = async () => {
     if (!toDeactivateCust) return;
+    if (!can('manage_customers')) { error('Vous n\'avez pas la permission de supprimer les clients'); return; }
     const { error: hardErr } = await supabase.rpc('tenant_delete_customer_safe', { p_id: toDeactivateCust.id });
     if (!hardErr) { success('Client supprimé définitivement'); setToDeactivateCust(null); load(); return; }
     const { error: e } = await supabase.from('customers').update({ is_active: false }).eq('id', toDeactivateCust.id);
@@ -208,6 +212,7 @@ export function Tiers() {
   const openSupEdit = (s: Supplier) => { setSupEdit(s); setSupForm(s); setSupOpen(true); };
   const saveSup = async () => {
     if (!tenant || !supForm.name?.trim()) { error('Nom obligatoire'); return; }
+    if (!can('manage_customers')) { error('Vous n\'avez pas la permission de gerer les fournisseurs'); return; }
     setSaving(true);
     const payload: any = {
       tenant_id: tenant.id, name: supForm.name.trim(), contact: supForm.contact || '',
@@ -230,6 +235,7 @@ export function Tiers() {
   };
   const deactivateSup = async () => {
     if (!toDeactivateSup) return;
+    if (!can('manage_customers')) { error('Vous n\'avez pas la permission de supprimer les fournisseurs'); return; }
     const { error: hardErr } = await supabase.rpc('tenant_delete_supplier_safe', { p_id: toDeactivateSup.id });
     if (!hardErr) { success('Fournisseur supprimé définitivement'); setToDeactivateSup(null); load(); return; }
     const { error: e } = await supabase.from('suppliers').update({ is_active: false }).eq('id', toDeactivateSup.id);
@@ -759,6 +765,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
 
   const [creditMethodIds, setCreditMethodIds] = useState<Set<string>>(new Set());
   const [prepayments, setPrepayments] = useState<{ id: string; amount: number; amount_used: number; method_name: string; reference: string; created_at: string }[]>([]);
+  const [avoirs, setAvoirs] = useState<{ id: string; return_number: string; total: number; credit_used: number; created_at: string; refunded_at?: string | null }[]>([]);
 
   const reload = async () => {
     if (!tenant) return;
@@ -777,10 +784,12 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     if (!payMethod && realMethods.length) setPayMethod(realMethods[0].id);
 
     const salesIds = ss.map(s => s.id);
-    const [{ data: prepays }] = await Promise.all([
+    const [{ data: prepays }, { data: avoirRows }] = await Promise.all([
       supabase.from('customer_prepayments').select('id, amount, amount_used, method_name, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }),
+      supabase.from('sale_returns').select('id, return_number, total, credit_used, created_at, refunded_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('status', 'approved').eq('refund_method', 'avoir').order('created_at', { ascending: false }),
     ]);
     setPrepayments(prepays || []);
+    setAvoirs(avoirRows || []);
 
     if (salesIds.length) {
       const [{ data: pays }, { data: items }] = await Promise.all([
@@ -808,8 +817,9 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       .filter(p => validIds.has(p.sale_id))
       .reduce((a, p) => a + Number(p.amount), 0);
     const unusedPrepay = prepayments.reduce((a, p) => a + Math.max(0, Number(p.amount) - Number(p.amount_used)), 0);
-    return { total, paid, due: total - paid - unusedPrepay, unusedPrepay };
-  }, [sales, realPayments, prepayments]);
+    const unusedAvoir = avoirs.reduce((a, av) => a + Math.max(0, Number(av.total) - Number(av.credit_used)), 0);
+    return { total, paid, due: total - paid - unusedPrepay, unusedPrepay, unusedAvoir };
+  }, [sales, realPayments, prepayments, avoirs]);
 
   const unpaidSales = useMemo(() => {
     const paidBySale: Record<string, number> = {};
@@ -847,7 +857,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     rows.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
     let running = 0;
     return rows.map(r => { running += r.debit - r.credit; return { ...r, running }; });
-  }, [sales, realPayments, prepayments]);
+  }, [sales, realPayments, prepayments, avoirs]);
 
   const filteredDocs = useMemo(() => sales.filter(s => {
     if (dateFrom && new Date(s.created_at) < new Date(dateFrom)) return false;
@@ -970,9 +980,17 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
             {key === 'pricing' && 'Prix spéciaux par article'}
           </div>
           {key !== 'pricing' && (
-          <div className={`text-right ${totals.due > 0 ? 'text-amber-700' : totals.due < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
-            <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">{totals.due < 0 ? 'Avoir' : 'Solde dû'}</div>
-            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(Math.abs(totals.due))}</div>
+          <div className="text-right">
+            <div className={`${totals.due > 0 ? 'text-amber-700' : 'text-slate-500'}`}>
+              <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde dû</div>
+              <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(totals.due)}</div>
+            </div>
+            {totals.unusedAvoir > 0 && (
+              <div className="text-teal-700 mt-1">
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Avoir disponible</div>
+                <div className="text-xs font-bold tabular-nums leading-none mt-0.5">-{formatFCFA(totals.unusedAvoir)}</div>
+              </div>
+            )}
           </div>
           )}
         </div>
@@ -981,7 +999,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       {loading && key !== 'pricing' ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div> : (
         <>
           {key === 'info' && (
-            <LedgerView customerName={c.name} ledger={ledger} totalDebit={totals.total} totalCredit={totals.paid} balance={totals.due}
+            <LedgerView customerName={c.name} ledger={ledger} totalDebit={totals.total} totalCredit={totals.paid} balance={totals.due} unusedAvoir={totals.unusedAvoir}
               dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} />
           )}
 
@@ -1024,10 +1042,10 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
 }
 
 /* ───────────────────────── Ledger view (bank-style) ───────────────────────── */
-function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, dateFrom, dateTo, onOpenPicker, onClearDates }: {
+function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, unusedAvoir, dateFrom, dateTo, onOpenPicker, onClearDates }: {
   customerName: string;
   ledger: { id: string; ts: string; label: string; ref: string; debit: number; credit: number; running: number; kind: string }[];
-  totalDebit: number; totalCredit: number; balance: number;
+  totalDebit: number; totalCredit: number; balance: number; unusedAvoir: number;
   dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void;
 }) {
   const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment'>('');
@@ -1178,7 +1196,7 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, da
             <div className="mt-0.5 text-[13px] sm:text-sm font-bold tabular-nums text-emerald-300">+{formatFCFA(filteredCredit)}</div>
             {filteredBalance < 0 && (
               <div className="mt-2 pt-2 border-t border-slate-700">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Avoir</div>
+                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Solde créditeur</div>
                 <div className="mt-0.5 text-sm font-bold tabular-nums text-emerald-300">{formatFCFA(Math.abs(filteredBalance))}</div>
               </div>
             )}
@@ -1190,6 +1208,15 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, da
             </div>
           )}
         </div>
+        {unusedAvoir > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-teal-400" />
+              <div className="text-[9px] uppercase tracking-wider text-teal-400 font-bold">Avoirs disponibles</div>
+            </div>
+            <div className="text-sm font-bold tabular-nums text-teal-300">+{formatFCFA(unusedAvoir)}</div>
+          </div>
+        )}
       </div>
     </div>
   );

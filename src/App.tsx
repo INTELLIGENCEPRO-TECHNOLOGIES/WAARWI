@@ -176,7 +176,7 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
 
 function Inner() {
   const { loading, user, tenant, profile } = useApp();
-  const { can } = usePermissions();
+  const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const [route, setRoute] = useState<Route>('dashboard');
   const [showWelcome, setShowWelcome] = useState(false);
@@ -198,6 +198,7 @@ function Inner() {
   useEffect(() => {
     if (!tenant && isSuperAdmin) { setRoute('platform_admin'); return; }
     if (isSuperAdmin) return;
+    if (permsLoading) return;
     const mod = ROUTE_MODULE[route];
     if (mod && !enabled.includes(mod)) { setRoute('pos'); return; }
     const perm = ROUTE_PERMISSION[route];
@@ -209,7 +210,7 @@ function Inner() {
       }) || 'pos';
       if (route !== fallback) setRoute(fallback);
     }
-  }, [tenant, isSuperAdmin, route, enabled.join(','), can]);
+  }, [tenant, isSuperAdmin, route, enabled.join(','), can, permsLoading]);
 
   if (loading) {
     return (

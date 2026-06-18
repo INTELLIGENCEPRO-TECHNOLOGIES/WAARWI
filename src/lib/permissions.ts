@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from './supabase';
 import { useApp } from '../context/AppContext';
 
@@ -150,15 +150,16 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
 ];
 
 const ALL_TRUE: PermissionMap = PERMISSION_KEYS.reduce((acc, k) => ({ ...acc, [k]: true }), {} as PermissionMap);
+const ALL_FALSE: PermissionMap = PERMISSION_KEYS.reduce((acc, k) => ({ ...acc, [k]: false }), {} as PermissionMap);
 
 export function usePermissions(): { permissions: PermissionMap; loading: boolean; can: (key: PermissionKey) => boolean } {
   const { profile, dataTick } = useApp();
-  const [permissions, setPermissions] = useState<PermissionMap>(ALL_TRUE);
+  const [permissions, setPermissions] = useState<PermissionMap>(ALL_FALSE);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!profile?.tenant_id || !profile?.role) {
-      setPermissions(ALL_TRUE);
+      setPermissions(ALL_FALSE);
       setLoading(false);
       return;
     }
@@ -178,7 +179,7 @@ export function usePermissions(): { permissions: PermissionMap; loading: boolean
         .maybeSingle();
 
       if (data?.permissions) {
-        const map = { ...ALL_TRUE };
+        const map = { ...ALL_FALSE };
         for (const k of PERMISSION_KEYS) {
           if (k in data.permissions) {
             map[k] = data.permissions[k] === true;
@@ -186,17 +187,18 @@ export function usePermissions(): { permissions: PermissionMap; loading: boolean
         }
         setPermissions(map);
       } else {
-        setPermissions(ALL_TRUE);
+        // No config found for this role: deny everything (secure by default)
+        setPermissions(ALL_FALSE);
       }
       setLoading(false);
     })();
   }, [profile?.tenant_id, profile?.role, dataTick]);
 
-  const can = (key: PermissionKey): boolean => {
+  const can = useCallback((key: PermissionKey): boolean => {
     if (!profile) return false;
     if (profile.role === 'admin' || profile.role === 'super_admin') return true;
     return permissions[key] === true;
-  };
+  }, [profile, permissions]);
 
   return { permissions, loading, can };
 }

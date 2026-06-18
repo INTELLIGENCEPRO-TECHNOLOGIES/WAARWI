@@ -7,10 +7,11 @@ import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { Modal } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { desktopAutoFocus } from '../lib/device';
+import { printStockMovementA4, printStockMovement80, type PrintTenant } from '../lib/print';
 import {
   TrendingUp, TrendingDown, AlertTriangle, Package, Loader2,
   Users, FileText, ExternalLink, Globe,
-  ShoppingCart, ChevronRight, Bell,
+  ShoppingCart, ChevronRight, Bell, Calendar,
   CheckCircle, Clock, Receipt, Wallet, ArrowUpRight, ArrowDownRight,
   ArrowUpLeft, CreditCard, Truck, Activity, Eye, EyeOff, X,
   Share2, Copy, Check as CheckIcon, MessageCircle, RefreshCw,
@@ -73,6 +74,8 @@ type Stats = {
   outOfStockCount: number;
   customersCount: number;
   suppliersCount: number;
+  customersToChase: number;
+  suppliersToChase: number;
   pendingQuotes: number;
   pendingReturns: number;
   stockInToday: number;
@@ -117,15 +120,58 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
   };
   const { can } = usePermissions();
 
+  const [period, setPeriod] = useState<string>('today');
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
+  const periodOptions = [
+    { value: 'today', label: `Aujourd'hui, ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}` },
+    { value: 'yesterday', label: 'Hier' },
+    { value: 'this_week', label: 'Cette semaine' },
+    { value: 'last_week', label: 'Semaine dernière' },
+    { value: 'this_month', label: 'Ce mois' },
+    { value: 'last_month', label: 'Mois dernier' },
+  ];
+  const periodLabel = periodOptions.find(o => o.value === period)?.label || 'Aujourd\'hui';
+
   useEffect(() => {
     if (!tenant || !currentSite) return;
     let cancelled = false;
     (async () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const now = new Date();
+      const today = new Date(); today.setHours(0, 0, 0, 0);
       const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+
+      let periodStart: Date;
+      let periodEnd: Date | null;
+      if (period === 'yesterday') {
+        periodStart = yest;
+        periodEnd = today;
+      } else if (period === 'this_week') {
+        periodStart = new Date(today);
+        const dow = periodStart.getDay();
+        periodStart.setDate(periodStart.getDate() - (dow === 0 ? 6 : dow - 1));
+        periodEnd = null;
+      } else if (period === 'last_week') {
+        periodStart = new Date(today);
+        const dow = periodStart.getDay();
+        periodStart.setDate(periodStart.getDate() - (dow === 0 ? 6 : dow - 1) - 7);
+        periodEnd = new Date(periodStart);
+        periodEnd.setDate(periodEnd.getDate() + 7);
+      } else if (period === 'this_month') {
+        periodStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        periodEnd = null;
+      } else if (period === 'last_month') {
+        periodStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        periodEnd = new Date(today.getFullYear(), today.getMonth(), 1);
+      } else {
+        periodStart = today;
+        periodEnd = null;
+      }
+
       const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const siteId = currentSite.id;
+
+      const periodQuery = supabase.from('sales').select('total, created_at, sale_items(unit_price, quantity, discount, purchase_cost)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString()).neq('status', 'cancelled');
+      if (periodEnd) periodQuery.lt('created_at', periodEnd.toISOString());
 
       const [
         todayData, yestData, monthData, articlesCount, stockData, recent,
@@ -133,7 +179,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         webNewData, webPrepData, webReadyData, webTodayData, webWaitData, lastWebOrderData,
         openSessions, stockInTodayData,
       ] = await Promise.all([
-        supabase.from('sales').select('total, created_at, sale_items(unit_price, quantity, discount, purchase_cost)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
+        periodQuery,
         supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', yest.toISOString()).lt('created_at', today.toISOString()).neq('status', 'cancelled'),
         supabase.from('sales').select('total, sale_items(total, purchase_cost, quantity)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', firstOfMonth.toISOString()).neq('status', 'cancelled'),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
@@ -147,11 +193,11 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('online_orders').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('status', 'nouvelle'),
         supabase.from('online_orders').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('status', 'en_preparation'),
         supabase.from('online_orders').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('status', 'prete'),
-        supabase.from('online_orders').select('total').eq('tenant_id', tenant.id).gte('created_at', today.toISOString()).neq('status', 'annulee'),
+        supabase.from('online_orders').select('total').eq('tenant_id', tenant.id).gte('created_at', periodStart.toISOString()).neq('status', 'annulee'),
         supabase.from('online_orders').select('created_at').eq('tenant_id', tenant.id).eq('status', 'nouvelle').order('created_at', { ascending: true }).limit(1),
         supabase.from('online_orders').select('order_number, customer_name, total, created_at').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'open'),
-        supabase.from('stock_movements').select('quantity').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['purchase', 'adjustment_in']).gte('created_at', today.toISOString()),
+        supabase.from('stock_movements').select('quantity').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['purchase', 'adjustment_in']).gte('created_at', periodStart.toISOString()),
       ]);
 
       if (shopData.data?.public_slug) {
@@ -181,8 +227,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       const stockRows = stockData.data || [];
       const low = stockRows.filter((r: any) => Number(r.quantity) > 0 && Number(r.articles?.stock_min || 0) > 0 && Number(r.quantity) <= Number(r.articles.stock_min)).length;
-      // Only count as rupture if stock_min > 0 (merchant actively tracks this item's minimum)
-      const out = stockRows.filter((r: any) => Number(r.quantity) <= 0 && Number(r.articles?.stock_min || 0) > 0).length;
+      const out = stockRows.filter((r: any) => Number(r.quantity) <= 0).length;
       const stockValue = stockRows.reduce((s: number, r: any) => s + (Number(r.quantity || 0) * Number(r.articles?.purchase_price || 0)), 0);
       const articlesInStockCount = stockRows.filter((r: any) => Number(r.quantity) > 0).length;
 
@@ -191,18 +236,21 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       const { data: unpaidOrders } = await supabase
         .from('supplier_orders')
-        .select('total, paid')
+        .select('total, paid, supplier_id')
         .eq('tenant_id', tenant.id)
         .neq('status', 'cancelled');
       const payables = (unpaidOrders || []).reduce((s: number, o: any) => {
         const remaining = Number(o.total || 0) - Number(o.paid || 0);
         return s + Math.max(0, remaining);
       }, 0);
-      const customersCount = (custData.data || []).length;
+      const payablesSupplierIds = new Set(
+        (unpaidOrders || []).filter((o: any) => Number(o.total || 0) - Number(o.paid || 0) > 0).map((o: any) => o.supplier_id)
+      );
+      const payablesSupplierCount = payablesSupplierIds.size;
 
       const { data: unpaidSales } = await supabase
         .from('sales')
-        .select('total, paid')
+        .select('total, paid, customer_id')
         .eq('tenant_id', tenant.id)
         .eq('site_id', siteId)
         .not('customer_id', 'is', null)
@@ -212,6 +260,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         const remaining = Number(sale.total || 0) - Number(sale.paid || 0);
         return s + Math.max(0, remaining);
       }, 0);
+      const receivablesCustomerIds = new Set(
+        (unpaidSales || []).filter((s: any) => Number(s.total || 0) - Number(s.paid || 0) > 0).map((s: any) => s.customer_id)
+      );
+      const customersToChaseCount = receivablesCustomerIds.size;
 
       const currentSession = (openSessions.data || []).length > 0
         ? (openSessions.data as any[]).sort((a: any, b: any) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())[0]
@@ -251,14 +303,14 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       const stockIn = (stockInTodayData.data || []).reduce((s: number, r: any) => s + Number(r.quantity || 0), 0);
 
-      // Stock out today
+      // Stock out for period
       const { data: stockOutTodayData2 } = await supabase
         .from('stock_movements')
         .select('quantity')
         .eq('tenant_id', tenant.id)
         .eq('site_id', siteId)
         .in('movement_type', ['sale', 'adjustment_out'])
-        .gte('created_at', today.toISOString());
+        .gte('created_at', periodStart.toISOString());
       const stockOut = (stockOutTodayData2 || []).reduce((s: number, r: any) => s + Math.abs(Number(r.quantity || 0)), 0);
 
       // Hourly sales breakdown for intraday chart
@@ -302,7 +354,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('supplier_orders').select('id, order_number, total, created_at, status, suppliers(name)').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
         supabase.from('online_orders').select('id, order_number, total, created_at, status, customer_name').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
         supabase.from('sale_returns').select('id, return_number, total, created_at, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(3),
-        supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, customers(name))').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
+        supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, site_id, customers(name))').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).order('created_at', { ascending: false }).limit(5),
       ]);
 
       const activities: ActivityItem[] = [];
@@ -374,7 +426,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           id: `return-${r.id}`,
           type: 'return',
           title: `Retour ${r.return_number || ''}`,
-          detail: `${client} · ${r.status === 'pending' ? 'En attente' : 'Traite'}`,
+          detail: `${client} · ${r.status === 'pending' ? 'En attente' : 'Traité'}`,
           amount: Number(r.total || 0),
           amountType: 'negative',
           time: r.created_at,
@@ -388,8 +440,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         activities.push({
           id: `payment-${p.id}`,
           type: 'payment_received',
-          title: `Reglement ${saleRef}`,
-          detail: `${client} · ${p.method_name || 'Especes'}`,
+          title: `Règlement ${saleRef}`,
+          detail: `${client} · ${p.method_name || 'Espèces'}`,
           amount: Number(p.amount),
           amountType: 'positive',
           time: p.created_at,
@@ -416,7 +468,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           id: `rupture-${item.articles.id}`,
           severity: 'critical',
           title: `Rupture : ${item.articles.name}`,
-          detail: `Ref. ${item.articles.internal_ref || '-'} · Stock: ${item.quantity}`,
+          detail: `Réf. ${item.articles.internal_ref || '-'} · Stock: ${item.quantity}`,
           time: null,
           route: 'stock',
           routeCtx: { filter: 'rupture' },
@@ -429,7 +481,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           id: `low-${item.articles.id}`,
           severity: 'warning',
           title: `Stock bas : ${item.articles.name}`,
-          detail: `Ref. ${item.articles.internal_ref || '-'} · Stock: ${item.quantity} / Min: ${item.articles.stock_min}`,
+          detail: `Réf. ${item.articles.internal_ref || '-'} · Stock: ${item.quantity} / Min: ${item.articles.stock_min}`,
           time: null,
           route: 'stock',
           routeCtx: { filter: 'bas' },
@@ -442,7 +494,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           id: `adj-${adj.id}`,
           severity: 'info',
           title: `Ajustement stock (${dir})`,
-          detail: `${adj.articles?.name || 'Article'} · Qte: ${adj.quantity}${adj.note ? ' · ' + adj.note : ''}`,
+          detail: `${adj.articles?.name || 'Article'} · Qté: ${adj.quantity}${adj.note ? ' · ' + adj.note : ''}`,
           time: adj.created_at,
           route: 'stock',
         });
@@ -516,8 +568,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         lowStockCount: low, outOfStockCount: out,
         stockValue,
         articlesInStockCount,
-        customersCount,
+        customersCount: (custData.data || []).length,
         suppliersCount: (suppData.data || []).length,
+        customersToChase: customersToChaseCount,
+        suppliersToChase: payablesSupplierCount,
         pendingQuotes: quotesData.count || 0,
         pendingReturns: returnsData.count || 0,
         stockInToday: stockIn,
@@ -540,7 +594,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       if (!cancelled) { setStats(next); setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [tenant, dataTick, currentSite?.id]);
+  }, [tenant, dataTick, currentSite?.id, period]);
 
   const nav = (route: string, ctx?: NavContext) => {
     setNavContext(ctx || null);
@@ -594,6 +648,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           dayMarginPct={can('view_margins') ? dayMarginPct : 0}
           marginPct={marginPct}
           nav={nav}
+          period={period}
+          setPeriod={setPeriod}
+          showPeriodMenu={showPeriodMenu}
+          setShowPeriodMenu={setShowPeriodMenu}
+          periodOptions={periodOptions}
+          periodLabel={periodLabel}
         />
       </div>
     </>
@@ -1386,9 +1446,10 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
   );
 }
 
-function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav }: any) {
-  const { tenant, currentSite, sites, setCurrentSite } = useApp();
+function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel }: any) {
+  const { tenant, currentSite, sites, setCurrentSite, profile } = useApp();
   const netFlux = stats.cashBalance - stats.sessionExpenses;
+  const { can } = usePermissions();
 
   // ── Multi-site overview ────────────────────────────────────────────────
   type SiteStat = { id: string; name: string; todaySales: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
@@ -1485,10 +1546,30 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
     if (!error) { setQAModal(null); nav('tiers', { target: 'suppliers' }); }
   };
 
+  const [stockDone, setStockDone] = useState<{ articleName: string; articleRef: string; qty: number; type: string; label: string } | null>(null);
+
+  const printStockDone = (format: 'a4' | '80') => {
+    if (!stockDone || !tenant || !currentSite || !profile) return;
+    const opts = {
+      tenant: { name: tenant.name, phone: tenant.phone || '', address: tenant.address || '', logo_url: tenant.logo_url || '' } as PrintTenant,
+      movementType: stockDone.type,
+      movementLabel: stockDone.label,
+      reference: `MOV-${Date.now().toString(36).toUpperCase()}`,
+      date: new Date().toLocaleString('fr-FR'),
+      user: profile.full_name || 'Utilisateur',
+      siteName: currentSite.name,
+      items: [{ ref: stockDone.articleRef, name: stockDone.articleName, quantity: stockDone.qty }],
+      observation: adjNote || undefined,
+    };
+    if (format === 'a4') printStockMovementA4(opts);
+    else printStockMovement80(opts);
+  };
+
   const saveStockAdj = async () => {
     if (!tenant || !currentSite || !adjArticleId || adjQty === '' || Number(adjQty) <= 0) return;
     setQASaving(true);
     const movType = qaModal === 'stock_in' ? 'adjustment_in' : qaModal === 'stock_out' ? 'adjustment_out' : 'transfer_out';
+    const articleRow = stockRows.find(r => r.article_id === adjArticleId);
     if (qaModal === 'stock_transfer') {
       if (!adjTargetSite) { setQASaving(false); return; }
       await supabase.rpc('adjust_stock', { p_article_id: adjArticleId, p_site_id: currentSite.id, p_quantity: -Number(adjQty), p_movement_type: 'transfer_out', p_note: adjNote || 'Transfert' });
@@ -1499,94 +1580,471 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
     }
     setQASaving(false);
     setQAModal(null);
+    setStockDone({
+      articleName: articleRow?.name || 'Article',
+      articleRef: articleRow?.internal_ref || '',
+      qty: Number(adjQty),
+      type: movType,
+      label: qaModal === 'stock_in' ? 'Entrée de stock' : qaModal === 'stock_out' ? 'Sortie de stock' : 'Transfert',
+    });
   };
 
   const adjRow = stockRows.find(r => r.article_id === adjArticleId);
 
-  return (
-    <div className="space-y-3 animate-fade-in">
+  const lastSaleTime = stats.recentSales.length > 0
+    ? new Date(stats.recentSales[0].created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
-      {/* Quick access bar - desktop header */}
-      <div className="grid grid-cols-4 xl:grid-cols-9 gap-1 py-1">
-        {/* Nouvelle vente — goes directly to POS counter */}
-        <button
-          onClick={() => nav('pos', { target: 'directPos' })}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-teal-50 active:scale-95 transition-all group border border-transparent hover:border-teal-200"
-        >
-          <ShoppingCart className="w-4 h-4 text-teal-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-teal-700 whitespace-nowrap">Ventes</span>
-        </button>
-        {/* Nouvelle commande fournisseur — opens full panel in SupplierOrders page */}
-        <button
-          onClick={() => nav('supplier_orders', { target: 'newOrder' })}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-orange-50 active:scale-95 transition-all group border border-transparent hover:border-orange-200"
-        >
-          <Truck className="w-4 h-4 text-orange-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-orange-700 whitespace-nowrap">Commande</span>
-        </button>
-        {/* Nouveau client */}
-        <button
-          onClick={() => openModal('customer')}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-emerald-50 active:scale-95 transition-all group border border-transparent hover:border-emerald-200"
-        >
-          <Users className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-emerald-700 whitespace-nowrap">Client</span>
-        </button>
-        {/* Nouveau fournisseur */}
-        <button
-          onClick={() => openModal('supplier')}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-cyan-50 active:scale-95 transition-all group border border-transparent hover:border-cyan-200"
-        >
-          <Truck className="w-4 h-4 text-cyan-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-cyan-700 whitespace-nowrap">Fournisseur</span>
-        </button>
-        {/* Nouvel article — opens full drawer in Articles page */}
-        <button
-          onClick={() => nav('articles', { target: 'newArticle' })}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-amber-50 active:scale-95 transition-all group border border-transparent hover:border-amber-200"
-        >
-          <Package className="w-4 h-4 text-amber-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-amber-700 whitespace-nowrap">Articles</span>
-        </button>
-        {/* Entrée stock */}
-        <button
-          onClick={() => openModal('stock_in')}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-green-50 active:scale-95 transition-all group border border-transparent hover:border-green-200"
-        >
-          <ArrowDownCircle className="w-4 h-4 text-green-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-green-700 whitespace-nowrap">Entrée stock</span>
-        </button>
-        {/* Sortie stock */}
-        <button
-          onClick={() => openModal('stock_out')}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-rose-50 active:scale-95 transition-all group border border-transparent hover:border-rose-200"
-        >
-          <ArrowUpCircle className="w-4 h-4 text-rose-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-rose-700 whitespace-nowrap">Sortie stock</span>
-        </button>
-        {/* Transfert (multi-magasin) */}
-        {sites.length > 1 && (
-          <button
-            onClick={() => openModal('stock_transfer')}
-            className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-blue-50 active:scale-95 transition-all group border border-transparent hover:border-blue-200"
-          >
-            <ArrowRightLeft className="w-4 h-4 text-blue-600 shrink-0" />
-            <span className="text-[11px] font-semibold text-slate-600 group-hover:text-blue-700 whitespace-nowrap">Transfert</span>
-          </button>
+  // ── Quick-action FAB overlay ──────────────────────────────────────────
+  const [fabOpen, setFabOpen] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-[#f8fafb] animate-fade-in">
+      {/* ── TOP BAR ── */}
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200/60" style={{ boxShadow: '0 1px 2px rgba(15,23,42,0.03)' }}>
+        <div className="pl-[120px] pr-5 xl:pr-8 py-3 flex items-center gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="relative">
+              <button
+                onClick={() => setShowPeriodMenu(!showPeriodMenu)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200/80 bg-white/85 backdrop-blur-sm hover:border-slate-300 transition-all"
+                style={{ boxShadow: '0 2px 8px -2px rgba(15,23,42,0.06)' }}
+              >
+                <Calendar className="w-4 h-4 text-slate-400" />
+                <span className="text-xs font-semibold text-slate-600 hidden sm:inline">Période :</span>
+                <span className="text-xs font-bold text-slate-900">{periodLabel}</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400 rotate-90" />
+              </button>
+              {showPeriodMenu && (
+                <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl border border-slate-200 shadow-lg z-50 py-1">
+                  {periodOptions.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => { setPeriod(opt.value); setShowPeriodMenu(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${period === opt.value ? 'bg-teal-50 text-teal-700 font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setFabOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200/80 bg-white/85 backdrop-blur-sm text-slate-700 text-xs font-semibold transition-all active:scale-95 hover:border-slate-300"
+              style={{ boxShadow: '0 2px 8px -2px rgba(15,23,42,0.06)' }}
+            >
+              <Activity className="w-3.5 h-3.5 text-teal-600" /> Actions rapides
+            </button>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            {hasMultiSites && (
+              <div className="flex items-center gap-2">
+                <Store className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-xs font-bold text-slate-700">{currentSite?.name}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── FAB Overlay — Quick actions ── */}
+      {fabOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-md" onClick={() => setFabOpen(false)} />
+          <div className="relative z-10 w-full max-w-lg px-6">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.15)] p-6 animate-scale-in">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-bold text-slate-900">Actions rapides</h3>
+                <button onClick={() => setFabOpen(false)} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { icon: ShoppingCart, label: 'Nouvelle vente', color: 'text-teal-600', bg: 'bg-teal-50', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
+                  { icon: CreditCard, label: 'Encaisser', color: 'text-teal-700', bg: 'bg-teal-50', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
+                  { icon: ClipboardList, label: 'Nouvelle commande', color: 'text-slate-600', bg: 'bg-slate-100', action: () => { setFabOpen(false); nav('supplier_orders', { target: 'newOrder' }); } },
+                  { icon: Users, label: 'Nouveau client', color: 'text-sky-600', bg: 'bg-sky-50', action: () => { setFabOpen(false); openModal('customer'); } },
+                  { icon: Truck, label: 'Nouveau fournisseur', color: 'text-orange-600', bg: 'bg-orange-50', action: () => { setFabOpen(false); openModal('supplier'); } },
+                  { icon: ArrowDownCircle, label: 'Entrée stock', color: 'text-emerald-600', bg: 'bg-emerald-50', action: () => { setFabOpen(false); openModal('stock_in'); } },
+                  { icon: ArrowUpCircle, label: 'Sortie stock', color: 'text-rose-500', bg: 'bg-rose-50', action: () => { setFabOpen(false); openModal('stock_out'); } },
+                  { icon: ArrowRightLeft, label: 'Transfert', color: 'text-blue-600', bg: 'bg-blue-50', action: () => { setFabOpen(false); openModal('stock_transfer'); } },
+                  { icon: BarChart3, label: 'Rapport', color: 'text-amber-600', bg: 'bg-amber-50', action: () => { setFabOpen(false); nav('reports'); } },
+                ].map(item => (
+                  <button
+                    key={item.label}
+                    onClick={item.action}
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-slate-100 hover:border-slate-200 hover:shadow-sm transition-all active:scale-[0.96] group"
+                  >
+                    <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                      <item.icon className={`w-5 h-5 ${item.color}`} />
+                    </div>
+                    <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="px-5 xl:px-8 py-4 space-y-4">
+
+        {/* ── ROW 1: Situation du jour (left) + Right column (Créances, Dettes, Stock) ── */}
+        <div className="grid grid-cols-[minmax(0,2fr)_380px] gap-4" style={{ height: 320 }}>
+          {/* Situation du jour */}
+          <div className="h-[320px] overflow-hidden bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-teal-600" />
+                <h3 className="text-base font-bold text-slate-900">Situation {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}</h3>
+              </div>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${dayDelta >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                {dayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {dayDelta >= 0 ? '+' : ''}{dayDelta}% vs hier
+              </span>
+            </div>
+
+            {/* Main amount */}
+            <div className="mb-4">
+              <p className="text-[11px] text-slate-400 font-medium mb-1">Encaissements {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
+              <p className="text-3xl font-black text-slate-900 num tracking-tight leading-none">{formatFCFA(stats.todaySales)}</p>
+            </div>
+
+            {/* KPI Grid */}
+            <div className="grid grid-cols-3 gap-3 flex-1">
+              <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Ventes</p>
+                <p className="text-lg font-bold text-slate-900 num leading-tight">{stats.todayCount}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Solde caisse</p>
+                <p className="text-lg font-bold text-slate-900 num leading-tight">{formatCompactFCFA(stats.cashBalance)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Net du jour</p>
+                <p className="text-lg font-bold text-teal-700 num leading-tight">{formatCompactFCFA(netFlux)}</p>
+              </div>
+              <div className="rounded-xl bg-rose-50/60 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Dépenses</p>
+                <p className="text-lg font-bold text-rose-600 num leading-tight">{formatCompactFCFA(stats.sessionExpenses)}</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50/60 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Encaissements nets</p>
+                <p className="text-lg font-bold text-emerald-700 num leading-tight">{formatCompactFCFA(stats.sessionCashIn)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Ticket moyen</p>
+                <p className="text-lg font-bold text-slate-900 num leading-tight">{stats.todayCount > 0 ? formatCompactFCFA(Math.round(stats.todaySales / stats.todayCount)) : '--'}</p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100">
+              {lastSaleTime && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <Clock className="w-3.5 h-3.5" />
+                  Dernière vente à {lastSaleTime}
+                </div>
+              )}
+              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-700 transition-colors ml-auto">
+                Voir le détail <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Right column: Créances + Dettes + Stock */}
+          <div className="h-[320px] flex flex-col gap-3">
+            {/* Créances clients */}
+            <div className="h-[92px] shrink-0 bg-white rounded-2xl border border-slate-200/80 px-4 py-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-teal-600" />
+                  <h3 className="text-sm font-bold text-slate-900">Créances clients</h3>
+                </div>
+                <button onClick={() => nav('tiers')} className="flex items-center gap-0.5 text-[11px] font-bold text-teal-600 hover:text-teal-700 transition-colors">
+                  Voir <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+              <p className="text-xl font-black text-slate-900 num tracking-tight">{formatFCFA(stats.receivables)}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''} à relancer</p>
+            </div>
+
+            {/* Dettes fournisseurs */}
+            <div className="h-[92px] shrink-0 bg-white rounded-2xl border border-slate-200/80 px-4 py-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-orange-500" />
+                  <h3 className="text-sm font-bold text-slate-900">Dettes fournisseurs</h3>
+                </div>
+                <button onClick={() => nav('supplier_orders')} className="flex items-center gap-0.5 text-[11px] font-bold text-orange-600 hover:text-orange-700 transition-colors">
+                  Voir <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+              <p className="text-xl font-black text-slate-900 num tracking-tight">{formatFCFA(stats.payables)}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} à payer</p>
+            </div>
+
+            {/* Stock à surveiller */}
+            <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200/80 px-4 py-3.5">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-amber-600" />
+                  <h3 className="text-sm font-bold text-slate-900">Stock à surveiller</h3>
+                </div>
+                <button onClick={() => nav('stock')} className="text-slate-400 hover:text-teal-600 transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400 mb-0.5">Rupture</p>
+                  <p className="flex items-baseline gap-1">
+                    <span className="text-lg font-black text-rose-600 num">{stats.outOfStockCount}</span>
+                    <span className="text-[10px] text-slate-400">articles</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400 mb-0.5">Stock bas</p>
+                  <p className="flex items-baseline gap-1">
+                    <span className="text-lg font-black text-amber-600 num">{stats.lowStockCount}</span>
+                    <span className="text-[10px] text-slate-400">articles</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400 mb-0.5">À commander</p>
+                  <p className="flex items-baseline gap-1">
+                    <span className="text-lg font-black text-slate-700 num">{stats.outOfStockCount + stats.lowStockCount}</span>
+                    <span className="text-[10px] text-slate-400">articles</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── ROW 2: Vue multi-magasins (only if 2+ sites) ── */}
+        {hasMultiSites && multiSiteStats.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Network className="w-5 h-5 text-teal-600" />
+                <h3 className="text-base font-bold text-slate-900">Vue multi-magasins</h3>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-bold border border-teal-100">{sites.length} magasins</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Total du jour :</span>
+                <span className="text-sm font-bold text-slate-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + x.todaySales, 0))}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {multiSiteStats.map((site: any) => {
+                const isCurrent = site.id === currentSite?.id;
+                const avgTicket = site.salesCount > 0 ? Math.round(site.todaySales / site.salesCount) : 0;
+                return (
+                  <button
+                    key={site.id}
+                    onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
+                    className={`p-5 rounded-xl border text-left transition-all duration-200 ${isCurrent ? 'border-teal-300 bg-teal-50/20' : 'border-slate-200 bg-white hover:border-teal-200'}`}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${site.sessionOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                        <span className="text-sm font-bold text-slate-900">{site.name}</span>
+                      </div>
+                      {isCurrent && <span className="text-[10px] font-bold text-teal-600 bg-teal-100 px-2 py-0.5 rounded">Actif</span>}
+                    </div>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">CA jour</p>
+                        <p className="text-sm font-bold text-slate-900 num">{formatCompactFCFA(site.todaySales)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Tickets</p>
+                        <p className="text-sm font-bold text-slate-900 num">{site.salesCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Panier moy.</p>
+                        <p className="text-sm font-bold text-slate-900 num">{avgTicket > 0 ? formatCompactFCFA(avgTicket) : '--'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Caisse</p>
+                        <p className={`text-sm font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
-        {/* Rapport */}
-        <button
-          onClick={() => nav('reports')}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg hover:bg-slate-100 active:scale-95 transition-all group border border-transparent hover:border-slate-200"
-        >
-          <BarChart3 className="w-4 h-4 text-slate-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-slate-600 group-hover:text-slate-800 whitespace-nowrap">Rapport</span>
-        </button>
+
+        {/* ── ROW 3: Activité récente + Priorités du jour + Mouvements de caisse ── */}
+        <div className="grid grid-cols-12 gap-4">
+          {/* Activité récente */}
+          <div className="col-span-12 xl:col-span-6 bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col max-h-[400px]">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-5 h-5 text-slate-500" />
+              <h3 className="text-base font-bold text-slate-900">Activités récentes</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="text-left py-2 pr-2">Type</th>
+                    <th className="text-left py-2 pr-2">Référence</th>
+                    <th className="text-left py-2 pr-2">Client / Fournisseur</th>
+                    <th className="text-right py-2 pr-2">Heure</th>
+                    <th className="text-right py-2">Montant</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.recentActivities.slice(0, 8).map((act: ActivityItem) => {
+                    const iconMap: Record<ActivityItem['type'], { icon: typeof Receipt; bg: string; fg: string; label: string }> = {
+                      sale: { icon: Receipt, bg: 'bg-emerald-50', fg: 'text-emerald-600', label: 'Vente' },
+                      quote: { icon: ClipboardList, bg: 'bg-sky-50', fg: 'text-sky-600', label: 'Devis' },
+                      supplier_order: { icon: Truck, bg: 'bg-orange-50', fg: 'text-orange-600', label: 'Commande' },
+                      payment_received: { icon: Coins, bg: 'bg-teal-50', fg: 'text-teal-600', label: 'Règlement client' },
+                      online_order: { icon: Globe, bg: 'bg-cyan-50', fg: 'text-cyan-600', label: 'Commande web' },
+                      stock_movement: { icon: RefreshCw, bg: 'bg-slate-100', fg: 'text-slate-600', label: 'Entrée stock' },
+                      return: { icon: RotateCcw, bg: 'bg-rose-50', fg: 'text-rose-500', label: 'Retour fournisseur' },
+                    };
+                    const cfg = iconMap[act.type];
+                    const Icon = cfg.icon;
+                    const refPart = act.title.split(' ').slice(1).join(' ');
+                    const clientPart = act.detail.split(' · ')[0];
+                    const timeStr = new Date(act.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <tr key={act.id} onClick={() => nav(act.route, act.routeCtx)} className="border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer transition-colors">
+                        <td className="py-2.5 pr-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                              <Icon className={`w-3 h-3 ${cfg.fg}`} />
+                            </div>
+                            <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 pr-2">
+                          <span className="text-xs font-semibold text-slate-700">{refPart}</span>
+                        </td>
+                        <td className="py-2.5 pr-2">
+                          <span className="text-xs text-slate-500">{clientPart}</span>
+                        </td>
+                        <td className="py-2.5 pr-2 text-right">
+                          <span className="text-xs text-slate-400">{timeStr}</span>
+                        </td>
+                        <td className="py-2.5 text-right">
+                          {act.amount !== null && (
+                            <span className={`text-xs font-bold num ${act.amountType === 'positive' ? 'text-emerald-600' : act.amountType === 'negative' ? 'text-rose-500' : 'text-slate-600'}`}>
+                              {act.amountType === 'positive' ? '+' : act.amountType === 'negative' ? '-' : ''}{formatCompactFCFA(Math.abs(act.amount))}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {stats.recentActivities.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Activity className="w-8 h-8 text-slate-200 mb-2" />
+                  <p className="text-xs text-slate-400">Aucune activité récente</p>
+                </div>
+              )}
+            </div>
+            {stats.recentActivities.length > 0 && (
+              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-700 mt-3 pt-3 border-t border-slate-100 transition-colors">
+                Voir toute l'activité <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Priorités du jour */}
+          <div className="col-span-12 xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <h3 className="text-base font-bold text-slate-900">Priorités du jour</h3>
+            </div>
+            <div className="space-y-1">
+              {stats.receivables > 0 && (
+                <button onClick={() => nav('tiers')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group">
+                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                  <span className="flex-1 text-sm text-slate-700 group-hover:text-teal-700 transition-colors">Relancer les clients</span>
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{stats.customersToChase}</span>
+                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                </button>
+              )}
+              {stats.payables > 0 && (
+                <button onClick={() => nav('supplier_orders')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group">
+                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                  <span className="flex-1 text-sm text-slate-700 group-hover:text-teal-700 transition-colors">Payer fournisseurs</span>
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{stats.suppliersToChase}</span>
+                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                </button>
+              )}
+              {stats.pendingReturns > 0 && (
+                <button onClick={() => nav('sales')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group">
+                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                  <span className="flex-1 text-sm text-slate-700 group-hover:text-teal-700 transition-colors">Réception fournisseur</span>
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{stats.pendingReturns}</span>
+                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                </button>
+              )}
+              {stats.sessionInfo && (
+                <button onClick={() => nav('pos')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group">
+                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                  <span className="flex-1 text-sm text-slate-700 group-hover:text-teal-700 transition-colors">Clôturer la caisse</span>
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Aujourd'hui</span>
+                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                </button>
+              )}
+              {!stats.receivables && !stats.payables && !stats.pendingReturns && !stats.sessionInfo && (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <CheckCircle className="w-8 h-8 text-emerald-300 mb-2" />
+                  <p className="text-xs font-semibold text-emerald-600">Tout est en ordre</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mouvements de caisse */}
+          <div className="col-span-12 xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Coins className="w-5 h-5 text-teal-600" />
+                <h3 className="text-sm font-bold text-slate-900">Mouvements de caisse</h3>
+              </div>
+              <span className="text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">Aujourd'hui</span>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Solde d'ouverture</span>
+                <span className="text-sm font-semibold text-slate-900 num">{formatCompactFCFA(stats.sessionInfo?.openingAmount || 0)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Encaissements</span>
+                <span className="text-sm font-bold text-teal-600 num">{formatCompactFCFA(stats.todaySales)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Dépenses</span>
+                <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionExpenses)}</span>
+              </div>
+              <div className="pt-3 mt-2 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-slate-900">Solde actuel</span>
+                  <span className="text-lg font-black text-teal-700 num">{formatCompactFCFA(stats.cashBalance)}</span>
+                </div>
+              </div>
+              <button onClick={() => nav('cash_history')} className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-700 mt-2 transition-colors">
+                Voir le détail de la caisse <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Quick-action modals ────────────────────────────────────────────── */}
-
-      {/* Nouveau client */}
       <Modal open={qaModal === 'customer'} onClose={() => setQAModal(null)} title="Nouveau client" size="sm"
         footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveCustomer} disabled={qaSaving || !custForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Créer le client</button></>}>
         <div className="space-y-3">
@@ -1606,7 +2064,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               </select>
             </div>
             <div>
-              <label className="label">Téléphone</label>
+              <label className="label">Telephone</label>
               <input value={custForm.phone || ''} onChange={e => setCustForm((f: any) => ({ ...f, phone: e.target.value }))} className="input" placeholder="+221 77 000 00 00" />
             </div>
           </div>
@@ -1621,9 +2079,8 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         </div>
       </Modal>
 
-      {/* Nouveau fournisseur */}
       <Modal open={qaModal === 'supplier'} onClose={() => setQAModal(null)} title="Nouveau fournisseur" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveSupplier} disabled={qaSaving || !supForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Créer le fournisseur</button></>}>
+        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveSupplier} disabled={qaSaving || !supForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Creer le fournisseur</button></>}>
         <div className="space-y-3">
           <div>
             <label className="label">Nom *</label>
@@ -1635,7 +2092,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               <input value={supForm.contact || ''} onChange={e => setSupForm((f: any) => ({ ...f, contact: e.target.value }))} className="input" />
             </div>
             <div>
-              <label className="label">Téléphone</label>
+              <label className="label">Telephone</label>
               <input value={supForm.phone || ''} onChange={e => setSupForm((f: any) => ({ ...f, phone: e.target.value }))} className="input" placeholder="+221 33 000 00 00" />
             </div>
           </div>
@@ -1646,15 +2103,12 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             </div>
             <div>
               <label className="label">Pays</label>
-              <input value={supForm.country || 'Sénégal'} onChange={e => setSupForm((f: any) => ({ ...f, country: e.target.value }))} className="input" />
+              <input value={supForm.country || 'Senegal'} onChange={e => setSupForm((f: any) => ({ ...f, country: e.target.value }))} className="input" />
             </div>
           </div>
         </div>
       </Modal>
 
-      {/* Nouvel article — removed, now navigates to Articles page */}
-
-      {/* Entrée / Sortie stock */}
       <Modal
         open={qaModal === 'stock_in' || qaModal === 'stock_out'}
         onClose={() => setQAModal(null)}
@@ -1682,19 +2136,18 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             />
           </div>
           <div>
-            <label className="label">Quantité</label>
+            <label className="label">Quantite</label>
             <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
           </div>
           <div>
             <label className="label">Note / motif</label>
-            <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="input" placeholder="Achat, retour, perte, correction…" />
+            <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="input" placeholder="Achat, retour, perte, correction..." />
           </div>
         </div>
       </Modal>
 
-      {/* Transfert stock */}
       <Modal open={qaModal === 'stock_transfer'} onClose={() => setQAModal(null)} title="Transfert de stock" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0 || !adjTargetSite} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Transférer</button></>}>
+        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0 || !adjTargetSite} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Transferer</button></>}>
         <div className="space-y-3">
           <div>
             <label className="label">Article</label>
@@ -1711,12 +2164,12 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               options={sites.filter((s: any) => s.id !== currentSite?.id).map((s: any) => ({ value: s.id, label: s.name }))}
               value={adjTargetSite}
               onChange={v => setAdjTargetSite(v)}
-              placeholder="— Choisir —"
+              placeholder="-- Choisir --"
               searchable={false}
             />
           </div>
           <div>
-            <label className="label">Quantité à transférer</label>
+            <label className="label">Quantite a transferer</label>
             <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input" autoFocus={desktopAutoFocus} />
           </div>
           <div>
@@ -1726,451 +2179,28 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         </div>
       </Modal>
 
-      {/* Nouvelle commande — removed, now navigates to SupplierOrders page */}
-
-      {/* ══ ROW 1: Hero Card (left) | Alertes (right) ══ */}
-      <div className="grid grid-cols-12 gap-3 items-stretch">
-
-        {/* LEFT COLUMN: Hero */}
-        <div className="col-span-12 xl:col-span-8">
-
-        {/* HERO CARD - dark teal gradient, compact */}
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, #0c2e3d 0%, #0a3d45 40%, #0d4a4a 100%)',
-            boxShadow: '0 20px 40px -12px rgba(12, 46, 61, 0.5)',
-          }}
-        >
-          {/* Header + Amount */}
-          <div className="px-5 pt-3 pb-1">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-sm font-bold text-white/90">Encaissement du jour</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/10">
-                <span className="text-xs font-medium text-white/80">Période : Aujourd'hui</span>
-                <ChevronRight className="w-3 h-3 text-white/50 rotate-90" />
-              </div>
+      <Modal open={!!stockDone} onClose={() => setStockDone(null)} title="Mouvement enregistré" size="sm"
+        footer={<button onClick={() => setStockDone(null)} className="btn-primary">Fermer</button>}>
+        {stockDone && (
+          <div className="text-center space-y-4">
+            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 flex items-center justify-center">
+              <CheckIcon className="w-7 h-7 text-emerald-600" />
             </div>
-            <div className="flex items-end gap-3">
-              <span className="text-3xl font-black text-white tracking-tight num">{formatFCFA(stats.todaySales)}</span>
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${dayDelta >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
-                  {dayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {dayDelta >= 0 ? '+' : ''}{dayDelta}% vs hier
-                </span>
-                <span className="text-[10px] text-white/50">{stats.todayCount} tickets</span>
-                {dayMarginPct > 0 && <span className="text-[10px] text-white/50">Marge {dayMarginPct}%</span>}
-              </div>
-            </div>
-          </div>
-
-          {/* Chart - full width, edge to edge */}
-          <div style={{ height: 110 }}>
-            <HeroChart data={stats.hourlySales} />
-          </div>
-
-          {/* KPIs - 2 columns x 3 rows, same style as mobile */}
-          <div className="grid grid-cols-2 border-t border-white/10">
-            {/* Left column */}
-            <div className="border-r border-white/8">
-              <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                    <Wallet className="w-3 h-3 text-white/70" />
-                  </div>
-                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Solde caisse</span>
-                </div>
-                <span className="num text-xs font-black text-teal-300">{formatFCFA(stats.cashBalance)}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
-                    <ArrowUpLeft className="w-3 h-3 text-rose-300" />
-                  </div>
-                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Dépenses</span>
-                </div>
-                <span className="num text-xs font-black text-white/80">{formatFCFA(stats.sessionExpenses)}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
-                    <ArrowDownRight className="w-3 h-3 text-emerald-300" />
-                  </div>
-                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Entrées</span>
-                </div>
-                <span className="num text-xs font-black text-white/80">{formatFCFA(stats.sessionCashIn)}</span>
-              </div>
-            </div>
-            {/* Right column */}
             <div>
-              <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(20,184,166,0.15)' }}>
-                    <ArrowUpRight className="w-3 h-3 text-teal-300" />
-                  </div>
-                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Net caisse</span>
-                </div>
-                <span className={`num text-xs font-black ${netFlux >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{formatFCFA(netFlux)}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(52,211,153,0.15)' }}>
-                    <TrendingUp className="w-3 h-3 text-emerald-300" />
-                  </div>
-                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">Marge jour</span>
-                </div>
-                <span className="num text-xs font-black text-emerald-300">{formatFCFA(stats.todayMargin)}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <BarChart3 className="w-3 h-3 text-white/50" />
-                  </div>
-                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-wide">CA du mois</span>
-                </div>
-                <span className="num text-xs font-black text-white/70">{formatFCFA(stats.monthSales)}</span>
-              </div>
+              <p className="text-sm font-bold text-slate-900">{stockDone.label}</p>
+              <p className="text-xs text-slate-500 mt-1">{stockDone.articleName} - Qté: {stockDone.qty}</p>
             </div>
-          </div>
-        </div>
-
-        </div>{/* end LEFT COLUMN */}
-
-        {/* RIGHT COLUMN: Alertes & priorités - matches hero height */}
-        <div className="col-span-12 xl:col-span-4 relative">
-          {/* Alertes & priorités - intelligent */}
-          <div className="xl:absolute xl:inset-0 rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-rose-100/50 -mx-5 -mt-5 px-5 pt-4 rounded-t-2xl bg-gradient-to-r from-rose-50 via-orange-50/60 to-white">
-              <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-rose-500" />
-                <h3 className="text-sm font-bold text-slate-800">Alertes & priorités</h3>
-              </div>
-              {stats.alerts.length > 0 && (
-                <span className="min-w-[22px] h-[22px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  {stats.alerts.length}
-                </span>
-              )}
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-1 -mr-2 pr-2">
-              {stats.alerts.map((alert) => {
-                const severityMap = {
-                  critical: { bg: 'bg-rose-50', fg: 'text-rose-600', icon: AlertTriangle, dot: 'bg-rose-500' },
-                  warning: { bg: 'bg-amber-50', fg: 'text-amber-600', icon: AlertTriangle, dot: 'bg-amber-500' },
-                  info: { bg: 'bg-sky-50', fg: 'text-sky-600', icon: Activity, dot: 'bg-sky-500' },
-                };
-                const cfg = severityMap[alert.severity];
-                const Icon = cfg.icon;
-                return (
-                  <button
-                    key={alert.id}
-                    onClick={() => nav(alert.route, alert.routeCtx)}
-                    className="w-full flex items-start gap-2.5 py-2 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group"
-                  >
-                    <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                      <Icon className={`w-3.5 h-3.5 ${cfg.fg}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} flex-shrink-0`} />
-                        <p className="text-xs font-semibold text-slate-700 group-hover:text-teal-700 transition-colors">
-                          {alert.title}
-                        </p>
-                      </div>
-                      <p className="text-[10px] text-slate-400 ml-3">{alert.detail}</p>
-                    </div>
-                    {alert.time && (
-                      <span className="text-[9px] text-slate-400 flex-shrink-0 mt-1">{getTimeAgo(alert.time)}</span>
-                    )}
-                    <ChevronRight className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors flex-shrink-0 mt-1" />
-                  </button>
-                );
-              })}
-              {stats.alerts.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <CheckCircle className="w-8 h-8 text-emerald-300 mb-2" />
-                  <p className="text-xs font-semibold text-emerald-600">Tout est en ordre</p>
-                  <p className="text-[10px] text-slate-400">Aucune alerte à signaler</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ══ MULTI-SITE OVERVIEW (only when user has multiple sites) ══ */}
-      {hasMultiSites && multiSiteStats.length > 0 && (
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 overflow-hidden">
-          <div className="flex items-center justify-between -mx-5 -mt-5 px-5 pt-4 pb-3 mb-4 border-b border-brand-100/50 bg-gradient-to-r from-brand-50 via-brand-50/40 to-white rounded-t-2xl">
-            <div className="flex items-center gap-2">
-              <Network className="w-5 h-5 text-brand-600" />
-              <h3 className="text-sm font-bold text-slate-800">Vue multi-magasins</h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 font-bold border border-brand-200/50">{sites.length} sites</span>
-            </div>
-            <div className="flex items-center gap-1 text-[10px]">
-              <span className="text-slate-400 font-medium">Total jour:</span>
-              <span className="font-bold text-slate-900 num">{formatFCFA(multiSiteStats.reduce((s, x) => s + x.todaySales, 0))}</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
-            {multiSiteStats.map(site => {
-              const isCurrent = site.id === currentSite?.id;
-              const avgTicket = site.salesCount > 0 ? Math.round(site.todaySales / site.salesCount) : 0;
-              return (
-                <button
-                  key={site.id}
-                  onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
-                  className={`relative p-3 rounded-xl border text-left transition-all duration-200 group ${isCurrent ? 'border-brand-300 bg-brand-50/40 ring-1 ring-brand-200' : 'border-slate-200 bg-white hover:border-brand-200 hover:bg-brand-50/20'}`}
-                >
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${site.sessionOpen ? 'bg-emerald-500 pulse-glow' : 'bg-slate-300'}`} />
-                    <span className="text-xs font-bold text-slate-800">{site.name}</span>
-                    {isCurrent && <span className="ml-auto text-[8px] font-bold text-brand-600 bg-brand-100 px-1.5 py-0.5 rounded shrink-0">Actif</span>}
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">CA jour</span>
-                      <span className="text-xs font-bold text-slate-900 num">{formatCompactFCFA(site.todaySales)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Tickets</span>
-                      <span className="text-xs font-bold text-slate-700 num">{site.salesCount}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Ticket moy.</span>
-                      <span className="text-xs font-bold text-slate-700 num">{avgTicket > 0 ? formatCompactFCFA(avgTicket) : '--'}</span>
-                    </div>
-                    <div className="pt-1.5 mt-1 border-t border-slate-100">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Caisse</span>
-                        <span className={`text-xs font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
-                      </div>
-                    </div>
-                  </div>
-                  {!isCurrent && (
-                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-white/80 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[10px] font-bold text-brand-700">Basculer</span>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ══ ROW 2: Centre de commandes | Vue synthétique | Activité en temps réel ══ */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
-
-        {/* Centre de commandes - intelligent */}
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
-          <div className="flex items-center justify-between -mx-5 -mt-5 px-5 pt-4 pb-3 mb-3 border-b border-cyan-100/50 bg-gradient-to-r from-cyan-50 via-teal-50/60 to-white rounded-t-2xl">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-teal-600" />
-              <h3 className="text-sm font-bold text-slate-800">Centre de commandes</h3>
-            </div>
-            <button onClick={() => nav('online_orders')} className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-0.5">
-              Tout <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-          {/* Status pills */}
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            <div className="text-center py-3 px-1 rounded-xl bg-gradient-to-br from-teal-50 to-white border border-teal-100 shadow-[0_4px_12px_rgba(20,184,166,0.12)]">
-              <p className="text-lg font-black text-teal-600 num">{stats.webNew}</p>
-              <p className="text-[8px] font-bold text-teal-600 uppercase tracking-wide">Nouvelles</p>
-            </div>
-            <div className="text-center py-3 px-1 rounded-xl bg-gradient-to-br from-amber-50 to-white border border-amber-100 shadow-[0_4px_12px_rgba(245,158,11,0.12)]">
-              <p className="text-lg font-black text-amber-500 num">{stats.webPrep}</p>
-              <p className="text-[8px] font-bold text-amber-500 uppercase tracking-wide">Préparation</p>
-            </div>
-            <div className="text-center py-3 px-1 rounded-xl bg-gradient-to-br from-emerald-50 to-white border border-emerald-100 shadow-[0_4px_12px_rgba(16,185,129,0.12)]">
-              <p className="text-lg font-black text-emerald-500 num">{stats.webReady}</p>
-              <p className="text-[8px] font-bold text-emerald-500 uppercase tracking-wide">Prêtes</p>
-            </div>
-          </div>
-          {/* Order list with details */}
-          <div className="flex-1 overflow-y-auto space-y-2 -mr-2 pr-2 min-h-0">
-            {stats.activeOrders.map((order) => {
-              const statusColors: Record<string, string> = {
-                nouvelle: 'bg-teal-100 text-teal-700',
-                en_preparation: 'bg-amber-100 text-amber-700',
-                prete: 'bg-emerald-100 text-emerald-700',
-              };
-              const statusLabels: Record<string, string> = {
-                nouvelle: 'Nouvelle',
-                en_preparation: 'En prep.',
-                prete: 'Prete',
-              };
-              return (
-                <button
-                  key={order.id}
-                  onClick={() => nav('online_orders')}
-                  className="w-full p-2.5 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50/30 active:scale-[0.98] transition-all text-left group"
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-800">#{order.orderNumber}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${statusColors[order.status] || 'bg-slate-100 text-slate-600'}`}>
-                        {statusLabels[order.status] || order.status}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-400">{getTimeAgo(order.createdAt)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[11px] font-semibold text-slate-700">{order.customerName}</span>
-                    {order.customerPhone && <span className="text-[10px] text-slate-400">{order.customerPhone}</span>}
-                  </div>
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    {order.deliveryMode === 'livraison' ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 text-[9px] font-semibold text-sky-700">
-                        <Truck className="w-2.5 h-2.5" /> Livraison
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-[9px] font-semibold text-slate-600">
-                        <Package className="w-2.5 h-2.5" /> Retrait
-                      </span>
-                    )}
-                    {order.deliveryMode === 'livraison' && order.deliveryAddress && (
-                      <span className="text-[9px] text-slate-400">{order.deliveryAddress}</span>
-                    )}
-                    <span className="ml-auto text-[11px] font-bold text-slate-800 num">{formatCompactFCFA(order.total)}</span>
-                  </div>
-                  {order.items.length > 0 && (
-                    <div className="mt-1 pt-1.5 border-t border-dashed border-slate-100">
-                      {order.items.slice(0, 3).map((item, i) => (
-                        <div key={i} className="flex items-center justify-between text-[10px]">
-                          <span className="text-slate-500">{item.qty}x {item.name}</span>
-                          <span className="text-slate-400 num">{formatCompactFCFA(item.price * item.qty)}</span>
-                        </div>
-                      ))}
-                      {order.items.length > 3 && (
-                        <p className="text-[9px] text-slate-400 mt-0.5">+{order.items.length - 3} autres articles</p>
-                      )}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-            {stats.activeOrders.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <ShoppingCart className="w-8 h-8 text-slate-200 mb-2" />
-                <p className="text-xs text-slate-400">Aucune commande en cours</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Vue synthétique - interactive */}
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
-          <div className="flex items-center justify-between -mx-5 -mt-5 px-5 pt-4 pb-3 mb-3 border-b border-slate-200/50 bg-gradient-to-r from-slate-100 via-slate-50/60 to-white rounded-t-2xl">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-slate-600" />
-              <h3 className="text-sm font-bold text-slate-800">Vue synthétique</h3>
-            </div>
-            <span className="text-[10px] font-medium text-slate-400">Aujourd'hui</span>
-          </div>
-          <div className="space-y-1.5 flex-1 overflow-y-auto min-h-0">
-            {[
-              { icon: Wallet, label: 'Encaissements', value: formatCompactFCFA(stats.todaySales), sub: `${stats.todayCount} ventes`, color: 'text-teal-600 bg-teal-50', route: 'sales' },
-              { icon: ArrowUpLeft, label: 'Dépenses', value: formatCompactFCFA(stats.sessionExpenses), sub: 'Session en cours', color: 'text-rose-600 bg-rose-50', route: 'pos' },
-              { icon: CreditCard, label: 'Créances clients', value: formatCompactFCFA(stats.receivables), sub: `${stats.customersCount} clients`, color: 'text-sky-600 bg-sky-50', route: 'tiers' },
-              { icon: Truck, label: 'Dettes fournisseurs', value: formatCompactFCFA(stats.payables), sub: `${stats.suppliersCount} fournisseurs`, color: 'text-orange-600 bg-orange-50', route: 'supplier_orders' },
-              { icon: ArrowUpRight, label: 'Entrées stock', value: `${stats.stockInToday} articles`, sub: 'Achats & ajustements', color: 'text-emerald-600 bg-emerald-50', route: 'stock' },
-              { icon: ArrowDownRight, label: 'Sorties stock', value: `${stats.stockOutToday} articles`, sub: 'Ventes & ajustements', color: 'text-amber-600 bg-amber-50', route: 'stock' },
-              { icon: TrendingUp, label: 'Marge du jour', value: `${dayMarginPct}%`, sub: formatCompactFCFA(stats.todayMargin), color: 'text-teal-600 bg-teal-50', route: 'reports' },
-              { icon: FileText, label: 'Devis en attente', value: String(stats.pendingQuotes), sub: 'À convertir', color: 'text-cyan-600 bg-cyan-50', route: 'sales' },
-            ].map((item) => (
-              <button
-                key={item.label}
-                onClick={() => nav(item.route)}
-                className="w-full flex items-center justify-between py-2 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.color}`}>
-                    <item.icon className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-xs font-semibold text-slate-700 group-hover:text-teal-700 transition-colors">{item.label}</p>
-                    <p className="text-[10px] text-slate-400">{item.sub}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-900 num">{item.value}</span>
-                  <ChevronRight className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors" />
-                </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button onClick={() => printStockDone('a4')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                <FileText className="w-3.5 h-3.5" /> Imprimer A4
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Activité en temps réel */}
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col overflow-hidden h-[380px]">
-          <div className="flex items-center justify-between -mx-5 -mt-5 px-5 pt-4 pb-3 mb-3 border-b border-teal-100/50 bg-gradient-to-r from-teal-50 via-emerald-50/50 to-white rounded-t-2xl">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-teal-600" />
-              <h3 className="text-sm font-bold text-slate-800">Activité en temps réel</h3>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[10px] font-medium text-emerald-600">Live</span>
+              <button onClick={() => printStockDone('80')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                <Receipt className="w-3.5 h-3.5" /> Ticket 80mm
+              </button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-1 -mr-2 pr-2 min-h-0">
-            {stats.recentActivities.map((act) => {
-              const iconMap: Record<ActivityItem['type'], { icon: typeof Receipt; bg: string; fg: string }> = {
-                sale: { icon: Receipt, bg: 'bg-emerald-50', fg: 'text-emerald-600' },
-                quote: { icon: ClipboardList, bg: 'bg-sky-50', fg: 'text-sky-600' },
-                supplier_order: { icon: Truck, bg: 'bg-orange-50', fg: 'text-orange-600' },
-                payment_received: { icon: Coins, bg: 'bg-teal-50', fg: 'text-teal-600' },
-                online_order: { icon: Globe, bg: 'bg-cyan-50', fg: 'text-cyan-600' },
-                stock_movement: { icon: RefreshCw, bg: 'bg-slate-100', fg: 'text-slate-600' },
-                return: { icon: RotateCcw, bg: 'bg-rose-50', fg: 'text-rose-500' },
-              };
-              const cfg = iconMap[act.type];
-              const Icon = cfg.icon;
-              const timeStr = getTimeAgo(act.time);
-              return (
-                <button
-                  key={act.id}
-                  onClick={() => nav(act.route, act.routeCtx)}
-                  className="w-full flex items-center gap-2.5 py-2 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group"
-                >
-                  <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center flex-shrink-0`}>
-                    <Icon className={`w-3.5 h-3.5 ${cfg.fg}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-700 group-hover:text-teal-700 transition-colors">
-                      {act.title}
-                    </p>
-                    <p className="text-[10px] text-slate-400">{act.detail}</p>
-                  </div>
-                  <div className="flex flex-col items-end flex-shrink-0">
-                    {act.amount !== null && (
-                      <span className={`text-[11px] font-bold num ${
-                        act.amountType === 'positive' ? 'text-emerald-600' :
-                        act.amountType === 'negative' ? 'text-rose-500' : 'text-slate-600'
-                      }`}>
-                        {act.amountType === 'positive' ? '+' : act.amountType === 'negative' ? '-' : ''}{formatCompactFCFA(Math.abs(act.amount))}
-                      </span>
-                    )}
-                    <span className="text-[9px] text-slate-400">{timeStr}</span>
-                  </div>
-                  <ChevronRight className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors flex-shrink-0" />
-                </button>
-              );
-            })}
-            {stats.recentActivities.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Activity className="w-8 h-8 text-slate-200 mb-2" />
-                <p className="text-xs text-slate-400">Aucune activité récente</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
+        )}
+      </Modal>
     </div>
   );
 }

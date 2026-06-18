@@ -196,24 +196,31 @@ export function MobileBillingWizard({
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto px-3 py-3">
             {filteredArticles.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                 <p className="text-sm">Aucun article trouvé</p>
               </div>
             )}
-            {filteredArticles.map(a => (
-              <button
-                key={a.id}
-                onClick={() => { onAddItem(a.id); setSearchOpen(false); }}
-                className="w-full h-[72px] flex flex-col justify-between px-4 py-2.5 border-b border-slate-100 active:bg-slate-50 transition-colors text-left"
-              >
-                <p className="text-[13px] font-medium text-slate-900 leading-snug line-clamp-2 w-full">{a.name}</p>
-                <span className="text-[12px] font-bold text-teal-700 num">
-                  {a[itemPriceField] ? formatFCFA(a[itemPriceField]) : ''}
-                </span>
-              </button>
-            ))}
+            <div className="flex flex-col gap-1">
+              {filteredArticles.map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => { onAddItem(a.id); setSearchOpen(false); }}
+                  className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-teal-300 hover:bg-teal-50/40 hover:shadow-sm transition-all text-left active:scale-[0.98]"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-semibold text-slate-900 leading-snug">{a.name}</div>
+                    {a.internal_ref && <div className="text-[10px] font-mono text-slate-400 mt-0.5">{a.internal_ref}</div>}
+                  </div>
+                  <div className="shrink-0 flex flex-col items-end">
+                    <span className="text-[13px] font-bold text-slate-900 num">
+                      {a[itemPriceField] ? formatFCFA(a[itemPriceField]) : ''}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -239,6 +239,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
   const saveEdit = async () => {
     if (!selected || !tenant || savingEdit) return;
+    if (!can('edit_invoices')) { toastError('Vous n\'avez pas la permission de modifier les ventes'); return; }
     setSavingEdit(true);
     try {
       const payload = editItems.map(i => ({
@@ -277,6 +278,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
   const deleteSale = useCallback(async () => {
     if (!selected || !tenant || deleting) return;
+    if (!can('delete_invoices')) { toastError('Vous n\'avez pas la permission de supprimer les ventes'); return; }
     setDeleting(true);
     try {
       const { data, error } = await supabase.rpc('delete_sale_and_recalculate', {
@@ -291,7 +293,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       setConfirmDelete(false);
     } catch (e: any) { toastError(e.message); }
     finally { setDeleting(false); }
-  }, [selected, tenant, deleting]);
+  }, [selected, tenant, deleting, can]);
 
   const comptabiliserVente = async () => {
     if (!selected || accounting) return;

@@ -49,6 +49,7 @@ export type Site = {
   phone: string;
   is_warehouse: boolean;
   is_active: boolean;
+  parent_site_id: string | null;
 };
 
 export type Category = {
@@ -148,6 +149,7 @@ export type CartItem = {
   discount: number;
   stock_available: number;
   purchase_cost: number;
+  tier_name?: string;
 };
 
 export type SalePayment = {

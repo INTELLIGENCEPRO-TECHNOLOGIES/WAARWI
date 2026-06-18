@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -39,6 +40,7 @@ type Quote = {
 type QuoteItem = {
   id?: string; article_id: string | null; name: string;
   quantity: number; unit_price: number; discount: number; total: number;
+  tier_name?: string;
 };
 type Invoice = {
   id: string; sale_number: string; total: number; paid: number; status: string;
@@ -52,7 +54,7 @@ type SaleReturn = {
   id: string; return_number: string; total: number; status: string;
   refund_method: string; reason: string; restock: boolean;
   credit_used?: number; customer_id: string | null;
-  created_at: string;
+  created_at: string; refunded_at?: string | null;
   customers: { name: string } | null;
   sales: { sale_number: string } | null;
 };
@@ -95,7 +97,8 @@ const TABS: { key: Tab; label: string; icon: any }[] = [
 ];
 
 export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
-  const { tenant, currentSite, dataTick, profile } = useApp();
+  const { tenant, currentSite, sites, depots, dataTick, profile } = useApp();
+  const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
 
@@ -117,6 +120,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [articles, setArticles] = useState<any[]>([]);
+  const [articleTiers, setArticleTiers] = useState<{ article_id: string; tier_name: string; price: number }[]>([]);
+  const [tierPickerOpen, setTierPickerOpen] = useState(false);
+  const [tierPickerArticle, setTierPickerArticle] = useState<any>(null);
+  const [tierPickerTarget, setTierPickerTarget] = useState<'invoice' | 'quote'>('invoice');
+  const [tierPickerIdx, setTierPickerIdx] = useState<number | null>(null);
+  const [billSourceSiteId, setBillSourceSiteId] = useState<string>('');
   const [sales, setSales] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
 
@@ -165,6 +174,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [returnItemsDetail, setReturnItemsDetail] = useState<any[]>([]);
   const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', refund_method: 'cash' as string, restock: true });
   const [returnLines, setReturnLines] = useState<{ item_id: string; article_id: string; name: string; max_qty: number; quantity: number; unit_price: number; selected: boolean }[]>([]);
+  const [returnWorkflowBusy, setReturnWorkflowBusy] = useState(false);
+  const [returnCashConfirmOpen, setReturnCashConfirmOpen] = useState(false);
 
   // Direct invoice creation
   const [invoiceEditorOpen, setInvoiceEditorOpen] = useState(false);
@@ -196,6 +207,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id]);
+  useEffect(() => { if (currentSite && !billSourceSiteId) setBillSourceSiteId(currentSite.id); }, [currentSite?.id]);
 
   // Load document settings (per doc type)
   useEffect(() => {
@@ -246,11 +258,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       articlesQuery,
       supabase.from('sales').select('id, sale_number, customer_id, customers(name)').eq('tenant_id', tenant.id).eq('status', 'paid').order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
-    ]).then(([c, a, sl, pm]) => {
+      supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
+    ]).then(([c, a, sl, pm, tr]) => {
       setCustomers(c.data || []);
       setArticles(a.data || []);
       setSales((sl.data as any) || []);
       setPaymentMethods((pm.data || []).filter((m: any) => m.payment_type !== 'credit'));
+      setArticleTiers((tr.data || []) as { article_id: string; tier_name: string; price: number }[]);
     });
   }, [tenant?.id]);
 
@@ -323,7 +337,66 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [returns, search, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount]);
 
   // ── Quote actions ────────────────────────────────────────────
+  const addArticleWithTierCheck = (articleId: string, target: 'invoice' | 'quote') => {
+    const art = articles.find(a => a.id === articleId);
+    if (!art) return;
+    const tiers = articleTiers.filter(t => t.article_id === articleId);
+    if (tiers.length > 1) {
+      setTierPickerArticle(art);
+      setTierPickerTarget(target);
+      setTierPickerOpen(true);
+      return;
+    }
+    const price = tiers.length === 1 ? tiers[0].price : (art.sale_price || 0);
+    const tierName = tiers.length === 1 ? tiers[0].tier_name : undefined;
+    const newItem: QuoteItem = { article_id: articleId, name: art.name, quantity: 1, unit_price: price, discount: 0, total: price, tier_name: tierName };
+    if (target === 'invoice') setInvoiceEditorItems(p => [...p, newItem]);
+    else setQuoteItems(p => [...p, newItem]);
+  };
+
+  const addArticleWithSelectedTier = (tierName: string, tierPrice: number) => {
+    if (!tierPickerArticle) return;
+    if (tierPickerIdx !== null) {
+      // Update existing line at index
+      const updateFn = (prev: QuoteItem[]) => {
+        const next = [...prev];
+        next[tierPickerIdx] = { ...next[tierPickerIdx], unit_price: tierPrice, tier_name: tierName || undefined };
+        next[tierPickerIdx].total = Math.max(0, Number(next[tierPickerIdx].quantity || 1) * tierPrice - Number(next[tierPickerIdx].discount || 0));
+        return next;
+      };
+      if (tierPickerTarget === 'invoice') setInvoiceEditorItems(updateFn);
+      else setQuoteItems(updateFn);
+    } else {
+      const newItem: QuoteItem = { article_id: tierPickerArticle.id, name: tierPickerArticle.name, quantity: 1, unit_price: tierPrice, discount: 0, total: tierPrice, tier_name: tierName || undefined };
+      if (tierPickerTarget === 'invoice') setInvoiceEditorItems(p => [...p, newItem]);
+      else setQuoteItems(p => [...p, newItem]);
+    }
+    setTierPickerOpen(false);
+    setTierPickerArticle(null);
+    setTierPickerIdx(null);
+  };
+
   const updateQuoteItem = (idx: number, field: keyof QuoteItem, val: any) => {
+    if (field === 'article_id') {
+      const art = articles.find(a => a.id === val);
+      if (art) {
+        const tiers = articleTiers.filter(t => t.article_id === val);
+        if (tiers.length > 1) {
+          // Set name/article first, then show picker for price
+          setQuoteItems(prev => {
+            const next = [...prev];
+            next[idx] = { ...next[idx], article_id: val, name: art.name };
+            if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
+            return next;
+          });
+          setTierPickerArticle(art);
+          setTierPickerTarget('quote');
+          setTierPickerIdx(idx);
+          setTierPickerOpen(true);
+          return;
+        }
+      }
+    }
     setQuoteItems(prev => {
       const next = [...prev];
       next[idx] = { ...next[idx], [field]: val };
@@ -331,7 +404,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         const art = articles.find(a => a.id === val);
         if (art) {
           next[idx].name = art.name;
-          next[idx].unit_price = art.sale_price;
+          const tiers = articleTiers.filter(t => t.article_id === val);
+          next[idx].unit_price = tiers.length === 1 ? tiers[0].price : art.sale_price;
+          next[idx].tier_name = tiers.length === 1 ? tiers[0].tier_name : undefined;
           if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
         }
       }
@@ -344,6 +419,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const saveQuote = async (opts?: { silent?: boolean }) => {
     if (!tenant || !currentSite) { if (!opts?.silent) error('Magasin introuvable'); return; }
+    if (!can('create_quotes')) { if (!opts?.silent) error('Vous n\'avez pas la permission de creer des devis'); return; }
     if (quoteItems.every(i => !i.name.trim())) { if (!opts?.silent) error('Ajoutez au moins un article'); return; }
     setSaving(true);
     const valid = quoteItems.filter(i => i.name.trim());
@@ -422,6 +498,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }
   };
   const changeQuoteStatus = async (q: Quote, status: string) => {
+    if (!can('edit_quotes')) { error('Vous n\'avez pas la permission de modifier les devis'); return; }
     await supabase.from('quotes').update({ status }).eq('id', q.id);
     success('Statut mis à jour'); load();
     if (quoteDetail?.id === q.id) setQuoteDetail({ ...q, status });
@@ -446,6 +523,25 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   // ── Direct invoice creation ──────────────────────────────────
   const updateInvoiceItem = (idx: number, field: keyof QuoteItem, val: any) => {
+    if (field === 'article_id') {
+      const art = articles.find(a => a.id === val);
+      if (art) {
+        const tiers = articleTiers.filter(t => t.article_id === val);
+        if (tiers.length > 1) {
+          setInvoiceEditorItems(prev => {
+            const next = [...prev];
+            next[idx] = { ...next[idx], article_id: val, name: art.name };
+            if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
+            return next;
+          });
+          setTierPickerArticle(art);
+          setTierPickerTarget('invoice');
+          setTierPickerIdx(idx);
+          setTierPickerOpen(true);
+          return;
+        }
+      }
+    }
     setInvoiceEditorItems(prev => {
       const next = [...prev];
       next[idx] = { ...next[idx], [field]: val };
@@ -453,7 +549,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         const art = articles.find(a => a.id === val);
         if (art) {
           next[idx].name = art.name;
-          next[idx].unit_price = art.sale_price;
+          const tiers = articleTiers.filter(t => t.article_id === val);
+          next[idx].unit_price = tiers.length === 1 ? tiers[0].price : art.sale_price;
+          next[idx].tier_name = tiers.length === 1 ? tiers[0].tier_name : undefined;
           if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
         }
       }
@@ -482,6 +580,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const saveInvoice = async () => {
     if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de creer des factures'); return; }
     const valid = invoiceEditorItems.filter(i => i.name.trim());
     if (valid.length === 0) { error('Ajoutez au moins un article'); return; }
 
@@ -576,15 +675,21 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       }
 
       // Deduct stock
+      const stockSiteId = billSourceSiteId || currentSite.id;
       for (const item of articleItems) {
         if (!item.article_id) continue;
         await supabase.rpc('adjust_stock', {
           p_article_id: item.article_id,
-          p_site_id: currentSite.id,
+          p_site_id: stockSiteId,
           p_quantity: -item.quantity,
           p_movement_type: 'sale',
           p_note: `Facture ${invNum}${invoiceIsCredit ? ' (credit)' : ''}`,
         });
+      }
+
+      // Auto-apply available avoirs for this customer
+      if (invoiceForm.customer_id) {
+        await supabase.rpc('auto_apply_customer_avoirs', { p_sale_id: sale.id });
       }
 
       success(`Facture ${invNum} créée${invoiceIsCredit ? ' (à crédit)' : ''}`);
@@ -633,6 +738,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const executeConvert = async (lotSelections: ArticleLotSelection[] | null) => {
     if (!convertFrom || !currentSite) return;
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de convertir en facture'); return; }
     setConverting(true);
 
     // Find active cash session for payment tracking
@@ -656,7 +762,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }
     const { data, error: e } = await supabase.rpc('convert_quote_to_sale', {
       p_quote_id: convertFrom.id,
-      p_site_id: currentSite.id,
+      p_site_id: billSourceSiteId || currentSite.id,
       p_cash_session_id: convertSessionId,
       p_payments: payments,
     });
@@ -668,7 +774,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         if (assignments.length > 0) {
           await supabase.rpc('deduct_stock_manual_lots', {
             p_article_id: sel.article_id,
-            p_site_id: currentSite.id,
+            p_site_id: billSourceSiteId || currentSite.id,
             p_total_quantity: assignments.reduce((s, a) => s + a.quantity, 0),
             p_lot_assignments: assignments,
           });
@@ -679,12 +785,17 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       for (const item of convertItems) {
         await supabase.rpc('adjust_stock', {
           p_article_id: item.article_id,
-          p_site_id: currentSite.id,
+          p_site_id: billSourceSiteId || currentSite.id,
           p_quantity: -item.quantity,
           p_movement_type: 'sale',
           p_note: `Facture ${saleNum} (devis converti)`,
         });
       }
+    }
+
+    // Auto-apply available avoirs for this customer
+    if (convertFrom.customer_id && (data as any)?.sale_id) {
+      await supabase.rpc('auto_apply_customer_avoirs', { p_sale_id: (data as any).sale_id });
     }
 
     setConverting(false);
@@ -733,6 +844,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const comptabiliserFacture = async () => {
     if (!invoiceDetail || accountingBusy) return;
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de comptabiliser les factures'); return; }
     setAccountingBusy(true);
     try {
       const { data, error } = await supabase.rpc('comptabiliser_vente', { p_sale_id: invoiceDetail.id });
@@ -797,6 +909,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
   const registerPayment = async () => {
     if (!invoiceDetail) return;
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'enregistrer des paiements'); return; }
     const amt = Number(payAmount);
     if (!amt || amt <= 0) { error('Montant invalide'); return; }
     const pm = paymentMethods.find(p => p.id === payMethod);
@@ -838,6 +951,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
   const applyCredit = async () => {
     if (!invoiceDetail || !creditSelected) { error('Sélectionnez un avoir'); return; }
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'appliquer des avoirs'); return; }
     const amt = Number(creditAmount);
     if (!amt || amt <= 0) { error('Montant invalide'); return; }
     setApplyingCredit(true);
@@ -855,8 +969,20 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   // ── Returns ──────────────────────────────────────────────────
   const loadSaleItems = async (saleId: string) => {
-    const { data } = await supabase.from('sale_items').select('*').eq('sale_id', saleId);
-    setReturnLines((data || []).map(i => ({ item_id: i.id, article_id: i.article_id, name: i.name, max_qty: i.quantity, quantity: i.quantity, unit_price: i.unit_price, selected: false })));
+    const [{ data: items }, { data: retQtys }] = await Promise.all([
+      supabase.from('sale_items').select('*').eq('sale_id', saleId),
+      supabase.rpc('get_sale_returned_quantities', { p_sale_id: saleId }),
+    ]);
+    const retMap: Record<string, number> = {};
+    (retQtys || []).forEach((r: any) => { retMap[r.article_id] = Number(r.total_returned); });
+    const lines = (items || [])
+      .map(i => {
+        const alreadyReturned = retMap[i.article_id] || 0;
+        const remaining = Math.max(0, Number(i.quantity) - alreadyReturned);
+        return { item_id: i.id, article_id: i.article_id, name: i.name, max_qty: remaining, quantity: Math.min(remaining, 1), unit_price: i.unit_price, selected: false };
+      })
+      .filter(i => i.max_qty > 0);
+    setReturnLines(lines);
   };
   const handleSaleChange = async (saleId: string) => {
     setReturnForm(f => ({ ...f, sale_id: saleId }));
@@ -865,24 +991,23 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
   const returnTotal = returnLines.filter(i => i.selected).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
 
-  const saveReturn = async (asCredit = false) => {
+  const saveReturn = async () => {
     if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
     if (!returnForm.sale_id) { error('Sélectionnez une vente'); return; }
     const sel = returnLines.filter(i => i.selected && i.quantity > 0);
     if (sel.length === 0) { error('Sélectionnez au moins un article'); return; }
     setSaving(true);
     const { data: numData } = await supabase.rpc('next_doc_number', {
-      p_tenant_id: tenant.id,
-      p_kind: asCredit ? 'credit' : 'return',
-      p_prefix: asCredit ? 'AVR' : 'RET',
+      p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET',
     });
-    const rNum = (numData as string) || ((asCredit ? 'AVR-' : 'RET-') + Date.now());
+    const rNum = (numData as string) || ('RET-' + Date.now());
     const sale = sales.find(s => s.id === returnForm.sale_id);
     const { data: ret, error: e } = await supabase.from('sale_returns').insert({
       tenant_id: tenant.id, site_id: currentSite.id,
       sale_id: returnForm.sale_id, customer_id: sale?.customer_id || null,
       return_number: rNum, total: returnTotal,
-      refund_method: asCredit ? 'avoir' : returnForm.refund_method, reason: returnForm.reason,
+      refund_method: 'pending', reason: returnForm.reason,
       restock: returnForm.restock, status: 'pending',
     }).select().single();
     if (e || !ret) { error(e?.message || 'Erreur'); setSaving(false); return; }
@@ -893,18 +1018,20 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (returnForm.restock) {
       for (const item of sel) {
         await supabase.rpc('adjust_stock', {
-          p_article_id: item.article_id, p_site_id: currentSite.id,
+          p_article_id: item.article_id, p_site_id: billSourceSiteId || currentSite.id,
           p_quantity: item.quantity, p_movement_type: 'return_customer',
           p_note: `Retour ${rNum}`,
         });
       }
     }
     setSaving(false);
-    success(asCredit ? 'Avoir créé' : 'Retour enregistré');
+    success('Retour enregistré — choisissez le mode de remboursement');
     setReturnOpen(false);
     setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true });
     setReturnLines([]);
-    load();
+    await load();
+    // Auto-open the return detail so user can choose cash or avoir
+    openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
   };
 
   const openReturnDetail = async (r: SaleReturn) => {
@@ -912,10 +1039,27 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const { data } = await supabase.from('sale_return_items').select('*, articles(internal_ref, oem_ref)').eq('return_id', r.id);
     setReturnItemsDetail(data || []);
   };
-  const approveReturn = async (r: SaleReturn) => {
-    await supabase.from('sale_returns').update({ status: 'approved' }).eq('id', r.id);
-    success('Approuvé'); load();
-    if (returnDetail?.id === r.id) setReturnDetail({ ...r, status: 'approved' });
+  const approveAsAvoir = async (r: SaleReturn) => {
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'approuver les retours'); return; }
+    setReturnWorkflowBusy(true);
+    const { error: e } = await supabase.rpc('approve_return_as_avoir', { p_return_id: r.id });
+    setReturnWorkflowBusy(false);
+    if (e) { error(e.message); return; }
+    success('Avoir créé — disponible sur le compte client');
+    load();
+    setReturnDetail(prev => prev?.id === r.id ? { ...prev, status: 'approved', refund_method: 'avoir' } : prev);
+  };
+
+  const approveAsCash = async (r: SaleReturn) => {
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'approuver les retours'); return; }
+    setReturnCashConfirmOpen(false);
+    setReturnWorkflowBusy(true);
+    const { error: e } = await supabase.rpc('process_return_as_cash', { p_return_id: r.id });
+    setReturnWorkflowBusy(false);
+    if (e) { error(e.message); return; }
+    success('Remboursement enregistré en caisse');
+    load();
+    setReturnDetail(prev => prev?.id === r.id ? { ...prev, status: 'approved', refund_method: 'cash' } : prev);
   };
 
   const printReturn = () => {
@@ -967,11 +1111,17 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [tab]);
 
   const primaryAction = () => {
-    if (tab === 'quotes') setQuoteOpen(true);
-    else if (tab === 'invoices') openInvoiceEditor();
-    else setReturnOpen(true);
+    if (tab === 'quotes') {
+      if (!can('create_quotes')) { error('Vous n\'avez pas la permission de creer des devis'); return; }
+      setQuoteOpen(true);
+    } else if (tab === 'invoices') {
+      if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de creer des factures'); return; }
+      openInvoiceEditor();
+    } else {
+      setReturnOpen(true);
+    }
   };
-  const primaryLabel = tab === 'quotes' ? 'Nouveau devis' : tab === 'invoices' ? 'Nouvelle facture' : tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir';
+  const primaryLabel = tab === 'quotes' ? 'Nouveau devis' : tab === 'invoices' ? 'Nouvelle facture' : 'Nouveau retour';
   const PIcon = Plus;
 
   const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
@@ -1021,6 +1171,31 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           </button>
         </div>
       </div>
+
+      {(() => {
+        const sharedCatalog = (tenant as any)?.settings?.shared_articles !== false;
+        const interDepot = !!(tenant as any)?.settings?.inter_depot_transfer;
+        // Own depots always accessible; other depots only if shared catalog + inter-depot enabled
+        const availableDepots = depots.filter(d =>
+          d.parent_site_id === currentSite?.id || (sharedCatalog && interDepot)
+        );
+        if (availableDepots.length === 0) return null;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock depuis :</span>
+            <select
+              value={billSourceSiteId}
+              onChange={e => setBillSourceSiteId(e.target.value)}
+              className="text-[11px] font-semibold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400/30"
+            >
+              {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+              {availableDepots.map(d => (
+                <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+              ))}
+            </select>
+          </div>
+        );
+      })()}
 
       {/* ── Tabs ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
@@ -1431,11 +1606,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           headerValues={invoiceForm}
           onHeaderChange={(k, v) => setInvoiceForm(f => ({ ...f, [k]: v }))}
           items={invoiceEditorItems}
-          onAddItem={(articleId) => {
-            const art = articles.find(a => a.id === articleId);
-            if (!art) return;
-            setInvoiceEditorItems(p => [...p, { article_id: articleId, name: art.name, quantity: 1, unit_price: art.sale_price || 0, discount: 0, total: art.sale_price || 0 }]);
-          }}
+          onAddItem={(articleId) => addArticleWithTierCheck(articleId, 'invoice')}
           onUpdateItem={(idx, field, val) => updateInvoiceItem(idx, field as any, val)}
           onRemoveItem={(idx) => setInvoiceEditorItems(p => p.filter((_, i) => i !== idx))}
           articles={articles}
@@ -1494,11 +1665,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           headerValues={quoteForm}
           onHeaderChange={(k, v) => setQuoteForm((f: any) => ({ ...f, [k]: v }))}
           items={quoteItems}
-          onAddItem={(articleId) => {
-            const art = articles.find(a => a.id === articleId);
-            if (!art) return;
-            setQuoteItems(p => [...p, { article_id: articleId, name: art.name, quantity: 1, unit_price: art.sale_price || 0, discount: 0, total: art.sale_price || 0 }]);
-          }}
+          onAddItem={(articleId) => addArticleWithTierCheck(articleId, 'quote')}
           onUpdateItem={(idx, field, val) => updateQuoteItem(idx, field as any, val)}
           onRemoveItem={(idx) => setQuoteItems(p => p.filter((_, i) => i !== idx))}
           articles={articles}
@@ -1620,6 +1787,33 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         title="Sélection des lots (Facturation)"
         confirmLabel="Confirmer & Facturer"
       />
+
+      {/* Tier picker modal */}
+      {tierPickerOpen && tierPickerArticle && (() => {
+        const tiers = articleTiers.filter(t => t.article_id === tierPickerArticle.id);
+        const defaultPrice = tierPickerArticle.sale_price || 0;
+        return (
+          <Modal open={tierPickerOpen} onClose={() => { setTierPickerOpen(false); setTierPickerArticle(null); }} title="Choisir le tarif" size="sm">
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 mb-3">Sélectionnez le tarif à appliquer pour <span className="font-semibold text-slate-700">{tierPickerArticle.name}</span></p>
+              <button onClick={() => addArticleWithSelectedTier('', defaultPrice)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-900">Prix standard</span>
+                  <span className="text-sm font-bold text-slate-900 num">{formatFCFA(defaultPrice)}</span>
+                </div>
+              </button>
+              {tiers.map(t => (
+                <button key={t.tier_name} onClick={() => addArticleWithSelectedTier(t.tier_name, t.price)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-slate-900">{t.tier_name}</span>
+                    <span className="text-sm font-bold text-brand-700 num">{formatFCFA(t.price)}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* ── Invoice detail ───────────────────────────────────── */}
       <DocPanel open={!!invoiceDetail} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
@@ -1769,14 +1963,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </Modal>
 
       {/* ── Return create modal ─────────────────────────────── */}
-      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title={tab === 'credits' ? 'Nouvel avoir client' : 'Nouveau retour client'} size="lg" fullMobile
+      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title="Nouveau retour client" size="lg" fullMobile
         footer={<>
           <button onClick={() => setReturnOpen(false)} className="btn-secondary">Annuler</button>
-          {tab === 'credits' ? (
-            <button onClick={() => saveReturn(true)} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}<Wallet className="w-4 h-4" />Créer avoir</button>
-          ) : (
-            <button onClick={() => saveReturn(false)} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer retour</button>
-          )}
+          <button onClick={() => saveReturn()} disabled={saving || returnLines.filter(i => i.selected && i.quantity > 0).length === 0} className="btn-primary">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            <RotateCcw className="w-4 h-4" />
+            Enregistrer le retour
+          </button>
         </>}>
         <div className="space-y-2 sm:space-y-4">
           <div>
@@ -1786,6 +1980,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               {sales.map(s => <option key={s.id} value={s.id}>{s.sale_number}{s.customers ? ` - ${s.customers.name}` : ''}</option>)}
             </select>
           </div>
+
+          {returnLines.length === 0 && returnForm.sale_id && (
+            <div className="py-4 text-center text-xs text-slate-500">Tous les articles de cette vente ont déjà été retournés.</div>
+          )}
 
           {returnLines.length > 0 && (
             <div>
@@ -1822,7 +2020,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               {returnLines.filter(i => i.selected).length > 0 && (
                 <div className="mt-2 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white p-3 flex items-center justify-between">
                   <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-white/50">{tab === 'credits' ? 'Total avoir' : 'Total remboursement'}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-white/50">Total retour</div>
                     <div className="text-[10px] text-white/70">{returnLines.filter(i => i.selected).length} article{returnLines.filter(i => i.selected).length > 1 ? 's' : ''}</div>
                   </div>
                   <div className="num text-lg font-bold">{formatFCFA(returnTotal)}</div>
@@ -1831,29 +2029,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             </div>
           )}
 
-          {tab !== 'credits' && (
-            <div className="grid grid-cols-2 gap-1.5">
-              <div>
-                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Remboursement</label>
-                <select value={returnForm.refund_method} onChange={e => setReturnForm(f => ({ ...f, refund_method: e.target.value }))} className="input text-xs h-[34px]">
-                  <option value="cash">Especes</option>
-                  <option value="wave">Wave</option>
-                  <option value="orange_money">Orange Money</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Motif</label>
-                <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="input text-xs h-[34px]" placeholder="Motif..." />
-              </div>
-            </div>
-          )}
-
-          {tab === 'credits' && (
-            <div>
-              <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Motif</label>
-              <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="input text-xs h-[34px]" placeholder="Raison de l'avoir..." />
-            </div>
-          )}
+          <div>
+            <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Motif</label>
+            <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="input text-xs h-[34px]" placeholder="Motif du retour..." />
+          </div>
 
           <label className="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/70">
             <input type="checkbox" checked={returnForm.restock} onChange={e => setReturnForm(f => ({ ...f, restock: e.target.checked }))} className="w-3.5 h-3.5 rounded" />
@@ -1865,7 +2044,6 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Return detail ─────────────────────────────────────── */}
       <DocPanel open={!!returnDetail} onClose={() => setReturnDetail(null)} title={returnDetail ? `${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}` : ''}
         footer={<>
-          {returnDetail?.status === 'pending' && <button onClick={() => { approveReturn(returnDetail); }} className="btn-icon-success" title="Approuver"><CheckCircle className="w-4 h-4" /></button>}
           <button onClick={() => setReturnDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           <button onClick={printReturn} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
         </>}>
@@ -1883,15 +2061,94 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                 date={formatDateTime(returnDetail.created_at)}
                 extra={returnDetail.sales?.sale_number ? `Vente ${returnDetail.sales.sale_number}` : undefined}
               />
-              {isCredit && (
-                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[12px]">
-                  <span className="font-semibold text-emerald-800">Solde avoir</span>
-                  <span className="font-bold text-emerald-700 num">{formatFCFA(balance)}{used > 0 ? ` (utilisé ${formatFCFA(used)})` : ''}</span>
+
+              {/* Workflow: pending return → choose action */}
+              {returnDetail.status === 'pending' && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                      <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-amber-900">Traitement du retour</div>
+                      <div className="text-[10px] text-amber-700">Choisissez comment rembourser le client</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setReturnCashConfirmOpen(true)}
+                      disabled={returnWorkflowBusy}
+                      className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-white border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 transition-all active:scale-[0.97] disabled:opacity-50"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <Coins className="w-4.5 h-4.5 text-emerald-700" />
+                      </div>
+                      <div className="text-[11px] font-bold text-slate-800">Rembourser en caisse</div>
+                      <div className="text-[9px] text-slate-500 text-center">Sortie caisse immédiate</div>
+                    </button>
+                    <button
+                      onClick={() => approveAsAvoir(returnDetail)}
+                      disabled={returnWorkflowBusy}
+                      className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-white border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-all active:scale-[0.97] disabled:opacity-50"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Wallet className="w-4.5 h-4.5 text-blue-700" />
+                      </div>
+                      <div className="text-[11px] font-bold text-slate-800">Créer un avoir</div>
+                      <div className="text-[9px] text-slate-500 text-center">Imputer sur prochaine facture</div>
+                    </button>
+                  </div>
+                  {returnWorkflowBusy && (
+                    <div className="flex items-center justify-center gap-2 py-1">
+                      <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                      <span className="text-xs text-amber-700">Traitement...</span>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {/* Avoir: show credit balance and usage */}
+              {isCredit && returnDetail.status === 'approved' && (
+                <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Wallet className="w-3.5 h-3.5 text-blue-600" />
+                      <span className="text-[11px] font-bold text-blue-900">Solde avoir</span>
+                    </div>
+                    <span className="text-sm font-bold text-blue-700 num">{formatFCFA(balance)}</span>
+                  </div>
+                  {used > 0 && (
+                    <div className="flex items-center justify-between text-[10px] text-blue-600 border-t border-blue-200/70 pt-1.5">
+                      <span>Montant initial</span>
+                      <span className="num">{formatFCFA(Number(returnDetail.total))}</span>
+                    </div>
+                  )}
+                  {used > 0 && (
+                    <div className="flex items-center justify-between text-[10px] text-blue-600">
+                      <span>Déjà utilisé</span>
+                      <span className="num">-{formatFCFA(used)}</span>
+                    </div>
+                  )}
+                  {balance <= 0 && (
+                    <div className="text-[10px] font-semibold text-slate-500 text-center pt-0.5">Avoir entièrement utilisé</div>
+                  )}
+                </div>
+              )}
+
+              {/* Cash refund: show approved status */}
+              {!isCredit && returnDetail.status === 'approved' && (
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="text-[11px] font-bold text-emerald-900">Remboursé en caisse</div>
+                    <div className="text-[10px] text-emerald-700 num">{formatFCFA(Number(returnDetail.total))}</div>
+                  </div>
+                </div>
+              )}
+
               {returnDetail.reason && <div className="p-3 bg-slate-50 rounded-xl text-sm border border-slate-200/70"><span className="font-semibold">Motif :</span> {returnDetail.reason}</div>}
               <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Articles</div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Articles retournés</div>
                 <div className="space-y-1.5">
                   {returnItemsDetail.map(i => (
                     <div key={i.id} className="p-3 rounded-xl bg-white border border-slate-200/70 shadow-sm flex items-start gap-3">
@@ -1906,11 +2163,28 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     </div>
                   ))}
                 </div>
+                <div className="mt-3 flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-900 text-white">
+                  <span className="text-[11px] font-bold text-white/60 uppercase tracking-wider">Total</span>
+                  <span className="text-base font-bold num">{formatFCFA(Number(returnDetail.total))}</span>
+                </div>
               </div>
             </div>
           );
         })()}
       </DocPanel>
+
+      {/* Confirm cash refund */}
+      {returnDetail && (
+        <ConfirmDialog
+          open={returnCashConfirmOpen}
+          onClose={() => setReturnCashConfirmOpen(false)}
+          onConfirm={() => approveAsCash(returnDetail)}
+          title="Rembourser en caisse ?"
+          message={`Le montant de ${formatFCFA(Number(returnDetail.total))} sera enregistré comme sortie caisse. Cette action est irréversible.`}
+          confirmLabel="Confirmer le remboursement"
+          danger={false}
+        />
+      )}
 
       {autoMode && tenant && currentSite && (
         <VehicleArticlePicker
@@ -2342,7 +2616,10 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
                           </div>
                         );
                         case 'designation': return (
-                          <div key="designation"><input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" /></div>
+                          <div key="designation">
+                            <input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
+                            {it.tier_name && <div className="text-[9px] font-medium text-brand-600 mt-0.5">{it.tier_name}</div>}
+                          </div>
                         );
                         case 'qty': return (
                           <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs text-center" /></div>
@@ -2630,7 +2907,10 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                           </div>
                         );
                         case 'designation': return (
-                          <div key="designation"><input value={it.name} onChange={e => updateInvoiceItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" /></div>
+                          <div key="designation">
+                            <input value={it.name} onChange={e => updateInvoiceItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
+                            {it.tier_name && <div className="text-[9px] font-medium text-brand-600 mt-0.5">{it.tier_name}</div>}
+                          </div>
                         );
                         case 'qty': return (
                           <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateInvoiceItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs text-center" /></div>

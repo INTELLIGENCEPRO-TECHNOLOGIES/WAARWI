@@ -5,13 +5,16 @@ export function formatFCFA(amount: number | null | undefined): string {
 
 export function formatCompactFCFA(amount: number | null | undefined): string {
   const v = Math.round(Number(amount || 0));
-  if (v < 1000) return `${v} FCFA`;
-  if (v < 1_000_000) {
-    const k = v / 1000;
-    return `${k >= 100 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, '')}k FCFA`;
+  const abs = Math.abs(v);
+  if (abs < 100_000_000) {
+    return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(v) + ' FCFA';
   }
-  const m = v / 1_000_000;
-  return `${m >= 100 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, '')}M FCFA`;
+  if (abs < 1_000_000_000) {
+    const m = v / 1_000_000;
+    return `${m.toFixed(1).replace(/\.0$/, '')}M FCFA`;
+  }
+  const b = v / 1_000_000_000;
+  return `${b.toFixed(1).replace(/\.0$/, '')}Md FCFA`;
 }
 
 export function formatDate(d: string | Date): string {

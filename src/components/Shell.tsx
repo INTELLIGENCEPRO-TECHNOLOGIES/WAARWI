@@ -93,7 +93,7 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
 
 export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r: Route) => void; children: ReactNode }) {
   const { tenant, profile, signOut, sites, currentSite, setCurrentSite, setDefaultSite, posCartCount, posCartOpen, setPosCart } = useApp();
-  const { can } = usePermissions();
+  const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const enabledModules: string[] = Array.isArray((tenant as any)?.enabled_modules)
     ? (tenant as any).enabled_modules
@@ -101,6 +101,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const routeVisible = (key: Route) => {
     const mod = ROUTE_MODULE[key];
     if (mod && !enabledModules.includes(mod)) return false;
+    if (permsLoading) return true;
     const perm = ROUTE_PERMISSION[key];
     if (perm && !can(perm)) return false;
     return true;
@@ -142,6 +143,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [userOpen, setUserOpen] = useState(false);
 
   const isPOS = route === 'pos';
+  const isDashboard = route === 'dashboard';
+  const [dashMenuOpen, setDashMenuOpen] = useState(false);
+  useEffect(() => { if (!isDashboard) setDashMenuOpen(false); }, [isDashboard]);
 
   // Swipe-to-close
   const panelRef = useRef<HTMLElement | null>(null);
@@ -299,7 +303,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     <div className="min-h-screen h-screen flex flex-col overflow-hidden">
       {/* Unified desktop header — spans full width, logo area aligns with sidebar */}
       <header
-        className="hidden lg:flex items-center h-16 border-b border-slate-200/60 bg-white sticky top-0 z-30 flex-shrink-0"
+        className={`${isDashboard && !dashMenuOpen ? 'hidden' : 'hidden lg:flex'} items-center h-16 border-b border-slate-200/60 bg-white sticky top-0 z-30 flex-shrink-0`}
         style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}
       >
         <div className={`flex items-center gap-2.5 px-5 h-full border-r border-slate-200/60 transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[260px]'}`}>
@@ -380,7 +384,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop sidebar — below unified header */}
-      <aside className={`hidden lg:flex flex-col flex-shrink-0 h-full border-r border-slate-200/60 bg-white/80 backdrop-blur-sm transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[260px]'}`}>
+      <aside className={`${isDashboard && !dashMenuOpen ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r border-slate-200/60 bg-white/80 backdrop-blur-sm transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[260px]'}`}>
         <NavList />
         <div className="p-3 border-t border-slate-100 space-y-2">
           {sites.length > 0 && !sidebarCollapsed && (
@@ -601,6 +605,26 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           <Menu className="w-[20px] h-[20px] text-slate-800" strokeWidth={2.4} />
         </button>
 
+        {/* Desktop dashboard menu button — only when sidebar hidden */}
+        {isDashboard && !dashMenuOpen && (
+          <button
+            onClick={() => setDashMenuOpen(true)}
+            className="hidden lg:flex fixed z-40 items-center gap-2 px-3 py-2 rounded-xl transition-all active:scale-95 hover:scale-[1.02]"
+            style={{
+              top: '12px',
+              left: '16px',
+              background: 'rgba(255,255,255,0.85)',
+              backdropFilter: 'saturate(1.6) blur(16px)',
+              WebkitBackdropFilter: 'saturate(1.6) blur(16px)',
+              border: '1px solid rgba(226,232,240,0.8)',
+              boxShadow: '0 4px 12px -2px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04)',
+            }}
+          >
+            <Menu className="w-4 h-4 text-slate-700" strokeWidth={2.2} />
+            <span className="text-xs font-semibold text-slate-600">Menu</span>
+          </button>
+        )}
+
         <header
           className="lg:hidden sticky top-0 z-30 flex items-center gap-2 px-3 sm:px-5 border-b border-slate-200/40 pl-[60px]"
           style={{
@@ -689,8 +713,10 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         </header>
 
-        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
+        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
           {isPOS ? (
+            <div className="flex-1 flex flex-col min-h-0 pb-[64px] lg:pb-0">{children}</div>
+          ) : (isDashboard && !dashMenuOpen) ? (
             <div className="flex-1 flex flex-col min-h-0 pb-[64px] lg:pb-0">{children}</div>
           ) : (
             <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[76px] lg:pb-8">{children}</div>

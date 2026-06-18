@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
@@ -47,6 +48,7 @@ const STATUS_ORDER: OrderStatus[] = ['nouvelle', 'confirmee', 'en_preparation', 
 
 export function OnlineOrders() {
   const { tenant, dataTick } = useApp();
+  const { can } = usePermissions();
   const { success, error } = useToast();
 
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
@@ -136,6 +138,7 @@ export function OnlineOrders() {
 
   const updateStatus = async (newStatus: OrderStatus) => {
     if (!selected || !tenant) return;
+    if (!can('manage_online_orders')) { error('Vous n\'avez pas la permission de gerer les commandes en ligne'); return; }
     const { error: err } = await supabase.from('online_orders').update({ status: newStatus }).eq('id', selected.id).eq('tenant_id', tenant.id);
     if (err) { error(err.message); return; }
     success(`Statut : ${STATUS_META[newStatus].label}`);
@@ -147,6 +150,7 @@ export function OnlineOrders() {
 
   const updatePayment = async (newStatus: PaymentStatus) => {
     if (!selected || !tenant) return;
+    if (!can('manage_online_orders')) { error('Vous n\'avez pas la permission de gerer les commandes en ligne'); return; }
     const { error: err } = await supabase.from('online_orders').update({ payment_status: newStatus }).eq('id', selected.id).eq('tenant_id', tenant.id);
     if (err) { error(err.message); return; }
     success(`Paiement : ${PAYMENT_META[newStatus].label}`);

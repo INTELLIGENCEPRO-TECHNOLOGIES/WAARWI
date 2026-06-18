@@ -8,6 +8,7 @@ type AppState = {
   profile: Profile | null;
   tenant: Tenant | null;
   sites: Site[];
+  depots: Site[];
   currentSite: Site | null;
   setCurrentSite: (site: Site) => void;
   /** Marks a site as the persistent default for this user (saved to DB, cross-device) */
@@ -31,6 +32,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
+  const [depots, setDepots] = useState<Site[]>([]);
   const [currentSite, setCurrentSite] = useState<Site | null>(null);
   const [dataTick, setDataTick] = useState(0);
   const [posCartCount, setPosCartCount] = useState(0);
@@ -41,7 +43,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: sessionData } = await supabase.auth.getSession();
     const session = sessionData.session;
     if (!session) {
-      setUser(null); setProfile(null); setTenant(null); setSites([]); setCurrentSite(null);
+      setUser(null); setProfile(null); setTenant(null); setSites([]); setDepots([]); setCurrentSite(null);
       setLoading(false);
       return;
     }
@@ -58,18 +60,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTenant(ten || null);
       const allSites = s || [];
       const assignedIds: string[] | null = (prof as any).assigned_site_ids;
-      const siteList = (assignedIds && assignedIds.length > 0)
+      const filtered = (assignedIds && assignedIds.length > 0)
         ? allSites.filter(x => assignedIds.includes(x.id))
         : allSites;
-      setSites(siteList);
+      const storeList = filtered.filter(x => !x.is_warehouse);
+      const depotList = filtered.filter(x => x.is_warehouse);
+      setSites(storeList);
+      setDepots(depotList);
 
-      // Priority: DB default_site_id > localStorage fallback > first site
+      // Priority: DB default_site_id > localStorage fallback > first store
       const defaultId: string | null = (prof as any).default_site_id || null;
       const storedId = localStorage.getItem('currentSiteId');
       const found =
-        (defaultId && siteList.find(x => x.id === defaultId)) ||
-        (storedId && siteList.find(x => x.id === storedId)) ||
-        siteList[0] ||
+        (defaultId && storeList.find(x => x.id === defaultId)) ||
+        (storedId && storeList.find(x => x.id === storedId)) ||
+        storeList[0] ||
         null;
       setCurrentSite(found);
       if (found) localStorage.setItem('currentSiteId', found.id);
@@ -130,14 +135,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (ten) setTenant(ten as Tenant);
       if (s && prof) {
         const assignedIds: string[] | null = (prof as any).assigned_site_ids;
-        const filteredSites = (assignedIds && assignedIds.length > 0)
+        const filtered = (assignedIds && assignedIds.length > 0)
           ? s.filter(x => assignedIds.includes(x.id))
           : s;
-        setSites(filteredSites);
-        setCurrentSite(prev => prev ? (filteredSites.find(x => x.id === prev.id) || filteredSites[0] || null) : (filteredSites[0] || null));
+        const storeList = filtered.filter(x => !x.is_warehouse);
+        const depotList = filtered.filter(x => x.is_warehouse);
+        setSites(storeList);
+        setDepots(depotList);
+        setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || null) : (storeList[0] || null));
       } else if (s) {
-        setSites(s);
-        setCurrentSite(prev => prev ? (s.find(x => x.id === prev.id) || s[0] || null) : (s[0] || null));
+        const storeList = s.filter(x => !x.is_warehouse);
+        const depotList = s.filter(x => x.is_warehouse);
+        setSites(storeList);
+        setDepots(depotList);
+        setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || null) : (storeList[0] || null));
       }
       if (prof) setProfile(prof);
     }, 150);
@@ -185,7 +196,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      setUser(null); setProfile(null); setTenant(null); setSites([]); setCurrentSite(null);
+      setUser(null); setProfile(null); setTenant(null); setSites([]); setDepots([]); setCurrentSite(null);
       try { localStorage.removeItem('currentSiteId'); } catch {}
       await Promise.race([
         supabase.auth.signOut({ scope: 'local' }),
@@ -231,7 +242,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={{
-      loading, user, profile, tenant, sites, currentSite,
+      loading, user, profile, tenant, sites, depots, currentSite,
       setCurrentSite: handleSetCurrentSite,
       setDefaultSite: handleSetDefaultSite,
       signIn, signUp, signOut, refresh: loadSession,
