@@ -771,8 +771,6 @@ function MobileDashboard({
     prevWebNew.current = stats.webNew;
   }, [stats.webNew]);
 
-  const netCaisse = stats.cashBalance - stats.sessionExpenses;
-
   return (
     <div className="space-y-1.5 animate-fade-in pb-1">
 
@@ -797,7 +795,7 @@ function MobileDashboard({
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${heroLight ? 'bg-teal-500' : 'bg-teal-300'}`} />
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-slate-400' : 'text-teal-200/70'}`}>Encaissement du jour</span>
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-slate-400' : 'text-teal-200/70'}`}>Chiffre d&apos;affaires du jour</span>
             </div>
             <div className="flex items-center gap-2">
               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${heroLight ? 'bg-teal-50 text-teal-600 border border-teal-100' : 'bg-teal-400/15 text-teal-200'}`}>
@@ -887,29 +885,29 @@ function MobileDashboard({
               </span>
             </div>
 
-            {/* ENTREES row */}
+            {/* NET ENCAISSE row */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.15)' }}>
                   <ArrowDownRight className={`w-2.5 h-2.5 ${heroLight ? 'text-emerald-500' : 'text-emerald-300'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Entrées</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Net encaissé</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-slate-800' : 'text-white/80'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.sessionCashIn)}
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-emerald-600' : 'text-emerald-300'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.todayPaid)}
               </span>
             </div>
 
-            {/* NET CAISSE row */}
+            {/* RESTE A PERCEVOIR row */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(20,184,166,0.08)' : 'rgba(20,184,166,0.15)' }}>
-                  <ArrowUpRight className={`w-2.5 h-2.5 ${heroLight ? 'text-teal-600' : 'text-teal-300'}`} />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.18)' }}>
+                  <Clock className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Net caisse</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Reste à percevoir</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? (netCaisse >= 0 ? 'text-emerald-600' : 'text-rose-600') : (netCaisse >= 0 ? 'text-emerald-300' : 'text-rose-300')}`}>
-                {balanceHidden ? '•••' : formatFCFA(netCaisse)}
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-amber-600' : 'text-amber-300'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.todayReceivable)}
               </span>
             </div>
 
