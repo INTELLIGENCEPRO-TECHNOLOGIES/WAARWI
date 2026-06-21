@@ -18,7 +18,7 @@ import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
 import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
-import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, type PrintTenant } from '../lib/print';
+import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, type PrintTenant } from '../lib/print';
 import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from '../lib/types';
 import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
@@ -899,9 +899,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [mvCustomer, setMvCustomer] = useState<Customer | null>(null);
   const [mvCustSearch, setMvCustSearch] = useState('');
   const [mvSubmitting, setMvSubmitting] = useState(false);
+  const [mvPrint, setMvPrint] = useState(true);
 
   // Customer payment (encaissement libre)
   const [custPayOpen, setCustPayOpen] = useState(false);
+  const [custPayMode, setCustPayMode] = useState<'invoice' | 'direct'>('invoice');
+  const [custPayLabel, setCustPayLabel] = useState('');
+  const [custPayPrint, setCustPayPrint] = useState(true);
   const [custPayCustomer, setCustPayCustomer] = useState<Customer | null>(null);
   const [custPayUnpaid, setCustPayUnpaid] = useState<{ id: string; sale_number: string; total: number; paid: number; created_at: string }[]>([]);
   const [custPaySaleId, setCustPaySaleId] = useState<string>('');
@@ -922,6 +926,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Session tickets list
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
+  const [sessionMovements, setSessionMovements] = useState<{ kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null; created_at: string }[]>([]);
+  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | null>('tickets');
   const [loadingTickets, setLoadingTickets] = useState(false);
 
   // Close workflow
@@ -942,7 +948,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   } | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | null>(null);
+  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | 'encDirect' | 'acomptes' | 'depenses' | null>(null);
 
   // Vehicle picker
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
@@ -1273,6 +1279,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const openCustomerPayment = () => {
     if (!session) { error('Ouvrez d\'abord la caisse'); return; }
     setCustPayOpen(true);
+    setCustPayMode('invoice');
+    setCustPayLabel('');
     setCustPayCustomer(null);
     setCustPayUnpaid([]);
     setCustPaySaleId('');
@@ -1280,6 +1288,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setCustPayMethod(methods[0] || null);
     setCustPayRef('');
     setCustPaySearch('');
+    setCustPayPrint(true);
   };
 
   const loadCustomerUnpaid = async (c: Customer) => {
@@ -1305,6 +1314,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setMvAmount(0); setMvReason(''); setMvNote(''); setMvRef('');
     setMvMethod(methods[0] || null);
     setMvCustomer(null); setMvCustSearch('');
+    setMvPrint(true);
   };
 
   const submitMovement = async () => {
@@ -1326,9 +1336,35 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       p_payment_method_id: mvMethod?.id || null,
       p_method_name: mvMethod?.name || '',
     });
-    setMvSubmitting(false);
-    if (e) { error(e.message); return; }
+    if (e) { setMvSubmitting(false); error(e.message); return; }
     const autoApplied = Number((data as any)?.auto_applied || 0);
+
+    const wantsReceipt = mvPrint && (mvKind === 'income' || mvKind === 'customer_prepayment') && !!mvMethod && !!tenant;
+    if (wantsReceipt && tenant && mvMethod) {
+      const prefix = mvKind === 'customer_prepayment' ? 'ACO' : 'ENC';
+      const kindLabel = mvKind === 'customer_prepayment' ? 'acompte_client' : 'entree_caisse';
+      const { data: numData } = await supabase.rpc('next_doc_number', {
+        p_tenant_id: tenant.id, p_kind: kindLabel, p_prefix: prefix,
+      });
+      const recNum = (numData as string) || (`${prefix}-` + Date.now());
+      try {
+        printEncaissementTicket80({
+          receiptNumber: recNum,
+          amount: mvAmount,
+          method: mvMethod.name,
+          label: mvKind === 'customer_prepayment'
+            ? (mvReason ? `Acompte · ${mvReason}` : 'Acompte client')
+            : (mvReason || undefined),
+          reference: mvRef || undefined,
+          customerName: mvCustomer?.name || null,
+          createdAt: new Date().toISOString(),
+          tenant: tenantForPrint as PrintTenant,
+          cashier: cashierName,
+        });
+      } catch {}
+    }
+
+    setMvSubmitting(false);
     if (mvKind === 'customer_prepayment' && autoApplied > 0) {
       success(`Acompte enregistré · ${formatFCFA(autoApplied)} imputé automatiquement`);
     } else if (mvKind === 'expense') {
@@ -1338,12 +1374,28 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     } else {
       success('Acompte enregistré · en attente de facture');
     }
-    setMvOpen(false);
+
+    if (mvKind === 'income' || mvKind === 'customer_prepayment') {
+      setMvAmount(0);
+      setMvReason('');
+      setMvNote('');
+      setMvRef('');
+      setMvCustomer(null);
+      setMvCustSearch('');
+      load();
+    } else {
+      setMvOpen(false);
+      load();
+    }
   };
 
   const submitCustomerPayment = async () => {
-    if (!session || !custPayCustomer || !custPayMethod) return;
+    if (!session || !custPayCustomer || !custPayMethod || !tenant) return;
     if (custPayAmount <= 0) { error('Montant invalide'); return; }
+    const paidAmount = custPayAmount;
+    const customerName = custPayCustomer.name;
+    const methodName = custPayMethod.name;
+    const refValue = custPayRef;
     setCustPaySubmitting(true);
     const { error: e } = await supabase.rpc('register_customer_payment', {
       p_customer_id: custPayCustomer.id,
@@ -1354,10 +1406,89 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       p_cash_session_id: session.id,
       p_sale_id: custPaySaleId || null,
     });
+    if (e) { setCustPaySubmitting(false); error(e.message); return; }
+
+    if (custPayPrint) {
+      const { data: numData } = await supabase.rpc('next_doc_number', {
+        p_tenant_id: tenant.id, p_kind: 'reglement_client', p_prefix: 'REG',
+      });
+      const recNum = (numData as string) || ('REG-' + Date.now());
+      try {
+        printEncaissementTicket80({
+          receiptNumber: recNum,
+          amount: paidAmount,
+          method: methodName,
+          label: 'Règlement client',
+          reference: refValue || undefined,
+          customerName,
+          createdAt: new Date().toISOString(),
+          tenant: tenantForPrint as PrintTenant,
+          cashier: cashierName,
+        });
+      } catch {}
+    }
+
     setCustPaySubmitting(false);
-    if (e) { error(e.message); return; }
     success('Règlement encaissé');
-    setCustPayOpen(false);
+    setCustPayCustomer(null);
+    setCustPayUnpaid([]);
+    setCustPaySaleId('');
+    setCustPayAmount(0);
+    setCustPayRef('');
+    setCustPaySearch('');
+    load();
+  };
+
+  const submitDirectEncaissement = async () => {
+    if (!session || !currentSite || !tenant) return;
+    if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
+    if (custPayAmount <= 0) { error('Montant invalide'); return; }
+    if (!custPayMethod) { error('Mode de règlement requis'); return; }
+    const paidAmount = custPayAmount;
+    const labelValue = custPayLabel.trim();
+    const refValue = custPayRef;
+    const methodName = custPayMethod.name;
+    setCustPaySubmitting(true);
+    const reason = labelValue || 'Encaissement direct';
+    const { error: e } = await supabase.rpc('record_cash_movement', {
+      p_cash_session_id: session.id,
+      p_site_id: currentSite.id,
+      p_kind: 'income',
+      p_amount: paidAmount,
+      p_reason: reason,
+      p_note: '',
+      p_reference: refValue,
+      p_customer_id: null,
+      p_payment_method_id: custPayMethod.id,
+      p_method_name: custPayMethod.name,
+    });
+    if (e) { setCustPaySubmitting(false); error(e.message); return; }
+
+    if (custPayPrint) {
+      const { data: numData } = await supabase.rpc('next_doc_number', {
+        p_tenant_id: tenant.id, p_kind: 'encaissement_direct', p_prefix: 'ENC',
+      });
+      const recNum = (numData as string) || ('ENC-' + Date.now());
+      try {
+        printEncaissementTicket80({
+          receiptNumber: recNum,
+          amount: paidAmount,
+          method: methodName,
+          label: labelValue || undefined,
+          reference: refValue || undefined,
+          customerName: null,
+          createdAt: new Date().toISOString(),
+          tenant: tenantForPrint as PrintTenant,
+          cashier: cashierName,
+        });
+      } catch {}
+    }
+
+    setCustPaySubmitting(false);
+    success('Encaissement enregistré');
+    setCustPayAmount(0);
+    setCustPayLabel('');
+    setCustPayRef('');
     load();
   };
 
@@ -1608,7 +1739,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openTickets = async () => {
     setTicketsOpen(true); setLoadingTickets(true);
-    const [{ data }, { data: retData }] = await Promise.all([
+    const [{ data }, { data: retData }, { data: mvData }] = await Promise.all([
       supabase
         .from('sales')
         .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price)')
@@ -1618,6 +1749,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       supabase
         .from('sale_returns')
         .select('id, return_number, total, created_at, sale_id')
+        .eq('tenant_id', tenant!.id)
+        .eq('cash_session_id', session!.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('cash_movements')
+        .select('kind, amount, reason, method_name, created_at, customers(name)')
         .eq('tenant_id', tenant!.id)
         .eq('cash_session_id', session!.id)
         .order('created_at', { ascending: false }),
@@ -1633,6 +1770,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       items: [],
     }));
     setSessionSales([...sales, ...returns].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+    const movs = (mvData || []).map((m: any) => ({
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
+      amount: Number(m.amount), reason: m.reason || '',
+      method_name: m.method_name || '', customer_name: m.customers?.name || null,
+      created_at: m.created_at || '',
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
+    setSessionMovements(movs);
+    setTicketsExpanded('tickets');
     setLoadingTickets(false);
   };
 
@@ -2493,7 +2638,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         <Modal open onClose={() => setMvOpen(false)} title="Mouvement de caisse" size="md"
           footer={
             <div className="flex gap-2 w-full">
-              <button onClick={() => setMvOpen(false)} className="btn-secondary flex-1 justify-center">Annuler</button>
+              <button onClick={() => setMvOpen(false)} className="btn-secondary flex-1 justify-center">Fermer</button>
               <button onClick={submitMovement} disabled={mvSubmitting || mvAmount <= 0}
                 className="btn-primary flex-1 justify-center">
                 {mvSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -2607,6 +2752,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <textarea value={mvNote} onChange={e => setMvNote(e.target.value)} className="input min-h-16" rows={2} placeholder="Détails complémentaires…" />
               </div>
             ) : null}
+
+            {(mvKind === 'income' || mvKind === 'customer_prepayment') && (
+              <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer select-none">
+                <input type="checkbox" checked={mvPrint} onChange={e => setMvPrint(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                <Printer className="w-4 h-4 text-slate-500" />
+                <span className="text-xs font-semibold text-slate-700">Imprimer le reçu après validation</span>
+              </label>
+            )}
           </div>
         </Modal>
       )}
@@ -2616,16 +2770,84 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         <Modal open onClose={() => setCustPayOpen(false)} title="Encaisser un client" size="md"
           footer={
             <div className="flex gap-2 w-full">
-              <button onClick={() => setCustPayOpen(false)} className="btn-secondary flex-1 justify-center">Annuler</button>
-              <button onClick={submitCustomerPayment} disabled={custPaySubmitting || !custPayCustomer || !custPayMethod || custPayAmount <= 0}
-                className="btn-primary flex-1 justify-center">
-                {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Valider {custPayAmount > 0 ? `· ${formatFCFA(custPayAmount)}` : ''}
-              </button>
+              <button onClick={() => setCustPayOpen(false)} className="btn-secondary flex-1 justify-center">Fermer</button>
+              {custPayMode === 'direct' ? (
+                <button onClick={submitDirectEncaissement} disabled={custPaySubmitting || !custPayMethod || custPayAmount <= 0}
+                  className="btn-primary flex-1 justify-center">
+                  {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Encaisser {custPayAmount > 0 ? `· ${formatFCFA(custPayAmount)}` : ''}
+                </button>
+              ) : (
+                <button onClick={submitCustomerPayment} disabled={custPaySubmitting || !custPayCustomer || !custPayMethod || custPayAmount <= 0}
+                  className="btn-primary flex-1 justify-center">
+                  {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Valider {custPayAmount > 0 ? `· ${formatFCFA(custPayAmount)}` : ''}
+                </button>
+              )}
             </div>
           }>
           <div className="space-y-4">
-            {!custPayCustomer ? (
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl">
+              <button type="button"
+                onClick={() => {
+                  setCustPayMode('invoice');
+                  setCustPayLabel('');
+                  if (!custPayCustomer) setCustPayAmount(0);
+                }}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${custPayMode === 'invoice' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                Client en attente
+              </button>
+              <button type="button"
+                onClick={() => {
+                  setCustPayMode('direct');
+                  setCustPayCustomer(null);
+                  setCustPayUnpaid([]);
+                  setCustPaySaleId('');
+                  setCustPayAmount(0);
+                  if (!custPayMethod) setCustPayMethod(methods[0] || null);
+                }}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${custPayMode === 'direct' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                Encaissement direct
+              </button>
+            </div>
+
+            {custPayMode === 'direct' ? (
+              <>
+                <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-white border border-emerald-200/70 p-3">
+                  <div className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wide">Encaissement direct</div>
+                  <div className="text-[11px] text-emerald-700 mt-0.5">Pour un client divers, sans facture rattachée. Un reçu numéroté sera imprimé.</div>
+                </div>
+
+                <div>
+                  <label className="label">Montant</label>
+                  <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
+                    autoFocus className="input text-lg font-bold num" placeholder="0" min={0} />
+                </div>
+
+                <div>
+                  <label className="label">Libellé (optionnel)</label>
+                  <input value={custPayLabel} onChange={e => setCustPayLabel(e.target.value)}
+                    className="input" placeholder="Ex: Acompte travaux, location matériel…" />
+                </div>
+
+                <div>
+                  <label className="label">Mode de règlement</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {methods.map(m => (
+                      <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
+                        className={`px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${custPayMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Référence (optionnel)</label>
+                  <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="input" placeholder="N° bordereau, transaction…" />
+                </div>
+              </>
+            ) : !custPayCustomer ? (
               <div>
                 <label className="label">Rechercher un client</label>
                 <div className="relative">
@@ -2723,6 +2945,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   </>
                 )}
               </>
+            )}
+
+            {(custPayMode === 'direct' || (custPayMode === 'invoice' && custPayCustomer && custPayUnpaid.length > 0)) && (
+              <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer select-none">
+                <input type="checkbox" checked={custPayPrint} onChange={e => setCustPayPrint(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                <Printer className="w-4 h-4 text-slate-500" />
+                <span className="text-xs font-semibold text-slate-700">Imprimer le reçu après validation</span>
+              </label>
             )}
           </div>
         </Modal>
@@ -2919,63 +3150,208 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       >
         {loadingTickets ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-        ) : sessionSales.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-500">Aucune vente dans cette session.</div>
-        ) : (
+        ) : sessionSales.length === 0 && sessionMovements.length === 0 ? (
+          <div className="py-8 text-center text-sm text-slate-500">Aucune activité dans cette session.</div>
+        ) : (() => {
+          const encDirectList = sessionMovements.filter(m => m.kind === 'income');
+          const acomptesList = sessionMovements.filter(m => m.kind === 'customer_prepayment');
+          const depensesList = sessionMovements.filter(m => m.kind === 'expense');
+          const encDirectTotal = encDirectList.reduce((s, m) => s + m.amount, 0);
+          const acomptesTotal = acomptesList.reduce((s, m) => s + m.amount, 0);
+          const depensesTotal = depensesList.reduce((s, m) => s + m.amount, 0);
+          return (
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="card p-3 text-center">
-                <div className="text-xs text-slate-500">Tickets</div>
-                <div className="text-xl font-bold mt-0.5">{sessionSales.filter(x => x.status !== 'return').length}</div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="card p-2.5 text-center">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Tickets</div>
+                <div className="text-lg font-bold mt-0.5 num">{sessionSales.filter(x => x.status !== 'return').length}</div>
               </div>
-              <div className="card p-3 text-center col-span-2">
-                <div className="text-xs text-slate-500">CA Net</div>
-                <div className="text-xl font-bold text-brand-800 mt-0.5">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</div>
+              <div className="card p-2.5 text-center col-span-2">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CA Net</div>
+                <div className="text-lg font-bold text-brand-800 mt-0.5 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</div>
               </div>
             </div>
-            <div className="space-y-2 max-h-[55vh] overflow-y-auto -mx-1 px-1 pb-1">
-              {sessionSales.map(s => (
-                <div key={s.id} className={`card p-3 flex items-center gap-3 hover:shadow-elevated transition-all ${s.status === 'return' ? 'border-red-200 bg-red-50/30' : ''}`}>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`font-mono text-xs font-bold ${s.status === 'return' ? 'text-red-600' : 'text-brand-700'}`}>{s.sale_number}</span>
-                      <span className="text-[11px] text-slate-400 num">{new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                      {s.status === 'return' && <span className="text-[10px] font-bold uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Retour</span>}
+
+            <div className="space-y-1.5">
+              {/* Tickets */}
+              <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'tickets' ? 'border-brand-300 bg-brand-50/30' : 'border-slate-200 bg-white'}`}>
+                <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'tickets' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
+                      <List className="w-3.5 h-3.5" />
                     </div>
-                    <div className="text-xs text-slate-600 article-text line-clamp-1 mt-0.5">{s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}</div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-800">Tickets de vente</div>
+                      <div className="text-[10px] text-slate-500">{sessionSales.length} ticket{sessionSales.length > 1 ? 's' : ''}</div>
+                    </div>
                   </div>
-                  <div className={`num font-bold shrink-0 ${s.total < 0 ? 'text-red-600' : 'text-slate-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</div>
-                  {s.status !== 'return' && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button title="Ticket 80mm" onClick={() => {
-                            const fakeSale = {
-                              sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
-                              items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                              payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
-                              customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
-                            };
-                            printSaleTicket(fakeSale);
-                          }} className="p-1.5 rounded hover:bg-slate-100 text-slate-600">
-                            <Printer className="w-4 h-4" />
-                          </button>
-                          <button title="Facture A4" onClick={() => {
-                            const fakeSale = {
-                              sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
-                              items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                              payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
-                              customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
-                            };
-                            printSaleInvoice(fakeSale);
-                          }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600">
-                            <FileText className="w-4 h-4" />
-                          </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-brand-800 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</span>
+                    <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${ticketsExpanded === 'tickets' ? 'rotate-90' : ''}`} />
                   </div>
+                </button>
+                {ticketsExpanded === 'tickets' && (
+                  <div className="px-3 pb-3 space-y-2 max-h-[45vh] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    {sessionSales.length === 0 ? (
+                      <div className="text-center py-3 text-[11px] text-slate-500">Aucun ticket.</div>
+                    ) : sessionSales.map(s => (
+                      <div key={s.id} className={`card p-3 flex items-center gap-3 hover:shadow-elevated transition-all ${s.status === 'return' ? 'border-red-200 bg-red-50/30' : ''}`}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`font-mono text-xs font-bold ${s.status === 'return' ? 'text-red-600' : 'text-brand-700'}`}>{s.sale_number}</span>
+                            <span className="text-[11px] text-slate-400 num">{new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            {s.status === 'return' && <span className="text-[10px] font-bold uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Retour</span>}
+                          </div>
+                          <div className="text-xs text-slate-600 article-text line-clamp-1 mt-0.5">{s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}</div>
+                        </div>
+                        <div className={`num font-bold shrink-0 ${s.total < 0 ? 'text-red-600' : 'text-slate-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</div>
+                        {s.status !== 'return' && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button title="Ticket 80mm" onClick={() => {
+                                  const fakeSale = {
+                                    sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
+                                    items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
+                                    payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                                    customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
+                                  };
+                                  printSaleTicket(fakeSale);
+                                }} className="p-1.5 rounded hover:bg-slate-100 text-slate-600">
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                                <button title="Facture A4" onClick={() => {
+                                  const fakeSale = {
+                                    sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
+                                    items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
+                                    payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                                    customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
+                                  };
+                                  printSaleInvoice(fakeSale);
+                                }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600">
+                                  <FileText className="w-4 h-4" />
+                                </button>
+                        </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Encaissements directs */}
+              {encDirectList.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'encDirect' ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'encDirect' ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <ArrowDownRight className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Encaissements directs</div>
+                        <div className="text-[10px] text-slate-500">{encDirectList.length} entrée{encDirectList.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-emerald-700 num">+{formatFCFA(encDirectTotal)}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${ticketsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {ticketsExpanded === 'encDirect' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {encDirectList.map((m, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-emerald-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.reason || 'Encaissement direct'}</div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                              {m.created_at && <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              ))}
+              )}
+
+              {/* Acomptes */}
+              {acomptesList.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
+                        <Wallet className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Acomptes clients</div>
+                        <div className="text-[10px] text-slate-500">{acomptesList.length} acompte{acomptesList.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-brand-700 num">+{formatFCFA(acomptesTotal)}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${ticketsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {ticketsExpanded === 'acomptes' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {acomptesList.map((m, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-brand-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.customer_name || 'Client'}</div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                              {m.created_at && <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                              {m.reason && <span className="line-clamp-1">{m.reason}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-brand-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Décaissements */}
+              {depensesList.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Décaissements</div>
+                        <div className="text-[10px] text-slate-500">{depensesList.length} dépense{depensesList.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-red-700 num">-{formatFCFA(depensesTotal)}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${ticketsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {ticketsExpanded === 'depenses' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {depensesList.map((m, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.reason || 'Dépense'}</div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                              {m.created_at && <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-red-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* Stats */}
@@ -3019,22 +3395,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </>}
             </div>
 
-            {/* Movements mini-summary */}
-            {statsData.movements.length > 0 && (
-              <div className="flex items-center gap-2 text-xs">
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold num">+{formatFCFA(statsData.movIncome + statsData.movPrepay)}</span>
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-700 font-semibold num">-{formatFCFA(statsData.movExpense)}</span>
-                {statsData.movements.map((m, i) => {
-                  const isExp = m.kind === 'expense';
-                  return (
-                    <span key={i} className={`hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium ${isExp ? 'bg-red-50/60 text-red-600' : 'bg-emerald-50/60 text-emerald-600'}`}>
-                      {m.reason || (isExp ? 'Sortie' : 'Entrée')}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-
             {/* Collapsible sections */}
             <div className="space-y-1.5">
               {/* Reglements */}
@@ -3071,6 +3431,116 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             </div>
                           </div>
                           <span className="text-xs font-bold text-emerald-700 num shrink-0">+{formatFCFA(p.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Encaissements directs */}
+              {statsData.movIncome > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'encDirect' ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'encDirect' ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <ArrowDownRight className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Encaissements directs</div>
+                        <div className="text-[10px] text-slate-500">{statsData.movements.filter(m => m.kind === 'income').length} entrée{statsData.movements.filter(m => m.kind === 'income').length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-emerald-700 num">+{formatFCFA(statsData.movIncome)}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'encDirect' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.movements.filter(m => m.kind === 'income').map((m, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-emerald-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.reason || 'Encaissement direct'}</div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                              {m.customer_name && <span>{m.customer_name}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Acomptes */}
+              {statsData.movPrepay > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
+                        <Wallet className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Acomptes clients</div>
+                        <div className="text-[10px] text-slate-500">{statsData.movements.filter(m => m.kind === 'customer_prepayment').length} acompte{statsData.movements.filter(m => m.kind === 'customer_prepayment').length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-brand-700 num">+{formatFCFA(statsData.movPrepay)}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'acomptes' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.movements.filter(m => m.kind === 'customer_prepayment').map((m, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-brand-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.customer_name || 'Client'}</div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                              {m.reason && <span className="line-clamp-1">{m.reason}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-brand-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Décaissements */}
+              {statsData.movExpense > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Décaissements</div>
+                        <div className="text-[10px] text-slate-500">{statsData.movements.filter(m => m.kind === 'expense').length} dépense{statsData.movements.filter(m => m.kind === 'expense').length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-red-700 num">-{formatFCFA(statsData.movExpense)}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'depenses' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.movements.filter(m => m.kind === 'expense').map((m, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.reason || 'Dépense'}</div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-red-700 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>

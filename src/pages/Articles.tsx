@@ -34,7 +34,7 @@ type TierDefinition = { id: string; tier_name: string; sort_order: number; is_de
 type TabKey = 'infos' | 'prix' | 'stock' | 'compat' | 'image';
 
 export function Articles({ onNavigate }: { onNavigate?: (route: string) => void } = {}) {
-  const { tenant, currentSite, dataTick } = useApp();
+  const { tenant, currentSite, sites, depots, dataTick } = useApp();
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const businessLabel = BUSINESS_TYPE_LABELS[tenant?.business_type || 'auto_parts'] || 'Catalogue';
@@ -71,6 +71,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [importFilename, setImportFilename] = useState('');
   const [importingArticles, setImportingArticles] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; updated: number; errors: any[] } | null>(null);
+  const [importTargetSite, setImportTargetSite] = useState<string>('');
   const [form, setForm] = useState<Form>({});
   const [compats, setCompats] = useState<Compat[]>([]);
   const [saving, setSaving] = useState(false);
@@ -500,7 +501,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   const exportArticles = async () => {
     const XLSX = await import('xlsx');
-    const { data, error: expErr } = await supabase.rpc('export_tenant_articles');
+    const { data, error: expErr } = await supabase.rpc('export_tenant_articles', importTargetSite ? { p_site_id: importTargetSite } : {});
     if (expErr) { error(expErr.message); return; }
     const rows = (data || []) as any[];
     if (rows.length === 0) { error('Aucun article à exporter'); return; }
@@ -553,7 +554,10 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     if (importRows.length === 0) return;
     setImportingArticles(true);
     try {
-      const { data, error: rpcErr } = await supabase.rpc('bulk_import_tenant_articles', { p_rows: importRows });
+      const { data, error: rpcErr } = await supabase.rpc('bulk_import_tenant_articles', {
+        p_rows: importRows,
+        p_site_id: importTargetSite || null,
+      });
       if (rpcErr) throw rpcErr;
       setImportResult(data as any);
       success('Import terminé');
@@ -889,6 +893,34 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       <Modal open={importExportOpen} onClose={() => { setImportExportOpen(false); resetImport(); }} title="Import / Export Excel" size="md"
         footer={importRows.length > 0 ? (<><button onClick={resetImport} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button><button onClick={runArticleImport} disabled={importingArticles} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5 disabled:opacity-50">{importingArticles ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}{importingArticles ? 'Import...' : `Importer ${importRows.length} article${importRows.length > 1 ? 's' : ''}`}</button></>) : <button onClick={() => { setImportExportOpen(false); resetImport(); }} className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white">Fermer</button>}>
         <div className="space-y-4">
+          {(() => {
+            const ownDepots = depots.filter((d: any) => d.parent_site_id === currentSite?.id);
+            const otherSites = sites.filter((s: any) => s.id !== currentSite?.id);
+            const hasAlternatives = ownDepots.length > 0 || otherSites.length > 0;
+            if (!hasAlternatives) return null;
+            return (
+              <div className="p-3 rounded-xl border border-brand-200 bg-brand-50/40">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-brand-700">Emplacement (stock initial)</label>
+                <select
+                  value={importTargetSite}
+                  onChange={e => setImportTargetSite(e.target.value)}
+                  className="mt-1.5 w-full text-xs font-semibold px-2.5 py-2 rounded-lg border border-brand-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                >
+                  <option value="">Tous les emplacements (export agrégé)</option>
+                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                  {ownDepots.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                  ))}
+                  {otherSites.map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name} (Magasin)</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-brand-700/80 mt-1.5 leading-relaxed">
+                  À l'import, le stock initial sera affecté à cet emplacement. À l'export, la colonne « Stock initial » reflétera le stock de cet emplacement.
+                </p>
+              </div>
+            );
+          })()}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button onClick={downloadArticleTemplate} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition text-left">
               <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center shrink-0"><Download className="w-4 h-4 text-sky-600" /></div>

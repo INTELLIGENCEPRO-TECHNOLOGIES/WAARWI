@@ -64,20 +64,63 @@ function waarwiFooterA4() {
   return `<div class="waarwi-brand-footer">${esc(WAARWI_FOOTER)}</div>`;
 }
 
+// ── Hidden iframe printing ────────────────────────────────────────────────────
+// Renders the HTML inside an offscreen iframe and triggers print.
+// Only the browser's print dialog is shown; the auxiliary window/page is hidden.
+function printHtml(html: string, delayMs = 300) {
+  if (typeof document === 'undefined') return;
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+  document.body.appendChild(iframe);
+
+  const cleanup = () => {
+    setTimeout(() => {
+      try { iframe.parentNode?.removeChild(iframe); } catch { /* ignore */ }
+    }, 1000);
+  };
+
+  const doc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!doc) { cleanup(); return; }
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const trigger = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch { /* ignore */ }
+    try {
+      if (iframe.contentWindow) iframe.contentWindow.onafterprint = cleanup;
+    } catch { /* ignore */ }
+    setTimeout(cleanup, 60_000);
+  };
+
+  const win = iframe.contentWindow;
+  if (win && win.document.readyState !== 'complete') {
+    win.addEventListener('load', () => setTimeout(trigger, delayMs), { once: true });
+    setTimeout(trigger, delayMs + 800);
+  } else {
+    setTimeout(trigger, delayMs);
+  }
+}
+
 // ── 80mm Thermal Receipt Style ────────────────────────────────────────────────
 // All text is pure black, no grey, no opacity, optimized for low-quality thermal printers
 const ticketStyle = `
   @page { margin: 0; size: 80mm auto; }
   @media print {
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    body { margin: 0 !important; padding: 2mm !important; }
+    html, body { margin: 0 !important; }
+    body { padding: 1.5mm 2mm !important; width: 80mm !important; }
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: 'Helvetica Neue', Arial, sans-serif;
     font-size: 13px;
-    width: 72mm;
-    padding: 3mm;
+    width: 80mm;
+    padding: 1.5mm 2mm;
     color: #000000;
     line-height: 1.4;
     background: #fff;
@@ -239,8 +282,6 @@ export function printTicket80(
   const totalPaid = sale.payments.reduce((s, p) => s + p.amount, 0);
   const change = Math.max(0, totalPaid - sale.total);
   const subtotal = sale.items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-  const w = window.open('', '_blank', 'width=340,height=640');
-  if (!w) return;
   const itemsHtml = sale.items
     .map(i => {
       const lineTotal = i.quantity * i.unit_price - (i.discount || 0);
@@ -256,7 +297,7 @@ export function printTicket80(
     })
     .join('');
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket ${esc(sale.sale_number)}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket ${esc(sale.sale_number)}</title>
 <style>${ticketStyle}</style></head><body>
 ${tenantHeader80(tenant)}
 <hr class="hr-solid" />
@@ -280,9 +321,8 @@ ${change > 0 ? `<div class="row change"><span>MONNAIE RENDUE</span><span>${fmtMo
   <div>À bientôt</div>
 </div>
 ${waarwiFooter80()}
-</body></html>`);
-  w.document.close();
-  setTimeout(() => w.print(), 300);
+</body></html>`;
+  printHtml(html);
 }
 
 export function printReturnTicket80(
@@ -293,8 +333,6 @@ export function printReturnTicket80(
   cashier: string,
   returnNumber?: string
 ) {
-  const w = window.open('', '_blank', 'width=340,height=560');
-  if (!w) return;
   const itemsHtml = items
     .map(i => `<div class="item">
       <div class="item-name">${esc(i.name)}</div>
@@ -305,7 +343,7 @@ export function printReturnTicket80(
     </div>`)
     .join('');
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Retour</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Retour</title>
 <style>${ticketStyle}</style></head><body>
 ${tenantHeader80(tenant)}
 <hr class="hr-solid" />
@@ -321,12 +359,50 @@ ${itemsHtml}
 <hr class="hr" />
 <div class="footer"><div class="thanks">Montant déduit de la caisse</div></div>
 ${waarwiFooter80()}
-</body></html>`);
-  w.document.close();
-  setTimeout(() => w.print(), 300);
+</body></html>`;
+  printHtml(html);
 }
 
-// ── X de Caisse / Session report (80mm) ─────────────────────────────────────
+// ── 80mm Direct cash receipt ──────────────────────────────────────────────────
+export function printEncaissementTicket80(opts: {
+  receiptNumber: string;
+  amount: number;
+  method: string;
+  label?: string;
+  reference?: string;
+  customerName?: string | null;
+  createdAt?: string;
+  tenant: PrintTenant;
+  cashier: string;
+}) {
+  const date = opts.createdAt ? new Date(opts.createdAt) : new Date();
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recu ${esc(opts.receiptNumber)}</title>
+<style>${ticketStyle}</style></head><body>
+${tenantHeader80(opts.tenant)}
+<hr class="hr-solid" />
+<div class="doc-label">RECU D'ENCAISSEMENT</div>
+<div class="doc-num">N° ${esc(opts.receiptNumber)}</div>
+<div class="doc-date">${date.toLocaleString('fr-FR')}</div>
+<div class="info-row"><span>Caissier</span><span>${esc(opts.cashier)}</span></div>
+${opts.customerName ? `<div class="info-row"><span>Client</span><span>${esc(opts.customerName)}</span></div>` : ''}
+<hr class="hr" />
+${opts.label ? `<div class="section">Motif</div><div class="item-name" style="font-weight:700;font-size:12.5px;margin-bottom:4px;">${esc(opts.label)}</div>` : ''}
+${opts.reference ? `<div class="info-row"><span>Référence</span><span>${esc(opts.reference)}</span></div>` : ''}
+<hr class="hr" />
+<div class="row payment"><span>Mode</span><span>${esc(opts.method)}</span></div>
+<div class="row total"><span>MONTANT REÇU</span><span>${fmtMoney(opts.amount)} FCFA</span></div>
+<hr class="hr" />
+<div class="footer">
+  <div class="thanks">Merci de votre règlement</div>
+  <div>Conservez ce reçu</div>
+</div>
+${waarwiFooter80()}
+</body></html>`;
+  printHtml(html);
+}
+
+
 
 export type XReportControl = {
   method_name: string;
@@ -364,9 +440,6 @@ export function printXReport80(opts: {
   regularizations?: XReportRegularization[];
   topArticles?: { name: string; qty: number; total: number }[];
 }) {
-  const w = window.open('', '_blank', 'width=320,height=800');
-  if (!w) return;
-
   const movements = opts.movements || [];
   const controls = opts.controls || [];
   const regularizations = opts.regularizations || [];
@@ -424,7 +497,7 @@ ${regularizations.map(r => `<div class="row"><span>${esc(r.reg_type)} : ${esc(r.
 ${topArticles.map(a => `<div class="row"><span>${esc(a.name.slice(0, 24))}</span><span>x${a.qty} · ${fmtMoney(a.total)}</span></div>`).join('')}
 ` : '';
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>X de Caisse</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>X de Caisse</title>
 <style>${ticketStyle}</style></head><body>
 ${tenantHeader80(opts.tenant)}
 <hr class="hr-solid" />
@@ -453,9 +526,8 @@ ${topArticlesHtml}
   <div class="thanks">— Fin du rapport —</div>
 </div>
 ${waarwiFooter80()}
-</body></html>`);
-  w.document.close();
-  setTimeout(() => w.print(), 300);
+</body></html>`;
+  printHtml(html);
 }
 
 // ── A4 Document Style ─────────────────────────────────────────────────────────
@@ -737,8 +809,6 @@ export function printDocumentA4(opts: {
   issuedBy?: string;
   docHeader?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; representative?: string | null } | null;
 }) {
-  const w = window.open('', '_blank', 'width=840,height=1180');
-  if (!w) return;
   const t = opts.tenant;
   const activity = activityLabel(t);
 
@@ -805,7 +875,7 @@ export function printDocumentA4(opts: {
     ...(opts.docHeader?.representative ? [{ label: 'Représentant', value: opts.docHeader.representative }] : []),
   ].map(m => `<p>${esc(m.label)} : ${esc(m.value)}</p>`).join('');
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.docLabel)} ${esc(opts.docNumber)}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.docLabel)} ${esc(opts.docNumber)}</title>
 <style>${a4Style}</style></head><body>
 <div class="page-content">
 <div class="header">
@@ -872,9 +942,8 @@ ${opts.footerNote ? `<div class="footer-note">${esc(opts.footerNote)}</div>` : '
 </div>
 ${waarwiFooterA4()}
 </div>
-</body></html>`);
-  w.document.close();
-  setTimeout(() => w.print(), 400);
+</body></html>`;
+  printHtml(html, 400);
 }
 
 // ── Stock Movement Print (A4) ─────────────────────────────────────────────────
@@ -913,8 +982,6 @@ const MOVEMENT_TYPE_TITLES: Record<string, string> = {
 };
 
 export function printStockMovementA4(opts: StockMovementPrintOpts) {
-  const w = window.open('', '_blank', 'width=900,height=1200');
-  if (!w) return;
   const t = opts.tenant;
   const title = MOVEMENT_TYPE_TITLES[opts.movementType] || 'BON DE MOUVEMENT DE STOCK';
   const totalQty = opts.items.reduce((s, i) => s + Math.abs(i.quantity), 0);
@@ -928,7 +995,7 @@ export function printStockMovementA4(opts: StockMovementPrintOpts) {
       <td style="font-size:9pt;color:#64748b;">${esc(item.note || '')}</td>
     </tr>`).join('');
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)} - ${esc(opts.reference)}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)} - ${esc(opts.reference)}</title>
 <style>
   @page { size: A4; margin: 15mm 12mm; }
   @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
@@ -1020,15 +1087,12 @@ export function printStockMovementA4(opts: StockMovementPrintOpts) {
 
   <div class="footer-brand">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
 </div>
-</body></html>`);
-  w.document.close();
-  setTimeout(() => w.print(), 400);
+</body></html>`;
+  printHtml(html, 400);
 }
 
 // ── Stock Movement Print (80mm Ticket) ────────────────────────────────────────
 export function printStockMovement80(opts: StockMovementPrintOpts) {
-  const w = window.open('', '_blank', 'width=350,height=600');
-  if (!w) return;
   const t = opts.tenant;
   const title = MOVEMENT_TYPE_TITLES[opts.movementType] || 'MOUVEMENT STOCK';
   const totalQty = opts.items.reduce((s, i) => s + Math.abs(i.quantity), 0);
@@ -1039,12 +1103,12 @@ export function printStockMovement80(opts: StockMovementPrintOpts) {
       <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:1.5mm 0;">${Math.abs(item.quantity)}</td>
     </tr>`).join('');
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
   @page { margin: 0; size: 80mm auto; }
-  @media print { body { margin: 0 !important; padding: 2mm !important; } }
+  @media print { html, body { margin: 0 !important; } body { padding: 1.5mm 2mm !important; width: 80mm !important; } }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; width: 72mm; padding: 3mm; color: #000; line-height: 1.4; background: #fff; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; width: 80mm; padding: 1.5mm 2mm; color: #000; line-height: 1.4; background: #fff; }
   .center { text-align: center; }
   .shop-name { text-align: center; font-weight: 900; font-size: 16px; margin-bottom: 2px; }
   .meta { text-align: center; font-size: 10px; color: #000; }
@@ -1076,9 +1140,8 @@ export function printStockMovement80(opts: StockMovementPrintOpts) {
   ${opts.observation ? `<div class="info" style="margin-top:3mm;font-style:italic;">Obs: ${esc(opts.observation)}</div>` : ''}
 
   <div class="footer">Propulsée par <strong>WAARWI</strong><br/>Plateforme Business 2.0</div>
-</body></html>`);
-  w.document.close();
-  setTimeout(() => w.print(), 400);
+</body></html>`;
+  printHtml(html, 400);
 }
 
 // ── Inventory Book Print (new design - light, professional) ───────────────────
@@ -1091,8 +1154,6 @@ export type InventoryBookOpts = {
 };
 
 export function printInventoryBookA4(opts: InventoryBookOpts) {
-  const w = window.open('', '_blank', 'width=900,height=1200');
-  if (!w) return;
   const t = opts.tenant;
   const totalQty = opts.items.reduce((s, i) => s + i.qty_real, 0);
   const totalValue = opts.items.reduce((s, i) => s + i.qty_real * i.purchase_price, 0);
@@ -1115,7 +1176,7 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
     </tr>`;
   }).join('');
 
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Livre d'inventaire — ${esc(opts.reference)}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Livre d'inventaire — ${esc(opts.reference)}</title>
 <style>
   @page { size: A4; margin: 12mm 10mm 14mm 10mm; }
   @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
@@ -1210,7 +1271,6 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
 
   <div class="brand-footer">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
 </div>
-</body></html>`);
-  w.document.close();
-  setTimeout(() => w.print(), 400);
+</body></html>`;
+  printHtml(html, 400);
 }

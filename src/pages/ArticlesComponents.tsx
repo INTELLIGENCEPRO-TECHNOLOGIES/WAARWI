@@ -454,8 +454,8 @@ export function DesktopListView({ articles, categoryMap, stockMap, suppliers, ca
                   <button onClick={onSelectAll} className="text-brand-700">{allSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}</button>
                 </th>
               )}
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[160px]">Désignation</th>
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[100px]">Référence</th>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[280px]">Désignation</th>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[160px]">Référence</th>
               <th className="px-2 py-2.5 text-left font-semibold min-w-[120px]">Catégorie</th>
               <th className="px-2 py-2.5 text-right font-semibold min-w-[90px]">Prix détail</th>
               <th className="px-2 py-2.5 text-right font-semibold min-w-[90px]">Prix gros</th>
@@ -480,10 +480,12 @@ export function DesktopListView({ articles, categoryMap, stockMap, suppliers, ca
                   )}
                   <td className="px-2 py-1.5">
                     <input value={getVal(a, 'name') || ''} onChange={e => onUpdateEdit(a.id, 'name', e.target.value)}
+                      title={getVal(a, 'name') || ''}
                       className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-semibold text-slate-900 outline-none transition" />
                   </td>
                   <td className="px-2 py-1.5">
                     <input value={getVal(a, 'internal_ref') || ''} onChange={e => onUpdateEdit(a.id, 'internal_ref', e.target.value)}
+                      title={getVal(a, 'internal_ref') || ''}
                       className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-mono text-slate-600 outline-none transition" />
                   </td>
                   <td className="px-2 py-1.5">

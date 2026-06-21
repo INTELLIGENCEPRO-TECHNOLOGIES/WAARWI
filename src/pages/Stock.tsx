@@ -62,6 +62,7 @@ export function Stock() {
   const [listSaving, setListSaving] = useState(false);
   const listInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const [listTransferTarget, setListTransferTarget] = useState('');
+  const [listSourceSite, setListSourceSite] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
 
   const [adjOpen, setAdjOpen] = useState(false);
@@ -124,6 +125,13 @@ export function Stock() {
   const [bulkDoneItems, setBulkDoneItems] = useState<{ ref: string; name: string; quantity: number }[]>([]);
   const [bulkDoneMode, setBulkDoneMode] = useState('');
 
+  // Per-site stock map for bulk operations (key: site_id, value: Map<article_id, qty>)
+  const [stockByLocation, setStockByLocation] = useState<Map<string, Map<string, number>>>(new Map());
+
+  // Inventory book printing modal
+  const [invBookOpen, setInvBookOpen] = useState(false);
+  const [invBookScope, setInvBookScope] = useState<string>('');
+
   const load = async (silent = false) => {
     if (!tenant || !currentSite) return;
     if (!silent) setLoading(true);
@@ -163,6 +171,24 @@ export function Stock() {
       stock_max: Number(a.stock_max), quantity: qmap.get(a.id) ?? 0, location: a.location || '',
     })).sort((a, b) => a.name.localeCompare(b.name)));
     setMoves(mv || []);
+
+    // Fetch stock levels per location (current site + own depots) for bulk operations / inventory book
+    const ownDepotIds = depots.filter(d => d.parent_site_id === currentSite.id).map(d => d.id);
+    const allLocationIds = [currentSite.id, ...ownDepotIds];
+    if (allLocationIds.length > 0) {
+      const { data: allStk } = await supabase
+        .from('stock_levels')
+        .select('article_id, site_id, quantity')
+        .eq('tenant_id', tenant.id)
+        .in('site_id', allLocationIds);
+      const byLoc = new Map<string, Map<string, number>>();
+      for (const id of allLocationIds) byLoc.set(id, new Map());
+      (allStk || []).forEach((r: any) => {
+        const m = byLoc.get(r.site_id);
+        if (m) m.set(r.article_id, Number(r.quantity));
+      });
+      setStockByLocation(byLoc);
+    }
 
     // Load lots if lot mode
     if (stockMethod === 'lot') {
@@ -221,21 +247,46 @@ export function Stock() {
 
   const printInventoryBook = () => {
     if (!tenant || !currentSite) return;
-    const avail = [...rows].filter(r => r.quantity > 0).sort((a, b) => a.name.localeCompare(b.name));
+    const ownDepots = depots.filter(d => d.parent_site_id === currentSite.id);
+    if (ownDepots.length === 0) {
+      runPrintInventoryBook(currentSite.id);
+      return;
+    }
+    setInvBookScope('');
+    setInvBookOpen(true);
+  };
+
+  const runPrintInventoryBook = (scope: string) => {
+    if (!tenant || !currentSite) return;
     const now = new Date();
-    const ref = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-    printInventoryBookA4({
-      tenant: {
-        name: tenant.name, logo_url: (tenant as any)?.logo_url,
-        address: (tenant as any)?.address, phone: (tenant as any)?.phone,
-      },
-      siteName: currentSite.name || '',
-      items: avail.map(r => ({
-        ref: r.internal_ref, name: r.name, location: r.location,
-        qty_theoretical: r.quantity, qty_real: r.quantity, purchase_price: r.purchase_price,
-      })),
-      date: now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      reference: ref,
+    const refBase = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    const dateStr = now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const tenantInfo = {
+      name: tenant.name, logo_url: (tenant as any)?.logo_url,
+      address: (tenant as any)?.address, phone: (tenant as any)?.phone,
+    };
+    const ownDepots = depots.filter(d => d.parent_site_id === currentSite.id);
+    const targets: { id: string; name: string }[] = scope === 'all'
+      ? [{ id: currentSite.id, name: currentSite.name + ' (Magasin)' }, ...ownDepots.map(d => ({ id: d.id, name: d.name + ' (Dépôt)' }))]
+      : [{ id: scope, name: (scope === currentSite.id ? currentSite.name + ' (Magasin)' : (ownDepots.find(d => d.id === scope)?.name || '') + ' (Dépôt)') }];
+
+    targets.forEach((target, idx) => {
+      const stockMap = stockByLocation.get(target.id) || new Map<string, number>();
+      const items = rows
+        .map(r => ({ ...r, _q: stockMap.get(r.article_id) ?? 0 }))
+        .filter(r => r._q > 0)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (items.length === 0 && scope === 'all') return;
+      printInventoryBookA4({
+        tenant: tenantInfo,
+        siteName: target.name,
+        items: items.map(r => ({
+          ref: r.internal_ref, name: r.name, location: r.location,
+          qty_theoretical: r._q, qty_real: r._q, purchase_price: r.purchase_price,
+        })),
+        date: dateStr,
+        reference: targets.length > 1 ? `${refBase}-${idx + 1}` : refBase,
+      });
     });
   };
 
@@ -276,6 +327,7 @@ export function Stock() {
   const PAGE_SIZE = 60;
   const [displayLimit, setDisplayLimit] = useState(PAGE_SIZE);
   useEffect(() => { setDisplayLimit(PAGE_SIZE); }, [search, filter]);
+  useEffect(() => { setListSourceSite(currentSite?.id || ''); }, [currentSite?.id]);
   const visibleItems = useMemo(() => filtered.slice(0, displayLimit), [filtered, displayLimit]);
   const hasMore = displayLimit < filtered.length;
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -585,8 +637,12 @@ export function Stock() {
             errorToast={error}
             stockMethod={stockMethod}
             sites={allTransferTargets}
+            depots={depots}
             listTransferTarget={listTransferTarget}
             setListTransferTarget={setListTransferTarget}
+            listSourceSite={listSourceSite}
+            setListSourceSite={setListSourceSite}
+            stockByLocation={stockByLocation}
           />
         ) : (
           <>
@@ -990,6 +1046,65 @@ export function Stock() {
         </div>
       </Modal>
 
+      {/* Inventory book — choose location */}
+      <Modal
+        open={invBookOpen}
+        onClose={() => setInvBookOpen(false)}
+        title="Livre d'inventaire — Choisir l'emplacement"
+        size="sm"
+        footer={
+          <>
+            <button onClick={() => setInvBookOpen(false)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
+            <button
+              onClick={() => { if (invBookScope) { runPrintInventoryBook(invBookScope); setInvBookOpen(false); } }}
+              disabled={!invBookScope}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-ink-900 to-slate-800 text-white shadow-glow inline-flex items-center gap-1.5 disabled:opacity-40"
+            >
+              <Printer className="w-3.5 h-3.5" />Imprimer
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-2">
+          <p className="text-[11px] text-slate-500 mb-2">Choisissez l'emplacement à imprimer. « Tous les emplacements » génère une page (livre) par dépôt.</p>
+          <button
+            onClick={() => setInvBookScope('all')}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${invBookScope === 'all' ? 'border-ink-900 bg-ink-900/5 ring-2 ring-ink-900/10' : 'border-slate-200 hover:border-slate-300'}`}
+          >
+            <div className="w-9 h-9 rounded-xl bg-ink-900/10 flex items-center justify-center shrink-0"><BookOpen className="w-4 h-4 text-ink-900" /></div>
+            <div className="flex-1">
+              <div className="text-xs font-bold text-slate-900">Tous les emplacements</div>
+              <div className="text-[10px] text-slate-500">{1 + depots.filter(d => d.parent_site_id === currentSite?.id).length} livre(s) — un par emplacement</div>
+            </div>
+          </button>
+          {currentSite && (
+            <button
+              onClick={() => setInvBookScope(currentSite.id)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${invBookScope === currentSite.id ? 'border-brand-500 bg-brand-50/40 ring-2 ring-brand-500/10' : 'border-slate-200 hover:border-slate-300'}`}
+            >
+              <div className="w-9 h-9 rounded-xl bg-brand-100 flex items-center justify-center shrink-0"><Boxes className="w-4 h-4 text-brand-700" /></div>
+              <div className="flex-1">
+                <div className="text-xs font-bold text-slate-900">{currentSite.name}</div>
+                <div className="text-[10px] text-slate-500">Magasin principal</div>
+              </div>
+            </button>
+          )}
+          {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
+            <button
+              key={d.id}
+              onClick={() => setInvBookScope(d.id)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${invBookScope === d.id ? 'border-amber-500 bg-amber-50/40 ring-2 ring-amber-500/10' : 'border-slate-200 hover:border-slate-300'}`}
+            >
+              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0"><PackageOpen className="w-4 h-4 text-amber-700" /></div>
+              <div className="flex-1">
+                <div className="text-xs font-bold text-slate-900">{d.name}</div>
+                <div className="text-[10px] text-slate-500">Dépôt</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </Modal>
+
       {/* Help/Guide modal */}
       <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Guide de gestion du stock" size="md">
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
@@ -1195,7 +1310,8 @@ function StockListEditView({
   filtered, listEditMode, setListEditMode, listEdits, setListEdits,
   listSaving, setListSaving, listInputRefs, currentSite,
   canViewPrices, canManageStock, onSaved, successToast, errorToast, stockMethod,
-  sites, listTransferTarget, setListTransferTarget,
+  sites, depots, listTransferTarget, setListTransferTarget,
+  listSourceSite, setListSourceSite, stockByLocation,
 }: {
   filtered: Row[];
   listEditMode: 'in' | 'out' | 'inventory' | 'transfer';
@@ -1213,11 +1329,24 @@ function StockListEditView({
   errorToast: (m: string) => void;
   stockMethod: string;
   sites: any[];
+  depots: any[];
   listTransferTarget: string;
   setListTransferTarget: (v: string) => void;
+  listSourceSite: string;
+  setListSourceSite: (v: string) => void;
+  stockByLocation: Map<string, Map<string, number>>;
 }) {
   const lotMode = stockMethod === 'lot';
   const editCount = Array.from(listEdits.values()).filter(e => e.qty !== '' && Number(e.qty) !== 0).length;
+  const sourceSiteId = listSourceSite || currentSite?.id || '';
+  const sourceStockMap = stockByLocation.get(sourceSiteId) || new Map<string, number>();
+  const stockAt = (articleId: string): number => {
+    if (sourceSiteId === currentSite?.id) {
+      const r = filtered.find(f => f.article_id === articleId);
+      return r?.quantity ?? 0;
+    }
+    return sourceStockMap.get(articleId) ?? 0;
+  };
 
   // Progressive rendering for table with many rows
   const TABLE_PAGE = 100;
@@ -1270,6 +1399,10 @@ function StockListEditView({
     if (listEditMode === 'transfer' && !listTransferTarget) {
       errorToast('Choisissez un site de destination'); return;
     }
+    const sourceSite = listSourceSite || currentSite.id;
+    if (listEditMode === 'transfer' && sourceSite === listTransferTarget) {
+      errorToast('La source et la destination doivent être différentes'); return;
+    }
     setListSaving(true);
     let savedCount = 0;
     try {
@@ -1277,7 +1410,7 @@ function StockListEditView({
         const qty = Number(entry.qty);
         if (listEditMode === 'transfer') {
           const { error: e1 } = await supabase.rpc('adjust_stock', {
-            p_article_id: entry.article_id, p_site_id: currentSite.id,
+            p_article_id: entry.article_id, p_site_id: sourceSite,
             p_quantity: -qty, p_movement_type: 'transfer_out',
             p_note: entry.note || 'Transfert sortie (masse)',
           });
@@ -1291,17 +1424,18 @@ function StockListEditView({
         } else if (listEditMode === 'inventory') {
           const row = filtered.find(r => r.article_id === entry.article_id);
           if (!row) continue;
-          const diff = qty - row.quantity;
+          const currentQty = stockAt(entry.article_id);
+          const diff = qty - currentQty;
           if (diff === 0) continue;
           const { error: e } = await supabase.rpc('adjust_stock', {
-            p_article_id: entry.article_id, p_site_id: currentSite.id,
+            p_article_id: entry.article_id, p_site_id: sourceSite,
             p_quantity: diff, p_movement_type: 'inventory',
-            p_note: entry.note || `Inventaire: ${row.quantity} -> ${qty}`,
+            p_note: entry.note || `Inventaire: ${currentQty} -> ${qty}`,
           });
           if (e) throw e;
         } else if (listEditMode === 'in' && lotMode) {
           const { error: e } = await supabase.rpc('adjust_stock_lot', {
-            p_article_id: entry.article_id, p_site_id: currentSite.id,
+            p_article_id: entry.article_id, p_site_id: sourceSite,
             p_quantity: qty, p_batch_number: entry.lot_number.trim(),
             p_expiry_date: null,
             p_purchase_price: filtered.find(r => r.article_id === entry.article_id)?.purchase_price ?? 0,
@@ -1312,7 +1446,7 @@ function StockListEditView({
           const signedQty = listEditMode === 'in' ? qty : -qty;
           const type = listEditMode === 'in' ? 'adjustment_in' : 'adjustment_out';
           const { error: e } = await supabase.rpc('adjust_stock', {
-            p_article_id: entry.article_id, p_site_id: currentSite.id,
+            p_article_id: entry.article_id, p_site_id: sourceSite,
             p_quantity: signedQty, p_movement_type: type,
             p_note: entry.note || (listEditMode === 'in' ? 'Entrée stock (masse)' : 'Sortie stock (masse)'),
           });
@@ -1377,23 +1511,58 @@ function StockListEditView({
         </button>
       </div>
 
-      {/* Transfer destination picker */}
-      {listEditMode === 'transfer' && (
-        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200">
-          <ArrowRightLeft className="w-4 h-4 text-amber-600 shrink-0" />
-          <span className="text-[11px] font-semibold text-amber-800 shrink-0">Destination :</span>
-          <select
-            value={listTransferTarget}
-            onChange={e => setListTransferTarget(e.target.value)}
-            className="flex-1 min-w-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/30"
-          >
-            <option value="">-- Choisir la destination --</option>
-            {sites.map(s => (
-              <option key={s.id} value={s.id}>{s.name}{s.is_warehouse ? ' (Dépôt)' : ''}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      {/* Source / Destination pickers */}
+      {(() => {
+        const ownDepots = depots.filter((d: any) => d.parent_site_id === currentSite?.id);
+        const showSourcePicker = ownDepots.length > 0;
+        const isTransfer = listEditMode === 'transfer';
+        if (!showSourcePicker && !isTransfer) return null;
+        const wrapperColor = isTransfer ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200';
+        const labelColor = isTransfer ? 'text-amber-800' : 'text-slate-700';
+        const iconColor = isTransfer ? 'text-amber-600' : 'text-slate-600';
+        const selectColor = isTransfer ? 'border-amber-200 focus:ring-amber-400/30' : 'border-slate-200 focus:ring-brand-500/20';
+        return (
+          <div className={`grid ${isTransfer && showSourcePicker ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-2`}>
+            {showSourcePicker && (
+              <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${wrapperColor}`}>
+                <MapPin className={`w-4 h-4 shrink-0 ${iconColor}`} />
+                <span className={`text-[11px] font-semibold shrink-0 ${labelColor}`}>{isTransfer ? 'Source :' : 'Emplacement :'}</span>
+                <select
+                  value={listSourceSite || currentSite?.id || ''}
+                  onChange={e => setListSourceSite(e.target.value)}
+                  className={`flex-1 min-w-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg border bg-white focus:outline-none focus:ring-2 ${selectColor}`}
+                >
+                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                  {ownDepots.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {isTransfer && (
+              <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${wrapperColor}`}>
+                <ArrowRightLeft className={`w-4 h-4 shrink-0 ${iconColor}`} />
+                <span className={`text-[11px] font-semibold shrink-0 ${labelColor}`}>Destination :</span>
+                <select
+                  value={listTransferTarget}
+                  onChange={e => setListTransferTarget(e.target.value)}
+                  className={`flex-1 min-w-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg border bg-white focus:outline-none focus:ring-2 ${selectColor}`}
+                >
+                  <option value="">-- Choisir la destination --</option>
+                  {sites.map((s: any) => {
+                    const isDepot = !!s.parent_site_id;
+                    const ownDepot = isDepot && s.parent_site_id === currentSite?.id;
+                    const label = isDepot
+                      ? `${s.name} (Dépôt${ownDepot ? '' : ' externe'})`
+                      : `${s.name} (Magasin)`;
+                    return <option key={s.id} value={s.id}>{label}</option>;
+                  })}
+                </select>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Table */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -1419,8 +1588,9 @@ function StockListEditView({
               {tableVisibleRows.map((r, idx) => {
                 const edit = listEdits.get(r.article_id);
                 const hasValue = edit && edit.qty !== '' && Number(edit.qty) !== 0;
-                const out = r.quantity <= 0;
-                const low = !out && r.quantity <= r.stock_min;
+                const displayQty = stockAt(r.article_id);
+                const out = displayQty <= 0;
+                const low = !out && displayQty <= r.stock_min;
                 return (
                   <tr key={r.article_id} className={`border-b border-slate-50 transition-colors ${hasValue ? 'bg-brand-50/30' : 'hover:bg-slate-50/50'}`}>
                     <td className="px-3 py-1.5">
@@ -1429,7 +1599,7 @@ function StockListEditView({
                     </td>
                     <td className="px-2 py-1.5 text-center">
                       <span className={`inline-block text-xs font-bold num px-1.5 py-0.5 rounded ${out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-700' : 'text-slate-800'}`}>
-                        {r.quantity}
+                        {displayQty}
                       </span>
                     </td>
                     <td className="px-2 py-1.5 text-center text-[11px] text-slate-500 num">{r.stock_min}</td>
@@ -1439,7 +1609,7 @@ function StockListEditView({
                         ref={el => { if (el) listInputRefs.current.set(r.article_id, el); }}
                         type="number"
                         min={0}
-                        placeholder={listEditMode === 'inventory' ? String(r.quantity) : '0'}
+                        placeholder={listEditMode === 'inventory' ? String(displayQty) : '0'}
                         value={edit?.qty ?? ''}
                         onChange={e => updateEdit(r.article_id, e.target.value === '' ? '' : Number(e.target.value), edit?.note, edit?.lot_number)}
                         onKeyDown={e => handleKeyDown(e, idx)}
