@@ -14,7 +14,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate } from '../lib/format';
-import { printDocumentA4, type PrintTenant } from '../lib/print';
+import { printDocumentA4, buildPrintTenant, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
 import { DocItems, DocTotals, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocStatusConfig } from '../components/DocLayout';
@@ -301,14 +301,7 @@ export function SupplierOrders() {
     await openDetailPanel(o, true);
   };
 
-  const tenantForPrint = (): PrintTenant => {
-    const t: any = tenant || {};
-    return {
-      name: t.name || '', legal_name: t.legal_name, ninea: t.ninea, rccm: t.rccm,
-      address: t.address, phone: t.phone, email: t.email, website: t.website,
-      logo_url: t.logo_url, business_type: t.business_type,
-    };
-  };
+  const tenantForPrint = (): PrintTenant => buildPrintTenant(tenant);
 
   const printOrder = () => {
     if (!selected) return;

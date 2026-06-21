@@ -1,5 +1,5 @@
-const CACHE = 'waarwi-v3';
-const PRECACHE = ['/manifest.webmanifest', '/waarwi-mark.png', '/waarwi-logo.png'];
+const CACHE = 'waarwi-v4';
+const PRECACHE = ['/manifest.webmanifest', '/newlogo.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)));

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers } from 'lucide-react';
+import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
 import { PermissionsTab } from '../components/PermissionsTab';
 import { DocumentSettingsTab } from '../components/DocumentSettingsTab';
+import { TicketHeaderConfigTab } from '../components/TicketHeaderConfigTab';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -11,7 +12,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
 
-type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents';
+type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header';
 
 type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
 
@@ -47,6 +48,7 @@ export function Settings() {
         { k: 'accounting', label: 'Comptabilité', icon: BookOpen, color: 'text-cyan-700', bg: 'bg-cyan-50/80 border-cyan-200' },
         { k: 'boutique', label: 'Boutique en ligne', icon: ShoppingBag, color: 'text-pink-700', bg: 'bg-pink-50/80 border-pink-200' },
         { k: 'documents', label: 'Paramètres documents', icon: FileText, color: 'text-blue-700', bg: 'bg-blue-50/80 border-blue-200' },
+        { k: 'ticket_header', label: 'En-tête tickets', icon: Printer, color: 'text-fuchsia-700', bg: 'bg-fuchsia-50/80 border-fuchsia-200' },
         { k: 'backup', label: 'Sauvegarde', icon: Database, color: 'text-green-700', bg: 'bg-green-50/80 border-green-200' },
       ],
     },
@@ -118,6 +120,7 @@ export function Settings() {
       {tab === 'pricing_tiers' && <PricingTiersTab />}
       {tab === 'backup' && <BackupTab />}
       {tab === 'documents' && <DocumentSettingsTab />}
+      {tab === 'ticket_header' && <TicketHeaderConfigTab />}
     </div>
   );
 }

@@ -57,7 +57,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('tenants').select('*').eq('id', prof.tenant_id).maybeSingle(),
         supabase.from('sites').select('*').eq('tenant_id', prof.tenant_id).eq('is_active', true).order('name'),
       ]);
-      setTenant(ten || null);
+      let tenantWithActivity: Tenant | null = ten || null;
+      if (ten?.business_activity_type_id) {
+        const { data: act } = await supabase
+          .from('business_activity_types')
+          .select('name')
+          .eq('id', ten.business_activity_type_id)
+          .maybeSingle();
+        tenantWithActivity = { ...ten, business_activity_type_name: act?.name || null } as Tenant;
+      }
+      setTenant(tenantWithActivity);
       const allSites = s || [];
       const assignedIds: string[] | null = (prof as any).assigned_site_ids;
       const filtered = (assignedIds && assignedIds.length > 0)
@@ -133,7 +142,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('sites').select('*').eq('tenant_id', tid).eq('is_active', true).order('name'),
         supabase.from('profiles').select('*').eq('id', pid).maybeSingle(),
       ]);
-      if (ten) setTenant(ten as Tenant);
+      if (ten) {
+        let tenantWithActivity: Tenant = ten as Tenant;
+        if (ten.business_activity_type_id) {
+          const { data: act } = await supabase
+            .from('business_activity_types')
+            .select('name')
+            .eq('id', ten.business_activity_type_id)
+            .maybeSingle();
+          tenantWithActivity = { ...ten, business_activity_type_name: act?.name || null } as Tenant;
+        }
+        setTenant(tenantWithActivity);
+      }
       if (s && prof) {
         const assignedIds: string[] | null = (prof as any).assigned_site_ids;
         const filtered = (assignedIds && assignedIds.length > 0)

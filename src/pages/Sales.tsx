@@ -8,7 +8,7 @@ import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
-import { printTicket80, printDocumentA4, type PrintTenant } from '../lib/print';
+import { printTicket80, printDocumentA4, buildPrintTenant, type PrintTenant } from '../lib/print';
 import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
 
@@ -151,18 +151,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     setItemsLoading(false);
   };
 
-  const tenantForPrint: PrintTenant = {
-    name: tenant?.name || '',
-    legal_name: (tenant as any)?.legal_name,
-    ninea: (tenant as any)?.ninea,
-    rccm: (tenant as any)?.rccm,
-    address: (tenant as any)?.address,
-    phone: (tenant as any)?.phone,
-    email: (tenant as any)?.email,
-    website: (tenant as any)?.website,
-    logo_url: (tenant as any)?.logo_url,
-    business_type: (tenant as any)?.business_type,
-  };
+  const tenantForPrint: PrintTenant = buildPrintTenant(tenant);
 
   const printTicket = () => {
     if (!selected || !tenant) return;

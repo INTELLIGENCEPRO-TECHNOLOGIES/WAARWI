@@ -1,4 +1,5 @@
-import { BUSINESS_TYPE_LABELS } from './types';
+import { BUSINESS_TYPE_LABELS, mergeTicketHeaderConfig } from './types';
+import type { TicketHeaderItem, TicketHeaderSize } from './types';
 
 export type PrintTenant = {
   name: string;
@@ -11,7 +12,29 @@ export type PrintTenant = {
   website?: string;
   logo_url?: string;
   business_type?: string;
+  activity_name?: string | null;
+  header_config?: TicketHeaderItem[] | null;
 };
+
+// Build a fully-populated PrintTenant from any tenant-like object.
+// Use this everywhere a print function is called so headers
+// (logo, NINEA, RCCM, legal name, contact info, activity, custom layout) are never truncated.
+export function buildPrintTenant(t: any): PrintTenant {
+  return {
+    name: t?.name || '',
+    legal_name: t?.legal_name,
+    ninea: t?.ninea,
+    rccm: t?.rccm,
+    address: t?.address,
+    phone: t?.phone,
+    email: t?.email,
+    website: t?.website,
+    logo_url: t?.logo_url,
+    business_type: t?.business_type,
+    activity_name: t?.business_activity_type_name ?? null,
+    header_config: t?.ticket_header_config ?? null,
+  };
+}
 
 const WAARWI_FOOTER = 'Propulsée par WAARWI — Plateforme Business 2.0 made in Sénégal';
 
@@ -36,24 +59,98 @@ const esc = (v: unknown) =>
 
 const fmtMoney = (n: number) => (Number(n) || 0).toLocaleString('fr-FR');
 
-const activityLabel = (t: PrintTenant) =>
-  BUSINESS_TYPE_LABELS[t.business_type || 'auto_parts'] || 'Commerce';
+const activityLabel = (t: PrintTenant) => {
+  // Priority: explicit activity name from business_activity_types (set in Platform Admin),
+  // then mapped business_type label, then fallback.
+  if (t.activity_name && String(t.activity_name).trim()) return String(t.activity_name).trim();
+  if (t.business_type && BUSINESS_TYPE_LABELS[t.business_type]) return BUSINESS_TYPE_LABELS[t.business_type];
+  return 'Commerce';
+};
+
+// ── Header field rendering (size + line-break configurable) ──────────────────
+// Sizes are mapped per medium (80mm thermal vs A4 document).
+const HEADER_SIZES_80: Record<TicketHeaderSize, { fs: number; fw: number }> = {
+  xs: { fs: 9.5,  fw: 500 },
+  sm: { fs: 11.5, fw: 500 },
+  md: { fs: 13,   fw: 600 },
+  lg: { fs: 16,   fw: 700 },
+  xl: { fs: 19,   fw: 900 },
+};
+
+const HEADER_SIZES_A4: Record<TicketHeaderSize, { fs: number; fw: number }> = {
+  xs: { fs: 9,    fw: 500 },
+  sm: { fs: 10.5, fw: 500 },
+  md: { fs: 12,   fw: 600 },
+  lg: { fs: 14,   fw: 700 },
+  xl: { fs: 18,   fw: 800 },
+};
+
+function headerFieldValue(t: PrintTenant, key: string): string {
+  switch (key) {
+    case 'name':       return t.name || '';
+    case 'legal_name': return t.legal_name || '';
+    case 'activity':   return activityLabel(t);
+    case 'address':    return t.address || '';
+    case 'phone':      return t.phone ? `Tél: ${t.phone}` : '';
+    case 'email':      return t.email || '';
+    case 'website':    return t.website || '';
+    case 'ninea':      return t.ninea ? `NINEA: ${t.ninea}` : '';
+    case 'rccm':       return t.rccm ? `RCCM: ${t.rccm}` : '';
+    default:           return '';
+  }
+}
 
 function tenantHeader80(t: PrintTenant) {
-  const activity = activityLabel(t);
-  const logo = t.logo_url
-    ? `<div class="logo-wrap"><img src="${esc(t.logo_url)}" alt="" onerror="this.style.display='none'"/></div>`
-    : '';
-  return `
-    ${logo}
-    <div class="shop-name">${esc(t.name)}</div>
-    ${t.address ? `<div class="meta">${esc(t.address)}</div>` : ''}
-    ${t.phone ? `<div class="meta">Tél: ${esc(t.phone)}</div>` : ''}
-    ${t.email ? `<div class="meta">${esc(t.email)}</div>` : ''}
-    ${t.website ? `<div class="meta">${esc(t.website)}</div>` : ''}
-    ${t.ninea ? `<div class="meta">NINEA: ${esc(t.ninea)}</div>` : ''}
-    ${t.rccm ? `<div class="meta">RCCM: ${esc(t.rccm)}</div>` : ''}
-  `;
+  const config = mergeTicketHeaderConfig(t.header_config);
+  const parts: string[] = [];
+  for (const item of config) {
+    if (!item.show) continue;
+    if (item.key === 'logo') {
+      if (!t.logo_url) continue;
+      const px = item.size === 'xl' ? 28 : item.size === 'lg' ? 22 : item.size === 'md' ? 18 : item.size === 'sm' ? 14 : 10;
+      parts.push(`<div class="logo-wrap" style="margin-bottom:${item.breakAfter ? 10 : 6}px;"><img src="${esc(t.logo_url)}" alt="" style="max-height:${px}mm;max-width:60mm;object-fit:contain;" onerror="this.style.display='none'"/></div>`);
+      continue;
+    }
+    const value = headerFieldValue(t, item.key);
+    if (!value) continue;
+    const sz = HEADER_SIZES_80[item.size] || HEADER_SIZES_80.sm;
+    const cls = item.key === 'name' ? 'shop-name' : item.key === 'activity' ? 'activity' : 'meta';
+    const extraStyle = item.key === 'legal_name' ? 'font-weight:700;' : '';
+    const breakStyle = item.breakAfter ? 'margin-bottom:6px;' : '';
+    parts.push(`<div class="${cls}" style="font-size:${sz.fs}px;font-weight:${sz.fw};${extraStyle}${breakStyle}">${esc(value)}</div>`);
+  }
+  return parts.join('');
+}
+
+function tenantHeaderA4Lines(t: PrintTenant) {
+  const config = mergeTicketHeaderConfig(t.header_config);
+  const parts: string[] = [];
+  for (const item of config) {
+    if (item.key === 'logo') continue;
+    if (!item.show) continue;
+    const value = headerFieldValue(t, item.key);
+    if (!value) continue;
+    const sz = HEADER_SIZES_A4[item.size] || HEADER_SIZES_A4.sm;
+    const cls = item.key === 'name' ? 'h1' : item.key === 'activity' ? 'activity' : 'p';
+    const extraStyle = item.key === 'legal_name' ? 'font-weight:700;' : '';
+    const breakStyle = item.breakAfter ? 'margin-bottom:6px;' : '';
+    if (cls === 'h1') {
+      parts.push(`<h1 style="font-size:${sz.fs}px;font-weight:${sz.fw};line-height:1.1;${breakStyle}">${esc(value)}</h1>`);
+    } else if (cls === 'activity') {
+      parts.push(`<div class="activity" style="font-size:${sz.fs}px;font-weight:${sz.fw};${breakStyle}">${esc(value)}</div>`);
+    } else {
+      parts.push(`<p style="font-size:${sz.fs}px;font-weight:${sz.fw};${extraStyle}${breakStyle}">${esc(value)}</p>`);
+    }
+  }
+  return parts.join('');
+}
+
+function tenantLogoA4(t: PrintTenant) {
+  const config = mergeTicketHeaderConfig(t.header_config);
+  const item = config.find(c => c.key === 'logo');
+  if (!item || !item.show || !t.logo_url) return '';
+  const px = item.size === 'xl' ? 96 : item.size === 'lg' ? 76 : item.size === 'md' ? 60 : item.size === 'sm' ? 46 : 32;
+  return `<img src="${esc(t.logo_url)}" alt="" style="max-width:${px}px;max-height:${px}px;object-fit:contain;" onerror="this.style.display='none'"/>`;
 }
 
 function waarwiFooter80() {
@@ -402,6 +499,45 @@ ${waarwiFooter80()}
   printHtml(html);
 }
 
+// ── 80mm Cash expense (decaissement) receipt ──────────────────────────────────
+export function printDecaissementTicket80(opts: {
+  receiptNumber: string;
+  amount: number;
+  method: string;
+  label?: string;
+  reference?: string;
+  beneficiary?: string | null;
+  createdAt?: string;
+  tenant: PrintTenant;
+  cashier: string;
+}) {
+  const date = opts.createdAt ? new Date(opts.createdAt) : new Date();
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recu ${esc(opts.receiptNumber)}</title>
+<style>${ticketStyle}</style></head><body>
+${tenantHeader80(opts.tenant)}
+<hr class="hr-solid" />
+<div class="doc-label">BON DE DECAISSEMENT</div>
+<div class="doc-num">N° ${esc(opts.receiptNumber)}</div>
+<div class="doc-date">${date.toLocaleString('fr-FR')}</div>
+<div class="info-row"><span>Caissier</span><span>${esc(opts.cashier)}</span></div>
+${opts.beneficiary ? `<div class="info-row"><span>Bénéficiaire</span><span>${esc(opts.beneficiary)}</span></div>` : ''}
+<hr class="hr" />
+${opts.label ? `<div class="section">Motif</div><div class="item-name" style="font-weight:700;font-size:12.5px;margin-bottom:4px;">${esc(opts.label)}</div>` : ''}
+${opts.reference ? `<div class="info-row"><span>Référence</span><span>${esc(opts.reference)}</span></div>` : ''}
+<hr class="hr" />
+<div class="row payment"><span>Mode</span><span>${esc(opts.method)}</span></div>
+<div class="row total"><span>MONTANT VERSÉ</span><span>- ${fmtMoney(opts.amount)} FCFA</span></div>
+<hr class="hr" />
+<div class="footer">
+  <div class="thanks">Montant déduit de la caisse</div>
+  <div>Conservez ce reçu</div>
+</div>
+${waarwiFooter80()}
+</body></html>`;
+  printHtml(html);
+}
+
 
 
 export type XReportControl = {
@@ -511,7 +647,7 @@ ${opts.closedAt ? `<div class="info-row"><span>Clôture</span><span>${new Date(o
 <hr class="hr" />
 <div class="section">Résumé ventes</div>
 <div class="row"><span>Nombre de ventes</span><span>${opts.salesCount}</span></div>
-<div class="row total"><span>CA Total</span><span>${fmtMoney(opts.salesTotal)} FCFA</span></div>
+<div class="row total"><span>Total encaissé</span><span>${fmtMoney(opts.salesTotal)} FCFA</span></div>
 <hr class="hr" />
 <div class="section">Encaissements par mode</div>
 ${opts.byMethod.length > 0
@@ -810,11 +946,9 @@ export function printDocumentA4(opts: {
   docHeader?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; representative?: string | null } | null;
 }) {
   const t = opts.tenant;
-  const activity = activityLabel(t);
 
-  const logoImg = t.logo_url
-    ? `<img src="${esc(t.logo_url)}" alt="" onerror="this.style.display='none'"/>`
-    : '';
+  const logoImg = tenantLogoA4(t);
+  const headerLines = tenantHeaderA4Lines(t);
 
   const itemsHtml = opts.items
     .map(i => {
@@ -882,13 +1016,7 @@ export function printDocumentA4(opts: {
   <div class="brand">
     ${logoImg}
     <div class="brand-text">
-      <h1>${esc(t.name)}</h1>
-      ${t.address ? `<p>${esc(t.address)}</p>` : ''}
-      ${t.phone ? `<p>Tél : ${esc(t.phone)}</p>` : ''}
-      ${t.email ? `<p>${esc(t.email)}</p>` : ''}
-      ${t.website ? `<p>${esc(t.website)}</p>` : ''}
-      ${t.ninea ? `<p>NINEA : ${esc(t.ninea)}</p>` : ''}
-      ${t.rccm ? `<p>RCCM : ${esc(t.rccm)}</p>` : ''}
+      ${headerLines}
     </div>
   </div>
   <div class="doc-meta">
@@ -1038,8 +1166,14 @@ export function printStockMovementA4(opts: StockMovementPrintOpts) {
     <div class="left">
       ${t.logo_url ? `<img class="logo" src="${esc(t.logo_url)}" onerror="this.style.display='none'"/>` : ''}
       <div class="company">${esc(t.name)}</div>
+      ${t.legal_name ? `<div class="info" style="font-weight:700">${esc(t.legal_name)}</div>` : ''}
+      <div class="info" style="text-transform:uppercase;letter-spacing:0.6px;font-weight:700">${esc(activityLabel(t))}</div>
       ${t.address ? `<div class="info">${esc(t.address)}</div>` : ''}
       ${t.phone ? `<div class="info">Tél : ${esc(t.phone)}</div>` : ''}
+      ${t.email ? `<div class="info">${esc(t.email)}</div>` : ''}
+      ${t.website ? `<div class="info">${esc(t.website)}</div>` : ''}
+      ${t.ninea ? `<div class="info">NINEA : ${esc(t.ninea)}</div>` : ''}
+      ${t.rccm ? `<div class="info">RCCM : ${esc(t.rccm)}</div>` : ''}
     </div>
     <div class="right">
       <div class="ref">${esc(opts.reference)}</div>
@@ -1112,6 +1246,9 @@ export function printStockMovement80(opts: StockMovementPrintOpts) {
   .center { text-align: center; }
   .shop-name { text-align: center; font-weight: 900; font-size: 16px; margin-bottom: 2px; }
   .meta { text-align: center; font-size: 10px; color: #000; }
+  .activity { text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; margin-top: 2px; margin-bottom: 5px; font-weight: 700; color: #000; }
+  .logo-wrap { display: flex; justify-content: center; margin-bottom: 6px; }
+  .logo-wrap img { max-width: 48mm; max-height: 22mm; object-fit: contain; }
   .title { text-align: center; font-weight: 900; font-size: 14px; margin: 4mm 0 2mm; letter-spacing: 0.5px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 2mm 0; }
   .info { font-size: 10px; margin: 2mm 0; }
   .info span { font-weight: 700; }
@@ -1120,9 +1257,7 @@ export function printStockMovement80(opts: StockMovementPrintOpts) {
   .total { border-top: 1.5px solid #000; margin-top: 1mm; padding-top: 2mm; font-weight: 900; font-size: 13px; display: flex; justify-content: space-between; }
   .footer { margin-top: 4mm; padding-top: 2mm; border-top: 1px dashed #000; text-align: center; font-size: 9px; color: #000; }
 </style></head><body>
-  <div class="shop-name">${esc(t.name)}</div>
-  ${t.address ? `<div class="meta">${esc(t.address)}</div>` : ''}
-  ${t.phone ? `<div class="meta">Tél: ${esc(t.phone)}</div>` : ''}
+  ${tenantHeader80(t)}
 
   <div class="title">${esc(title)}</div>
 
@@ -1218,8 +1353,13 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
     <div>
       ${t.logo_url ? `<img class="logo" src="${esc(t.logo_url)}" onerror="this.style.display='none'"/>` : ''}
       <div class="company">${esc(t.name)}</div>
+      ${t.legal_name ? `<div class="sub" style="font-weight:700">${esc(t.legal_name)}</div>` : ''}
+      <div class="sub" style="text-transform:uppercase;letter-spacing:0.6px;font-weight:700">${esc(activityLabel(t))}</div>
       ${t.address ? `<div class="sub">${esc(t.address)}</div>` : ''}
       ${t.phone ? `<div class="sub">Tél : ${esc(t.phone)}</div>` : ''}
+      ${t.email ? `<div class="sub">${esc(t.email)}</div>` : ''}
+      ${t.ninea ? `<div class="sub">NINEA : ${esc(t.ninea)}</div>` : ''}
+      ${t.rccm ? `<div class="sub">RCCM : ${esc(t.rccm)}</div>` : ''}
     </div>
     <div class="right">
       <div class="ref">${esc(opts.reference)}</div>

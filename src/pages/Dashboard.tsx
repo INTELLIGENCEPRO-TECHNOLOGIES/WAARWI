@@ -59,6 +59,8 @@ type OrderDetail = {
 
 type Stats = {
   todaySales: number;
+  todayCollected: number;
+  todayDirectCash: number;
   todayCount: number;
   todayPaid: number;
   todayReceivable: number;
@@ -212,6 +214,18 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const todaySales = (todayData.data || []).reduce((s, r) => s + Number(r.total), 0);
       const todayPaid = (todayData.data || []).reduce((s: number, r: any) => s + Math.min(Number(r.total || 0), Number(r.paid || 0)), 0);
       const todayReceivable = Math.max(0, todaySales - todayPaid);
+
+      const periodEndIso = periodEnd ? periodEnd.toISOString() : null;
+      const periodPaymentsQuery = supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).gte('created_at', periodStart.toISOString());
+      if (periodEndIso) periodPaymentsQuery.lt('created_at', periodEndIso);
+      const periodMovsQuery = supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString());
+      if (periodEndIso) periodMovsQuery.lt('created_at', periodEndIso);
+      const [{ data: periodPayments }, { data: periodMovs }] = await Promise.all([periodPaymentsQuery, periodMovsQuery]);
+      const todayPaymentsTotal = (periodPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+      const todayMovIncome = (periodMovs || [])
+        .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement ')))
+        .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+      const todayCollected = todayPaymentsTotal + todayMovIncome;
       let todayMargin = 0;
       for (const sale of (todayData.data || []) as any[]) {
         for (const item of (sale.sale_items || [])) {
@@ -220,7 +234,18 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         }
       }
       const yesterdaySales = (yestData.data || []).reduce((s, r) => s + Number(r.total), 0);
-      const monthSales = (monthData.data || []).reduce((s, r) => s + Number(r.total), 0);
+      const monthInvoicedSales = (monthData.data || []).reduce((s, r) => s + Number(r.total), 0);
+
+      const { data: monthDirectMovs } = await supabase
+        .from('cash_movements')
+        .select('kind, amount, reason')
+        .eq('tenant_id', tenant.id)
+        .eq('site_id', siteId)
+        .gte('created_at', firstOfMonth.toISOString());
+      const monthDirectIncome = (monthDirectMovs || [])
+        .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement ')))
+        .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+      const monthSales = monthInvoicedSales + monthDirectIncome;
 
       let monthMargin = 0;
       for (const sale of (monthData.data || []) as any[]) {
@@ -561,7 +586,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       }));
 
       const next: Stats = {
-        todaySales, todayCount: todayData.data?.length || 0,
+        todaySales, todayCollected, todayDirectCash: todayMovIncome, todayCount: todayData.data?.length || 0,
         todayPaid, todayReceivable,
         yesterdaySales,
         monthSales, monthMargin,
@@ -645,7 +670,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       <div className="hidden lg:block">
         <DesktopDashboard
-          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, todayPaid: 0, todayReceivable: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0 }}
+          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, todayCollected: 0, todayDirectCash: 0, todayPaid: 0, todayReceivable: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0 }}
           shopInfo={shopInfo}
           greet={hourGreet}
           firstName={firstName}
@@ -685,7 +710,7 @@ function MobileDashboard({
   const { tenant, currentSite, sites, setCurrentSite } = useApp();
 
   // ── Multi-site overview ────────────────────────────────────────────────
-  type SiteStat = { id: string; name: string; todaySales: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
+  type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
   const [multiSiteStats, setMultiSiteStats] = useState<SiteStat[]>([]);
   const hasMultiSites = sites.length > 1;
 
@@ -696,18 +721,22 @@ function MobileDashboard({
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const results: SiteStat[] = [];
       for (const site of sites) {
-        const [{ data: salesData }, { data: sessData }, { data: pmtData }] = await Promise.all([
+        const [{ data: salesData }, { data: sessData }, { data: pmtData }, { data: collectedPmts }, { data: collectedMovs }] = await Promise.all([
           supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
           supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1),
           supabase.from('sale_payments').select('amount, cash_session_id').eq('tenant_id', tenant.id).in('cash_session_id', (await supabase.from('cash_sessions').select('id').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open')).data?.map((s: any) => s.id) || []),
+          supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', today.toISOString()),
+          supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()),
         ]);
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
+        const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
+          + (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const session = (sessData || [])[0];
         const openingAmount = session ? Number(session.opening_amount || 0) : 0;
         const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
         const cashBalance = session ? openingAmount + sessionPayTotal : 0;
-        results.push({ id: site.id, name: site.name, todaySales, salesCount, cashBalance, openingAmount, sessionOpen: !!session });
+        results.push({ id: site.id, name: site.name, todaySales, todayCollected, salesCount, cashBalance, openingAmount, sessionOpen: !!session });
       }
       if (!cancelled) setMultiSiteStats(results);
     })();
@@ -795,7 +824,7 @@ function MobileDashboard({
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${heroLight ? 'bg-teal-500' : 'bg-teal-300'}`} />
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-slate-400' : 'text-teal-200/70'}`}>Chiffre d&apos;affaires du jour</span>
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-slate-400' : 'text-teal-200/70'}`}>Encaissements du jour</span>
             </div>
             <div className="flex items-center gap-2">
               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${heroLight ? 'bg-teal-50 text-teal-600 border border-teal-100' : 'bg-teal-400/15 text-teal-200'}`}>
@@ -831,7 +860,7 @@ function MobileDashboard({
           {/* Main amount + delta */}
           <div className="flex items-end gap-3 mb-2.5">
             <div className={`num font-black leading-none tracking-tight ${heroLight ? 'text-slate-900' : 'text-white'}`} style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
-              {balanceHidden ? '••••••' : formatFCFA(stats.todaySales)}
+              {balanceHidden ? '••••••' : formatFCFA(stats.todayCollected)}
             </div>
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${
@@ -885,29 +914,29 @@ function MobileDashboard({
               </span>
             </div>
 
-            {/* NET ENCAISSE row */}
+            {/* VENTES FACTUREES row */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.15)' }}>
-                  <ArrowDownRight className={`w-2.5 h-2.5 ${heroLight ? 'text-emerald-500' : 'text-emerald-300'}`} />
+                  <Receipt className={`w-2.5 h-2.5 ${heroLight ? 'text-emerald-500' : 'text-emerald-300'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Net encaissé</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Ventes facturées</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-emerald-600' : 'text-emerald-300'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.todayPaid)}
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-slate-800' : 'text-white/85'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.todaySales)}
               </span>
             </div>
 
-            {/* RESTE A PERCEVOIR row */}
+            {/* ENCAISSEMENTS DIRECTS row */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.18)' }}>
-                  <Clock className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(20,184,166,0.10)' : 'rgba(20,184,166,0.18)' }}>
+                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-teal-600' : 'text-teal-300'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Reste à percevoir</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Encaissements directs</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-amber-600' : 'text-amber-300'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.todayReceivable)}
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-teal-700' : 'text-teal-300'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.todayDirectCash)}
               </span>
             </div>
 
@@ -956,7 +985,7 @@ function MobileDashboard({
               <Network className="w-3.5 h-3.5 text-brand-600" />
               <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Magasins</span>
             </div>
-            <span className="text-[9px] font-bold text-slate-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + x.todaySales, 0))}</span>
+            <span className="text-[9px] font-bold text-slate-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + x.todayCollected, 0))}</span>
           </div>
           <div className="flex overflow-x-auto gap-1.5 p-2 no-scrollbar">
             {multiSiteStats.map(site => {
@@ -971,7 +1000,8 @@ function MobileDashboard({
                     <div className={`w-1.5 h-1.5 rounded-full ${site.sessionOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                     <span className="text-[10px] font-bold text-slate-800">{site.name}</span>
                   </div>
-                  <div className="text-[13px] font-black num text-slate-900 mb-1">{formatCompactFCFA(site.todaySales)}</div>
+                  <div className="text-[13px] font-black num text-slate-900 mb-0.5">{formatCompactFCFA(site.todayCollected)}</div>
+                  <div className="text-[8px] text-slate-400 font-semibold mb-1">Encaissé · facturé {formatCompactFCFA(site.todaySales)}</div>
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
                       <span className="text-[8px] text-slate-400 font-semibold">Tickets</span>
@@ -1454,7 +1484,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
   const { can } = usePermissions();
 
   // ── Multi-site overview ────────────────────────────────────────────────
-  type SiteStat = { id: string; name: string; todaySales: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
+  type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
   const [multiSiteStats, setMultiSiteStats] = useState<SiteStat[]>([]);
   const [multiSiteView, setMultiSiteView] = useState<'all' | string>('current');
   const hasMultiSites = sites.length > 1;
@@ -1466,18 +1496,22 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const results: SiteStat[] = [];
       for (const site of sites) {
-        const [{ data: salesData }, { data: sessData }, { data: pmtData }] = await Promise.all([
+        const [{ data: salesData }, { data: sessData }, { data: pmtData }, { data: collectedPmts }, { data: collectedMovs }] = await Promise.all([
           supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
           supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1),
           supabase.from('sale_payments').select('amount, cash_session_id').eq('tenant_id', tenant.id).in('cash_session_id', (await supabase.from('cash_sessions').select('id').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open')).data?.map((s: any) => s.id) || []),
+          supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', today.toISOString()),
+          supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()),
         ]);
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
+        const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
+          + (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const session = (sessData || [])[0];
         const openingAmount = session ? Number(session.opening_amount || 0) : 0;
         const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
         const cashBalance = session ? openingAmount + sessionPayTotal : 0;
-        results.push({ id: site.id, name: site.name, todaySales, salesCount, cashBalance, openingAmount, sessionOpen: !!session });
+        results.push({ id: site.id, name: site.name, todaySales, todayCollected, salesCount, cashBalance, openingAmount, sessionOpen: !!session });
       }
       if (!cancelled) setMultiSiteStats(results);
     })();
@@ -1788,19 +1822,19 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
             {/* Main amount */}
             <div className="mb-4">
-              <p className="text-[11px] text-slate-400 font-medium mb-1">Chiffre d&apos;affaires {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
-              <p className="text-3xl font-black text-slate-900 num tracking-tight leading-none">{formatFCFA(stats.todaySales)}</p>
+              <p className="text-[11px] text-slate-400 font-medium mb-1">Encaissements {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
+              <p className="text-3xl font-black text-slate-900 num tracking-tight leading-none">{formatFCFA(stats.todayCollected)}</p>
             </div>
 
             {/* KPI Grid */}
             <div className="grid grid-cols-3 gap-3 flex-1">
               <div className="rounded-xl bg-emerald-50/60 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-emerald-700/70 uppercase tracking-wide mb-1">Net encaissé</p>
-                <p className="text-lg font-bold text-emerald-700 num leading-tight">{formatCompactFCFA(stats.todayPaid)}</p>
+                <p className="text-[10px] font-semibold text-emerald-700/70 uppercase tracking-wide mb-1">Ventes facturées</p>
+                <p className="text-lg font-bold text-emerald-700 num leading-tight">{formatCompactFCFA(stats.todaySales)}</p>
               </div>
-              <div className="rounded-xl bg-amber-50/60 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-amber-700/70 uppercase tracking-wide mb-1">Reste à percevoir</p>
-                <p className="text-lg font-bold text-amber-700 num leading-tight">{formatCompactFCFA(stats.todayReceivable)}</p>
+              <div className="rounded-xl bg-teal-50/60 px-3.5 py-3 flex flex-col justify-center">
+                <p className="text-[10px] font-semibold text-teal-700/70 uppercase tracking-wide mb-1">Encaissements directs</p>
+                <p className="text-lg font-bold text-teal-700 num leading-tight">{formatCompactFCFA(stats.todayDirectCash)}</p>
               </div>
               <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Ventes</p>
@@ -1914,8 +1948,8 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 <span className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-bold border border-teal-100">{sites.length} magasins</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Total du jour :</span>
-                <span className="text-sm font-bold text-slate-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + x.todaySales, 0))}</span>
+                <span className="text-xs text-slate-400">Total encaissé du jour :</span>
+                <span className="text-sm font-bold text-slate-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + x.todayCollected, 0))}</span>
               </div>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -1937,8 +1971,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                     </div>
                     <div className="grid grid-cols-4 gap-4">
                       <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">CA jour</p>
-                        <p className="text-sm font-bold text-slate-900 num">{formatCompactFCFA(site.todaySales)}</p>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Encaissé jour</p>
+                        <p className="text-sm font-bold text-slate-900 num">{formatCompactFCFA(site.todayCollected)}</p>
+                        <p className="text-[9px] text-slate-400 num mt-0.5">Facturé {formatCompactFCFA(site.todaySales)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Tickets</p>
@@ -2177,7 +2212,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600">Encaissements</span>
-                <span className="text-sm font-bold text-teal-600 num">{formatCompactFCFA(stats.todaySales)}</span>
+                <span className="text-sm font-bold text-teal-600 num">{formatCompactFCFA(stats.todayCollected)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600">Dépenses</span>

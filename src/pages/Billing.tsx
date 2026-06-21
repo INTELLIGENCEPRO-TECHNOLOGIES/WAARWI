@@ -15,7 +15,7 @@ import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate, formatDateTime } from '../lib/format';
-import { printDocumentA4, type PrintTenant } from '../lib/print';
+import { printDocumentA4, buildPrintTenant, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
 import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
@@ -23,11 +23,7 @@ import { MobileBillingWizard, type WizardHeaderField } from '../components/Mobil
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
 
-const tenantForPrint = (t: any): PrintTenant => ({
-  name: t?.name || '', legal_name: t?.legal_name, ninea: t?.ninea, rccm: t?.rccm,
-  address: t?.address, phone: t?.phone, email: t?.email, website: t?.website,
-  logo_url: t?.logo_url, business_type: t?.business_type,
-});
+const tenantForPrint = (t: any): PrintTenant => buildPrintTenant(t);
 
 type Tab = 'quotes' | 'invoices' | 'returns' | 'credits';
 

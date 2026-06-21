@@ -18,7 +18,7 @@ import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
 import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
-import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, type PrintTenant } from '../lib/print';
+import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, printDecaissementTicket80, buildPrintTenant, type PrintTenant } from '../lib/print';
 import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from '../lib/types';
 import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
@@ -55,6 +55,7 @@ type SessionSale = {
   id: string;
   sale_number: string;
   total: number;
+  paid: number;
   created_at: string;
   customer_name: string | null;
   customer_phone: string | null;
@@ -88,7 +89,7 @@ function printXReport(
     closedAt: session.closed_at,
     openingAmount: Number(session.opening_amount),
     salesCount: salesStats.count,
-    salesTotal: salesStats.total,
+    salesTotal: salesStats.total + (salesStats.movIncome || 0) + (salesStats.movPrepay || 0),
     byMethod: salesStats.byMethod,
     movements: salesStats.movements,
     controls: controls.map(c => ({
@@ -120,7 +121,7 @@ function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
     if (!tenantId || !siteId || !sessionId) return;
     setLoading(true);
     (async () => {
-      const [{ data: sales }, { data: payments }] = await Promise.all([
+      const [{ data: sales }, { data: payments }, { data: movements }] = await Promise.all([
         supabase
           .from('sales')
           .select('id, total')
@@ -132,19 +133,33 @@ function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
           .select('method_name, amount')
           .eq('tenant_id', tenantId)
           .eq('cash_session_id', sessionId),
+        supabase
+          .from('cash_movements')
+          .select('kind, amount, reason, method_name')
+          .eq('tenant_id', tenantId)
+          .eq('cash_session_id', sessionId),
       ]);
       const salesArr = sales || [];
       const paymentsArr = (payments || []) as { method_name: string; amount: number }[];
+      const movementsArr = (movements || []) as { kind: string; amount: number; reason: string | null; method_name: string | null }[];
       const byMethod: Record<string, number> = {};
-      let totalPaid = 0;
+      let total = 0;
       for (const p of paymentsArr) {
         const amt = Number(p.amount);
         byMethod[p.method_name] = (byMethod[p.method_name] || 0) + amt;
-        totalPaid += amt;
+        total += amt;
+      }
+      for (const m of movementsArr) {
+        if (m.kind !== 'income' && m.kind !== 'customer_prepayment') continue;
+        if (m.kind === 'income' && (m.reason || '').startsWith('Reglement ')) continue;
+        const amt = Number(m.amount);
+        const method = m.method_name || 'Especes';
+        byMethod[method] = (byMethod[method] || 0) + amt;
+        total += amt;
       }
       setSummary({
         salesCount: salesArr.length,
-        salesTotal: totalPaid,
+        salesTotal: total,
         byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
       });
       setLoading(false);
@@ -204,7 +219,7 @@ function POSLandingOpen({
   return (
     <div className="pb-4">
       {/* ── Header (matches resume screen) ── */}
-      <div className="px-1 sm:px-2 lg:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4">
+      <div className="px-1.5 lg:px-6 pt-3 sm:pt-5 pb-2.5 sm:pb-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Caisse</h1>
           {currentSite && (
@@ -308,7 +323,7 @@ function POSLandingOpen({
       </div>
 
       {/* ── Mobile layout ── */}
-      <div className="lg:hidden px-2 sm:px-3 space-y-3">
+      <div className="lg:hidden px-1.5 space-y-2.5">
         <div className="bg-white rounded-xl border border-slate-200 p-3.5">
           <h2 className="text-sm font-bold text-slate-900 mb-3">Ouvrir la caisse</h2>
           <div className="space-y-2.5">
@@ -366,7 +381,7 @@ function POSLandingOpen({
 
       {/* ── Recent sessions (cleaner, aligned with the rest) ── */}
       {!loadingSessions && sessions.length > 0 && (
-        <div className="mt-5 px-2 sm:px-3 lg:px-6">
+        <div className="mt-4 px-1.5 lg:px-6">
           <div className="flex items-center justify-between mb-2 px-1">
             <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dernières sessions</h3>
             {onSeeAll && (
@@ -507,7 +522,7 @@ function POSLandingResume({
   return (
     <div className="pb-4">
       {/* ── Header ── */}
-      <div className="px-1 sm:px-2 lg:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4">
+      <div className="px-1.5 lg:px-6 pt-3 sm:pt-5 pb-2.5 sm:pb-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Caisse</h1>
           {currentSite && (
@@ -639,7 +654,7 @@ function POSLandingResume({
       </div>
 
       {/* ── Mobile layout ── */}
-      <div className="lg:hidden px-2 sm:px-3 space-y-3">
+      <div className="lg:hidden px-1.5 space-y-2.5">
         {/* Session info card */}
         <div className="bg-white rounded-xl border border-slate-200 p-3.5">
           <h2 className="text-sm font-bold text-slate-900 mb-3">Session de caisse</h2>
@@ -733,14 +748,7 @@ function POSLandingResume({
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, dataTick } = useApp();
   const { can } = usePermissions();
-  const tenantForPrint: PrintTenant = tenant ? {
-    name: tenant.name, legal_name: (tenant as any).legal_name,
-    ninea: (tenant as any).ninea, rccm: (tenant as any).rccm,
-    address: (tenant as any).address, phone: (tenant as any).phone,
-    email: (tenant as any).email, website: (tenant as any).website,
-    logo_url: (tenant as any).logo_url,
-    business_type: (tenant as any).business_type,
-  } : { name: '' };
+  const tenantForPrint: PrintTenant = buildPrintTenant(tenant);
   const cashierName = profile?.full_name || profile?.email || '';
 
   const printSaleTicket = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }) => {
@@ -926,9 +934,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Session tickets list
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
-  const [sessionMovements, setSessionMovements] = useState<{ kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null; created_at: string }[]>([]);
+  const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
   const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | null>('tickets');
   const [loadingTickets, setLoadingTickets] = useState(false);
+  const [sessionEncaisse, setSessionEncaisse] = useState(0);
 
   // Close workflow
   const [closeOpen, setCloseOpen] = useState(false);
@@ -1739,10 +1748,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openTickets = async () => {
     setTicketsOpen(true); setLoadingTickets(true);
-    const [{ data }, { data: retData }, { data: mvData }] = await Promise.all([
+    const [{ data }, { data: retData }, { data: mvData }, { data: pmtData }] = await Promise.all([
       supabase
         .from('sales')
-        .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price)')
+        .select('id, sale_number, total, paid, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price)')
         .eq('tenant_id', tenant!.id)
         .eq('cash_session_id', session!.id)
         .order('created_at', { ascending: false }),
@@ -1754,29 +1763,41 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         .order('created_at', { ascending: false }),
       supabase
         .from('cash_movements')
-        .select('kind, amount, reason, method_name, created_at, customers(name)')
+        .select('id, kind, amount, reason, method_name, reference, created_at, customers(name)')
         .eq('tenant_id', tenant!.id)
         .eq('cash_session_id', session!.id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('sale_payments')
+        .select('amount')
+        .eq('tenant_id', tenant!.id)
+        .eq('cash_session_id', session!.id),
     ]);
     const sales: SessionSale[] = (data || []).map((s: any) => ({
-      id: s.id, sale_number: s.sale_number, total: Number(s.total),
+      id: s.id, sale_number: s.sale_number, total: Number(s.total), paid: Math.min(Number(s.total || 0), Number(s.paid || 0)),
       created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
       items: (s.sale_items || []).map((i: any) => ({ article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
     }));
     const returns: SessionSale[] = (retData || []).map((r: any) => ({
-      id: r.id, sale_number: r.return_number, total: -Number(r.total),
+      id: r.id, sale_number: r.return_number, total: -Number(r.total), paid: -Number(r.total),
       created_at: r.created_at, customer_name: null, customer_phone: null, customer_address: null, status: 'return',
       items: [],
     }));
     setSessionSales([...sales, ...returns].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     const movs = (mvData || []).map((m: any) => ({
+      id: m.id,
       kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
       amount: Number(m.amount), reason: m.reason || '',
-      method_name: m.method_name || '', customer_name: m.customers?.name || null,
+      method_name: m.method_name || '', reference: m.reference || '',
+      customer_name: m.customers?.name || null,
       created_at: m.created_at || '',
     })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
     setSessionMovements(movs);
+    const pmtTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    const movEncaisseTotal = (mvData || [])
+      .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement ')))
+      .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+    setSessionEncaisse(pmtTotal + movEncaisseTotal);
     setTicketsExpanded('tickets');
     setLoadingTickets(false);
   };
@@ -1905,8 +1926,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     ]);
     const salesList = sales || [];
     const pmtList = pmtRows || [];
+    const movs = (mvRows || []).map((m: any) => ({
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
+      amount: Number(m.amount), reason: m.reason || '',
+      method_name: m.method_name || '', customer_name: m.customers?.name || null,
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
+    movs.forEach(m => {
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
+      const method = m.method_name || 'Especes';
+      byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
+    });
     const invoicePayments = pmtList
       .filter((p: any) => !p.sales || p.sales.cash_session_id !== session.id)
       .map((p: any) => ({
@@ -1926,11 +1957,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       });
     });
     const topArticles = Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10);
-    const movs = (mvRows || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
-      amount: Number(m.amount), reason: m.reason || '',
-      method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
     const movExpense = movs.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
     const movIncome = movs.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movs.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
@@ -1998,8 +2024,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
     // Build stats for X report
     const salesList = salesResult.data || [];
+    const movList = (mvs || []).map((m: any) => ({
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
+      amount: Number(m.amount), reason: m.reason || '',
+      method_name: m.method_name || '', customer_name: m.customers?.name || null,
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
+    movList.forEach(m => {
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
+      const method = m.method_name || 'Especes';
+      byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
+    });
     const invoicePayments = pmtList
       .filter((p: any) => !p.sales || p.sales.cash_session_id !== session.id)
       .map((p: any) => ({
@@ -2018,11 +2054,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         articleMap[item.name].total += Number(item.total);
       });
     });
-    const movList = (mvs || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
-      amount: Number(m.amount), reason: m.reason || '',
-      method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
     const movExpense = movList.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
     const movIncome = movList.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movList.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
@@ -3167,8 +3198,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="text-lg font-bold mt-0.5 num">{sessionSales.filter(x => x.status !== 'return').length}</div>
               </div>
               <div className="card p-2.5 text-center col-span-2">
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CA Net</div>
-                <div className="text-lg font-bold text-brand-800 mt-0.5 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Total encaissé</div>
+                <div className="text-lg font-bold text-brand-800 mt-0.5 num">{formatFCFA(sessionEncaisse)}</div>
               </div>
             </div>
 
@@ -3267,6 +3298,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             </div>
                           </div>
                           <span className="text-xs font-bold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                          <button
+                            title="Réimprimer le reçu"
+                            onClick={() => {
+                              try {
+                                printEncaissementTicket80({
+                                  receiptNumber: `ENC-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                  amount: m.amount,
+                                  method: m.method_name || 'Especes',
+                                  label: m.reason || undefined,
+                                  reference: m.reference || undefined,
+                                  customerName: m.customer_name,
+                                  createdAt: m.created_at,
+                                  tenant: tenantForPrint as PrintTenant,
+                                  cashier: cashierName,
+                                });
+                              } catch {}
+                            }}
+                            className="p-1.5 rounded hover:bg-emerald-100 text-emerald-700 shrink-0"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -3305,6 +3357,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             </div>
                           </div>
                           <span className="text-xs font-bold text-brand-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                          <button
+                            title="Réimprimer le reçu"
+                            onClick={() => {
+                              try {
+                                printEncaissementTicket80({
+                                  receiptNumber: `ACO-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                  amount: m.amount,
+                                  method: m.method_name || 'Especes',
+                                  label: m.reason ? `Acompte · ${m.reason}` : 'Acompte client',
+                                  reference: m.reference || undefined,
+                                  customerName: m.customer_name,
+                                  createdAt: m.created_at,
+                                  tenant: tenantForPrint as PrintTenant,
+                                  cashier: cashierName,
+                                });
+                              } catch {}
+                            }}
+                            className="p-1.5 rounded hover:bg-brand-100 text-brand-700 shrink-0"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -3342,6 +3415,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             </div>
                           </div>
                           <span className="text-xs font-bold text-red-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          <button
+                            title="Réimprimer le bon"
+                            onClick={() => {
+                              try {
+                                printDecaissementTicket80({
+                                  receiptNumber: `DEC-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                  amount: m.amount,
+                                  method: m.method_name || 'Especes',
+                                  label: m.reason || undefined,
+                                  reference: m.reference || undefined,
+                                  beneficiary: m.customer_name,
+                                  createdAt: m.created_at,
+                                  tenant: tenantForPrint as PrintTenant,
+                                  cashier: cashierName,
+                                });
+                              } catch {}
+                            }}
+                            className="p-1.5 rounded hover:bg-red-100 text-red-700 shrink-0"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -3383,8 +3477,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </div>
               <div className="w-px bg-slate-200" />
               <div className="flex-1 text-center px-2 py-1.5">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-brand-600">CA Total</div>
-                <div className="text-lg font-bold text-brand-900 num leading-tight">{formatFCFA(statsData.total)}</div>
+                <div className="text-[9px] font-bold uppercase tracking-wider text-brand-600">Total encaissé</div>
+                <div className="text-lg font-bold text-brand-900 num leading-tight">{formatFCFA(statsData.netTotal + (statsData.movExpense || 0))}</div>
               </div>
               {statsData.movements.length > 0 && <>
                 <div className="w-px bg-slate-200" />
@@ -3397,6 +3491,37 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
             {/* Collapsible sections */}
             <div className="space-y-1.5">
+              {/* Encaissements par mode */}
+              {statsData.byMethod.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'modes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
+                        <CreditCard className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">Encaissements par mode</div>
+                        <div className="text-[10px] text-slate-500">{statsData.byMethod.length} mode{statsData.byMethod.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-brand-800 num">{formatFCFA(statsData.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'modes' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'modes' && (
+                    <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.byMethod.map(m => (
+                        <div key={m.method_name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 text-xs">
+                          <span className="font-medium text-slate-700">{m.method_name}</span>
+                          <span className="font-bold text-slate-900 num">{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Reglements */}
               {statsData.invoicePayments.length > 0 && (
                 <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'reglements' ? 'border-sky-300 bg-sky-50/40 order-first' : 'border-slate-200 bg-white'}`}>
@@ -3548,37 +3673,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
-              {/* Encaissements par mode */}
-              {statsData.byMethod.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-slate-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'modes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
-                        <CreditCard className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">Encaissements par mode</div>
-                        <div className="text-[10px] text-slate-500">{statsData.byMethod.length} mode{statsData.byMethod.length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-brand-800 num">{formatFCFA(statsData.total)}</span>
-                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'modes' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'modes' && (
-                    <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.byMethod.map(m => (
-                        <div key={m.method_name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 text-xs">
-                          <span className="font-medium text-slate-700">{m.method_name}</span>
-                          <span className="font-bold text-slate-900 num">{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Top articles */}
               {statsData.topArticles.length > 0 && (
                 <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'articles' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-slate-200 bg-white'}`}>
@@ -3592,7 +3686,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                         <div className="text-[10px] text-slate-500">{statsData.topArticles.length} article{statsData.topArticles.length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'articles' ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-amber-700 num">{formatFCFA(statsData.topArticles.reduce((s, a) => s + a.total, 0))}</span>
+                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${statsExpanded === 'articles' ? 'rotate-90' : ''}`} />
+                    </div>
                   </button>
                   {statsExpanded === 'articles' && (
                     <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">

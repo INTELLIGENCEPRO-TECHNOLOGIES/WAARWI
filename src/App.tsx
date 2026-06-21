@@ -215,13 +215,9 @@ function Inner() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-brand-50/30">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-24 h-24 rounded-3xl bg-white border border-slate-200 shadow-sm flex items-center justify-center overflow-hidden p-3">
-            <img src="/Picsart_26-05-30_02-43-37-384.png" alt="WAARWI" className="w-full h-full object-contain" />
-          </div>
-          <div className="text-sm font-bold tracking-[0.2em] text-slate-800">WAARWI</div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Plateforme Business 2.0 made in Sénégal</div>
-          <Loader2 className="w-5 h-5 animate-spin text-brand-700 mt-2" />
+        <div className="flex flex-col items-center gap-4">
+          <img src="/newlogo.png" alt="" className="w-44 h-44 object-contain" />
+          <Loader2 className="w-5 h-5 animate-spin text-brand-700" />
         </div>
       </div>
     );

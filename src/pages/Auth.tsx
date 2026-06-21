@@ -166,6 +166,136 @@ function StepBar({ step }: { step: number }) {
   );
 }
 
+/* ─── Mobile-only monochrome components (black & white premium) ─────────── */
+
+function MonoInput({ icon: Icon, label, value, onChange, placeholder, type = 'text', required }: {
+  icon: any; label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; type?: string; required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-[13px] font-medium text-slate-800 mb-2">{label}</label>
+      <div className="relative">
+        <Icon className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-slate-500 pointer-events-none" strokeWidth={1.6} />
+        <input
+          required={required}
+          type={type}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full h-12 pl-12 pr-4 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400
+            focus:outline-none focus:ring-1 focus:ring-slate-900/15 focus:border-slate-900
+            transition-colors text-[14px]"
+        />
+      </div>
+    </div>
+  );
+}
+
+function MonoPassword({ value, onChange, show, toggleShow, placeholder, label = 'Mot de passe' }: {
+  value: string; onChange: (v: string) => void; show: boolean; toggleShow: () => void; placeholder: string; label?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-[13px] font-medium text-slate-800 mb-2">{label}</label>
+      <div className="relative">
+        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-slate-500 pointer-events-none" strokeWidth={1.6} />
+        <input
+          required
+          type={show ? 'text' : 'password'}
+          minLength={6}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full h-12 pl-12 pr-12 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400
+            focus:outline-none focus:ring-1 focus:ring-slate-900/15 focus:border-slate-900
+            transition-colors text-[14px]"
+        />
+        <button type="button" onClick={toggleShow} aria-label="Afficher le mot de passe"
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-900 transition-colors">
+          {show ? <EyeOff className="w-[18px] h-[18px]" strokeWidth={1.6} /> : <Eye className="w-[18px] h-[18px]" strokeWidth={1.6} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MonoButton({ children, loading, disabled, onClick, type = 'button' }: {
+  children: React.ReactNode; loading?: boolean; disabled?: boolean;
+  onClick?: () => void; type?: 'button' | 'submit';
+}) {
+  return (
+    <button
+      type={type}
+      disabled={disabled || loading}
+      onClick={onClick}
+      className="w-full h-12 rounded-xl bg-slate-900 text-white text-[14px] font-semibold
+        hover:bg-black active:scale-[0.99] transition-all
+        disabled:opacity-40 disabled:cursor-not-allowed
+        inline-flex items-center justify-center gap-2 px-5 relative"
+    >
+      {loading ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : (
+        <>
+          <span className="mx-auto">{children}</span>
+          <ArrowRight className="w-[18px] h-[18px] absolute right-5 top-1/2 -translate-y-1/2" strokeWidth={1.8} />
+        </>
+      )}
+    </button>
+  );
+}
+
+function MonoSecondaryBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="flex-1 h-12 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 transition-colors active:scale-[0.99] inline-flex items-center justify-center gap-2 text-[14px]">
+      <ArrowLeft className="w-4 h-4" />{children}
+    </button>
+  );
+}
+
+function MonoTabs({ mode, setMode, setStep }: { mode: string; setMode: (m: 'login' | 'register') => void; setStep: (s: number) => void }) {
+  const isLogin = mode === 'login';
+  return (
+    <div className="grid grid-cols-2 border-b border-slate-200">
+      <button
+        onClick={() => { setMode('login'); setStep(1); }}
+        className={`relative flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors ${
+          isLogin ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
+        }`}
+      >
+        <User className="w-4 h-4" strokeWidth={1.6} />
+        Connexion
+        {isLogin && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-slate-900" />}
+      </button>
+      <button
+        onClick={() => { setMode('register'); setStep(1); }}
+        className={`relative flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors ${
+          !isLogin ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
+        }`}
+      >
+        <Building2 className="w-4 h-4" strokeWidth={1.6} />
+        Inscription
+        {!isLogin && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-slate-900" />}
+      </button>
+    </div>
+  );
+}
+
+function MonoStepBar({ step }: { step: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      {[1, 2, 3].map(s => (
+        <div key={s} className="flex-1 h-[3px] rounded-full overflow-hidden bg-slate-100">
+          <div className={`h-full rounded-full transition-all duration-500 ${s <= step ? 'bg-slate-900' : ''}`} style={{ width: s <= step ? '100%' : '0%' }} />
+        </div>
+      ))}
+      <span className="text-[10px] font-semibold text-slate-500 tabular-nums">{step}/3</span>
+    </div>
+  );
+}
+
 /* ─── Auth page ──────────────────────────────────────────────────────────── */
 
 export function Auth() {
@@ -372,56 +502,132 @@ export function Auth() {
   );
 
   /* ── Logo ─────────────────────────────────────────────────────────────── */
-  const logoSrc = isTenantBranded && branding?.logo_url ? branding.logo_url : '/waarwi.png';
+  const logoSrc = isTenantBranded && branding?.logo_url ? branding.logo_url : '/newlogo.png';
 
   const loginBgUrl = config?.login_bg_url;
 
-  return (
-    <div className="fixed inset-0 overflow-hidden bg-[#f0f4f8]">
-      {/* Animated mesh gradient background */}
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#edf2f7] via-[#f0f4f8] to-[#e8f4f1]" />
-        <div className="auth-mesh-gradient">
-          <div className="auth-orb-1" />
-          <div className="auth-orb-2" />
-          <div className="auth-orb-3" />
+  /* ── Mobile-only form (black & white premium) ─────────────────────────── */
+  const mobileFormInner = submitted ? (
+    <div className="text-center space-y-4 py-2">
+      <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 flex items-center justify-center">
+        <CheckCircle2 className="w-7 h-7 text-slate-900" strokeWidth={1.6} />
+      </div>
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">Compte en attente de validation</h2>
+        <p className="text-sm text-slate-500 leading-relaxed mt-2">
+          Merci pour votre inscription. Un administrateur doit approuver votre compte avant activation.
+        </p>
+      </div>
+      <button onClick={() => { setSubmitted(false); setMode('login'); setStep(1); }}
+        className="text-sm font-medium text-slate-900 underline-offset-4 hover:underline transition-colors">
+        Retour à la connexion
+      </button>
+    </div>
+  ) : mode === 'login' ? (
+    <form onSubmit={submit} className="space-y-4">
+      <MonoInput icon={Mail} type="email" label="Adresse email" value={email} onChange={setEmail} placeholder="votre@email.com" required />
+      <MonoPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="••••••••••" />
+      <MonoButton loading={loading} type="submit">Se connecter</MonoButton>
+    </form>
+  ) : step === 1 ? (
+    <div className="space-y-4">
+      <MonoInput icon={Building2} label="Nom de l'entreprise" value={companyName} onChange={setCompanyName} placeholder="Ex : Sénégal Auto Parts" required />
+      <MonoInput icon={User} label="Responsable" value={fullName} onChange={setFullName} placeholder="Nom complet" required />
+      <MonoButton disabled={!step1Valid} onClick={() => setStep(2)}>Continuer</MonoButton>
+    </div>
+  ) : step === 2 ? (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-[13px] font-medium text-slate-800 mb-2">Activité</label>
+        <div className="relative">
+          <select
+            value={businessType}
+            onChange={e => setBusinessType(e.target.value)}
+            className="w-full h-12 pl-4 pr-10 rounded-xl bg-white border border-slate-200 text-slate-900
+              focus:outline-none focus:ring-1 focus:ring-slate-900/15 focus:border-slate-900
+              transition-colors text-[14px] appearance-none cursor-pointer"
+          >
+            {activityTypes.map(bt => (
+              <option key={bt.id} value={bt.slug}>{bt.name}</option>
+            ))}
+            <option value="__other__">Autre activité</option>
+          </select>
+          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+        </div>
+        {selectedActivity?.description && businessType !== '__other__' && (
+          <p className="mt-2 text-[12px] text-slate-500 leading-relaxed">{selectedActivity.description}</p>
+        )}
+      </div>
+      {businessType === '__other__' && (
+        <MonoInput icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Pharmacie..." required />
+      )}
+      <div className="flex gap-3">
+        <MonoSecondaryBtn onClick={() => setStep(1)}>Retour</MonoSecondaryBtn>
+        <div className="flex-[2]">
+          <MonoButton disabled={!step2Valid} onClick={() => setStep(3)}>Continuer</MonoButton>
         </div>
       </div>
+    </div>
+  ) : (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-1.5">
+        {[
+          ['Entreprise', companyName],
+          ['Responsable', fullName],
+          ['Activité', selectedActivityLabel],
+        ].map(([k, v]) => (
+          <div key={k} className="flex items-center justify-between">
+            <span className="text-[11px] text-slate-500">{k}</span>
+            <span className="text-[12px] font-medium text-slate-800 truncate ml-2">{v}</span>
+          </div>
+        ))}
+      </div>
+      <MonoInput icon={Mail} type="email" label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" required />
+      <MonoPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="6 caractères minimum" />
+      <div className="flex gap-3">
+        <MonoSecondaryBtn onClick={() => setStep(2)}>Retour</MonoSecondaryBtn>
+        <div className="flex-[2]">
+          <MonoButton loading={loading} disabled={!step3Valid} type="submit">Créer mon compte</MonoButton>
+        </div>
+      </div>
+      <p className="text-[11px] text-slate-400 text-center">Soumis à validation par un administrateur WAARWI.</p>
+    </form>
+  );
+
+  return (
+    <div className="fixed inset-0 overflow-hidden bg-white">
       {loginBgUrl && (
         <div className="absolute inset-0 z-[1]">
           <img src={loginBgUrl} alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px]" />
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px]" />
         </div>
       )}
 
       {/* ══════════ DESKTOP ══════════ */}
       <div className={`hidden lg:flex h-full relative z-10 transition-all duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
 
-        {/* LEFT + RIGHT: aligned at bottom using items-end */}
-        <div className="flex-1 flex items-end px-14 xl:px-20 pb-12 pt-10">
+        {/* LEFT + RIGHT: top-aligned to bring logo higher */}
+        <div className="flex-1 flex items-start px-14 xl:px-20 pb-10 pt-10">
 
           {/* LEFT COLUMN */}
           <div className={`w-full max-w-lg transition-all duration-500 delay-200 ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
 
-            {/* Logo + slogan */}
+            {/* Logo */}
             <div className="mb-8">
-              <img src={logoSrc} alt={brandName} className="h-14 xl:h-16 w-auto object-contain" />
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-2">
-                Plateforme Business 2.0
-              </p>
+              <img src={logoSrc} alt={brandName} className="h-12 xl:h-14 w-auto object-contain" />
             </div>
 
             {config?.headline ? (
               <h1 className="text-3xl xl:text-4xl font-extrabold text-slate-900 leading-[1.15] tracking-tight mb-4">
                 {config.headline}
                 {config.headline_accent && (
-                  <> <span className="text-teal-600">{config.headline_accent}</span></>
+                  <> <span className="text-slate-900">{config.headline_accent}</span></>
                 )}
               </h1>
             ) : (
               <h1 className="text-3xl xl:text-4xl font-extrabold text-slate-900 leading-[1.15] tracking-tight mb-4">
                 La plateforme qui simplifie,<br />connecte et propulse votre{' '}
-                <span className="text-teal-600">business.</span>
+                <span className="text-slate-900">business.</span>
               </h1>
             )}
 
@@ -445,8 +651,8 @@ export function Auth() {
                   >
                     {slideFeatures.map((f, i) => (
                       <div key={`${carouselSlide}-${i}`}
-                        className="rounded-xl bg-white/80 border border-slate-200 p-3.5">
-                        <f.icon className={`w-4 h-4 mb-2.5 ${f.color.split(' ')[0]}`} />
+                        className="rounded-xl bg-white border border-slate-200 p-3.5">
+                        <f.icon className="w-4 h-4 mb-2.5 text-slate-700" strokeWidth={1.6} />
                         <p className="text-xs font-bold text-slate-800 mb-0.5">{f.label}</p>
                         <p className="text-[10px] text-slate-500 leading-snug">{f.desc}</p>
                       </div>
@@ -458,7 +664,7 @@ export function Auth() {
                       <button
                         key={i}
                         onClick={() => { setCarouselAnim('out'); setTimeout(() => { setCarouselSlide(i); setCarouselAnim('in'); }, 320); }}
-                        className={`rounded-full transition-all duration-300 ${i === carouselSlide ? 'w-4 h-1.5 bg-teal-500' : 'w-1.5 h-1.5 bg-slate-300 hover:bg-slate-400'}`}
+                        className={`rounded-full transition-all duration-300 ${i === carouselSlide ? 'w-4 h-1.5 bg-slate-900' : 'w-1.5 h-1.5 bg-slate-300 hover:bg-slate-400'}`}
                       />
                     ))}
                   </div>
@@ -466,14 +672,14 @@ export function Auth() {
               );
             })()}
 
-            {/* Dashboard mockup preview — aligns to form bottom */}
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-xl overflow-hidden">
+            {/* Dashboard mockup preview */}
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.18)] overflow-hidden">
               <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 border-b border-slate-100">
                 <div className="w-2 h-2 rounded-full bg-slate-200" />
                 <div className="w-2 h-2 rounded-full bg-slate-200" />
                 <div className="w-2 h-2 rounded-full bg-slate-200" />
                 <div className="ml-2 flex items-center gap-3">
-                  <div className="w-20 h-1.5 rounded-full bg-teal-100" />
+                  <div className="w-20 h-1.5 rounded-full bg-slate-200" />
                   <div className="w-14 h-1.5 rounded-full bg-slate-100" />
                   <div className="w-16 h-1.5 rounded-full bg-slate-100" />
                 </div>
@@ -481,9 +687,9 @@ export function Auth() {
               <div className="p-4 flex gap-3">
                 {/* Sidebar mock */}
                 <div className="w-24 flex-shrink-0 space-y-1">
-                  <div className="h-3 w-16 rounded bg-teal-100 mb-1.5" />
+                  <div className="h-3 w-16 rounded bg-slate-200 mb-1.5" />
                   {['Tableau de bord', 'Ventes', 'Caisse', 'Stock', 'Clients', 'Fournisseurs', 'Facturation', 'Rapports'].map((item, i) => (
-                    <div key={i} className={`h-2.5 rounded flex items-center px-1.5 ${i === 0 ? 'bg-teal-500' : 'bg-slate-50'}`}>
+                    <div key={i} className={`h-2.5 rounded flex items-center px-1.5 ${i === 0 ? 'bg-slate-900' : 'bg-slate-50'}`}>
                       <span className={`text-[6px] font-medium truncate ${i === 0 ? 'text-white' : 'text-slate-400'}`}>{item}</span>
                     </div>
                   ))}
@@ -493,22 +699,22 @@ export function Auth() {
                   <div>
                     <div className="text-[8px] text-slate-400 font-medium">Encaissement du jour</div>
                     <div className="text-sm font-black text-slate-900 num">2 212 000 FCFA</div>
-                    <div className="text-[8px] text-teal-600 font-bold">↗ +26% vs hier</div>
+                    <div className="text-[8px] text-slate-700 font-bold">↗ +26% vs hier</div>
                   </div>
                   <div className="h-12 flex items-end gap-0.5">
                     {[25, 40, 30, 55, 45, 70, 60, 80, 65, 90, 75, 95, 70, 85, 60, 78, 88, 72, 95, 80].map((h, i) => (
-                      <div key={i} className={`flex-1 rounded-sm ${i === 12 ? 'bg-teal-500' : 'bg-teal-200/60'}`} style={{ height: `${h}%` }} />
+                      <div key={i} className={`flex-1 rounded-sm ${i === 12 ? 'bg-slate-900' : 'bg-slate-200'}`} style={{ height: `${h}%` }} />
                     ))}
                   </div>
                   <div className="grid grid-cols-3 gap-1.5 pt-1">
                     {[
-                      { label: 'SOLDE CAISSE', val: '1 820 000', color: 'text-teal-600 bg-teal-50' },
-                      { label: 'DÉPENSES', val: '25 000', color: 'text-rose-600 bg-rose-50' },
-                      { label: 'ENTRÉES', val: '10 000', color: 'text-emerald-600 bg-emerald-50' },
+                      { label: 'SOLDE CAISSE', val: '1 820 000' },
+                      { label: 'DÉPENSES', val: '25 000' },
+                      { label: 'ENTRÉES', val: '10 000' },
                     ].map((s, i) => (
-                      <div key={i} className={`rounded-lg p-1.5 ${s.color}`}>
-                        <div className="text-[6px] font-bold uppercase opacity-70">{s.label}</div>
-                        <div className="text-[8px] font-black num">{s.val} FCFA</div>
+                      <div key={i} className="rounded-lg p-1.5 bg-slate-50 border border-slate-100">
+                        <div className="text-[6px] font-bold uppercase text-slate-500">{s.label}</div>
+                        <div className="text-[8px] font-black text-slate-900 num">{s.val} FCFA</div>
                       </div>
                     ))}
                   </div>
@@ -524,16 +730,15 @@ export function Auth() {
                 { icon: null, label: 'Made in Sénégal', sub: 'Conçu pour les entreprises locales', flag: true },
               ].map((t, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
                     {t.flag ? (
                       <svg className="w-3.5 h-2.5" viewBox="0 0 21 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="7" height="14" fill="#00853F" opacity="0.85" />
-                        <rect x="7" width="7" height="14" fill="#FDEF42" opacity="0.85" />
-                        <rect x="14" width="7" height="14" fill="#E31B23" opacity="0.85" />
-                        <path d="M10.5 5.2L10.9 6.4H12.1L11.1 7.1L11.5 8.3L10.5 7.6L9.5 8.3L9.9 7.1L8.9 6.4H10.1L10.5 5.2Z" fill="#00853F" opacity="0.9" />
+                        <rect width="7" height="14" fill="#1f2937" opacity="0.2" />
+                        <rect x="7" width="7" height="14" fill="#1f2937" opacity="0.5" />
+                        <rect x="14" width="7" height="14" fill="#1f2937" opacity="0.85" />
                       </svg>
                     ) : (
-                      t.icon && <t.icon className="w-3 h-3 text-teal-600" />
+                      t.icon && <t.icon className="w-3 h-3 text-slate-700" strokeWidth={1.7} />
                     )}
                   </div>
                   <div>
@@ -546,16 +751,16 @@ export function Auth() {
           </div>
         </div>
 
-        {/* RIGHT PANEL - Form — also bottom-aligned */}
-        <div className={`w-[460px] xl:w-[500px] flex-shrink-0 flex items-end justify-center px-10 xl:px-12 pb-12 pt-10 transition-all duration-500 delay-300 ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}>
+        {/* RIGHT PANEL - Form */}
+        <div className={`w-[460px] xl:w-[500px] flex-shrink-0 flex items-center justify-center px-10 xl:px-12 pb-12 pt-10 transition-all duration-500 delay-300 ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}>
           <div className="w-full">
             {/* Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_8px_40px_-8px_rgba(0,0,0,0.12)] p-7 xl:p-8">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_8px_40px_-8px_rgba(15,23,42,0.12)] p-7 xl:p-8">
               {/* Card header */}
               <div className="text-center mb-6">
-                <h2 className="text-xl font-extrabold text-slate-900">
+                <h2 className="text-xl font-semibold text-slate-900 tracking-tight">
                   Bienvenue sur{' '}
-                  <span className="text-teal-600">{isTenantBranded ? brandName : 'Waarwi'}</span>
+                  <span className="font-bold">{isTenantBranded ? brandName : 'Waarwi'}</span>
                 </h2>
                 <p className="text-sm text-slate-500 mt-1">
                   {submitted ? 'Inscription soumise' : mode === 'login' ? 'Connectez-vous à votre espace' : 'Créez votre espace business'}
@@ -565,76 +770,65 @@ export function Auth() {
               {/* Tabs */}
               {!isTenantBranded && !submitted && (
                 <div className="mb-5">
-                  <ModeTabs mode={mode} setMode={setMode} setStep={setStep} />
+                  <MonoTabs mode={mode} setMode={setMode} setStep={setStep} />
                 </div>
               )}
 
               {/* Step bar for register */}
               {!submitted && mode === 'register' && (
                 <div className="mb-5">
-                  <StepBar step={step} />
+                  <MonoStepBar step={step} />
                 </div>
               )}
 
-              {formInner}
+              {mobileFormInner}
             </div>
 
             {/* Below card */}
             <div className="flex items-center justify-center gap-1.5 mt-4">
               <div className="w-px h-3 bg-slate-200" />
-              <span className="text-[10px] text-slate-400">© {new Date().getFullYear()} WAARWI</span>
+              <span className="text-[10px] text-slate-500">© {new Date().getFullYear()} WAARWI</span>
               <div className="w-px h-3 bg-slate-200" />
-              <span className="text-[10px] text-slate-400">Infrastructure sécurisée</span>
+              <span className="text-[10px] text-slate-500">Infrastructure sécurisée</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* ══════════ MOBILE ══════════ */}
-      <div className={`flex lg:hidden flex-col h-full relative z-10 overflow-y-auto transition-all duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="flex flex-col min-h-full px-5 pt-5 pb-4">
+      <div className={`flex lg:hidden flex-col h-full relative z-10 overflow-y-auto bg-white transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
+        <div className="flex flex-col min-h-full px-6 pt-8 pb-5">
 
           {/* Logo */}
-          <div className="flex flex-col items-center text-center mb-3">
-            <img src={logoSrc} alt={brandName} className="h-10 w-auto object-contain mb-1" />
-            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Plateforme Business 2.0</p>
+          <div className="flex flex-col items-center text-center mb-6">
+            <img src={logoSrc} alt={brandName} className="h-9 w-auto object-contain" />
           </div>
 
-          {/* Feature pills */}
-          <div className="grid grid-cols-3 gap-1.5 mb-4">
-            {features.map((f, i) => (
-              <div key={i} className="rounded-lg bg-white border border-slate-200 px-2 py-1.5 text-center">
-                <f.icon className={`w-3.5 h-3.5 mx-auto mb-1 ${f.color.split(' ')[0]}`} />
-                <p className="text-[8.5px] font-bold text-slate-700 leading-tight">{f.label}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Form card */}
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10)] p-5">
-              <div className="text-center mb-4">
-                <h2 className="text-base font-extrabold text-slate-900">
-                  Bienvenue sur <span className="text-teal-600">{isTenantBranded ? brandName : 'Waarwi'}</span>
-                </h2>
-              </div>
-
-              {!isTenantBranded && !submitted && (
-                <div className="mb-4">
-                  <ModeTabs mode={mode} setMode={setMode} setStep={setStep} />
-                </div>
-              )}
-              {!submitted && mode === 'register' && (
-                <div className="mb-4"><StepBar step={step} /></div>
-              )}
-              {formInner}
+          {/* Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_2px_18px_-6px_rgba(15,23,42,0.10)] p-6">
+            <div className="text-center mb-5">
+              <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
+                Bienvenue sur <span className="font-bold">{isTenantBranded ? brandName : 'Waarwi'}</span>
+              </h2>
             </div>
+
+            {!isTenantBranded && !submitted && (
+              <div className="mb-5">
+                <MonoTabs mode={mode} setMode={setMode} setStep={setStep} />
+              </div>
+            )}
+            {!submitted && mode === 'register' && (
+              <div className="mb-5"><MonoStepBar step={step} /></div>
+            )}
+            {mobileFormInner}
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-center gap-3 mt-5 text-[10px] text-slate-400">
-            <Shield className="w-3 h-3 text-teal-500" />
-            <span>Connexion sécurisée</span>
+          <div className="flex items-center justify-center gap-3 mt-auto pt-8 text-[11px] text-slate-500">
+            <div className="inline-flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" strokeWidth={1.6} />
+              <span>Connexion sécurisée</span>
+            </div>
             <div className="w-px h-3 bg-slate-200" />
             <span>© {new Date().getFullYear()} WAARWI</span>
           </div>

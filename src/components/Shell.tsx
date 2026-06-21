@@ -315,7 +315,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             />
           ) : (
             <img
-              src="/Picsart_26-05-30_02-43-37-384.png"
+              src="/newlogo.png"
               alt="WAARWI"
               className="h-8 w-auto max-w-[130px] object-contain flex-shrink-0 header-logo-reveal"
             />
@@ -324,9 +324,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             <div className="leading-tight min-w-0">
               {tenant?.logo_url && (
                 <div className="text-sm font-bold text-slate-900 tracking-tight">{tenant?.name || 'WAARWI'}</div>
-              )}
-              {!tenant?.logo_url && (
-                <div className="text-[9px] font-semibold text-slate-400 leading-tight tracking-wide uppercase">Plateforme Business 2.0</div>
               )}
               {tenant?.slogan && <div className="text-[10px] font-medium text-slate-500 leading-tight">{tenant.slogan}</div>}
             </div>
@@ -474,7 +471,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     />
                   ) : (
                     <img
-                      src="/Picsart_26-05-30_02-43-37-384.png"
+                      src="/newlogo.png"
                       alt="WAARWI"
                       className="h-7 w-auto max-w-[110px] object-contain shrink-0 header-logo-reveal"
                     />
@@ -483,9 +480,11 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     {tenant?.logo_url && (
                       <div className="text-[13px] font-bold text-slate-900 tracking-tight truncate leading-tight">{tenant?.name || 'WAARWI'}</div>
                     )}
-                    <div className="text-[9px] text-slate-500 leading-tight font-medium truncate">
-                      {tenant?.logo_url ? (tenant?.slogan || profile?.email) : 'Plateforme Business 2.0'}
-                    </div>
+                    {(tenant?.logo_url ? (tenant?.slogan || profile?.email) : profile?.email) && (
+                      <div className="text-[9px] text-slate-500 leading-tight font-medium truncate">
+                        {tenant?.logo_url ? (tenant?.slogan || profile?.email) : profile?.email}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button
@@ -647,7 +646,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 />
               ) : (
                 <img
-                  src="/Picsart_26-05-30_02-43-37-384.png"
+                  src="/newlogo.png"
                   alt="WAARWI"
                   className="h-7 w-auto max-w-[100px] object-contain shrink-0 header-logo-reveal"
                 />
@@ -660,9 +659,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 </div>
               )}
             </div>
-            {!tenant?.logo_url && (
-              <div className="text-[9px] font-semibold text-slate-400 leading-tight mt-0.5 uppercase tracking-wide">Plateforme Business 2.0</div>
-            )}
             {tenant?.slogan && (
               <div className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5 truncate">
                 {tenant.slogan}
@@ -713,11 +709,11 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         </header>
 
-        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
+        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
           {isPOS ? (
             <div className="flex-1 flex flex-col min-h-0 pb-[64px] lg:pb-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
-            <div className="flex-1 flex flex-col min-h-0 pb-[64px] lg:pb-0">{children}</div>
+            <div className="flex-1 flex flex-col min-h-0 px-2 sm:px-3 lg:px-0 pb-[64px] lg:pb-0">{children}</div>
           ) : (
             <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[76px] lg:pb-8">{children}</div>
           )}

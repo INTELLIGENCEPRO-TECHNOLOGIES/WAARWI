@@ -14,10 +14,76 @@ export type Tenant = {
   plan: string;
   public_slug: string | null;
   business_type?: string;
+  business_activity_type_id?: string | null;
+  business_activity_type_name?: string | null;
+  ticket_header_config?: TicketHeaderItem[] | null;
   enabled_modules?: string[];
   approval_status?: string;
   slogan?: string;
+  website?: string;
 };
+
+export type TicketHeaderFieldKey =
+  | 'logo'
+  | 'name'
+  | 'legal_name'
+  | 'activity'
+  | 'address'
+  | 'phone'
+  | 'email'
+  | 'website'
+  | 'ninea'
+  | 'rccm';
+
+export type TicketHeaderSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+
+export type TicketHeaderItem = {
+  key: TicketHeaderFieldKey;
+  show: boolean;
+  size: TicketHeaderSize;
+  breakAfter: boolean;
+};
+
+export const DEFAULT_TICKET_HEADER_CONFIG: TicketHeaderItem[] = [
+  { key: 'logo',       show: true, size: 'lg', breakAfter: false },
+  { key: 'name',       show: true, size: 'xl', breakAfter: false },
+  { key: 'legal_name', show: true, size: 'sm', breakAfter: false },
+  { key: 'activity',   show: true, size: 'sm', breakAfter: false },
+  { key: 'address',    show: true, size: 'sm', breakAfter: false },
+  { key: 'phone',      show: true, size: 'sm', breakAfter: false },
+  { key: 'email',      show: true, size: 'sm', breakAfter: false },
+  { key: 'website',    show: true, size: 'sm', breakAfter: false },
+  { key: 'ninea',      show: true, size: 'sm', breakAfter: false },
+  { key: 'rccm',       show: true, size: 'sm', breakAfter: false },
+];
+
+export const TICKET_HEADER_FIELD_LABELS: Record<TicketHeaderFieldKey, string> = {
+  logo:       'Logo',
+  name:       "Nom de l'entreprise",
+  legal_name: 'Raison sociale',
+  activity:   "Type d'activité",
+  address:    'Adresse',
+  phone:      'Téléphone',
+  email:      'Email',
+  website:    'Site web',
+  ninea:      'NINEA',
+  rccm:       'RCCM',
+};
+
+export function mergeTicketHeaderConfig(stored: TicketHeaderItem[] | null | undefined): TicketHeaderItem[] {
+  const defaults = DEFAULT_TICKET_HEADER_CONFIG;
+  if (!Array.isArray(stored) || stored.length === 0) return defaults.map(d => ({ ...d }));
+  const known = new Set(defaults.map(d => d.key));
+  const ordered = stored.filter(s => s && known.has(s.key as TicketHeaderFieldKey)).map(s => ({
+    key: s.key as TicketHeaderFieldKey,
+    show: typeof s.show === 'boolean' ? s.show : true,
+    size: (['xs','sm','md','lg','xl'] as TicketHeaderSize[]).includes(s.size as TicketHeaderSize) ? (s.size as TicketHeaderSize) : 'sm',
+    breakAfter: typeof s.breakAfter === 'boolean' ? s.breakAfter : false,
+  }));
+  const present = new Set(ordered.map(s => s.key));
+  defaults.forEach(d => { if (!present.has(d.key)) ordered.push({ ...d, show: false }); });
+  return ordered;
+}
 
 export const BUSINESS_TYPE_LABELS: Record<string, string> = {
   auto_parts: 'Pièces automobiles',

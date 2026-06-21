@@ -58,7 +58,7 @@ export function PlatformAdmin() {
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-teal-500/20 to-transparent rounded-full blur-3xl" />
         <div className="relative flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center shadow-lg overflow-hidden p-1">
-            <img src="/Picsart_26-05-30_02-43-37-384.png" alt="WAARWI" className="w-full h-full object-contain" />
+            <img src="/newlogo.png" alt="WAARWI" className="w-full h-full object-contain" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -1726,7 +1726,7 @@ function LoginConfigSection() {
               <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-4 space-y-3">
                 {/* Logo */}
                 <div>
-                  <img src="/Picsart_26-05-30_02-43-37-384.png" alt="WAARWI" className="h-8 w-auto object-contain" />
+                  <img src="/newlogo.png" alt="WAARWI" className="h-8 w-auto object-contain" />
                   <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wider mt-1">Plateforme Business 2.0</p>
                 </div>
                 {/* Headline */}

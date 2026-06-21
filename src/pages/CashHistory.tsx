@@ -108,6 +108,13 @@ export function CashHistory() {
     ]);
     const byMethodMap: Record<string, number> = {};
     (pmtData || []).forEach((p: any) => { byMethodMap[p.method_name] = (byMethodMap[p.method_name] || 0) + Number(p.amount); });
+    (mvData || []).forEach((m: any) => {
+      const isReglement = m.kind === 'income' && (m.reason || '').startsWith('Reglement ');
+      if (isReglement) return;
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
+      const method = m.method_name || 'Especes';
+      byMethodMap[method] = (byMethodMap[method] || 0) + Number(m.amount);
+    });
     const invoicePayments: InvoicePayment[] = (pmtData || [])
       .filter((p: any) => !p.sales || p.sales.cash_session_id !== s.id)
       .map((p: any) => ({
@@ -141,8 +148,7 @@ export function CashHistory() {
   };
 
   const printReport = (d: SessionDetail) => {
-    const salesTotal = d.sales.reduce((s, x) => s + x.total, 0);
-    const invoicePayTotal = d.invoicePayments.reduce((s, p) => s + p.amount, 0);
+    const byMethodTotal = d.byMethod.reduce((s, m) => s + m.amount, 0);
     printXReport80({
       tenant: {
         name: tenant?.name || '',
@@ -163,7 +169,7 @@ export function CashHistory() {
       closedAt: d.session.closed_at,
       openingAmount: Number(d.session.opening_amount),
       salesCount: d.sales.length,
-      salesTotal: salesTotal + invoicePayTotal,
+      salesTotal: byMethodTotal,
       byMethod: d.byMethod,
       movements: d.movements,
       controls: d.controls.map(c => ({
@@ -298,11 +304,10 @@ export function CashHistory() {
             {/* Compact KPI strip */}
             {(() => {
               const mvExp = detail.movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
-              const mvIn = detail.movements.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
-              const mvPre = detail.movements.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
               const salesTotal = detail.sales.reduce((s, x) => s + x.total, 0);
-              const invoicePayTotal = detail.invoicePayments.reduce((s, p) => s + p.amount, 0);
-              const net = salesTotal + invoicePayTotal + mvIn + mvPre - mvExp;
+              const byMethodTotal = detail.byMethod.reduce((s, m) => s + m.amount, 0);
+              const totalEncaisse = byMethodTotal;
+              const net = totalEncaisse - mvExp;
               return (
                 <div className="flex items-stretch gap-px rounded-xl overflow-hidden border border-slate-200 bg-slate-200">
                   <div className="flex-1 bg-white p-2 text-center">
@@ -310,8 +315,9 @@ export function CashHistory() {
                     <div className="text-sm font-bold text-slate-900 num mt-0.5">{detail.sales.length}</div>
                   </div>
                   <div className="flex-1 bg-white p-2 text-center">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">CA Total</div>
-                    <div className="text-sm font-bold text-slate-900 num mt-0.5">{formatFCFA(salesTotal + invoicePayTotal)}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total encaissé</div>
+                    <div className="text-sm font-bold text-slate-900 num mt-0.5">{formatFCFA(totalEncaisse)}</div>
+                    <div className="text-[8px] text-slate-400 num mt-0.5">Facturé {formatFCFA(salesTotal)}</div>
                   </div>
                   <div className="flex-1 bg-white p-2 text-center">
                     <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Net</div>

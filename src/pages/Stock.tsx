@@ -12,7 +12,7 @@ import { desktopAutoFocus } from '../lib/device';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
-import { printStockMovementA4, printStockMovement80, printInventoryBookA4, type PrintTenant } from '../lib/print';
+import { printStockMovementA4, printStockMovement80, printInventoryBookA4, buildPrintTenant, type PrintTenant } from '../lib/print';
 
 type Row = {
   article_id: string;
@@ -51,6 +51,7 @@ export function Stock() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [tab, setTab] = useState<'stocks' | 'movements' | 'lots'>('stocks');
+  const [mvSubTab, setMvSubTab] = useState<'movements' | 'documents'>('movements');
   const [moves, setMoves] = useState<any[]>([]);
   const [mvDateFrom, setMvDateFrom] = useState<string>('');
   const [mvDateTo, setMvDateTo] = useState<string>('');
@@ -131,6 +132,35 @@ export function Stock() {
   // Inventory book printing modal
   const [invBookOpen, setInvBookOpen] = useState(false);
   const [invBookScope, setInvBookScope] = useState<string>('');
+
+  // Stock documents (bulk operations)
+  type StockDocRow = {
+    id: string;
+    doc_number: string;
+    doc_type: 'entry' | 'exit' | 'transfer' | 'inventory';
+    site_id: string;
+    dest_site_id: string | null;
+    user_id: string | null;
+    note: string;
+    status: string;
+    total_qty: number;
+    line_count: number;
+    created_at: string;
+    user_email?: string | null;
+  };
+  const [stockDocs, setStockDocs] = useState<StockDocRow[]>([]);
+  const [docsTypeFilter, setDocsTypeFilter] = useState<'all' | 'entry' | 'exit' | 'transfer' | 'inventory'>('all');
+  const [docDetailOpen, setDocDetailOpen] = useState(false);
+  const [docDetailDoc, setDocDetailDoc] = useState<StockDocRow | null>(null);
+  const [docDetailLines, setDocDetailLines] = useState<any[]>([]);
+  const [docDetailLoading, setDocDetailLoading] = useState(false);
+  const [docEditOpen, setDocEditOpen] = useState(false);
+  const [docEditDoc, setDocEditDoc] = useState<StockDocRow | null>(null);
+  const [docEditEntries, setDocEditEntries] = useState<{ article_id: string; article_name: string; article_ref: string; quantity: number | ''; note: string }[]>([]);
+  const [docEditNote, setDocEditNote] = useState('');
+  const [docEditSaving, setDocEditSaving] = useState(false);
+  const [docDeleteConfirm, setDocDeleteConfirm] = useState<StockDocRow | null>(null);
+  const [docDeleting, setDocDeleting] = useState(false);
 
   const load = async (silent = false) => {
     if (!tenant || !currentSite) return;
@@ -213,6 +243,23 @@ export function Stock() {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id]);
 
+  // ── Load stock documents when entering documents sub-tab ────────────────────
+  const loadStockDocs = async () => {
+    if (!tenant) return;
+    const { data, error: e } = await supabase
+      .from('stock_documents')
+      .select('id, doc_number, doc_type, site_id, dest_site_id, user_id, note, status, total_qty, line_count, created_at')
+      .eq('tenant_id', tenant.id)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (e) { setStockDocs([]); return; }
+    setStockDocs((data || []) as StockDocRow[]);
+  };
+  useEffect(() => {
+    if (tab === 'movements' && mvSubTab === 'documents') loadStockDocs();
+    /* eslint-disable-next-line */
+  }, [tab, mvSubTab, tenant?.id, dataTick]);
+
   const [flashKey, setFlashKey] = useState<string | null>(null);
   useEffect(() => {
     const ctx = consumeNavContext();
@@ -261,10 +308,7 @@ export function Stock() {
     const now = new Date();
     const refBase = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
     const dateStr = now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const tenantInfo = {
-      name: tenant.name, logo_url: (tenant as any)?.logo_url,
-      address: (tenant as any)?.address, phone: (tenant as any)?.phone,
-    };
+    const tenantInfo = buildPrintTenant(tenant);
     const ownDepots = depots.filter(d => d.parent_site_id === currentSite.id);
     const targets: { id: string; name: string }[] = scope === 'all'
       ? [{ id: currentSite.id, name: currentSite.name + ' (Magasin)' }, ...ownDepots.map(d => ({ id: d.id, name: d.name + ' (Dépôt)' }))]
@@ -290,11 +334,7 @@ export function Stock() {
     });
   };
 
-  const tenantPrint: PrintTenant = {
-    name: tenant?.name || '', logo_url: (tenant as any)?.logo_url,
-    address: (tenant as any)?.address, phone: (tenant as any)?.phone,
-    email: (tenant as any)?.email,
-  };
+  const tenantPrint: PrintTenant = buildPrintTenant(tenant);
 
   const printMovement = (m: any, format: 'a4' | '80') => {
     if (!tenant || !currentSite) return;
@@ -311,6 +351,181 @@ export function Stock() {
     };
     if (format === 'a4') printStockMovementA4(opts);
     else printStockMovement80(opts);
+  };
+
+  // ── Stock document helpers ───────────────────────────────────────────────────
+  const docTypeMeta: Record<string, { label: string; color: string; mvType: string }> = {
+    entry: { label: 'Entrée', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', mvType: 'adjustment_in' },
+    exit: { label: 'Sortie', color: 'bg-red-50 text-red-700 border-red-200', mvType: 'adjustment_out' },
+    transfer: { label: 'Transfert', color: 'bg-sky-50 text-sky-700 border-sky-200', mvType: 'transfer_out' },
+    inventory: { label: 'Inventaire', color: 'bg-amber-50 text-amber-700 border-amber-200', mvType: 'inventory' },
+  };
+
+  const findSiteName = (id: string | null | undefined) => {
+    if (!id) return '';
+    if (currentSite?.id === id) return currentSite.name;
+    const s = sites.find(x => x.id === id);
+    if (s) return s.name;
+    const d = depots.find(x => x.id === id);
+    if (d) return d.name + ' (Dépôt)';
+    return '—';
+  };
+
+  const openDocDetail = async (doc: StockDocRow) => {
+    setDocDetailDoc(doc);
+    setDocDetailOpen(true);
+    setDocDetailLoading(true);
+    setDocDetailLines([]);
+    const { data } = await supabase
+      .from('stock_movements')
+      .select('id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, articles(name, internal_ref)')
+      .eq('stock_document_id', doc.id)
+      .order('created_at', { ascending: true });
+    setDocDetailLines(data || []);
+    setDocDetailLoading(false);
+  };
+
+  const printStockDoc = (doc: StockDocRow, lines: any[], format: 'a4' | '80') => {
+    if (!tenant) return;
+    const meta = docTypeMeta[doc.doc_type];
+    const items = lines
+      .filter(l => doc.doc_type !== 'transfer' || l.movement_type === 'transfer_out')
+      .map(l => ({
+        ref: (l.articles as any)?.internal_ref || '',
+        name: (l.articles as any)?.name || '',
+        quantity: Math.abs(Number(l.quantity)),
+      }));
+    const siteName = findSiteName(doc.site_id) + (doc.dest_site_id ? ` → ${findSiteName(doc.dest_site_id)}` : '');
+    const opts = {
+      tenant: tenantPrint,
+      movementType: meta?.mvType || doc.doc_type,
+      movementLabel: meta?.label || doc.doc_type,
+      reference: doc.doc_number,
+      date: new Date(doc.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      user: profile?.full_name || profile?.email || '',
+      siteName,
+      items,
+      observation: doc.note || undefined,
+    };
+    if (format === 'a4') printStockMovementA4(opts);
+    else printStockMovement80(opts);
+  };
+
+  const reprintDocFromList = async (doc: StockDocRow, format: 'a4' | '80') => {
+    const { data } = await supabase
+      .from('stock_movements')
+      .select('id, movement_type, quantity, article_id, articles(name, internal_ref)')
+      .eq('stock_document_id', doc.id);
+    printStockDoc(doc, data || [], format);
+  };
+
+  const openDocEdit = async (doc: StockDocRow) => {
+    if (doc.status !== 'active') { error('Document déjà annulé ou édité'); return; }
+    if (doc.doc_type === 'transfer') { error('Édition non supportée pour les transferts (annulez puis recréez)'); return; }
+    setDocEditDoc(doc);
+    setDocEditNote(doc.note || '');
+    setDocEditSaving(false);
+    const { data } = await supabase
+      .from('stock_movements')
+      .select('id, quantity, article_id, note, articles(name, internal_ref)')
+      .eq('stock_document_id', doc.id);
+    const entries = (data || []).map((l: any) => ({
+      article_id: l.article_id,
+      article_name: l.articles?.name || '',
+      article_ref: l.articles?.internal_ref || '',
+      quantity: Math.abs(Number(l.quantity)) as number | '',
+      note: l.note || '',
+    }));
+    setDocEditEntries(entries);
+    setDocEditOpen(true);
+  };
+
+  const saveDocEdit = async () => {
+    if (!docEditDoc || !tenant) return;
+    if (!can('manage_stock')) { error('Permission refusée'); return; }
+    const valid = docEditEntries.filter(e => e.quantity !== '' && Number(e.quantity) > 0);
+    if (valid.length === 0) { error('Aucune ligne valide'); return; }
+    setDocEditSaving(true);
+    try {
+      // 1. Reverse old movements (returns stock to pre-document state)
+      const { error: rErr } = await supabase.rpc('reverse_stock_document', { p_document_id: docEditDoc.id });
+      if (rErr) throw rErr;
+
+      // 2. Re-apply new entries linked to the SAME document id
+      for (const entry of valid) {
+        const qty = Number(entry.quantity);
+        if (docEditDoc.doc_type === 'entry') {
+          const { error: e } = await supabase.rpc('adjust_stock_with_doc', {
+            p_article_id: entry.article_id, p_site_id: docEditDoc.site_id,
+            p_quantity: qty, p_movement_type: 'adjustment_in',
+            p_note: entry.note || 'Entrée stock (masse édité)',
+            p_stock_document_id: docEditDoc.id,
+          });
+          if (e) throw e;
+        } else if (docEditDoc.doc_type === 'exit') {
+          const { error: e } = await supabase.rpc('adjust_stock_with_doc', {
+            p_article_id: entry.article_id, p_site_id: docEditDoc.site_id,
+            p_quantity: -qty, p_movement_type: 'adjustment_out',
+            p_note: entry.note || 'Sortie stock (masse édité)',
+            p_stock_document_id: docEditDoc.id,
+          });
+          if (e) throw e;
+        } else if (docEditDoc.doc_type === 'inventory') {
+          // For inventory, qty is the new real qty; compute diff against current level
+          const { data: lvl } = await supabase
+            .from('stock_levels')
+            .select('quantity')
+            .eq('article_id', entry.article_id).eq('site_id', docEditDoc.site_id).maybeSingle();
+          const currentQty = Number(lvl?.quantity ?? 0);
+          const diff = qty - currentQty;
+          if (diff === 0) continue;
+          const { error: e } = await supabase.rpc('adjust_stock_with_doc', {
+            p_article_id: entry.article_id, p_site_id: docEditDoc.site_id,
+            p_quantity: diff, p_movement_type: 'inventory',
+            p_note: entry.note || `Inventaire édité: ${currentQty} -> ${qty}`,
+            p_stock_document_id: docEditDoc.id,
+          });
+          if (e) throw e;
+        }
+      }
+
+      // 3. Update document header
+      const totalQty = valid.reduce((s, e) => s + Math.abs(Number(e.quantity) || 0), 0);
+      await supabase.from('stock_documents').update({
+        note: docEditNote,
+        total_qty: totalQty,
+        line_count: valid.length,
+        updated_at: new Date().toISOString(),
+      }).eq('id', docEditDoc.id);
+
+      success(`Document ${docEditDoc.doc_number} mis à jour · stock régénéré`);
+      setDocEditOpen(false);
+      setDocEditDoc(null);
+      await loadStockDocs();
+      await load(true);
+    } catch (e: any) {
+      error(e.message || 'Erreur lors de la mise à jour');
+    } finally {
+      setDocEditSaving(false);
+    }
+  };
+
+  const cancelDoc = async (doc: StockDocRow) => {
+    if (!can('manage_stock')) { error('Permission refusée'); return; }
+    setDocDeleting(true);
+    try {
+      const { error: rErr } = await supabase.rpc('reverse_stock_document', { p_document_id: doc.id });
+      if (rErr) throw rErr;
+      await supabase.from('stock_documents').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', doc.id);
+      success(`Document ${doc.doc_number} annulé · stock régénéré`);
+      setDocDeleteConfirm(null);
+      await loadStockDocs();
+      await load(true);
+    } catch (e: any) {
+      error(e.message || 'Erreur lors de l\'annulation');
+    } finally {
+      setDocDeleting(false);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -643,6 +858,7 @@ export function Stock() {
             listSourceSite={listSourceSite}
             setListSourceSite={setListSourceSite}
             stockByLocation={stockByLocation}
+            tenantId={tenant!.id}
           />
         ) : (
           <>
@@ -743,6 +959,24 @@ export function Stock() {
         )
       ) : tab === 'movements' ? (
         <>
+          {/* Sub-tabs: Mouvements / Documents */}
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+            <button
+              onClick={() => setMvSubTab('movements')}
+              className={`px-3 py-1.5 text-[11px] font-bold inline-flex items-center gap-1.5 transition-all ${mvSubTab === 'movements' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
+            >
+              <History className="w-3.5 h-3.5" />Mouvements
+            </button>
+            <button
+              onClick={() => setMvSubTab('documents')}
+              className={`px-3 py-1.5 text-[11px] font-bold inline-flex items-center gap-1.5 transition-all ${mvSubTab === 'documents' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
+            >
+              <ClipboardList className="w-3.5 h-3.5" />Documents
+            </button>
+          </div>
+
+          {mvSubTab === 'movements' ? (
+          <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
             <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filteredMoves.length} / {moves.length}</span>
             {(mvDateFrom || mvDateTo) && (
@@ -804,6 +1038,90 @@ export function Stock() {
               );
             })}
           </div>
+          )}
+          </>
+          ) : (
+          /* ─────────── Documents sub-section ─────────── */
+          <>
+          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+            <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">
+              {stockDocs.filter(d => docsTypeFilter === 'all' || d.doc_type === docsTypeFilter).length} / {stockDocs.length}
+            </span>
+            {(['all', 'entry', 'exit', 'transfer', 'inventory'] as const).map(k => {
+              const labels: Record<string, string> = { all: 'Tous', entry: 'Entrées', exit: 'Sorties', transfer: 'Transferts', inventory: 'Inventaires' };
+              const active = docsTypeFilter === k;
+              return (
+                <button key={k}
+                  onClick={() => setDocsTypeFilter(k)}
+                  className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all ${active ? 'bg-ink-900 text-white' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
+                >{labels[k]}</button>
+              );
+            })}
+          </div>
+
+          {(() => {
+            const filtered = stockDocs.filter(d => docsTypeFilter === 'all' || d.doc_type === docsTypeFilter);
+            if (filtered.length === 0) {
+              return <div className="card-premium"><EmptyState icon={ClipboardList} title="Aucun document" description="Les documents de stock (opérations en masse) apparaîtront ici." /></div>;
+            }
+            return (
+              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100 count-up">
+                {filtered.map(d => {
+                  const meta = docTypeMeta[d.doc_type] || { label: d.doc_type, color: 'bg-slate-100 text-slate-700 border-slate-200', mvType: '' };
+                  const cancelled = d.status === 'cancelled';
+                  return (
+                    <div key={d.id} className={`flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50/60 transition-colors ${cancelled ? 'opacity-60' : ''}`}>
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${meta.color}`}>
+                        <ClipboardList className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-1.5 flex-wrap">
+                          <span className="text-[12px] font-semibold text-slate-900 break-words min-w-0 num">{d.doc_number}</span>
+                          <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${meta.color}`}>
+                            {meta.label}
+                          </span>
+                          {cancelled && (
+                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">Annulé</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 flex-wrap">
+                          <span className="num">{d.line_count} ligne{d.line_count > 1 ? 's' : ''}</span>
+                          <span>·</span>
+                          <span className="num">Total: {Number(d.total_qty).toLocaleString('fr-FR')}</span>
+                          <span>·</span>
+                          <span className="num">{formatDateTime(d.created_at)}</span>
+                          {d.dest_site_id && (<><span>·</span><span className="truncate">{findSiteName(d.site_id)} → {findSiteName(d.dest_site_id)}</span></>)}
+                        </div>
+                        {d.note && <div className="text-[10px] text-slate-400 break-words mt-0.5">{d.note}</div>}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1">
+                        <button onClick={() => openDocDetail(d)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 transition-all active:scale-90" title="Détails">
+                          <Info className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => reprintDocFromList(d, 'a4')} className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 transition-all active:scale-90" title="Imprimer A4">
+                          <Printer className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => reprintDocFromList(d, '80')} className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 transition-all active:scale-90" title="Imprimer 80mm">
+                          <Scroll className="w-3.5 h-3.5" />
+                        </button>
+                        {!cancelled && can('manage_stock') && d.doc_type !== 'transfer' && (
+                          <button onClick={() => openDocEdit(d)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 transition-all active:scale-90" title="Éditer (régénère le stock)">
+                            <Save className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {!cancelled && can('manage_stock') && (
+                          <button onClick={() => setDocDeleteConfirm(d)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-800 transition-all active:scale-90" title="Annuler (régénère le stock)">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          </>
           )}
         </>
       ) : null}
@@ -1105,6 +1423,167 @@ export function Stock() {
         </div>
       </Modal>
 
+      {/* Stock document detail */}
+      <Modal
+        open={docDetailOpen}
+        onClose={() => { setDocDetailOpen(false); setDocDetailDoc(null); setDocDetailLines([]); }}
+        title={docDetailDoc ? `Document ${docDetailDoc.doc_number}` : 'Document'}
+        size="md"
+        footer={docDetailDoc ? (
+          <>
+            <button onClick={() => { setDocDetailOpen(false); setDocDetailDoc(null); setDocDetailLines([]); }} className="btn-secondary">Fermer</button>
+            <div className="flex-1" />
+            <button onClick={() => printStockDoc(docDetailDoc, docDetailLines, '80')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95">
+              <Scroll className="w-3.5 h-3.5" />80mm
+            </button>
+            <button onClick={() => printStockDoc(docDetailDoc, docDetailLines, 'a4')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-ink-900 to-slate-800 text-white shadow-glow active:scale-95">
+              <Printer className="w-3.5 h-3.5" />A4
+            </button>
+          </>
+        ) : null}
+      >
+        {docDetailDoc && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
+                <div className="text-[9px] font-bold uppercase text-slate-400">Type</div>
+                <div className="font-bold text-slate-800 mt-0.5">{docTypeMeta[docDetailDoc.doc_type]?.label || docDetailDoc.doc_type}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
+                <div className="text-[9px] font-bold uppercase text-slate-400">Date</div>
+                <div className="font-bold text-slate-800 num mt-0.5">{formatDateTime(docDetailDoc.created_at)}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 col-span-2">
+                <div className="text-[9px] font-bold uppercase text-slate-400">{docDetailDoc.dest_site_id ? 'Trajet' : 'Site'}</div>
+                <div className="font-bold text-slate-800 mt-0.5">{findSiteName(docDetailDoc.site_id)}{docDetailDoc.dest_site_id ? ` → ${findSiteName(docDetailDoc.dest_site_id)}` : ''}</div>
+              </div>
+              {docDetailDoc.note && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 col-span-2">
+                  <div className="text-[9px] font-bold uppercase text-slate-400">Note</div>
+                  <div className="text-slate-700 mt-0.5">{docDetailDoc.note}</div>
+                </div>
+              )}
+            </div>
+            {docDetailLoading ? (
+              <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                {docDetailLines
+                  .filter(l => docDetailDoc.doc_type !== 'transfer' || l.movement_type === 'transfer_out')
+                  .map((l, i) => (
+                  <div key={l.id} className="flex items-center gap-2 px-3 py-2 text-[11px]">
+                    <div className="w-5 h-5 rounded-md bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-600 num shrink-0">{i + 1}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-900 truncate">{(l.articles as any)?.name}</div>
+                      <div className="text-[10px] text-slate-500 font-mono truncate">{(l.articles as any)?.internal_ref}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-slate-900 num">{Math.abs(Number(l.quantity))}</div>
+                      <div className="text-[9px] text-slate-400 num">{l.previous_qty} → {l.new_qty}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Stock document edit (regenerate stock) */}
+      <Modal
+        open={docEditOpen}
+        onClose={() => { if (!docEditSaving) { setDocEditOpen(false); setDocEditDoc(null); } }}
+        title={docEditDoc ? `Éditer ${docEditDoc.doc_number}` : 'Éditer document'}
+        size="md"
+        footer={docEditDoc ? (
+          <>
+            <button onClick={() => setDocEditOpen(false)} disabled={docEditSaving} className="btn-secondary">Annuler</button>
+            <div className="flex-1" />
+            <button onClick={saveDocEdit} disabled={docEditSaving} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-glow active:scale-95 disabled:opacity-50">
+              {docEditSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <Save className="w-3.5 h-3.5" />Enregistrer & régénérer
+            </button>
+          </>
+        ) : null}
+      >
+        {docEditDoc && (
+          <div className="space-y-3">
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                Modifier ce document <strong>annule</strong> les mouvements existants et <strong>régénère</strong> le stock avec les nouvelles quantités. L'historique reste lié au document.
+              </div>
+            </div>
+            <div>
+              <label className="label">Note du document</label>
+              <input value={docEditNote} onChange={e => setDocEditNote(e.target.value)} className="input" placeholder="Note globale" />
+            </div>
+            <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+              {docEditEntries.map((entry, idx) => (
+                <div key={entry.article_id} className="flex items-center gap-2 px-3 py-2 text-[11px]">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-slate-900 truncate">{entry.article_name}</div>
+                    <div className="text-[10px] text-slate-500 font-mono truncate">{entry.article_ref}</div>
+                  </div>
+                  <input
+                    type="number" step="any" inputMode="decimal"
+                    value={entry.quantity}
+                    onChange={e => {
+                      const v = e.target.value === '' ? '' : Number(e.target.value);
+                      setDocEditEntries(prev => prev.map((p, i) => i === idx ? { ...p, quantity: v } : p));
+                    }}
+                    className="input w-24 text-right num"
+                  />
+                  <button
+                    onClick={() => setDocEditEntries(prev => prev.filter((_, i) => i !== idx))}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 transition-all active:scale-90"
+                    title="Retirer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              {docEditEntries.length === 0 && (
+                <div className="px-3 py-3 text-[11px] text-slate-500 text-center">Aucune ligne — ajoutez au moins une quantité.</div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Confirm cancel document */}
+      <Modal
+        open={!!docDeleteConfirm}
+        onClose={() => { if (!docDeleting) setDocDeleteConfirm(null); }}
+        title="Annuler ce document ?"
+        size="sm"
+        footer={
+          <>
+            <button onClick={() => setDocDeleteConfirm(null)} disabled={docDeleting} className="btn-secondary">Non</button>
+            <div className="flex-1" />
+            <button
+              onClick={() => docDeleteConfirm && cancelDoc(docDeleteConfirm)}
+              disabled={docDeleting}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-red-600 to-red-700 text-white shadow-glow active:scale-95 disabled:opacity-50"
+            >
+              {docDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Oui, annuler & régénérer
+            </button>
+          </>
+        }
+      >
+        {docDeleteConfirm && (
+          <div className="space-y-2 text-[12px] text-slate-700">
+            <p>Le document <strong className="num">{docDeleteConfirm.doc_number}</strong> ({docTypeMeta[docDeleteConfirm.doc_type]?.label}) sera marqué comme annulé.</p>
+            <p>Les <strong>{docDeleteConfirm.line_count}</strong> mouvements liés seront supprimés et le stock <strong>régénéré</strong> à l'état antérieur.</p>
+            <div className="rounded-xl bg-red-50 border border-red-200 p-2.5 text-[11px] text-red-900 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>Cette action est irréversible. Les niveaux de stock seront recalculés immédiatement.</span>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Help/Guide modal */}
       <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Guide de gestion du stock" size="md">
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
@@ -1311,7 +1790,7 @@ function StockListEditView({
   listSaving, setListSaving, listInputRefs, currentSite,
   canViewPrices, canManageStock, onSaved, successToast, errorToast, stockMethod,
   sites, depots, listTransferTarget, setListTransferTarget,
-  listSourceSite, setListSourceSite, stockByLocation,
+  listSourceSite, setListSourceSite, stockByLocation, tenantId,
 }: {
   filtered: Row[];
   listEditMode: 'in' | 'out' | 'inventory' | 'transfer';
@@ -1335,6 +1814,7 @@ function StockListEditView({
   listSourceSite: string;
   setListSourceSite: (v: string) => void;
   stockByLocation: Map<string, Map<string, number>>;
+  tenantId: string;
 }) {
   const lotMode = stockMethod === 'lot';
   const editCount = Array.from(listEdits.values()).filter(e => e.qty !== '' && Number(e.qty) !== 0).length;
@@ -1406,19 +1886,54 @@ function StockListEditView({
     setListSaving(true);
     let savedCount = 0;
     try {
+      // ─── Create stock document header ──────────────────────────────────────
+      const docTypeMap: Record<string, { type: 'entry' | 'exit' | 'transfer' | 'inventory'; kind: string; prefix: string }> = {
+        in: { type: 'entry', kind: 'stock_entry', prefix: 'BE' },
+        out: { type: 'exit', kind: 'stock_exit', prefix: 'BS' },
+        transfer: { type: 'transfer', kind: 'stock_transfer', prefix: 'BT' },
+        inventory: { type: 'inventory', kind: 'stock_inventory', prefix: 'BI' },
+      };
+      const docInfo = docTypeMap[listEditMode];
+      const { data: docNum, error: docNumErr } = await supabase.rpc('next_doc_number', {
+        p_tenant_id: tenantId,
+        p_kind: docInfo.kind,
+        p_prefix: docInfo.prefix,
+      });
+      if (docNumErr) throw docNumErr;
+      const totalQty = entries.reduce((s, e) => s + Math.abs(Number(e.qty) || 0), 0);
+      const headerNote = entries[0]?.note || '';
+      const { data: docRow, error: docInsErr } = await supabase
+        .from('stock_documents')
+        .insert({
+          tenant_id: tenantId,
+          doc_number: docNum,
+          doc_type: docInfo.type,
+          site_id: sourceSite,
+          dest_site_id: listEditMode === 'transfer' ? listTransferTarget : null,
+          note: headerNote,
+          total_qty: totalQty,
+          line_count: entries.length,
+        })
+        .select('id, doc_number')
+        .single();
+      if (docInsErr) throw docInsErr;
+      const documentId = docRow.id as string;
+
       for (const entry of entries) {
         const qty = Number(entry.qty);
         if (listEditMode === 'transfer') {
-          const { error: e1 } = await supabase.rpc('adjust_stock', {
+          const { error: e1 } = await supabase.rpc('adjust_stock_with_doc', {
             p_article_id: entry.article_id, p_site_id: sourceSite,
             p_quantity: -qty, p_movement_type: 'transfer_out',
             p_note: entry.note || 'Transfert sortie (masse)',
+            p_stock_document_id: documentId,
           });
           if (e1) throw e1;
-          const { error: e2 } = await supabase.rpc('adjust_stock', {
+          const { error: e2 } = await supabase.rpc('adjust_stock_with_doc', {
             p_article_id: entry.article_id, p_site_id: listTransferTarget,
             p_quantity: qty, p_movement_type: 'transfer_in',
             p_note: entry.note || 'Transfert entrée (masse)',
+            p_stock_document_id: documentId,
           });
           if (e2) throw e2;
         } else if (listEditMode === 'inventory') {
@@ -1427,10 +1942,11 @@ function StockListEditView({
           const currentQty = stockAt(entry.article_id);
           const diff = qty - currentQty;
           if (diff === 0) continue;
-          const { error: e } = await supabase.rpc('adjust_stock', {
+          const { error: e } = await supabase.rpc('adjust_stock_with_doc', {
             p_article_id: entry.article_id, p_site_id: sourceSite,
             p_quantity: diff, p_movement_type: 'inventory',
             p_note: entry.note || `Inventaire: ${currentQty} -> ${qty}`,
+            p_stock_document_id: documentId,
           });
           if (e) throw e;
         } else if (listEditMode === 'in' && lotMode) {
@@ -1442,19 +1958,30 @@ function StockListEditView({
             p_note: entry.note || `Lot ${entry.lot_number.trim()}`,
           });
           if (e) throw e;
+          // Link the freshly inserted movement to the stock document
+          await supabase
+            .from('stock_movements')
+            .update({ stock_document_id: documentId })
+            .eq('article_id', entry.article_id)
+            .eq('site_id', sourceSite)
+            .eq('movement_type', 'adjustment_in')
+            .is('stock_document_id', null)
+            .order('created_at', { ascending: false })
+            .limit(1);
         } else {
           const signedQty = listEditMode === 'in' ? qty : -qty;
           const type = listEditMode === 'in' ? 'adjustment_in' : 'adjustment_out';
-          const { error: e } = await supabase.rpc('adjust_stock', {
+          const { error: e } = await supabase.rpc('adjust_stock_with_doc', {
             p_article_id: entry.article_id, p_site_id: sourceSite,
             p_quantity: signedQty, p_movement_type: type,
             p_note: entry.note || (listEditMode === 'in' ? 'Entrée stock (masse)' : 'Sortie stock (masse)'),
+            p_stock_document_id: documentId,
           });
           if (e) throw e;
         }
         savedCount++;
       }
-      successToast(`${savedCount} article${savedCount > 1 ? 's' : ''} mis à jour`);
+      successToast(`${savedCount} article${savedCount > 1 ? 's' : ''} mis à jour · ${docRow.doc_number}`);
       const modeType = listEditMode === 'transfer' ? 'transfer_out' : listEditMode === 'inventory' ? 'inventory' : listEditMode === 'in' ? 'adjustment_in' : 'adjustment_out';
       const items = entries.map(e => {
         const row = filtered.find(r => r.article_id === e.article_id);

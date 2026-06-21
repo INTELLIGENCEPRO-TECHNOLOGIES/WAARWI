@@ -50,7 +50,7 @@ export function PendingApproval() {
       {/* TOP HEADER */}
       <header className="shrink-0 flex flex-col items-center pt-8 pb-4 px-4">
         <img
-          src="/waarwi.png"
+          src="/newlogo.png"
           alt="Waarwi"
           className="h-12 md:h-16 object-contain"
           onError={e => {

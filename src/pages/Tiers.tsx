@@ -15,7 +15,7 @@ import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
-import { printDocumentA4, type PrintTenant } from '../lib/print';
+import { printDocumentA4, buildPrintTenant, type PrintTenant } from '../lib/print';
 import { DocItems, DocTotals, DocPayments, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocPayment } from '../components/DocLayout';
 import type { Customer } from '../lib/types';
@@ -933,12 +933,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
 
   const printInvoice = (data: { sale: any; items: any[]; pays: any[] }) => {
     if (!tenant) return;
-    const tenantPrint: PrintTenant = {
-      name: tenant.name, legal_name: (tenant as any).legal_name, ninea: (tenant as any).ninea,
-      rccm: (tenant as any).rccm, address: (tenant as any).address, phone: (tenant as any).phone,
-      email: (tenant as any).email, website: (tenant as any).website, logo_url: (tenant as any).logo_url,
-      business_type: (tenant as any).business_type,
-    };
+    const tenantPrint: PrintTenant = buildPrintTenant(tenant);
     const items = data.items.map(i => ({
       name: i.name, supplier_ref: null,
       oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity),
@@ -1644,12 +1639,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 
   const printOrder = (data: { order: any; items: any[]; pays: any[] }) => {
     if (!tenant) return;
-    const tenantPrint: PrintTenant = {
-      name: tenant.name, legal_name: (tenant as any).legal_name, ninea: (tenant as any).ninea,
-      rccm: (tenant as any).rccm, address: (tenant as any).address, phone: (tenant as any).phone,
-      email: (tenant as any).email, website: (tenant as any).website, logo_url: (tenant as any).logo_url,
-      business_type: (tenant as any).business_type,
-    };
+    const tenantPrint: PrintTenant = buildPrintTenant(tenant);
     const items = data.items.map(i => ({
       name: i.name, supplier_ref: i.supplier_ref || null,
       oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity_ordered),
