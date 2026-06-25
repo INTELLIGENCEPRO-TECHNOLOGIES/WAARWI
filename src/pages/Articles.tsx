@@ -122,7 +122,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         .order('name')
         .range(from, from + batchSize - 1);
       if (!sharedArticles && currentSite) {
-        query = query.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+        query = query.eq('site_id', currentSite.id);
       }
       const { data, error: e } = await query;
       if (e || !data) break;
@@ -287,6 +287,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         stock_max: Number(form.stock_max || 0),
         location: form.location || '',
         image_url: finalImageUrl,
+        ipm_eligible: form.ipm_eligible !== false,
       };
       if (!sharedArticles && currentSite && !editing) {
         payload.site_id = currentSite.id;
@@ -501,7 +502,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   const exportArticles = async () => {
     const XLSX = await import('xlsx');
-    const { data, error: expErr } = await supabase.rpc('export_tenant_articles', importTargetSite ? { p_site_id: importTargetSite } : {});
+    const exportSite = importTargetSite || (!sharedArticles && currentSite ? currentSite.id : null);
+    const { data, error: expErr } = await supabase.rpc('export_tenant_articles', exportSite ? { p_site_id: exportSite } : {});
     if (expErr) { error(expErr.message); return; }
     const rows = (data || []) as any[];
     if (rows.length === 0) { error('Aucun article à exporter'); return; }
@@ -552,11 +554,17 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   const runArticleImport = async () => {
     if (importRows.length === 0) return;
+    // In independent catalog mode, a target site is mandatory
+    const targetSite = importTargetSite || (currentSite?.id ?? null);
+    if (!sharedArticles && !targetSite) {
+      error('En mode catalogue indépendant, vous devez sélectionner un magasin cible pour l\'import');
+      return;
+    }
     setImportingArticles(true);
     try {
       const { data, error: rpcErr } = await supabase.rpc('bulk_import_tenant_articles', {
         p_rows: importRows,
-        p_site_id: importTargetSite || null,
+        p_site_id: targetSite,
       });
       if (rpcErr) throw rpcErr;
       setImportResult(data as any);
@@ -636,7 +644,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             <button onClick={() => setViewMode('list')} className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`} aria-label="Vue liste"><List className="w-3.5 h-3.5" /></button>
             <button onClick={() => setViewMode('cards')} className={`p-1.5 transition-colors ${viewMode === 'cards' ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`} aria-label="Vue cartes"><LayoutGrid className="w-3.5 h-3.5" /></button>
           </div>
-          <button onClick={() => setImportExportOpen(true)} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100">
+          <button onClick={() => { if (!sharedArticles && currentSite) setImportTargetSite(currentSite.id); setImportExportOpen(true); }} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100">
             <Download className="w-3.5 h-3.5" /><span>Excel</span>
           </button>
           <button onClick={openCreate} className="shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all" aria-label="Nouvel article">
@@ -834,7 +842,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             </div>
             <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4">
               {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} />}
-              {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} />}
+              {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={(tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie' || (tenant?.enabled_modules || []).includes('ipm')} />}
               {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
               {tab === 'compat' && autoMode && <CompatTab compats={compats} brands={brands} models={models} onAdd={addCompat} onRemove={removeCompat} onUpdate={(i, patch) => setCompats(arr => arr.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
               {tab === 'image' && <ImageTab currentUrl={imagePreview} uploading={imageUploading} onFileSelect={file => { setImageFile(file); setImageDeletePending(false); setImagePreview(URL.createObjectURL(file)); }} onDelete={() => { setImageFile(null); setImagePreview(null); setImageDeletePending(true); }} />}
@@ -895,8 +903,9 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         <div className="space-y-4">
           {(() => {
             const ownDepots = depots.filter((d: any) => d.parent_site_id === currentSite?.id);
-            const otherSites = sites.filter((s: any) => s.id !== currentSite?.id);
-            const hasAlternatives = ownDepots.length > 0 || otherSites.length > 0;
+            const otherSites = sharedArticles ? sites.filter((s: any) => s.id !== currentSite?.id) : [];
+            const otherDepots = sharedArticles ? depots.filter((d: any) => d.parent_site_id !== currentSite?.id) : [];
+            const hasAlternatives = ownDepots.length > 0 || otherSites.length > 0 || otherDepots.length > 0;
             if (!hasAlternatives) return null;
             return (
               <div className="p-3 rounded-xl border border-brand-200 bg-brand-50/40">
@@ -906,24 +915,30 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                   onChange={e => setImportTargetSite(e.target.value)}
                   className="mt-1.5 w-full text-xs font-semibold px-2.5 py-2 rounded-lg border border-brand-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
                 >
-                  <option value="">Tous les emplacements (export agrégé)</option>
-                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                  {sharedArticles && <option value="">Tous les emplacements (export agrégé)</option>}
+                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin actuel)</option>}
                   {ownDepots.map((d: any) => (
                     <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
                   ))}
                   {otherSites.map((s: any) => (
                     <option key={s.id} value={s.id}>{s.name} (Magasin)</option>
                   ))}
+                  {otherDepots.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                  ))}
                 </select>
                 <p className="text-[10px] text-brand-700/80 mt-1.5 leading-relaxed">
-                  À l'import, le stock initial sera affecté à cet emplacement. À l'export, la colonne « Stock initial » reflétera le stock de cet emplacement.
+                  {sharedArticles
+                    ? 'À l\'import, le stock initial sera affecté à cet emplacement. À l\'export, la colonne « Stock initial » reflétera le stock de cet emplacement.'
+                    : 'Le stock initial sera affecté à l\'emplacement sélectionné (magasin actuel ou ses dépôts rattachés).'
+                  }
                 </p>
               </div>
             );
           })()}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button onClick={downloadArticleTemplate} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition text-left">
-              <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center shrink-0"><Download className="w-4 h-4 text-sky-600" /></div>
+            <button onClick={downloadArticleTemplate} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-neutral-300 hover:bg-neutral-50/50 transition text-left">
+              <div className="w-9 h-9 rounded-xl bg-neutral-100 flex items-center justify-center shrink-0"><Download className="w-4 h-4 text-neutral-700" /></div>
               <div><div className="text-xs font-bold text-slate-900">Modèle Excel</div><div className="text-[10px] text-slate-500">Fichier vierge avec un exemple</div></div>
             </button>
             <button onClick={exportArticles} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition text-left">
@@ -947,7 +962,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             <div className="space-y-2">
               <div className="grid grid-cols-3 gap-2">
                 <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-center"><div className="text-[9px] font-bold uppercase text-emerald-700">Créés</div><div className="text-lg font-bold text-emerald-800 num">{importResult.imported}</div></div>
-                <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-100 text-center"><div className="text-[9px] font-bold uppercase text-sky-700">Mis à jour</div><div className="text-lg font-bold text-sky-800 num">{importResult.updated}</div></div>
+                <div className="p-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-center"><div className="text-[9px] font-bold uppercase text-neutral-700">Mis à jour</div><div className="text-lg font-bold text-neutral-800 num">{importResult.updated}</div></div>
                 <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-center"><div className="text-[9px] font-bold uppercase text-red-700">Erreurs</div><div className="text-lg font-bold text-red-800 num">{importResult.errors?.length || 0}</div></div>
               </div>
               {importResult.errors && importResult.errors.length > 0 && <div className="max-h-32 overflow-auto bg-slate-50 rounded-xl p-2 space-y-0.5">{importResult.errors.map((e: any, i: number) => <div key={i} className="text-[10px] text-red-700">Ligne {e.row}: {e.error}</div>)}</div>}

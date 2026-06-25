@@ -77,11 +77,11 @@ export function Tiers() {
     if (!silent) setLoading(true);
     let custQuery = supabase.from('customers').select('*').eq('tenant_id', tenant.id).order('name');
     if (!sharedCustomers && currentSite) {
-      custQuery = custQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+      custQuery = custQuery.eq('site_id', currentSite.id);
     }
     let supQuery = supabase.from('suppliers').select('*').eq('tenant_id', tenant.id).order('name');
     if (!sharedSuppliers && currentSite) {
-      supQuery = supQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+      supQuery = supQuery.eq('site_id', currentSite.id);
     }
     const [cRes, sRes, salesRes, soRes, supPayRes] = await Promise.all([
       custQuery,
@@ -388,7 +388,7 @@ export function Tiers() {
               Nouveau client
             </button>
             <button onClick={openSupCreate} className="flex items-center gap-2 pr-4 pl-2 py-2 rounded-full bg-white border border-slate-200 shadow-premium text-sm font-semibold text-slate-800 whitespace-nowrap">
-              <span className="w-8 h-8 rounded-full bg-sky-50 text-sky-700 flex items-center justify-center shrink-0"><Truck className="w-4 h-4" /></span>
+              <span className="w-8 h-8 rounded-full bg-neutral-50 text-neutral-700 flex items-center justify-center shrink-0"><Truck className="w-4 h-4" /></span>
               Nouveau fournisseur
             </button>
           </div>
@@ -516,7 +516,7 @@ export function Tiers() {
           actions={[
             { icon: Info, label: 'Interroger le compte', desc: 'Dette, totaux et derniers mouvements', onClick: () => { setSupView({ s: optSup, key: 'info' }); setOptSup(null); } },
             { icon: Wallet, label: 'Saisir un règlement', desc: 'Paiement + imputation commande', onClick: () => { setSupView({ s: optSup, key: 'payment' }); setOptSup(null); } },
-            { icon: FileText, label: 'Documents d\u2019achats', desc: 'Commandes filtrées par période', onClick: () => { setSupView({ s: optSup, key: 'docs' }); setOptSup(null); } },
+            { icon: FileText, label: 'Documents d\'achats', desc: 'Commandes filtrées par période', onClick: () => { setSupView({ s: optSup, key: 'docs' }); setOptSup(null); } },
             { icon: ShoppingBag, label: 'Articles liés', desc: 'Catalogue rattaché', onClick: () => { setSupView({ s: optSup, key: 'articles' }); setOptSup(null); } },
           ]}
         />
@@ -581,7 +581,7 @@ function Badge({ tone, children }: { tone: 'neutral' | 'emerald' | 'amber' | 're
     amber: 'bg-amber-50 text-amber-700',
     red: 'bg-red-50 text-red-700',
     slate: 'bg-slate-100 text-slate-500',
-    sky: 'bg-sky-50 text-sky-700',
+    sky: 'bg-neutral-50 text-neutral-700',
   };
   return <span className={`badge ${tones[tone]} capitalize`}>{children}</span>;
 }
@@ -664,11 +664,11 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
           <button
             key={s.id}
             onClick={() => onClickRow(s)}
-            className={`w-full text-left bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-sky-300 active:scale-[0.99] transition-all px-3.5 py-2.5 ${!s.is_active ? 'opacity-50' : ''}`}
+            className={`w-full text-left bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 active:scale-[0.99] transition-all px-3.5 py-2.5 ${!s.is_active ? 'opacity-50' : ''}`}
           >
             {/* Row 1: name + inactive badge */}
             <div className="flex items-start gap-2 mb-1.5">
-              <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-sky-50 to-sky-100 text-sky-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
+              <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-neutral-50 to-neutral-100 text-neutral-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
                 {s.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -1147,7 +1147,7 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
                 <div className="divide-y divide-slate-100 border-t border-slate-100">
                   {rows.map(r => (
                     <div key={r.id} className="flex items-center gap-2 px-2.5 py-2">
-                      <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center ${r.kind === 'sale' ? 'bg-sky-50 text-sky-700' : r.kind === 'payment' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                      <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center ${r.kind === 'sale' ? 'bg-neutral-50 text-neutral-700' : r.kind === 'payment' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
                         {r.kind === 'sale' ? <FileText className="w-3.5 h-3.5" /> : r.kind === 'payment' ? <Wallet className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1322,9 +1322,9 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
           <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Factures</div>
           <div className="mt-0.5 text-[15px] font-bold text-slate-900 tabular-nums">{kpis.count}</div>
         </div>
-        <div className="rounded-2xl border border-sky-200 bg-sky-50/40 p-2.5 min-w-0">
-          <div className="text-[9px] uppercase tracking-wider text-sky-700 font-bold">CA total</div>
-          <div className="mt-0.5 text-[13px] font-bold text-sky-900 tabular-nums break-words">{formatFCFA(kpis.ca)}</div>
+        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/40 p-2.5 min-w-0">
+          <div className="text-[9px] uppercase tracking-wider text-neutral-700 font-bold">CA total</div>
+          <div className="mt-0.5 text-[13px] font-bold text-neutral-900 tabular-nums break-words">{formatFCFA(kpis.ca)}</div>
         </div>
         <div className={`rounded-2xl border p-2.5 min-w-0 ${kpis.marge >= 0 ? 'border-emerald-200 bg-emerald-50/40' : 'border-red-200 bg-red-50/40'}`}>
           <div className={`text-[9px] uppercase tracking-wider font-bold ${kpis.marge >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>Marge</div>
@@ -2024,9 +2024,9 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
           <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Commandes</div>
           <div className="mt-0.5 text-[15px] font-bold text-slate-900 tabular-nums">{kpis.count}</div>
         </div>
-        <div className="rounded-2xl border border-sky-200 bg-sky-50/40 p-2.5 min-w-0">
-          <div className="text-[9px] uppercase tracking-wider text-sky-700 font-bold">Achats</div>
-          <div className="mt-0.5 text-[13px] font-bold text-sky-900 tabular-nums break-words">{formatFCFA(kpis.achats)}</div>
+        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/40 p-2.5 min-w-0">
+          <div className="text-[9px] uppercase tracking-wider text-neutral-700 font-bold">Achats</div>
+          <div className="mt-0.5 text-[13px] font-bold text-neutral-900 tabular-nums break-words">{formatFCFA(kpis.achats)}</div>
         </div>
         <div className={`rounded-2xl border p-2.5 min-w-0 ${kpis.due > 0 ? 'border-amber-200 bg-amber-50/40' : 'border-emerald-200 bg-emerald-50/40'}`}>
           <div className={`text-[9px] uppercase tracking-wider font-bold ${kpis.due > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>Dette</div>

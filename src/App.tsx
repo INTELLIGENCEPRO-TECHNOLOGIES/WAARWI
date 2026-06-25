@@ -43,6 +43,8 @@ const OnlineOrders = lazyWithRetry(() => import('./pages/OnlineOrders').then(m =
 const MasterCatalog = lazyWithRetry(() => import('./pages/MasterCatalog').then(m => ({ default: m.MasterCatalog })));
 const PlatformAdmin = lazyWithRetry(() => import('./pages/PlatformAdmin').then(m => ({ default: m.PlatformAdmin })));
 const Reports = lazyWithRetry(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
+const IPM = lazyWithRetry(() => import('./pages/IPM').then(m => ({ default: m.IPM })));
+const Warranties = lazyWithRetry(() => import('./pages/Warranties').then(m => ({ default: m.Warranties })));
 
 function getShopRoute(): { slug: string; initialView: 'shop' | 'track' } | null {
   const m = window.location.pathname.match(/^\/shop\/([^/]+)(\/track)?/);
@@ -148,7 +150,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
   acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting',
-  settings: 'settings', reports: 'reports',
+  ipm: 'ipm', settings: 'settings', reports: 'reports',
 };
 
 const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
@@ -193,14 +195,14 @@ function Inner() {
 
   const enabled: string[] = Array.isArray((tenant as any)?.enabled_modules)
     ? (tenant as any).enabled_modules
-    : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports'];
+    : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports','ipm'];
 
   useEffect(() => {
     if (!tenant && isSuperAdmin) { setRoute('platform_admin'); return; }
     if (isSuperAdmin) return;
     if (permsLoading) return;
     const mod = ROUTE_MODULE[route];
-    if (mod && !enabled.includes(mod)) { setRoute('pos'); return; }
+    if (mod && mod !== 'ipm' && !enabled.includes(mod)) { setRoute('pos'); return; }
     const perm = ROUTE_PERMISSION[route];
     if (perm && !can(perm)) {
       const fallbackRoutes: Route[] = ['pos', 'dashboard', 'articles', 'billing', 'tiers', 'sales'];
@@ -267,6 +269,8 @@ function Inner() {
         {route === 'acc_cloture' && <Accounting section="cloture" />}
         {route === 'settings' && <Settings />}
         {route === 'reports' && <Reports />}
+        {route === 'ipm' && <IPM />}
+        {route === 'warranties' && <Warranties />}
         {route === 'platform_admin' && isSuperAdmin && <PlatformAdmin />}
       </Suspense>
       <TenantMessagePopup />

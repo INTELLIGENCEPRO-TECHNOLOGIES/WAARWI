@@ -13,22 +13,16 @@
   "categories": ["business", "productivity", "finance"],
   "icons": [
     {
-      "src": "/newlogo.png",
+      "src": "/icone.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/newlogo.png",
+      "src": "/icone.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
-    },
-    {
-      "src": "/newlogo.png",
-      "type": "image/png",
-      "sizes": "any",
-      "purpose": "maskable"
     }
   ]
 }

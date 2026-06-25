@@ -194,8 +194,9 @@ async function fetchCashStats(
     const rev = row.total || 0;
     const rowCost = ((row.sale_items || []) as any[])
       .reduce((s: number, i: any) => s + ((i.purchase_cost || 0) * i.quantity), 0);
-    const rowPaid = row.status === 'paid' ? rev : row.status === 'partial' ? rev * 0.5 : 0;
-    const rowCredit = (row.status === 'credit' || row.status === 'validated') ? rev : row.status === 'partial' ? rev * 0.5 : 0;
+    const paidSum = ((row.sale_payments || []) as any[]).reduce((s: number, p: any) => s + (p.amount || 0), 0);
+    const rowPaid = row.status === 'paid' ? rev : paidSum;
+    const rowCredit = Math.max(0, rev - paidSum);
     totalRevenue += rev; totalCost += rowCost; totalPaid += rowPaid; totalCredit += rowCredit;
 
     const prev = byDay.get(day) || { revenue: 0, txCount: 0, cost: 0, paid: 0, credit: 0 };

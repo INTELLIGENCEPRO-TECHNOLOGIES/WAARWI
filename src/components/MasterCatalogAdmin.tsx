@@ -861,11 +861,11 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="card-premium p-4">
           <div className="flex items-start gap-3">
-            <Download className="w-5 h-5 text-sky-600 mt-0.5 shrink-0" />
+            <Download className="w-5 h-5 text-neutral-700 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="text-sm font-bold text-slate-900">Modele Excel</div>
               <div className="text-[11px] text-slate-500 mt-0.5 mb-2">Fichier avec les colonnes attendues et un exemple. Les champs marques * sont obligatoires.</div>
-              <button onClick={downloadTemplate} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 hover:border-sky-300 text-slate-800 transition active:scale-95">
+              <button onClick={downloadTemplate} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 hover:border-neutral-300 text-slate-800 transition active:scale-95">
                 <Download className="w-3.5 h-3.5" /> Telecharger le modele
               </button>
             </div>
@@ -912,9 +912,9 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
         {rows.length > 0 && (
           <>
             {rows.length > CHUNK_SIZE && (
-              <div className="mt-3 flex items-start gap-2 p-3 rounded-xl bg-sky-50 border border-sky-200">
-                <AlertCircle className="w-4 h-4 text-sky-600 mt-0.5 shrink-0" />
-                <div className="text-[11px] text-sky-800">
+              <div className="mt-3 flex items-start gap-2 p-3 rounded-xl bg-neutral-50 border border-neutral-200">
+                <AlertCircle className="w-4 h-4 text-neutral-700 mt-0.5 shrink-0" />
+                <div className="text-[11px] text-neutral-800">
                   <span className="font-bold">{rows.length} articles détectés.</span> Import en{' '}
                   <span className="font-bold">{Math.ceil(rows.length / CHUNK_SIZE)} lot{Math.ceil(rows.length / CHUNK_SIZE) > 1 ? 's' : ''} de {CHUNK_SIZE}</span> — traitement ensembliste optimisé, pas de timeout attendu.
                 </div>
@@ -960,7 +960,7 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
           <div className="text-sm font-bold text-slate-900">Rapport d'import</div>
           <div className="grid grid-cols-3 gap-2">
             <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100"><div className="text-[10px] font-bold uppercase text-emerald-700">Créés</div><div className="text-2xl font-bold text-emerald-800 num mt-1">{result.imported}</div></div>
-            <div className="p-3 rounded-xl bg-sky-50 border border-sky-100"><div className="text-[10px] font-bold uppercase text-sky-700">Mis à jour</div><div className="text-2xl font-bold text-sky-800 num mt-1">{result.updated}</div></div>
+            <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200"><div className="text-[10px] font-bold uppercase text-neutral-700">Mis à jour</div><div className="text-2xl font-bold text-neutral-800 num mt-1">{result.updated}</div></div>
             <div className="p-3 rounded-xl bg-red-50 border border-red-100"><div className="text-[10px] font-bold uppercase text-red-700">Erreurs</div><div className="text-2xl font-bold text-red-800 num mt-1">{result.errors?.length || 0}</div></div>
           </div>
           {result.errors && result.errors.length > 0 && (

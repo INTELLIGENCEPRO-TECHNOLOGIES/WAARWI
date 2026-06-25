@@ -28,6 +28,7 @@ export type DocSettings = {
   show_imei: boolean;
   show_representative: boolean;
   default_representative: string;
+  warranty_terms: string;
   require_header_lock: boolean;
   allow_edit: boolean;
   allow_delete: boolean;
@@ -50,6 +51,7 @@ export const DEFAULT_DOC_SETTINGS: DocSettings = {
   show_imei:           false,
   show_representative: false,
   default_representative: '',
+  warranty_terms: '',
   require_header_lock: false,
   allow_edit:          false,
   allow_delete:        false,
@@ -76,7 +78,7 @@ const DOC_TYPE_CONFIG: {
   activeBg: string;
   accentBar: string;
 }[] = [
-  { key: 'invoice',        label: 'Facture',      sublabel: 'Vente client',      icon: FileText,       color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',  activeBg: 'bg-blue-600',   accentBar: 'bg-blue-500' },
+  { key: 'invoice',        label: 'Facture',      sublabel: 'Vente client',      icon: FileText,       color: 'text-neutral-800',   bg: 'bg-neutral-50',   border: 'border-neutral-200',  activeBg: 'bg-neutral-900',   accentBar: 'bg-neutral-900' },
   { key: 'quote',          label: 'Devis',         sublabel: 'Proposition prix',  icon: ClipboardList, color: 'text-teal-700',   bg: 'bg-teal-50',   border: 'border-teal-200',  activeBg: 'bg-teal-600',   accentBar: 'bg-teal-500' },
   { key: 'supplier_order', label: 'Cmd. fourn.',   sublabel: 'Achat fournisseur', icon: Truck,  color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200', activeBg: 'bg-amber-600',  accentBar: 'bg-amber-500' },
   { key: 'credit_note',    label: 'Avoir',         sublabel: 'Retour / Avoir',    icon: RotateCcw,     color: 'text-rose-700',   bg: 'bg-rose-50',   border: 'border-rose-200',  activeBg: 'bg-rose-600',   accentBar: 'bg-rose-500' },
@@ -107,12 +109,14 @@ function Toggle({ on, onChange, label, sub }: { on: boolean; onChange: (v: boole
 }
 
 const FIELD_META = [
-  { key: 'show_delivery_date' as const, label: 'Date de livraison', sub: 'Date de livraison prevue',     icon: CalendarDays, iconBg: 'bg-blue-50 border-blue-100',       iconColor: 'text-blue-500' },
+  { key: 'show_delivery_date' as const, label: 'Date de livraison', sub: 'Date de livraison prévue',     icon: CalendarDays, iconBg: 'bg-neutral-50 border-neutral-200',       iconColor: 'text-neutral-600' },
   { key: 'show_reference'     as const, label: 'Reference',         sub: 'Ref. commande / dossier',      icon: Tag,          iconBg: 'bg-amber-50 border-amber-100',     iconColor: 'text-amber-500' },
   { key: 'show_warranty'      as const, label: 'Garantie',          sub: 'Conditions de garantie',       icon: ShieldCheck,  iconBg: 'bg-emerald-50 border-emerald-100', iconColor: 'text-emerald-500' },
-  { key: 'show_imei'          as const, label: 'IMEI / Telephone',  sub: 'Numero IMEI ou serie appareil', icon: Smartphone,   iconBg: 'bg-violet-50 border-violet-100',   iconColor: 'text-violet-500' },
-  { key: 'show_representative' as const, label: 'Representant',     sub: 'Commercial en charge',          icon: User2,        iconBg: 'bg-slate-50 border-slate-200',     iconColor: 'text-slate-500' },
+  { key: 'show_imei'          as const, label: 'IMEI / Téléphone',  sub: 'Numéro IMEI ou série appareil', icon: Smartphone,   iconBg: 'bg-neutral-50 border-neutral-200',   iconColor: 'text-neutral-600' },
+  { key: 'show_representative' as const, label: 'Représentant',     sub: 'Commercial en charge',          icon: User2,        iconBg: 'bg-slate-50 border-slate-200',     iconColor: 'text-slate-500' },
 ];
+
+const IMEI_ACTIVITY_TYPES = ['électroménager', 'electromenager', 'smartphones et accessoires', 'smartphones'];
 
 export function DocumentSettingsTab() {
   const { tenant } = useApp();
@@ -122,6 +126,9 @@ export function DocumentSettingsTab() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
   const [saved, setSaved] = useState(false);
+
+  const activityName = (tenant?.business_activity_type_name || '').toLowerCase().trim();
+  const showImeiFields = IMEI_ACTIVITY_TYPES.some(t => activityName.includes(t));
 
   const loadSettings = useCallback(async (type: DocType) => {
     if (!tenant) return;
@@ -140,6 +147,7 @@ export function DocumentSettingsTab() {
         show_imei:           data.show_imei           ?? false,
         show_representative: data.show_representative ?? false,
         default_representative: data.default_representative ?? '',
+        warranty_terms: data.warranty_terms ?? '',
         require_header_lock: data.require_header_lock ?? false,
         allow_edit:          data.allow_edit          ?? false,
         allow_delete:        data.allow_delete        ?? false,
@@ -167,6 +175,7 @@ export function DocumentSettingsTab() {
         show_imei:           s.show_imei,
         show_representative: s.show_representative,
         default_representative: s.default_representative,
+        warranty_terms:      s.warranty_terms,
         require_header_lock: s.require_header_lock,
         allow_edit:          s.allow_edit,
         allow_delete:        s.allow_delete,
@@ -264,7 +273,10 @@ export function DocumentSettingsTab() {
             </div>
             <p className="text-[11px] text-slate-400 px-4 pb-2 leading-relaxed">Champs proposés à la saisie et visibles sur le document imprimé.</p>
             <div className="divide-y divide-slate-50 px-2">
-              {FIELD_META.map(f => (
+              {FIELD_META.filter(f => {
+                if ((f.key === 'show_imei' || f.key === 'show_warranty') && !showImeiFields) return false;
+                return true;
+              }).map(f => (
                 <div key={f.key}>
                   <div className="flex items-center gap-2.5 py-1">
                     <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${f.iconBg} ml-1`}>
@@ -286,6 +298,18 @@ export function DocumentSettingsTab() {
                         onChange={e => set({ default_representative: e.target.value })}
                         placeholder="Nom par défaut (optionnel)"
                         className="input text-sm h-9 w-full max-w-xs"
+                      />
+                    </div>
+                  )}
+                  {f.key === 'show_warranty' && settings.show_warranty && showImeiFields && (
+                    <div className="pl-12 pb-3 pr-4">
+                      <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Mentions de garantie (affichees sur la fiche garantie)</label>
+                      <textarea
+                        value={settings.warranty_terms}
+                        onChange={e => set({ warranty_terms: e.target.value })}
+                        placeholder="Ex: La garantie couvre les defauts de fabrication. Exclut les dommages lies a une mauvaise utilisation, l'eau, les chocs..."
+                        rows={3}
+                        className="w-full rounded-xl border border-slate-200 bg-white text-[12px] text-slate-800 px-3 py-2 outline-none focus:border-slate-400 transition-colors resize-y"
                       />
                     </div>
                   )}
@@ -332,8 +356,8 @@ export function DocumentSettingsTab() {
             <p className="text-[11px] text-slate-400 px-4 pb-2 leading-relaxed">Autoriser la modification ou suppression des documents (hors documents comptabilises).</p>
             <div className="divide-y divide-slate-50 px-2">
               <div className="flex items-center gap-2.5 py-1">
-                <div className="w-7 h-7 rounded-lg border border-blue-100 bg-blue-50 flex items-center justify-center shrink-0 ml-1">
-                  <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                <div className="w-7 h-7 rounded-lg border border-neutral-200 bg-neutral-50 flex items-center justify-center shrink-0 ml-1">
+                  <Pencil className="w-3.5 h-3.5 text-neutral-600" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <Toggle on={settings.allow_edit} onChange={v => set({ allow_edit: v })} label="Autoriser la modification" sub="Modifier les articles et montants du document" />

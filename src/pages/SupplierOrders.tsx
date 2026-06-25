@@ -31,7 +31,7 @@ type SupplierOrder = {
 
 const STATUS_MAP: Record<string, { label: string; pill: string; dot: string }> = {
   draft:     { label: 'Brouillon',           pill: 'bg-slate-100 text-slate-700 border-slate-200',     dot: 'bg-slate-400' },
-  sent:      { label: 'Envoyée',             pill: 'bg-blue-50 text-blue-700 border-blue-200',         dot: 'bg-blue-500' },
+  sent:      { label: 'Envoyée',             pill: 'bg-neutral-50 text-neutral-800 border-neutral-200',         dot: 'bg-neutral-500' },
   confirmed: { label: 'Confirmée',           pill: 'bg-brand-50 text-brand-700 border-brand-200',      dot: 'bg-brand-500' },
   partial:   { label: 'Partielle',           pill: 'bg-amber-50 text-amber-700 border-amber-200',      dot: 'bg-amber-500' },
   received:  { label: 'Reçue',               pill: 'bg-emerald-50 text-emerald-700 border-emerald-200',dot: 'bg-emerald-500' },
@@ -121,18 +121,29 @@ export function SupplierOrders() {
     if (!tenant) return;
     const isShared = (tenant as any)?.settings?.shared_articles !== false;
     const isSharedSup = (tenant as any)?.settings?.shared_suppliers !== false;
-    let artQuery = supabase.from('articles').select('id, name, purchase_price, supplier_ref, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(500);
-    if (!isShared && currentSite) {
-      artQuery = artQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
-    }
+    const fetchAllArticles = async () => {
+      const all: any[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        let q = supabase.from('articles').select('id, name, purchase_price, supplier_ref, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').range(from, from + pageSize - 1);
+        if (!isShared && currentSite) q = q.eq('site_id', currentSite.id);
+        const { data } = await q;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
+    };
     let supQuery = supabase.from('suppliers').select('id, name, phone, balance, credit_limit, credit_blocked').eq('tenant_id', tenant.id).eq('is_active', true).order('name');
     if (!isSharedSup && currentSite) {
-      supQuery = supQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+      supQuery = supQuery.eq('site_id', currentSite.id);
     }
     Promise.all([
       supQuery,
-      artQuery,
-    ]).then(([{ data: s }, { data: a }]) => { setSuppliers(s || []); setArticles(a || []); });
+      fetchAllArticles(),
+    ]).then(([{ data: s }, a]) => { setSuppliers(s || []); setArticles(a); });
   }, [tenant?.id, currentSite?.id]);
 
   const filtered = useMemo(() => {
@@ -684,7 +695,7 @@ export function SupplierOrders() {
                     {o.status === 'draft' && (
                       <button
                         onClick={e => { e.stopPropagation(); changeStatus(o, 'sent'); }}
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition"
+                        className="p-1.5 rounded-lg hover:bg-neutral-50 text-neutral-700 transition"
                         title="Marquer envoyée"
                       ><CheckCircle className="w-3.5 h-3.5" /></button>
                     )}
@@ -825,7 +836,7 @@ export function SupplierOrders() {
       >
         {selected && (() => {
           const STATUS_COLOR_MAP: Record<string, DocStatusConfig['color']> = {
-            draft: 'slate', sent: 'blue', confirmed: 'teal', partial: 'amber', received: 'emerald', cancelled: 'rose',
+            draft: 'slate', sent: 'slate', confirmed: 'teal', partial: 'amber', received: 'emerald', cancelled: 'rose',
           };
           const slimStatus: DocStatusConfig = {
             label: STATUS_MAP[selected.status]?.label || selected.status,
@@ -1003,9 +1014,9 @@ export function SupplierOrders() {
         }
       >
         <div className="space-y-4">
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200">
-            <Package className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-            <p className="text-xs text-blue-800">
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-neutral-50 border border-neutral-200">
+            <Package className="w-4 h-4 text-neutral-700 mt-0.5 shrink-0" />
+            <p className="text-xs text-neutral-800">
               Le mode fournisseurs partagés est actif. Répartissez les quantités reçues entre vos {sites.length} magasins.
             </p>
           </div>
@@ -1329,7 +1340,7 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center">
               <ShoppingBag className="w-4 h-4 text-white" />
             </div>
             <div>
@@ -1343,7 +1354,7 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
             {saving && <span className="text-[10px] text-teal-600 font-medium animate-pulse">Sauvegarde...</span>}
             {editingOrder && (
               <>
-                {editingOrder.status === 'draft' && <button onClick={() => onChangeStatus('sent')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors" title="Marquer envoyée"><CheckCircle className="w-3.5 h-3.5 inline mr-1" />Envoyée</button>}
+                {editingOrder.status === 'draft' && <button onClick={() => onChangeStatus('sent')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-neutral-200 text-neutral-800 bg-neutral-50 hover:bg-neutral-100 transition-colors" title="Marquer envoyée"><CheckCircle className="w-3.5 h-3.5 inline mr-1" />Envoyée</button>}
                 <button onClick={onPrint} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title="Imprimer"><Printer className="w-4 h-4" /></button>
               </>
             )}
@@ -1394,7 +1405,7 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
             <div
               key={idx}
               data-row-idx={idx}
-              className={`grid grid-cols-[1fr_1.2fr_80px_120px_80px_40px] gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === orderItems.length - 1 ? 'bg-blue-50/30' : ''}`}
+              className={`grid grid-cols-[1fr_1.2fr_80px_120px_80px_40px] gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === orderItems.length - 1 ? 'bg-neutral-50/30' : ''}`}
               onKeyDown={e => handleRowKeyDown(e, idx)}
             >
               <div>
@@ -1449,7 +1460,7 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
           <div className="px-5 py-2">
             <button
               onClick={() => setOrderItems((p: any[]) => [...p, { article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }])}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-2 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-neutral-800 hover:bg-neutral-50 px-3 py-2 rounded-lg transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />Ajouter une ligne
             </button>

@@ -26,7 +26,7 @@ export function Settings() {
       title: 'Votre entreprise',
       tiles: [
         { k: 'company', label: 'Identification', icon: Building2, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' },
-        { k: 'users', label: 'Utilisateurs', icon: Users, color: 'text-blue-700', bg: 'bg-blue-50/80 border-blue-200' },
+        { k: 'users', label: 'Utilisateurs', icon: Users, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
         { k: 'permissions', label: 'Permissions', icon: Shield, color: 'text-rose-700', bg: 'bg-rose-50/80 border-rose-200' },
         { k: 'sites', label: 'Magasins', icon: Store, color: 'text-emerald-700', bg: 'bg-emerald-50/80 border-emerald-200' },
       ],
@@ -35,9 +35,9 @@ export function Settings() {
       title: 'Données de structure',
       tiles: [
         { k: 'categories', label: 'Catégories', icon: Tag, color: 'text-amber-700', bg: 'bg-amber-50/80 border-amber-200' },
-        ...(autoMode ? [{ k: 'brands' as TabKey, label: 'Marques véhicules', icon: Car, color: 'text-sky-700', bg: 'bg-sky-50/80 border-sky-200' }] : []),
+        ...(autoMode ? [{ k: 'brands' as TabKey, label: 'Marques véhicules', icon: Car, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' }] : []),
         { k: 'payments', label: 'Modes de paiement', icon: CreditCard, color: 'text-teal-700', bg: 'bg-teal-50/80 border-teal-200' },
-        { k: 'pricing_tiers', label: 'Catégories tarifaires', icon: Layers, color: 'text-indigo-700', bg: 'bg-indigo-50/80 border-indigo-200' },
+        { k: 'pricing_tiers', label: 'Catégories tarifaires', icon: Layers, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
         { k: 'stock', label: 'Gestion des stocks', icon: Package, color: 'text-orange-700', bg: 'bg-orange-50/80 border-orange-200' },
         { k: 'tiers', label: 'Tiers', icon: Users, color: 'text-lime-700', bg: 'bg-lime-50/80 border-lime-200' },
       ],
@@ -47,7 +47,7 @@ export function Settings() {
       tiles: [
         { k: 'accounting', label: 'Comptabilité', icon: BookOpen, color: 'text-cyan-700', bg: 'bg-cyan-50/80 border-cyan-200' },
         { k: 'boutique', label: 'Boutique en ligne', icon: ShoppingBag, color: 'text-pink-700', bg: 'bg-pink-50/80 border-pink-200' },
-        { k: 'documents', label: 'Paramètres documents', icon: FileText, color: 'text-blue-700', bg: 'bg-blue-50/80 border-blue-200' },
+        { k: 'documents', label: 'Paramètres documents', icon: FileText, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
         { k: 'ticket_header', label: 'En-tête tickets', icon: Printer, color: 'text-fuchsia-700', bg: 'bg-fuchsia-50/80 border-fuchsia-200' },
         { k: 'backup', label: 'Sauvegarde', icon: Database, color: 'text-green-700', bg: 'bg-green-50/80 border-green-200' },
       ],
@@ -1368,9 +1368,9 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
             })}
           </div>
           {stockMethod === 'lot' && (
-            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200">
-              <AlertCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-blue-800">Suivi par lot actif — dates de péremption et alertes disponibles.</p>
+            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-neutral-50 border border-neutral-200">
+              <AlertCircle className="w-3.5 h-3.5 text-neutral-700 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-neutral-800">Suivi par lot actif — dates de péremption et alertes disponibles.</p>
             </div>
           )}
           {stockMethod === 'cmup' && (
@@ -1513,7 +1513,7 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
       {/* Clients */}
       <div className="card p-4 space-y-3">
         <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-          <div className="w-1 h-4 rounded-full bg-blue-500" />
+          <div className="w-1 h-4 rounded-full bg-neutral-500" />
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Clients</span>
           <span className="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{sites.length} magasins</span>
         </div>
@@ -1532,9 +1532,9 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
             onSelect={() => { updateSetting('shared_customers', false); success('Clients indépendants activés'); }}
           />
         </div>
-        <div className={`flex items-start gap-2 p-2.5 rounded-lg ${sharedCustomers ? 'bg-blue-50 border border-blue-200' : 'bg-slate-50 border border-slate-200'}`}>
-          <Users className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedCustomers ? 'text-blue-600' : 'text-slate-400'}`} />
-          <p className={`text-[11px] ${sharedCustomers ? 'text-blue-800' : 'text-slate-600'}`}>
+        <div className={`flex items-start gap-2 p-2.5 rounded-lg ${sharedCustomers ? 'bg-neutral-50 border border-neutral-200' : 'bg-slate-50 border border-slate-200'}`}>
+          <Users className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedCustomers ? 'text-neutral-700' : 'text-slate-400'}`} />
+          <p className={`text-[11px] ${sharedCustomers ? 'text-neutral-800' : 'text-slate-600'}`}>
             {sharedCustomers
               ? 'Base clients commune — un client créé dans un magasin est visible partout.'
               : 'Clients isolés — un client créé dans un magasin reste invisible dans les autres.'}
@@ -1681,9 +1681,9 @@ function PricingTiersTab() {
         </div>
       </div>
 
-      <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
-        <h4 className="text-xs font-bold text-blue-800 mb-1">Comment utiliser les catégories tarifaires</h4>
-        <ol className="text-[11px] text-blue-700 space-y-1 list-decimal list-inside">
+      <div className="rounded-xl bg-neutral-50 border border-neutral-200 p-4">
+        <h4 className="text-xs font-bold text-neutral-800 mb-1">Comment utiliser les catégories tarifaires</h4>
+        <ol className="text-[11px] text-neutral-800 space-y-1 list-decimal list-inside">
           <li>Ajoutez vos catégories ici (ex : Détail, Semi-gros, Grossiste)</li>
           <li>Dans la fiche article, onglet "Prix et tarifs", renseignez un prix par catégorie</li>
           <li>Lors de la vente (POS ou Facturation), si l'article a plusieurs tarifs, un sélecteur s'affiche</li>

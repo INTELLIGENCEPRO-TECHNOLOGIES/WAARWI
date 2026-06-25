@@ -406,7 +406,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       for (const q of (actQuotes.data || []) as any[]) {
         const client = q.customers?.name || 'Client';
-        const statusLabel = q.status === 'sent' ? 'Envoye' : q.status === 'accepted' ? 'Accepte' : q.status === 'converted' ? 'Converti' : 'Brouillon';
+        const statusLabel = q.status === 'sent' ? 'Envoyé' : q.status === 'accepted' ? 'Accepté' : q.status === 'converted' ? 'Converti' : 'Brouillon';
         activities.push({
           id: `quote-${q.id}`,
           type: 'quote',
@@ -421,7 +421,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       for (const o of (actSupOrders.data || []) as any[]) {
         const supplier = o.suppliers?.name || 'Fournisseur';
-        const statusLabel = o.status === 'delivered' ? 'Livree' : o.status === 'sent' ? 'Envoyee' : o.status === 'partial' ? 'Partielle' : 'Brouillon';
+        const statusLabel = o.status === 'delivered' ? 'Livrée' : o.status === 'sent' ? 'Envoyée' : o.status === 'partial' ? 'Partielle' : 'Brouillon';
         activities.push({
           id: `suporder-${o.id}`,
           type: 'supplier_order',
@@ -635,10 +635,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <div className="relative">
-          <div className="absolute inset-0 rounded-full bg-brand-500/20 blur-xl animate-pulse" />
-          <Loader2 className="relative w-6 h-6 animate-spin text-brand-600" />
+          <div className="absolute inset-0 rounded-full bg-neutral-200 blur-xl animate-pulse" />
+          <Loader2 className="relative w-6 h-6 animate-spin text-neutral-600" />
         </div>
-        <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-[0.2em]">Chargement</span>
+        <span className="text-[11px] text-neutral-400 font-semibold uppercase tracking-[0.2em]">Chargement</span>
       </div>
     );
   }
@@ -693,7 +693,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 function getTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "A l'instant";
+  if (min < 1) return "À l'instant";
   if (min < 60) return `Il y a ${min}min`;
   const h = Math.floor(min / 60);
   if (h < 24) return `Il y a ${h}h`;
@@ -809,13 +809,13 @@ function MobileDashboard({
         className={`w-full text-left relative overflow-hidden rounded-[18px] p-3.5 active:scale-[0.985] transition-transform duration-200 ${heroLight ? '' : ''}`}
         style={heroLight
           ? { background: '#ffffff', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }
-          : { background: 'linear-gradient(160deg, #021e2f 0%, #053d47 35%, #0a5e58 65%, #0d8f82 100%)', boxShadow: '0 16px 32px -8px rgba(5, 61, 71, 0.55), 0 6px 12px -4px rgba(13, 148, 136, 0.25)' }
+          : { background: 'linear-gradient(160deg, #0a0a0a 0%, #171717 35%, #262626 65%, #404040 100%)', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
         }
       >
         {!heroLight && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-teal-300/15 to-transparent blur-3xl animate-pulse-slow" />
-            <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-cyan-300/8 to-transparent blur-3xl" />
+            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-white/5 to-transparent blur-3xl animate-pulse-slow" />
+            <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-white/3 to-transparent blur-3xl" />
           </div>
         )}
 
@@ -823,57 +823,57 @@ function MobileDashboard({
           {/* Header row */}
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${heroLight ? 'bg-teal-500' : 'bg-teal-300'}`} />
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-slate-400' : 'text-teal-200/70'}`}>Encaissements du jour</span>
+              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${heroLight ? 'bg-neutral-900' : 'bg-white'}`} />
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-neutral-400' : 'text-white/60'}`}>Encaissements du jour</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${heroLight ? 'bg-teal-50 text-teal-600 border border-teal-100' : 'bg-teal-400/15 text-teal-200'}`}>
-                <span className={`w-1 h-1 rounded-full animate-pulse ${heroLight ? 'bg-teal-500' : 'bg-teal-400'}`} />LIVE
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${heroLight ? 'bg-neutral-100 text-neutral-600 border border-neutral-200' : 'bg-white/10 text-white/80'}`}>
+                <span className={`w-1 h-1 rounded-full animate-pulse ${heroLight ? 'bg-neutral-900' : 'bg-white'}`} />LIVE
               </span>
               {shopInfo?.isActive && shopUrl && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShareOpen(true); }}
-                  className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-slate-100 border border-slate-200' : 'bg-white/10 border border-white/15'}`}
+                  className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-neutral-100 border border-neutral-200' : 'bg-white/10 border border-white/15'}`}
                   aria-label="Partager la boutique"
                 >
-                  <Share2 className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-500' : 'text-white/70'}`} />
+                  <Share2 className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-500' : 'text-white/70'}`} />
                 </button>
               )}
               <button
                 onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
-                className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-slate-100 border border-slate-200' : 'bg-white/8 border border-white/10'}`}
+                className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-neutral-100 border border-neutral-200' : 'bg-white/8 border border-white/10'}`}
               >
                 {balanceHidden
-                  ? <Eye className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-500' : 'text-white/60'}`} />
-                  : <EyeOff className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-500' : 'text-white/60'}`} />}
+                  ? <Eye className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-500' : 'text-white/60'}`} />
+                  : <EyeOff className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-500' : 'text-white/60'}`} />}
               </button>
               <button
                 onClick={toggleHeroTheme}
-                className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-slate-100 border border-slate-200' : 'bg-white/8 border border-white/10'}`}
+                className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-neutral-100 border border-neutral-200' : 'bg-white/8 border border-white/10'}`}
                 aria-label="Changer le thème"
               >
-                <Palette className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-500' : 'text-white/60'}`} />
+                <Palette className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-500' : 'text-white/60'}`} />
               </button>
             </div>
           </div>
 
           {/* Main amount + delta */}
           <div className="flex items-end gap-3 mb-2.5">
-            <div className={`num font-black leading-none tracking-tight ${heroLight ? 'text-slate-900' : 'text-white'}`} style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
+            <div className={`num font-black leading-none tracking-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`} style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
               {balanceHidden ? '••••••' : formatFCFA(stats.todayCollected)}
             </div>
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${
                 heroLight
-                  ? (dayDelta >= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100')
-                  : (dayDelta >= 0 ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200')
+                  ? (dayDelta >= 0 ? 'bg-neutral-100 text-neutral-700 border border-neutral-200' : 'bg-rose-50 text-rose-700 border border-rose-100')
+                  : (dayDelta >= 0 ? 'bg-white/10 text-white/80' : 'bg-rose-400/15 text-rose-200')
               }`}>
                 {dayDelta >= 0 ? <TrendingUp className="w-2 h-2" /> : <TrendingDown className="w-2 h-2" />}
                 {dayDelta >= 0 ? '+' : ''}{dayDelta}%
               </span>
-              <span className={`text-[8px] ${heroLight ? 'text-slate-400' : 'text-white/35'}`}>vs hier</span>
-              <span className={`text-[8px] ${heroLight ? 'text-slate-300' : 'text-white/35'}`}>·</span>
-              <span className={`text-[8px] num ${heroLight ? 'text-slate-500' : 'text-white/45'}`}>{stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}</span>
+              <span className={`text-[8px] ${heroLight ? 'text-neutral-400' : 'text-white/35'}`}>vs hier</span>
+              <span className={`text-[8px] ${heroLight ? 'text-neutral-300' : 'text-white/35'}`}>·</span>
+              <span className={`text-[8px] num ${heroLight ? 'text-neutral-500' : 'text-white/45'}`}>{stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}</span>
             </div>
           </div>
 
@@ -882,7 +882,7 @@ function MobileDashboard({
 
             {/* Session info */}
             {stats.sessionInfo && (
-              <div className={`flex items-center gap-1 mb-1.5 text-[8px] font-semibold uppercase tracking-[0.1em] ${heroLight ? 'text-teal-600/60' : 'text-teal-200/40'}`}>
+              <div className={`flex items-center gap-1 mb-1.5 text-[8px] font-semibold uppercase tracking-[0.1em] ${heroLight ? 'text-neutral-400' : 'text-white/40'}`}>
                 <Clock className="w-2.5 h-2.5" />
                 Session depuis {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
               </div>
@@ -891,12 +891,12 @@ function MobileDashboard({
             {/* CAISSE row */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(20,184,166,0.08)' : 'rgba(255,255,255,0.07)' }}>
-                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-teal-600' : 'text-white/70'}`} />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.07)' }}>
+                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Solde caisse</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Solde caisse</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-teal-700' : 'text-teal-300'}`}>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.cashBalance)}
               </span>
             </div>
@@ -907,22 +907,22 @@ function MobileDashboard({
                 <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.15)' }}>
                   <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Dépenses</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-slate-800' : 'text-white/80'}`}>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.sessionExpenses)}
               </span>
             </div>
 
-            {/* VENTES FACTUREES row */}
+            {/* VENTES FACTURÉES row */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.15)' }}>
-                  <Receipt className={`w-2.5 h-2.5 ${heroLight ? 'text-emerald-500' : 'text-emerald-300'}`} />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
+                  <Receipt className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Ventes facturées</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Ventes facturées</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-slate-800' : 'text-white/85'}`}>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/85'}`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.todaySales)}
               </span>
             </div>
@@ -930,12 +930,12 @@ function MobileDashboard({
             {/* ENCAISSEMENTS DIRECTS row */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(20,184,166,0.10)' : 'rgba(20,184,166,0.18)' }}>
-                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-teal-600' : 'text-teal-300'}`} />
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.08)' : 'rgba(255,255,255,0.12)' }}>
+                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Encaissements directs</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Encaissements directs</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-teal-700' : 'text-teal-300'}`}>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.todayDirectCash)}
               </span>
             </div>
@@ -944,16 +944,16 @@ function MobileDashboard({
             {!balanceHidden && dayMarginPct > 0 && (
               <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(52,211,153,0.08)' : 'rgba(52,211,153,0.15)' }}>
-                    <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-emerald-500' : 'text-emerald-300'}`} />
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
+                    <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                   </div>
-                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-600' : 'text-white/70'}`}>Marge jour</span>
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Marge jour</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`num text-[13px] font-black ${heroLight ? 'text-emerald-600' : 'text-emerald-300'}`}>
+                  <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
                     {formatFCFA(stats.todayMargin)}
                   </span>
-                  <span className={`text-[8px] font-bold num ${heroLight ? 'text-emerald-500/60' : 'text-emerald-400/60'}`}>{dayMarginPct}%</span>
+                  <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{dayMarginPct}%</span>
                 </div>
               </div>
             )}
@@ -963,13 +963,13 @@ function MobileDashboard({
               <div className="flex items-center justify-between py-1.5">
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(226,232,240,0.5)' : 'rgba(255,255,255,0.06)' }}>
-                    <BarChart3 className={`w-2.5 h-2.5 ${heroLight ? 'text-slate-400' : 'text-white/50'}`} />
+                    <BarChart3 className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />
                   </div>
-                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-slate-400' : 'text-white/50'}`}>CA du mois</span>
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>CA du mois</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`num text-[13px] font-black ${heroLight ? 'text-slate-700' : 'text-white/70'}`}>{formatCompactFCFA(stats.monthSales)}</span>
-                  {marginPct > 0 && <span className={`text-[8px] font-bold num ${heroLight ? 'text-emerald-500/60' : 'text-emerald-400/60'}`}>marge {marginPct}%</span>}
+                  <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-700' : 'text-white/70'}`}>{formatCompactFCFA(stats.monthSales)}</span>
+                  {marginPct > 0 && <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>marge {marginPct}%</span>}
                 </div>
               </div>
             )}
@@ -980,12 +980,12 @@ function MobileDashboard({
       {/* ── MULTI-SITE STRIP (mobile) ── */}
       {sites.length > 1 && multiSiteStats.length > 0 && (
         <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
-          <div className="flex items-center justify-between px-3 py-2 border-b border-brand-100/50 bg-gradient-to-r from-brand-50/80 to-white">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
             <div className="flex items-center gap-1.5">
-              <Network className="w-3.5 h-3.5 text-brand-600" />
-              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Magasins</span>
+              <Network className="w-3.5 h-3.5 text-neutral-700" />
+              <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Magasins</span>
             </div>
-            <span className="text-[9px] font-bold text-slate-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + x.todayCollected, 0))}</span>
+            <span className="text-[9px] font-bold text-neutral-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + x.todayCollected, 0))}</span>
           </div>
           <div className="flex overflow-x-auto gap-1.5 p-2 no-scrollbar">
             {multiSiteStats.map(site => {
@@ -994,22 +994,22 @@ function MobileDashboard({
                 <button
                   key={site.id}
                   onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
-                  className={`shrink-0 p-2.5 rounded-xl border min-w-[135px] text-left transition-all ${isCurrent ? 'border-brand-300 bg-brand-50/50' : 'border-slate-200 bg-white active:bg-slate-50'}`}
+                  className={`shrink-0 p-2.5 rounded-xl border min-w-[135px] text-left transition-all ${isCurrent ? 'border-neutral-400 bg-neutral-50' : 'border-neutral-200 bg-white active:bg-neutral-50'}`}
                 >
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <div className={`w-1.5 h-1.5 rounded-full ${site.sessionOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    <span className="text-[10px] font-bold text-slate-800">{site.name}</span>
+                    <div className={`w-1.5 h-1.5 rounded-full ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
+                    <span className="text-[10px] font-bold text-neutral-800">{site.name}</span>
                   </div>
-                  <div className="text-[13px] font-black num text-slate-900 mb-0.5">{formatCompactFCFA(site.todayCollected)}</div>
-                  <div className="text-[8px] text-slate-400 font-semibold mb-1">Encaissé · facturé {formatCompactFCFA(site.todaySales)}</div>
+                  <div className="text-[13px] font-black num text-neutral-900 mb-0.5">{formatCompactFCFA(site.todayCollected)}</div>
+                  <div className="text-[8px] text-neutral-400 font-semibold mb-1">Encaissé · facturé {formatCompactFCFA(site.todaySales)}</div>
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-slate-400 font-semibold">Tickets</span>
-                      <span className="text-[9px] font-bold text-slate-700 num">{site.salesCount}</span>
+                      <span className="text-[8px] text-neutral-400 font-semibold">Tickets</span>
+                      <span className="text-[9px] font-bold text-neutral-700 num">{site.salesCount}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-slate-400 font-semibold">Caisse</span>
-                      <span className={`text-[9px] font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
+                      <span className="text-[8px] text-neutral-400 font-semibold">Caisse</span>
+                      <span className={`text-[9px] font-bold num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
                     </div>
                   </div>
                 </button>
@@ -1021,30 +1021,30 @@ function MobileDashboard({
 
       {/* ── FINANCES ── */}
       <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-blue-100/50 bg-gradient-to-r from-blue-50/80 to-white">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-200/50 bg-gradient-to-r from-neutral-50/80 to-white">
           <div className="flex items-center gap-1.5">
-            <CreditCard className="w-3.5 h-3.5 text-blue-500" />
-            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Finances</span>
+            <CreditCard className="w-3.5 h-3.5 text-neutral-600" />
+            <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Finances</span>
           </div>
-          <button onClick={() => nav('accounting')} className="text-[9px] font-bold text-slate-400 flex items-center gap-0.5">
+          <button onClick={() => nav('accounting')} className="text-[9px] font-bold text-neutral-400 flex items-center gap-0.5">
             Voir tout <ChevronRight className="w-2.5 h-2.5" />
           </button>
         </div>
-        <div className="grid grid-cols-2 divide-x divide-slate-100">
-          <button onClick={() => nav('tiers', { target: 'receivables' })} className="px-3 py-2 text-left active:bg-slate-50 transition-colors">
-            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Créances</div>
-            <div className="num text-[14px] font-black text-slate-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.receivables)}</div>
+        <div className="grid grid-cols-2 divide-x divide-neutral-100">
+          <button onClick={() => nav('tiers', { target: 'receivables' })} className="px-3 py-2 text-left active:bg-neutral-50 transition-colors">
+            <div className="text-[8px] text-neutral-400 font-semibold mb-0.5">Créances</div>
+            <div className="num text-[14px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.receivables)}</div>
             <div className="flex items-center justify-between mt-0.5">
-              <div className="text-[8px] text-slate-400">{stats.customersCount} client{stats.customersCount > 1 ? 's' : ''}</div>
-              <ChevronRight className="w-2.5 h-2.5 text-slate-300" />
+              <div className="text-[8px] text-neutral-400">{stats.customersCount} client{stats.customersCount > 1 ? 's' : ''}</div>
+              <ChevronRight className="w-2.5 h-2.5 text-neutral-300" />
             </div>
           </button>
-          <button onClick={() => nav('supplier_orders', { target: 'payables' })} className="px-3 py-2 text-left active:bg-slate-50 transition-colors">
-            <div className="text-[8px] text-slate-400 font-semibold mb-0.5">Fournisseurs</div>
-            <div className="num text-[14px] font-black text-slate-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.payables)}</div>
+          <button onClick={() => nav('supplier_orders', { target: 'payables' })} className="px-3 py-2 text-left active:bg-neutral-50 transition-colors">
+            <div className="text-[8px] text-neutral-400 font-semibold mb-0.5">Fournisseurs</div>
+            <div className="num text-[14px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.payables)}</div>
             <div className="flex items-center justify-between mt-0.5">
-              <div className="text-[8px] text-slate-400">{stats.suppliersCount} fournisseur{stats.suppliersCount > 1 ? 's' : ''}</div>
-              <ChevronRight className="w-2.5 h-2.5 text-slate-300" />
+              <div className="text-[8px] text-neutral-400">{stats.suppliersCount} fournisseur{stats.suppliersCount > 1 ? 's' : ''}</div>
+              <ChevronRight className="w-2.5 h-2.5 text-neutral-300" />
             </div>
           </button>
         </div>
@@ -1056,7 +1056,7 @@ function MobileDashboard({
           <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'rgba(245,158,11,0.15)' }}>
             <div className="flex items-center gap-1.5">
               <Bell className="w-3.5 h-3.5 text-amber-500" />
-              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Alertes</span>
+              <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Alertes</span>
             </div>
             <button onClick={() => nav('stock')} className="text-[9px] font-bold text-amber-600 flex items-center gap-0.5">
               Voir tout <ChevronRight className="w-2.5 h-2.5" />
@@ -1069,10 +1069,10 @@ function MobileDashboard({
                   <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold text-slate-800">{stats.outOfStockCount} rupture{stats.outOfStockCount > 1 ? 's' : ''} de stock</div>
-                  <div className="text-[8px] text-slate-500">À commander d'urgence</div>
+                  <div className="text-[10px] font-bold text-neutral-800">{stats.outOfStockCount} rupture{stats.outOfStockCount > 1 ? 's' : ''} de stock</div>
+                  <div className="text-[8px] text-neutral-500">À commander d'urgence</div>
                 </div>
-                <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+                <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
               </button>
             )}
             {stats.lowStockCount > 0 && (
@@ -1081,22 +1081,22 @@ function MobileDashboard({
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold text-slate-800">{stats.lowStockCount} stock{stats.lowStockCount > 1 ? 's' : ''} bas</div>
-                  <div className="text-[8px] text-slate-500">Seuil minimum atteint</div>
+                  <div className="text-[10px] font-bold text-neutral-800">{stats.lowStockCount} stock{stats.lowStockCount > 1 ? 's' : ''} bas</div>
+                  <div className="text-[8px] text-neutral-500">Seuil minimum atteint</div>
                 </div>
-                <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+                <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
               </button>
             )}
             {stats.pendingQuotes > 0 && (
               <button onClick={() => nav('billing', { target: 'quotes' })} className="w-full px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
-                <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
+                  <FileText className="w-3.5 h-3.5 text-neutral-700" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold text-slate-800">{stats.pendingQuotes} devis en attente</div>
-                  <div className="text-[8px] text-slate-500">À traiter</div>
+                  <div className="text-[10px] font-bold text-neutral-800">{stats.pendingQuotes} devis en attente</div>
+                  <div className="text-[8px] text-neutral-500">À traiter</div>
                 </div>
-                <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+                <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
               </button>
             )}
           </div>
@@ -1105,109 +1105,109 @@ function MobileDashboard({
 
       {/* ── ACTIVITÉ ── */}
       <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-emerald-100/50 bg-gradient-to-r from-emerald-50/80 to-white">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
           <div className="flex items-center gap-1.5">
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Activité</span>
+            <TrendingUp className="w-3.5 h-3.5 text-neutral-700" />
+            <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Activité</span>
           </div>
-          <button onClick={() => nav('stock')} className="text-[9px] font-bold text-slate-400 flex items-center gap-0.5">
+          <button onClick={() => nav('stock')} className="text-[9px] font-bold text-neutral-400 flex items-center gap-0.5">
             Voir tout <ChevronRight className="w-2.5 h-2.5" />
           </button>
         </div>
         <div className="grid grid-cols-3 gap-2 p-2">
-          <button onClick={() => nav('stock')} className="flex flex-col p-3 rounded-xl text-left active:scale-95 transition-all" style={{ background: 'linear-gradient(135deg,#f0fdf4 0%,#ffffff 100%)', boxShadow: '0 4px 14px rgba(16,185,129,0.13),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(16,185,129,0.18)' }}>
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mb-2 shadow-sm">
+          <button onClick={() => nav('stock')} className="flex flex-col p-3 rounded-xl text-left active:scale-95 transition-all" style={{ background: '#fafafa', boxShadow: '0 4px 14px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.08)' }}>
+            <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center mb-2 shadow-sm">
               <Package className="w-4 h-4 text-white" />
             </div>
-            <div className="text-[8px] font-bold text-emerald-700/70 mb-0.5 uppercase tracking-wide">Stock</div>
-            <div className="num text-[15px] font-black text-slate-900 leading-tight">{stats.articlesInStockCount}</div>
-            <div className="text-[8px] text-slate-400 mt-0.5 leading-tight">{stats.stockValue > 0 ? formatCompactFCFA(stats.stockValue) : `+${stats.stockInToday} aujourd'hui`}</div>
+            <div className="text-[8px] font-bold text-neutral-500 mb-0.5 uppercase tracking-wide">Stock</div>
+            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{stats.articlesInStockCount}</div>
+            <div className="text-[8px] text-neutral-400 mt-0.5 leading-tight">{stats.stockValue > 0 ? formatCompactFCFA(stats.stockValue) : `+${stats.stockInToday} aujourd'hui`}</div>
           </button>
           <button
             ref={webCardRef}
             onClick={() => { setWebBlink(false); nav('online_orders'); }}
             className="flex flex-col p-3 rounded-xl text-left transition-all active:scale-95"
             style={webBlink
-              ? { background: 'linear-gradient(135deg,#ccfbf1 0%,#f0fdfa 100%)', boxShadow: '0 4px 20px rgba(20,184,166,0.30),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(20,184,166,0.40)' }
-              : { background: 'linear-gradient(135deg,#f0fdfa 0%,#ffffff 100%)', boxShadow: '0 4px 14px rgba(20,184,166,0.12),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(20,184,166,0.18)' }}
+              ? { background: '#f5f5f5', boxShadow: '0 4px 20px rgba(0,0,0,0.12),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.15)' }
+              : { background: '#fafafa', boxShadow: '0 4px 14px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.08)' }}
           >
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-2 shadow-sm ${webBlink ? 'bg-gradient-to-br from-teal-400 to-teal-600 animate-pulse' : 'bg-gradient-to-br from-teal-400 to-teal-600'}`}>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-2 shadow-sm ${webBlink ? 'bg-neutral-900 animate-pulse' : 'bg-neutral-900'}`}>
               <Globe className="w-4 h-4 text-white" />
             </div>
-            <div className="text-[8px] font-bold text-teal-700/70 mb-0.5 uppercase tracking-wide">Web</div>
-            <div className={`num text-[15px] font-black leading-tight ${webBlink ? 'text-teal-600' : 'text-slate-900'}`}>{stats.webNew}</div>
-            <div className="text-[8px] text-slate-400 mt-0.5">{stats.webNew === 0 ? 'Aucune commande' : `${stats.webNew} nouvelle${stats.webNew > 1 ? 's' : ''}`}</div>
+            <div className="text-[8px] font-bold text-neutral-500 mb-0.5 uppercase tracking-wide">Web</div>
+            <div className={`num text-[15px] font-black leading-tight ${webBlink ? 'text-neutral-900' : 'text-neutral-900'}`}>{stats.webNew}</div>
+            <div className="text-[8px] text-neutral-400 mt-0.5">{stats.webNew === 0 ? 'Aucune commande' : `${stats.webNew} nouvelle${stats.webNew > 1 ? 's' : ''}`}</div>
           </button>
-          <button onClick={() => nav('billing', { target: 'quotes' })} className="flex flex-col p-3 rounded-xl text-left active:scale-95 transition-all" style={{ background: 'linear-gradient(135deg,#eff6ff 0%,#ffffff 100%)', boxShadow: '0 4px 14px rgba(59,130,246,0.12),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(59,130,246,0.18)' }}>
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center mb-2 shadow-sm">
+          <button onClick={() => nav('billing', { target: 'quotes' })} className="flex flex-col p-3 rounded-xl text-left active:scale-95 transition-all" style={{ background: '#fafafa', boxShadow: '0 4px 14px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.08)' }}>
+            <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center mb-2 shadow-sm">
               <FileText className="w-4 h-4 text-white" />
             </div>
-            <div className="text-[8px] font-bold text-blue-700/70 mb-0.5 uppercase tracking-wide">Devis</div>
-            <div className="num text-[15px] font-black text-slate-900 leading-tight">{stats.pendingQuotes}</div>
-            <div className="text-[8px] text-slate-400 mt-0.5">{stats.pendingQuotes === 0 ? 'Aucun devis' : `${stats.pendingQuotes} en attente`}</div>
+            <div className="text-[8px] font-bold text-neutral-500 mb-0.5 uppercase tracking-wide">Devis</div>
+            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{stats.pendingQuotes}</div>
+            <div className="text-[8px] text-neutral-400 mt-0.5">{stats.pendingQuotes === 0 ? 'Aucun devis' : `${stats.pendingQuotes} en attente`}</div>
           </button>
         </div>
       </div>
 
       {/* ── SANTÉ BUSINESS ── */}
       <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-teal-100/50 bg-gradient-to-r from-teal-50/80 to-white">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
           <div className="flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-teal-500" />
-            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Santé business</span>
+            <Activity className="w-3.5 h-3.5 text-neutral-700" />
+            <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Santé business</span>
           </div>
-          <button onClick={() => nav('sales')} className="text-[9px] font-bold text-teal-600 flex items-center gap-0.5">
+          <button onClick={() => nav('sales')} className="text-[9px] font-bold text-neutral-500 flex items-center gap-0.5">
             Voir le journal <ChevronRight className="w-2.5 h-2.5" />
           </button>
         </div>
-        <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
+        <div className="grid grid-cols-2 divide-x divide-neutral-100 border-b border-neutral-100">
           <div className="px-3 py-2">
-            <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Ticket moyen</div>
-            <div className="num text-[13px] font-black text-slate-900 leading-tight">
+            <div className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Ticket moyen</div>
+            <div className="num text-[13px] font-black text-neutral-900 leading-tight">
               {balanceHidden ? '•••' : formatFCFA(stats.todayCount > 0 ? Math.round(stats.todaySales / stats.todayCount) : 0)}
             </div>
           </div>
           <div className="px-3 py-2">
-            <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Dernière vente</div>
-            <div className="num text-[13px] font-black text-slate-900 leading-tight">
+            <div className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Dernière vente</div>
+            <div className="num text-[13px] font-black text-neutral-900 leading-tight">
               {stats.recentSales.length > 0 ? (balanceHidden ? '•••' : formatFCFA(stats.recentSales[0].total)) : '-'}
             </div>
           </div>
         </div>
         {stats.recentSales.length > 0 && (
-          <button onClick={() => nav('sales')} className="w-full flex items-center gap-2 px-3 py-2 active:bg-slate-50 transition-colors text-left border-b border-slate-100">
-            <div className="w-7 h-7 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
-              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+          <button onClick={() => nav('sales')} className="w-full flex items-center gap-2 px-3 py-2 active:bg-neutral-50 transition-colors text-left border-b border-neutral-100">
+            <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center shrink-0">
+              <CheckCircle className="w-3.5 h-3.5 text-neutral-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-semibold text-slate-800 truncate">
+              <div className="text-[10px] font-semibold text-neutral-800 truncate">
                 {(stats.recentSales[0] as any).customers?.name || 'Client comptoir'}
               </div>
-              <div className="text-[8px] text-slate-400">{getTimeAgo(stats.recentSales[0].created_at)}</div>
+              <div className="text-[8px] text-neutral-400">{getTimeAgo(stats.recentSales[0].created_at)}</div>
             </div>
-            <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+            <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
           </button>
         )}
-        <div className="grid grid-cols-3 divide-x divide-slate-100">
-          <button onClick={() => nav('articles')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-slate-50 transition-colors">
-            <Package className="w-3 h-3 text-slate-400 shrink-0" />
+        <div className="grid grid-cols-3 divide-x divide-neutral-100">
+          <button onClick={() => nav('articles')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-neutral-50 transition-colors">
+            <Package className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[12px] font-extrabold text-slate-900 leading-none">{stats.articlesCount}</div>
-              <div className="text-[8px] text-slate-400 font-semibold mt-0.5">Articles</div>
+              <div className="num text-[12px] font-extrabold text-neutral-900 leading-none">{stats.articlesCount}</div>
+              <div className="text-[8px] text-neutral-400 font-semibold mt-0.5">Articles</div>
             </div>
           </button>
-          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-slate-50 transition-colors">
-            <Users className="w-3 h-3 text-slate-400 shrink-0" />
+          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-neutral-50 transition-colors">
+            <Users className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[12px] font-extrabold text-slate-900 leading-none">{stats.customersCount}</div>
-              <div className="text-[8px] text-slate-400 font-semibold mt-0.5">Clients</div>
+              <div className="num text-[12px] font-extrabold text-neutral-900 leading-none">{stats.customersCount}</div>
+              <div className="text-[8px] text-neutral-400 font-semibold mt-0.5">Clients</div>
             </div>
           </button>
-          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-slate-50 transition-colors">
-            <Truck className="w-3 h-3 text-slate-400 shrink-0" />
+          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-neutral-50 transition-colors">
+            <Truck className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[12px] font-extrabold text-slate-900 leading-none">{stats.suppliersCount}</div>
-              <div className="text-[8px] text-slate-400 font-semibold mt-0.5">Fourn.</div>
+              <div className="num text-[12px] font-extrabold text-neutral-900 leading-none">{stats.suppliersCount}</div>
+              <div className="text-[8px] text-neutral-400 font-semibold mt-0.5">Fourn.</div>
             </div>
           </button>
         </div>
@@ -1219,22 +1219,22 @@ function MobileDashboard({
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-sm rounded-[24px] overflow-hidden"
-            style={{ background: 'linear-gradient(160deg, #021e2f 0%, #053d47 60%, #0a5e58 100%)', boxShadow: '0 32px 64px -16px rgba(5,61,71,0.8)' }}
+            style={{ background: '#0a0a0a', boxShadow: '0 32px 64px -16px rgba(0,0,0,0.8)' }}
             onClick={e => e.stopPropagation()}
           >
             {/* Decorative glow */}
-            <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-teal-400/20 blur-3xl pointer-events-none" />
+            <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-white/5 blur-3xl pointer-events-none" />
 
             <div className="relative p-5">
               {/* Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-2xl bg-teal-400/15 border border-teal-300/20 flex items-center justify-center">
-                    <Share2 className="w-4 h-4 text-teal-300" />
+                  <div className="w-9 h-9 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center">
+                    <Share2 className="w-4 h-4 text-white/80" />
                   </div>
                   <div>
                     <div className="text-sm font-bold text-white leading-tight">Partager la boutique</div>
-                    <div className="text-[10px] text-teal-200/50 font-medium">Boutique en ligne active</div>
+                    <div className="text-[10px] text-white/40 font-medium">Boutique en ligne active</div>
                   </div>
                 </div>
                 <button
@@ -1247,13 +1247,13 @@ function MobileDashboard({
 
               {/* Link field */}
               <div className="mb-3">
-                <div className="text-[9px] font-bold text-teal-200/50 uppercase tracking-[0.1em] mb-1.5">Lien de la boutique</div>
+                <div className="text-[9px] font-bold text-white/40 uppercase tracking-[0.1em] mb-1.5">Lien de la boutique</div>
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <Globe className="w-3.5 h-3.5 text-teal-300/60 shrink-0" />
+                  <Globe className="w-3.5 h-3.5 text-white/40 shrink-0" />
                   <span className="flex-1 text-[11px] text-white/70 font-medium truncate min-w-0">{shopUrl}</span>
                   <button
                     onClick={copyLink}
-                    className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${copied ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/8 text-white/60 active:bg-white/15'}`}
+                    className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${copied ? 'bg-white/15 text-white' : 'bg-white/8 text-white/60 active:bg-white/15'}`}
                   >
                     {copied ? <CheckIcon className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                     {copied ? 'Copié !' : 'Copier'}
@@ -1263,10 +1263,10 @@ function MobileDashboard({
 
               {/* WhatsApp section */}
               <div className="mb-4">
-                <div className="text-[9px] font-bold text-teal-200/50 uppercase tracking-[0.1em] mb-1.5">Envoyer par WhatsApp</div>
+                <div className="text-[9px] font-bold text-white/40 uppercase tracking-[0.1em] mb-1.5">Envoyer par WhatsApp</div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <MessageCircle className="w-3.5 h-3.5 text-emerald-300/60 shrink-0" />
+                    <MessageCircle className="w-3.5 h-3.5 text-white/40 shrink-0" />
                     <input
                       type="tel"
                       value={waNumber}
@@ -1289,7 +1289,7 @@ function MobileDashboard({
               {/* Open in browser */}
               <button
                 onClick={() => window.open(shopUrl, '_blank')}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold text-teal-200/70 transition-colors active:bg-white/5"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold text-white/60 transition-colors active:bg-white/5"
                 style={{ border: '1px solid rgba(255,255,255,0.08)' }}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -1372,8 +1372,8 @@ function HeroChart({ data }: { data: number[] }) {
     >
       <defs>
         <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#5eead4" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#5eead4" stopOpacity="0.02" />
+          <stop offset="0%" stopColor="#a3a3a3" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#a3a3a3" stopOpacity="0.02" />
         </linearGradient>
       </defs>
       {yTicks.map((v, i) => {
@@ -1396,13 +1396,13 @@ function HeroChart({ data }: { data: number[] }) {
         );
       })}
       {areaD && <path d={areaD} fill="url(#heroGrad)" />}
-      {pathD && <path d={pathD} fill="none" stroke="#5eead4" strokeWidth="2" strokeLinecap="round" />}
+      {pathD && <path d={pathD} fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />}
       {hp && (
         <>
-          <line x1={hp.x} y1={padT} x2={hp.x} y2={padT + chartH} stroke="#5eead4" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.7" />
-          <circle cx={hp.x} cy={hp.y} r="4" fill="#fff" stroke="#0d9488" strokeWidth="2" />
+          <line x1={hp.x} y1={padT} x2={hp.x} y2={padT + chartH} stroke="#ffffff" strokeWidth="0.8" strokeDasharray="3 3" opacity="0.7" />
+          <circle cx={hp.x} cy={hp.y} r="4" fill="#fff" stroke="#171717" strokeWidth="2" />
           <rect x={Math.min(Math.max(hp.x - 40, 2), w - 82)} y={hp.y - 28} width="80" height="22" rx="4" fill="rgba(0,0,0,0.85)" />
-          <text x={Math.min(Math.max(hp.x, 42), w - 42)} y={hp.y - 14} textAnchor="middle" fill="#5eead4" fontSize="10" fontWeight="700">
+          <text x={Math.min(Math.max(hp.x, 42), w - 42)} y={hp.y - 14} textAnchor="middle" fill="#ffffff" fontSize="10" fontWeight="700">
             {formatCompactFCFA(hp.value)} - {String(hp.hour).padStart(2, '0')}h
           </text>
         </>
@@ -1433,8 +1433,8 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
           const y = padT + (1 - v / max) * chartH;
           return (
             <g key={i}>
-              <line x1={padL} y1={y} x2={w - 10} y2={y} stroke="#e2e8f0" strokeWidth="0.5" />
-              <text x={padL - 4} y={y + 3} textAnchor="end" fill="#94a3b8" fontSize="8" fontWeight="500">
+              <line x1={padL} y1={y} x2={w - 10} y2={y} stroke="#e5e5e5" strokeWidth="0.5" />
+              <text x={padL - 4} y={y + 3} textAnchor="end" fill="#a3a3a3" fontSize="8" fontWeight="500">
                 {v >= 1000 ? `${Math.round(v / 1000)}K` : Math.round(v)}
               </text>
             </g>
@@ -1449,7 +1449,7 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
             <g key={i}>
               <rect
                 x={x} y={y} width={barW} height={barH}
-                rx="3" fill={isHov ? '#0d9488' : '#0d9488'}
+                rx="3" fill={isHov ? '#171717' : '#171717'}
                 opacity={isHov ? 1 : 0.75}
                 className="transition-opacity duration-150"
               />
@@ -1460,7 +1460,7 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
                 onMouseLeave={() => setHover(null)}
                 className="cursor-pointer"
               />
-              <text x={x + barW / 2} y={h - 5} textAnchor="middle" fill="#64748b" fontSize="8" fontWeight="600">
+              <text x={x + barW / 2} y={h - 5} textAnchor="middle" fill="#737373" fontSize="8" fontWeight="600">
                 {d.day}
               </text>
             </g>
@@ -1469,7 +1469,7 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
       </svg>
       {hover !== null && (
         <div
-          className="absolute pointer-events-none z-10 px-2 py-1 rounded bg-slate-900 text-white text-[10px] font-semibold shadow-lg"
+          className="absolute pointer-events-none z-10 px-2 py-1 rounded bg-neutral-900 text-white text-[10px] font-semibold shadow-lg"
           style={{ left: `${((hover + 0.5) / data.length) * 100}%`, top: 0, transform: 'translateX(-50%)' }}
         >
           {formatCompactFCFA(data[hover].total)}
@@ -1713,29 +1713,28 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
   const [fabOpen, setFabOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#f8fafb] animate-fade-in">
+    <div className="min-h-screen bg-white animate-fade-in">
       {/* ── TOP BAR ── */}
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-200/60" style={{ boxShadow: '0 1px 2px rgba(15,23,42,0.03)' }}>
+      <div className="sticky top-0 z-20 bg-white border-b border-neutral-200">
         <div className="pl-[120px] pr-5 xl:pr-8 py-3 flex items-center gap-4">
           <div className="flex items-center gap-3 shrink-0">
             <div className="relative">
               <button
                 onClick={() => setShowPeriodMenu(!showPeriodMenu)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200/80 bg-white/85 backdrop-blur-sm hover:border-slate-300 transition-all"
-                style={{ boxShadow: '0 2px 8px -2px rgba(15,23,42,0.06)' }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 hover:border-neutral-300 transition-all"
               >
-                <Calendar className="w-4 h-4 text-slate-400" />
-                <span className="text-xs font-semibold text-slate-600 hidden sm:inline">Période :</span>
-                <span className="text-xs font-bold text-slate-900">{periodLabel}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400 rotate-90" />
+                <Calendar className="w-4 h-4 text-neutral-400" />
+                <span className="text-xs font-medium text-neutral-500 hidden sm:inline">Période :</span>
+                <span className="text-xs font-semibold text-neutral-900">{periodLabel}</span>
+                <ChevronRight className="w-3.5 h-3.5 text-neutral-400 rotate-90" />
               </button>
               {showPeriodMenu && (
-                <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl border border-slate-200 shadow-lg z-50 py-1">
+                <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl border border-neutral-200 shadow-elevated z-50 py-1">
                   {periodOptions.map(opt => (
                     <button
                       key={opt.value}
                       onClick={() => { setPeriod(opt.value); setShowPeriodMenu(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${period === opt.value ? 'bg-teal-50 text-teal-700 font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
+                      className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${period === opt.value ? 'bg-neutral-100 text-neutral-900 font-semibold' : 'text-neutral-600 hover:bg-neutral-50'}`}
                     >
                       {opt.label}
                     </button>
@@ -1745,17 +1744,16 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             </div>
             <button
               onClick={() => setFabOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200/80 bg-white/85 backdrop-blur-sm text-slate-700 text-xs font-semibold transition-all active:scale-95 hover:border-slate-300"
-              style={{ boxShadow: '0 2px 8px -2px rgba(15,23,42,0.06)' }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-neutral-200 text-neutral-700 text-xs font-medium transition-all active:scale-95 hover:border-neutral-300"
             >
-              <Activity className="w-3.5 h-3.5 text-teal-600" /> Actions rapides
+              <Activity className="w-3.5 h-3.5 text-neutral-500" /> Actions rapides
             </button>
           </div>
           <div className="ml-auto flex items-center gap-3">
             {hasMultiSites && (
               <div className="flex items-center gap-2">
-                <Store className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs font-bold text-slate-700">{currentSite?.name}</span>
+                <Store className="w-3.5 h-3.5 text-neutral-400" />
+                <span className="text-xs font-semibold text-neutral-700">{currentSite?.name}</span>
               </div>
             )}
           </div>
@@ -1765,36 +1763,36 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       {/* ── FAB Overlay — Quick actions ── */}
       {fabOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-md" onClick={() => setFabOpen(false)} />
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm" onClick={() => setFabOpen(false)} />
           <div className="relative z-10 w-full max-w-lg px-6">
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.15)] p-6 animate-scale-in">
+            <div className="bg-white rounded-xl border border-neutral-200 shadow-premium p-6 animate-scale-in">
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-base font-bold text-slate-900">Actions rapides</h3>
-                <button onClick={() => setFabOpen(false)} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
+                <h3 className="text-base font-bold text-neutral-900">Actions rapides</h3>
+                <button onClick={() => setFabOpen(false)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { icon: ShoppingCart, label: 'Nouvelle vente', color: 'text-teal-600', bg: 'bg-teal-50', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
-                  { icon: CreditCard, label: 'Encaisser', color: 'text-teal-700', bg: 'bg-teal-50', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
-                  { icon: ClipboardList, label: 'Nouvelle commande', color: 'text-slate-600', bg: 'bg-slate-100', action: () => { setFabOpen(false); nav('supplier_orders', { target: 'newOrder' }); } },
-                  { icon: Users, label: 'Nouveau client', color: 'text-sky-600', bg: 'bg-sky-50', action: () => { setFabOpen(false); openModal('customer'); } },
-                  { icon: Truck, label: 'Nouveau fournisseur', color: 'text-orange-600', bg: 'bg-orange-50', action: () => { setFabOpen(false); openModal('supplier'); } },
-                  { icon: ArrowDownCircle, label: 'Entrée stock', color: 'text-emerald-600', bg: 'bg-emerald-50', action: () => { setFabOpen(false); openModal('stock_in'); } },
-                  { icon: ArrowUpCircle, label: 'Sortie stock', color: 'text-rose-500', bg: 'bg-rose-50', action: () => { setFabOpen(false); openModal('stock_out'); } },
-                  { icon: ArrowRightLeft, label: 'Transfert', color: 'text-blue-600', bg: 'bg-blue-50', action: () => { setFabOpen(false); openModal('stock_transfer'); } },
-                  { icon: BarChart3, label: 'Rapport', color: 'text-amber-600', bg: 'bg-amber-50', action: () => { setFabOpen(false); nav('reports'); } },
+                  { icon: ShoppingCart, label: 'Nouvelle vente', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
+                  { icon: CreditCard, label: 'Encaisser', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
+                  { icon: ClipboardList, label: 'Nouvelle commande', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('supplier_orders', { target: 'newOrder' }); } },
+                  { icon: Users, label: 'Nouveau client', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('customer'); } },
+                  { icon: Truck, label: 'Nouveau fournisseur', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('supplier'); } },
+                  { icon: ArrowDownCircle, label: 'Entrée stock', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('stock_in'); } },
+                  { icon: ArrowUpCircle, label: 'Sortie stock', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('stock_out'); } },
+                  { icon: ArrowRightLeft, label: 'Transfert', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('stock_transfer'); } },
+                  { icon: BarChart3, label: 'Rapport', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('reports'); } },
                 ].map(item => (
                   <button
                     key={item.label}
                     onClick={item.action}
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-slate-100 hover:border-slate-200 hover:shadow-sm transition-all active:scale-[0.96] group"
+                    className="flex flex-col items-center gap-2 p-4 rounded-xl border border-neutral-100 hover:border-neutral-200 hover:bg-neutral-50 transition-all active:scale-[0.96] group"
                   >
-                    <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                      <item.icon className={`w-5 h-5 ${item.color}`} />
+                    <div className={`w-9 h-9 rounded-lg ${item.bg} flex items-center justify-center`}>
+                      <item.icon className={`w-[18px] h-[18px] ${item.color}`} />
                     </div>
-                    <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">{item.label}</span>
+                    <span className="text-[11px] font-medium text-neutral-700 text-center leading-tight">{item.label}</span>
                   </button>
                 ))}
               </div>
@@ -1808,13 +1806,13 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         {/* ── ROW 1: Situation du jour (left) + Right column (Créances, Dettes, Stock) ── */}
         <div className="grid grid-cols-[minmax(0,2fr)_380px] gap-4" style={{ height: 320 }}>
           {/* Situation du jour */}
-          <div className="h-[320px] overflow-hidden bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col">
+          <div className="h-[320px] overflow-hidden bg-white rounded-xl border border-neutral-200 p-5 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-teal-600" />
-                <h3 className="text-base font-bold text-slate-900">Situation {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}</h3>
+                <TrendingUp className="w-5 h-5 text-neutral-700" />
+                <h3 className="text-base font-bold text-neutral-900">Situation {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}</h3>
               </div>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${dayDelta >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${dayDelta >= 0 ? 'border-neutral-200 text-neutral-700' : 'border-red-200 text-red-600'}`}>
                 {dayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                 {dayDelta >= 0 ? '+' : ''}{dayDelta}% vs hier
               </span>
@@ -1822,115 +1820,112 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
             {/* Main amount */}
             <div className="mb-4">
-              <p className="text-[11px] text-slate-400 font-medium mb-1">Encaissements {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
-              <p className="text-3xl font-black text-slate-900 num tracking-tight leading-none">{formatFCFA(stats.todayCollected)}</p>
+              <p className="text-[11px] text-neutral-400 font-medium mb-1">Encaissements {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
+              <p className="text-3xl font-bold text-neutral-900 num tracking-tight leading-none">{formatFCFA(stats.todayCollected)}</p>
             </div>
 
             {/* KPI Grid */}
             <div className="grid grid-cols-3 gap-3 flex-1">
-              <div className="rounded-xl bg-emerald-50/60 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-emerald-700/70 uppercase tracking-wide mb-1">Ventes facturées</p>
-                <p className="text-lg font-bold text-emerald-700 num leading-tight">{formatCompactFCFA(stats.todaySales)}</p>
+              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Ventes facturées</p>
+                <p className="text-lg font-bold text-neutral-900 num leading-tight">{formatCompactFCFA(stats.todaySales)}</p>
               </div>
-              <div className="rounded-xl bg-teal-50/60 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-teal-700/70 uppercase tracking-wide mb-1">Encaissements directs</p>
-                <p className="text-lg font-bold text-teal-700 num leading-tight">{formatCompactFCFA(stats.todayDirectCash)}</p>
+              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Encaissements directs</p>
+                <p className="text-lg font-bold text-neutral-900 num leading-tight">{formatCompactFCFA(stats.todayDirectCash)}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Ventes</p>
-                <p className="text-lg font-bold text-slate-900 num leading-tight">{stats.todayCount}</p>
+              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Ventes</p>
+                <p className="text-lg font-bold text-neutral-900 num leading-tight">{stats.todayCount}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Solde caisse</p>
-                <p className="text-lg font-bold text-slate-900 num leading-tight">{formatCompactFCFA(stats.cashBalance)}</p>
+              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Solde caisse</p>
+                <p className="text-lg font-bold text-neutral-900 num leading-tight">{formatCompactFCFA(stats.cashBalance)}</p>
               </div>
-              <div className="rounded-xl bg-rose-50/60 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-rose-700/70 uppercase tracking-wide mb-1">Dépenses</p>
-                <p className="text-lg font-bold text-rose-600 num leading-tight">{formatCompactFCFA(stats.sessionExpenses)}</p>
+              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Dépenses</p>
+                <p className="text-lg font-bold text-red-600 num leading-tight">{formatCompactFCFA(stats.sessionExpenses)}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 px-3.5 py-3 flex flex-col justify-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Ticket moyen</p>
-                <p className="text-lg font-bold text-slate-900 num leading-tight">{stats.todayCount > 0 ? formatCompactFCFA(Math.round(stats.todaySales / stats.todayCount)) : '--'}</p>
+              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Ticket moyen</p>
+                <p className="text-lg font-bold text-neutral-900 num leading-tight">{stats.todayCount > 0 ? formatCompactFCFA(Math.round(stats.todaySales / stats.todayCount)) : '--'}</p>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between pt-3 mt-3 border-t border-neutral-100">
               {lastSaleTime && (
-                <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <div className="flex items-center gap-1.5 text-xs text-neutral-400">
                   <Clock className="w-3.5 h-3.5" />
                   Dernière vente à {lastSaleTime}
                 </div>
               )}
-              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-700 transition-colors ml-auto">
+              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-semibold text-neutral-900 hover:text-neutral-600 transition-colors ml-auto">
                 Voir le détail <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Right column: Créances + Dettes + Stock */}
+          {/* Right column */}
           <div className="h-[320px] flex flex-col gap-3">
-            {/* Créances clients */}
-            <div className="h-[92px] shrink-0 bg-white rounded-2xl border border-slate-200/80 px-4 py-3.5">
+            <div className="h-[92px] shrink-0 bg-white rounded-xl border border-neutral-200 px-4 py-3.5">
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-teal-600" />
-                  <h3 className="text-sm font-bold text-slate-900">Créances clients</h3>
+                  <Users className="w-4 h-4 text-neutral-600" />
+                  <h3 className="text-sm font-bold text-neutral-900">Créances clients</h3>
                 </div>
-                <button onClick={() => nav('tiers')} className="flex items-center gap-0.5 text-[11px] font-bold text-teal-600 hover:text-teal-700 transition-colors">
+                <button onClick={() => nav('tiers')} className="flex items-center gap-0.5 text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors">
                   Voir <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
-              <p className="text-xl font-black text-slate-900 num tracking-tight">{formatFCFA(stats.receivables)}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''} à relancer</p>
+              <p className="text-xl font-bold text-neutral-900 num tracking-tight">{formatFCFA(stats.receivables)}</p>
+              <p className="text-[11px] text-neutral-400 mt-0.5">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''} a relancer</p>
             </div>
 
-            {/* Dettes fournisseurs */}
-            <div className="h-[92px] shrink-0 bg-white rounded-2xl border border-slate-200/80 px-4 py-3.5">
+            <div className="h-[92px] shrink-0 bg-white rounded-xl border border-neutral-200 px-4 py-3.5">
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-orange-500" />
-                  <h3 className="text-sm font-bold text-slate-900">Dettes fournisseurs</h3>
+                  <Truck className="w-4 h-4 text-neutral-600" />
+                  <h3 className="text-sm font-bold text-neutral-900">Dettes fournisseurs</h3>
                 </div>
-                <button onClick={() => nav('supplier_orders')} className="flex items-center gap-0.5 text-[11px] font-bold text-orange-600 hover:text-orange-700 transition-colors">
+                <button onClick={() => nav('supplier_orders')} className="flex items-center gap-0.5 text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors">
                   Voir <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
-              <p className="text-xl font-black text-slate-900 num tracking-tight">{formatFCFA(stats.payables)}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} à payer</p>
+              <p className="text-xl font-bold text-neutral-900 num tracking-tight">{formatFCFA(stats.payables)}</p>
+              <p className="text-[11px] text-neutral-400 mt-0.5">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} a payer</p>
             </div>
 
-            {/* Stock à surveiller */}
-            <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200/80 px-4 py-3.5">
+            <div className="flex-1 min-h-0 bg-white rounded-xl border border-neutral-200 px-4 py-3.5">
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-2">
-                  <Package className="w-4 h-4 text-amber-600" />
-                  <h3 className="text-sm font-bold text-slate-900">Stock à surveiller</h3>
+                  <Package className="w-4 h-4 text-neutral-600" />
+                  <h3 className="text-sm font-bold text-neutral-900">Stock a surveiller</h3>
                 </div>
-                <button onClick={() => nav('stock')} className="text-slate-400 hover:text-teal-600 transition-colors">
+                <button onClick={() => nav('stock')} className="text-neutral-400 hover:text-neutral-700 transition-colors">
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-400 mb-0.5">Rupture</p>
+                  <p className="text-[11px] font-medium text-neutral-400 mb-0.5">Rupture</p>
                   <p className="flex items-baseline gap-1">
-                    <span className="text-lg font-black text-rose-600 num">{stats.outOfStockCount}</span>
-                    <span className="text-[10px] text-slate-400">articles</span>
+                    <span className="text-lg font-bold text-red-600 num">{stats.outOfStockCount}</span>
+                    <span className="text-[10px] text-neutral-400">articles</span>
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-400 mb-0.5">Stock bas</p>
+                  <p className="text-[11px] font-medium text-neutral-400 mb-0.5">Stock bas</p>
                   <p className="flex items-baseline gap-1">
-                    <span className="text-lg font-black text-amber-600 num">{stats.lowStockCount}</span>
-                    <span className="text-[10px] text-slate-400">articles</span>
+                    <span className="text-lg font-bold text-neutral-700 num">{stats.lowStockCount}</span>
+                    <span className="text-[10px] text-neutral-400">articles</span>
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-400 mb-0.5">À commander</p>
+                  <p className="text-[11px] font-medium text-neutral-400 mb-0.5">A commander</p>
                   <p className="flex items-baseline gap-1">
-                    <span className="text-lg font-black text-slate-700 num">{stats.outOfStockCount + stats.lowStockCount}</span>
-                    <span className="text-[10px] text-slate-400">articles</span>
+                    <span className="text-lg font-bold text-neutral-900 num">{stats.outOfStockCount + stats.lowStockCount}</span>
+                    <span className="text-[10px] text-neutral-400">articles</span>
                   </p>
                 </div>
               </div>
@@ -1940,16 +1935,16 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
         {/* ── ROW 2: Vue multi-magasins (2+ sites) ou Top articles du jour (1 site) ── */}
         {hasMultiSites ? (multiSiteStats.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
+          <div className="bg-white rounded-xl border border-neutral-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <Network className="w-5 h-5 text-teal-600" />
-                <h3 className="text-base font-bold text-slate-900">Vue multi-magasins</h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-bold border border-teal-100">{sites.length} magasins</span>
+                <Network className="w-5 h-5 text-neutral-700" />
+                <h3 className="text-base font-bold text-neutral-900">Vue multi-magasins</h3>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{sites.length} magasins</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Total encaissé du jour :</span>
-                <span className="text-sm font-bold text-slate-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + x.todayCollected, 0))}</span>
+                <span className="text-xs text-neutral-400">Total encaissé du jour :</span>
+                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + x.todayCollected, 0))}</span>
               </div>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -1960,32 +1955,32 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   <button
                     key={site.id}
                     onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
-                    className={`p-5 rounded-xl border text-left transition-all duration-200 ${isCurrent ? 'border-teal-300 bg-teal-50/20' : 'border-slate-200 bg-white hover:border-teal-200'}`}
+                    className={`p-5 rounded-xl border text-left transition-all duration-200 ${isCurrent ? 'border-neutral-400 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${site.sessionOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                        <span className="text-sm font-bold text-slate-900">{site.name}</span>
+                        <div className={`w-3 h-3 rounded-full ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
+                        <span className="text-sm font-bold text-neutral-900">{site.name}</span>
                       </div>
-                      {isCurrent && <span className="text-[10px] font-bold text-teal-600 bg-teal-100 px-2 py-0.5 rounded">Actif</span>}
+                      {isCurrent && <span className="text-[10px] font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded">Actif</span>}
                     </div>
                     <div className="grid grid-cols-4 gap-4">
                       <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Encaissé jour</p>
-                        <p className="text-sm font-bold text-slate-900 num">{formatCompactFCFA(site.todayCollected)}</p>
-                        <p className="text-[9px] text-slate-400 num mt-0.5">Facturé {formatCompactFCFA(site.todaySales)}</p>
+                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">Encaissé jour</p>
+                        <p className="text-sm font-bold text-neutral-900 num">{formatCompactFCFA(site.todayCollected)}</p>
+                        <p className="text-[9px] text-neutral-400 num mt-0.5">Facturé {formatCompactFCFA(site.todaySales)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Tickets</p>
-                        <p className="text-sm font-bold text-slate-900 num">{site.salesCount}</p>
+                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">Tickets</p>
+                        <p className="text-sm font-bold text-neutral-900 num">{site.salesCount}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Panier moy.</p>
-                        <p className="text-sm font-bold text-slate-900 num">{avgTicket > 0 ? formatCompactFCFA(avgTicket) : '--'}</p>
+                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">Panier moy.</p>
+                        <p className="text-sm font-bold text-neutral-900 num">{avgTicket > 0 ? formatCompactFCFA(avgTicket) : '--'}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Caisse</p>
-                        <p className={`text-sm font-bold num ${site.sessionOpen ? 'text-teal-700' : 'text-slate-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</p>
+                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">Caisse</p>
+                        <p className={`text-sm font-bold num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</p>
                       </div>
                     </div>
                   </button>
@@ -1994,68 +1989,68 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             </div>
           </div>
         )) : (
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
+          <div className="bg-white rounded-xl border border-neutral-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <Award className="w-5 h-5 text-teal-600" />
-                <h3 className="text-base font-bold text-slate-900">Top articles</h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-bold border border-teal-100">{periodLabel}</span>
+                <Award className="w-5 h-5 text-neutral-700" />
+                <h3 className="text-base font-bold text-neutral-900">Top articles</h3>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{periodLabel}</span>
                 {topArticles.length > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold border border-slate-200">{topArticles.length}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-bold border border-neutral-200">{topArticles.length}</span>
                 )}
               </div>
               <button
                 onClick={() => nav('/sales')}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-teal-700 transition-colors"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-500 hover:text-neutral-900 transition-colors"
               >
                 Voir le journal des ventes
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
             {topArticlesLoading ? (
-              <div className="flex items-center justify-center py-12 text-slate-400">
+              <div className="flex items-center justify-center py-12 text-neutral-400">
                 <Loader2 className="w-5 h-5 animate-spin" />
               </div>
             ) : topArticles.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
-                <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
-                  <Package className="w-5 h-5 text-slate-300" />
+                <div className="w-12 h-12 rounded-full bg-neutral-50 flex items-center justify-center mb-3">
+                  <Package className="w-5 h-5 text-neutral-300" />
                 </div>
-                <p className="text-sm font-semibold text-slate-700">Aucune vente sur la periode</p>
-                <p className="text-xs text-slate-400 mt-1">Les articles vendus apparaitront ici en temps reel.</p>
+                <p className="text-sm font-semibold text-neutral-700">Aucune vente sur la période</p>
+                <p className="text-xs text-neutral-400 mt-1">Les articles vendus apparaitront ici en temps reel.</p>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-slate-100">
+              <div className="overflow-hidden rounded-xl border border-neutral-100">
                 <div className="max-h-[330px] overflow-y-auto">
                   <table className="w-full">
-                    <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
-                      <tr className="border-b border-slate-100">
-                        <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-10">#</th>
-                        <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Article</th>
-                        <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-28">Quantite</th>
-                        <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-32">Chiffre d&apos;affaires</th>
+                    <thead className="sticky top-0 z-10 bg-neutral-50/95 backdrop-blur">
+                      <tr className="border-b border-neutral-100">
+                        <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 w-10">#</th>
+                        <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Article</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 w-28">Quantité</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 w-32">Chiffre d&apos;affaires</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-neutral-100">
                       {(() => {
                         const maxTotal = Math.max(...topArticles.map(a => a.total), 1);
                         return topArticles.map((art, idx) => {
                           const pct = Math.round((art.total / maxTotal) * 100);
                           return (
-                            <tr key={art.article_id} className="hover:bg-slate-50/50 transition-colors">
+                            <tr key={art.article_id} className="hover:bg-neutral-50/50 transition-colors">
                               <td className="px-4 py-3">
-                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${idx === 0 ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${idx === 0 ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-600'}`}>
                                   {idx + 1}
                                 </span>
                               </td>
                               <td className="px-4 py-3">
-                                <div className="text-sm font-semibold text-slate-900 truncate max-w-md">{art.name}</div>
-                                <div className="mt-1.5 h-1 rounded-full bg-slate-100 overflow-hidden">
-                                  <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                <div className="text-sm font-semibold text-neutral-900 truncate max-w-md">{art.name}</div>
+                                <div className="mt-1.5 h-1 rounded-full bg-neutral-100 overflow-hidden">
+                                  <div className="h-full bg-neutral-900 rounded-full transition-all" style={{ width: `${pct}%` }} />
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-right text-sm font-bold text-slate-800 num">{art.quantity}</td>
-                              <td className="px-4 py-3 text-right text-sm font-bold text-teal-700 num">{formatFCFA(art.total)}</td>
+                              <td className="px-4 py-3 text-right text-sm font-bold text-neutral-800 num">{art.quantity}</td>
+                              <td className="px-4 py-3 text-right text-sm font-bold text-neutral-900 num">{formatFCFA(art.total)}</td>
                             </tr>
                           );
                         });
@@ -2071,15 +2066,15 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         {/* ── ROW 3: Activité récente + Priorités du jour + Mouvements de caisse ── */}
         <div className="grid grid-cols-12 gap-4">
           {/* Activité récente */}
-          <div className="col-span-12 xl:col-span-6 bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col max-h-[400px]">
+          <div className="col-span-12 xl:col-span-6 bg-white rounded-xl border border-neutral-200 p-5 flex flex-col max-h-[400px]">
             <div className="flex items-center gap-2 mb-4">
-              <Clock className="w-5 h-5 text-slate-500" />
-              <h3 className="text-base font-bold text-slate-900">Activités récentes</h3>
+              <Clock className="w-5 h-5 text-neutral-500" />
+              <h3 className="text-base font-bold text-neutral-900">Activités récentes</h3>
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
               <table className="w-full">
                 <thead>
-                  <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                  <tr className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100">
                     <th className="text-left py-2 pr-2">Type</th>
                     <th className="text-left py-2 pr-2">Référence</th>
                     <th className="text-left py-2 pr-2">Client / Fournisseur</th>
@@ -2090,13 +2085,13 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 <tbody>
                   {stats.recentActivities.slice(0, 8).map((act: ActivityItem) => {
                     const iconMap: Record<ActivityItem['type'], { icon: typeof Receipt; bg: string; fg: string; label: string }> = {
-                      sale: { icon: Receipt, bg: 'bg-emerald-50', fg: 'text-emerald-600', label: 'Vente' },
-                      quote: { icon: ClipboardList, bg: 'bg-sky-50', fg: 'text-sky-600', label: 'Devis' },
-                      supplier_order: { icon: Truck, bg: 'bg-orange-50', fg: 'text-orange-600', label: 'Commande' },
-                      payment_received: { icon: Coins, bg: 'bg-teal-50', fg: 'text-teal-600', label: 'Règlement client' },
-                      online_order: { icon: Globe, bg: 'bg-cyan-50', fg: 'text-cyan-600', label: 'Commande web' },
-                      stock_movement: { icon: RefreshCw, bg: 'bg-slate-100', fg: 'text-slate-600', label: 'Entrée stock' },
-                      return: { icon: RotateCcw, bg: 'bg-rose-50', fg: 'text-rose-500', label: 'Retour fournisseur' },
+                      sale: { icon: Receipt, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Vente' },
+                      quote: { icon: ClipboardList, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Devis' },
+                      supplier_order: { icon: Truck, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Commande' },
+                      payment_received: { icon: Coins, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Règlement client' },
+                      online_order: { icon: Globe, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Commande web' },
+                      stock_movement: { icon: RefreshCw, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Entrée stock' },
+                      return: { icon: RotateCcw, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Retour fournisseur' },
                     };
                     const cfg = iconMap[act.type];
                     const Icon = cfg.icon;
@@ -2104,27 +2099,27 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                     const clientPart = act.detail.split(' · ')[0];
                     const timeStr = new Date(act.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
                     return (
-                      <tr key={act.id} onClick={() => nav(act.route, act.routeCtx)} className="border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer transition-colors">
+                      <tr key={act.id} onClick={() => nav(act.route, act.routeCtx)} className="border-b border-neutral-50 hover:bg-neutral-50/50 cursor-pointer transition-colors">
                         <td className="py-2.5 pr-2">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
                               <Icon className={`w-3 h-3 ${cfg.fg}`} />
                             </div>
-                            <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
+                            <span className="text-xs font-medium text-neutral-600">{cfg.label}</span>
                           </div>
                         </td>
                         <td className="py-2.5 pr-2">
-                          <span className="text-xs font-semibold text-slate-700">{refPart}</span>
+                          <span className="text-xs font-semibold text-neutral-700">{refPart}</span>
                         </td>
                         <td className="py-2.5 pr-2">
-                          <span className="text-xs text-slate-500">{clientPart}</span>
+                          <span className="text-xs text-neutral-500">{clientPart}</span>
                         </td>
                         <td className="py-2.5 pr-2 text-right">
-                          <span className="text-xs text-slate-400">{timeStr}</span>
+                          <span className="text-xs text-neutral-400">{timeStr}</span>
                         </td>
                         <td className="py-2.5 text-right">
                           {act.amount !== null && (
-                            <span className={`text-xs font-bold num ${act.amountType === 'positive' ? 'text-emerald-600' : act.amountType === 'negative' ? 'text-rose-500' : 'text-slate-600'}`}>
+                            <span className={`text-xs font-bold num ${act.amountType === 'positive' ? 'text-neutral-900' : act.amountType === 'negative' ? 'text-rose-500' : 'text-neutral-600'}`}>
                               {act.amountType === 'positive' ? '+' : act.amountType === 'negative' ? '-' : ''}{formatCompactFCFA(Math.abs(act.amount))}
                             </span>
                           )}
@@ -2136,95 +2131,95 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               </table>
               {stats.recentActivities.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Activity className="w-8 h-8 text-slate-200 mb-2" />
-                  <p className="text-xs text-slate-400">Aucune activité récente</p>
+                  <Activity className="w-8 h-8 text-neutral-200 mb-2" />
+                  <p className="text-xs text-neutral-400">Aucune activité récente</p>
                 </div>
               )}
             </div>
             {stats.recentActivities.length > 0 && (
-              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-700 mt-3 pt-3 border-t border-slate-100 transition-colors">
+              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 mt-3 pt-3 border-t border-neutral-100 transition-colors">
                 Voir toute l'activité <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
           {/* Priorités du jour */}
-          <div className="col-span-12 xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-5">
+          <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-5">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
-              <h3 className="text-base font-bold text-slate-900">Priorités du jour</h3>
+              <h3 className="text-base font-bold text-neutral-900">Priorités du jour</h3>
             </div>
             <div className="space-y-1">
               {stats.receivables > 0 && (
-                <button onClick={() => nav('tiers')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group">
-                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                  <span className="flex-1 text-sm text-slate-700 group-hover:text-teal-700 transition-colors">Relancer les clients</span>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{stats.customersToChase}</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                <button onClick={() => nav('tiers')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
+                  <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
+                  <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Relancer les clients</span>
+                  <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">{stats.customersToChase}</span>
+                  <ChevronRight className="w-4 h-4 text-neutral-300" />
                 </button>
               )}
               {stats.payables > 0 && (
-                <button onClick={() => nav('supplier_orders')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group">
-                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                  <span className="flex-1 text-sm text-slate-700 group-hover:text-teal-700 transition-colors">Payer fournisseurs</span>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{stats.suppliersToChase}</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                <button onClick={() => nav('supplier_orders')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
+                  <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
+                  <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Payer fournisseurs</span>
+                  <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">{stats.suppliersToChase}</span>
+                  <ChevronRight className="w-4 h-4 text-neutral-300" />
                 </button>
               )}
               {stats.pendingReturns > 0 && (
-                <button onClick={() => nav('sales')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group">
-                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                  <span className="flex-1 text-sm text-slate-700 group-hover:text-teal-700 transition-colors">Réception fournisseur</span>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{stats.pendingReturns}</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                <button onClick={() => nav('sales')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
+                  <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
+                  <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Réception fournisseur</span>
+                  <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">{stats.pendingReturns}</span>
+                  <ChevronRight className="w-4 h-4 text-neutral-300" />
                 </button>
               )}
               {stats.sessionInfo && (
-                <button onClick={() => nav('pos')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-slate-50 active:scale-[0.98] transition-all text-left group">
-                  <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                  <span className="flex-1 text-sm text-slate-700 group-hover:text-teal-700 transition-colors">Clôturer la caisse</span>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Aujourd'hui</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300" />
+                <button onClick={() => nav('pos')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
+                  <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
+                  <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Clôturer la caisse</span>
+                  <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">Aujourd'hui</span>
+                  <ChevronRight className="w-4 h-4 text-neutral-300" />
                 </button>
               )}
               {!stats.receivables && !stats.payables && !stats.pendingReturns && !stats.sessionInfo && (
                 <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <CheckCircle className="w-8 h-8 text-emerald-300 mb-2" />
-                  <p className="text-xs font-semibold text-emerald-600">Tout est en ordre</p>
+                  <CheckCircle className="w-8 h-8 text-neutral-300 mb-2" />
+                  <p className="text-xs font-semibold text-neutral-600">Tout est en ordre</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Mouvements de caisse */}
-          <div className="col-span-12 xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-5">
+          <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Coins className="w-5 h-5 text-teal-600" />
-                <h3 className="text-sm font-bold text-slate-900">Mouvements de caisse</h3>
+                <Coins className="w-5 h-5 text-neutral-700" />
+                <h3 className="text-sm font-bold text-neutral-900">Mouvements de caisse</h3>
               </div>
-              <span className="text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">Aujourd'hui</span>
+              <span className="text-[10px] font-medium text-neutral-400 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">Aujourd'hui</span>
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Solde d'ouverture</span>
-                <span className="text-sm font-semibold text-slate-900 num">{formatCompactFCFA(stats.sessionInfo?.openingAmount || 0)}</span>
+                <span className="text-sm text-neutral-600">Solde d'ouverture</span>
+                <span className="text-sm font-semibold text-neutral-900 num">{formatCompactFCFA(stats.sessionInfo?.openingAmount || 0)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Encaissements</span>
-                <span className="text-sm font-bold text-teal-600 num">{formatCompactFCFA(stats.todayCollected)}</span>
+                <span className="text-sm text-neutral-600">Encaissements</span>
+                <span className="text-sm font-bold text-neutral-900 num">{formatCompactFCFA(stats.todayCollected)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Dépenses</span>
+                <span className="text-sm text-neutral-600">Dépenses</span>
                 <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionExpenses)}</span>
               </div>
-              <div className="pt-3 mt-2 border-t border-slate-200">
+              <div className="pt-3 mt-2 border-t border-neutral-200">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-slate-900">Solde actuel</span>
-                  <span className="text-lg font-black text-teal-700 num">{formatCompactFCFA(stats.cashBalance)}</span>
+                  <span className="text-sm font-bold text-neutral-900">Solde actuel</span>
+                  <span className="text-lg font-black text-neutral-900 num">{formatCompactFCFA(stats.cashBalance)}</span>
                 </div>
               </div>
-              <button onClick={() => nav('cash_history')} className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:text-teal-700 mt-2 transition-colors">
+              <button onClick={() => nav('cash_history')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 mt-2 transition-colors">
                 Voir le détail de la caisse <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -2268,7 +2263,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       </Modal>
 
       <Modal open={qaModal === 'supplier'} onClose={() => setQAModal(null)} title="Nouveau fournisseur" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveSupplier} disabled={qaSaving || !supForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Creer le fournisseur</button></>}>
+        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveSupplier} disabled={qaSaving || !supForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Créer le fournisseur</button></>}>
         <div className="space-y-3">
           <div>
             <label className="label">Nom *</label>
@@ -2306,10 +2301,10 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       >
         <div className="space-y-3">
           {adjRow && (
-            <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
-              <div className="text-[12px] font-semibold text-slate-900 truncate">{adjRow.name}</div>
-              <div className="text-[10px] text-slate-500 font-mono">{adjRow.internal_ref}</div>
-              <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-700">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-neutral-50 to-white border border-neutral-200">
+              <div className="text-[12px] font-semibold text-neutral-900 truncate">{adjRow.name}</div>
+              <div className="text-[10px] text-neutral-500 font-mono">{adjRow.internal_ref}</div>
+              <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-neutral-200 text-neutral-700">
                 Stock actuel : <span className="num">{adjRow.quantity}</span>
               </div>
             </div>
@@ -2324,7 +2319,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             />
           </div>
           <div>
-            <label className="label">Quantite</label>
+            <label className="label">Quantité</label>
             <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
           </div>
           <div>
@@ -2357,7 +2352,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             />
           </div>
           <div>
-            <label className="label">Quantite a transferer</label>
+            <label className="label">Quantité à transférer</label>
             <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input" autoFocus={desktopAutoFocus} />
           </div>
           <div>
@@ -2371,18 +2366,18 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         footer={<button onClick={() => setStockDone(null)} className="btn-primary">Fermer</button>}>
         {stockDone && (
           <div className="text-center space-y-4">
-            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 flex items-center justify-center">
-              <CheckIcon className="w-7 h-7 text-emerald-600" />
+            <div className="w-14 h-14 mx-auto rounded-full bg-neutral-100 flex items-center justify-center">
+              <CheckIcon className="w-7 h-7 text-neutral-700" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-900">{stockDone.label}</p>
-              <p className="text-xs text-slate-500 mt-1">{stockDone.articleName} - Qté: {stockDone.qty}</p>
+              <p className="text-sm font-bold text-neutral-900">{stockDone.label}</p>
+              <p className="text-xs text-neutral-500 mt-1">{stockDone.articleName} - Qté: {stockDone.qty}</p>
             </div>
             <div className="flex items-center justify-center gap-2 pt-2">
-              <button onClick={() => printStockDone('a4')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+              <button onClick={() => printStockDone('a4')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-200 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors">
                 <FileText className="w-3.5 h-3.5" /> Imprimer A4
               </button>
-              <button onClick={() => printStockDone('80')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+              <button onClick={() => printStockDone('80')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-200 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors">
                 <Receipt className="w-3.5 h-3.5" /> Ticket 80mm
               </button>
             </div>

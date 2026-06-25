@@ -6,7 +6,7 @@ import {
   Wrench as Wrench_, Store as Store_, ShoppingBag as ShoppingBag_, Shirt as Shirt_, Cpu as Cpu_,
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
-  ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus,
+  ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -30,7 +30,7 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
 }
 
 const SEV = {
-  info: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-800', icon: 'text-sky-600', label: 'Info' },
+  info: { bg: 'bg-neutral-50', border: 'border-neutral-200', text: 'text-neutral-800', icon: 'text-neutral-700', label: 'Info' },
   success: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800', icon: 'text-emerald-600', label: 'Succès' },
   warning: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-800', icon: 'text-amber-600', label: 'Avertissement' },
   critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', icon: 'text-red-600', label: 'Critique' },
@@ -120,7 +120,7 @@ function OverviewSection() {
 
   const planColors: Record<string, string> = {
     trial: 'from-slate-500 to-slate-700',
-    starter: 'from-sky-500 to-sky-700',
+    starter: 'from-neutral-700 to-neutral-900',
     pro: 'from-emerald-500 to-teal-700',
     enterprise: 'from-amber-500 to-amber-700',
   };
@@ -214,7 +214,7 @@ function KpiCard({ icon: Icon, label, value, sub, color }: any) {
   const colors: Record<string, string> = {
     emerald: 'from-emerald-500 to-teal-600 shadow-emerald-500/30',
     amber: 'from-amber-500 to-orange-600 shadow-amber-500/30',
-    sky: 'from-sky-500 to-blue-600 shadow-sky-500/30',
+    sky: 'from-neutral-700 to-neutral-900 shadow-neutral-500/30',
     red: 'from-red-500 to-rose-600 shadow-red-500/30',
   };
   return (
@@ -528,7 +528,7 @@ function TenantsSection() {
 function PlanBadge({ plan, code }: { plan: any; code: string }) {
   const colors: Record<string, string> = {
     trial: 'bg-slate-100 text-slate-700 border-slate-200',
-    starter: 'bg-sky-50 text-sky-700 border-sky-200',
+    starter: 'bg-neutral-50 text-neutral-800 border-neutral-200',
     pro: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     enterprise: 'bg-amber-50 text-amber-700 border-amber-200',
   };
@@ -564,6 +564,8 @@ const MODULE_DEFS: { key: string; name: string; desc: string; icon: any; color: 
   { key: 'tiers', name: 'Tiers', desc: 'Clients & fournisseurs', icon: Users, color: 'sky' },
   { key: 'supplier_orders', name: 'Commandes fournisseurs', desc: 'Approvisionnement', icon: ShoppingBag_, color: 'slate' },
   { key: 'accounting', name: 'Comptabilité', desc: 'Plan comptable SYSCOHADA', icon: BookOpen_, color: 'amber' },
+  { key: 'reports', name: 'États / Rapports', desc: 'Statistiques et rapports', icon: BarChart3, color: 'sky' },
+  { key: 'ipm', name: 'IPM / Tiers payant', desc: 'Gestion mutuelle pharmacie', icon: HeartPulse, color: 'emerald' },
   { key: 'settings', name: 'Paramètres', desc: 'Configuration tenant', icon: Settings_, color: 'slate' },
 ];
 
@@ -626,8 +628,8 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
             <span>Le tenant pourra importer depuis le catalogue maître correspondant. Les articles ne sont copiés que sur action du tenant.</span>
           </div>
         ) : (
-          <div className="mt-2 flex items-start gap-2 text-[11px] bg-sky-50 border border-sky-200 text-sky-800 rounded-xl p-2.5">
-            <Info_ className="w-4 h-4 shrink-0 mt-px text-sky-600" />
+          <div className="mt-2 flex items-start gap-2 text-[11px] bg-neutral-50 border border-neutral-200 text-neutral-800 rounded-xl p-2.5">
+            <Info_ className="w-4 h-4 shrink-0 mt-px text-neutral-700" />
             <span>Sélectionnez un type d'activité pour activer l'accès au catalogue maître correspondant.</span>
           </div>
         )}
@@ -714,7 +716,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
     plan_expires_at: tenant.plan_expires_at?.slice(0, 10) || '',
     business_type: tenant.business_type || 'auto_parts',
     business_activity_type_id: tenant.business_activity_type_id || null,
-    enabled_modules: Array.isArray(tenant.enabled_modules) ? tenant.enabled_modules : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings'],
+    enabled_modules: Array.isArray(tenant.enabled_modules) ? tenant.enabled_modules : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports'],
   });
   const [saving, setSaving] = useState(false);
   const [subForm, setSubForm] = useState<any>({ plan_code: tenant.plan, billing_cycle: 'monthly', amount: 0, auto_renew: true, started_at: new Date().toISOString().slice(0, 10), ends_at: '' });
@@ -1432,13 +1434,13 @@ const ICON_MAP_ADMIN: Record<string, any> = {
 
 const ALL_APP_FEATURES: { icon: string; label: string; desc: string; color: string }[] = [
   { icon: 'ShoppingCart', label: 'Point de vente', desc: 'Caisse rapide et intuitive', color: 'text-teal-600 bg-teal-50' },
-  { icon: 'Package', label: 'Stock', desc: 'Maîtrisez vos stocks', color: 'text-sky-600 bg-sky-50' },
+  { icon: 'Package', label: 'Stock', desc: 'Maîtrisez vos stocks', color: 'text-neutral-700 bg-neutral-50' },
   { icon: 'FileText', label: 'Facturation', desc: 'Devis et factures pro', color: 'text-amber-600 bg-amber-50' },
   { icon: 'Users', label: 'Clients & Tiers', desc: 'CRM et créances', color: 'text-emerald-600 bg-emerald-50' },
   { icon: 'Truck', label: 'Fournisseurs', desc: 'Commandes et dettes', color: 'text-orange-600 bg-orange-50' },
   { icon: 'Globe', label: 'Boutique en ligne', desc: 'Vitrine et commandes web', color: 'text-cyan-600 bg-cyan-50' },
   { icon: 'BarChart3', label: 'Comptabilité', desc: 'Suivi financier complet', color: 'text-rose-600 bg-rose-50' },
-  { icon: 'TrendingUp', label: 'Rapports', desc: 'Analyses et tableaux de bord', color: 'text-violet-600 bg-violet-50' },
+  { icon: 'TrendingUp', label: 'Rapports', desc: 'Analyses et tableaux de bord', color: 'text-neutral-700 bg-neutral-50' },
   { icon: 'Shield', label: 'Sécurité', desc: 'Rôles et permissions', color: 'text-slate-600 bg-slate-100' },
 ];
 

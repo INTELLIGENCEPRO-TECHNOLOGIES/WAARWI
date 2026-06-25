@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, type ReactNode } from 'react';
 import {
   X, Plus, Search, Trash2, ChevronRight,
   ChevronLeft, Loader2, Check, ShoppingCart, Delete,
@@ -43,6 +43,7 @@ type Props = {
   total: number;
   saveLabel?: string;
   itemPriceField?: 'sale_price' | 'purchase_price';
+  banner?: ReactNode;
 };
 
 export function MobileBillingWizard({
@@ -62,6 +63,7 @@ export function MobileBillingWizard({
   total,
   saveLabel = 'Enregistrer',
   itemPriceField = 'sale_price',
+  banner,
 }: Props) {
   const [step, setStep] = useState<1 | 2>(1);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -112,6 +114,9 @@ export function MobileBillingWizard({
           <StepIndicator step={step} />
         </div>
       </div>
+
+      {/* Optional banner (e.g. IPM) */}
+      {banner && <div className="flex-shrink-0">{banner}</div>}
 
       {/* Step content */}
       <div className="flex-1 overflow-y-auto">

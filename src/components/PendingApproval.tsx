@@ -105,7 +105,7 @@ export function PendingApproval() {
                   Votre entreprise
                 </div>
                 <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-wide leading-tight">
-                  {tenant?.name || '\u2014'}
+                  {tenant?.name || '—'}
                 </h2>
               </div>
 

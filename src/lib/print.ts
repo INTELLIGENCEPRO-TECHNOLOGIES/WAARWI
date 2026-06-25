@@ -59,6 +59,22 @@ const esc = (v: unknown) =>
 
 const fmtMoney = (n: number) => (Number(n) || 0).toLocaleString('fr-FR');
 
+export function computeWarrantyExpiry(saleDate: string, warranty: string | null): string {
+  if (!warranty) return '';
+  const lower = warranty.toLowerCase().trim();
+  const numMatch = lower.match(/^(\d+)/);
+  if (!numMatch) return '';
+  const num = parseInt(numMatch[1], 10);
+  let days = num * 30;
+  if (lower.includes('an') || lower.includes('year')) days = num * 365;
+  else if (lower.includes('mois') || lower.includes('month')) days = num * 30;
+  else if (lower.includes('jour') || lower.includes('day')) days = num;
+  else if (lower.includes('semaine') || lower.includes('week')) days = num * 7;
+  const end = new Date(saleDate);
+  end.setDate(end.getDate() + days);
+  return end.toLocaleDateString('fr-FR');
+}
+
 const activityLabel = (t: PrintTenant) => {
   // Priority: explicit activity name from business_activity_types (set in Platform Admin),
   // then mapped business_type label, then fallback.
@@ -372,6 +388,7 @@ export function printTicket80(
     items: PrintItem[];
     payments: PrintPayment[];
     customer?: PrintCustomer;
+    docHeader?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; imei?: string | null; representative?: string | null } | null;
   },
   tenant: PrintTenant,
   cashier: string
@@ -394,6 +411,15 @@ export function printTicket80(
     })
     .join('');
 
+  const docHeaderRows = [
+    ...(sale.docHeader?.reference ? [`<div class="info-row"><span>Réf.</span><span>${esc(sale.docHeader.reference)}</span></div>`] : []),
+    ...(sale.docHeader?.delivery_date ? [`<div class="info-row"><span>Livraison</span><span>${new Date(sale.docHeader.delivery_date).toLocaleDateString('fr-FR')}</span></div>`] : []),
+    ...(sale.docHeader?.imei ? [`<div class="info-row"><span>IMEI</span><span>${esc(sale.docHeader.imei)}</span></div>`] : []),
+    ...(sale.docHeader?.warranty ? [`<div class="info-row"><span>Garantie</span><span>${esc(sale.docHeader.warranty)}</span></div>`] : []),
+    ...(sale.docHeader?.warranty ? [`<div class="info-row"><span>Expire le</span><span>${computeWarrantyExpiry(sale.created_at, sale.docHeader.warranty)}</span></div>`] : []),
+    ...(sale.docHeader?.representative ? [`<div class="info-row"><span>Représentant</span><span>${esc(sale.docHeader.representative)}</span></div>`] : []),
+  ].join('');
+
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket ${esc(sale.sale_number)}</title>
 <style>${ticketStyle}</style></head><body>
 ${tenantHeader80(tenant)}
@@ -403,6 +429,7 @@ ${tenantHeader80(tenant)}
 <div class="doc-date">${new Date(sale.created_at).toLocaleString('fr-FR')}</div>
 <div class="info-row"><span>Caissier</span><span>${esc(cashier)}</span></div>
 ${sale.customer ? `<div class="info-row"><span>Client</span><span>${esc(sale.customer.name)}</span></div>` : ''}
+${docHeaderRows}
 <hr class="hr" />
 ${itemsHtml}
 <hr class="hr" />
@@ -932,6 +959,7 @@ export function printDocumentA4(opts: {
   docLabel: string;
   docNumber: string;
   docDate: string;
+  docCreatedAt?: string;
   footerNote?: string;
   customer?: PrintCustomer;
   extraMeta?: { label: string; value: string }[];
@@ -943,7 +971,7 @@ export function printDocumentA4(opts: {
   paid?: number;
   cashier?: string;
   issuedBy?: string;
-  docHeader?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; representative?: string | null } | null;
+  docHeader?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; imei?: string | null; representative?: string | null } | null;
 }) {
   const t = opts.tenant;
 
@@ -1003,9 +1031,11 @@ export function printDocumentA4(opts: {
 
   const extraMeta = [
     ...(opts.extraMeta || []),
-    ...(opts.docHeader?.reference ? [{ label: 'Référence', value: opts.docHeader.reference }] : []),
+    ...(opts.docHeader?.reference ? [{ label: 'Reference', value: opts.docHeader.reference }] : []),
     ...(opts.docHeader?.delivery_date ? [{ label: 'Date de livraison', value: new Date(opts.docHeader.delivery_date).toLocaleDateString('fr-FR') }] : []),
     ...(opts.docHeader?.warranty ? [{ label: 'Garantie', value: opts.docHeader.warranty }] : []),
+    ...(opts.docHeader?.warranty && opts.docCreatedAt ? [{ label: 'Expiration garantie', value: computeWarrantyExpiry(opts.docCreatedAt, opts.docHeader.warranty) }] : []),
+    ...(opts.docHeader?.imei ? [{ label: 'IMEI / Téléphone', value: opts.docHeader.imei }] : []),
     ...(opts.docHeader?.representative ? [{ label: 'Représentant', value: opts.docHeader.representative }] : []),
   ].map(m => `<p>${esc(m.label)} : ${esc(m.value)}</p>`).join('');
 
@@ -1410,6 +1440,125 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
   </div>
 
   <div class="brand-footer">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
+</div>
+</body></html>`;
+  printHtml(html, 400);
+}
+
+// ── Warranty Certificate Print (A4) ──────────────────────────────────────────
+
+export type WarrantyCertificateOpts = {
+  tenant: PrintTenant;
+  saleNumber: string;
+  saleDate: string;
+  customerName: string;
+  customerPhone?: string;
+  imei?: string | null;
+  warrantyDuration: string;
+  expirationDate: string;
+  items?: { name: string; quantity: number; unit_price: number }[];
+  total?: number;
+  warrantyTerms?: string;
+  representative?: string | null;
+  siteName?: string | null;
+  status: 'active' | 'expiring' | 'expired' | 'cancelled';
+};
+
+export function printWarrantyCertificate(opts: WarrantyCertificateOpts) {
+  const t = opts.tenant;
+  const logoImg = tenantLogoA4(t);
+  const headerLines = tenantHeaderA4Lines(t);
+
+  const statusLabels: Record<string, { text: string; color: string; bg: string }> = {
+    active: { text: 'EN COURS DE VALIDITÉ', color: '#166534', bg: '#dcfce7' },
+    expiring: { text: 'EXPIRE BIENTÔT', color: '#92400e', bg: '#fef3c7' },
+    expired: { text: 'EXPIRÉE', color: '#991b1b', bg: '#fee2e2' },
+    cancelled: { text: 'ANNULÉE', color: '#991b1b', bg: '#fee2e2' },
+  };
+  const statusCfg = statusLabels[opts.status] || statusLabels.active;
+
+  const itemsHtml = opts.items && opts.items.length > 0
+    ? `<table class="items-table">
+        <thead><tr><th>Designation</th><th class="center">Qte</th><th class="right">Prix unit.</th><th class="right">Total</th></tr></thead>
+        <tbody>${opts.items.map(i => `<tr><td>${esc(i.name)}</td><td class="center">${i.quantity}</td><td class="right">${fmtMoney(i.unit_price)} FCFA</td><td class="right bold">${fmtMoney(i.quantity * i.unit_price)} FCFA</td></tr>`).join('')}</tbody>
+      </table>
+      ${opts.total ? `<div class="total-line"><span>TOTAL TTC</span><span class="bold">${fmtMoney(opts.total)} FCFA</span></div>` : ''}`
+    : '';
+
+  const termsHtml = opts.warrantyTerms
+    ? `<div class="terms-section">
+        <h3>Conditions de garantie</h3>
+        <div class="terms-content">${esc(opts.warrantyTerms).replace(/\n/g, '<br/>')}</div>
+      </div>`
+    : `<div class="terms-section">
+        <h3>Conditions de garantie</h3>
+        <div class="terms-content">
+          La garantie couvre les defauts de fabrication et les pannes survenant dans des conditions normales d'utilisation.<br/>
+          La garantie ne couvre pas les dommages causes par une mauvaise utilisation, les chocs, l'exposition a l'eau ou a des temperatures extremes, les modifications non autorisees ou l'usure normale.
+        </div>
+      </div>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>FICHE DE GARANTIE - ${esc(opts.saleNumber)}</title>
+<style>${a4Style}
+  .warranty-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.5px; }
+  .warranty-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin: 16px 0; }
+  .warranty-info-item { padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; }
+  .warranty-info-item .label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 3px; }
+  .warranty-info-item .value { font-size: 13px; font-weight: 600; color: #111827; }
+  .warranty-info-item .value.mono { font-family: 'Courier New', monospace; letter-spacing: 0.5px; }
+  .terms-section { margin-top: 20px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb; }
+  .terms-section h3 { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #374151; margin-bottom: 8px; }
+  .terms-content { font-size: 11px; line-height: 1.6; color: #4b5563; }
+  .items-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 11px; }
+  .items-table th { background: #f3f4f6; padding: 8px 10px; border: 1px solid #e5e7eb; font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.3px; color: #374151; }
+  .items-table td { padding: 8px 10px; border: 1px solid #e5e7eb; }
+  .total-line { display: flex; justify-content: space-between; padding: 10px 14px; background: #111827; color: #ffffff; border-radius: 8px; font-size: 13px; margin-top: 8px; }
+  .signatures-warranty { display: flex; justify-content: space-between; gap: 24px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+  .sig-block-w { text-align: center; flex: 1; }
+  .sig-block-w .line-w { border-bottom: 1px solid #d1d5db; height: 50px; margin-bottom: 6px; }
+  .sig-block-w .cap-w { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #6b7280; letter-spacing: 0.3px; }
+</style></head><body>
+<div class="page-content">
+  <div class="header">
+    <div class="brand">
+      ${logoImg}
+      <div class="brand-text">
+        ${headerLines}
+      </div>
+    </div>
+    <div class="doc-info">
+      <div class="doc-title">FICHE DE GARANTIE</div>
+      <div class="doc-number">${esc(opts.saleNumber)}</div>
+      <div class="doc-date">${new Date(opts.saleDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+      <div style="margin-top:8px;">
+        <span class="warranty-badge" style="background:${statusCfg.bg};color:${statusCfg.color};">${statusCfg.text}</span>
+      </div>
+    </div>
+  </div>
+
+  ${opts.customerName ? `<div class="client-box"><div class="client-label">CLIENT</div><div class="client-name">${esc(opts.customerName)}</div>${opts.customerPhone ? `<div class="client-phone">${esc(opts.customerPhone)}</div>` : ''}</div>` : ''}
+
+  <div class="warranty-info-grid">
+    ${opts.imei ? `<div class="warranty-info-item"><div class="label">IMEI / Numéro de série</div><div class="value mono">${esc(opts.imei)}</div></div>` : ''}
+    <div class="warranty-info-item"><div class="label">Durée de garantie</div><div class="value">${esc(opts.warrantyDuration)}</div></div>
+    <div class="warranty-info-item"><div class="label">Date d'achat</div><div class="value">${new Date(opts.saleDate).toLocaleDateString('fr-FR')}</div></div>
+    <div class="warranty-info-item"><div class="label">Date d'expiration</div><div class="value">${esc(opts.expirationDate)}</div></div>
+    ${opts.representative ? `<div class="warranty-info-item"><div class="label">Représentant</div><div class="value">${esc(opts.representative)}</div></div>` : ''}
+    ${opts.siteName ? `<div class="warranty-info-item"><div class="label">Point de vente</div><div class="value">${esc(opts.siteName)}</div></div>` : ''}
+  </div>
+
+  ${itemsHtml}
+  ${termsHtml}
+
+  <div class="signatures-warranty">
+    <div class="sig-block-w"><div class="line-w"></div><div class="cap-w">Le vendeur</div></div>
+    <div class="sig-block-w"><div class="line-w"></div><div class="cap-w">Le client</div></div>
+    <div class="sig-block-w"><div class="line-w"></div><div class="cap-w">Cachet et signature</div></div>
+  </div>
+</div>
+
+<div class="page-bottom">
+  ${waarwiFooterA4()}
 </div>
 </body></html>`;
   printHtml(html, 400);

@@ -110,8 +110,8 @@ export function TicketHeaderConfigTab() {
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-slate-200 p-4">
         <div className="flex items-start gap-3 mb-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-            <Printer className="w-4.5 h-4.5 text-blue-600" />
+          <div className="w-9 h-9 rounded-xl bg-neutral-50 border border-neutral-200 flex items-center justify-center shrink-0">
+            <Printer className="w-4.5 h-4.5 text-neutral-700" />
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-bold text-slate-900">En-tête des tickets et documents imprimés</h3>

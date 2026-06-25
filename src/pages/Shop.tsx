@@ -386,9 +386,9 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
   // ── Shop view ──
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-100">
       {/* ── Sticky compact header ──────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-xl border-b border-slate-200/60">
+      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-xl border-b border-neutral-200/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center gap-3 py-2.5">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -413,7 +413,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
                 </a>
               )}
               <button onClick={() => setView('track')}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 active:scale-95 transition-all">
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-neutral-100 text-neutral-700 text-xs font-bold hover:bg-neutral-200 active:scale-95 transition-all">
                 <ClipboardList className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Suivi</span>
               </button>
@@ -536,19 +536,19 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
       <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-6 relative z-10">
         <div className="flex gap-2">
           <div className="flex-1 relative group">
-            <div className="absolute inset-0 rounded-2xl bg-white shadow-premium border border-slate-200/80" />
+            <div className="absolute inset-0 rounded-2xl bg-white shadow-premium border border-neutral-200/80" />
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-brand-700 pointer-events-none z-10" strokeWidth={2.3} />
             <input type="search" value={search} onChange={e => setSearch(e.target.value)}
               placeholder={(tenant?.business_type || 'auto_parts') === 'auto_parts' ? 'Référence, OEM, pièce, véhicule…' : 'Rechercher un produit…'}
               className="relative w-full h-12 pl-11 pr-4 rounded-2xl bg-transparent text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/25 transition-all" />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 transition-colors z-10">
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-neutral-100 transition-colors z-10">
                 <X className="w-3.5 h-3.5 text-slate-400" />
               </button>
             )}
           </div>
           <button onClick={() => setFiltersOpen(true)}
-            className={`relative shrink-0 h-12 px-4 rounded-2xl text-sm font-bold transition-all active:scale-95 inline-flex items-center gap-1.5 ${activeFilters > 0 ? 'bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow' : 'bg-white text-slate-700 border border-slate-200/80 shadow-premium hover:border-slate-300'}`}>
+            className={`relative shrink-0 h-12 px-4 rounded-2xl text-sm font-bold transition-all active:scale-95 inline-flex items-center gap-1.5 ${activeFilters > 0 ? 'bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow' : 'bg-white text-neutral-700 border border-neutral-200/80 shadow-premium hover:border-neutral-300'}`}>
             <SlidersHorizontal className="w-4 h-4" />
             <span className="hidden sm:inline">Filtres</span>
             {activeFilters > 0 && (
@@ -599,7 +599,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
       </main>
 
       {/* ── Footer (full tenant info) ──────────────────────────── */}
-      <footer className="mt-12 border-t border-slate-200 bg-gradient-to-b from-white to-slate-50">
+      <footer className="mt-12 border-t border-neutral-200 bg-gradient-to-b from-white to-neutral-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
@@ -622,7 +622,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
             <div className="space-y-2">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Contact</div>
               {shopPhone && (
-                <a href={`tel:${shopPhone}`} className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-brand-700 transition-colors">
+                <a href={`tel:${shopPhone}`} className="flex items-center gap-2 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors">
                   <Phone className="w-3.5 h-3.5 text-brand-600" /> {shopPhone}
                 </a>
               )}
@@ -654,7 +654,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
             </div>
           </div>
 
-          <div className="border-t border-slate-200 mt-6 pt-4 text-center">
+          <div className="border-t border-neutral-200 mt-6 pt-4 text-center">
             <div className="text-[10px] text-slate-400">Propulsée par <span className="font-bold text-slate-600">WAARWI</span> — Plateforme Business 2.0 made in Sénégal</div>
           </div>
         </div>
@@ -734,7 +734,7 @@ function ProductCard({ article, categories, cartQty, onDetail, onAddToCart }: {
   return (
     <div className="product-card group relative flex flex-col">
       {/* Image */}
-      <button onClick={onDetail} className="relative w-full aspect-square rounded-xl overflow-hidden bg-white border border-slate-100 mb-2 shrink-0">
+      <button onClick={onDetail} className="relative w-full aspect-square rounded-xl overflow-hidden bg-white border border-neutral-100 mb-2 shrink-0">
         {article.image_url && !imgErr ? (
           <img src={article.image_url} alt={article.name} className="w-full h-full object-contain p-1.5" onError={() => setImgErr(true)} />
         ) : (
@@ -777,7 +777,7 @@ function ProductCard({ article, categories, cartQty, onDetail, onAddToCart }: {
           disabled={outOfStock || cartQty >= article.stock_qty}
           className={`mt-2 w-full h-8 rounded-xl text-xs font-bold transition-all active:scale-95 inline-flex items-center justify-center gap-1 ${
             outOfStock || cartQty >= article.stock_qty
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
               : inCart
                 ? 'bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100'
                 : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-sm hover:shadow-glow'
@@ -811,7 +811,7 @@ function CartDrawer({ cart, cartTotal, onClose, onQtyChange, onRemove, onCheckou
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 flex items-center justify-center shadow-glow">
               <ShoppingCart className="w-4.5 h-4.5 text-white" />
@@ -821,7 +821,7 @@ function CartDrawer({ cart, cartTotal, onClose, onQtyChange, onRemove, onCheckou
               <div className="text-base font-bold text-slate-900">{cart.length} article{cart.length > 1 ? 's' : ''}</div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors">
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-neutral-100 text-neutral-500 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -830,7 +830,7 @@ function CartDrawer({ cart, cartTotal, onClose, onQtyChange, onRemove, onCheckou
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-neutral-100 flex items-center justify-center">
                 <ShoppingCart className="w-7 h-7 text-slate-300" />
               </div>
               <div className="text-sm font-semibold text-slate-500">Panier vide</div>
@@ -849,7 +849,7 @@ function CartDrawer({ cart, cartTotal, onClose, onQtyChange, onRemove, onCheckou
 
         {/* Footer */}
         {cart.length > 0 && (
-          <div className="shrink-0 border-t border-slate-100 bg-white/95 backdrop-blur-md p-4 space-y-3 safe-bottom">
+          <div className="shrink-0 border-t border-neutral-100 bg-white/95 backdrop-blur-md p-4 space-y-3 safe-bottom">
             {/* Total */}
             <div className="flex items-center justify-between px-1">
               <span className="text-sm font-semibold text-slate-600">Total panier</span>
@@ -880,9 +880,9 @@ function CartLine({ item, onQtyChange, onRemove }: {
   const maxReached = item.qty >= item.article.stock_qty;
 
   return (
-    <div className="flex items-start gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50/50">
+    <div className="flex items-start gap-3 p-3 rounded-2xl border border-neutral-100 bg-neutral-50/50">
       {/* Image */}
-      <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+      <div className="w-14 h-14 rounded-xl bg-white border border-neutral-100 flex items-center justify-center overflow-hidden shrink-0">
         {item.article.image_url && !imgErr ? (
           <img src={item.article.image_url} alt={item.article.name} className="w-full h-full object-contain p-1" onError={() => setImgErr(true)} />
         ) : (
@@ -904,13 +904,13 @@ function CartLine({ item, onQtyChange, onRemove }: {
           <div className="flex items-center gap-1">
             <button
               onClick={() => onQtyChange(item.qty - 1)}
-              className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-90 transition-all"
+              className="w-7 h-7 rounded-lg bg-white border border-neutral-200 flex items-center justify-center hover:bg-neutral-100 active:scale-90 transition-all"
             ><Minus className="w-3 h-3 text-slate-600" /></button>
             <span className="w-8 text-center text-sm font-bold text-slate-900 num">{item.qty}</span>
             <button
               onClick={() => onQtyChange(item.qty + 1)}
               disabled={maxReached}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center active:scale-90 transition-all ${maxReached ? 'bg-slate-50 border-slate-100 opacity-40 cursor-not-allowed' : 'bg-white border-slate-200 hover:bg-slate-100'}`}
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center active:scale-90 transition-all ${maxReached ? 'bg-neutral-50 border-neutral-100 opacity-40 cursor-not-allowed' : 'bg-white border-neutral-200 hover:bg-neutral-100'}`}
             ><Plus className="w-3 h-3 text-slate-600" /></button>
           </div>
           <div className="text-sm font-bold text-slate-900 num">{formatFCFA(item.unit_price * item.qty)}</div>
@@ -1047,9 +1047,9 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
   const stepIdx = steps.findIndex(s => s.k === step);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-100">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-3">
           <button onClick={onBack} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0">
             <ArrowLeft className="w-5 h-5" />
@@ -1401,7 +1401,7 @@ function DetailSheet({ article, categories, shopWhatsApp, shopName, cartQty, onA
                 <div className="text-3xl font-bold text-slate-900 num">{formatFCFA(article.sale_price)}</div>
                 <div className="text-xs text-slate-500 mt-0.5">par {article.unit}</div>
               </div>
-              <div className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wide ${article.condition === 'neuf' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : article.condition === 'occasion' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+              <div className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wide ${article.condition === 'neuf' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : article.condition === 'occasion' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-neutral-50 text-neutral-800 border border-neutral-200'}`}>
                 {article.condition}
               </div>
             </div>

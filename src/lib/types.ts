@@ -158,6 +158,7 @@ export type Article = {
   location: string;
   image_url: string;
   is_active: boolean;
+  ipm_eligible: boolean;
 };
 
 export type StockLevel = {
@@ -216,6 +217,7 @@ export type CartItem = {
   stock_available: number;
   purchase_cost: number;
   tier_name?: string;
+  ipm_eligible?: boolean;
 };
 
 export type SalePayment = {

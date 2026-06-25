@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 
 const SEV_CFG = {
-  info: { icon: Info, bg: 'from-sky-500 to-blue-700', border: 'border-sky-200', text: 'text-sky-800', soft: 'bg-sky-50' },
+  info: { icon: Info, bg: 'from-neutral-700 to-neutral-900', border: 'border-neutral-200', text: 'text-neutral-800', soft: 'bg-neutral-50' },
   success: { icon: CheckCircle2, bg: 'from-emerald-500 to-teal-700', border: 'border-emerald-200', text: 'text-emerald-800', soft: 'bg-emerald-50' },
   warning: { icon: AlertTriangle, bg: 'from-amber-500 to-orange-600', border: 'border-amber-200', text: 'text-amber-800', soft: 'bg-amber-50' },
   critical: { icon: AlertOctagon, bg: 'from-red-500 to-rose-700', border: 'border-red-200', text: 'text-red-800', soft: 'bg-red-50' },

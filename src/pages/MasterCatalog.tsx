@@ -119,7 +119,7 @@ export function MasterCatalog() {
             .not('master_catalog_item_id', 'is', null)
             .range(from, from + batchSize - 1);
           if (!sharedArticles && currentSite) {
-            q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+            q = q.eq('site_id', currentSite.id);
           }
           const { data: batch } = await q;
           const rows = batch || [];
@@ -173,7 +173,7 @@ export function MasterCatalog() {
         .not('master_catalog_item_id', 'is', null)
         .range(from, from + batchSize - 1);
       if (!sharedArticles && currentSite) {
-        q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+        q = q.eq('site_id', currentSite.id);
       }
       const { data } = await q;
       const rows = data || [];

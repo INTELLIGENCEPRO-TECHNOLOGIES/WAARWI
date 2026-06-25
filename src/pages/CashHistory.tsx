@@ -195,18 +195,18 @@ export function CashHistory() {
   return (
     <div className="space-y-3">
       {/* Premium unified search bar with embedded title + date picker */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+          <div className="flex items-center gap-2 pr-2 border-r border-neutral-200 shrink-0">
             <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Caisse</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">Historique des sessions</div>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Historique</div>
+              <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5 hidden sm:block">Historique des sessions</div>
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5 sm:hidden">Historique</div>
             </div>
           </div>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400" />
-          {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors"><X className="w-3.5 h-3.5" /></button>}
-          <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${dateFrom || dateTo ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
+          {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-3.5 h-3.5" /></button>}
+          <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${dateFrom || dateTo ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'bg-neutral-50 text-neutral-500 border border-neutral-200 hover:bg-neutral-100'}`}>
             <Calendar className="w-3.5 h-3.5" />
             <span className="hidden md:inline max-w-[120px] truncate">{dateLabel}</span>
           </button>
@@ -218,11 +218,11 @@ export function CashHistory() {
 
       {/* Inline stats chips */}
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filtered.length} / {sessions.length}</span>
-        {stats.open > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-glow" />{stats.open} ouverte{stats.open > 1 ? 's' : ''}</span>}
-        {stats.closed > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200">{stats.closed} clôturée{stats.closed > 1 ? 's' : ''}</span>}
+        <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-100 text-neutral-600 num">{filtered.length} / {sessions.length}</span>
+        {stats.open > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-50 text-neutral-700 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-neutral-500 pulse-glow" />{stats.open} ouverte{stats.open > 1 ? 's' : ''}</span>}
+        {stats.closed > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-50 text-neutral-600 border border-neutral-200">{stats.closed} clôturée{stats.closed > 1 ? 's' : ''}</span>}
         {stats.variances > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-amber-50 text-amber-700">{stats.variances} écart{stats.variances > 1 ? 's' : ''}</span>}
-        {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-400 hover:text-slate-600 inline-flex items-center gap-1">Effacer <X className="w-3 h-3" /></button>}
+        {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="shrink-0 px-2 py-1 rounded-full bg-neutral-50 text-neutral-400 hover:text-neutral-600 inline-flex items-center gap-1">Effacer <X className="w-3 h-3" /></button>}
       </div>
 
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
@@ -244,39 +244,39 @@ export function CashHistory() {
             return (
               <button key={s.id} onClick={() => openDetail(s)} className="card-premium text-left p-3 flex flex-col gap-2 hover:border-brand-400 transition-all duration-300 group">
                 <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOpen ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-glow' : balanced ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white' : 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'}`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOpen ? 'bg-gradient-to-br from-neutral-400 to-neutral-600 text-white shadow-glow' : balanced ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white' : 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'}`}>
                     {isOpen ? <Clock className="w-3.5 h-3.5" /> : balanced ? <Check className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono text-[10px] font-bold tracking-wider text-brand-700">#{s.id.slice(0, 8).toUpperCase()}</span>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${isOpen ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${isOpen ? 'bg-neutral-50 text-neutral-700' : 'bg-neutral-100 text-neutral-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
                     </div>
-                    <div className="text-[11px] text-slate-500 num leading-tight mt-0.5 truncate">
+                    <div className="text-[11px] text-neutral-500 num leading-tight mt-0.5 truncate">
                       {opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                       {closed && <>→{closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</>}
-                      {duration != null && <span className="text-slate-400"> · {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
+                      {duration != null && <span className="text-neutral-400"> · {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
                     </div>
                   </div>
-                  <Eye className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-600 transition-colors shrink-0" />
+                  <Eye className="w-3.5 h-3.5 text-neutral-300 group-hover:text-brand-600 transition-colors shrink-0" />
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-100">
+                <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-neutral-100">
                   <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Fond</div>
-                    <div className="text-[11px] font-bold text-slate-800 num leading-tight mt-0.5">{formatFCFA(s.opening_amount)}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Fond</div>
+                    <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{formatFCFA(s.opening_amount)}</div>
                   </div>
                   <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Compté</div>
-                    <div className="text-[11px] font-bold text-slate-800 num leading-tight mt-0.5">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Compté</div>
+                    <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</div>
                   </div>
                   <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Écart</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Écart</div>
                     <div className="leading-tight mt-0.5">
                       {variance != null ? (
-                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold num ${balanced ? 'text-emerald-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold num ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                           {balanced ? 'OK' : <>{variance > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(variance))}</>}
                         </span>
-                      ) : <span className="text-[11px] text-slate-400">—</span>}
+                      ) : <span className="text-[11px] text-neutral-400">—</span>}
                     </div>
                   </div>
                 </div>
@@ -309,23 +309,23 @@ export function CashHistory() {
               const totalEncaisse = byMethodTotal;
               const net = totalEncaisse - mvExp;
               return (
-                <div className="flex items-stretch gap-px rounded-xl overflow-hidden border border-slate-200 bg-slate-200">
+                <div className="flex items-stretch gap-px rounded-xl overflow-hidden border border-neutral-200 bg-neutral-200">
                   <div className="flex-1 bg-white p-2 text-center">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ventes</div>
-                    <div className="text-sm font-bold text-slate-900 num mt-0.5">{detail.sales.length}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Ventes</div>
+                    <div className="text-sm font-bold text-neutral-900 num mt-0.5">{detail.sales.length}</div>
                   </div>
                   <div className="flex-1 bg-white p-2 text-center">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total encaissé</div>
-                    <div className="text-sm font-bold text-slate-900 num mt-0.5">{formatFCFA(totalEncaisse)}</div>
-                    <div className="text-[8px] text-slate-400 num mt-0.5">Facturé {formatFCFA(salesTotal)}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Total encaissé</div>
+                    <div className="text-sm font-bold text-neutral-900 num mt-0.5">{formatFCFA(totalEncaisse)}</div>
+                    <div className="text-[8px] text-neutral-400 num mt-0.5">Facturé {formatFCFA(salesTotal)}</div>
                   </div>
                   <div className="flex-1 bg-white p-2 text-center">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Net</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Net</div>
                     <div className="text-sm font-bold text-brand-800 num mt-0.5">{formatFCFA(net)}</div>
                   </div>
                   <div className="flex-1 bg-white p-2 text-center">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ecart</div>
-                    <div className={`text-sm font-bold num mt-0.5 ${(detail.session.variance || 0) === 0 ? 'text-emerald-700' : (detail.session.variance || 0) < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Ecart</div>
+                    <div className={`text-sm font-bold num mt-0.5 ${(detail.session.variance || 0) === 0 ? 'text-neutral-700' : (detail.session.variance || 0) < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                       {detail.session.variance != null ? (detail.session.variance === 0 ? 'OK' : `${detail.session.variance > 0 ? '+' : ''}${formatFCFA(detail.session.variance)}`) : '--'}
                     </div>
                   </div>
@@ -338,12 +338,12 @@ export function CashHistory() {
               <div className="absolute inset-0 shimmer-bg opacity-30" />
               <div className="relative flex items-center gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[8px] font-bold uppercase tracking-[0.15em] text-emerald-400">Ouverture</div>
+                  <div className="text-[8px] font-bold uppercase tracking-[0.15em] text-white/80">Ouverture</div>
                   <div className="text-xs font-bold mt-0.5 num truncate">{formatDateTime(detail.session.opened_at)}</div>
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <ChevronRight className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
                 <div className="flex-1 min-w-0 text-right">
-                  <div className={`text-[8px] font-bold uppercase tracking-[0.15em] ${detail.session.closed_at ? 'text-amber-400' : 'text-slate-500'}`}>Cloture</div>
+                  <div className={`text-[8px] font-bold uppercase tracking-[0.15em] ${detail.session.closed_at ? 'text-amber-400' : 'text-neutral-500'}`}>Clôture</div>
                   <div className="text-xs font-bold mt-0.5 num truncate">{detail.session.closed_at ? formatDateTime(detail.session.closed_at) : 'En cours'}</div>
                 </div>
               </div>
@@ -353,20 +353,20 @@ export function CashHistory() {
             <div className="space-y-1.5">
               {/* Encaissements par mode */}
               {detail.byMethod.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setDetailExpanded(detailExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'modes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
                         <CreditCard className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-slate-800">Encaissements par mode</div>
-                        <div className="text-[10px] text-slate-500">{detail.byMethod.length} mode{detail.byMethod.length > 1 ? 's' : ''}</div>
+                        <div className="text-xs font-bold text-neutral-800">Encaissements par mode</div>
+                        <div className="text-[10px] text-neutral-500">{detail.byMethod.length} mode{detail.byMethod.length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-brand-800 num">{formatFCFA(detail.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
-                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'modes' ? 'rotate-90' : ''}`} />
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${detailExpanded === 'modes' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {detailExpanded === 'modes' && (
@@ -375,12 +375,12 @@ export function CashHistory() {
                         const total = detail.byMethod.reduce((s, x) => s + x.amount, 0);
                         const pct = total > 0 ? (m.amount / total) * 100 : 0;
                         return (
-                          <div key={m.method_name} className="relative flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 text-xs overflow-hidden">
+                          <div key={m.method_name} className="relative flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-neutral-100 text-xs overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-r from-brand-50/60 to-transparent" style={{ width: `${pct}%` }} />
-                            <span className="relative font-medium text-slate-700">{m.method_name}</span>
+                            <span className="relative font-medium text-neutral-700">{m.method_name}</span>
                             <div className="relative flex items-center gap-2 shrink-0">
-                              <span className="text-[10px] font-bold text-slate-400 num">{pct.toFixed(0)}%</span>
-                              <span className="font-bold text-slate-900 num">{formatFCFA(m.amount)}</span>
+                              <span className="text-[10px] font-bold text-neutral-400 num">{pct.toFixed(0)}%</span>
+                              <span className="font-bold text-neutral-900 num">{formatFCFA(m.amount)}</span>
                             </div>
                           </div>
                         );
@@ -392,37 +392,37 @@ export function CashHistory() {
 
               {/* Reglements factures */}
               {detail.invoicePayments.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'reglements' ? 'border-sky-300 bg-sky-50/40 order-first' : 'border-slate-200 bg-white'}`}>
+                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40 order-first' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setDetailExpanded(detailExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'reglements' ? 'bg-sky-200 text-sky-800' : 'bg-sky-100 text-sky-700'}`}>
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'reglements' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
                         <Wallet className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-slate-800">Reglements factures</div>
-                        <div className="text-[10px] text-slate-500">{detail.invoicePayments.length} reglement{detail.invoicePayments.length > 1 ? 's' : ''}</div>
+                        <div className="text-xs font-bold text-neutral-800">Reglements factures</div>
+                        <div className="text-[10px] text-neutral-500">{detail.invoicePayments.length} reglement{detail.invoicePayments.length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-sky-800 num">+{formatFCFA(detail.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
-                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'reglements' ? 'rotate-90' : ''}`} />
+                      <span className="text-sm font-bold text-neutral-800 num">+{formatFCFA(detail.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${detailExpanded === 'reglements' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {detailExpanded === 'reglements' && (
                     <div className="px-3 pb-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
                       {detail.invoicePayments.map(p => (
-                        <div key={p.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-sky-100">
+                        <div key={p.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-200">
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-bold text-slate-900">
+                            <div className="text-xs font-bold text-neutral-900">
                               <span className="font-mono">{p.sale_number}</span>
-                              {p.customer_name && <span className="text-slate-600 font-medium ml-1">- {p.customer_name}</span>}
+                              {p.customer_name && <span className="text-neutral-600 font-medium ml-1">- {p.customer_name}</span>}
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
                               <span>{new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} {new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{p.method_name}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{p.method_name}</span>
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-emerald-700 num shrink-0">+{formatFCFA(p.amount)}</span>
+                          <span className="text-xs font-bold text-neutral-700 num shrink-0">+{formatFCFA(p.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -441,34 +441,34 @@ export function CashHistory() {
                 return (
                   <>
                     {encDirectList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'encDirect' ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-white'}`}>
+                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-50/40' : 'border-neutral-200 bg-white'}`}>
                         <button onClick={() => setDetailExpanded(detailExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                           <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'encDirect' ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700'}`}>
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'encDirect' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
                               <ArrowDownRight className="w-3.5 h-3.5" />
                             </div>
                             <div>
-                              <div className="text-xs font-bold text-slate-800">Encaissements directs</div>
-                              <div className="text-[10px] text-slate-500">{encDirectList.length} entrée{encDirectList.length > 1 ? 's' : ''}</div>
+                              <div className="text-xs font-bold text-neutral-800">Encaissements directs</div>
+                              <div className="text-[10px] text-neutral-500">{encDirectList.length} entrée{encDirectList.length > 1 ? 's' : ''}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-emerald-700 num">+{formatFCFA(encDirectTotal)}</span>
-                            <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
+                            <span className="text-sm font-bold text-neutral-700 num">+{formatFCFA(encDirectTotal)}</span>
+                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${detailExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
                           </div>
                         </button>
                         {detailExpanded === 'encDirect' && (
                           <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                             {encDirectList.map(m => (
-                              <div key={m.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-emerald-100">
+                              <div key={m.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-100">
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.reason || 'Encaissement direct'}</div>
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                                  <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Encaissement direct'}</div>
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
                                     <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
                                   </div>
                                 </div>
-                                <span className="text-xs font-bold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                                <span className="text-xs font-bold text-neutral-700 num shrink-0">+{formatFCFA(m.amount)}</span>
                               </div>
                             ))}
                           </div>
@@ -477,20 +477,20 @@ export function CashHistory() {
                     )}
 
                     {acomptesList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-slate-200 bg-white'}`}>
+                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
                         <button onClick={() => setDetailExpanded(detailExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
                               <Wallet className="w-3.5 h-3.5" />
                             </div>
                             <div>
-                              <div className="text-xs font-bold text-slate-800">Acomptes clients</div>
-                              <div className="text-[10px] text-slate-500">{acomptesList.length} acompte{acomptesList.length > 1 ? 's' : ''}</div>
+                              <div className="text-xs font-bold text-neutral-800">Acomptes clients</div>
+                              <div className="text-[10px] text-neutral-500">{acomptesList.length} acompte{acomptesList.length > 1 ? 's' : ''}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-brand-700 num">+{formatFCFA(acomptesTotal)}</span>
-                            <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
+                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${detailExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
                           </div>
                         </button>
                         {detailExpanded === 'acomptes' && (
@@ -498,10 +498,10 @@ export function CashHistory() {
                             {acomptesList.map(m => (
                               <div key={m.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-brand-100">
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.customer_name || 'Client'}</div>
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                                  <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.customer_name || 'Client'}</div>
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
                                     <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
                                     {m.reason && <span className="line-clamp-1">{m.reason}</span>}
                                   </div>
                                 </div>
@@ -514,20 +514,20 @@ export function CashHistory() {
                     )}
 
                     {depensesList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-slate-200 bg-white'}`}>
+                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
                         <button onClick={() => setDetailExpanded(detailExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
                               <ArrowUpRight className="w-3.5 h-3.5" />
                             </div>
                             <div>
-                              <div className="text-xs font-bold text-slate-800">Décaissements</div>
-                              <div className="text-[10px] text-slate-500">{depensesList.length} dépense{depensesList.length > 1 ? 's' : ''}</div>
+                              <div className="text-xs font-bold text-neutral-800">Décaissements</div>
+                              <div className="text-[10px] text-neutral-500">{depensesList.length} dépense{depensesList.length > 1 ? 's' : ''}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-red-700 num">-{formatFCFA(depensesTotal)}</span>
-                            <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'depenses' ? 'rotate-90' : ''}`} />
+                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${detailExpanded === 'depenses' ? 'rotate-90' : ''}`} />
                           </div>
                         </button>
                         {detailExpanded === 'depenses' && (
@@ -535,10 +535,10 @@ export function CashHistory() {
                             {depensesList.map(m => (
                               <div key={m.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100">
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-semibold text-slate-900 line-clamp-1">{m.reason || 'Dépense'}</div>
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-slate-500">
+                                  <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Dépense'}</div>
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
                                     <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{m.method_name}</span>}
+                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
                                   </div>
                                 </div>
                                 <span className="text-xs font-bold text-red-700 num shrink-0">-{formatFCFA(m.amount)}</span>
@@ -553,39 +553,39 @@ export function CashHistory() {
               })()}
 
               {/* Ventes */}
-              <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'ventes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+              <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'ventes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
                 <button onClick={() => setDetailExpanded(detailExpanded === 'ventes' ? null : 'ventes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                   <div className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'ventes' ? 'bg-brand-200 text-brand-800' : 'bg-slate-100 text-slate-700'}`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'ventes' ? 'bg-brand-200 text-brand-800' : 'bg-neutral-100 text-neutral-700'}`}>
                       <Package className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-800">Ventes de la session</div>
-                      <div className="text-[10px] text-slate-500">{detail.sales.length} vente{detail.sales.length > 1 ? 's' : ''}</div>
+                      <div className="text-xs font-bold text-neutral-800">Ventes de la session</div>
+                      <div className="text-[10px] text-neutral-500">{detail.sales.length} vente{detail.sales.length > 1 ? 's' : ''}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-slate-800 num">{formatFCFA(detail.sales.reduce((s, x) => s + x.total, 0))}</span>
-                    <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'ventes' ? 'rotate-90' : ''}`} />
+                    <span className="text-sm font-bold text-neutral-800 num">{formatFCFA(detail.sales.reduce((s, x) => s + x.total, 0))}</span>
+                    <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${detailExpanded === 'ventes' ? 'rotate-90' : ''}`} />
                   </div>
                 </button>
                 {detailExpanded === 'ventes' && (
                   <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
                     {detail.sales.length === 0 ? (
-                      <div className="py-3 text-center text-xs text-slate-500">Aucune vente.</div>
+                      <div className="py-3 text-center text-xs text-neutral-500">Aucune vente.</div>
                     ) : detail.sales.map(s => (
-                      <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-100 hover:border-brand-200 transition">
+                      <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-white border border-neutral-100 hover:border-brand-200 transition">
                         <div className="w-6 h-6 rounded-md bg-brand-50 flex items-center justify-center shrink-0">
                           <Wallet className="w-3 h-3 text-brand-700" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-[10px] font-bold text-brand-700">{s.sale_number}</span>
-                            <span className="text-[10px] text-slate-500 truncate">{s.customer_name || 'Comptoir'}</span>
+                            <span className="text-[10px] text-neutral-500 truncate">{s.customer_name || 'Comptoir'}</span>
                           </div>
-                          <div className="text-[9px] text-slate-400 num leading-none mt-0.5">{formatDateTime(s.created_at)}</div>
+                          <div className="text-[9px] text-neutral-400 num leading-none mt-0.5">{formatDateTime(s.created_at)}</div>
                         </div>
-                        <div className="num font-bold text-xs text-slate-900 shrink-0">{formatFCFA(s.total)}</div>
+                        <div className="num font-bold text-xs text-neutral-900 shrink-0">{formatFCFA(s.total)}</div>
                       </div>
                     ))}
                   </div>
@@ -594,19 +594,19 @@ export function CashHistory() {
 
               {/* Controle de caisse */}
               {detail.controls.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'controle' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-slate-200 bg-white'}`}>
+                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'controle' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setDetailExpanded(detailExpanded === 'controle' ? null : 'controle')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'controle' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
                         <Check className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-slate-800">Controle de caisse</div>
-                        <div className="text-[10px] text-slate-500">{detail.controls.length} methode{detail.controls.length > 1 ? 's' : ''}</div>
+                        <div className="text-xs font-bold text-neutral-800">Controle de caisse</div>
+                        <div className="text-[10px] text-neutral-500">{detail.controls.length} methode{detail.controls.length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${detailExpanded === 'controle' ? 'rotate-90' : ''}`} />
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${detailExpanded === 'controle' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {detailExpanded === 'controle' && (
@@ -616,16 +616,16 @@ export function CashHistory() {
                           const diff = Number(c.difference_amount);
                           const balanced = diff === 0;
                           return (
-                            <div key={i} className={`rounded-lg border p-2.5 ${balanced ? 'border-slate-100 bg-white' : diff < 0 ? 'border-red-100 bg-red-50/40' : 'border-amber-100 bg-amber-50/40'}`}>
+                            <div key={i} className={`rounded-lg border p-2.5 ${balanced ? 'border-neutral-100 bg-white' : diff < 0 ? 'border-red-100 bg-red-50/40' : 'border-amber-100 bg-amber-50/40'}`}>
                               <div className="flex items-center justify-between gap-2">
-                                <div className="text-xs font-bold text-slate-800 truncate">{c.method_name}</div>
-                                <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold num shrink-0 ${balanced ? 'text-emerald-700' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                                <div className="text-xs font-bold text-neutral-800 truncate">{c.method_name}</div>
+                                <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold num shrink-0 ${balanced ? 'text-neutral-700' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                                   {balanced ? <><Check className="w-3 h-3" /> OK</> : <>{diff > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(diff))}</>}
                                 </span>
                               </div>
                               <div className="mt-1.5 flex items-center justify-between text-[10px]">
-                                <div><span className="text-slate-400">Th.</span> <span className="num font-semibold text-slate-700">{formatFCFA(c.theoretical_amount)}</span></div>
-                                <div><span className="text-slate-400">Cpt.</span> <span className="num font-semibold text-slate-800">{formatFCFA(c.counted_amount)}</span></div>
+                                <div><span className="text-neutral-400">Th.</span> <span className="num font-semibold text-neutral-700">{formatFCFA(c.theoretical_amount)}</span></div>
+                                <div><span className="text-neutral-400">Cpt.</span> <span className="num font-semibold text-neutral-800">{formatFCFA(c.counted_amount)}</span></div>
                               </div>
                             </div>
                           );
@@ -640,12 +640,12 @@ export function CashHistory() {
             {/* Regularizations inline if any */}
             {detail.regularizations.length > 0 && (
               <div className="space-y-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Regularisations ({detail.regularizations.length})</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Regularisations ({detail.regularizations.length})</div>
                 {detail.regularizations.map((r, i) => (
-                  <div key={i} className={`flex items-center justify-between p-2 rounded-lg text-xs ${r.reg_type === 'manquant' ? 'bg-red-50 border border-red-100' : r.reg_type === 'excedent' ? 'bg-amber-50 border border-amber-100' : 'bg-slate-50 border border-slate-100'}`}>
+                  <div key={i} className={`flex items-center justify-between p-2 rounded-lg text-xs ${r.reg_type === 'manquant' ? 'bg-red-50 border border-red-100' : r.reg_type === 'excedent' ? 'bg-amber-50 border border-amber-100' : 'bg-neutral-50 border border-neutral-100'}`}>
                     <div className="min-w-0 truncate">
                       <span className="font-semibold capitalize">{r.reg_type}</span>
-                      {r.reason && <span className="text-slate-600 ml-2">-- {r.reason}</span>}
+                      {r.reason && <span className="text-neutral-600 ml-2">-- {r.reason}</span>}
                     </div>
                     <span className="font-bold num shrink-0 ml-2">{formatFCFA(r.amount)}</span>
                   </div>
@@ -657,15 +657,15 @@ export function CashHistory() {
             {(detail.session.opening_note || detail.session.closing_note) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
                 {detail.session.opening_note && (
-                  <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Note ouverture</div>
-                    <div className="text-slate-700">{detail.session.opening_note}</div>
+                  <div className="p-2 bg-neutral-50 rounded-xl border border-neutral-100">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Note ouverture</div>
+                    <div className="text-neutral-700">{detail.session.opening_note}</div>
                   </div>
                 )}
                 {detail.session.closing_note && (
-                  <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Note cloture</div>
-                    <div className="text-slate-700">{detail.session.closing_note}</div>
+                  <div className="p-2 bg-neutral-50 rounded-xl border border-neutral-100">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Note cloture</div>
+                    <div className="text-neutral-700">{detail.session.closing_note}</div>
                   </div>
                 )}
               </div>

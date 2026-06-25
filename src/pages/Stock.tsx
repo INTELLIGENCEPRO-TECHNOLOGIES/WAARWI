@@ -178,7 +178,7 @@ export function Stock() {
         .eq('is_active', true)
         .range(from, from + batchSize - 1);
       if (!sharedArticles && currentSite) {
-        query = query.or(`site_id.eq.${currentSite.id},site_id.is.null`);
+        query = query.eq('site_id', currentSite.id);
       }
       const { data, error: e } = await query;
       if (e || !data) break;
@@ -357,7 +357,7 @@ export function Stock() {
   const docTypeMeta: Record<string, { label: string; color: string; mvType: string }> = {
     entry: { label: 'Entrée', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', mvType: 'adjustment_in' },
     exit: { label: 'Sortie', color: 'bg-red-50 text-red-700 border-red-200', mvType: 'adjustment_out' },
-    transfer: { label: 'Transfert', color: 'bg-sky-50 text-sky-700 border-sky-200', mvType: 'transfer_out' },
+    transfer: { label: 'Transfert', color: 'bg-neutral-50 text-neutral-800 border-neutral-200', mvType: 'transfer_out' },
     inventory: { label: 'Inventaire', color: 'bg-amber-50 text-amber-700 border-amber-200', mvType: 'inventory' },
   };
 
@@ -603,6 +603,11 @@ export function Stock() {
       } else if (adjMode === 'transfer') {
         if (!adjTargetSite) { error('Choisissez un magasin de destination'); setSaving(false); return; }
         if (!qty || qty <= 0) { error('Quantité invalide'); setSaving(false); return; }
+        // Validate transfer is allowed based on catalog mode
+        if (!allTransferTargets.some(t => t.id === adjTargetSite)) {
+          error('Transfert non autorisé vers cette destination');
+          setSaving(false); return;
+        }
         const { error: e1 } = await supabase.rpc('adjust_stock', {
           p_article_id: adjRow.article_id, p_site_id: targetSite,
           p_quantity: -qty, p_movement_type: 'transfer_out', p_note: adjNote || 'Transfert sortie',
@@ -681,7 +686,7 @@ export function Stock() {
     stock_initial: 'bg-slate-100 text-slate-700', initial: 'bg-slate-100 text-slate-700',
     sale: 'bg-red-50 text-red-700', adjustment_out: 'bg-red-50 text-red-700', transfer_out: 'bg-amber-50 text-amber-700',
     adjustment_in: 'bg-emerald-50 text-emerald-700', transfer_in: 'bg-emerald-50 text-emerald-700',
-    inventory: 'bg-blue-50 text-blue-700', purchase: 'bg-emerald-50 text-emerald-700', return: 'bg-slate-100 text-slate-700',
+    inventory: 'bg-neutral-50 text-neutral-800', purchase: 'bg-emerald-50 text-emerald-700', return: 'bg-slate-100 text-slate-700',
   };
 
   return (
@@ -742,10 +747,10 @@ export function Stock() {
           {tab === 'stocks' && (
             <button
               onClick={() => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); }}
-              className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${viewMode === 'list' ? 'bg-blue-600 shadow-glow' : 'bg-white border border-slate-200 hover:border-blue-300'}`}
+              className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${viewMode === 'list' ? 'bg-neutral-900 shadow-glow' : 'bg-white border border-slate-200 hover:border-neutral-300'}`}
               aria-label={viewMode === 'cards' ? 'Vue liste éditable' : 'Vue cartes'}
             >
-              {viewMode === 'cards' ? <List className="w-3.5 h-3.5 text-blue-600" /> : <LayoutGrid className="w-3.5 h-3.5 text-white" />}
+              {viewMode === 'cards' ? <List className="w-3.5 h-3.5 text-neutral-700" /> : <LayoutGrid className="w-3.5 h-3.5 text-white" />}
             </button>
           )}
           <button
@@ -808,8 +813,8 @@ export function Stock() {
               <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />Transfert
             </button>
           )}
-          <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-all active:scale-95">
-            <ClipboardList className="w-3.5 h-3.5 text-blue-600" />Inventaire
+          <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800 transition-all active:scale-95">
+            <ClipboardList className="w-3.5 h-3.5 text-neutral-700" />Inventaire
           </button>
           <button onClick={() => setHelpOpen(true)} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95">
             <Info className="w-3.5 h-3.5" />Guide
@@ -869,76 +874,66 @@ export function Stock() {
               const value = r.quantity * r.purchase_price;
               const ratio = r.stock_max > 0 ? Math.min(100, Math.round((r.quantity / r.stock_max) * 100)) : 0;
               return (
-                <div key={r.article_id} className="card-premium p-3 flex flex-col gap-2 hover:border-brand-400 transition-all duration-300 group">
+                <div key={r.article_id} className="card-premium p-3 flex flex-col gap-2 hover:border-neutral-400 transition-all duration-200 group">
                   <div className="flex items-start gap-2">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
-                      out ? 'bg-gradient-to-br from-red-400 to-red-600 text-white shadow-glow' :
-                      low ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white' :
-                      'bg-gradient-to-br from-brand-500 to-brand-700 text-white'
-                    }`}>
-                      <Boxes className="w-3.5 h-3.5" />
-                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-semibold text-slate-900 leading-tight break-words">{r.name}</div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="font-mono text-[10px] text-slate-500 truncate">{r.internal_ref}</span>
-                        {r.location && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400 shrink-0">
-                            <MapPin className="w-2.5 h-2.5" />{r.location}
-                          </span>
-                        )}
-                      </div>
+                      <div className="text-[12px] font-semibold text-neutral-900 leading-tight break-words">{r.name}</div>
+                      {r.location && (
+                        <div className="flex items-center gap-0.5 mt-0.5 text-[10px] text-neutral-400">
+                          <MapPin className="w-2.5 h-2.5" />{r.location}
+                        </div>
+                      )}
                     </div>
                     <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full num ${
-                      out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'
+                      out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-800' : 'bg-neutral-100 text-neutral-800'
                     }`}>
                       {r.quantity}
                     </span>
                   </div>
 
                   {/* stock bar */}
-                  <div className="relative h-1 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="relative h-1 rounded-full bg-neutral-100 overflow-hidden">
                     <div
                       className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
-                        out ? 'bg-gradient-to-r from-red-400 to-red-500' :
-                        low ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
-                        'bg-gradient-to-r from-emerald-400 to-emerald-500'
+                        out ? 'bg-red-400' :
+                        low ? 'bg-amber-400' :
+                        'bg-neutral-900'
                       }`}
                       style={{ width: `${Math.max(out ? 0 : 4, ratio)}%` }}
                     />
                   </div>
 
-                  <div className={`grid gap-1.5 pt-1.5 border-t border-slate-100 ${can('view_purchase_prices') ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <div className={`grid gap-1.5 pt-1.5 border-t border-neutral-100 ${can('view_purchase_prices') ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Min</div>
-                      <div className="text-[11px] font-bold text-slate-700 num leading-tight mt-0.5">{r.stock_min}</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Min</div>
+                      <div className="text-[11px] font-bold text-neutral-700 num leading-tight mt-0.5">{r.stock_min}</div>
                     </div>
                     <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Max</div>
-                      <div className="text-[11px] font-bold text-slate-700 num leading-tight mt-0.5">{r.stock_max || '—'}</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Max</div>
+                      <div className="text-[11px] font-bold text-neutral-700 num leading-tight mt-0.5">{r.stock_max || '—'}</div>
                     </div>
                     {can('view_purchase_prices') && (
                       <div>
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Valeur</div>
-                        <div className="text-[11px] font-bold text-slate-800 num leading-tight mt-0.5 truncate">{formatFCFA(value)}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Valeur</div>
+                        <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5 truncate">{formatFCFA(value)}</div>
                       </div>
                     )}
                   </div>
 
                   {can('manage_stock') && (
                   <div className="flex items-center gap-1 pt-1">
-                    <button onClick={() => openAdj(r, 'in')} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all active:scale-95" title="Entrée">
+                    <button onClick={() => openAdj(r, 'in')} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-neutral-100 text-neutral-800 hover:bg-neutral-200 transition-all active:scale-95" title="Entrée">
                       <Plus className="w-3 h-3" />Entrée
                     </button>
-                    <button onClick={() => openAdj(r, 'out')} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-red-50 text-red-700 hover:bg-red-100 transition-all active:scale-95" title="Sortie">
+                    <button onClick={() => openAdj(r, 'out')} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-neutral-100 text-neutral-800 hover:bg-neutral-200 transition-all active:scale-95" title="Sortie">
                       <Minus className="w-3 h-3" />Sortie
                     </button>
                     {canTransfer && (
-                      <button onClick={() => openAdj(r, 'transfer')} className="shrink-0 w-8 h-[26px] inline-flex items-center justify-center rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all active:scale-95" title="Transfert">
+                      <button onClick={() => openAdj(r, 'transfer')} className="shrink-0 w-8 h-[26px] inline-flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-800 hover:bg-neutral-200 transition-all active:scale-95" title="Transfert">
                         <ArrowRightLeft className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={() => openAdj(r, 'inventory')} className="shrink-0 w-8 h-[26px] inline-flex items-center justify-center rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all active:scale-95" title="Inventaire">
+                    <button onClick={() => openAdj(r, 'inventory')} className="shrink-0 w-8 h-[26px] inline-flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-800 hover:bg-neutral-200 transition-all active:scale-95" title="Inventaire">
                       <ClipboardList className="w-3 h-3" />
                     </button>
                   </div>
@@ -1105,7 +1100,7 @@ export function Stock() {
                           <Scroll className="w-3.5 h-3.5" />
                         </button>
                         {!cancelled && can('manage_stock') && d.doc_type !== 'transfer' && (
-                          <button onClick={() => openDocEdit(d)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 transition-all active:scale-90" title="Éditer (régénère le stock)">
+                          <button onClick={() => openDocEdit(d)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-neutral-50 hover:bg-neutral-100 text-neutral-700 hover:text-neutral-800 transition-all active:scale-90" title="Éditer (régénère le stock)">
                             <Save className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -1499,7 +1494,7 @@ export function Stock() {
           <>
             <button onClick={() => setDocEditOpen(false)} disabled={docEditSaving} className="btn-secondary">Annuler</button>
             <div className="flex-1" />
-            <button onClick={saveDocEdit} disabled={docEditSaving} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-glow active:scale-95 disabled:opacity-50">
+            <button onClick={saveDocEdit} disabled={docEditSaving} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-neutral-900 text-white shadow-glow hover:bg-neutral-800 active:scale-95 disabled:opacity-50">
               {docEditSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <Save className="w-3.5 h-3.5" />Enregistrer & régénérer
             </button>
@@ -1598,13 +1593,13 @@ export function Stock() {
               Déplace une quantité d'un dépôt/site vers un autre. Le stock sort du site d'origine et entre dans le site de destination. Utile pour équilibrer les stocks entre magasins.
             </HelpSection>
           )}
-          <HelpSection icon={<ClipboardList className="w-4 h-4 text-blue-600" />} title="Inventaire" color="blue">
+          <HelpSection icon={<ClipboardList className="w-4 h-4 text-neutral-700" />} title="Inventaire" color="slate">
             Permet de corriger le stock réel après un comptage physique. Vous saisissez la quantité réellement comptée et le système calcule automatiquement l'écart (positif ou négatif).
           </HelpSection>
           <HelpSection icon={<BookOpen className="w-4 h-4 text-ink-900" />} title="Livre d'inventaire" color="slate">
             Génère un document imprimable A4 listant tous les articles en stock avec leurs quantités, emplacements et valeurs. Idéal pour les contrôles périodiques et les audits.
           </HelpSection>
-          <HelpSection icon={<List className="w-4 h-4 text-blue-600" />} title="Vue liste éditable" color="blue">
+          <HelpSection icon={<List className="w-4 h-4 text-neutral-700" />} title="Vue liste éditable" color="slate">
             Basculez en vue liste pour saisir rapidement des entrées, sorties ou inventaires en masse. Parcourez les articles avec les flèches du clavier, puis cliquez « Enregistrer » pour valider toutes les modifications en une seule fois.
           </HelpSection>
           <HelpSection icon={<History className="w-4 h-4 text-teal-700" />} title="Historique des mouvements" color="teal">
@@ -1883,6 +1878,10 @@ function StockListEditView({
     if (listEditMode === 'transfer' && sourceSite === listTransferTarget) {
       errorToast('La source et la destination doivent être différentes'); return;
     }
+    // Validate transfer target is allowed based on catalog mode
+    if (listEditMode === 'transfer' && !allTransferTargets.some(t => t.id === listTransferTarget)) {
+      errorToast('Transfert non autorisé vers cette destination en mode catalogue indépendant'); return;
+    }
     setListSaving(true);
     let savedCount = 0;
     try {
@@ -2022,7 +2021,7 @@ function StockListEditView({
           )}
           <button
             onClick={() => { setListEditMode('inventory'); setListEdits(new Map()); setBulkSavedItems([]); }}
-            className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'inventory' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-blue-50'}`}
+            className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'inventory' ? 'bg-neutral-900 text-white' : 'text-slate-600 hover:bg-neutral-50'}`}
           >
             <ClipboardList className="w-3.5 h-3.5 inline mr-1" />Inventaire
           </button>
@@ -2121,8 +2120,7 @@ function StockListEditView({
                 return (
                   <tr key={r.article_id} className={`border-b border-slate-50 transition-colors ${hasValue ? 'bg-brand-50/30' : 'hover:bg-slate-50/50'}`}>
                     <td className="px-3 py-1.5">
-                      <div className="text-[11px] font-semibold text-slate-900 leading-tight">{r.name}</div>
-                      <div className="text-[9px] text-slate-400 font-mono">{r.internal_ref}</div>
+                      <div className="text-[11px] font-semibold text-neutral-900 leading-tight">{r.name}</div>
                     </td>
                     <td className="px-2 py-1.5 text-center">
                       <span className={`inline-block text-xs font-bold num px-1.5 py-0.5 rounded ${out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-700' : 'text-slate-800'}`}>
@@ -2195,7 +2193,7 @@ function StockListEditView({
  *  HELP SECTION — Reusable row for the guide modal
  * ════════════════════════════════════════════════════════════════════════════ */
 function HelpSection({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
-  const bgMap: Record<string, string> = { emerald: 'bg-emerald-50 border-emerald-200', red: 'bg-red-50 border-red-200', amber: 'bg-amber-50 border-amber-200', blue: 'bg-blue-50 border-blue-200', slate: 'bg-slate-50 border-slate-200', teal: 'bg-teal-50 border-teal-200' };
+  const bgMap: Record<string, string> = { emerald: 'bg-emerald-50 border-emerald-200', red: 'bg-red-50 border-red-200', amber: 'bg-amber-50 border-amber-200', slate: 'bg-neutral-50 border-neutral-200', teal: 'bg-teal-50 border-teal-200' };
   return (
     <div className={`p-3 rounded-xl border ${bgMap[color] || 'bg-slate-50 border-slate-200'}`}>
       <div className="flex items-center gap-2 mb-1">

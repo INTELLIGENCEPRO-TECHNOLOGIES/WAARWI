@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, ReactNode } from 'react';
-import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronRight, Tag, Barcode, Hash, MapPin, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Upload, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Save, Info, DollarSign, Boxes, Car, Image as ImageIcon, CheckCircle2, AlertTriangle, AlertCircle, Percent, Layers } from 'lucide-react';
+import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronRight, Tag, Barcode, Hash, MapPin, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Upload, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Save, Info, DollarSign, Boxes, Car, Image as ImageIcon, CheckCircle2, AlertTriangle, AlertCircle, Percent, Layers, ShieldCheck } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 
@@ -243,13 +243,14 @@ export function InfosTab({ form, setForm, editing, categories, suppliers, onGene
 
 // ── PrixTab ────────────────────────────────────────────────
 
-export function PrixTab({ form, setForm, marginValue, marginStr, showPurchasePrice, showMargin, formTiers, setFormTiers, tierDefinitions }: {
+export function PrixTab({ form, setForm, marginValue, marginStr, showPurchasePrice, showMargin, formTiers, setFormTiers, tierDefinitions, isPharmacy }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   marginValue: number; marginStr: string;
   showPurchasePrice: boolean; showMargin: boolean;
   formTiers: Array<{ tier_name: string; price: number | '' }>;
   setFormTiers: (t: Array<{ tier_name: string; price: number | '' }>) => void;
   tierDefinitions: TierDefinition[];
+  isPharmacy?: boolean;
 }) {
   const mgTone = marginValue >= 30 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : marginValue >= 15 ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200';
 
@@ -299,6 +300,20 @@ export function PrixTab({ form, setForm, marginValue, marginStr, showPurchasePri
             ))}
           </div>
           <p className="text-[10px] text-slate-400">Laissez vide si non applicable. Ces prix seront proposés lors de la vente.</p>
+        </div>
+      )}
+
+      {isPharmacy && (
+        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
+          <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold text-slate-700">Eligible IPM</div>
+            <div className="text-[10px] text-slate-500">Cet article est pris en charge par les conventions IPM</div>
+          </div>
+          <button type="button" onClick={() => setForm(f => ({ ...f, ipm_eligible: f.ipm_eligible === false ? true : false }))}
+            className={`relative w-10 h-5 rounded-full transition-colors ${form.ipm_eligible !== false ? 'bg-teal-500' : 'bg-slate-300'}`}>
+            <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.ipm_eligible !== false ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
         </div>
       )}
     </div>

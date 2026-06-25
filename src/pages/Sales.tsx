@@ -21,6 +21,7 @@ type Sale = {
   customers: { name: string } | null;
   sites: { name: string } | null;
   sale_payments?: { method_name: string }[];
+  ipm_ventes?: { part_ipm: number; part_client: number; statut: string }[];
 };
 
 type DateRange = 'all' | 'today' | 'week' | 'month' | 'custom';
@@ -41,10 +42,13 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Annulée' },
 ];
 
-function statusStyles(status: string) {
-  if (status === 'paid') return { pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', label: 'Payée' };
-  if (status === 'cancelled') return { pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500', label: 'Annulée' };
-  if (status === 'validated') return { pill: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500', label: 'Crédit' };
+function statusStyles(status: string, sale?: Sale) {
+  const hasIpm = sale?.ipm_ventes && sale.ipm_ventes.length > 0;
+  if (status === 'paid' && hasIpm) return { pill: 'bg-neutral-100 text-neutral-700 border-neutral-300', dot: 'bg-neutral-900', label: 'Reglee (IPM a recouvrer)' };
+  if (status === 'paid') return { pill: 'bg-neutral-100 text-neutral-700 border-neutral-200', dot: 'bg-neutral-900', label: 'Payee' };
+  if (status === 'cancelled') return { pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500', label: 'Annulee' };
+  if (status === 'validated') return { pill: 'bg-slate-50 text-slate-700 border-slate-200', dot: 'bg-slate-500', label: 'Credit' };
+  if (hasIpm) return { pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500', label: 'Partielle (IPM)' };
   return { pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500', label: 'Partielle' };
 }
 
@@ -95,7 +99,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     let cancelled = false;
     (async () => {
       const { data } = await supabase.from('sales')
-        .select('*, customers(name, phone, address), sites(name), sale_payments(method_name)')
+        .select('*, customers(name, phone, address), sites(name), sale_payments(method_name), ipm_ventes(part_ipm, part_client, statut)')
         .eq('tenant_id', tenant.id)
         .eq('site_id', currentSite.id)
         .order('created_at', { ascending: false })
@@ -171,6 +175,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         })),
         payments: pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
         customer: selected.customers ? { name: selected.customers.name, phone: (selected.customers as any).phone || undefined, address: (selected.customers as any).address || undefined } : null,
+        docHeader: (selected as any).doc_header ?? null,
       },
       tenantForPrint,
       profile?.full_name || profile?.email || ''
@@ -194,6 +199,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       docLabel: 'FACTURE',
       docNumber: selected.sale_number,
       docDate: new Date(selected.created_at).toLocaleDateString('fr-FR'),
+      docCreatedAt: selected.created_at,
       customer: selected.customers ? { name: selected.customers.name, phone: (selected.customers as any).phone || undefined, address: (selected.customers as any).address || undefined } : null,
       items: printItems,
       subtotal,
@@ -301,23 +307,23 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Unified premium header ───────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+          <div className="flex items-center gap-2 pr-2 border-r border-neutral-200 shrink-0">
             <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Journal des ventes</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5">Tickets encaissés</div>
+              <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Journal des ventes</h1>
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">Tickets encaissés</div>
             </div>
           </div>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="N°, client, magasin, paiement…"
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
+            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors">
+            <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -326,7 +332,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
               activeFilterCount > 0
                 ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
+                : 'bg-neutral-50 text-neutral-500 border border-neutral-200 hover:bg-neutral-100'
             }`}
             title="Filtres"
           >
@@ -337,7 +343,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           <button
             onClick={() => onNavigate?.('pos')}
             className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #262626 0%, #0a0a0a 100%)' }}
             aria-label="Nouvelle vente"
           >
             <ShoppingCart className="w-3.5 h-3.5 text-white" />
@@ -347,15 +353,15 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
       {/* ── Inline stats chips ───────────────────────────────────── */}
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filtered.length} / {sales.length}</span>
-        <span className="shrink-0 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1 num">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Aujourd'hui · {todayCount}
+        <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-100 text-neutral-600 num">{filtered.length} / {sales.length}</span>
+        <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-100 text-neutral-700 inline-flex items-center gap-1 num">
+          <span className="w-1.5 h-1.5 rounded-full bg-neutral-900" />Aujourd'hui · {todayCount}
         </span>
-        <span className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200 num">Total jour · {formatFCFA(todayTotal)}</span>
+        <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-50 text-neutral-700 border border-neutral-200 num">Total jour · {formatFCFA(todayTotal)}</span>
         {hasFilters && (
           <button
             onClick={clearFilters}
-            className="shrink-0 px-2 py-1 rounded-full bg-white text-slate-500 border border-slate-200 hover:bg-slate-100 inline-flex items-center gap-1 transition-all"
+            className="shrink-0 px-2 py-1 rounded-full bg-white text-neutral-500 border border-neutral-200 hover:bg-neutral-100 inline-flex items-center gap-1 transition-all"
           >
             <X className="w-3 h-3" />Réinitialiser
           </button>
@@ -384,7 +390,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           {/* ── MOBILE: card list ──────────────────────────────── */}
           <div className="md:hidden space-y-2 count-up">
             {filtered.map(s => {
-              const st = statusStyles(s.status);
+              const st = statusStyles(s.status, s);
               const payMethods = (s.sale_payments || []).map(p => p.method_name).join(', ');
               return (
                 <button
@@ -395,27 +401,27 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[11px] font-bold text-slate-700 truncate">{s.sale_number}</span>
+                        <span className="font-mono text-[11px] font-bold text-neutral-700 truncate">{s.sale_number}</span>
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${st.pill}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
                         </span>
-                        {s.accounting_status === 'accounted' && <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200">C</span>}
+                        {s.accounting_status === 'accounted' && <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200">C</span>}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 num">{formatDateTime(s.created_at)}</div>
+                      <div className="text-[10px] text-neutral-400 mt-0.5 num">{formatDateTime(s.created_at)}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total</div>
-                      <div className="text-sm font-bold text-slate-900 num leading-tight mt-0.5">{formatFCFA(s.total)}</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Total</div>
+                      <div className="text-sm font-bold text-neutral-900 num leading-tight mt-0.5">{formatFCFA(s.total)}</div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100">
-                    <div className="min-w-0 flex items-center gap-1.5 text-[11px] text-slate-600 truncate">
-                      <User className="w-3 h-3 text-slate-400 shrink-0" />
+                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-neutral-100">
+                    <div className="min-w-0 flex items-center gap-1.5 text-[11px] text-neutral-600 truncate">
+                      <User className="w-3 h-3 text-neutral-400 shrink-0" />
                       <span className="truncate">{s.customers?.name || 'Client comptoir'}</span>
                     </div>
                     {payMethods && (
-                      <div className="flex items-center gap-1 text-[10px] text-slate-500 shrink-0">
-                        <CreditCard className="w-3 h-3 text-slate-400" /><span className="truncate max-w-[90px]">{payMethods}</span>
+                      <div className="flex items-center gap-1 text-[10px] text-neutral-500 shrink-0">
+                        <CreditCard className="w-3 h-3 text-neutral-400" /><span className="truncate max-w-[90px]">{payMethods}</span>
                       </div>
                     )}
                   </div>
@@ -428,7 +434,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           <div className="hidden md:block card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-slate-50/90 backdrop-blur text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                <thead className="sticky top-0 bg-neutral-50/90 backdrop-blur text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
                   <tr>
                     <th className="px-4 py-3 text-left">N° Vente</th>
                     <th className="px-4 py-3 text-left">Date</th>
@@ -441,16 +447,16 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                     <th className="px-4 py-3 text-right w-16">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-neutral-100">
                   {filtered.map(s => {
-                    const st = statusStyles(s.status);
+                    const st = statusStyles(s.status, s);
                     return (
                       <tr key={s.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">{s.sale_number}</td>
-                        <td className="px-4 py-3 text-xs whitespace-nowrap text-slate-500 num">{formatDateTime(s.created_at)}</td>
-                        <td className="px-4 py-3 text-slate-700">{s.customers?.name || <span className="text-slate-400">Client comptoir</span>}</td>
-                        <td className="px-4 py-3 hidden lg:table-cell text-slate-500 text-xs">{s.sites?.name || '—'}</td>
-                        <td className="px-4 py-3 hidden xl:table-cell text-slate-500 text-xs">
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-neutral-700">{s.sale_number}</td>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap text-neutral-500 num">{formatDateTime(s.created_at)}</td>
+                        <td className="px-4 py-3 text-neutral-700">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
+                        <td className="px-4 py-3 hidden lg:table-cell text-neutral-500 text-xs">{s.sites?.name || '—'}</td>
+                        <td className="px-4 py-3 hidden xl:table-cell text-neutral-500 text-xs">
                           {(s.sale_payments || []).map(p => p.method_name).join(', ') || '—'}
                         </td>
                         <td className="px-4 py-3 text-center">
@@ -460,16 +466,16 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                         </td>
                         <td className="px-4 py-3 text-center hidden lg:table-cell">
                           {s.accounting_status === 'accounted' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />OK</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200"><BookOpen className="w-3 h-3" />OK</span>
                           ) : (
-                            <span className="text-[10px] text-slate-400">—</span>
+                            <span className="text-[10px] text-neutral-400">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-900 num whitespace-nowrap">{formatFCFA(s.total)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(s.total)}</td>
                         <td className="px-4 py-3 text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); openDetail(s); }}
-                            className="p-1.5 rounded-lg hover:bg-white hover:shadow-sm text-slate-500 hover:text-brand-700 transition-all"
+                            className="p-1.5 rounded-lg hover:bg-white hover:shadow-sm text-neutral-500 hover:text-brand-700 transition-all"
                             title="Voir détail"
                           >
                             <Eye className="w-4 h-4" />
@@ -494,7 +500,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       >
         <div className="space-y-5">
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500 mb-2">
               <Calendar className="w-3.5 h-3.5" />Période
             </div>
             <div className="grid grid-cols-2 gap-1.5">
@@ -505,7 +511,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                   className={`px-3 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
                     dateRange === o.value
                       ? 'bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-glow border-transparent'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:border-brand-300 hover:bg-brand-50/50'
+                      : 'bg-white text-neutral-700 border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/50'
                   }`}
                 >
                   {o.label}
@@ -522,7 +528,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             )}
           </div>
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500 mb-2">
               <Filter className="w-3.5 h-3.5" />Statut
             </div>
             <div className="grid grid-cols-2 gap-1.5">
@@ -533,7 +539,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                   className={`px-3 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
                     statusFilter === o.value
                       ? 'bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-glow border-transparent'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:border-brand-300 hover:bg-brand-50/50'
+                      : 'bg-white text-neutral-700 border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/50'
                   }`}
                 >
                   {o.label}
@@ -557,7 +563,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             </button>
           )}
           {selected && canEditSale && selected.accounting_status !== 'accounted' && !editing && (
-            <button onClick={startEdit} className="btn-icon text-blue-600 hover:bg-blue-50" title="Modifier">
+            <button onClick={startEdit} className="btn-icon text-neutral-700 hover:bg-neutral-50" title="Modifier">
               <Pencil className="w-4 h-4" />
             </button>
           )}
@@ -570,22 +576,23 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             </>
           )}
           {!editing && selected && selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' && (
-            <button onClick={comptabiliserVente} disabled={accounting} className="btn-icon text-teal-700 hover:bg-teal-50" title="Comptabiliser">
+            <button onClick={comptabiliserVente} disabled={accounting} className="btn-icon text-neutral-700 hover:bg-neutral-100" title="Comptabiliser">
               {accounting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
             </button>
           )}
           {!editing && selected && selected.accounting_status === 'accounted' && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />Comptabilise</span>
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200"><BookOpen className="w-3 h-3" />Comptabilise</span>
           )}
           {!editing && <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Scroll className="w-4 h-4" /></button>}
           {!editing && <button onClick={printInvoice} className="btn-icon-primary" title="Facture A4"><Printer className="w-4 h-4" /></button>}
         </>}
       >
         {selected && (() => {
-          const st = statusStyles(selected.status);
+          const st = statusStyles(selected.status, selected);
+          const hasIpm = selected.ipm_ventes && selected.ipm_ventes.length > 0;
           const slimStatus: DocStatusConfig = {
             label: st.label,
-            color: selected.status === 'paid' ? 'emerald' : selected.status === 'cancelled' ? 'rose' : selected.status === 'validated' ? 'blue' : 'amber',
+            color: selected.status === 'paid' ? (hasIpm ? 'teal' : 'emerald') : selected.status === 'cancelled' ? 'rose' : selected.status === 'validated' ? 'slate' : 'amber',
           };
           return (
             <div className="space-y-4">
@@ -593,6 +600,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                 status={slimStatus}
                 customerName={selected.customers?.name ?? null}
                 date={formatDateTime(selected.created_at)}
+                docHeader={(selected as any).doc_header ? { ...(selected as any).doc_header, created_at: selected.created_at } : null}
               />
 
               {itemsLoading ? (
@@ -603,45 +611,45 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                   <DocSectionTitle title="Modifier les articles" count={editItems.length} />
                   <div className="space-y-2">
                     {editItems.map((item, idx) => (
-                      <div key={idx} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+                      <div key={idx} className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold text-slate-800 truncate flex-1">{item.name}</span>
+                          <span className="text-xs font-semibold text-neutral-800 truncate flex-1">{item.name}</span>
                           <button onClick={() => removeEditItem(idx)} className="p-1 rounded-lg hover:bg-red-50 text-red-500" title="Retirer">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                           <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase">Qte</label>
+                            <label className="text-[9px] font-bold text-neutral-400 uppercase">Qte</label>
                             <input type="number" min="1" value={item.quantity}
                               onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
-                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-center focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                              className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-center focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase">Prix unit.</label>
+                            <label className="text-[9px] font-bold text-neutral-400 uppercase">Prix unit.</label>
                             <input type="number" min="0" value={item.unit_price}
                               onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
-                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                              className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase">Remise</label>
+                            <label className="text-[9px] font-bold text-neutral-400 uppercase">Remise</label>
                             <input type="number" min="0" value={item.discount}
                               onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
-                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                              className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
                             />
                           </div>
                         </div>
-                        <div className="text-right text-[11px] font-bold text-slate-700">
+                        <div className="text-right text-[11px] font-bold text-neutral-700">
                           Sous-total : {formatFCFA(item.quantity * item.unit_price - (item.discount || 0))}
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-3 text-right">
-                    <span className="text-xs text-slate-500">Nouveau total : </span>
-                    <span className="text-sm font-bold text-slate-900">
+                  <div className="bg-neutral-50 rounded-xl p-3 text-right">
+                    <span className="text-xs text-neutral-500">Nouveau total : </span>
+                    <span className="text-sm font-bold text-neutral-900">
                       {formatFCFA(editItems.reduce((s, i) => s + (i.quantity * i.unit_price - (i.discount || 0)), 0))}
                     </span>
                   </div>
@@ -706,10 +714,10 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
             <AlertTriangle className="w-6 h-6 text-red-500" />
           </div>
-          <p className="text-sm text-slate-700 font-medium">
+          <p className="text-sm text-neutral-700 font-medium">
             Supprimer la vente <span className="font-bold">{selected?.sale_number}</span> ?
           </p>
-          <p className="text-xs text-slate-500 max-w-xs">
+          <p className="text-xs text-neutral-500 max-w-xs">
             Le stock sera restaure et le solde du client recalcule. Cette action est irreversible.
           </p>
         </div>

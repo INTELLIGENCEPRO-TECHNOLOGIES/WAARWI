@@ -10,8 +10,9 @@
  *   DocStatusBadge   — Badge de statut premium cohérent
  */
 
-import { ChevronRight, CalendarDays, Tag, ShieldCheck, User } from 'lucide-react';
+import { ChevronRight, CalendarDays, Tag, ShieldCheck, User, Smartphone, Clock } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
+import { computeWarrantyExpiry } from '../lib/print';
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * Types
@@ -48,12 +49,12 @@ export interface DocStatusConfig {
  * Couleurs de statut
  * ─────────────────────────────────────────────────────────────────────────── */
 const STATUS_COLORS: Record<DocStatusConfig['color'], { bg: string; text: string; border: string; dot: string }> = {
-  slate:   { bg: 'bg-slate-100',   text: 'text-slate-700',   border: 'border-slate-200',  dot: 'bg-slate-500' },
-  amber:   { bg: 'bg-amber-50',    text: 'text-amber-800',   border: 'border-amber-200',  dot: 'bg-amber-500' },
-  emerald: { bg: 'bg-emerald-50',  text: 'text-emerald-800', border: 'border-emerald-200',dot: 'bg-emerald-500' },
-  blue:    { bg: 'bg-blue-50',     text: 'text-blue-800',    border: 'border-blue-200',   dot: 'bg-blue-500' },
-  rose:    { bg: 'bg-rose-50',     text: 'text-rose-800',    border: 'border-rose-200',   dot: 'bg-rose-500' },
-  teal:    { bg: 'bg-teal-50',     text: 'text-teal-800',    border: 'border-teal-200',   dot: 'bg-teal-500' },
+  slate:   { bg: 'bg-neutral-100',  text: 'text-neutral-700',  border: 'border-neutral-200', dot: 'bg-neutral-500' },
+  amber:   { bg: 'bg-amber-50',     text: 'text-amber-800',    border: 'border-amber-200',   dot: 'bg-amber-500' },
+  emerald: { bg: 'bg-neutral-100',  text: 'text-neutral-800',  border: 'border-neutral-200', dot: 'bg-neutral-900' },
+  blue:    { bg: 'bg-neutral-50',   text: 'text-neutral-800',  border: 'border-neutral-200', dot: 'bg-neutral-900' },
+  rose:    { bg: 'bg-rose-50',      text: 'text-rose-800',     border: 'border-rose-200',    dot: 'bg-rose-500' },
+  teal:    { bg: 'bg-neutral-100',  text: 'text-neutral-800',  border: 'border-neutral-300', dot: 'bg-neutral-900' },
 };
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -76,7 +77,9 @@ export interface DocHeaderMeta {
   delivery_date?: string | null;
   reference?: string | null;
   warranty?: string | null;
+  imei?: string | null;
   representative?: string | null;
+  created_at?: string | null;
 }
 
 interface DocSlimHeaderProps {
@@ -89,22 +92,27 @@ interface DocSlimHeaderProps {
 
 export function DocSlimHeader({ status, customerName, date, extra, docHeader }: DocSlimHeaderProps) {
   const metaPills: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; color: string }[] = [];
-  if (docHeader?.reference)      metaPills.push({ icon: Tag,          label: 'Réf.',         value: docHeader.reference, color: 'bg-amber-50 border-amber-200 text-amber-800' });
-  if (docHeader?.delivery_date)  metaPills.push({ icon: CalendarDays, label: 'Livraison',     value: new Date(docHeader.delivery_date).toLocaleDateString('fr-FR'), color: 'bg-blue-50 border-blue-200 text-blue-800' });
-  if (docHeader?.warranty)       metaPills.push({ icon: ShieldCheck,  label: 'Garantie',      value: docHeader.warranty, color: 'bg-emerald-50 border-emerald-200 text-emerald-800' });
-  if (docHeader?.representative) metaPills.push({ icon: User,         label: 'Représentant',  value: docHeader.representative, color: 'bg-slate-50 border-slate-200 text-slate-700' });
+  if (docHeader?.reference)      metaPills.push({ icon: Tag,          label: 'Ref.',         value: docHeader.reference, color: 'bg-amber-50 border-amber-200 text-amber-800' });
+  if (docHeader?.delivery_date)  metaPills.push({ icon: CalendarDays, label: 'Livraison',     value: new Date(docHeader.delivery_date).toLocaleDateString('fr-FR'), color: 'bg-neutral-50 border-neutral-200 text-neutral-800' });
+  if (docHeader?.warranty)       metaPills.push({ icon: ShieldCheck,  label: 'Garantie',      value: docHeader.warranty, color: 'bg-neutral-100 border-neutral-200 text-neutral-800' });
+  if (docHeader?.warranty && docHeader?.created_at) {
+    const expiry = computeWarrantyExpiry(docHeader.created_at, docHeader.warranty);
+    if (expiry) metaPills.push({ icon: Clock, label: 'Expire le', value: expiry, color: 'bg-neutral-50 border-neutral-200 text-neutral-700' });
+  }
+  if (docHeader?.imei)           metaPills.push({ icon: Smartphone,   label: 'IMEI',          value: docHeader.imei, color: 'bg-neutral-50 border-neutral-200 text-neutral-800' });
+  if (docHeader?.representative) metaPills.push({ icon: User,         label: 'Representant',  value: docHeader.representative, color: 'bg-neutral-50 border-neutral-200 text-neutral-700' });
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap py-1">
         {status && <DocStatusBadge {...status} />}
         {customerName !== undefined && (
-          <span className="text-[12px] font-semibold text-slate-700 break-words">
+          <span className="text-[12px] font-semibold text-neutral-700 break-words">
             {customerName || 'Comptoir'}
           </span>
         )}
         {(date || extra) && (
-          <span className="ml-auto text-[11px] text-slate-400 font-medium whitespace-nowrap num">
+          <span className="ml-auto text-[11px] text-neutral-400 font-medium whitespace-nowrap num">
             {extra ? `${extra} · ` : ''}{date}
           </span>
         )}
@@ -145,8 +153,8 @@ export function DocHeader({ docType, docNumber, date, status, customerLabel = 'C
       {/* Type + numéro + statut */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">{docType}</div>
-          <div className="text-[18px] font-black text-slate-900 leading-tight tracking-tight num">{docNumber}</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-neutral-400">{docType}</div>
+          <div className="text-[18px] font-black text-neutral-900 leading-tight tracking-tight num">{docNumber}</div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {status && <DocStatusBadge {...status} />}
@@ -179,9 +187,9 @@ export function DocHeader({ docType, docNumber, date, status, customerLabel = 'C
 
 function MetaCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/80">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">{label}</div>
-      <div className="text-[12px] font-semibold text-slate-800 leading-tight break-words">{value}</div>
+    <div className="px-3 py-2 rounded-xl bg-neutral-50 border border-neutral-200/80">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">{label}</div>
+      <div className="text-[12px] font-semibold text-neutral-800 leading-tight break-words">{value}</div>
     </div>
   );
 }
@@ -202,7 +210,7 @@ interface DocItemsProps {
 export function DocItems({ items, showReceived = false, qtyLabel = 'Qté' }: DocItemsProps) {
   if (items.length === 0) {
     return (
-      <div className="py-6 text-center text-[12px] text-slate-400 font-medium">Aucun article</div>
+      <div className="py-6 text-center text-[12px] text-neutral-400 font-medium">Aucun article</div>
     );
   }
 
@@ -216,33 +224,33 @@ export function DocItems({ items, showReceived = false, qtyLabel = 'Qté' }: Doc
           return (
             <div
               key={item.id ?? idx}
-              className="rounded-xl bg-white border border-slate-200 overflow-hidden"
+              className="rounded-xl bg-white border border-neutral-200 overflow-hidden"
               style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.06)' }}
             >
               {/* Nom de l'article — max 2 lignes */}
               <div className="px-3 pt-2.5 pb-1.5">
                 <div
-                  className="text-[13px] font-bold text-slate-900 leading-snug"
+                  className="text-[13px] font-bold text-neutral-900 leading-snug"
                   style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                 >
                   {item.name}
                 </div>
                 {ref && (
-                  <div className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">
+                  <div className="text-[10px] font-mono text-neutral-400 mt-0.5 truncate">
                     {item.supplier_ref ? `Fournisseur : ${ref}` : `Réf : ${ref}`}
                   </div>
                 )}
                 {item.oem_ref && (
-                  <div className="text-[10px] font-mono text-slate-400 truncate">OEM : {item.oem_ref}</div>
+                  <div className="text-[10px] font-mono text-neutral-400 truncate">OEM : {item.oem_ref}</div>
                 )}
               </div>
 
               {/* Ligne quantité / PU / Total — Qté compact, PU et Total prennent l'espace */}
-              <div className="flex divide-x divide-slate-100 border-t border-slate-100">
+              <div className="flex divide-x divide-slate-100 border-t border-neutral-100">
                 {/* Qté — largeur fixe compacte */}
                 <div className="px-2.5 py-2 shrink-0" style={{ width: '52px' }}>
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">{qtyLabel}</div>
-                  <div className="text-[13px] font-bold text-slate-800 num leading-none">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">{qtyLabel}</div>
+                  <div className="text-[13px] font-bold text-neutral-800 num leading-none">
                     {showReceived && item.quantity_ordered != null
                       ? `${item.quantity_received ?? 0}/${item.quantity_ordered}`
                       : item.quantity}
@@ -250,15 +258,15 @@ export function DocItems({ items, showReceived = false, qtyLabel = 'Qté' }: Doc
                 </div>
                 {/* Prix unit. — flex-1 */}
                 <div className="px-2.5 py-2 flex-1 min-w-0">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Prix unit.</div>
-                  <div className="text-[12px] font-semibold text-slate-700 num leading-none whitespace-nowrap overflow-hidden text-ellipsis">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Prix unit.</div>
+                  <div className="text-[12px] font-semibold text-neutral-700 num leading-none whitespace-nowrap overflow-hidden text-ellipsis">
                     {formatFCFA(item.unit_price)}
                   </div>
                 </div>
                 {/* Total — flex-1, fond légèrement teinté, priorité visuelle maximale */}
-                <div className="px-2.5 py-2 flex-1 min-w-0 bg-slate-50/60">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Total</div>
-                  <div className="text-[14px] font-black text-slate-900 num leading-none whitespace-nowrap overflow-hidden text-ellipsis">
+                <div className="px-2.5 py-2 flex-1 min-w-0 bg-neutral-50/60">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Total</div>
+                  <div className="text-[14px] font-black text-neutral-900 num leading-none whitespace-nowrap overflow-hidden text-ellipsis">
                     {formatFCFA(lineTotal)}
                   </div>
                 </div>
@@ -269,14 +277,14 @@ export function DocItems({ items, showReceived = false, qtyLabel = 'Qté' }: Doc
       </div>
 
       {/* ── DESKTOP TABLE (≥ md) ────────────────────────────────────────── */}
-      <div className="hidden md:block rounded-xl border border-slate-200 overflow-hidden">
+      <div className="hidden md:block rounded-xl border border-neutral-200 overflow-hidden">
         <table className="w-full text-sm table-fixed">
-          <thead className="bg-slate-50 border-b border-slate-200">
+          <thead className="bg-neutral-50 border-b border-neutral-200">
             <tr>
-              <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[52%]">Article</th>
-              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[10%]">{qtyLabel}</th>
-              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[19%]">Prix unit.</th>
-              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[19%]">Total</th>
+              <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-neutral-500 w-[52%]">Article</th>
+              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-neutral-500 w-[10%]">{qtyLabel}</th>
+              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-neutral-500 w-[19%]">Prix unit.</th>
+              <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-neutral-500 w-[19%]">Total</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -284,21 +292,21 @@ export function DocItems({ items, showReceived = false, qtyLabel = 'Qté' }: Doc
               const lineTotal = item.total ?? (item.quantity * item.unit_price - (item.discount ?? 0));
               const ref = item.supplier_ref || item.internal_ref;
               return (
-                <tr key={item.id ?? idx} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={item.id ?? idx} className="hover:bg-neutral-50/50 transition-colors">
                   <td className="px-4 py-3 align-top">
-                    <div className="text-[13px] font-semibold text-slate-900 leading-snug">{item.name}</div>
-                    {ref && <div className="text-[10px] font-mono text-slate-400 mt-0.5">{ref}</div>}
-                    {item.oem_ref && <div className="text-[10px] font-mono text-slate-400">OEM : {item.oem_ref}</div>}
+                    <div className="text-[13px] font-semibold text-neutral-900 leading-snug">{item.name}</div>
+                    {ref && <div className="text-[10px] font-mono text-neutral-400 mt-0.5">{ref}</div>}
+                    {item.oem_ref && <div className="text-[10px] font-mono text-neutral-400">OEM : {item.oem_ref}</div>}
                   </td>
-                  <td className="px-4 py-3 text-right text-[13px] text-slate-700 num align-top font-medium">
+                  <td className="px-4 py-3 text-right text-[13px] text-neutral-700 num align-top font-medium">
                     {showReceived && item.quantity_ordered != null
                       ? `${item.quantity_received ?? 0}/${item.quantity_ordered}`
                       : item.quantity}
                   </td>
-                  <td className="px-4 py-3 text-right text-[13px] text-slate-700 num align-top font-medium whitespace-nowrap">
+                  <td className="px-4 py-3 text-right text-[13px] text-neutral-700 num align-top font-medium whitespace-nowrap">
                     {formatFCFA(item.unit_price)}
                   </td>
-                  <td className="px-4 py-3 text-right text-[14px] font-bold text-slate-900 num align-top whitespace-nowrap">
+                  <td className="px-4 py-3 text-right text-[14px] font-bold text-neutral-900 num align-top whitespace-nowrap">
                     {formatFCFA(lineTotal)}
                   </td>
                 </tr>
@@ -329,7 +337,7 @@ interface DocTotalsProps {
 
 export function DocTotals({ subtotal, discount = 0, tax = 0, total, totalLabel = 'Total à payer', paid, remaining }: DocTotalsProps) {
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden">
+    <div className="rounded-xl border border-neutral-200 overflow-hidden">
       {discount > 0 && (
         <TotalsRow label="Sous-total" value={formatFCFA(subtotal)} />
       )}
@@ -339,7 +347,7 @@ export function DocTotals({ subtotal, discount = 0, tax = 0, total, totalLabel =
       {tax > 0 && (
         <TotalsRow label="TVA" value={formatFCFA(tax)} />
       )}
-      <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900">
+      <div className="flex items-center justify-between px-4 py-3.5 bg-neutral-900">
         <span className="text-[12px] font-bold uppercase tracking-wider text-white/70">{totalLabel}</span>
         <span className="text-[18px] font-black text-white num whitespace-nowrap">{formatFCFA(total)}</span>
       </div>
@@ -356,10 +364,10 @@ export function DocTotals({ subtotal, discount = 0, tax = 0, total, totalLabel =
   );
 }
 
-function TotalsRow({ label, value, valueClass = 'text-slate-900' }: { label: string; value: string; valueClass?: string }) {
+function TotalsRow({ label, value, valueClass = 'text-neutral-900' }: { label: string; value: string; valueClass?: string }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 last:border-0">
-      <span className="text-[11px] font-medium text-slate-500">{label}</span>
+    <div className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-100 last:border-0">
+      <span className="text-[11px] font-medium text-neutral-500">{label}</span>
       <span className={`text-[13px] font-bold num whitespace-nowrap ${valueClass}`}>{value}</span>
     </div>
   );
@@ -376,16 +384,16 @@ interface DocPaymentsProps {
 export function DocPayments({ payments, formatDate }: DocPaymentsProps) {
   if (payments.length === 0) return null;
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Paiements reçus</div>
+    <div className="rounded-xl border border-neutral-200 overflow-hidden">
+      <div className="px-4 py-2.5 bg-neutral-50 border-b border-neutral-200">
+        <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Paiements reçus</div>
       </div>
       {payments.map((p, idx) => (
-        <div key={idx} className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 last:border-0">
+        <div key={idx} className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-100 last:border-0">
           <div className="min-w-0">
-            <div className="text-[12px] font-semibold text-slate-800">{p.method_name}</div>
+            <div className="text-[12px] font-semibold text-neutral-800">{p.method_name}</div>
             {p.paid_at && formatDate && (
-              <div className="text-[10px] text-slate-400 mt-0.5">{formatDate(p.paid_at)}</div>
+              <div className="text-[10px] text-neutral-400 mt-0.5">{formatDate(p.paid_at)}</div>
             )}
           </div>
           <span className="text-[13px] font-bold text-emerald-700 num whitespace-nowrap ml-4">
@@ -403,9 +411,9 @@ export function DocPayments({ payments, formatDate }: DocPaymentsProps) {
 export function DocSectionTitle({ title, count }: { title: string; count?: number }) {
   return (
     <div className="flex items-center justify-between">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{title}</div>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{title}</div>
       {count !== undefined && (
-        <span className="text-[10px] font-bold text-slate-400 num">{count}</span>
+        <span className="text-[10px] font-bold text-neutral-400 num">{count}</span>
       )}
     </div>
   );

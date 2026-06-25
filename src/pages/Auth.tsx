@@ -402,13 +402,13 @@ export function Auth() {
   /* ── Default feature list (all app modules) ──────────────────────────── */
   const allFeatures = [
     { icon: ShoppingCart, label: 'Point de vente', desc: 'Caisse rapide et intuitive', color: 'text-teal-600 bg-teal-50 border-teal-100' },
-    { icon: Package, label: 'Stock', desc: 'Maîtrisez vos stocks', color: 'text-sky-600 bg-sky-50 border-sky-100' },
+    { icon: Package, label: 'Stock', desc: 'Maîtrisez vos stocks', color: 'text-neutral-700 bg-neutral-50 border-neutral-200' },
     { icon: FileText, label: 'Facturation', desc: 'Devis et factures pro', color: 'text-amber-600 bg-amber-50 border-amber-100' },
     { icon: Users, label: 'Clients & Tiers', desc: 'CRM et créances', color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
     { icon: Truck, label: 'Fournisseurs', desc: 'Commandes et dettes', color: 'text-orange-600 bg-orange-50 border-orange-100' },
     { icon: Globe, label: 'Boutique en ligne', desc: 'Vitrine et commandes web', color: 'text-cyan-600 bg-cyan-50 border-cyan-100' },
     { icon: BarChart3, label: 'Comptabilité', desc: 'Suivi financier complet', color: 'text-rose-600 bg-rose-50 border-rose-100' },
-    { icon: TrendingUp, label: 'Rapports', desc: 'Analyses et tableaux de bord', color: 'text-violet-600 bg-violet-50 border-violet-100' },
+    { icon: TrendingUp, label: 'Rapports', desc: 'Analyses et tableaux de bord', color: 'text-neutral-700 bg-neutral-50 border-neutral-200' },
     { icon: Shield, label: 'Sécurité', desc: 'Rôles et permissions', color: 'text-slate-600 bg-slate-50 border-slate-200' },
   ];
 

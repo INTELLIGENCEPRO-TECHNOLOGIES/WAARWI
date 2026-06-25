@@ -54,20 +54,17 @@ export function ActiveCashSessionCard({ session, siteName, onResume }: ActivePro
               Session en cours
             </div>
             <h2 className="text-sm font-bold text-slate-900 leading-tight truncate">
-              Caisse ouverte
+              {new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} &middot; {fmtTime(session.opened_at)}
             </h2>
           </div>
           <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold uppercase tracking-wider shadow-sm">
             <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
-            Ouverte
+            Active
           </span>
         </div>
 
         {/* Info rows ultra-compactes */}
         <div className="space-y-1.5">
-          {siteName && (
-            <InfoRow icon={ShieldCheck} label="Point de vente" value={siteName} accent="slate" />
-          )}
           <InfoRow
             icon={Calendar}
             label="Ouverte le"

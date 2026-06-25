@@ -278,8 +278,8 @@ export function BackupTab() {
       {/* Import from file */}
       <div className="card p-5">
         <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
-            <Upload className="w-5 h-5 text-sky-700" />
+          <div className="w-11 h-11 rounded-xl bg-neutral-50 flex items-center justify-center shrink-0">
+            <Upload className="w-5 h-5 text-neutral-700" />
           </div>
           <div className="flex-1">
             <h4 className="font-semibold text-slate-900">Importer une sauvegarde depuis un fichier</h4>
@@ -392,7 +392,7 @@ export function BackupTab() {
               <div key={b.id} className="py-3 flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`badge ${b.is_auto ? 'bg-sky-50 text-sky-700' : 'bg-brand-50 text-brand-700'}`}>
+                    <span className={`badge ${b.is_auto ? 'bg-neutral-50 text-neutral-700' : 'bg-brand-50 text-brand-700'}`}>
                       {b.is_auto ? 'AUTO' : 'MANUEL'}
                     </span>
                     <div className="font-semibold text-sm text-slate-900 truncate">{b.label}</div>
