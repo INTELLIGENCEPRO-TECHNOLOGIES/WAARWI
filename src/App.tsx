@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Loader2, CheckCircle, XCircle, WifiOff, Wifi } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { usePermissions, type PermissionKey } from './lib/permissions';
 import { ToastProvider } from './context/ToastContext';
@@ -12,7 +12,7 @@ import { PendingApproval } from './components/PendingApproval';
 
 // Recharge automatique si un chunk est introuvable (ancien index.html qui pointe
 // vers des assets hashés obsolètes après un déploiement).
-function lazyWithRetry<T extends { default: any }>(factory: () => Promise<T>) {
+function lazyWithRetry<T extends React.ComponentType<any>>(factory: () => Promise<{ default: T }>) {
   return lazy(() => factory().catch((err) => {
     const msg = String(err?.message || err);
     const isChunkErr = /Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg);
@@ -21,7 +21,7 @@ function lazyWithRetry<T extends { default: any }>(factory: () => Promise<T>) {
       if (!sessionStorage.getItem(KEY)) {
         sessionStorage.setItem(KEY, '1');
         window.location.reload();
-        return new Promise<T>(() => {});
+        return new Promise<{ default: T }>(() => {});
       }
     }
     throw err;
@@ -249,14 +249,14 @@ function Inner() {
       )}
     <Shell route={route} onRoute={setRoute}>
       <Suspense fallback={<div className="p-6 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>}>
-        {route === 'dashboard' && <Dashboard onNavigate={(r) => setRoute(r as any)} />}
-        {route === 'pos' && <POS onLeave={() => setRoute('dashboard')} onNavigate={(r) => setRoute(r as any)} />}
-        {route === 'articles' && <Articles onNavigate={(r) => setRoute(r as any)} />}
+        {route === 'dashboard' && <Dashboard onNavigate={(r: string) => setRoute(r as any)} />}
+        {route === 'pos' && <POS onLeave={() => setRoute('dashboard')} onNavigate={(r: string) => setRoute(r as any)} />}
+        {route === 'articles' && <Articles onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'master_catalog' && <MasterCatalog />}
         {route === 'stock' && <Stock />}
-        {route === 'sales' && <Sales onNavigate={(r) => setRoute(r as any)} />}
+        {route === 'sales' && <Sales onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'tiers' && <Tiers />}
-        {route === 'billing' && <Billing onNavigate={(r) => setRoute(r as any)} />}
+        {route === 'billing' && <Billing onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'supplier_orders' && <SupplierOrders />}
         {route === 'online_orders' && <OnlineOrders />}
         {route === 'cash_history' && <CashHistory />}
@@ -277,6 +277,63 @@ function Inner() {
     </Shell>
     </>
   );
+}
+
+function NetworkBanner() {
+  const [online, setOnline] = useState(navigator.onLine);
+  const [showReconnect, setShowReconnect] = useState(false);
+
+  useEffect(() => {
+    const goOffline = () => { setOnline(false); setShowReconnect(false); };
+    const goOnline = () => { setOnline(true); setShowReconnect(true); setTimeout(() => setShowReconnect(false), 3000); };
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
+  }, []);
+
+  if (online && !showReconnect) return null;
+
+  return (
+    <div className={`fixed top-0 left-0 right-0 z-[9999] flex items-center justify-center gap-2 py-2 px-4 text-sm font-medium transition-all duration-300 ${
+      online ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+    }`}>
+      {online ? (
+        <><Wifi className="w-4 h-4" /><span>Connexion rétablie</span></>
+      ) : (
+        <><WifiOff className="w-4 h-4" /><span>Hors ligne — les modifications ne seront pas enregistrées</span></>
+      )}
+    </div>
+  );
+}
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-neutral-50 p-6">
+          <div className="w-full max-w-md text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto">
+              <XCircle className="w-7 h-7 text-red-600" />
+            </div>
+            <h1 className="text-xl font-bold text-neutral-900">Une erreur est survenue</h1>
+            <p className="text-sm text-neutral-500">L'application a rencontre un probleme inattendu.</p>
+            <pre className="text-xs text-left bg-neutral-100 rounded-xl p-3 overflow-auto max-h-32 text-red-700">{this.state.error?.message}</pre>
+            <button onClick={() => window.location.reload()} className="px-5 py-2.5 bg-neutral-900 text-white rounded-xl text-sm font-semibold hover:bg-neutral-800 transition-colors">
+              Recharger l'application
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export default function App() {
@@ -314,10 +371,13 @@ export default function App() {
   }
 
   return (
-    <ToastProvider>
-      <AppProvider>
-        <Inner />
-      </AppProvider>
-    </ToastProvider>
+    <ErrorBoundary>
+      <NetworkBanner />
+      <ToastProvider>
+        <AppProvider>
+          <Inner />
+        </AppProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

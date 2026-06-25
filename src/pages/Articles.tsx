@@ -1,26 +1,24 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Plus, Search, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
-  CreditCard as Edit2, Filter, ChevronDown, Tag, TrendingUp, TrendingDown,
-  Barcode, Layers, MapPin, Hash, CheckCircle2, AlertTriangle, AlertCircle,
-  Image as ImageIcon, Upload, Camera, CheckSquare, Square,
-  Library, ArrowRight, Lightbulb, MousePointerClick, Download, ChevronRight,
-  List, LayoutGrid, Save, ChevronLeft, ArrowLeft, ArrowRight as ArrowRightIcon,
-  Percent, Moon, Sun, MoreHorizontal,
+  Plus, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
+  CreditCard as Edit2, Filter, ChevronDown, CheckCircle2,
+  Upload, Camera, CheckSquare, Square,
+  Lightbulb, Download,
+  List, LayoutGrid, Save, ArrowLeft,
+  MoreHorizontal,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
-import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
 import { ConfirmDialog, Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 import { isAutoParts, BUSINESS_TYPE_LABELS } from '../lib/types';
 import {
-  stockStatus, Field, PremiumSelect, PriceInput,
+  stockStatus, Field, PremiumSelect,
   ArticleCard, CategoryFilterSheet, MasterCatalogGuide,
   InfosTab, PrixTab, StockTab, CompatTab, ImageTab,
   DesktopListView, FullScreenArticleEdit,
@@ -34,7 +32,7 @@ type TierDefinition = { id: string; tier_name: string; sort_order: number; is_de
 type TabKey = 'infos' | 'prix' | 'stock' | 'compat' | 'image';
 
 export function Articles({ onNavigate }: { onNavigate?: (route: string) => void } = {}) {
-  const { tenant, currentSite, sites, depots, dataTick } = useApp();
+  const { tenant, currentSite, sites, depots, dataTick, refData } = useApp();
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const businessLabel = BUSINESS_TYPE_LABELS[tenant?.business_type || 'auto_parts'] || 'Catalogue';
@@ -93,8 +91,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [bulkActionValue, setBulkActionValue] = useState('');
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState(-1);
-  const [fullScreenSearch, setFullScreenSearch] = useState('');
-  const [pricingTiers, setPricingTiers] = useState<PricingTier[]>([]);
+  const [, setPricingTiers] = useState<PricingTier[]>([]);
   const [tierDefinitions, setTierDefinitions] = useState<TierDefinition[]>([]);
   const [formTiers, setFormTiers] = useState<Array<{ tier_name: string; price: number | '' }>>([]);
 
@@ -116,7 +113,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     while (true) {
       let query = supabase
         .from('articles')
-        .select('*')
+        .select('id, tenant_id, internal_ref, name, description, category_id, brand, oem_ref, supplier_ref, barcode, supplier_id, condition, unit, purchase_price, sale_price, min_price, wholesale_price, vat_rate, stock_min, stock_max, location, image_url, is_active, ipm_eligible')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
         .order('name')
@@ -131,18 +128,15 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       from += batchSize;
     }
 
-    const [{ data: cats }, { data: stk }, { data: b }, { data: m }, { data: sup }, { data: tierDefs }] = await Promise.all([
-      supabase.from('part_categories').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+    const [{ data: stk }, { data: sup }, { data: tierDefs }] = await Promise.all([
       supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id),
-      supabase.from('vehicle_brands').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
-      supabase.from('vehicle_models').select('*').eq('tenant_id', tenant.id).order('name'),
       supabase.from('suppliers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
-      supabase.from('pricing_tier_definitions').select('*').eq('tenant_id', tenant.id).order('sort_order'),
+      supabase.from('pricing_tier_definitions').select('id, tier_name, sort_order, is_default, tenant_id').eq('tenant_id', tenant.id).order('sort_order'),
     ]);
     setArticles(allArts);
-    setCategories(cats || []);
-    setBrands(b || []);
-    setModels(m || []);
+    setCategories(refData?.categories || []);
+    setBrands(refData?.brands || []);
+    setModels(refData?.models || []);
     setSuppliers(sup || []);
     setTierDefinitions(tierDefs || []);
     const map: Record<string, number> = {};
@@ -152,7 +146,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id, sharedArticles]);
-  useEffect(() => { if (dataTick > 0) load(true); /* eslint-disable-next-line */ }, [dataTick]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 300); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   useEffect(() => {
     const ctx = consumeNavContext();

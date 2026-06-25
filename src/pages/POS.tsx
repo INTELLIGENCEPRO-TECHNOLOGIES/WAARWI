@@ -18,7 +18,7 @@ import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
 import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
-import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, printDecaissementTicket80, buildPrintTenant, type PrintTenant } from '../lib/print';
+import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, printDecaissementTicket80, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from '../lib/types';
 import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
@@ -726,10 +726,23 @@ function POSLandingResume({
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
+// Module-level cache to avoid full reload when returning to POS
+const posCache: {
+  key: string;
+  articles: ArticleLite[];
+  customers: Customer[];
+  methods: PaymentMethod[];
+  session: CashSession | null;
+  categories: CategoryLite[];
+  topScores: Record<string, number>;
+  articleTiers: ArticleTier[];
+  screen: 'open-form' | 'resume' | 'pos';
+} = { key: '', articles: [], customers: [], methods: [], session: null, categories: [], topScores: {}, articleTiers: [], screen: 'open-form' };
+
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, dataTick } = useApp();
+  const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange } = useApp();
   const { can } = usePermissions();
-  const tenantForPrint: PrintTenant = buildPrintTenant(tenant);
+  const tenantForPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
   const cashierName = profile?.full_name || profile?.email || '';
 
   const buildDocHeader = () => {
@@ -776,15 +789,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
 
+  const posCacheKey = `${tenant?.id}:${currentSite?.id}`;
+  const hasPosCache = posCache.key === posCacheKey && posCache.articles.length > 0;
+
   // Screen state: 'open-form' | 'resume' | 'pos'
-  const [screen, setScreen] = useState<'open-form' | 'resume' | 'pos'>('open-form');
+  const [screen, setScreen] = useState<'open-form' | 'resume' | 'pos'>(hasPosCache ? posCache.screen : 'open-form');
 
   // Data
-  const [articles, setArticles] = useState<ArticleLite[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [methods, setMethods] = useState<PaymentMethod[]>([]);
-  const [session, setSession] = useState<CashSession | null>(null);
-  const [loadingData, setLoadingData] = useState(true);
+  const [articles, setArticles] = useState<ArticleLite[]>(hasPosCache ? posCache.articles : []);
+  const [customers, setCustomers] = useState<Customer[]>(hasPosCache ? posCache.customers : []);
+  const [methods, setMethods] = useState<PaymentMethod[]>(hasPosCache ? posCache.methods : []);
+  const [session, setSession] = useState<CashSession | null>(hasPosCache ? posCache.session : null);
+  const [loadingData, setLoadingData] = useState(!hasPosCache);
 
   // Session open form
   const [openingAmount, setOpeningAmount] = useState(0);
@@ -792,8 +808,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [openingSubmitting, setOpeningSubmitting] = useState(false);
 
   // Catalog filters
-  const [categories, setCategories] = useState<CategoryLite[]>([]);
-  const [topScores, setTopScores] = useState<Record<string, number>>({});
+  const [categories, setCategories] = useState<CategoryLite[]>(hasPosCache ? posCache.categories : []);
+  const [topScores, setTopScores] = useState<Record<string, number>>(hasPosCache ? posCache.topScores : {});
   const [sortMode, setSortMode] = useState<'top' | 'alpha'>('top');
   const [categoryId, setCategoryId] = useState<string>('');
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
@@ -1043,7 +1059,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const load = useCallback(async () => {
     if (!tenant || !currentSite) return;
     const stockSiteId = saleSourceSiteId || currentSite.id;
-    setLoadingData(true);
+    const thisCacheKey = `${tenant.id}:${currentSite.id}`;
+    if (posCache.key !== thisCacheKey || posCache.articles.length === 0) {
+      setLoadingData(true);
+    }
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
     const isShared = (tenant as any)?.settings?.shared_articles !== false;
     const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
@@ -1069,36 +1088,40 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       from += batchSize;
     }
 
-    const [{ data: stk }, { data: pm }, { data: cs }, { data: cust }, { data: cats }, { data: topRows }, { data: tiers }] = await Promise.all([
+    const [{ data: stk }, { data: cs }, { data: cust }, { data: topRows }, { data: tiers }] = await Promise.all([
       supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId),
-      supabase.from('payment_methods').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
-      supabase.from('cash_sessions').select('*').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
-      (() => { let q = supabase.from('customers').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
-      supabase.from('part_categories').select('id, name, parent_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+      supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, status, user_id, site_id, tenant_id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
+      (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
       supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
     ]);
     const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-    setArticles((allArts).map((a: any) => ({
+    const newArticles = (allArts).map((a: any) => ({
       id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
       sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
       stock_available: qmap.get(a.id) || 0,
       category_id: a.category_id || null,
       image_url: a.image_url || null,
       ipm_eligible: a.ipm_eligible !== false,
-    })));
-    setMethods((pm || []).filter((m: any) => m.payment_type !== 'credit'));
-    setCustomers(cust || []);
-    setCategories((cats || []) as CategoryLite[]);
+    }));
+    const newMethods = ((refData?.paymentMethods || []).filter((m: any) => m.payment_type !== 'credit')) as PaymentMethod[];
+    const newCustomers = (cust || []) as Customer[];
+    const newCategories = (refData?.categories || []) as CategoryLite[];
     const scores: Record<string, number> = {};
     for (const r of (topRows || []) as any[]) {
       if (!r.article_id) continue;
       scores[r.article_id] = (scores[r.article_id] || 0) + Number(r.quantity || 0);
     }
-    setTopScores(scores);
-    setArticleTiers((tiers || []) as ArticleTier[]);
+    const newTiers = (tiers || []) as ArticleTier[];
     const existingSession = cs || null;
-    setSession(existingSession);
+
+    setArticles(newArticles);
+    setMethods(newMethods);
+    setCustomers(newCustomers);
+    setCategories(newCategories);
+    setTopScores(scores);
+    setArticleTiers(newTiers);
+    setSession((existingSession) as any);
     // Only update screen if we're not already inside the POS (avoids resetting after a sale)
     setScreen(prev => {
       if (prev === 'pos') return 'pos';
@@ -1108,29 +1131,68 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         consumeNavContext();
         return 'pos';
       }
-      return existingSession ? 'resume' : 'open-form';
+      const newScreen = existingSession ? 'resume' : 'open-form';
+      posCache.screen = newScreen;
+      return newScreen;
     });
     setLoadingData(false);
+
+    // Persist to module-level cache
+    posCache.key = thisCacheKey;
+    posCache.articles = newArticles;
+    posCache.customers = newCustomers;
+    posCache.methods = newMethods;
+    posCache.session = existingSession as any;
+    posCache.categories = newCategories;
+    posCache.topScores = scores;
+    posCache.articleTiers = newTiers;
   }, [tenant?.id, currentSite?.id, saleSourceSiteId]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Realtime: silently refresh stock + customers when another user makes changes
+  // Realtime: silently refresh stock + customers + articles when another user makes changes
   useEffect(() => {
-    if (dataTick === 0 || !tenant || !currentSite) return;
+    if (!tenant || !currentSite) return;
     const stockSiteId = saleSourceSiteId || currentSite.id;
-    (async () => {
-      const [{ data: stk }, { data: cust }] = await Promise.all([
-        supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId),
-        supabase.from('customers').select('*').eq('tenant_id', tenant.id).order('name'),
-      ]);
-      if (stk) {
-        const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
-        setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.get(a.id) || 0 })));
+    const isShared = (tenant as any)?.settings?.shared_articles !== false;
+    const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsub = onDataChange(
+      ['articles', 'stock_levels', 'customers', 'sales', 'sale_payments', 'cash_movements'],
+      () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(async () => {
+          const [{ data: stk }, { data: cust }, { data: newArts }] = await Promise.all([
+            supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId),
+            (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
+            (() => { let q = supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible').eq('tenant_id', tenant.id).eq('is_active', true); if (!isShared) q = q.eq('site_id', currentSite.id); return q; })(),
+          ]);
+          if (stk && newArts) {
+            const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
+            const updatedArticles = (newArts as any[]).map((a: any) => ({
+              id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
+              sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
+              stock_available: qmap.get(a.id) || 0,
+              category_id: a.category_id || null,
+              image_url: a.image_url || null,
+              ipm_eligible: a.ipm_eligible !== false,
+            }));
+            setArticles(updatedArticles);
+            posCache.articles = updatedArticles;
+          } else if (stk) {
+            const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
+            setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.get(a.id) || 0 })));
+          }
+          if (cust) {
+            setCustomers(cust as any);
+            posCache.customers = cust as any;
+          }
+        }, 300);
       }
-      if (cust) setCustomers(cust);
-    })();
-  }, [dataTick]);
+    );
+    return () => { unsub(); if (timer) clearTimeout(timer); };
+  }, [tenant?.id, currentSite?.id, saleSourceSiteId, onDataChange]);
 
   // Force-skip resume screen when coming from Dashboard "Ventes" button
   useEffect(() => {
@@ -1677,7 +1739,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       }).eq('id', pendingWeb).eq('tenant_id', tenant.id);
       await supabase.rpc('log_online_order_status', {
         p_order_id: pendingWeb, p_old_status: 'prete', p_new_status: 'livree', p_note: `Transformée en vente ${saleNum}`,
-      }).then(() => {}).catch(() => {});
+      }).then(() => {}, () => {});
       (window as any).__pendingWebOrderId = undefined;
     }
     // Auto-apply available avoirs for this customer
@@ -1756,7 +1818,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
         items, fullyReturned,
       };
-    }));
+    }) as any);
     setReturnLoading(false);
   };
 
@@ -1994,7 +2056,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (e) { error(e.message); return; }
     await supabase.rpc('log_online_order_status', {
       p_order_id: o.id, p_old_status: o.status, p_new_status: 'livree', p_note: 'Livrée depuis caisse',
-    }).then(() => {}).catch(() => {});
+    }).then(() => {}, () => {});
     success('Commande marquée comme livrée');
     loadWebOrders();
   };
@@ -2009,7 +2071,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (e) { error(e.message); return; }
     await supabase.rpc('log_online_order_status', {
       p_order_id: o.id, p_old_status: o.status, p_new_status: 'annulee', p_note: 'Annulée depuis caisse',
-    }).then(() => {}).catch(() => {});
+    }).then(() => {}, () => {});
     success('Commande annulée');
     loadWebOrders();
     setWebOrderDetail(null);
@@ -2756,6 +2818,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             stock_available: a.stock_available,
             category_id: null,
             image_url: null,
+            ipm_eligible: true,
           };
           addToCart(article);
         }}
@@ -3376,7 +3439,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                     payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
                                     customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
                                   };
-                                  printSaleTicket(fakeSale, s.doc_header);
+                                  printSaleTicket(fakeSale as any, s.doc_header);
                                 }} className="p-1.5 rounded hover:bg-neutral-100 text-neutral-600">
                                   <Printer className="w-4 h-4" />
                                 </button>
@@ -3387,7 +3450,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                     payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
                                     customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
                                   };
-                                  printSaleInvoice(fakeSale, s.doc_header);
+                                  printSaleInvoice(fakeSale as any, s.doc_header);
                                 }} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600">
                                   <FileText className="w-4 h-4" />
                                 </button>

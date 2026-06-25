@@ -495,6 +495,8 @@ function SitesTab() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const siteLogoRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
     if (!tenant) return;
@@ -510,6 +512,33 @@ function SitesTab() {
   const openCreateDepot = () => { setEditing(null); setForm({ name: '', code: '', address: '', phone: '', is_warehouse: true, is_active: true, parent_site_id: stores[0]?.id || '' }); setOpen(true); };
   const openEdit = (s: any) => { setEditing(s); setForm({ ...s }); setOpen(true); };
 
+  const uploadSiteLogo = async (file: File) => {
+    if (!tenant || !editing) return;
+    if (file.size > 2 * 1024 * 1024) { error('Logo max 2 Mo'); return; }
+    setUploadingLogo(true);
+    const ext = file.name.split('.').pop() || 'png';
+    const path = `${tenant.id}/site-${editing.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('tenant-logos').upload(path, file, { upsert: true, cacheControl: '3600' });
+    if (upErr) { error(upErr.message); setUploadingLogo(false); return; }
+    const { data: urlData } = supabase.storage.from('tenant-logos').getPublicUrl(path);
+    const publicUrl = urlData.publicUrl;
+    const { error: e } = await supabase.from('sites').update({ logo_url: publicUrl }).eq('id', editing.id);
+    setUploadingLogo(false);
+    if (e) { error(e.message); return; }
+    setForm((f: any) => ({ ...f, logo_url: publicUrl }));
+    success('Logo du magasin mis à jour');
+    load(); refresh();
+  };
+
+  const removeSiteLogo = async () => {
+    if (!editing) return;
+    const { error: e } = await supabase.from('sites').update({ logo_url: null }).eq('id', editing.id);
+    if (e) { error(e.message); return; }
+    setForm((f: any) => ({ ...f, logo_url: '' }));
+    success('Logo retiré');
+    load(); refresh();
+  };
+
   const save = async () => {
     if (!tenant || !form.name) { error('Nom obligatoire'); return; }
     if (form.is_warehouse && !form.parent_site_id) { error('Sélectionnez le magasin rattaché'); return; }
@@ -519,6 +548,12 @@ function SitesTab() {
       address: form.address || '', phone: form.phone || '',
       is_warehouse: !!form.is_warehouse, is_active: form.is_active !== false,
       parent_site_id: form.is_warehouse ? form.parent_site_id : null,
+      logo_url: form.logo_url || null,
+      legal_name: form.legal_name || null,
+      ninea: form.ninea || null,
+      rccm: form.rccm || null,
+      email: form.email || null,
+      website: form.website || null,
     };
     const { error: e } = editing
       ? await supabase.from('sites').update(payload).eq('id', editing.id)
@@ -586,12 +621,15 @@ function SitesTab() {
         </div>
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? (form.is_warehouse ? 'Modifier le dépôt' : 'Modifier le magasin') : (form.is_warehouse ? 'Nouveau dépôt' : 'Nouveau magasin')} size="sm"
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? (form.is_warehouse ? 'Modifier le dépôt' : 'Modifier le magasin') : (form.is_warehouse ? 'Nouveau dépôt' : 'Nouveau magasin')} size="md"
         footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
         <div className="space-y-3">
           <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div><label className="label">Code court</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="input" placeholder="EX: DEP-01" /></div>
-          <div><label className="label">Téléphone</label><input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><label className="label">Téléphone</label><input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
+            <div><label className="label">Email</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="input" type="email" placeholder="contact@magasin.com" /></div>
+          </div>
           <div><label className="label">Adresse</label><input value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} className="input" /></div>
           {form.is_warehouse && (
             <div>
@@ -603,6 +641,58 @@ function SitesTab() {
               <p className="text-[10px] text-slate-400 mt-1">Seul ce magasin pourra vendre depuis ce dépôt (sauf si transfert inter-dépôts activé).</p>
             </div>
           )}
+
+          {/* Document header section (only for stores) */}
+          {!form.is_warehouse && editing && (
+            <div className="pt-2 border-t border-slate-100 space-y-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Entête documents (propre à ce magasin)</p>
+              <p className="text-[10px] text-slate-400">Laisser vide pour utiliser les infos générales de l'entreprise.</p>
+
+              {/* Logo upload */}
+              <div>
+                <label className="label">Logo du magasin</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                    {form.logo_url ? (
+                      <img src={form.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                    ) : tenant?.logo_url ? (
+                      <img src={tenant.logo_url} alt="Logo tenant" className="w-full h-full object-contain opacity-40" />
+                    ) : (
+                      <ImageIcon className="w-5 h-5 text-slate-300" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {!form.logo_url && tenant?.logo_url && (
+                      <p className="text-[10px] text-slate-400 mb-1">Logo actuel : celui de l'entreprise (par défaut)</p>
+                    )}
+                    <p className="text-[10px] text-slate-500 mb-1.5">PNG, JPG, WebP ou SVG — max 2 Mo</p>
+                    <div className="flex items-center gap-2">
+                      <input ref={siteLogoRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadSiteLogo(f); e.target.value = ''; }} />
+                      <button type="button" onClick={() => siteLogoRef.current?.click()} disabled={uploadingLogo}
+                        className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1">
+                        {uploadingLogo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                        {form.logo_url ? 'Changer' : 'Charger un logo'}
+                      </button>
+                      {form.logo_url && (
+                        <button type="button" onClick={removeSiteLogo} className="btn-secondary text-[11px] py-1 px-2.5 text-red-600 flex items-center gap-1">
+                          <X className="w-3 h-3" />Retirer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div><label className="label">Raison sociale / Nom commercial</label><input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="input" placeholder={tenant?.legal_name || tenant?.name || ''} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="label">NINEA</label><input value={form.ninea || ''} onChange={e => setForm({ ...form, ninea: e.target.value })} className="input" placeholder={tenant?.ninea || ''} /></div>
+                <div><label className="label">RCCM</label><input value={form.rccm || ''} onChange={e => setForm({ ...form, rccm: e.target.value })} className="input" placeholder={tenant?.rccm || ''} /></div>
+              </div>
+              <div><label className="label">Site web</label><input value={form.website || ''} onChange={e => setForm({ ...form, website: e.target.value })} className="input" placeholder={tenant?.website || ''} /></div>
+            </div>
+          )}
+
           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Actif</span></label>
         </div>
       </Modal>

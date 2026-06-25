@@ -84,14 +84,6 @@ const DOC_TYPE_CONFIG: {
   { key: 'credit_note',    label: 'Avoir',         sublabel: 'Retour / Avoir',    icon: RotateCcw,     color: 'text-rose-700',   bg: 'bg-rose-50',   border: 'border-rose-200',  activeBg: 'bg-rose-600',   accentBar: 'bg-rose-500' },
 ];
 
-function SectionTitle({ accent, children }: { accent: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 mb-3">
-      <div className={`w-0.5 h-4 rounded-full ${accent}`} />
-      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{children}</span>
-    </div>
-  );
-}
 
 function Toggle({ on, onChange, label, sub }: { on: boolean; onChange: (v: boolean) => void; label: string; sub?: string }) {
   return (

@@ -6,7 +6,7 @@ import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
-import { printXReport80 } from '../lib/print';
+import { printXReport80, buildPrintTenantForSite } from '../lib/print';
 
 type SessionRow = {
   id: string;
@@ -66,17 +66,17 @@ export function CashHistory() {
     if (!silent) setLoading(true);
     const { data } = await supabase
       .from('cash_sessions')
-      .select('*')
+      .select('id, opening_amount, theoretical_amount, counted_cash, opened_at, closed_at, status, user_id, site_id, tenant_id')
       .eq('tenant_id', tenant.id)
       .eq('site_id', currentSite.id)
       .order('opened_at', { ascending: false })
       .limit(200);
-    setSessions(data || []);
+    setSessions((data || []) as any);
     if (!silent) setLoading(false);
   };
 
   useEffect(() => { load(); }, [tenant?.id, currentSite?.id]);
-  useEffect(() => { if (dataTick > 0) load(true); }, [dataTick]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
 
   const filtered = useMemo(() => {
     let r = sessions;
@@ -150,18 +150,7 @@ export function CashHistory() {
   const printReport = (d: SessionDetail) => {
     const byMethodTotal = d.byMethod.reduce((s, m) => s + m.amount, 0);
     printXReport80({
-      tenant: {
-        name: tenant?.name || '',
-        legal_name: (tenant as any)?.legal_name,
-        ninea: (tenant as any)?.ninea,
-        rccm: (tenant as any)?.rccm,
-        address: (tenant as any)?.address,
-        phone: (tenant as any)?.phone,
-        email: (tenant as any)?.email,
-        website: (tenant as any)?.website,
-        logo_url: (tenant as any)?.logo_url,
-        business_type: (tenant as any)?.business_type,
-      },
+      tenant: buildPrintTenantForSite(tenant, currentSite),
       cashier: d.session.cashier_name || profile?.full_name || profile?.email || '',
       siteName: d.session.site_name || currentSite?.name || '',
       sessionId: d.session.id,

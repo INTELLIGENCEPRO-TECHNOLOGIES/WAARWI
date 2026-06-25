@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Wallet, Play, ShieldCheck, Clock, Calendar, Banknote, AlertTriangle,
+  Wallet, Play, Clock, Calendar, Banknote, AlertTriangle,
   History, ChevronRight, RefreshCw, CheckCircle2, Lock, CircleDot,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -34,7 +34,7 @@ type ActiveProps = {
   onResume: () => void;
 };
 
-export function ActiveCashSessionCard({ session, siteName, onResume }: ActiveProps) {
+export function ActiveCashSessionCard({ session, siteName: _siteName, onResume }: ActiveProps) {
   return (
     <div className="relative overflow-hidden rounded-3xl border border-emerald-200/70 shadow-[0_8px_30px_-12px_rgba(16,185,129,0.35)] bg-gradient-to-br from-white via-emerald-50/40 to-emerald-100/40 backdrop-blur-xl">
       {/* Decorative blobs */}

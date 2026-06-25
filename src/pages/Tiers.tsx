@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
   X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
@@ -15,7 +15,7 @@ import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
-import { printDocumentA4, buildPrintTenant, type PrintTenant } from '../lib/print';
+import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { DocItems, DocTotals, DocPayments, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocPayment } from '../components/DocLayout';
 import type { Customer } from '../lib/types';
@@ -47,6 +47,8 @@ export function Tiers() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | 'active' | 'inactive'>('');
 
@@ -75,23 +77,23 @@ export function Tiers() {
   const load = async (silent = false) => {
     if (!tenant) return;
     if (!silent) setLoading(true);
-    let custQuery = supabase.from('customers').select('*').eq('tenant_id', tenant.id).order('name');
+    let custQuery = supabase.from('customers').select('id, name, phone, email, address, customer_type, whatsapp, is_active, tenant_id, site_id, credit_limit, ice_number').eq('tenant_id', tenant.id).order('name');
     if (!sharedCustomers && currentSite) {
       custQuery = custQuery.eq('site_id', currentSite.id);
     }
-    let supQuery = supabase.from('suppliers').select('*').eq('tenant_id', tenant.id).order('name');
+    let supQuery = supabase.from('suppliers').select('id, name, phone, email, address, whatsapp, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).order('name');
     if (!sharedSuppliers && currentSite) {
       supQuery = supQuery.eq('site_id', currentSite.id);
     }
     const [cRes, sRes, salesRes, soRes, supPayRes] = await Promise.all([
       custQuery,
       supQuery,
-      supabase.from('sales').select('customer_id, total, paid, status').eq('tenant_id', tenant.id).not('customer_id', 'is', null).neq('status', 'cancelled'),
-      supabase.from('supplier_orders').select('supplier_id, total, paid, status').eq('tenant_id', tenant.id).neq('status', 'cancelled'),
-      supabase.from('supplier_payments').select('supplier_id, amount').eq('tenant_id', tenant.id),
+      supabase.from('sales').select('customer_id, total, paid, status').eq('tenant_id', tenant.id).not('customer_id', 'is', null).neq('status', 'cancelled').limit(5000),
+      supabase.from('supplier_orders').select('supplier_id, total, paid, status').eq('tenant_id', tenant.id).neq('status', 'cancelled').limit(5000),
+      supabase.from('supplier_payments').select('supplier_id, amount').eq('tenant_id', tenant.id).limit(5000),
     ]);
-    setCustomers(cRes.data || []);
-    setSuppliers(sRes.data || []);
+    setCustomers((cRes.data || []) as any);
+    setSuppliers((sRes.data || []) as any);
 
     const dm: Record<string, number> = {};
     const pm: Record<string, number> = {};
@@ -123,7 +125,7 @@ export function Tiers() {
     if (!silent) setLoading(false);
   };
   useEffect(() => { load(); }, [tenant?.id, currentSite?.id, sharedCustomers, sharedSuppliers]);
-  useEffect(() => { if (dataTick > 0) load(true); }, [dataTick]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
 
   const [flashTarget, setFlashTarget] = useState<'customers' | 'suppliers' | null>(null);
   useEffect(() => {
@@ -248,7 +250,7 @@ export function Tiers() {
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const hasFilters = !!(search || typeFilter || statusFilter);
-  const clearFilters = () => { setSearch(''); setTypeFilter(''); setStatusFilter(''); setFiltersOpen(false); };
+  const clearFilters = () => { setSearch(''); setSearchInput(''); setTypeFilter(''); setStatusFilter(''); setFiltersOpen(false); };
 
   return (
     <div className="space-y-3 pb-6">
@@ -264,13 +266,13 @@ export function Tiers() {
               </div>
             </div>
             <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={e => { setSearchInput(e.target.value); if (searchTimerRef.current) clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearch(e.target.value), 250); }}
               placeholder="Nom, téléphone, email, pays…"
               className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
             />
-            {search && (
-              <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors">
+            {searchInput && (
+              <button onClick={() => { setSearchInput(''); setSearch(''); }} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -744,7 +746,7 @@ function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate 
 /* ───────────────────────── Customer detail modal ───────────────────────── */
 function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: CustomerOptionKey }; onClose: () => void }) {
   const { c, key } = view;
-  const { tenant, currentSite } = useApp();
+  const { tenant, currentSite, profile } = useApp();
   const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
@@ -933,7 +935,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
 
   const printInvoice = (data: { sale: any; items: any[]; pays: any[] }) => {
     if (!tenant) return;
-    const tenantPrint: PrintTenant = buildPrintTenant(tenant);
+    const tenantPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
     const items = data.items.map(i => ({
       name: i.name, supplier_ref: null,
       oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity),
@@ -1006,7 +1008,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
               payMethod={payMethod} setPayMethod={setPayMethod}
               payRef={payRef} setPayRef={setPayRef}
               paying={paying} onSubmit={submitPayment}
-              onSelectSale={id => { const s = sales.find(x => x.id === id); if (s) setPayAmount(String(Math.max(0, Number(s.total) - Number(s.paid)))); }}
+              onSelectSale={(id: string) => { const s = sales.find(x => x.id === id); if (s) setPayAmount(String(Math.max(0, Number(s.total) - Number(s.paid)))); }}
               recentPayments={payments.slice(0, 8).map(p => ({ ...p, sale_number: sales.find(x => x.id === p.sale_id)?.sale_number }))}
             />
           )}
@@ -1639,7 +1641,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 
   const printOrder = (data: { order: any; items: any[]; pays: any[] }) => {
     if (!tenant) return;
-    const tenantPrint: PrintTenant = buildPrintTenant(tenant);
+    const tenantPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
     const items = data.items.map(i => ({
       name: i.name, supplier_ref: i.supplier_ref || null,
       oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity_ordered),
@@ -1702,7 +1704,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
               payMethod={payMethod} setPayMethod={setPayMethod}
               payRef={payRef} setPayRef={setPayRef}
               paying={paying} onSubmit={submitPayment}
-              onSelectOrder={id => { const o = orders.find(x => x.id === id); if (o) setPayAmount(String(Math.max(0, Number(o.total) - Number(o.paid || 0)))); }}
+              onSelectOrder={(id: string) => { const o = orders.find(x => x.id === id); if (o) setPayAmount(String(Math.max(0, Number(o.total) - Number(o.paid || 0)))); }}
               recentPayments={payments.slice(0, 8).map(p => ({ ...p, order_number: orders.find(x => x.id === p.order_id)?.order_number }))}
             />
           )}

@@ -305,6 +305,7 @@ export function VehicleArticlePicker({ open, onClose, onSelect, priceMode = 'sal
               selectedCategoryLabel={selectedMainCat ? selectedMainCatLabel : null}
               priceMode={priceMode}
               onSelect={article => { onSelect(article); onClose(); }}
+              modelName={selectedModel?.name}
             />
           )}
         </div>
@@ -429,12 +430,13 @@ function CategoryGrid({ compatibleArticles, onSelect }: {
 
 // ─── Article list ──────────────────────────────────────────────────────────────
 
-function ArticleList({ articles, totalCompatible, selectedCategoryLabel, priceMode, onSelect }: {
+function ArticleList({ articles, totalCompatible, selectedCategoryLabel, priceMode, onSelect, modelName }: {
   articles: PickedArticle[];
   totalCompatible: number;
   selectedCategoryLabel: string | null;
   priceMode: 'sale' | 'purchase';
   onSelect: (a: PickedArticle) => void;
+  modelName?: string;
 }) {
   if (articles.length === 0) {
     const inCategory = selectedCategoryLabel !== null;
@@ -457,7 +459,7 @@ function ArticleList({ articles, totalCompatible, selectedCategoryLabel, priceMo
           <>
             <p className="text-slate-800 font-semibold text-sm">Aucune pièce compatible avec ce véhicule.</p>
             <p className="text-xs text-slate-500 mt-2 max-w-sm leading-relaxed">
-              Aucun article n'est encore rattaché à <span className="font-semibold">{selectedModel?.name || 'ce modèle'}</span>.
+              Aucun article n'est encore rattaché à <span className="font-semibold">{modelName || 'ce modèle'}</span>.
             </p>
             <p className="text-xs text-slate-500 mt-1 max-w-sm leading-relaxed">
               Pour associer des pièces, ouvrez un article dans le <span className="font-semibold">Catalogue → onglet Compatibilité</span> et ajoutez ce véhicule.

@@ -1,6 +1,14 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Profile, Tenant, Site } from '../lib/types';
+import type { Profile, Tenant, Site, Category, VehicleBrand } from '../lib/types';
+
+export type RefData = {
+  categories: Category[];
+  brands: VehicleBrand[];
+  models: { id: string; name: string; brand_id: string; tenant_id: string }[];
+  paymentMethods: { id: string; name: string; is_active: boolean; sort_order: number; tenant_id: string }[];
+  loadedAt: number;
+};
 
 type AppState = {
   loading: boolean;
@@ -22,6 +30,7 @@ type AppState = {
   posCartCount: number;
   posCartOpen: boolean;
   setPosCart: (count: number, open: boolean) => void;
+  refData: RefData | null;
 };
 
 const Ctx = createContext<AppState | null>(null);
@@ -38,7 +47,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [posCartCount, setPosCartCount] = useState(0);
   const [posCartOpen, setPosCartOpenState] = useState(false);
   const listenersRef = useRef<{ tables: Set<string>; cb: () => void }[]>([]);
-
+  const [refData, setRefData] = useState<RefData | null>(null);
+  const refDataTidRef = useRef<string | null>(null);
   const loadSession = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const session = sessionData.session;
@@ -55,7 +65,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (prof?.tenant_id) {
       const [{ data: ten }, { data: s }] = await Promise.all([
         supabase.from('tenants').select('*').eq('id', prof.tenant_id).maybeSingle(),
-        supabase.from('sites').select('*').eq('tenant_id', prof.tenant_id).eq('is_active', true).order('name'),
+        supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id, logo_url, legal_name, ninea, rccm, email, website, ticket_header_config').eq('tenant_id', prof.tenant_id).eq('is_active', true).order('name'),
       ]);
       let tenantWithActivity: Tenant | null = ten || null;
       if (ten?.business_activity_type_id) {
@@ -120,6 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tables.forEach(table => {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
         setDataTick(t => t + 1);
+        if (REF_TABLES.includes(table)) refDirtyRef.current = true;
         listenersRef.current.forEach(l => {
           if (l.tables.has(table) || l.tables.has('*')) {
             try { l.cb(); } catch (_e) { /* ignore */ }
@@ -139,7 +150,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const timer = setTimeout(async () => {
       const [{ data: ten }, { data: s }, { data: prof }] = await Promise.all([
         supabase.from('tenants').select('*').eq('id', tid).maybeSingle(),
-        supabase.from('sites').select('*').eq('tenant_id', tid).eq('is_active', true).order('name'),
+        supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id').eq('tenant_id', tid).eq('is_active', true).order('name'),
         supabase.from('profiles').select('*').eq('id', pid).maybeSingle(),
       ]);
       if (ten) {
@@ -172,7 +183,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || depotList[0] || null) : (storeList[0] || depotList[0] || null));
       }
       if (prof) setProfile(prof);
-    }, 150);
+    }, 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataTick]);
@@ -182,6 +193,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     listenersRef.current.push(entry);
     return () => { listenersRef.current = listenersRef.current.filter(l => l !== entry); };
   }, []);
+
+  // Reference data cache: categories, brands, models, payment methods
+  const REF_TABLES = ['part_categories', 'vehicle_brands', 'vehicle_models', 'payment_methods'];
+  const refDirtyRef = useRef(false);
+  const loadRefData = useCallback(async (tid: string) => {
+    const [{ data: cats }, { data: brands }, { data: models }, { data: pm }] = await Promise.all([
+      supabase.from('part_categories').select('id, name, parent_id, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('name'),
+      supabase.from('vehicle_brands').select('id, name, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('name'),
+      supabase.from('vehicle_models').select('id, name, brand_id, tenant_id').eq('tenant_id', tid).order('name'),
+      supabase.from('payment_methods').select('id, name, is_active, sort_order, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('sort_order'),
+    ]);
+    setRefData({
+      categories: (cats || []) as Category[],
+      brands: (brands || []) as VehicleBrand[],
+      models: models || [],
+      paymentMethods: pm || [],
+      loadedAt: Date.now(),
+    });
+    refDirtyRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    const tid = profile?.tenant_id;
+    if (!tid) { setRefData(null); return; }
+    if (refDataTidRef.current !== tid) {
+      refDataTidRef.current = tid;
+      loadRefData(tid);
+    }
+  }, [profile?.tenant_id, loadRefData]);
+
+  // Invalidate refData when ref tables change via realtime
+  useEffect(() => {
+    if (!profile?.tenant_id || dataTick === 0 || !refDirtyRef.current) return;
+    const timer = setTimeout(() => { loadRefData(profile.tenant_id!); }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataTick]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -269,6 +317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signIn, signUp, signOut, refresh: loadSession,
       dataTick, onDataChange,
       posCartCount, posCartOpen, setPosCart,
+      refData,
     }}>
       {children}
     </Ctx.Provider>

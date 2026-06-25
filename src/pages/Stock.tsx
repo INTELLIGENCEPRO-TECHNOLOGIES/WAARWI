@@ -12,7 +12,7 @@ import { desktopAutoFocus } from '../lib/device';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
-import { printStockMovementA4, printStockMovement80, printInventoryBookA4, buildPrintTenant, type PrintTenant } from '../lib/print';
+import { printStockMovementA4, printStockMovement80, printInventoryBookA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 
 type Row = {
   article_id: string;
@@ -271,7 +271,7 @@ export function Stock() {
     const t = setTimeout(() => setFlashKey(null), 6800);
     return () => clearTimeout(t);
   }, []);
-  useEffect(() => { if (dataTick > 0) load(true); /* eslint-disable-next-line */ }, [dataTick]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   const lowCount = useMemo(() => rows.filter(r => r.quantity <= r.stock_min && r.quantity > 0).length, [rows]);
   const outCount = useMemo(() => rows.filter(r => r.quantity <= 0).length, [rows]);
@@ -308,7 +308,7 @@ export function Stock() {
     const now = new Date();
     const refBase = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
     const dateStr = now.toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const tenantInfo = buildPrintTenant(tenant);
+    const tenantInfo = buildPrintTenantForSite(tenant, currentSite);
     const ownDepots = depots.filter(d => d.parent_site_id === currentSite.id);
     const targets: { id: string; name: string }[] = scope === 'all'
       ? [{ id: currentSite.id, name: currentSite.name + ' (Magasin)' }, ...ownDepots.map(d => ({ id: d.id, name: d.name + ' (Dépôt)' }))]
@@ -334,7 +334,7 @@ export function Stock() {
     });
   };
 
-  const tenantPrint: PrintTenant = buildPrintTenant(tenant);
+  const tenantPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
 
   const printMovement = (m: any, format: 'a4' | '80') => {
     if (!tenant || !currentSite) return;
@@ -1879,7 +1879,7 @@ function StockListEditView({
       errorToast('La source et la destination doivent être différentes'); return;
     }
     // Validate transfer target is allowed based on catalog mode
-    if (listEditMode === 'transfer' && !allTransferTargets.some(t => t.id === listTransferTarget)) {
+    if (listEditMode === 'transfer' && ![...sites, ...depots].some((t: any) => t.id === listTransferTarget)) {
       errorToast('Transfert non autorisé vers cette destination en mode catalogue indépendant'); return;
     }
     setListSaving(true);
@@ -2000,27 +2000,27 @@ function StockListEditView({
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
           <button
-            onClick={() => { setListEditMode('in'); setListEdits(new Map()); setBulkSavedItems([]); }}
+            onClick={() => { setListEditMode('in'); setListEdits(new Map()); }}
             className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'in' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
           >
             <ArrowDownCircle className="w-3.5 h-3.5 inline mr-1" />Entrée
           </button>
           <button
-            onClick={() => { setListEditMode('out'); setListEdits(new Map()); setBulkSavedItems([]); }}
+            onClick={() => { setListEditMode('out'); setListEdits(new Map()); }}
             className={`px-3 py-1.5 text-[11px] font-bold border-x border-slate-200 transition-all ${listEditMode === 'out' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-red-50'}`}
           >
             <ArrowUpCircle className="w-3.5 h-3.5 inline mr-1" />Sortie
           </button>
           {sites.length > 0 && (
             <button
-              onClick={() => { setListEditMode('transfer'); setListEdits(new Map()); setBulkSavedItems([]); }}
+              onClick={() => { setListEditMode('transfer'); setListEdits(new Map()); }}
               className={`px-3 py-1.5 text-[11px] font-bold border-r border-slate-200 transition-all ${listEditMode === 'transfer' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-amber-50'}`}
             >
               <ArrowRightLeft className="w-3.5 h-3.5 inline mr-1" />Transfert
             </button>
           )}
           <button
-            onClick={() => { setListEditMode('inventory'); setListEdits(new Map()); setBulkSavedItems([]); }}
+            onClick={() => { setListEditMode('inventory'); setListEdits(new Map()); }}
             className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'inventory' ? 'bg-neutral-900 text-white' : 'text-slate-600 hover:bg-neutral-50'}`}
           >
             <ClipboardList className="w-3.5 h-3.5 inline mr-1" />Inventaire

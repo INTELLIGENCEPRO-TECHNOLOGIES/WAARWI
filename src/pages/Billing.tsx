@@ -15,7 +15,7 @@ import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate, formatDateTime } from '../lib/format';
-import { printDocumentA4, buildPrintTenant, type PrintTenant } from '../lib/print';
+import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
 import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments as IpmDocsType } from '../lib/ipm';
@@ -24,7 +24,7 @@ import { MobileBillingWizard, type WizardHeaderField } from '../components/Mobil
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
 
-const tenantForPrint = (t: any): PrintTenant => buildPrintTenant(t);
+const tenantForPrint = (t: any, site?: any): PrintTenant => buildPrintTenantForSite(t, site);
 
 type Tab = 'quotes' | 'invoices' | 'returns' | 'credits';
 
@@ -33,6 +33,7 @@ type Quote = {
   status: string; created_at: string; valid_until: string | null; note: string;
   converted_sale_id: string | null; customer_id: string | null;
   customers: { name: string } | null;
+  doc_header?: { delivery_date?: string; reference?: string; warranty?: string; representative?: string; imei?: string } | null;
 };
 type QuoteItem = {
   id?: string; article_id: string | null; name: string;
@@ -315,6 +316,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       require_header_lock: data.require_header_lock ?? false,
       allow_edit:          data.allow_edit          ?? false,
       allow_delete:        data.allow_delete        ?? false,
+      warranty_terms:      data.warranty_terms      ?? '',
       columns_config:      mergeColumns(data.columns_config ?? []),
     });
     supabase.from('document_settings').select('*').eq('tenant_id', tenant.id).in('doc_type', ['invoice', 'quote']).then(({ data }) => {
@@ -335,7 +337,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const t = setTimeout(() => setFlashTab(null), 6800);
     return () => clearTimeout(t);
   }, []);
-  useEffect(() => { if (dataTick > 0) load(true); /* eslint-disable-next-line */ }, [dataTick]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -630,7 +632,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const items = quoteItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     printDocumentA4({
-      tenant: tenantForPrint(tenant),
+      tenant: tenantForPrint(tenant, currentSite),
       docLabel: 'DEVIS',
       docNumber: quoteDetail.quote_number,
       docDate: new Date(quoteDetail.created_at).toLocaleDateString('fr-FR'),
@@ -688,14 +690,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const openInvoiceEditor = () => {
     setInvoiceEditorOpen(true);
-    setInvoiceForm({ customer_id: '', note: '' });
+    setInvoiceForm({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
     setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setInvoicePayList([]);
     setInvoiceIsCredit(false);
   };
   const closeInvoiceEditor = () => {
     setInvoiceEditorOpen(false);
-    setInvoiceForm({ customer_id: '', note: '' });
+    setInvoiceForm({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
     setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setInvoicePayList([]);
     setInvoiceIsCredit(false);
@@ -1059,7 +1061,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const items = invoiceItems.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     printDocumentA4({
-      tenant: tenantForPrint(tenant),
+      tenant: tenantForPrint(tenant, currentSite),
       docLabel: 'FACTURE',
       docNumber: invoiceDetail.sale_number,
       docDate: new Date(invoiceDetail.created_at).toLocaleDateString('fr-FR'),
@@ -1352,7 +1354,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const extra: { label: string; value: string }[] = [];
     if (returnDetail.sales?.sale_number) extra.push({ label: 'Vente liée', value: returnDetail.sales.sale_number });
     printDocumentA4({
-      tenant: tenantForPrint(tenant),
+      tenant: tenantForPrint(tenant, currentSite),
       docLabel: isCredit ? 'AVOIR' : 'RETOUR',
       docNumber: returnDetail.return_number,
       docDate: new Date(returnDetail.created_at).toLocaleDateString('fr-FR'),
@@ -1974,7 +1976,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             if (!editingQuote || !tenant) return;
             const items = quoteItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
             const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-            printDocumentA4({ tenant: tenantForPrint(tenant), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0, docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || quoteForm.representative ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: quoteForm.representative || null } : null });
+            printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0, docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || quoteForm.representative ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: quoteForm.representative || null } : null });
           }}
         />
       )}
@@ -2869,7 +2871,7 @@ function CustomerSearchInput({ customers, value, onSelect, placeholder }: {
 function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint, docSettings, isPharmacy, ipmBeneficiaire, ipmTaux, ipmPartIpm, ipmPartClient }: {
   articles: any[];
   customers: any[];
-  quoteForm: { customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string };
+  quoteForm: { customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
   setQuoteForm: (fn: any) => void;
   quoteItems: QuoteItem[];
   setQuoteItems: (fn: any) => void;

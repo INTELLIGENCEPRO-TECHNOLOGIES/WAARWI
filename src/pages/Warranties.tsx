@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
-import { printWarrantyCertificate, buildPrintTenant, computeWarrantyExpiry } from '../lib/print';
+import { printWarrantyCertificate, buildPrintTenantForSite, computeWarrantyExpiry } from '../lib/print';
 
 type WarrantyEntry = {
   id: string;
@@ -250,7 +250,7 @@ export function Warranties() {
     const ws = getWarrantyStatus(entry.created_at, entry.warranty, entry.warranty_cancelled);
     const expiry = entry.warranty ? computeWarrantyExpiry(entry.created_at, entry.warranty) : '';
     printWarrantyCertificate({
-      tenant: buildPrintTenant(tenant),
+      tenant: buildPrintTenantForSite(tenant, currentSite),
       saleNumber: entry.sale_number,
       saleDate: entry.created_at,
       customerName: entry.customer_name || 'Client comptoir',
@@ -263,7 +263,7 @@ export function Warranties() {
       warrantyTerms: warrantyTerms || undefined,
       representative: entry.representative,
       siteName: entry.site_name,
-      status: ws,
+      status: ws as any,
     });
   };
 

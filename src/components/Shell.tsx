@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
-  Plus, CreditCard, Wallet, ChevronRight, Truck, BarChart3, ClipboardList, Star,
+  Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';

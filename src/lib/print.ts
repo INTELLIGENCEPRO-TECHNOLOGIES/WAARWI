@@ -36,6 +36,26 @@ export function buildPrintTenant(t: any): PrintTenant {
   };
 }
 
+// Build a PrintTenant with site-level overrides (multi-store support).
+// Site-specific values take priority over tenant values when set.
+export function buildPrintTenantForSite(t: any, site: any): PrintTenant {
+  const base = buildPrintTenant(t);
+  if (!site) return base;
+  return {
+    ...base,
+    name: site.name || base.name,
+    legal_name: site.legal_name || base.legal_name,
+    ninea: site.ninea || base.ninea,
+    rccm: site.rccm || base.rccm,
+    address: site.address || base.address,
+    phone: site.phone || base.phone,
+    email: site.email || base.email,
+    website: site.website || base.website,
+    logo_url: site.logo_url || base.logo_url,
+    header_config: site.ticket_header_config ?? base.header_config,
+  };
+}
+
 const WAARWI_FOOTER = 'Propulsée par WAARWI — Plateforme Business 2.0 made in Sénégal';
 
 export type PrintItem = {

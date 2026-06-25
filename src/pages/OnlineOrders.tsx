@@ -68,7 +68,7 @@ export function OnlineOrders() {
     if (!tenant) return;
     if (!silent) setLoading(true);
     const { data, error: err } = await supabase
-      .from('online_orders').select('*')
+      .from('online_orders').select('id, order_number, customer_name, customer_phone, customer_whatsapp, customer_email, customer_address, customer_note, delivery_mode, delivery_address, delivery_fee, payment_mode, payment_status, subtotal, total, status, internal_note, sale_id, created_at, updated_at')
       .eq('tenant_id', tenant.id)
       .order('created_at', { ascending: false }).limit(500);
     if (err) error(err.message);
@@ -77,7 +77,7 @@ export function OnlineOrders() {
   }, [tenant, error]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (dataTick > 0) load(true); }, [dataTick]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
 
   const [flashList, setFlashList] = useState(false);
   useEffect(() => {
@@ -316,7 +316,7 @@ export function OnlineOrders() {
             <span className="hidden md:inline">Filtres</span>
           </button>
           <button
-            onClick={load}
+            onClick={() => load(true)}
             className="shrink-0 w-8 h-8 rounded-xl bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-all active:scale-95"
             aria-label="Actualiser"
           >

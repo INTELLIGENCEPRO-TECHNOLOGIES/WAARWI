@@ -3,7 +3,6 @@ import { Loader2, PackageOpen, Calendar, Zap, AlertTriangle } from 'lucide-react
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { Modal } from './Modal';
-import { formatFCFA } from '../lib/format';
 
 export type LotAssignment = {
   lot_id: string;

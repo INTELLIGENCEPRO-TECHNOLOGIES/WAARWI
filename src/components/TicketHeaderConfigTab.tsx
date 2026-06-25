@@ -36,18 +36,26 @@ const PREVIEW_FONT_WEIGHT: Record<TicketHeaderSize, number> = {
 };
 
 export function TicketHeaderConfigTab() {
-  const { tenant, refresh } = useApp();
+  const { tenant, sites, currentSite, refresh } = useApp();
   const { success, error } = useToast();
   const [config, setConfig] = useState<TicketHeaderItem[]>(DEFAULT_TICKET_HEADER_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [targetSiteId, setTargetSiteId] = useState<string>('');
+
+  const activeSites = (sites || []).filter((s: any) => !s.is_warehouse && s.is_active);
+  const selectedSite = targetSiteId ? activeSites.find((s: any) => s.id === targetSiteId) : null;
 
   useEffect(() => {
     if (!tenant) return;
-    setConfig(mergeTicketHeaderConfig(tenant.ticket_header_config || null));
+    if (selectedSite?.ticket_header_config) {
+      setConfig(mergeTicketHeaderConfig(selectedSite.ticket_header_config));
+    } else {
+      setConfig(mergeTicketHeaderConfig(tenant.ticket_header_config || null));
+    }
     setLoading(false);
-  }, [tenant?.id, tenant?.ticket_header_config]);
+  }, [tenant?.id, tenant?.ticket_header_config, targetSiteId]);
 
   const move = (idx: number, dir: -1 | 1) => {
     setConfig(prev => {
@@ -68,14 +76,24 @@ export function TicketHeaderConfigTab() {
   const save = async () => {
     if (!tenant) return;
     setSaving(true);
-    const { error: e } = await supabase
-      .from('tenants')
-      .update({ ticket_header_config: config })
-      .eq('id', tenant.id);
+    let e: any = null;
+    if (selectedSite) {
+      const { error: err } = await supabase
+        .from('sites')
+        .update({ ticket_header_config: config })
+        .eq('id', selectedSite.id);
+      e = err;
+    } else {
+      const { error: err } = await supabase
+        .from('tenants')
+        .update({ ticket_header_config: config })
+        .eq('id', tenant.id);
+      e = err;
+    }
     setSaving(false);
     if (e) { error(e.message); return; }
     setSaved(true);
-    success('Entête enregistrée');
+    success(selectedSite ? `Entête ${selectedSite.name} enregistrée` : 'Entête générale enregistrée');
     setTimeout(() => setSaved(false), 2000);
     refresh();
   };
@@ -88,7 +106,7 @@ export function TicketHeaderConfigTab() {
     );
   }
 
-  const tenantPreview: any = tenant || {};
+  const tenantPreview: any = selectedSite ? { ...tenant, ...Object.fromEntries(Object.entries(selectedSite).filter(([_, v]) => v != null && v !== '')) } : (tenant || {});
   const previewActivity = (tenantPreview.business_activity_type_name || '').trim();
 
   const previewValue = (key: TicketHeaderItem['key']): string => {
@@ -108,6 +126,26 @@ export function TicketHeaderConfigTab() {
 
   return (
     <div className="space-y-4">
+      {/* Site selector for multi-store */}
+      {activeSites.length > 1 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <label className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider block mb-1.5">Configurer l'entête pour :</label>
+          <select
+            value={targetSiteId}
+            onChange={e => setTargetSiteId(e.target.value)}
+            className="input text-sm"
+          >
+            <option value="">Tous les magasins (configuration par défaut)</option>
+            {activeSites.map((s: any) => (
+              <option key={s.id} value={s.id}>{s.name}{s.ticket_header_config ? ' (personnalisé)' : ''}</option>
+            ))}
+          </select>
+          {selectedSite && (
+            <p className="text-[10px] text-amber-700 mt-1">Les champs laissés vides utiliseront les valeurs de la configuration par défaut de l'entreprise.</p>
+          )}
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-slate-200 p-4">
         <div className="flex items-start gap-3 mb-3">
           <div className="w-9 h-9 rounded-xl bg-neutral-50 border border-neutral-200 flex items-center justify-center shrink-0">

@@ -1,9 +1,7 @@
 import { useState, useRef, useMemo, ReactNode } from 'react';
-import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronRight, Tag, Barcode, Hash, MapPin, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Upload, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Save, Info, DollarSign, Boxes, Car, Image as ImageIcon, CheckCircle2, AlertTriangle, AlertCircle, Percent, Layers, ShieldCheck } from 'lucide-react';
+import { Package, Trash2, X, Plus, Search, ChevronDown, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, DollarSign, Boxes, Car, CheckCircle2, Percent, ShieldCheck } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 import type { Article, Category, VehicleBrand } from '../lib/types';
-
-type PricingTier = { id: string; article_id: string; tier_name: string; price: number; sort_order: number };
 type TierDefinition = { id: string; tier_name: string; sort_order: number; is_default: boolean };
 type Form = Partial<Article> & { stock_init?: number };
 type Compat = { id?: string; brand_id: string; model_id: string; year_start: number; year_end: number; notes: string };
@@ -61,7 +59,7 @@ export function PriceInput({ value, onChange, placeholder }: { value: number | '
 
 // ── ArticleCard (mobile) ───────────────────────────────────
 
-export function ArticleCard({ article, category, qty, onEdit, onDelete, selectionMode, selected, onToggleSelect, showMargin, showStock }: {
+export function ArticleCard({ article, category, qty, onEdit, onDelete, selectionMode, selected, onToggleSelect, showMargin: _showMargin, showStock }: {
   article: Article; category?: Category; qty: number;
   onEdit: () => void; onDelete: () => void;
   selectionMode: boolean; selected: boolean; onToggleSelect: () => void;
@@ -145,7 +143,7 @@ export function CategoryFilterSheet({ categories, value, onChange, onClose }: {
 
 // ── MasterCatalogGuide ─────────────────────────────────────
 
-export function MasterCatalogGuide({ step, articleCount, onStep, onDismiss, onGo }: {
+export function MasterCatalogGuide({ step, articleCount: _articleCount, onStep, onDismiss, onGo }: {
   step: number; articleCount: number; onStep: (s: number) => void; onDismiss: () => void; onGo: () => void;
 }) {
   const steps = [
@@ -437,7 +435,7 @@ export function ImageTab({ currentUrl, uploading, onFileSelect, onDelete }: {
 
 // ── DesktopListView (inline-editable table) ────────────────
 
-export function DesktopListView({ articles, categoryMap, stockMap, suppliers, categories, listEdits, onUpdateEdit, selectionMode, selectedIds, onToggleSelect, onSelectAll, allSelected, onOpenFullScreen, onDelete, showMargin, showStock, showPurchase }: {
+export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap, suppliers, categories, listEdits, onUpdateEdit, selectionMode, selectedIds, onToggleSelect, onSelectAll, allSelected, onOpenFullScreen, onDelete, showMargin: _showMargin, showStock, showPurchase: _showPurchase }: {
   articles: Article[]; categoryMap: Map<string, Category>; stockMap: Record<string, number>;
   suppliers: any[]; categories: Category[];
   listEdits: Map<string, Partial<Article>>; onUpdateEdit: (id: string, field: string, value: any) => void;
@@ -565,7 +563,7 @@ export function DesktopListView({ articles, categoryMap, stockMap, suppliers, ca
 
 // ── FullScreenArticleEdit ──────────────────────────────────
 
-export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TABS, save, saving, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, onClose, onPrev, onNext, editingIndex, totalCount, filtered, onJumpTo }: {
+export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TABS: _TABS, save, saving, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, onClose, onPrev, onNext, editingIndex, totalCount, filtered, onJumpTo }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
   TABS: { k: TabKey; l: string; icon: any }[];

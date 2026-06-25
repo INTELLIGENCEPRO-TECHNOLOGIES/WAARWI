@@ -14,7 +14,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate } from '../lib/format';
-import { printDocumentA4, buildPrintTenant, type PrintTenant } from '../lib/print';
+import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
 import { DocItems, DocTotals, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocStatusConfig } from '../components/DocLayout';
@@ -27,6 +27,7 @@ type SupplierOrder = {
   public_code?: string | null;
   supplier_id?: string | null;
   suppliers: { name: string; phone?: string | null; whatsapp?: string | null; email?: string | null; address?: string | null } | null;
+  doc_header?: any;
 };
 
 const STATUS_MAP: Record<string, { label: string; pill: string; dot: string }> = {
@@ -103,7 +104,7 @@ export function SupplierOrders() {
   };
 
   useEffect(() => { load(); }, [tenant?.id, currentSite?.id]);
-  useEffect(() => { if (dataTick > 0) load(true); }, [dataTick]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
 
   useEffect(() => {
     const ctx = consumeNavContext();
@@ -312,7 +313,7 @@ export function SupplierOrders() {
     await openDetailPanel(o, true);
   };
 
-  const tenantForPrint = (): PrintTenant => buildPrintTenant(tenant);
+  const tenantForPrint = (): PrintTenant => buildPrintTenantForSite(tenant, currentSite);
 
   const printOrder = () => {
     if (!selected) return;

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, BookOpen, FileText, CheckCircle, PlayCircle, Users, Lock, X } from 'lucide-react';
+import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
-import { formatFCFA, formatDate } from '../lib/format';
+import { formatDate } from '../lib/format';
 
 type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture';
 
@@ -685,8 +685,8 @@ function TiersTab() {
       .then(({ data, error }) => {
         if (error) toastError(error.message);
         else setTiers(data || []);
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
   }, [tenant, type]);
 
   function loadExtrait(account: any) {
@@ -696,8 +696,8 @@ function TiersTab() {
       .then(({ data, error }) => {
         if (error) toastError(error.message);
         else setExtrait(data || []);
-      })
-      .finally(() => setExtraitLoading(false));
+        setExtraitLoading(false);
+      });
   }
 
   return (
@@ -826,8 +826,8 @@ function SearchTab() {
       .then(({ data, error }) => {
         if (error) toastError(error.message);
         else setResults(data || []);
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
   }
 
   return (
@@ -999,14 +999,14 @@ function ClotureTab() {
         title="Confirmer la clôture"
         message={`Vous allez clôturer le journal ${journalType} pour ${month}. Toutes les écritures brouillon seront validées et ne pourront plus être modifiées.`}
         onConfirm={clotureJournal}
-        onCancel={() => setConfirmJournal(false)}
+        onClose={() => setConfirmJournal(false)}
       />
       <ConfirmDialog
         open={confirmExercice}
         title="Confirmer la clôture d'exercice"
         message={`Vous allez clôturer l'exercice ${exercice} pour tous les journaux. Toutes les écritures brouillon de l'année seront validées et ne pourront plus être modifiées.`}
         onConfirm={clotureExercice}
-        onCancel={() => setConfirmExercice(false)}
+        onClose={() => setConfirmExercice(false)}
       />
     </div>
   );

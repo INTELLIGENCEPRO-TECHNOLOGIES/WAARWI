@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Scroll, User, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -8,7 +8,7 @@ import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
-import { printTicket80, printDocumentA4, buildPrintTenant, type PrintTenant } from '../lib/print';
+import { printTicket80, printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
 
@@ -58,6 +58,9 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const { can } = usePermissions();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [debouncedTick, setDebouncedTick] = useState(0);
+  const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { if (dataTick === 0) return; if (tickRef.current) clearTimeout(tickRef.current); tickRef.current = setTimeout(() => setDebouncedTick(dataTick), 400); return () => { if (tickRef.current) clearTimeout(tickRef.current); }; }, [dataTick]);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Sale | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -92,7 +95,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           setDocSettings({ allow_edit: true, allow_delete: true, loaded: true });
         }
       });
-  }, [tenant?.id, dataTick]);
+  }, [tenant?.id, debouncedTick]);
 
   useEffect(() => {
     if (!tenant || !currentSite) return;
@@ -110,7 +113,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       }
     })();
     return () => { cancelled = true; };
-  }, [tenant?.id, currentSite?.id, dataTick]);
+  }, [tenant?.id, currentSite?.id, debouncedTick]);
 
   const filtered = useMemo(() => {
     let result = sales;
@@ -155,7 +158,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     setItemsLoading(false);
   };
 
-  const tenantForPrint: PrintTenant = buildPrintTenant(tenant);
+  const tenantForPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
 
   const printTicket = () => {
     if (!selected || !tenant) return;

@@ -107,11 +107,29 @@ type Stats = {
   weekTotal: number;
 };
 
+const dashCache: { stats: Stats | null; shopInfo: ShopInfo | null; key: string; ts: number } = { stats: null, shopInfo: null, key: '', ts: 0 };
+
 export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void }) {
-  const { tenant, dataTick, profile, currentSite } = useApp();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [shopInfo, setShopInfo] = useState<ShopInfo | null>(null);
+  const { tenant, profile, currentSite, onDataChange } = useApp();
+  const cacheKey = `${tenant?.id}:${currentSite?.id}`;
+  const hasCached = dashCache.key === cacheKey && dashCache.stats !== null;
+  const [stats, setStats] = useState<Stats | null>(hasCached ? dashCache.stats : null);
+  const [loading, setLoading] = useState(!hasCached);
+  const [shopInfo, setShopInfo] = useState<ShopInfo | null>(hasCached ? dashCache.shopInfo : null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!tenant) return;
+    const unsub = onDataChange(
+      ['sales', 'sale_payments', 'cash_movements', 'cash_sessions', 'customers', 'suppliers', 'articles', 'stock_levels', 'quotes', 'sale_returns', 'online_orders', 'supplier_orders'],
+      () => {
+        if (refreshTimer.current) clearTimeout(refreshTimer.current);
+        refreshTimer.current = setTimeout(() => setRefreshTick(t => t + 1), 400);
+      }
+    );
+    return () => { unsub(); if (refreshTimer.current) clearTimeout(refreshTimer.current); };
+  }, [tenant?.id, onDataChange]);
   const [balanceHidden, setBalanceHidden] = useState(() => {
     try { return localStorage.getItem('dashboardBalanceHidden') === '1'; } catch { return false; }
   });
@@ -189,8 +207,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
         supabase.from('stock_levels').select('quantity, articles!inner(stock_min, purchase_price)').eq('tenant_id', tenant.id).eq('site_id', siteId),
         supabase.from('sales').select('id, sale_number, total, created_at, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
-        supabase.from('customers').select('id').eq('tenant_id', tenant.id).eq('is_active', true),
-        supabase.from('suppliers').select('id').eq('tenant_id', tenant.id).eq('is_active', true),
+        supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
+        supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
         supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).in('status', ['draft', 'sent']),
         supabase.from('sale_returns').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'pending'),
         supabase.from('tenants').select('public_slug').eq('id', tenant.id).maybeSingle(),
@@ -204,11 +222,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('stock_movements').select('quantity').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['purchase', 'adjustment_in']).gte('created_at', periodStart.toISOString()),
       ]);
 
+      let newShopInfo: ShopInfo;
       if (shopData.data?.public_slug) {
         const { data: ss } = await supabase.from('shop_settings').select('is_active').eq('tenant_id', tenant.id).maybeSingle();
-        setShopInfo({ slug: shopData.data.public_slug, isActive: ss?.is_active ?? false });
+        newShopInfo = { slug: shopData.data.public_slug, isActive: ss?.is_active ?? false };
       } else {
-        setShopInfo({ slug: null, isActive: false });
+        newShopInfo = { slug: null, isActive: false };
       }
 
       const todaySales = (todayData.data || []).reduce((s, r) => s + Number(r.total), 0);
@@ -267,7 +286,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         .from('supplier_orders')
         .select('total, paid, supplier_id')
         .eq('tenant_id', tenant.id)
-        .neq('status', 'cancelled');
+        .neq('status', 'cancelled')
+        .limit(5000);
       const payables = (unpaidOrders || []).reduce((s: number, o: any) => {
         const remaining = Number(o.total || 0) - Number(o.paid || 0);
         return s + Math.max(0, remaining);
@@ -284,7 +304,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         .eq('site_id', siteId)
         .not('customer_id', 'is', null)
         .neq('status', 'cancelled')
-        .neq('status', 'paid');
+        .neq('status', 'paid')
+        .limit(5000);
       const receivables = (unpaidSales || []).reduce((s: number, sale: any) => {
         const remaining = Number(sale.total || 0) - Number(sale.paid || 0);
         return s + Math.max(0, remaining);
@@ -598,8 +619,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         lowStockCount: low, outOfStockCount: out,
         stockValue,
         articlesInStockCount,
-        customersCount: (custData.data || []).length,
-        suppliersCount: (suppData.data || []).length,
+        customersCount: custData.count || 0,
+        suppliersCount: suppData.count || 0,
         customersToChase: customersToChaseCount,
         suppliersToChase: payablesSupplierCount,
         pendingQuotes: quotesData.count || 0,
@@ -621,10 +642,18 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         weeklySales,
         weekTotal,
       };
-      if (!cancelled) { setStats(next); setLoading(false); }
+      if (!cancelled) {
+        dashCache.stats = next;
+        dashCache.shopInfo = newShopInfo;
+        dashCache.key = `${tenant.id}:${siteId}`;
+        dashCache.ts = Date.now();
+        setStats(next);
+        setShopInfo(newShopInfo);
+        setLoading(false);
+      }
     })();
     return () => { cancelled = true; };
-  }, [tenant, dataTick, currentSite?.id, period]);
+  }, [tenant, refreshTick, currentSite?.id, period]);
 
   const nav = (route: string, ctx?: NavContext) => {
     setNavContext(ctx || null);
@@ -1730,7 +1759,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               </button>
               {showPeriodMenu && (
                 <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl border border-neutral-200 shadow-elevated z-50 py-1">
-                  {periodOptions.map(opt => (
+                  {periodOptions.map((opt: any) => (
                     <button
                       key={opt.value}
                       onClick={() => { setPeriod(opt.value); setShowPeriodMenu(false); }}
