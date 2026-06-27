@@ -234,22 +234,31 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
     const [
       { data: arts }, { data: cats }, { data: vBrands }, { data: vModels },
-      { data: stocks }, { data: compats },
+      { data: compats },
     ] = await Promise.all([
       supabase.from('articles').select('id,name,internal_ref,oem_ref,brand,category_id,sale_price,image_url,description,unit,condition').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
       supabase.from('part_categories').select('id,name,parent_id').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
       supabase.from('vehicle_brands').select('id,name').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
       supabase.from('vehicle_models').select('id,name,brand_id').eq('tenant_id', tenantRow.id).order('name'),
-      supabase.from('stock_levels').select('article_id,quantity').eq('tenant_id', tenantRow.id),
       supabase.from('article_compatibilities').select('article_id,brand_id,model_id,year_start,year_end').eq('tenant_id', tenantRow.id),
     ]);
+
+    let stocks: any[] = [];
+    let sFrom = 0;
+    while (true) {
+      const { data, error: e } = await supabase.from('stock_levels').select('article_id,quantity').eq('tenant_id', tenantRow.id).range(sFrom, sFrom + 999);
+      if (e || !data || data.length === 0) break;
+      stocks = stocks.concat(data);
+      if (data.length < 1000) break;
+      sFrom += 1000;
+    }
 
     setCategories(cats || []);
     setVehicleBrands(vBrands || []);
     setVehicleModels(vModels || []);
 
     const stockMap: Record<string, number> = {};
-    (stocks || []).forEach((s: any) => { stockMap[s.article_id] = (stockMap[s.article_id] || 0) + Number(s.quantity); });
+    stocks.forEach((s: any) => { stockMap[s.article_id] = (stockMap[s.article_id] || 0) + Number(s.quantity); });
 
     const brandNameMap: Record<string, string> = {};
     (vBrands || []).forEach((b: any) => { brandNameMap[b.id] = b.name; });

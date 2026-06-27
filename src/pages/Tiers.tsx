@@ -77,7 +77,7 @@ export function Tiers() {
   const load = async (silent = false) => {
     if (!tenant) return;
     if (!silent) setLoading(true);
-    let custQuery = supabase.from('customers').select('id, name, phone, email, address, customer_type, whatsapp, is_active, tenant_id, site_id, credit_limit, ice_number').eq('tenant_id', tenant.id).order('name');
+    let custQuery = supabase.from('customers').select('id, name, phone, email, address, customer_type, whatsapp, is_active, tenant_id, site_id, credit_limit').eq('tenant_id', tenant.id).order('name');
     if (!sharedCustomers && currentSite) {
       custQuery = custQuery.eq('site_id', currentSite.id);
     }
@@ -197,7 +197,10 @@ export function Tiers() {
       ? await supabase.from('customers').update(payload).eq('id', custEdit.id)
       : await supabase.from('customers').insert(payload);
     setSaving(false);
-    if (e) error(e.message); else { success(custEdit ? 'Client modifié' : 'Client créé'); setCustOpen(false); load(); }
+    if (e) {
+      const msg = e.message || '';
+      error(msg.includes('Limite du plan') ? 'Limite de clients atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
+    } else { success(custEdit ? 'Client modifié' : 'Client créé'); setCustOpen(false); load(); }
   };
   const deactivateCust = async () => {
     if (!toDeactivateCust) return;
@@ -233,7 +236,10 @@ export function Tiers() {
       ? await supabase.from('suppliers').update(payload).eq('id', supEdit.id)
       : await supabase.from('suppliers').insert(payload);
     setSaving(false);
-    if (e) error(e.message); else { success(supEdit ? 'Fournisseur modifié' : 'Fournisseur créé'); setSupOpen(false); load(); }
+    if (e) {
+      const msg = e.message || '';
+      error(msg.includes('Limite du plan') ? 'Limite de fournisseurs atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
+    } else { success(supEdit ? 'Fournisseur modifié' : 'Fournisseur créé'); setSupOpen(false); load(); }
   };
   const deactivateSup = async () => {
     if (!toDeactivateSup) return;

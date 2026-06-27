@@ -6,7 +6,7 @@ import {
   Wrench as Wrench_, Store as Store_, ShoppingBag as ShoppingBag_, Shirt as Shirt_, Cpu as Cpu_,
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
-  ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse,
+  ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse, Bell,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -389,7 +389,16 @@ function TenantsSection() {
                         {!isPending && !isRejected && !t.is_active && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Suspendu</span>}
                         {expired && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Expiré</span>}
                       </div>
-                      <div className="text-xs text-slate-500 truncate">{t.email || '—'} · {(t.profiles || []).length} utilisateur(s) · Créé {formatDate(t.created_at)}{t.last_active_at ? ` · Actif ${formatDate(t.last_active_at)}` : ''}</div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {t.email || '—'} · {(t.profiles || []).length} utilisateur(s) · Créé {formatDate(t.created_at)}{t.last_active_at ? ` · Actif ${formatDate(t.last_active_at)}` : ''}
+                      </div>
+                      {isPending && (t.whatsapp_phone || t.city || t.selected_plan_code) && (
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                          {t.whatsapp_phone && <span className="text-[10px] text-emerald-700 font-medium">WhatsApp: {t.whatsapp_phone}</span>}
+                          {t.city && <span className="text-[10px] text-slate-500">Ville: {t.city}</span>}
+                          {t.selected_plan_code && <span className="text-[10px] text-blue-600 font-medium">Plan: {t.selected_plan_code}</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-4 text-xs shrink-0">
@@ -671,12 +680,29 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
 
       {usage && (
         <div className="rounded-2xl border border-slate-200 p-3 bg-slate-50">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Usage vs limites du plan</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Usage vs limites du plan ({usage.plan_code || 'aucun'})</div>
           <div className="grid grid-cols-3 gap-2 text-xs">
             <UsageBar label="Magasins" current={usage.sites_count} limit={usage.plan_limits?.sites} />
             <UsageBar label="Utilisateurs" current={usage.users_count} limit={usage.plan_limits?.users} />
             <UsageBar label="Articles" current={usage.articles_count} limit={usage.plan_limits?.articles} />
           </div>
+          {usage.plan_limits && (
+            <div className="mt-2 pt-2 border-t border-slate-200">
+              <div className="text-[10px] font-bold text-slate-500 mb-1">Modules inclus</div>
+              <div className="flex flex-wrap gap-1">
+                {Object.entries(usage.plan_limits).filter(([, v]) => v === true).map(([k]) => (
+                  <span key={k} className="text-[9px] bg-emerald-100 text-emerald-700 font-semibold px-1.5 py-0.5 rounded">
+                    {k.replace(/^has_/, '').replace(/_/g, ' ')}
+                  </span>
+                ))}
+                {Object.entries(usage.plan_limits).filter(([, v]) => v === false).map(([k]) => (
+                  <span key={k} className="text-[9px] bg-slate-100 text-slate-400 font-semibold px-1.5 py-0.5 rounded line-through">
+                    {k.replace(/^has_/, '').replace(/_/g, ' ')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -719,7 +745,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
     enabled_modules: Array.isArray(tenant.enabled_modules) ? tenant.enabled_modules : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports'],
   });
   const [saving, setSaving] = useState(false);
-  const [subForm, setSubForm] = useState<any>({ plan_code: tenant.plan, billing_cycle: 'monthly', amount: 0, auto_renew: true, started_at: new Date().toISOString().slice(0, 10), ends_at: '' });
+  const [subForm, setSubForm] = useState<any>({ plan_code: tenant.plan, billing_cycle: tenant.billing_cycle || 'monthly', amount: 0, auto_renew: tenant.auto_renew !== false, started_at: new Date().toISOString().slice(0, 10), ends_at: '' });
   const { success, error } = useToast();
 
   useEffect(() => {
@@ -736,7 +762,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
         tenant_id: tenant.id,
         patch: {
           name: form.name, legal_name: form.legal_name, email: form.email, phone: form.phone,
-          status: form.status, is_active: form.is_active, plan_expires_at: form.plan_expires_at || null,
+          status: form.status, is_active: form.is_active,
           business_type: form.business_type,
           business_activity_type_id: form.business_activity_type_id || null,
           enabled_modules: form.enabled_modules,
@@ -754,6 +780,11 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
     const plan = plans.find(p => p.code === subForm.plan_code);
     const amount = Number(subForm.amount) || (plan ? (subForm.billing_cycle === 'yearly' ? plan.price_yearly : plan.price_monthly) : 0);
     try {
+      const customLimits = subForm.custom_limits || {};
+      const cleanCustom: Record<string, number> = {};
+      for (const [k, v] of Object.entries(customLimits)) {
+        if (v !== undefined && v !== null && v !== '') cleanCustom[k] = Number(v);
+      }
       await call('create_subscription', {
         tenant_id: tenant.id,
         plan_code: subForm.plan_code,
@@ -763,6 +794,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
         ends_at: subForm.ends_at ? new Date(subForm.ends_at).toISOString() : null,
         auto_renew: subForm.auto_renew,
         notes: subForm.notes || '',
+        custom_limits: Object.keys(cleanCustom).length > 0 ? cleanCustom : null,
       });
       success('Abonnement appliqué');
       onRefresh();
@@ -826,7 +858,6 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                       <option value="active">Actif</option><option value="suspended">Suspendu</option><option value="cancelled">Annulé</option>
                     </select>
                   </div>
-                  <div><label className="label">Expiration abonnement</label><input type="date" value={form.plan_expires_at || ''} onChange={e => setForm({ ...form, plan_expires_at: e.target.value })} className="input" /></div>
                   <div>
                     <label className="label">Sous-domaine</label>
                     <div className="flex items-center gap-1.5">
@@ -876,15 +907,32 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
 
               {tab === 'sub' && (
                 <div className="space-y-4">
+                  {/* Current subscription summary */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">État actuel</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900">Plan {tenant.plan || '—'}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        tenant.subscription_status === 'active' ? 'bg-emerald-100 text-emerald-700'
+                          : tenant.subscription_status === 'trial_active' ? 'bg-blue-100 text-blue-700'
+                          : tenant.subscription_status === 'expired' ? 'bg-red-100 text-red-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>{tenant.subscription_status || 'N/A'}</span>
+                      <span className="text-xs text-slate-500">{tenant.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'}</span>
+                      {tenant.plan_expires_at && <span className="text-xs text-slate-500">· Expire : {formatDate(tenant.plan_expires_at)}</span>}
+                      {tenant.auto_renew && <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">Auto-renew</span>}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {plans.map(p => {
                       const active = subForm.plan_code === p.code;
                       return (
-                        <button key={p.code} onClick={() => setSubForm({ ...subForm, plan_code: p.code, amount: subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly })}
+                        <button key={p.code} onClick={() => setSubForm({ ...subForm, plan_code: p.code, amount: subForm.billing_cycle === 'lifetime' ? (p.price_lifetime || 0) : subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly })}
                           className={`text-left p-3 rounded-2xl border-2 transition-all ${active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
                           <div className="text-[10px] uppercase tracking-wider font-bold opacity-70">{p.code}</div>
                           <div className="font-bold">{p.name}</div>
-                          <div className="text-xs mt-1">{formatCompactFCFA(subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly)}/{subForm.billing_cycle === 'yearly' ? 'an' : 'mois'}</div>
+                          <div className="text-xs mt-1">{subForm.billing_cycle === 'lifetime' ? `${formatCompactFCFA(p.price_lifetime || 0)} (à vie)` : `${formatCompactFCFA(subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly)}/${subForm.billing_cycle === 'yearly' ? 'an' : 'mois'}`}</div>
                         </button>
                       );
                     })}
@@ -893,9 +941,11 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                     <div><label className="label">Cycle</label>
                       <select value={subForm.billing_cycle} onChange={e => {
                         const plan = plans.find(p => p.code === subForm.plan_code);
-                        setSubForm({ ...subForm, billing_cycle: e.target.value, amount: plan ? (e.target.value === 'yearly' ? plan.price_yearly : plan.price_monthly) : subForm.amount });
+                        const cycle = e.target.value;
+                        const amount = plan ? (cycle === 'lifetime' ? (plan.price_lifetime || 0) : cycle === 'yearly' ? plan.price_yearly : plan.price_monthly) : subForm.amount;
+                        setSubForm({ ...subForm, billing_cycle: cycle, amount, ends_at: cycle === 'lifetime' ? '' : subForm.ends_at });
                       }} className="input">
-                        <option value="monthly">Mensuel</option><option value="yearly">Annuel</option>
+                        <option value="monthly">Mensuel</option><option value="yearly">Annuel</option><option value="lifetime">À vie</option>
                       </select>
                     </div>
                     <div><label className="label">Montant (FCFA)</label><input type="number" value={subForm.amount || 0} onChange={e => setSubForm({ ...subForm, amount: Number(e.target.value) })} className="input" /></div>
@@ -909,6 +959,19 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                   </div>
                   <button onClick={applyPlan} className="btn-primary w-full"><Zap className="w-4 h-4" />Appliquer ce plan</button>
 
+                  <div className="border-t border-slate-200 pt-3">
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Limites personnalisées (override)</div>
+                    <p className="text-[10px] text-slate-400 mb-2">Laisser vide pour utiliser les limites du plan. Renseigner pour surcharger uniquement pour ce tenant.</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([['articles', 'Articles'], ['sites', 'Magasins'], ['users', 'Utilisateurs']] as [string, string][]).map(([key, label]) => (
+                        <div key={key}>
+                          <label className="text-[9px] font-medium text-slate-500">{label}</label>
+                          <input type="number" placeholder="plan" value={subForm.custom_limits?.[key] ?? ''} onChange={e => setSubForm({ ...subForm, custom_limits: { ...(subForm.custom_limits || {}), [key]: e.target.value === '' ? undefined : Number(e.target.value) } })} className="input text-xs" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Historique d'abonnements</div>
                     <div className="space-y-1.5">
@@ -917,7 +980,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                           <span className={`w-2 h-2 rounded-full shrink-0 ${s.status === 'active' ? 'bg-emerald-500' : s.status === 'cancelled' ? 'bg-red-400' : 'bg-slate-400'}`} />
                           <span className="font-bold uppercase tracking-wider">{s.plan_code}</span>
                           <span className="text-slate-500">·</span>
-                          <span>{formatFCFA(s.amount)} / {s.billing_cycle === 'yearly' ? 'an' : 'mois'}</span>
+                          <span>{formatFCFA(s.amount)} {s.billing_cycle === 'lifetime' ? '(à vie)' : `/ ${s.billing_cycle === 'yearly' ? 'an' : 'mois'}`}</span>
                           <span className="text-slate-500">·</span>
                           <span>{formatDate(s.started_at)}{s.ends_at ? ` → ${formatDate(s.ends_at)}` : ''}</span>
                           <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${s.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{s.status}</span>
@@ -991,6 +1054,12 @@ function PlansSection() {
     if (!form.code || !form.name) { error('Code et nom requis'); return; }
     try {
       const featuresArr = Array.isArray(form.features) ? form.features : String(form.features || '').split('\n').map((s: string) => s.trim()).filter(Boolean);
+      const rawLimits = form.limits || {};
+      const limits: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(rawLimits)) {
+        if (typeof v === 'boolean') { limits[k] = v; }
+        else { limits[k] = v === '' || v === null || v === undefined ? -1 : Number(v); }
+      }
       await call('upsert_plan', {
         plan: {
           code: form.code,
@@ -1000,7 +1069,7 @@ function PlansSection() {
           price_yearly: Number(form.price_yearly) || 0,
           currency: form.currency || 'FCFA',
           features: featuresArr,
-          limits: form.limits || {},
+          limits,
           is_public: form.is_public !== false,
           sort_order: Number(form.sort_order) || 0,
         },
@@ -1014,7 +1083,7 @@ function PlansSection() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">{plans.length} plan{plans.length > 1 ? 's' : ''} configuré(s)</p>
-        <button onClick={() => { setForm({ features: '', is_public: true, sort_order: plans.length }); setOpen(true); }} className="btn-primary">
+        <button onClick={() => { setForm({ features: '', is_public: true, sort_order: plans.length, limits: { articles: -1, sites: 1, users: 2, max_clients: -1, max_suppliers: -1, max_invoices_month: -1, monthly_sales: -1, online_shop: false, accounting: false, supplier_orders: false, has_whatsapp: false, has_multi_store: false, has_advanced_reports: false, has_accounting_export: false } }); setOpen(true); }} className="btn-primary">
           <Plus className="w-4 h-4" />Nouveau plan
         </button>
       </div>
@@ -1034,7 +1103,14 @@ function PlansSection() {
                 <div className="text-[11px] text-slate-500">{formatCompactFCFA(p.price_yearly)} /an</div>
               </div>
               <div className="space-y-1 mb-3">
-                {(Array.isArray(p.features) ? p.features : []).slice(0, 5).map((f: string, i: number) => (
+                {p.limits && (
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded">{p.limits.articles === -1 ? '∞' : p.limits.articles} art.</span>
+                    <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded">{p.limits.sites === -1 ? '∞' : p.limits.sites} sites</span>
+                    <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded">{p.limits.users === -1 ? '∞' : p.limits.users} users</span>
+                  </div>
+                )}
+                {(Array.isArray(p.features) ? p.features : []).slice(0, 4).map((f: string, i: number) => (
                   <div key={i} className="flex items-start gap-1.5 text-xs text-slate-600">
                     <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
                     <span className="truncate">{f}</span>
@@ -1042,7 +1118,7 @@ function PlansSection() {
                 ))}
               </div>
               <div className="flex gap-1">
-                <button onClick={() => { setForm({ ...p, features: (p.features || []).join('\n') }); setOpen(true); }} className="flex-1 btn-secondary text-xs"><Edit2 className="w-3 h-3" />Modifier</button>
+                <button onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); }} className="flex-1 btn-secondary text-xs"><Edit2 className="w-3 h-3" />Modifier</button>
                 <button onClick={() => setToDelete(p)} className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             </div>
@@ -1050,20 +1126,55 @@ function PlansSection() {
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={form.code ? 'Modifier plan' : 'Nouveau plan'} size="md"
+      <Modal open={open} onClose={() => setOpen(false)} title={form.code ? 'Modifier plan' : 'Nouveau plan'} size="lg"
         footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} className="btn-primary">Enregistrer</button></>}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label className="label">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="starter" /></div>
-          <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
-          <div className="sm:col-span-2"><label className="label">Description</label><input value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="input" /></div>
-          <div><label className="label">Prix mensuel</label><input type="number" value={form.price_monthly || 0} onChange={e => setForm({ ...form, price_monthly: e.target.value })} className="input" /></div>
-          <div><label className="label">Prix annuel</label><input type="number" value={form.price_yearly || 0} onChange={e => setForm({ ...form, price_yearly: e.target.value })} className="input" /></div>
-          <div className="sm:col-span-2"><label className="label">Fonctionnalités (une par ligne)</label><textarea value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} className="input resize-none" rows={5} /></div>
-          <div><label className="label">Ordre</label><input type="number" value={form.sort_order || 0} onChange={e => setForm({ ...form, sort_order: e.target.value })} className="input" /></div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={form.is_public !== false} onChange={e => setForm({ ...form, is_public: e.target.checked })} className="rounded" />
-            Visible publiquement
-          </label>
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><label className="label">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="starter" /></div>
+            <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
+            <div className="sm:col-span-2"><label className="label">Description</label><input value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="input" /></div>
+            <div><label className="label">Prix mensuel</label><input type="number" value={form.price_monthly || 0} onChange={e => setForm({ ...form, price_monthly: e.target.value })} className="input" /></div>
+            <div><label className="label">Prix annuel</label><input type="number" value={form.price_yearly || 0} onChange={e => setForm({ ...form, price_yearly: e.target.value })} className="input" /></div>
+          </div>
+
+          <div className="border-t border-slate-200 pt-3">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Limites techniques <span className="text-slate-400 font-normal normal-case">(-1 = illimité)</span></p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {([['articles', 'Articles max'], ['sites', 'Magasins max'], ['users', 'Utilisateurs max'], ['max_clients', 'Clients max'], ['max_suppliers', 'Fournisseurs max'], ['max_invoices_month', 'Factures/mois max'], ['monthly_sales', 'Ventes/mois max']] as [string, string][]).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-[10px] font-medium text-slate-500">{label}</label>
+                  <input type="number" value={form.limits?.[key] ?? ''} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.value === '' ? -1 : Number(e.target.value) } })} className="input text-sm" placeholder="-1" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 pt-3">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Modules inclus dans le plan</p>
+            <p className="text-[10px] text-slate-400 mb-2">Les modules liés au type d'activité (IPM, Garanties, Lots/Péremptions) sont gérés au niveau du tenant, pas du plan.</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {([['online_shop', 'Boutique en ligne'], ['accounting', 'Comptabilité'], ['supplier_orders', 'Commandes fournisseurs'], ['has_whatsapp', 'Notifications WhatsApp'], ['has_multi_store', 'Multi-magasins'], ['has_advanced_reports', 'Rapports avancés'], ['has_accounting_export', 'Export comptable']] as [string, string][]).map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2 text-xs cursor-pointer py-1 px-2 rounded-lg hover:bg-slate-50">
+                  <input type="checkbox" checked={!!form.limits?.[key]} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.checked } })} className="rounded text-brand-600" />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 pt-3">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Texte marketing (affiché aux clients)</p>
+            <textarea value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} className="input resize-none text-xs" rows={4} placeholder="Une fonctionnalité par ligne" />
+            <p className="text-[10px] text-slate-400 mt-1">Ces textes sont purement informatifs et ne contrôlent pas les limites réelles</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="label">Ordre</label><input type="number" value={form.sort_order || 0} onChange={e => setForm({ ...form, sort_order: e.target.value })} className="input" /></div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer self-end pb-2">
+              <input type="checkbox" checked={form.is_public !== false} onChange={e => setForm({ ...form, is_public: e.target.checked })} className="rounded" />
+              Visible publiquement
+            </label>
+          </div>
         </div>
       </Modal>
 
@@ -1081,7 +1192,15 @@ function PlansSection() {
 function SubscriptionsSection() {
   const [tenants, setTenants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { error } = useToast();
+  const [expiring, setExpiring] = useState<any[]>([]);
+  const [reminderDays, setReminderDays] = useState(5);
+  const [sendingReminder, setSendingReminder] = useState<string | null>(null);
+  const { success, error } = useToast();
+
+  const loadExpiring = async (days: number) => {
+    try { const res = await call('list_expiring_tenants', { days }); setExpiring(res.tenants || []); }
+    catch (e: any) { error(e.message); }
+  };
 
   useEffect(() => {
     (async () => {
@@ -1089,7 +1208,17 @@ function SubscriptionsSection() {
       catch (e: any) { error(e.message); }
       setLoading(false);
     })();
+    loadExpiring(reminderDays);
   }, []);
+
+  const sendReminder = async (tenantId: string) => {
+    setSendingReminder(tenantId);
+    try {
+      const res = await call('send_payment_reminder', { tenant_id: tenantId });
+      success(`Rappel envoyé à ${res.tenant_name}`);
+    } catch (e: any) { error(e.message); }
+    setSendingReminder(null);
+  };
 
   const rows = useMemo(() => {
     const out: any[] = [];
@@ -1101,7 +1230,7 @@ function SubscriptionsSection() {
     return out.sort((a, b) => (b.started_at || '').localeCompare(a.started_at || ''));
   }, [tenants]);
 
-  const totalMRR = rows.filter(r => r.status === 'active').reduce((s, r) => s + Number(r.amount || 0) / (r.billing_cycle === 'yearly' ? 12 : 1), 0);
+  const totalMRR = rows.filter(r => r.status === 'active' && r.billing_cycle !== 'lifetime').reduce((s, r) => s + Number(r.amount || 0) / (r.billing_cycle === 'yearly' ? 12 : 1), 0);
 
   if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
 
@@ -1111,6 +1240,55 @@ function SubscriptionsSection() {
         <KpiCard icon={TrendingUp} label="MRR" value={formatCompactFCFA(totalMRR)} sub="Actifs mensuels" color="emerald" />
         <KpiCard icon={CircleDollarSign} label="Abonnements actifs" value={rows.filter(r => r.status === 'active').length} sub={`sur ${rows.length}`} color="sky" />
         <KpiCard icon={X} label="Annulés" value={rows.filter(r => r.status === 'cancelled').length} sub="Total historique" color="red" />
+      </div>
+
+      {/* Payment reminders section */}
+      <div className="bg-white border border-amber-200/70 rounded-2xl overflow-hidden shadow-card">
+        <div className="flex items-center justify-between px-4 py-3 bg-amber-50/80 border-b border-amber-100">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 text-amber-600" />
+            <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Rappels de paiement</span>
+            {expiring.length > 0 && <span className="text-[10px] font-bold bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">{expiring.length}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={reminderDays} onChange={e => { const d = Number(e.target.value); setReminderDays(d); loadExpiring(d); }} className="text-xs border border-amber-200 rounded-lg px-2 py-1 bg-white">
+              <option value={3}>3 jours</option>
+              <option value={5}>5 jours</option>
+              <option value={7}>7 jours</option>
+              <option value={14}>14 jours</option>
+              <option value={30}>30 jours</option>
+            </select>
+          </div>
+        </div>
+        {expiring.length === 0 ? (
+          <div className="px-4 py-6 text-center text-sm text-slate-400">Aucun tenant n'expire dans les {reminderDays} prochains jours.</div>
+        ) : (
+          <div className="divide-y divide-amber-100">
+            {expiring.map(t => {
+              const days = Math.ceil((new Date(t.plan_expires_at).getTime() - Date.now()) / 86400000);
+              return (
+                <div key={t.id} className="px-4 py-2.5 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-slate-800 truncate">{t.name}</div>
+                    <div className="text-[11px] text-slate-500">
+                      Plan {t.plan} · {t.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'} · Expire dans <span className={`font-bold ${days <= 3 ? 'text-red-600' : 'text-amber-600'}`}>{days}j</span>
+                      {' '}({new Date(t.plan_expires_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })})
+                      {t.auto_renew && <span className="ml-1.5 text-[10px] bg-slate-100 text-slate-500 px-1 rounded">auto-renew</span>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => sendReminder(t.id)}
+                    disabled={sendingReminder === t.id}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold transition-all disabled:opacity-50"
+                  >
+                    {sendingReminder === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bell className="w-3 h-3" />}
+                    Rappeler
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200/70 rounded-3xl overflow-hidden shadow-card">

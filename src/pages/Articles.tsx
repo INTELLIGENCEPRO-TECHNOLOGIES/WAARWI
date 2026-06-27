@@ -381,7 +381,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       setDrawerOpen(false);
       await load();
     } catch (e: any) {
-      error(e.message?.includes('unique') ? 'Cette référence existe déjà' : (e.message || 'Erreur d\'enregistrement'));
+      const msg = e.message || '';
+      if (msg.includes('Limite du plan')) {
+        error(msg.replace('Mettez à niveau votre abonnement.', '').trim());
+      } else if (msg.includes('unique')) {
+        error('Cette référence existe déjà');
+      } else {
+        error(msg || 'Erreur d\'enregistrement');
+      }
     } finally {
       setSaving(false);
     }

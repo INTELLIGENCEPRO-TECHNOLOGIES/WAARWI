@@ -209,7 +209,7 @@ Deno.serve(async (req: Request) => {
     if (action === "update_tenant") {
       const { tenant_id, patch } = body;
       if (!tenant_id || !patch) return json({ error: "Paramètres manquants" }, 400);
-      const allowed = ["status", "plan", "plan_expires_at", "is_active", "name", "legal_name", "email", "phone", "business_type", "business_activity_type_id", "enabled_modules", "custom_domain", "subdomain"];
+      const allowed = ["status", "plan", "plan_expires_at", "is_active", "name", "legal_name", "email", "phone", "business_type", "business_activity_type_id", "enabled_modules", "custom_domain", "subdomain", "billing_cycle", "auto_renew", "subscription_status", "subscription_start_date", "trial_start_date", "trial_end_date"];
       const clean: Record<string, unknown> = {};
       for (const k of allowed) if (k in patch) clean[k] = patch[k];
       const { error } = await admin.from("tenants").update(clean).eq("id", tenant_id);
@@ -237,18 +237,65 @@ Deno.serve(async (req: Request) => {
     if (action === "approve_tenant") {
       const { tenant_id } = body;
       if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
-      const { error } = await admin.from("tenants").update({
+
+      // Get tenant's selected plan and billing cycle
+      const { data: tenantData } = await admin.from("tenants").select("selected_plan_code, plan, billing_cycle").eq("id", tenant_id).maybeSingle();
+      const planCode = tenantData?.selected_plan_code || tenantData?.plan || "trial";
+      const billingCycle = tenantData?.billing_cycle || "monthly";
+      const { data: planData } = await admin.from("plans").select("trial_days, price_monthly, price_yearly, price_lifetime").eq("code", planCode).maybeSingle();
+      const trialDays = planData?.trial_days || 14;
+      const isLifetime = billingCycle === "lifetime";
+
+      const now = new Date();
+      const trialEnd = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+
+      // Calculate subscription end date (after trial) - lifetime has no end
+      let subscriptionEndDate: Date | null = null;
+      if (!isLifetime) {
+        if (billingCycle === "yearly") {
+          subscriptionEndDate = new Date(trialEnd.getTime() + 365 * 24 * 60 * 60 * 1000);
+        } else {
+          subscriptionEndDate = new Date(trialEnd.getTime() + 30 * 24 * 60 * 60 * 1000);
+        }
+      }
+
+      const updatePayload: Record<string, unknown> = {
         approval_status: "approved",
-        approved_at: new Date().toISOString(),
+        approved_at: now.toISOString(),
         approved_by: caller.id,
         is_active: true,
         status: "active",
-      }).eq("id", tenant_id);
+        plan: planCode,
+        subscription_status: isLifetime ? "active" : "trial_active",
+        trial_start_date: isLifetime ? null : now.toISOString(),
+        trial_end_date: isLifetime ? null : trialEnd.toISOString(),
+        subscription_start_date: isLifetime ? now.toISOString() : trialEnd.toISOString(),
+        plan_expires_at: subscriptionEndDate ? subscriptionEndDate.toISOString() : null,
+        auto_renew: !isLifetime,
+      };
+
+      const { error } = await admin.from("tenants").update(updatePayload).eq("id", tenant_id);
       if (error) return json({ error: error.message }, 400);
-      await logEvent("tenant.approve", tenant_id, {});
+
+      // Create subscription record
+      const amount = isLifetime ? (planData?.price_lifetime || 0) : billingCycle === "yearly" ? (planData?.price_yearly || 0) : (planData?.price_monthly || 0);
+      await admin.from("tenant_subscriptions").insert({
+        tenant_id,
+        plan_code: planCode,
+        billing_cycle: billingCycle,
+        amount,
+        currency: "FCFA",
+        started_at: isLifetime ? now.toISOString() : trialEnd.toISOString(),
+        ends_at: subscriptionEndDate ? subscriptionEndDate.toISOString() : null,
+        auto_renew: !isLifetime,
+        status: "pending",
+        notes: `Abonnement ${billingCycle === "yearly" ? "annuel" : "mensuel"} - commence après essai de ${trialDays}j`,
+        created_by: caller.id,
+      });
+
+      await logEvent("tenant.approve", tenant_id, { trial_days: trialDays, plan: planCode, billing_cycle: billingCycle });
 
       // Send approval notification email (fire-and-forget)
-      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
       fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
         method: "POST",
         headers: {
@@ -343,7 +390,7 @@ Deno.serve(async (req: Request) => {
 
     // ============ SUBSCRIPTIONS ============
     if (action === "create_subscription") {
-      const { tenant_id, plan_code, billing_cycle, amount, currency, started_at, ends_at, auto_renew, notes } = body;
+      const { tenant_id, plan_code, billing_cycle, amount, currency, started_at, ends_at, auto_renew, notes, custom_limits } = body;
       if (!tenant_id || !plan_code) return json({ error: "Paramètres manquants" }, 400);
       await admin.from("tenant_subscriptions").update({ status: "superseded" }).eq("tenant_id", tenant_id).eq("status", "active");
       const { data, error } = await admin.from("tenant_subscriptions").insert({
@@ -355,10 +402,20 @@ Deno.serve(async (req: Request) => {
         notes: notes || "",
         status: "active",
         created_by: caller.id,
+        custom_limits: custom_limits || null,
       }).select().maybeSingle();
       if (error) return json({ error: error.message }, 400);
-      await admin.from("tenants").update({ plan: plan_code, plan_expires_at: ends_at || null, status: "active", is_active: true }).eq("id", tenant_id);
-      await logEvent("subscription.create", tenant_id, { plan_code, amount });
+      await admin.from("tenants").update({
+        plan: plan_code,
+        plan_expires_at: ends_at || null,
+        status: "active",
+        is_active: true,
+        subscription_status: "active",
+        billing_cycle: billing_cycle || "monthly",
+        auto_renew: auto_renew !== false,
+        subscription_start_date: started_at || new Date().toISOString(),
+      }).eq("id", tenant_id);
+      await logEvent("subscription.create", tenant_id, { plan_code, amount, custom_limits });
       return json({ success: true, subscription: data });
     }
 
@@ -371,6 +428,59 @@ Deno.serve(async (req: Request) => {
       if (error) return json({ error: error.message }, 400);
       if (sub) await logEvent("subscription.cancel", sub.tenant_id, { subscription_id, reason });
       return json({ success: true });
+    }
+
+    if (action === "send_payment_reminder") {
+      const { tenant_id, custom_message } = body;
+      if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
+
+      const { data: tenantData } = await admin.from("tenants").select("name, email, plan, plan_expires_at, billing_cycle, whatsapp_phone").eq("id", tenant_id).maybeSingle();
+      if (!tenantData) return json({ error: "Tenant introuvable" }, 404);
+
+      const { data: planData } = await admin.from("plans").select("name, price_monthly, price_yearly, price_lifetime").eq("code", tenantData.plan).maybeSingle();
+
+      const expiresAt = tenantData.plan_expires_at ? new Date(tenantData.plan_expires_at) : null;
+      const daysLeft = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86400000) : null;
+      const amount = tenantData.billing_cycle === "lifetime" ? (planData?.price_lifetime || 0) : tenantData.billing_cycle === "yearly" ? (planData?.price_yearly || 0) : (planData?.price_monthly || 0);
+
+      // Send reminder notification email
+      fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "payment_reminder",
+          tenant_id,
+          data: {
+            tenant_name: tenantData.name,
+            plan_name: planData?.name || tenantData.plan,
+            amount,
+            billing_cycle: tenantData.billing_cycle,
+            expires_at: tenantData.plan_expires_at,
+            days_left: daysLeft,
+            custom_message: custom_message || "",
+          },
+        }),
+      }).catch(() => {});
+
+      await logEvent("subscription.reminder_sent", tenant_id, { days_left: daysLeft, amount });
+      return json({ success: true, tenant_name: tenantData.name, days_left: daysLeft });
+    }
+
+    if (action === "list_expiring_tenants") {
+      const { days } = body;
+      const daysAhead = days || 5;
+      const now = new Date();
+      const limit = new Date(now.getTime() + daysAhead * 86400000);
+      const { data } = await admin.from("tenants")
+        .select("id, name, email, plan, plan_expires_at, billing_cycle, whatsapp_phone, auto_renew")
+        .eq("approval_status", "approved")
+        .eq("is_active", true)
+        .neq("billing_cycle", "lifetime")
+        .not("plan_expires_at", "is", null)
+        .lte("plan_expires_at", limit.toISOString())
+        .gte("plan_expires_at", now.toISOString())
+        .order("plan_expires_at");
+      return json({ tenants: data || [] });
     }
 
     // ============ MESSAGES ============

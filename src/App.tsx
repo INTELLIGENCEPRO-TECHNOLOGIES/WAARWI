@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Loader2, CheckCircle, XCircle, WifiOff, Wifi } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, WifiOff, Wifi, LogOut, ShieldX, Phone, Headphones } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { usePermissions, type PermissionKey } from './lib/permissions';
 import { ToastProvider } from './context/ToastContext';
@@ -9,6 +9,36 @@ import { Shell, type Route } from './components/Shell';
 import { Dashboard } from './pages/Dashboard';
 import { TenantMessagePopup } from './components/TenantMessagePopup';
 import { PendingApproval } from './components/PendingApproval';
+
+function SuspendedTenant() {
+  const { tenant, signOut } = useApp();
+  return (
+    <div className="h-screen bg-white flex flex-col items-center justify-center px-4">
+      <div className="w-full max-w-md text-center space-y-5">
+        <div className="flex justify-center">
+          <div className="w-16 h-16 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center">
+            <ShieldX className="w-8 h-8 text-red-500" />
+          </div>
+        </div>
+        <div>
+          <h2 className="text-xl font-black text-slate-900">{tenant?.name || 'Votre compte'}</h2>
+          <p className="text-sm text-slate-600 mt-2">Votre compte a été suspendu. Vous n'avez plus accès à l'application.</p>
+          <p className="text-xs text-slate-400 mt-1">Veuillez contacter l'équipe Waarwi pour plus d'informations.</p>
+        </div>
+        <div className="flex flex-col items-center gap-3 pt-4">
+          <button onClick={signOut} className="flex items-center gap-2.5 px-8 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-sm font-bold transition-all">
+            <LogOut className="w-4 h-4" />Se déconnecter
+          </button>
+          <div className="flex items-center gap-3 text-xs text-slate-400 font-medium">
+            <span className="flex items-center gap-1.5"><Headphones className="w-3.5 h-3.5" />Assistance</span>
+            <span className="text-slate-200">|</span>
+            <span className="flex items-center gap-1.5 text-slate-600 font-bold"><Phone className="w-3.5 h-3.5" />77 525 41 01</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Recharge automatique si un chunk est introuvable (ancien index.html qui pointe
 // vers des assets hashés obsolètes après un déploiement).
@@ -231,6 +261,11 @@ function Inner() {
   const approvalStatus = (tenant as any)?.approval_status;
   if (tenant && !isSuperAdmin && approvalStatus && approvalStatus !== 'approved') {
     return <PendingApproval />;
+  }
+
+  const tenantSuspended = tenant && !isSuperAdmin && ((tenant as any)?.is_active === false || (tenant as any)?.status === 'suspended');
+  if (tenantSuspended) {
+    return <SuspendedTenant />;
   }
 
   const welcomeName = tenant?.name || (isSuperAdmin ? 'Console plateforme' : 'WAARWI');

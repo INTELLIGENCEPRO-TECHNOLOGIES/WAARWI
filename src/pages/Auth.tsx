@@ -3,7 +3,8 @@ import {
   Loader2, ArrowRight, ArrowLeft, Mail, Lock, Building2, User, Eye, EyeOff,
   CheckCircle2, ChevronDown, Briefcase, Shield, Package, Receipt, BarChart3,
   Globe, Monitor, FileText, Zap, ShoppingCart, Users, TrendingUp,
-  Truck, CreditCard, Wallet, Layers, Settings, BookOpen,
+  Truck, CreditCard, Wallet, Layers, Settings, BookOpen, Phone,
+  MapPin, Check, Star, MessageCircle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -33,15 +34,31 @@ type BusinessActivityType = {
   is_active: boolean;
 };
 
-/* ─── Shared components ─────────────────────────────────────────────────── */
+type Plan = {
+  code: string;
+  name: string;
+  description: string;
+  price_monthly: number;
+  price_yearly: number;
+  limits: Record<string, any>;
+  features: string[];
+  trial_days: number;
+  is_public: boolean;
+  sort_order: number;
+};
 
-function InputField({ icon: Icon, label, value, onChange, placeholder, type = 'text', required }: {
+/* ---- Shared UI primitives ---- */
+
+function AuthInput({ icon: Icon, label, value, onChange, placeholder, type = 'text', required, hint }: {
   icon: any; label: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; type?: string; required?: boolean;
+  placeholder?: string; type?: string; required?: boolean; hint?: string;
 }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-slate-600 mb-1.5">{label}</label>
+      <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
+        {label}
+        {required && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
       <div className="relative">
         <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         <input
@@ -51,20 +68,23 @@ function InputField({ icon: Icon, label, value, onChange, placeholder, type = 't
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
           className="w-full h-11 pl-10 pr-4 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400
-            focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400
-            hover:border-slate-300 transition-all text-sm shadow-sm"
+            focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
+            hover:border-slate-300 transition-all text-sm"
         />
       </div>
+      {hint && <p className="mt-1 text-[11px] text-slate-400">{hint}</p>}
     </div>
   );
 }
 
-function PasswordField({ value, onChange, show, toggleShow, placeholder }: {
+function AuthPassword({ value, onChange, show, toggleShow, placeholder }: {
   value: string; onChange: (v: string) => void; show: boolean; toggleShow: () => void; placeholder: string;
 }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Mot de passe</label>
+      <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
+        Mot de passe<span className="text-red-400 ml-0.5">*</span>
+      </label>
       <div className="relative">
         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         <input
@@ -75,8 +95,8 @@ function PasswordField({ value, onChange, show, toggleShow, placeholder }: {
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
           className="w-full h-11 pl-10 pr-10 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400
-            focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400
-            hover:border-slate-300 transition-all text-sm shadow-sm"
+            focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
+            hover:border-slate-300 transition-all text-sm"
         />
         <button type="button" onClick={toggleShow} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
           {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -86,217 +106,147 @@ function PasswordField({ value, onChange, show, toggleShow, placeholder }: {
   );
 }
 
-function PrimaryBtn({ children, loading, disabled, onClick, type = 'button', className = '' }: {
+function AuthBtn({ children, loading, disabled, onClick, type = 'button', variant = 'primary' }: {
   children: React.ReactNode; loading?: boolean; disabled?: boolean;
-  onClick?: () => void; type?: 'button' | 'submit'; className?: string;
+  onClick?: () => void; type?: 'button' | 'submit'; variant?: 'primary' | 'secondary';
 }) {
-  return (
-    <button
-      type={type}
-      disabled={disabled || loading}
-      onClick={onClick}
-      className={`group relative w-full h-12 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 text-white font-bold text-sm
-        shadow-[0_4px_16px_-4px_rgba(13,148,136,0.45)] hover:shadow-[0_6px_24px_-4px_rgba(13,148,136,0.55)]
-        hover:from-teal-500 hover:to-teal-400
-        transition-all duration-200 active:scale-[0.98]
-        disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none
-        inline-flex items-center justify-center gap-2 overflow-hidden ${className}`}
-    >
-      <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.12] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-600" />
-      <span className="relative inline-flex items-center gap-2">
-        {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-        {children}
-        {!loading && <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />}
-      </span>
-    </button>
-  );
-}
-
-function SecondaryBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
+  if (variant === 'secondary') return (
     <button type="button" onClick={onClick}
-      className="flex-1 h-12 rounded-xl border border-slate-200 bg-white text-slate-600 font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] inline-flex items-center justify-center gap-2 text-sm shadow-sm">
+      className="h-11 px-5 rounded-xl border border-slate-200 bg-white text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] inline-flex items-center justify-center gap-2 text-sm">
       <ArrowLeft className="w-4 h-4" />{children}
     </button>
   );
-}
-
-function ModeTabs({ mode, setMode, setStep }: { mode: string; setMode: (m: 'login' | 'register') => void; setStep: (s: number) => void }) {
-  return (
-    <div className="flex gap-0 bg-slate-100 rounded-xl p-1 border border-slate-200">
-      <button
-        onClick={() => { setMode('login'); setStep(1); }}
-        className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200
-          ${mode === 'login'
-            ? 'bg-white text-teal-700 shadow-sm border border-teal-100 shadow-teal-50'
-            : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
-          }`}
-      >
-        <User className="w-3.5 h-3.5" />
-        Connexion
-      </button>
-      <button
-        onClick={() => { setMode('register'); setStep(1); }}
-        className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200
-          ${mode === 'register'
-            ? 'bg-white text-teal-700 shadow-sm border border-teal-100 shadow-teal-50'
-            : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
-          }`}
-      >
-        <Building2 className="w-3.5 h-3.5" />
-        Inscription
-      </button>
-    </div>
-  );
-}
-
-function StepBar({ step }: { step: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      {[1, 2, 3].map(s => (
-        <div key={s} className="flex-1 h-1 rounded-full overflow-hidden bg-slate-100">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${s <= step ? 'bg-teal-500' : ''}`}
-            style={{ width: s <= step ? '100%' : '0%' }}
-          />
-        </div>
-      ))}
-      <span className="text-[10px] font-bold text-slate-400 tabular-nums">{step}/3</span>
-    </div>
-  );
-}
-
-/* ─── Mobile-only monochrome components (black & white premium) ─────────── */
-
-function MonoInput({ icon: Icon, label, value, onChange, placeholder, type = 'text', required }: {
-  icon: any; label: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; type?: string; required?: boolean;
-}) {
-  return (
-    <div>
-      <label className="block text-[13px] font-medium text-slate-800 mb-2">{label}</label>
-      <div className="relative">
-        <Icon className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-slate-500 pointer-events-none" strokeWidth={1.6} />
-        <input
-          required={required}
-          type={type}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full h-12 pl-12 pr-4 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400
-            focus:outline-none focus:ring-1 focus:ring-slate-900/15 focus:border-slate-900
-            transition-colors text-[14px]"
-        />
-      </div>
-    </div>
-  );
-}
-
-function MonoPassword({ value, onChange, show, toggleShow, placeholder, label = 'Mot de passe' }: {
-  value: string; onChange: (v: string) => void; show: boolean; toggleShow: () => void; placeholder: string; label?: string;
-}) {
-  return (
-    <div>
-      <label className="block text-[13px] font-medium text-slate-800 mb-2">{label}</label>
-      <div className="relative">
-        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-slate-500 pointer-events-none" strokeWidth={1.6} />
-        <input
-          required
-          type={show ? 'text' : 'password'}
-          minLength={6}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full h-12 pl-12 pr-12 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400
-            focus:outline-none focus:ring-1 focus:ring-slate-900/15 focus:border-slate-900
-            transition-colors text-[14px]"
-        />
-        <button type="button" onClick={toggleShow} aria-label="Afficher le mot de passe"
-          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-900 transition-colors">
-          {show ? <EyeOff className="w-[18px] h-[18px]" strokeWidth={1.6} /> : <Eye className="w-[18px] h-[18px]" strokeWidth={1.6} />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function MonoButton({ children, loading, disabled, onClick, type = 'button' }: {
-  children: React.ReactNode; loading?: boolean; disabled?: boolean;
-  onClick?: () => void; type?: 'button' | 'submit';
-}) {
   return (
     <button
       type={type}
       disabled={disabled || loading}
       onClick={onClick}
-      className="w-full h-12 rounded-xl bg-slate-900 text-white text-[14px] font-semibold
-        hover:bg-black active:scale-[0.99] transition-all
+      className="w-full h-11 rounded-xl bg-slate-900 text-white font-semibold text-sm
+        hover:bg-black active:scale-[0.98] transition-all
         disabled:opacity-40 disabled:cursor-not-allowed
-        inline-flex items-center justify-center gap-2 px-5 relative"
+        inline-flex items-center justify-center gap-2"
     >
-      {loading ? (
-        <Loader2 className="w-4 h-4 animate-spin" />
-      ) : (
-        <>
-          <span className="mx-auto">{children}</span>
-          <ArrowRight className="w-[18px] h-[18px] absolute right-5 top-1/2 -translate-y-1/2" strokeWidth={1.8} />
-        </>
+      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>{children}<ArrowRight className="w-4 h-4" /></>}
+    </button>
+  );
+}
+
+function StepIndicator({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      {Array.from({ length: total }).map((_, i) => (
+        <div key={i} className="flex-1 h-1 rounded-full overflow-hidden bg-slate-100">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${i < current ? 'bg-slate-900' : ''}`}
+            style={{ width: i < current ? '100%' : '0%' }}
+          />
+        </div>
+      ))}
+      <span className="text-[10px] font-bold text-slate-400 tabular-nums shrink-0">{current}/{total}</span>
+    </div>
+  );
+}
+
+function PlanCard({ plan, selected, onSelect, popular, billingCycle = 'monthly' }: { plan: Plan; selected: boolean; onSelect: () => void; popular?: boolean; billingCycle?: 'monthly' | 'yearly' }) {
+  const limits = plan.limits || {};
+  const modules: { key: string; label: string }[] = [
+    { key: 'online_shop', label: 'Boutique en ligne' },
+    { key: 'supplier_orders', label: 'Commandes fournisseurs' },
+    { key: 'accounting', label: 'Comptabilité' },
+    { key: 'has_multi_store', label: 'Multi-magasins' },
+    { key: 'has_advanced_reports', label: 'Rapports avancés' },
+    { key: 'has_whatsapp', label: 'WhatsApp' },
+    { key: 'has_accounting_export', label: 'Export comptable' },
+  ];
+  const enabledModules = modules.filter(m => !!limits[m.key]);
+
+  const isYearly = billingCycle === 'yearly';
+  const price = isYearly ? plan.price_yearly : plan.price_monthly;
+  const monthlyEquivalent = isYearly && plan.price_yearly > 0 ? Math.round(plan.price_yearly / 12) : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`relative text-left w-full rounded-2xl border-2 p-4 transition-all ${
+        selected
+          ? 'border-slate-900 bg-slate-50 shadow-lg'
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+      }`}
+    >
+      {popular && (
+        <span className="absolute -top-2.5 left-4 text-[9px] font-bold bg-slate-900 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
+          <Star className="w-2.5 h-2.5" />Recommandé
+        </span>
+      )}
+      {selected && (
+        <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-slate-900 flex items-center justify-center">
+          <Check className="w-3 h-3 text-white" />
+        </div>
+      )}
+
+      <div className="mb-2">
+        <h3 className="text-base font-bold text-slate-900">{plan.name}</h3>
+        {plan.description && <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{plan.description}</p>}
+      </div>
+
+      <div className="mb-3">
+        {isYearly ? (
+          <>
+            <span className="text-xl font-extrabold text-slate-900">
+              {price > 0 ? `${Number(price).toLocaleString('fr-FR')}` : 'Gratuit'}
+            </span>
+            {price > 0 && <span className="text-xs text-slate-500 ml-1">FCFA/an</span>}
+            {monthlyEquivalent && (
+              <span className="block text-[11px] text-slate-500 mt-0.5">
+                soit {monthlyEquivalent.toLocaleString('fr-FR')} FCFA/mois
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="text-xl font-extrabold text-slate-900">
+              {price > 0 ? `${Number(price).toLocaleString('fr-FR')}` : 'Gratuit'}
+            </span>
+            {price > 0 && <span className="text-xs text-slate-500 ml-1">FCFA/mois</span>}
+          </>
+        )}
+        {plan.trial_days > 0 && (
+          <span className="ml-2 text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+            {plan.trial_days}j d&apos;essai
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-1.5 mb-3">
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <Package className="w-3 h-3 text-slate-400" />
+          <span>{limits.articles === -1 ? 'Articles illimités' : `${limits.articles || 100} articles`}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <Users className="w-3 h-3 text-slate-400" />
+          <span>{limits.users === -1 ? 'Utilisateurs illimités' : `${limits.users || 2} utilisateur${(limits.users || 2) > 1 ? 's' : ''}`}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <Building2 className="w-3 h-3 text-slate-400" />
+          <span>{limits.sites === -1 ? 'Magasins illimités' : `${limits.sites || 1} magasin${(limits.sites || 1) > 1 ? 's' : ''}`}</span>
+        </div>
+      </div>
+
+      {enabledModules.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {enabledModules.map(m => (
+            <span key={m.key} className="text-[9px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+              {m.label}
+            </span>
+          ))}
+        </div>
       )}
     </button>
   );
 }
 
-function MonoSecondaryBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick}
-      className="flex-1 h-12 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 transition-colors active:scale-[0.99] inline-flex items-center justify-center gap-2 text-[14px]">
-      <ArrowLeft className="w-4 h-4" />{children}
-    </button>
-  );
-}
-
-function MonoTabs({ mode, setMode, setStep }: { mode: string; setMode: (m: 'login' | 'register') => void; setStep: (s: number) => void }) {
-  const isLogin = mode === 'login';
-  return (
-    <div className="grid grid-cols-2 border-b border-slate-200">
-      <button
-        onClick={() => { setMode('login'); setStep(1); }}
-        className={`relative flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors ${
-          isLogin ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
-        }`}
-      >
-        <User className="w-4 h-4" strokeWidth={1.6} />
-        Connexion
-        {isLogin && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-slate-900" />}
-      </button>
-      <button
-        onClick={() => { setMode('register'); setStep(1); }}
-        className={`relative flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors ${
-          !isLogin ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
-        }`}
-      >
-        <Building2 className="w-4 h-4" strokeWidth={1.6} />
-        Inscription
-        {!isLogin && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-slate-900" />}
-      </button>
-    </div>
-  );
-}
-
-function MonoStepBar({ step }: { step: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      {[1, 2, 3].map(s => (
-        <div key={s} className="flex-1 h-[3px] rounded-full overflow-hidden bg-slate-100">
-          <div className={`h-full rounded-full transition-all duration-500 ${s <= step ? 'bg-slate-900' : ''}`} style={{ width: s <= step ? '100%' : '0%' }} />
-        </div>
-      ))}
-      <span className="text-[10px] font-semibold text-slate-500 tabular-nums">{step}/3</span>
-    </div>
-  );
-}
-
-/* ─── Auth page ──────────────────────────────────────────────────────────── */
+/* ---- Main Auth component ---- */
 
 export function Auth() {
   const { signIn, signUp } = useApp();
@@ -305,7 +255,6 @@ export function Auth() {
   useEffect(() => { if (branding) setMode('login'); }, [branding]);
   const isTenantBranded = !!branding;
   const brandName = branding?.name || 'WAARWI';
-  const brandTagline = branding?.tagline || '';
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
@@ -313,23 +262,46 @@ export function Auth() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [businessType, setBusinessType] = useState('auto_parts');
+  const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [responsibleTitle, setResponsibleTitle] = useState('');
+  const [businessType, setBusinessType] = useState('');
   const [customActivity, setCustomActivity] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [submitted, setSubmitted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [activityTypes, setActivityTypes] = useState<BusinessActivityType[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
-  const [carouselSlide, setCarouselSlide] = useState(0);
-  const [carouselAnim, setCarouselAnim] = useState<'in' | 'out'>('in');
   const [config, setConfig] = useState<LoginConfig | null>(null);
+
+  const TOTAL_STEPS = 5;
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('business_activity_types').select('*').eq('is_active', true).order('name');
-      if (data) setActivityTypes(data);
+      if (data) {
+        setActivityTypes(data);
+        if (data.length > 0 && !businessType) setBusinessType(data[0].slug);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('plans').select('*').eq('is_public', true).order('sort_order');
+      if (data) {
+        setPlans(data as Plan[]);
+        if (data.length > 0 && !selectedPlan) {
+          const pro = data.find((p: any) => p.code === 'starter');
+          setSelectedPlan(pro ? pro.code : data[0].code);
+        }
+      }
     })();
   }, []);
 
@@ -348,22 +320,6 @@ export function Auth() {
     })();
   }, []);
 
-  const carouselRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    carouselRef.current = setInterval(() => {
-      setCarouselAnim('out');
-      setTimeout(() => {
-        setCarouselSlide(prev => {
-          const totalFeats = (config?.modules?.length ? config.modules.length : 9);
-          const totalSlides = Math.ceil(totalFeats / 3);
-          return (prev + 1) % totalSlides;
-        });
-        setCarouselAnim('in');
-      }, 320);
-    }, 3500);
-    return () => { if (carouselRef.current) clearInterval(carouselRef.current); };
-  }, [config]);
-
   const selectedActivity = useMemo(() => {
     if (businessType === '__other__') return null;
     return activityTypes.find(t => t.slug === businessType) || null;
@@ -374,24 +330,33 @@ export function Auth() {
     return selectedActivity?.name || businessType;
   }, [businessType, selectedActivity, customActivity]);
 
-  const step1Valid = companyName.trim().length >= 2 && fullName.trim().length >= 2;
-  const step2Valid = businessType !== '__other__' || customActivity.trim().length >= 2;
-  const step3Valid = email.includes('@') && password.length >= 6;
+  const selectedPlanObj = useMemo(() => plans.find(p => p.code === selectedPlan) || null, [plans, selectedPlan]);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const isValidPhone = (phone: string) => {
+    const cleaned = phone.replace(/[\s\-\.]/g, '');
+    return /^(\+?\d{8,15})$/.test(cleaned);
+  };
+
+  const step1Valid = companyName.trim().length >= 2 && (businessType !== '__other__' || customActivity.trim().length >= 2);
+  const step2Valid = fullName.trim().length >= 2 && isValidPhone(whatsappPhone);
+  const step3Valid = !!selectedPlan;
+  const step4Valid = email.includes('@') && password.length >= 6;
+
+  const submit = async () => {
     setLoading(true);
     try {
-      if (mode === 'login') {
-        await signIn(email, password);
-      } else {
-        const typeForProvision = businessType === '__other__'
-          ? 'generic'
-          : (selectedActivity?.legacy_business_type || businessType);
-        const activityTypeId = businessType !== '__other__' ? selectedActivity?.id : null;
-        await signUp(email, password, fullName, companyName, typeForProvision, activityTypeId);
-        setSubmitted(true);
-      }
+      const typeForProvision = businessType === '__other__'
+        ? 'generic'
+        : (selectedActivity?.legacy_business_type || businessType);
+      const activityTypeId = businessType !== '__other__' ? selectedActivity?.id : null;
+      await signUp(email, password, fullName, companyName, typeForProvision, activityTypeId, {
+        city,
+        whatsapp_phone: whatsappPhone,
+        responsible_title: responsibleTitle,
+        selected_plan: selectedPlan,
+        billing_cycle: billingCycle,
+      });
+      setSubmitted(true);
     } catch (err: any) {
       showError(err.message || 'Une erreur est survenue');
     } finally {
@@ -399,230 +364,305 @@ export function Auth() {
     }
   };
 
-  /* ── Default feature list (all app modules) ──────────────────────────── */
-  const allFeatures = [
-    { icon: ShoppingCart, label: 'Point de vente', desc: 'Caisse rapide et intuitive', color: 'text-teal-600 bg-teal-50 border-teal-100' },
-    { icon: Package, label: 'Stock', desc: 'Maîtrisez vos stocks', color: 'text-neutral-700 bg-neutral-50 border-neutral-200' },
-    { icon: FileText, label: 'Facturation', desc: 'Devis et factures pro', color: 'text-amber-600 bg-amber-50 border-amber-100' },
-    { icon: Users, label: 'Clients & Tiers', desc: 'CRM et créances', color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
-    { icon: Truck, label: 'Fournisseurs', desc: 'Commandes et dettes', color: 'text-orange-600 bg-orange-50 border-orange-100' },
-    { icon: Globe, label: 'Boutique en ligne', desc: 'Vitrine et commandes web', color: 'text-cyan-600 bg-cyan-50 border-cyan-100' },
-    { icon: BarChart3, label: 'Comptabilité', desc: 'Suivi financier complet', color: 'text-rose-600 bg-rose-50 border-rose-100' },
-    { icon: TrendingUp, label: 'Rapports', desc: 'Analyses et tableaux de bord', color: 'text-neutral-700 bg-neutral-50 border-neutral-200' },
-    { icon: Shield, label: 'Sécurité', desc: 'Rôles et permissions', color: 'text-slate-600 bg-slate-50 border-slate-200' },
-  ];
+  const loginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await signIn(email, password);
+    } catch (err: any) {
+      showError(err.message || 'Une erreur est survenue');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const hasModules = !!(config?.modules?.length);
-  const features = hasModules
-    ? config!.modules.map(m => ({ icon: ICON_MAP[m.icon] || Shield, label: m.label, desc: m.desc, color: 'text-teal-600 bg-teal-50 border-teal-100' }))
+  /* ---- Features for left panel ---- */
+  const allFeatures = [
+    { icon: ShoppingCart, label: 'Point de vente', desc: 'Caisse rapide et intuitive' },
+    { icon: Package, label: 'Stock', desc: 'Maîtrisez vos stocks' },
+    { icon: FileText, label: 'Facturation', desc: 'Devis et factures pro' },
+    { icon: Users, label: 'Clients & Tiers', desc: 'CRM et créances' },
+    { icon: Truck, label: 'Fournisseurs', desc: 'Commandes et dettes' },
+    { icon: Globe, label: 'Boutique en ligne', desc: 'Vitrine et commandes web' },
+    { icon: BarChart3, label: 'Comptabilité', desc: 'Suivi financier complet' },
+    { icon: TrendingUp, label: 'Rapports', desc: 'Analyses et tableaux de bord' },
+    { icon: Shield, label: 'Sécurité', desc: 'Rôles et permissions' },
+  ];
+  const features = config?.modules?.length
+    ? config.modules.map(m => ({ icon: ICON_MAP[m.icon] || Shield, label: m.label, desc: m.desc }))
     : allFeatures;
 
-  /* ── Form content ─────────────────────────────────────────────────────── */
-  const formInner = submitted ? (
-    <div className="text-center space-y-4 py-4">
-      <div className="w-14 h-14 mx-auto rounded-2xl bg-teal-50 flex items-center justify-center border border-teal-100">
-        <CheckCircle2 className="w-7 h-7 text-teal-600" />
-      </div>
-      <div>
-        <h2 className="text-base font-bold text-slate-900">Compte en attente de validation</h2>
-        <p className="text-sm text-slate-500 leading-relaxed mt-2">
-          Merci pour votre inscription. Un administrateur doit approuver votre compte avant activation.
-        </p>
-      </div>
-      <button onClick={() => { setSubmitted(false); setMode('login'); setStep(1); }}
-        className="text-sm font-semibold text-teal-600 hover:text-teal-700 transition-colors">
-        ← Retour à la connexion
-      </button>
-    </div>
-  ) : mode === 'login' ? (
-    <form onSubmit={submit} className="space-y-4">
-      <InputField icon={Mail} type="email" label="Adresse email" value={email} onChange={setEmail} placeholder="votre@email.com" required />
-      <PasswordField value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="••••••••••" />
-      <PrimaryBtn loading={loading} type="submit">Se connecter</PrimaryBtn>
-    </form>
-  ) : step === 1 ? (
-    <div className="space-y-4">
-      <InputField icon={Building2} label="Nom de l'entreprise" value={companyName} onChange={setCompanyName} placeholder="Ex : Sénégal Auto Parts" required />
-      <InputField icon={User} label="Responsable" value={fullName} onChange={setFullName} placeholder="Nom complet" required />
-      <PrimaryBtn disabled={!step1Valid} onClick={() => setStep(2)}>Continuer</PrimaryBtn>
-    </div>
-  ) : step === 2 ? (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Activité</label>
-        <div className="relative">
-          <select
-            value={businessType}
-            onChange={e => setBusinessType(e.target.value)}
-            className="w-full h-11 pl-4 pr-10 rounded-xl bg-white border border-slate-200 text-slate-900
-              focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400
-              hover:border-slate-300 transition-all text-sm appearance-none cursor-pointer shadow-sm"
-          >
-            {activityTypes.map(bt => (
-              <option key={bt.id} value={bt.slug}>{bt.name}</option>
-            ))}
-            <option value="__other__">Autre activité</option>
-          </select>
-          <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-        </div>
-        {selectedActivity?.description && businessType !== '__other__' && (
-          <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">{selectedActivity.description}</p>
-        )}
-      </div>
-      {businessType === '__other__' && (
-        <InputField icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Pharmacie..." required />
-      )}
-      <div className="flex gap-3">
-        <SecondaryBtn onClick={() => setStep(1)}>Retour</SecondaryBtn>
-        <PrimaryBtn disabled={!step2Valid} onClick={() => setStep(3)} className="flex-[2]">Continuer</PrimaryBtn>
-      </div>
-    </div>
-  ) : (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-1.5">
-        {[
-          ['Entreprise', companyName],
-          ['Responsable', fullName],
-          ['Activité', selectedActivityLabel],
-        ].map(([k, v]) => (
-          <div key={k} className="flex items-center justify-between">
-            <span className="text-[11px] text-slate-500 font-medium">{k}</span>
-            <span className="text-[11px] font-semibold text-slate-700 truncate ml-2">{v}</span>
-          </div>
-        ))}
-      </div>
-      <InputField icon={Mail} type="email" label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" required />
-      <PasswordField value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="6 caractères minimum" />
-      <div className="flex gap-3">
-        <SecondaryBtn onClick={() => setStep(2)}>Retour</SecondaryBtn>
-        <PrimaryBtn loading={loading} disabled={!step3Valid} type="submit" className="flex-[2]">Créer mon compte</PrimaryBtn>
-      </div>
-      <p className="text-[10px] text-slate-400 text-center">Soumis à validation par un administrateur WAARWI.</p>
-    </form>
-  );
-
-  /* ── Logo ─────────────────────────────────────────────────────────────── */
   const logoSrc = isTenantBranded && branding?.logo_url ? branding.logo_url : '/newlogo.png';
 
-  const loginBgUrl = config?.login_bg_url;
-
-  /* ── Mobile-only form (black & white premium) ─────────────────────────── */
-  const mobileFormInner = submitted ? (
-    <div className="text-center space-y-4 py-2">
-      <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 flex items-center justify-center">
-        <CheckCircle2 className="w-7 h-7 text-slate-900" strokeWidth={1.6} />
-      </div>
-      <div>
-        <h2 className="text-base font-semibold text-slate-900">Compte en attente de validation</h2>
-        <p className="text-sm text-slate-500 leading-relaxed mt-2">
-          Merci pour votre inscription. Un administrateur doit approuver votre compte avant activation.
-        </p>
-      </div>
-      <button onClick={() => { setSubmitted(false); setMode('login'); setStep(1); }}
-        className="text-sm font-medium text-slate-900 underline-offset-4 hover:underline transition-colors">
-        Retour à la connexion
-      </button>
-    </div>
-  ) : mode === 'login' ? (
-    <form onSubmit={submit} className="space-y-4">
-      <MonoInput icon={Mail} type="email" label="Adresse email" value={email} onChange={setEmail} placeholder="votre@email.com" required />
-      <MonoPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="••••••••••" />
-      <MonoButton loading={loading} type="submit">Se connecter</MonoButton>
-    </form>
-  ) : step === 1 ? (
-    <div className="space-y-4">
-      <MonoInput icon={Building2} label="Nom de l'entreprise" value={companyName} onChange={setCompanyName} placeholder="Ex : Sénégal Auto Parts" required />
-      <MonoInput icon={User} label="Responsable" value={fullName} onChange={setFullName} placeholder="Nom complet" required />
-      <MonoButton disabled={!step1Valid} onClick={() => setStep(2)}>Continuer</MonoButton>
-    </div>
-  ) : step === 2 ? (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-[13px] font-medium text-slate-800 mb-2">Activité</label>
-        <div className="relative">
-          <select
-            value={businessType}
-            onChange={e => setBusinessType(e.target.value)}
-            className="w-full h-12 pl-4 pr-10 rounded-xl bg-white border border-slate-200 text-slate-900
-              focus:outline-none focus:ring-1 focus:ring-slate-900/15 focus:border-slate-900
-              transition-colors text-[14px] appearance-none cursor-pointer"
-          >
-            {activityTypes.map(bt => (
-              <option key={bt.id} value={bt.slug}>{bt.name}</option>
-            ))}
-            <option value="__other__">Autre activité</option>
-          </select>
-          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-        </div>
-        {selectedActivity?.description && businessType !== '__other__' && (
-          <p className="mt-2 text-[12px] text-slate-500 leading-relaxed">{selectedActivity.description}</p>
-        )}
-      </div>
-      {businessType === '__other__' && (
-        <MonoInput icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Pharmacie..." required />
-      )}
-      <div className="flex gap-3">
-        <MonoSecondaryBtn onClick={() => setStep(1)}>Retour</MonoSecondaryBtn>
-        <div className="flex-[2]">
-          <MonoButton disabled={!step2Valid} onClick={() => setStep(3)}>Continuer</MonoButton>
-        </div>
-      </div>
-    </div>
-  ) : (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-1.5">
-        {[
-          ['Entreprise', companyName],
-          ['Responsable', fullName],
-          ['Activité', selectedActivityLabel],
-        ].map(([k, v]) => (
-          <div key={k} className="flex items-center justify-between">
-            <span className="text-[11px] text-slate-500">{k}</span>
-            <span className="text-[12px] font-medium text-slate-800 truncate ml-2">{v}</span>
+  /* ---- Render: Confirmation after signup ---- */
+  if (submitted) {
+    return (
+      <div className="fixed inset-0 overflow-auto bg-slate-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-8 text-center space-y-5">
+          <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center border border-emerald-100">
+            <CheckCircle2 className="w-8 h-8 text-emerald-600" />
           </div>
-        ))}
-      </div>
-      <MonoInput icon={Mail} type="email" label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" required />
-      <MonoPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="6 caractères minimum" />
-      <div className="flex gap-3">
-        <MonoSecondaryBtn onClick={() => setStep(2)}>Retour</MonoSecondaryBtn>
-        <div className="flex-[2]">
-          <MonoButton loading={loading} disabled={!step3Valid} type="submit">Créer mon compte</MonoButton>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Demande d'inscription envoyée</h2>
+            <p className="text-sm text-slate-500 leading-relaxed mt-2">
+              Votre compte Waarwi est actuellement en attente de validation.
+              Notre équipe vous contactera par WhatsApp ou par email après vérification.
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-left space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">Statut</span>
+              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">En attente de validation</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">Plan demandé</span>
+              <span className="text-[11px] font-bold text-slate-800">{selectedPlanObj?.name || selectedPlan}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">Contact WhatsApp</span>
+              <span className="text-[11px] font-bold text-slate-800">{whatsappPhone}</span>
+            </div>
+            {email && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-500">Email</span>
+                <span className="text-[11px] font-bold text-slate-800 truncate ml-2">{email}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">Canal de contact principal</span>
+              <span className="text-[11px] font-bold text-emerald-700 inline-flex items-center gap-1">
+                <MessageCircle className="w-3 h-3" />WhatsApp
+              </span>
+            </div>
+          </div>
+
+          <button onClick={() => { setSubmitted(false); setMode('login'); setStep(1); }}
+            className="text-sm font-semibold text-slate-900 hover:underline underline-offset-4 transition-colors">
+            Retour à la connexion
+          </button>
         </div>
       </div>
-      <p className="text-[11px] text-slate-400 text-center">Soumis à validation par un administrateur WAARWI.</p>
+    );
+  }
+
+  /* ---- Render: Registration Steps ---- */
+  const registerContent = (
+    <div className="space-y-5">
+      <StepIndicator current={step} total={TOTAL_STEPS} />
+
+      {step === 1 && (
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Votre entreprise</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Parlez-nous de votre activité commerciale.</p>
+          </div>
+          <AuthInput icon={Building2} label="Nom de l'entreprise" value={companyName} onChange={setCompanyName} placeholder="Ex : Saloum Electronique" required />
+          <div>
+            <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
+              Type d'activité<span className="text-red-400 ml-0.5">*</span>
+            </label>
+            <div className="relative">
+              <select
+                value={businessType}
+                onChange={e => setBusinessType(e.target.value)}
+                className="w-full h-11 pl-4 pr-10 rounded-xl bg-white border border-slate-200 text-slate-900
+                  focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
+                  hover:border-slate-300 transition-all text-sm appearance-none cursor-pointer"
+              >
+                {activityTypes.map(bt => (
+                  <option key={bt.id} value={bt.slug}>{bt.name}</option>
+                ))}
+                <option value="__other__">Autre activité</option>
+              </select>
+              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+            {selectedActivity?.description && businessType !== '__other__' && (
+              <p className="mt-1.5 text-[11px] text-slate-500">{selectedActivity.description}</p>
+            )}
+          </div>
+          {businessType === '__other__' && (
+            <AuthInput icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Couture..." required />
+          )}
+          <AuthInput icon={MapPin} label="Ville" value={city} onChange={setCity} placeholder="Dakar, Thies, Saint-Louis..." />
+          <AuthInput icon={MapPin} label="Adresse" value={address} onChange={setAddress} placeholder="Adresse complète (facultatif)" hint="Optionnel" />
+          <AuthBtn disabled={!step1Valid} onClick={() => setStep(2)}>Continuer</AuthBtn>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Le responsable</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Vos coordonnées pour la gestion du compte.</p>
+          </div>
+          <AuthInput icon={User} label="Nom complet" value={fullName} onChange={setFullName} placeholder="Prénom et nom" required />
+          <AuthInput icon={Phone} label="Numéro WhatsApp" value={whatsappPhone} onChange={setWhatsappPhone} placeholder="+221 77 123 45 67" required hint="Canal principal de communication" />
+          <AuthInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" type="email" hint="Recommandé mais non obligatoire" />
+          <AuthInput icon={Briefcase} label="Fonction" value={responsibleTitle} onChange={setResponsibleTitle} placeholder="Gérant, Directeur, Responsable..." hint="Optionnel" />
+          <div className="flex gap-3">
+            <AuthBtn variant="secondary" onClick={() => setStep(1)}>Retour</AuthBtn>
+            <div className="flex-1">
+              <AuthBtn disabled={!step2Valid} onClick={() => setStep(3)}>Continuer</AuthBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Choisissez votre plan</h3>
+            <p className="text-xs text-slate-500 mt-0.5">14 jours d'essai gratuit inclus. L'abonnement débute après la période d'essai.</p>
+          </div>
+          <div className="flex items-center justify-center gap-1 bg-slate-100 rounded-xl p-1 border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setBillingCycle('monthly')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${billingCycle === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Mensuel
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingCycle('yearly')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${billingCycle === 'yearly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Annuel <span className="text-[9px] font-bold text-emerald-600 ml-1">-17%</span>
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 max-h-[40vh] overflow-y-auto pr-1">
+            {plans.map(plan => (
+              <PlanCard
+                key={plan.code}
+                plan={plan}
+                selected={selectedPlan === plan.code}
+                onSelect={() => setSelectedPlan(plan.code)}
+                popular={plan.code === 'pro'}
+                billingCycle={billingCycle}
+              />
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <AuthBtn variant="secondary" onClick={() => setStep(2)}>Retour</AuthBtn>
+            <div className="flex-1">
+              <AuthBtn disabled={!step3Valid} onClick={() => setStep(4)}>Continuer</AuthBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Sécurisez votre compte</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Créez vos identifiants de connexion.</p>
+          </div>
+          <AuthInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" type="email" required />
+          <AuthPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="6 caractères minimum" />
+          <div className="flex gap-3">
+            <AuthBtn variant="secondary" onClick={() => setStep(3)}>Retour</AuthBtn>
+            <div className="flex-1">
+              <AuthBtn disabled={!step4Valid} onClick={() => setStep(5)}>Vérifier</AuthBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 5 && (
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Récapitulatif</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Vérifiez vos informations avant de valider.</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2.5">
+            {[
+              ['Entreprise', companyName],
+              ['Activité', selectedActivityLabel],
+              ['Ville', city || '—'],
+              ['Responsable', fullName],
+              ['WhatsApp', whatsappPhone],
+              ['Email', email || '—'],
+              ['Plan choisi', selectedPlanObj?.name || selectedPlan],
+              ['Cycle', billingCycle === 'yearly' ? 'Annuel' : 'Mensuel'],
+              ['Prix', (() => {
+                if (!selectedPlanObj) return 'Gratuit';
+                const p = billingCycle === 'yearly' ? selectedPlanObj.price_yearly : selectedPlanObj.price_monthly;
+                if (!p || p <= 0) return 'Gratuit';
+                return billingCycle === 'yearly'
+                  ? `${Number(p).toLocaleString('fr-FR')} FCFA/an`
+                  : `${Number(p).toLocaleString('fr-FR')} FCFA/mois`;
+              })()],
+              ...(selectedPlanObj?.trial_days ? [['Essai gratuit', `${selectedPlanObj.trial_days} jours`]] : []),
+            ].map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-500">{k}</span>
+                <span className="text-[11px] font-semibold text-slate-800 truncate ml-3 max-w-[60%] text-right">{v}</span>
+              </div>
+            ))}
+          </div>
+
+          {selectedPlanObj && (
+            <div className="rounded-xl border border-slate-200 p-3">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Limites du plan</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <div className="text-sm font-bold text-slate-900">{selectedPlanObj.limits?.articles === -1 ? '∞' : selectedPlanObj.limits?.articles || 100}</div>
+                  <div className="text-[9px] text-slate-500">Articles</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">{selectedPlanObj.limits?.users === -1 ? '∞' : selectedPlanObj.limits?.users || 2}</div>
+                  <div className="text-[9px] text-slate-500">Utilisateurs</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">{selectedPlanObj.limits?.sites === -1 ? '∞' : selectedPlanObj.limits?.sites || 1}</div>
+                  <div className="text-[9px] text-slate-500">Magasins</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <AuthBtn variant="secondary" onClick={() => setStep(4)}>Retour</AuthBtn>
+            <div className="flex-1">
+              <AuthBtn loading={loading} onClick={submit}>Envoyer ma demande</AuthBtn>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-400 text-center">Votre compte sera activé après validation par l'équipe Waarwi.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  /* ---- Render: Login form ---- */
+  const loginContent = (
+    <form onSubmit={loginSubmit} className="space-y-4">
+      <AuthInput icon={Mail} type="email" label="Adresse email" value={email} onChange={setEmail} placeholder="votre@email.com" required />
+      <AuthPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="Votre mot de passe" />
+      <AuthBtn loading={loading} type="submit">Se connecter</AuthBtn>
     </form>
   );
 
+  /* ---- Render: Main layout ---- */
   return (
-    <div className="fixed inset-0 overflow-hidden bg-white">
-      {loginBgUrl && (
+    <div className={`fixed inset-0 overflow-hidden bg-white transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
+      {config?.login_bg_url && (
         <div className="absolute inset-0 z-[1]">
-          <img src={loginBgUrl} alt="" className="w-full h-full object-cover" />
+          <img src={config.login_bg_url} alt="" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px]" />
         </div>
       )}
 
-      {/* ══════════ DESKTOP ══════════ */}
-      <div className={`hidden lg:flex h-full relative z-10 transition-all duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
-
-        {/* LEFT + RIGHT: top-aligned to bring logo higher */}
-        <div className="flex-1 flex items-start px-14 xl:px-20 pb-10 pt-10">
-
-          {/* LEFT COLUMN */}
-          <div className={`w-full max-w-lg transition-all duration-500 delay-200 ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
-
-            {/* Logo */}
-            <div className="mb-8">
-              <img src={logoSrc} alt={brandName} className="h-12 xl:h-14 w-auto object-contain" />
-            </div>
-
+      {/* ---- DESKTOP ---- */}
+      <div className="hidden lg:flex h-full relative z-10">
+        {/* Left panel - branding */}
+        <div className="flex-1 flex flex-col justify-center px-14 xl:px-20">
+          <div className="w-full max-w-lg">
+            <img src={logoSrc} alt={brandName} className="h-12 xl:h-14 w-auto object-contain mb-8" />
             {config?.headline ? (
               <h1 className="text-3xl xl:text-4xl font-extrabold text-slate-900 leading-[1.15] tracking-tight mb-4">
                 {config.headline}
-                {config.headline_accent && (
-                  <> <span className="text-slate-900">{config.headline_accent}</span></>
-                )}
+                {config.headline_accent && <> <span className="text-slate-900">{config.headline_accent}</span></>}
               </h1>
             ) : (
               <h1 className="text-3xl xl:text-4xl font-extrabold text-slate-900 leading-[1.15] tracking-tight mb-4">
@@ -630,208 +670,98 @@ export function Auth() {
                 <span className="text-slate-900">business.</span>
               </h1>
             )}
-
-            <p className="text-sm xl:text-base text-slate-500 leading-relaxed mb-7">
+            <p className="text-sm xl:text-base text-slate-500 leading-relaxed mb-8">
               {config?.subtitle || 'Gérez vos ventes, stocks, clients et finances depuis un seul espace, en toute sécurité.'}
             </p>
-
-            {/* Animated feature carousel — 3 per slide */}
-            {(() => {
-              const slideFeatures = features.slice(carouselSlide * 3, carouselSlide * 3 + 3);
-              const totalSlides = Math.ceil(features.length / 3);
-              return (
-                <div className="mb-7">
-                  <div
-                    className="grid grid-cols-3 gap-3"
-                    style={{
-                      opacity: carouselAnim === 'in' ? 1 : 0,
-                      transform: carouselAnim === 'in' ? 'translateY(0)' : 'translateY(6px)',
-                      transition: 'opacity 0.32s ease, transform 0.32s ease',
-                    }}
-                  >
-                    {slideFeatures.map((f, i) => (
-                      <div key={`${carouselSlide}-${i}`}
-                        className="rounded-xl bg-white border border-slate-200 p-3.5">
-                        <f.icon className="w-4 h-4 mb-2.5 text-slate-700" strokeWidth={1.6} />
-                        <p className="text-xs font-bold text-slate-800 mb-0.5">{f.label}</p>
-                        <p className="text-[10px] text-slate-500 leading-snug">{f.desc}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Slide indicators */}
-                  <div className="flex items-center justify-center gap-1.5 mt-3">
-                    {Array.from({ length: totalSlides }).map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => { setCarouselAnim('out'); setTimeout(() => { setCarouselSlide(i); setCarouselAnim('in'); }, 320); }}
-                        className={`rounded-full transition-all duration-300 ${i === carouselSlide ? 'w-4 h-1.5 bg-slate-900' : 'w-1.5 h-1.5 bg-slate-300 hover:bg-slate-400'}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Dashboard mockup preview */}
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.18)] overflow-hidden">
-              <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 border-b border-slate-100">
-                <div className="w-2 h-2 rounded-full bg-slate-200" />
-                <div className="w-2 h-2 rounded-full bg-slate-200" />
-                <div className="w-2 h-2 rounded-full bg-slate-200" />
-                <div className="ml-2 flex items-center gap-3">
-                  <div className="w-20 h-1.5 rounded-full bg-slate-200" />
-                  <div className="w-14 h-1.5 rounded-full bg-slate-100" />
-                  <div className="w-16 h-1.5 rounded-full bg-slate-100" />
-                </div>
-              </div>
-              <div className="p-4 flex gap-3">
-                {/* Sidebar mock */}
-                <div className="w-24 flex-shrink-0 space-y-1">
-                  <div className="h-3 w-16 rounded bg-slate-200 mb-1.5" />
-                  {['Tableau de bord', 'Ventes', 'Caisse', 'Stock', 'Clients', 'Fournisseurs', 'Facturation', 'Rapports'].map((item, i) => (
-                    <div key={i} className={`h-2.5 rounded flex items-center px-1.5 ${i === 0 ? 'bg-slate-900' : 'bg-slate-50'}`}>
-                      <span className={`text-[6px] font-medium truncate ${i === 0 ? 'text-white' : 'text-slate-400'}`}>{item}</span>
-                    </div>
-                  ))}
-                </div>
-                {/* Content mock */}
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div>
-                    <div className="text-[8px] text-slate-400 font-medium">Encaissement du jour</div>
-                    <div className="text-sm font-black text-slate-900 num">2 212 000 FCFA</div>
-                    <div className="text-[8px] text-slate-700 font-bold">↗ +26% vs hier</div>
-                  </div>
-                  <div className="h-12 flex items-end gap-0.5">
-                    {[25, 40, 30, 55, 45, 70, 60, 80, 65, 90, 75, 95, 70, 85, 60, 78, 88, 72, 95, 80].map((h, i) => (
-                      <div key={i} className={`flex-1 rounded-sm ${i === 12 ? 'bg-slate-900' : 'bg-slate-200'}`} style={{ height: `${h}%` }} />
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5 pt-1">
-                    {[
-                      { label: 'SOLDE CAISSE', val: '1 820 000' },
-                      { label: 'DÉPENSES', val: '25 000' },
-                      { label: 'ENTRÉES', val: '10 000' },
-                    ].map((s, i) => (
-                      <div key={i} className="rounded-lg p-1.5 bg-slate-50 border border-slate-100">
-                        <div className="text-[6px] font-bold uppercase text-slate-500">{s.label}</div>
-                        <div className="text-[8px] font-black text-slate-900 num">{s.val} FCFA</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom trust */}
-            <div className={`flex items-center gap-5 mt-6 transition-all duration-500 delay-600 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
-              {[
-                { icon: Shield, label: 'Données sécurisées', sub: 'Chiffrement SSL 256 bits', flag: false },
-                { icon: Globe, label: 'Hébergement cloud', sub: 'Haute disponibilité', flag: false },
-                { icon: null, label: 'Made in Sénégal', sub: 'Conçu pour les entreprises locales', flag: true },
-              ].map((t, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
-                    {t.flag ? (
-                      <svg className="w-3.5 h-2.5" viewBox="0 0 21 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="7" height="14" fill="#1f2937" opacity="0.2" />
-                        <rect x="7" width="7" height="14" fill="#1f2937" opacity="0.5" />
-                        <rect x="14" width="7" height="14" fill="#1f2937" opacity="0.85" />
-                      </svg>
-                    ) : (
-                      t.icon && <t.icon className="w-3 h-3 text-slate-700" strokeWidth={1.7} />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-bold text-slate-700 leading-tight">{t.label}</p>
-                    <p className="text-[8px] text-slate-400 leading-tight">{t.sub}</p>
-                  </div>
+            <div className="grid grid-cols-3 gap-3">
+              {features.slice(0, 6).map((f, i) => (
+                <div key={i} className="rounded-xl bg-white border border-slate-200 p-3.5">
+                  <f.icon className="w-4 h-4 mb-2.5 text-slate-700" strokeWidth={1.6} />
+                  <p className="text-xs font-bold text-slate-800 mb-0.5">{f.label}</p>
+                  <p className="text-[10px] text-slate-500 leading-snug">{f.desc}</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* RIGHT PANEL - Form */}
-        <div className={`w-[460px] xl:w-[500px] flex-shrink-0 flex items-center justify-center px-10 xl:px-12 pb-12 pt-10 transition-all duration-500 delay-300 ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}>
-          <div className="w-full">
-            {/* Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_8px_40px_-8px_rgba(15,23,42,0.12)] p-7 xl:p-8">
-              {/* Card header */}
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-semibold text-slate-900 tracking-tight">
-                  Bienvenue sur{' '}
-                  <span className="font-bold">{isTenantBranded ? brandName : 'Waarwi'}</span>
-                </h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  {submitted ? 'Inscription soumise' : mode === 'login' ? 'Connectez-vous à votre espace' : 'Créez votre espace business'}
-                </p>
+        {/* Right panel - form */}
+        <div className="w-[480px] xl:w-[520px] flex flex-col justify-center px-10 xl:px-14 border-l border-slate-100 bg-white/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm mx-auto">
+            {/* Tabs */}
+            {!isTenantBranded && (
+              <div className="flex gap-0 bg-slate-100 rounded-xl p-1 border border-slate-200 mb-6">
+                <button
+                  onClick={() => { setMode('login'); setStep(1); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                    mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5" />Connexion
+                </button>
+                <button
+                  onClick={() => { setMode('register'); setStep(1); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                    mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />Inscription
+                </button>
               </div>
+            )}
+            {isTenantBranded && (
+              <div className="mb-6">
+                <h2 className="text-lg font-bold text-slate-900">Connexion</h2>
+                <p className="text-xs text-slate-500">{brandName}</p>
+              </div>
+            )}
 
-              {/* Tabs */}
-              {!isTenantBranded && !submitted && (
-                <div className="mb-5">
-                  <MonoTabs mode={mode} setMode={setMode} setStep={setStep} />
-                </div>
-              )}
-
-              {/* Step bar for register */}
-              {!submitted && mode === 'register' && (
-                <div className="mb-5">
-                  <MonoStepBar step={step} />
-                </div>
-              )}
-
-              {mobileFormInner}
-            </div>
-
-            {/* Below card */}
-            <div className="flex items-center justify-center gap-1.5 mt-4">
-              <div className="w-px h-3 bg-slate-200" />
-              <span className="text-[10px] text-slate-500">© {new Date().getFullYear()} WAARWI</span>
-              <div className="w-px h-3 bg-slate-200" />
-              <span className="text-[10px] text-slate-500">Infrastructure sécurisée</span>
+            <div className="max-h-[70vh] overflow-y-auto pr-1">
+              {mode === 'login' ? loginContent : registerContent}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ══════════ MOBILE ══════════ */}
-      <div className={`flex lg:hidden flex-col h-full relative z-10 overflow-y-auto bg-white transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="flex flex-col justify-center min-h-full px-6 py-6">
-
-          {/* Logo */}
-          <div className="flex flex-col items-center text-center mb-5">
-            <img src={logoSrc} alt={brandName} className="h-9 w-auto object-contain" />
-          </div>
-
-          {/* Card */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_2px_18px_-6px_rgba(15,23,42,0.10)] p-6">
-            <div className="text-center mb-5">
-              <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
-                Bienvenue sur <span className="font-bold">{isTenantBranded ? brandName : 'Waarwi'}</span>
-              </h2>
-            </div>
-
-            {!isTenantBranded && !submitted && (
-              <div className="mb-5">
-                <MonoTabs mode={mode} setMode={setMode} setStep={setStep} />
-              </div>
+      {/* ---- MOBILE ---- */}
+      <div className="lg:hidden h-full flex flex-col overflow-auto">
+        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center justify-between">
+            <img src={logoSrc} alt={brandName} className="h-8 w-auto object-contain" />
+            {mode === 'register' && step > 1 && !submitted && (
+              <button onClick={() => setStep(step - 1)} className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                <ArrowLeft className="w-3.5 h-3.5" />Retour
+              </button>
             )}
-            {!submitted && mode === 'register' && (
-              <div className="mb-5"><MonoStepBar step={step} /></div>
-            )}
-            {mobileFormInner}
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-center gap-3 mt-6 text-[11px] text-slate-500">
-            <div className="inline-flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5" strokeWidth={1.6} />
-              <span>Connexion sécurisée</span>
+        <div className="flex-1 px-5 py-6">
+          {/* Tabs (mobile) */}
+          {!isTenantBranded && !submitted && (
+            <div className="grid grid-cols-2 border-b border-slate-200 mb-6">
+              <button
+                onClick={() => { setMode('login'); setStep(1); }}
+                className={`relative flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors ${
+                  mode === 'login' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <User className="w-4 h-4" />Connexion
+                {mode === 'login' && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-slate-900" />}
+              </button>
+              <button
+                onClick={() => { setMode('register'); setStep(1); }}
+                className={`relative flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors ${
+                  mode === 'register' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Building2 className="w-4 h-4" />Inscription
+                {mode === 'register' && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-slate-900" />}
+              </button>
             </div>
-            <div className="w-px h-3 bg-slate-200" />
-            <span>© {new Date().getFullYear()} WAARWI</span>
-          </div>
+          )}
+
+          {mode === 'login' ? loginContent : registerContent}
         </div>
       </div>
     </div>

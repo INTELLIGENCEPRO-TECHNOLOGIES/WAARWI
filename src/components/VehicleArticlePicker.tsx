@@ -143,7 +143,7 @@ export function VehicleArticlePicker({ open, onClose, onSelect, priceMode = 'sal
       return;
     }
 
-    const [{ data: artData }, { data: catData }, { data: stkData }] = await Promise.all([
+    const [{ data: artData }, { data: catData }] = await Promise.all([
       supabase
         .from('articles')
         .select('id, internal_ref, name, sale_price, purchase_price, oem_ref, supplier_ref, category_id')
@@ -153,11 +153,20 @@ export function VehicleArticlePicker({ open, onClose, onSelect, priceMode = 'sal
         .order('name')
         .limit(1000),
       supabase.from('part_categories').select('id, name').eq('tenant_id', tenantId),
-      supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenantId).eq('site_id', siteId),
     ]);
 
+    let allStk: any[] = [];
+    let sFrom = 0;
+    while (true) {
+      const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenantId).eq('site_id', siteId).range(sFrom, sFrom + 999);
+      if (e || !data || data.length === 0) break;
+      allStk = allStk.concat(data);
+      if (data.length < 1000) break;
+      sFrom += 1000;
+    }
+
     const catMap = new Map((catData || []).map((c: any) => [c.id, c.name as string]));
-    const qmap = new Map((stkData || []).map((r: any) => [r.article_id, Number(r.quantity)]));
+    const qmap = new Map(allStk.map((r: any) => [r.article_id, Number(r.quantity)]));
 
     const mapped: CompatibleArticle[] = (artData || []).map((a: any) => {
       const cname = a.category_id ? (catMap.get(a.category_id) || null) : null;

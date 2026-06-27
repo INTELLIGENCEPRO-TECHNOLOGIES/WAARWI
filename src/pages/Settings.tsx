@@ -12,7 +12,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
 
-type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header';
+type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription';
 
 type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
 
@@ -26,6 +26,7 @@ export function Settings() {
       title: 'Votre entreprise',
       tiles: [
         { k: 'company', label: 'Identification', icon: Building2, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' },
+        { k: 'subscription', label: 'Abonnement', icon: CreditCard, color: 'text-blue-700', bg: 'bg-blue-50/80 border-blue-200' },
         { k: 'users', label: 'Utilisateurs', icon: Users, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
         { k: 'permissions', label: 'Permissions', icon: Shield, color: 'text-rose-700', bg: 'bg-rose-50/80 border-rose-200' },
         { k: 'sites', label: 'Magasins', icon: Store, color: 'text-emerald-700', bg: 'bg-emerald-50/80 border-emerald-200' },
@@ -121,6 +122,7 @@ export function Settings() {
       {tab === 'backup' && <BackupTab />}
       {tab === 'documents' && <DocumentSettingsTab />}
       {tab === 'ticket_header' && <TicketHeaderConfigTab />}
+      {tab === 'subscription' && <SubscriptionTab />}
     </div>
   );
 }
@@ -559,7 +561,10 @@ function SitesTab() {
       ? await supabase.from('sites').update(payload).eq('id', editing.id)
       : await supabase.from('sites').insert(payload);
     setSaving(false);
-    if (e) error(e.message); else { success(editing ? 'Modifié' : 'Créé'); setOpen(false); load(); refresh(); }
+    if (e) {
+      const msg = e.message || '';
+      error(msg.includes('Limite du plan') ? 'Limite de magasins atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
+    } else { success(editing ? 'Modifié' : 'Créé'); setOpen(false); load(); refresh(); }
   };
 
   return (
@@ -1936,6 +1941,189 @@ function PricingTiersTab() {
       </div>
 
       <ConfirmDialog open={!!toDelete} onClose={() => setToDelete(null)} onConfirm={() => toDelete && deleteTier(toDelete)} title="Supprimer cette catégorie tarifaire ?" message="Les prix associés à cette catégorie seront supprimés pour tous les articles." confirmLabel="Supprimer" danger />
+    </div>
+  );
+}
+
+/* ===================== SUBSCRIPTION ===================== */
+function SubscriptionTab() {
+  const { tenant } = useApp();
+  const [loading, setLoading] = useState(true);
+  const [limits, setLimits] = useState<any>(null);
+  const [usage, setUsage] = useState<any>(null);
+  const [plan, setPlan] = useState<any>(null);
+
+  useEffect(() => {
+    if (!tenant) return;
+    (async () => {
+      const [{ data: usageData }, { data: limitsData }, { data: planData }] = await Promise.all([
+        supabase.rpc('tenant_usage', { p_tenant_id: tenant.id }),
+        supabase.rpc('get_tenant_effective_limits', { p_tenant_id: tenant.id }),
+        supabase.from('plans').select('*').eq('code', (tenant as any).plan || '').maybeSingle(),
+      ]);
+      const u = Array.isArray(usageData) ? usageData[0] : usageData;
+      setUsage(u);
+      setLimits(limitsData || {});
+      setPlan(planData);
+      setLoading(false);
+    })();
+  }, [tenant]);
+
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
+  if (!tenant) return null;
+
+  const t = tenant as any;
+  const billingCycle = t.billing_cycle || 'monthly';
+  const autoRenew = t.auto_renew !== false;
+  const trialEnd = t.trial_end_date ? new Date(t.trial_end_date) : null;
+  const subStart = t.subscription_start_date ? new Date(t.subscription_start_date) : null;
+  const planExpires = t.plan_expires_at ? new Date(t.plan_expires_at) : null;
+  const now = new Date();
+
+  let subStatus: string;
+  if (t.approval_status !== 'approved') {
+    subStatus = 'pending_review';
+  } else if (billingCycle === 'lifetime') {
+    subStatus = 'active';
+  } else if (trialEnd && trialEnd.getTime() > now.getTime()) {
+    subStatus = 'trial_active';
+  } else if (planExpires && planExpires.getTime() < now.getTime()) {
+    subStatus = 'expired';
+  } else {
+    subStatus = 'active';
+  }
+
+  const daysRemaining = trialEnd && subStatus === 'trial_active' ? Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+
+  const statusLabel = subStatus === 'trial_active' ? 'Essai gratuit' : subStatus === 'active' ? 'Actif' : subStatus === 'expired' ? 'Expiré' : subStatus === 'pending_review' ? 'En attente' : subStatus;
+  const statusColor = subStatus === 'expired' ? 'bg-red-100 text-red-700' : subStatus === 'trial_active' ? 'bg-blue-100 text-blue-700' : subStatus === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
+
+  const price = billingCycle === 'lifetime' ? (plan?.price_lifetime || 0) : billingCycle === 'yearly' ? (plan?.price_yearly || 0) : (plan?.price_monthly || 0);
+  const priceLabel = billingCycle === 'lifetime' ? (price > 0 ? `${Number(price).toLocaleString('fr-FR')} FCFA (à vie)` : 'À vie') : price > 0 ? `${Number(price).toLocaleString('fr-FR')} FCFA/${billingCycle === 'yearly' ? 'an' : 'mois'}` : 'Gratuit';
+
+  const numericLimits = [
+    { key: 'articles', label: 'Articles', current: usage?.articles_count },
+    { key: 'sites', label: 'Magasins', current: usage?.sites_count },
+    { key: 'users', label: 'Utilisateurs', current: usage?.users_count },
+    { key: 'max_clients', label: 'Clients', current: usage?.customers_count },
+    { key: 'max_suppliers', label: 'Fournisseurs', current: usage?.suppliers_count },
+    { key: 'max_invoices_month', label: 'Factures / mois', current: null },
+  ];
+
+  const modules = [
+    { key: 'online_shop', label: 'Boutique en ligne' },
+    { key: 'accounting', label: 'Comptabilite SYSCOHADA' },
+    { key: 'supplier_orders', label: 'Commandes fournisseurs' },
+    { key: 'has_whatsapp', label: 'Notifications WhatsApp' },
+    { key: 'has_multi_store', label: 'Multi-magasins' },
+    { key: 'has_advanced_reports', label: 'Rapports avances' },
+    { key: 'has_accounting_export', label: 'Export comptable' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Expired banner */}
+      {subStatus === 'expired' && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-red-800">Votre abonnement a expiré.</p>
+            <p className="text-xs text-red-600 mt-0.5">Veuillez contacter l'équipe Waarwi pour renouveler votre abonnement.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Plan header with status */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Plan {plan?.name || t.plan || 'Non défini'}</h3>
+            <p className="text-xs text-slate-500 mt-0.5">{priceLabel}</p>
+          </div>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusColor}`}>{statusLabel}</span>
+        </div>
+
+        {/* Subscription details */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Cycle</div>
+            <div className="text-sm font-bold text-slate-900">{billingCycle === 'lifetime' ? 'À vie' : billingCycle === 'yearly' ? 'Annuel' : 'Mensuel'}</div>
+          </div>
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Renouvellement</div>
+            <div className="text-sm font-bold text-slate-900">{autoRenew ? 'Auto' : 'Manuel'}</div>
+          </div>
+          {(subStart || (subStatus !== 'trial_active' && trialEnd)) && (
+            <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Début</div>
+              <div className="text-sm font-bold text-slate-900">
+                {(subStart || trialEnd)?.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </div>
+            </div>
+          )}
+          {planExpires && (
+            <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Expiration</div>
+              <div className={`text-sm font-bold ${subStatus === 'expired' ? 'text-red-600' : 'text-slate-900'}`}>
+                {planExpires.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Trial info */}
+        {subStatus === 'trial_active' && trialEnd && (
+          <div className="mb-4 rounded-xl bg-blue-50 border border-blue-100 p-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-blue-800">Période d'essai en cours</p>
+              <p className="text-[11px] text-blue-600 mt-0.5">
+                Fin de l'essai : {trialEnd.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-xl font-extrabold text-blue-900">{daysRemaining}</div>
+              <div className="text-[10px] text-blue-600 font-medium">jour{daysRemaining > 1 ? 's' : ''} restant{daysRemaining > 1 ? 's' : ''}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {numericLimits.map(({ key, label, current }) => {
+            const limit = limits?.[key];
+            const unlimited = limit === -1 || limit === undefined;
+            const pct = unlimited ? 15 : (current != null ? Math.min(100, (current / Math.max(1, limit)) * 100) : 0);
+            const reached = !unlimited && current != null && current >= limit;
+            return (
+              <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+                  <span className={`text-xs font-bold ${reached ? 'text-red-600' : 'text-slate-800'}`}>
+                    {current != null ? current : '—'} / {unlimited ? '∞' : limit}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                  <div className={`h-full rounded-full ${reached ? 'bg-red-500' : 'bg-emerald-500'} transition-all`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <h4 className="text-sm font-bold text-slate-700 mb-3">Modules inclus dans votre plan</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {modules.map(({ key, label }) => {
+            const enabled = !!limits?.[key];
+            return (
+              <div key={key} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium ${enabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                {enabled ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                {label}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

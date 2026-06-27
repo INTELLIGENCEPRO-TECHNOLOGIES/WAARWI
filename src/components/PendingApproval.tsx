@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LogOut, Building2, Phone, Headphones, RefreshCw, Clock, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { LogOut, Building2, Phone, Headphones, RefreshCw, Clock, CheckCircle2, XCircle, AlertTriangle, CreditCard, MessageCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 
@@ -15,6 +15,7 @@ export function PendingApproval() {
   const rejected = (tenant as any)?.approval_status === 'rejected';
   const reason = (tenant as any)?.rejection_reason as string | undefined;
   const [activityName, setActivityName] = useState<string | null>(null);
+  const [planName, setPlanName] = useState<string | null>(null);
 
   useEffect(() => {
     const activityTypeId = (tenant as any)?.business_activity_type_id;
@@ -40,9 +41,17 @@ export function PendingApproval() {
           });
       }
     }
+
+    const planCode = (tenant as any)?.selected_plan_code || (tenant as any)?.plan;
+    if (planCode) {
+      supabase.from('plans').select('name').eq('code', planCode).maybeSingle().then(({ data }) => {
+        if (data?.name) setPlanName(data.name);
+      });
+    }
   }, [tenant]);
 
   const currentStep = rejected ? -1 : 2;
+  const whatsapp = (tenant as any)?.whatsapp_phone;
 
   return (
     <div className="h-screen bg-white flex flex-col overflow-hidden">
@@ -77,13 +86,13 @@ export function PendingApproval() {
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest text-red-500 mb-1">Acces refuse</div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-red-500 mb-1">Accès refusé</div>
                 <h2 className="text-xl md:text-2xl font-black text-slate-900">
                   {tenant?.name || 'Votre compte'}
                 </h2>
               </div>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Votre inscription n&apos;a pas ete validee par l&apos;equipe Waarwi.
+                Votre inscription n'a pas été validée par l'équipe Waarwi.
               </p>
               {reason && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-left">
@@ -109,17 +118,26 @@ export function PendingApproval() {
                 </h2>
               </div>
 
-              {activityName && (
-                <div className="flex flex-col items-center gap-1">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Activité choisie
-                  </div>
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-slate-50">
-                    <Building2 className="w-4 h-4 text-[#00b4d8] shrink-0" />
-                    <span className="text-sm font-semibold text-slate-800">{activityName}</span>
-                  </div>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {activityName && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700">
+                    <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                    {activityName}
+                  </span>
+                )}
+                {planName && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-100 bg-blue-50 text-xs font-medium text-blue-700">
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Plan {planName}
+                  </span>
+                )}
+                {whatsapp && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-100 bg-emerald-50 text-xs font-medium text-emerald-700">
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    {whatsapp}
+                  </span>
+                )}
+              </div>
 
               <div className="flex flex-col items-center gap-1">
                 <div className="flex items-center gap-2">
@@ -132,7 +150,7 @@ export function PendingApproval() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Votre espace Waarwi est en préparation.
+                  Notre équipe vous contactera par WhatsApp après vérification.
                 </p>
               </div>
             </div>
@@ -172,7 +190,7 @@ export function PendingApproval() {
         </div>
       </main>
 
-      {/* FOOTER - always visible */}
+      {/* FOOTER */}
       <footer className="shrink-0 flex flex-col items-center gap-3 pb-6 pt-4 px-4">
         <button
           onClick={signOut}

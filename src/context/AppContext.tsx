@@ -22,7 +22,7 @@ type AppState = {
   /** Marks a site as the persistent default for this user (saved to DB, cross-device) */
   setDefaultSite: (site: Site) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null, extra?: { city?: string; whatsapp_phone?: string; responsible_title?: string; selected_plan?: string; billing_cycle?: string }) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   dataTick: number;
@@ -236,7 +236,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  const signUp = async (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null) => {
+  const signUp = async (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null, extra?: { city?: string; whatsapp_phone?: string; responsible_title?: string; selected_plan?: string; billing_cycle?: string }) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
     if (!data.user) throw new Error('Inscription impossible');
@@ -245,6 +245,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_user_full_name: fullName,
       p_business_type: businessType,
       p_activity_type_id: activityTypeId || null,
+      p_city: extra?.city || '',
+      p_whatsapp_phone: extra?.whatsapp_phone || '',
+      p_responsible_title: extra?.responsible_title || '',
+      p_selected_plan: extra?.selected_plan || 'trial',
+      p_billing_cycle: extra?.billing_cycle || 'monthly',
     });
     if (rpcErr) throw rpcErr;
 

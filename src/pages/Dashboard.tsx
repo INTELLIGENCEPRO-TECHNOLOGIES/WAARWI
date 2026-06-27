@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
+import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 import { formatFCFA, formatCompactFCFA } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
@@ -111,6 +112,7 @@ const dashCache: { stats: Stats | null; shopInfo: ShopInfo | null; key: string; 
 
 export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void }) {
   const { tenant, profile, currentSite, onDataChange } = useApp();
+  const { error: toastError } = useToast();
   const cacheKey = `${tenant?.id}:${currentSite?.id}`;
   const hasCached = dashCache.key === cacheKey && dashCache.stats !== null;
   const [stats, setStats] = useState<Stats | null>(hasCached ? dashCache.stats : null);
@@ -196,7 +198,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       if (periodEnd) periodQuery.lt('created_at', periodEnd.toISOString());
 
       const [
-        todayData, yestData, monthData, articlesCount, stockData, recent,
+        todayData, yestData, monthData, articlesCount, recent,
         custData, suppData, quotesData, returnsData, shopData,
         webNewData, webPrepData, webReadyData, webTodayData, webWaitData, lastWebOrderData,
         openSessions, stockInTodayData,
@@ -204,8 +206,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         periodQuery,
         supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', yest.toISOString()).lt('created_at', today.toISOString()).neq('status', 'cancelled'),
         supabase.from('sales').select('total, sale_items(total, purchase_cost, quantity)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', firstOfMonth.toISOString()).neq('status', 'cancelled'),
-        supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
-        supabase.from('stock_levels').select('quantity, articles!inner(stock_min, purchase_price)').eq('tenant_id', tenant.id).eq('site_id', siteId),
+        supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true),
         supabase.from('sales').select('id, sale_number, total, created_at, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
         supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
         supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
@@ -221,6 +222,22 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'open'),
         supabase.from('stock_movements').select('quantity').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['purchase', 'adjustment_in']).gte('created_at', periodStart.toISOString()),
       ]);
+
+      // Paginate stock_levels to bypass server-side 1000-row cap
+      let allStockRows: any[] = [];
+      let stkFrom = 0;
+      while (true) {
+        const { data, error: stkErr } = await supabase
+          .from('stock_levels')
+          .select('quantity, articles!inner(stock_min, purchase_price)')
+          .eq('tenant_id', tenant.id)
+          .eq('site_id', siteId)
+          .range(stkFrom, stkFrom + 999);
+        if (stkErr || !data || data.length === 0) break;
+        allStockRows = allStockRows.concat(data);
+        if (data.length < 1000) break;
+        stkFrom += 1000;
+      }
 
       let newShopInfo: ShopInfo;
       if (shopData.data?.public_slug) {
@@ -273,11 +290,15 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         }
       }
 
-      const stockRows = stockData.data || [];
+      const stockRows = allStockRows;
+      const siteArticlesTotal = articlesCount.count || 0;
       const low = stockRows.filter((r: any) => Number(r.quantity) > 0 && Number(r.articles?.stock_min || 0) > 0 && Number(r.quantity) <= Number(r.articles.stock_min)).length;
-      const out = stockRows.filter((r: any) => Number(r.quantity) <= 0).length;
-      const stockValue = stockRows.reduce((s: number, r: any) => s + (Number(r.quantity || 0) * Number(r.articles?.purchase_price || 0)), 0);
+      const outInLevels = stockRows.filter((r: any) => Number(r.quantity) <= 0).length;
       const articlesInStockCount = stockRows.filter((r: any) => Number(r.quantity) > 0).length;
+      const articlesWithLevels = stockRows.length;
+      const articlesWithoutLevels = Math.max(0, siteArticlesTotal - articlesWithLevels);
+      const out = outInLevels + articlesWithoutLevels;
+      const stockValue = stockRows.reduce((s: number, r: any) => s + (Number(r.quantity || 0) * Number(r.articles?.purchase_price || 0)), 0);
 
       const webTodayRows = (webTodayData.data || []) as any[];
       const webTodayTotal = webTodayRows.reduce((s, r) => s + Number(r.total || 0), 0);
@@ -504,8 +525,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       // ── Intelligent Alerts ──
       const [alertStockOut, alertStockLow, alertAdjustments, alertModifiedSales] = await Promise.all([
-        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).lte('quantity', 0),
-        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).gt('quantity', 0),
+        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).lte('quantity', 0).limit(10000),
+        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).gt('quantity', 0).limit(10000),
         supabase.from('stock_movements').select('id, movement_type, quantity, note, created_at, articles(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['adjustment_in', 'adjustment_out']).order('created_at', { ascending: false }).limit(5),
         supabase.from('sales').select('id, sale_number, total, created_at, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(10),
       ]);
@@ -737,6 +758,55 @@ function MobileDashboard({
   balanceHidden, toggleBalanceHidden,
 }: any) {
   const { tenant, currentSite, sites, setCurrentSite } = useApp();
+
+  // ── Subscription info ─────────────────────────────────────────────────
+  const [subInfo, setSubInfo] = useState<{ planName: string; status: string; startsAt: string | null; expiresAt: string | null; price: number; billingCycle: string } | null>(null);
+  useEffect(() => {
+    if (!tenant) return;
+    const planCode = (tenant as any)?.plan || (tenant as any)?.selected_plan_code;
+    const approvalStatus = (tenant as any)?.approval_status;
+    const trialStart = (tenant as any)?.trial_start_date || null;
+    const trialEnd = (tenant as any)?.trial_end_date || null;
+    const subStart = (tenant as any)?.subscription_start_date || null;
+    const planExpires = (tenant as any)?.plan_expires_at || null;
+    const billingCycle = (tenant as any)?.billing_cycle || 'monthly';
+    const now = Date.now();
+
+    let status: string;
+    let startsAt: string | null;
+    let expiresAt: string | null;
+
+    if (approvalStatus !== 'approved') {
+      status = 'pending_review';
+      startsAt = null;
+      expiresAt = null;
+    } else if (billingCycle === 'lifetime') {
+      status = 'active';
+      startsAt = subStart || trialStart;
+      expiresAt = null;
+    } else if (trialEnd && new Date(trialEnd).getTime() > now) {
+      status = 'trial_active';
+      startsAt = trialStart;
+      expiresAt = trialEnd;
+    } else if (planExpires && new Date(planExpires).getTime() < now) {
+      status = 'expired';
+      startsAt = subStart || trialStart;
+      expiresAt = planExpires;
+    } else {
+      status = 'active';
+      startsAt = subStart || trialStart;
+      expiresAt = planExpires;
+    }
+
+    if (planCode) {
+      supabase.from('plans').select('name, price_monthly, price_yearly, price_lifetime').eq('code', planCode).maybeSingle().then(({ data }) => {
+        const price = billingCycle === 'lifetime' ? (data?.price_lifetime || 0) : billingCycle === 'yearly' ? (data?.price_yearly || 0) : (data?.price_monthly || 0);
+        setSubInfo({ planName: data?.name || planCode, status, startsAt, expiresAt, price, billingCycle });
+      });
+    } else {
+      setSubInfo({ planName: 'Standard', status, startsAt, expiresAt, price: 0, billingCycle });
+    }
+  }, [tenant]);
 
   // ── Multi-site overview ────────────────────────────────────────────────
   type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; todayDirectCash: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean; expenses: number };
@@ -1146,6 +1216,66 @@ function MobileDashboard({
       )}
 
 
+      {/* ── ABONNEMENT ── */}
+      {subInfo && (
+        <button
+          onClick={() => nav('settings', { target: 'subscription' })}
+          className="w-full rounded-xl bg-white overflow-hidden text-left active:scale-[0.98] transition-transform"
+          style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
+            <div className="flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5 text-neutral-600" />
+              <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Abonnement</span>
+            </div>
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+              subInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                : subInfo.status === 'expired' ? 'bg-red-50 text-red-600 border border-red-100'
+                : 'bg-amber-50 text-amber-600 border border-amber-100'
+            }`}>
+              {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
+            </span>
+          </div>
+          <div className="px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[11px] font-bold text-neutral-900">Plan {subInfo.planName}</div>
+                <div className="text-[9px] text-neutral-400 mt-0.5">
+                  {subInfo.billingCycle === 'lifetime' ? 'À vie' : subInfo.price > 0 ? `${Number(subInfo.price).toLocaleString('fr-FR')} FCFA/${subInfo.billingCycle === 'yearly' ? 'an' : 'mois'}` : 'Gratuit'}
+                </div>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />
+            </div>
+            {(subInfo.startsAt || subInfo.expiresAt) && (
+              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-neutral-100">
+                {subInfo.startsAt && (
+                  <div className="text-[9px] text-neutral-400">
+                    <span className="font-medium">{subInfo.status === 'trial_active' ? 'Essai depuis' : 'Début'} :</span> {new Date(subInfo.startsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                )}
+                {subInfo.expiresAt && (
+                  <div className="text-[9px]">
+                    <span className="font-medium text-neutral-400">Fin :</span>{' '}
+                    <span className={(() => {
+                      const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
+                      return days <= 0 ? 'text-red-500 font-bold' : days <= 7 ? 'text-amber-600 font-medium' : 'text-neutral-500';
+                    })()}>
+                      {new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {(() => {
+                        const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
+                        if (days <= 0) return ' (expiré)';
+                        return ` (${days}j)`;
+                      })()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </button>
+      )}
+
       {/* ── SANTÉ BUSINESS ── */}
       <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
         <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
@@ -1480,6 +1610,55 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
   const { tenant, currentSite, sites, setCurrentSite, profile } = useApp();
   const { can } = usePermissions();
 
+  // ── Subscription info ─────────────────────────────────────────────────
+  const [subInfo, setSubInfo] = useState<{ planName: string; status: string; startsAt: string | null; expiresAt: string | null; price: number; billingCycle: string } | null>(null);
+  useEffect(() => {
+    if (!tenant) return;
+    const planCode = (tenant as any)?.plan || (tenant as any)?.selected_plan_code;
+    const approvalStatus = (tenant as any)?.approval_status;
+    const trialStart = (tenant as any)?.trial_start_date || null;
+    const trialEnd = (tenant as any)?.trial_end_date || null;
+    const subStart = (tenant as any)?.subscription_start_date || null;
+    const planExpires = (tenant as any)?.plan_expires_at || null;
+    const billingCycle = (tenant as any)?.billing_cycle || 'monthly';
+    const now = Date.now();
+
+    let status: string;
+    let startsAt: string | null;
+    let expiresAt: string | null;
+
+    if (approvalStatus !== 'approved') {
+      status = 'pending_review';
+      startsAt = null;
+      expiresAt = null;
+    } else if (billingCycle === 'lifetime') {
+      status = 'active';
+      startsAt = subStart || trialStart;
+      expiresAt = null;
+    } else if (trialEnd && new Date(trialEnd).getTime() > now) {
+      status = 'trial_active';
+      startsAt = trialStart;
+      expiresAt = trialEnd;
+    } else if (planExpires && new Date(planExpires).getTime() < now) {
+      status = 'expired';
+      startsAt = subStart || trialStart;
+      expiresAt = planExpires;
+    } else {
+      status = 'active';
+      startsAt = subStart || trialStart;
+      expiresAt = planExpires;
+    }
+
+    if (planCode) {
+      supabase.from('plans').select('name, price_monthly, price_yearly, price_lifetime').eq('code', planCode).maybeSingle().then(({ data }) => {
+        const price = billingCycle === 'lifetime' ? (data?.price_lifetime || 0) : billingCycle === 'yearly' ? (data?.price_yearly || 0) : (data?.price_monthly || 0);
+        setSubInfo({ planName: data?.name || planCode, status, startsAt, expiresAt, price, billingCycle });
+      });
+    } else {
+      setSubInfo({ planName: 'Standard', status, startsAt, expiresAt, price: 0, billingCycle });
+    }
+  }, [tenant]);
+
   // ── Multi-site overview ────────────────────────────────────────────────
   type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; todayDirectCash: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean; expenses: number };
   const [multiSiteStats, setMultiSiteStats] = useState<SiteStat[]>([]);
@@ -1623,12 +1802,26 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
     if (modal === 'stock_in' || modal === 'stock_out' || modal === 'stock_transfer') {
       if (tenant && currentSite) {
-        const [{ data: arts }, { data: stk }] = await Promise.all([
-          supabase.from('articles').select('id, name, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
-          supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
-        ]);
-        const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-        const rows = (arts || []).map((a: any) => ({ article_id: a.id, name: a.name, internal_ref: a.internal_ref, quantity: qmap.get(a.id) ?? 0 }));
+        let allArts: any[] = [];
+        let artFrom = 0;
+        while (true) {
+          const { data, error: e } = await supabase.from('articles').select('id, name, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').range(artFrom, artFrom + 999);
+          if (e || !data || data.length === 0) break;
+          allArts = allArts.concat(data);
+          if (data.length < 1000) break;
+          artFrom += 1000;
+        }
+        let allStk: any[] = [];
+        let sFrom = 0;
+        while (true) {
+          const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).range(sFrom, sFrom + 999);
+          if (e || !data || data.length === 0) break;
+          allStk = allStk.concat(data);
+          if (data.length < 1000) break;
+          sFrom += 1000;
+        }
+        const qmap = new Map(allStk.map((r: any) => [r.article_id, Number(r.quantity)]));
+        const rows = allArts.map((a: any) => ({ article_id: a.id, name: a.name, internal_ref: a.internal_ref, quantity: qmap.get(a.id) ?? 0 }));
         setStockRows(rows);
         if (rows.length > 0) setAdjArticleId(rows[0].article_id);
       }
@@ -1646,7 +1839,10 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       customer_type: custForm.customer_type || 'particulier', is_active: true,
     });
     setQASaving(false);
-    if (!error) { setQAModal(null); nav('tiers', { target: 'customers' }); }
+    if (error) {
+      const msg = error.message || '';
+      toastError(msg.includes('Limite du plan') ? 'Limite de clients atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
+    } else { setQAModal(null); nav('tiers', { target: 'customers' }); }
   };
 
   const saveSupplier = async () => {
@@ -1661,7 +1857,10 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       payment_terms: supForm.payment_terms || '', is_active: true,
     });
     setQASaving(false);
-    if (!error) { setQAModal(null); nav('tiers', { target: 'suppliers' }); }
+    if (error) {
+      const msg = error.message || '';
+      toastError(msg.includes('Limite du plan') ? 'Limite de fournisseurs atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
+    } else { setQAModal(null); nav('tiers', { target: 'suppliers' }); }
   };
 
   const [stockDone, setStockDone] = useState<{ articleName: string; articleRef: string; qty: number; type: string; label: string } | null>(null);
@@ -1754,6 +1953,34 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             </button>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            {subInfo && (
+              <button
+                onClick={() => nav('settings', { target: 'subscription' })}
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-neutral-200 hover:border-neutral-300 transition-all group"
+              >
+                <CreditCard className="w-3.5 h-3.5 text-neutral-400 group-hover:text-neutral-600" />
+                <span className="text-xs font-semibold text-neutral-700">Plan {subInfo.planName}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  subInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600'
+                    : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
+                    : subInfo.status === 'expired' ? 'bg-red-50 text-red-600'
+                    : 'bg-amber-50 text-amber-600'
+                }`}>
+                  {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
+                </span>
+                {subInfo.billingCycle === 'lifetime' && !subInfo.expiresAt && (
+                  <span className="text-[10px] font-bold text-emerald-600">À vie</span>
+                )}
+                {subInfo.expiresAt && (() => {
+                  const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
+                  const dateStr = new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+                  if (days <= 0) return <span className="text-[10px] font-bold text-red-500">Expiré le {dateStr}</span>;
+                  if (days <= 7) return <span className="text-[10px] font-medium text-amber-600">Expire le {dateStr} ({days}j)</span>;
+                  return <span className="text-[10px] font-medium text-neutral-400">Jusqu'au {dateStr}</span>;
+                })()}
+                <ChevronRight className="w-3 h-3 text-neutral-300 group-hover:text-neutral-500" />
+              </button>
+            )}
             {hasMultiSites && (
               <div className="flex items-center gap-2">
                 <Store className="w-3.5 h-3.5 text-neutral-400" />
