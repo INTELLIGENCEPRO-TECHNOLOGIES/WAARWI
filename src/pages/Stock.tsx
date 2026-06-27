@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -26,7 +26,7 @@ type Row = {
 };
 
 type AdjustMode = 'in' | 'out' | 'transfer' | 'inventory';
-type FilterKey = 'all' | 'low' | 'out';
+type FilterKey = 'all' | 'instock' | 'low' | 'out';
 type StockMethod = 'none' | 'cmup' | 'lot';
 
 type LotRow = {
@@ -48,14 +48,22 @@ export function Stock() {
   const { success, error } = useToast();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [stkSortCol, setStkSortCol] = useState<'name' | 'stock' | 'min' | 'price'>('name');
+  const [stkSortDir, setStkSortDir] = useState<'asc' | 'desc'>('asc');
   const [tab, setTab] = useState<'stocks' | 'movements' | 'lots'>('stocks');
   const [mvSubTab, setMvSubTab] = useState<'movements' | 'documents'>('movements');
   const [moves, setMoves] = useState<any[]>([]);
   const [mvDateFrom, setMvDateFrom] = useState<string>('');
   const [mvDateTo, setMvDateTo] = useState<string>('');
   const [mvPickerOpen, setMvPickerOpen] = useState(false);
+  const [mvPage, setMvPage] = useState(1);
+  const [mvTotalCount, setMvTotalCount] = useState(0);
+  const [mvLoading, setMvLoading] = useState(false);
+  const MV_PAGE_SIZE = 50;
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
   const [listEditMode, setListEditMode] = useState<'in' | 'out' | 'inventory' | 'transfer'>('in');
   type ListEditEntry = { article_id: string; qty: number | ''; note: string; lot_number: string; };
@@ -187,12 +195,25 @@ export function Stock() {
       from += batchSize;
     }
 
-    const [{ data: stk }, { data: mv }] = await Promise.all([
-      supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
-      supabase.from('stock_movements')
-        .select('id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, articles(name, internal_ref)')
-        .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-        .order('created_at', { ascending: false }).limit(150),
+    const [{ data: stk }] = await Promise.all([
+      (async () => {
+        let allStk: any[] = [];
+        let stkFrom = 0;
+        const stkBatch = 1000;
+        while (true) {
+          const { data, error: e } = await supabase
+            .from('stock_levels')
+            .select('article_id, quantity')
+            .eq('tenant_id', tenant.id)
+            .eq('site_id', currentSite.id)
+            .range(stkFrom, stkFrom + stkBatch - 1);
+          if (e || !data) break;
+          allStk = allStk.concat(data);
+          if (data.length < stkBatch) break;
+          stkFrom += stkBatch;
+        }
+        return { data: allStk };
+      })(),
     ]);
     const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
     setRows(allArts.map((a: any) => ({
@@ -200,20 +221,29 @@ export function Stock() {
       purchase_price: Number(a.purchase_price), stock_min: Number(a.stock_min),
       stock_max: Number(a.stock_max), quantity: qmap.get(a.id) ?? 0, location: a.location || '',
     })).sort((a, b) => a.name.localeCompare(b.name)));
-    setMoves(mv || []);
 
     // Fetch stock levels per location (current site + own depots) for bulk operations / inventory book
     const ownDepotIds = depots.filter(d => d.parent_site_id === currentSite.id).map(d => d.id);
     const allLocationIds = [currentSite.id, ...ownDepotIds];
     if (allLocationIds.length > 0) {
-      const { data: allStk } = await supabase
-        .from('stock_levels')
-        .select('article_id, site_id, quantity')
-        .eq('tenant_id', tenant.id)
-        .in('site_id', allLocationIds);
+      let allLocStk: any[] = [];
+      let locFrom = 0;
+      const locBatch = 1000;
+      while (true) {
+        const { data, error: e } = await supabase
+          .from('stock_levels')
+          .select('article_id, site_id, quantity')
+          .eq('tenant_id', tenant.id)
+          .in('site_id', allLocationIds)
+          .range(locFrom, locFrom + locBatch - 1);
+        if (e || !data) break;
+        allLocStk = allLocStk.concat(data);
+        if (data.length < locBatch) break;
+        locFrom += locBatch;
+      }
       const byLoc = new Map<string, Map<string, number>>();
       for (const id of allLocationIds) byLoc.set(id, new Map());
-      (allStk || []).forEach((r: any) => {
+      allLocStk.forEach((r: any) => {
         const m = byLoc.get(r.site_id);
         if (m) m.set(r.article_id, Number(r.quantity));
       });
@@ -239,9 +269,73 @@ export function Stock() {
     }
 
     if (!silent) setLoading(false);
+    setInitialLoaded(true);
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id]);
+
+  // ── Load movements paginated with search/date filters ──────────────────────
+  const loadMovements = async (page = 1) => {
+    if (!tenant || !currentSite) return;
+    setMvLoading(true);
+    const from = (page - 1) * MV_PAGE_SIZE;
+    const to = from + MV_PAGE_SIZE - 1;
+
+    // If search is active, we need to find matching article IDs first
+    let articleFilter: string[] | null = null;
+    const q = search.toLowerCase().trim();
+    if (q && tab === 'movements') {
+      const matchingArticles = rows.filter(r =>
+        r.name.toLowerCase().includes(q) || r.internal_ref.toLowerCase().includes(q)
+      ).map(r => r.article_id);
+      articleFilter = matchingArticles;
+      if (matchingArticles.length === 0) {
+        setMoves([]);
+        setMvTotalCount(0);
+        setMvLoading(false);
+        return;
+      }
+    }
+
+    let query = supabase
+      .from('stock_movements')
+      .select('id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, articles(name, internal_ref)', { count: 'exact' })
+      .eq('tenant_id', tenant.id)
+      .eq('site_id', currentSite.id);
+
+    if (articleFilter && articleFilter.length <= 200) {
+      query = query.in('article_id', articleFilter);
+    }
+    if (mvDateFrom) {
+      query = query.gte('created_at', mvDateFrom + 'T00:00:00');
+    }
+    if (mvDateTo) {
+      query = query.lte('created_at', mvDateTo + 'T23:59:59');
+    }
+
+    query = query.order('created_at', { ascending: false }).range(from, to);
+
+    const { data, count, error: e } = await query;
+    if (!e) {
+      setMoves(data || []);
+      setMvTotalCount(count ?? 0);
+    }
+    setMvLoading(false);
+  };
+
+  useEffect(() => {
+    if (tab === 'movements' && mvSubTab === 'movements') loadMovements(mvPage);
+    /* eslint-disable-next-line */
+  }, [tab, mvSubTab, mvPage, mvDateFrom, mvDateTo, tenant?.id, currentSite?.id]);
+
+  // Reset movements page when search or date changes
+  useEffect(() => {
+    if (tab === 'movements' && mvSubTab === 'movements') {
+      setMvPage(1);
+      loadMovements(1);
+    }
+    /* eslint-disable-next-line */
+  }, [search]);
 
   // ── Load stock documents when entering documents sub-tab ────────────────────
   const loadStockDocs = async () => {
@@ -275,22 +369,12 @@ export function Stock() {
 
   const lowCount = useMemo(() => rows.filter(r => r.quantity <= r.stock_min && r.quantity > 0).length, [rows]);
   const outCount = useMemo(() => rows.filter(r => r.quantity <= 0).length, [rows]);
-  const okCount = rows.length - lowCount - outCount;
+  const inStockCount = useMemo(() => rows.filter(r => r.quantity > 0).length, [rows]);
   const totalValue = useMemo(() => rows.reduce((s, r) => s + r.quantity * r.purchase_price, 0), [rows]);
 
-  const filteredMoves = useMemo(() => {
-    if (!mvDateFrom && !mvDateTo) return moves;
-    const f = mvDateFrom ? new Date(mvDateFrom) : null;
-    if (f) f.setHours(0, 0, 0, 0);
-    const t = mvDateTo ? new Date(mvDateTo) : null;
-    if (t) t.setHours(23, 59, 59, 999);
-    return moves.filter(m => {
-      const d = new Date(m.created_at);
-      if (f && d < f) return false;
-      if (t && d > t) return false;
-      return true;
-    });
-  }, [moves, mvDateFrom, mvDateTo]);
+  const filteredMoves = moves;
+
+  const mvTotalPages = Math.max(1, Math.ceil(mvTotalCount / MV_PAGE_SIZE));
 
   const printInventoryBook = () => {
     if (!tenant || !currentSite) return;
@@ -530,32 +614,33 @@ export function Stock() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return rows.filter(r => {
+    let result = rows.filter(r => {
+      if (filter === 'instock' && r.quantity <= 0) return false;
       if (filter === 'low' && !(r.quantity > 0 && r.quantity <= r.stock_min)) return false;
       if (filter === 'out' && r.quantity > 0) return false;
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || r.internal_ref.toLowerCase().includes(q) || (r.location || '').toLowerCase().includes(q);
     });
-  }, [rows, search, filter]);
-
-  // Progressive rendering: only show N items at a time for performance with 10k+ articles
-  const PAGE_SIZE = 60;
-  const [displayLimit, setDisplayLimit] = useState(PAGE_SIZE);
-  useEffect(() => { setDisplayLimit(PAGE_SIZE); }, [search, filter]);
-  useEffect(() => { setListSourceSite(currentSite?.id || ''); }, [currentSite?.id]);
-  const visibleItems = useMemo(() => filtered.slice(0, displayLimit), [filtered, displayLimit]);
-  const hasMore = displayLimit < filtered.length;
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const sentinelCallback = useCallback((node: HTMLDivElement | null) => {
-    if (observerRef.current) observerRef.current.disconnect();
-    if (!node) return;
-    observerRef.current = new IntersectionObserver(entries => {
-      if (entries[0]?.isIntersecting) {
-        setDisplayLimit(prev => Math.min(prev + PAGE_SIZE, filtered.length));
+    result.sort((a, b) => {
+      let cmp = 0;
+      switch (stkSortCol) {
+        case 'name': cmp = a.name.localeCompare(b.name); break;
+        case 'stock': cmp = a.quantity - b.quantity; break;
+        case 'min': cmp = a.stock_min - b.stock_min; break;
+        case 'price': cmp = a.purchase_price - b.purchase_price; break;
       }
-    }, { rootMargin: '200px' });
-    observerRef.current.observe(node);
-  }, [filtered.length]);
+      return stkSortDir === 'asc' ? cmp : -cmp;
+    });
+    return result;
+  }, [rows, search, filter, stkSortCol, stkSortDir]);
+
+  // Paginated rendering
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [search, filter, stkSortCol, stkSortDir]);
+  useEffect(() => { setListSourceSite(currentSite?.id || ''); }, [currentSite?.id]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const visibleItems = useMemo(() => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE), [filtered, currentPage]);
 
   const openAdj = (r: Row, mode: AdjustMode) => {
     setAdjRow(r); setAdjMode(mode); setAdjQty(''); setAdjNote('');
@@ -669,7 +754,15 @@ export function Stock() {
       }
       setAdjDoneData({ articleName: adjRow.name, articleRef: adjRow.internal_ref, qty: savedQty, type: savedType, label: mvTypeLabel[savedType] || savedType });
       setAdjDone(true);
-      await load();
+      // Quick targeted refresh: update only the affected article's stock
+      const { data: updatedStk } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant!.id).eq('site_id', targetSite).eq('article_id', adjRow.article_id).maybeSingle();
+      if (updatedStk) {
+        setRows(prev => prev.map(r => r.article_id === adjRow.article_id ? { ...r, quantity: Number(updatedStk.quantity) } : r));
+      } else {
+        setRows(prev => prev.map(r => r.article_id === adjRow.article_id ? { ...r, quantity: 0 } : r));
+      }
+      // Refresh movements if on that tab
+      if (tab === 'movements' && mvSubTab === 'movements') loadMovements(mvPage);
     } catch (e: any) {
       error(e.message || 'Erreur');
     } finally {
@@ -682,6 +775,7 @@ export function Stock() {
     initial: 'Initial', transfer_in: 'Transfert +', transfer_out: 'Transfert -',
     inventory: 'Inventaire', return: 'Retour', purchase: 'Achat',
   };
+
   const mvTypeColor: Record<string, string> = {
     stock_initial: 'bg-slate-100 text-slate-700', initial: 'bg-slate-100 text-slate-700',
     sale: 'bg-red-50 text-red-700', adjustment_out: 'bg-red-50 text-red-700', transfer_out: 'bg-amber-50 text-amber-700',
@@ -705,9 +799,17 @@ export function Stock() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher…"
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder={tab === 'movements' ? "Rechercher un article…" : "Rechercher…"}
             className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
           />
+          {/* Valorisation inside search bar - visible when not searching */}
+          {can('view_purchase_prices') && !search && !searchFocused && (
+            <span className="shrink-0 text-base font-extrabold text-slate-800 num tracking-tight pr-1">
+              {formatFCFA(totalValue)}
+            </span>
+          )}
           {search && (
             <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors">
               <X className="w-3.5 h-3.5" />
@@ -773,10 +875,15 @@ export function Stock() {
             filter === 'all' ? 'bg-ink-900 text-white' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
           }`}
         >Tous</button>
-        {okCount > 0 && (
-          <span className="shrink-0 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{okCount} OK
-          </span>
+        {inStockCount > 0 && (
+          <button
+            onClick={() => setFilter(f => f === 'instock' ? 'all' : 'instock')}
+            className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all ${
+              filter === 'instock' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{inStockCount} En stock
+          </button>
         )}
         <button
           onClick={() => setFilter(f => f === 'low' ? 'all' : 'low')}
@@ -796,7 +903,6 @@ export function Stock() {
         >
           <AlertTriangle className="w-3 h-3" />{outCount} rupture{outCount > 1 ? 's' : ''}
         </button>
-        {can('view_purchase_prices') && <span className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200 num">Val. {formatFCFA(totalValue)}</span>}
       </div>
 
       {/* Quick actions row */}
@@ -826,9 +932,24 @@ export function Stock() {
       )}
       </div>
 
+      {/* Sort controls for stocks tab */}
+      {tab === 'stocks' && (
+        <div className="flex items-center gap-1 text-[10px] font-bold">
+          <span className="text-slate-400 mr-1">Trier:</span>
+          {([['name', 'Nom'], ['stock', 'Qté'], ['min', 'Min'], ['price', 'P.Achat']] as const).map(([col, label]) => (
+            <button key={col} onClick={() => { setStkSortCol(col); setStkSortDir(d => stkSortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}
+              className={`px-2 py-1 rounded-lg inline-flex items-center gap-0.5 transition-all ${stkSortCol === col ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            >
+              {label}
+              {stkSortCol === col && (stkSortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {tab === 'stocks' ? (
-        loading ? (
-          <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+        (!initialLoaded && loading) ? (
+          <div className="py-16 flex justify-center opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         ) : filtered.length === 0 ? (
           <div className="card-premium"><EmptyState icon={Boxes} title="Aucun article" description="Créez des articles dans le module Articles." /></div>
         ) : viewMode === 'list' ? (
@@ -864,6 +985,9 @@ export function Stock() {
             setListSourceSite={setListSourceSite}
             stockByLocation={stockByLocation}
             tenantId={tenant!.id}
+            sortCol={stkSortCol}
+            sortDir={stkSortDir}
+            onSort={(col) => { setStkSortCol(col); setStkSortDir(d => stkSortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}
           />
         ) : (
           <>
@@ -942,11 +1066,18 @@ export function Stock() {
               );
             })}
           </div>
-          {hasMore && (
-            <div ref={sentinelCallback} className="flex justify-center py-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                {visibleItems.length} / {filtered.length} articles
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-2 py-3 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} sur {filtered.length} articles
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
+                <span className="text-[11px] font-medium text-slate-700 px-2">{currentPage} / {totalPages}</span>
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
               </div>
             </div>
           )}
@@ -973,21 +1104,29 @@ export function Stock() {
           {mvSubTab === 'movements' ? (
           <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-            <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filteredMoves.length} / {moves.length}</span>
+            <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{mvTotalCount} mouvement{mvTotalCount > 1 ? 's' : ''}</span>
+            {search && tab === 'movements' && (
+              <span className="shrink-0 px-2 py-1 rounded-full bg-blue-50 text-blue-700 inline-flex items-center gap-1 normal-case tracking-normal text-[10px]">
+                Filtre: "{search}"
+              </span>
+            )}
             {(mvDateFrom || mvDateTo) && (
               <span className="shrink-0 px-2 py-1 rounded-full bg-brand-50 text-brand-700 inline-flex items-center gap-1 normal-case tracking-normal num text-[10px]">
                 <Calendar className="w-3 h-3" />
                 {mvDateFrom ? new Date(mvDateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '…'}
                 {' → '}
                 {mvDateTo ? new Date(mvDateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '…'}
-                <button onClick={() => { setMvDateFrom(''); setMvDateTo(''); }} className="ml-0.5 hover:text-brand-900"><X className="w-3 h-3" /></button>
+                <button onClick={() => { setMvDateFrom(''); setMvDateTo(''); setMvPage(1); }} className="ml-0.5 hover:text-brand-900"><X className="w-3 h-3" /></button>
               </span>
             )}
           </div>
 
-          {filteredMoves.length === 0 ? (
-            <div className="card-premium"><EmptyState icon={History} title={(mvDateFrom || mvDateTo) ? 'Aucun mouvement sur la période' : 'Aucun mouvement'} description={(mvDateFrom || mvDateTo) ? 'Essayez une autre période.' : 'Les mouvements de stock apparaîtront ici après chaque opération.'} /></div>
+          {mvLoading ? (
+            <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
+          ) : filteredMoves.length === 0 ? (
+            <div className="card-premium"><EmptyState icon={History} title={(mvDateFrom || mvDateTo || search) ? 'Aucun mouvement trouvé' : 'Aucun mouvement'} description={(mvDateFrom || mvDateTo || search) ? 'Essayez une autre période ou un autre article.' : 'Les mouvements de stock apparaîtront ici après chaque opération.'} /></div>
           ) : (
+          <>
           <div className={`rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100 count-up ${flashKey === 'stockIn' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
             {filteredMoves.map(m => {
               const qty = Number(m.quantity);
@@ -1033,6 +1172,22 @@ export function Stock() {
               );
             })}
           </div>
+          {/* Movements pagination */}
+          {mvTotalPages > 1 && (
+            <div className="flex items-center justify-between px-2 py-3 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                {((mvPage - 1) * MV_PAGE_SIZE) + 1}–{Math.min(mvPage * MV_PAGE_SIZE, mvTotalCount)} sur {mvTotalCount}
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setMvPage(1)} disabled={mvPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setMvPage(p => Math.max(1, p - 1))} disabled={mvPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
+                <span className="text-[11px] font-medium text-slate-700 px-2">{mvPage} / {mvTotalPages}</span>
+                <button onClick={() => setMvPage(p => Math.min(mvTotalPages, p + 1))} disabled={mvPage === mvTotalPages} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
+                <button onClick={() => setMvPage(mvTotalPages)} disabled={mvPage === mvTotalPages} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+              </div>
+            </div>
+          )}
+          </>
           )}
           </>
           ) : (
@@ -1040,7 +1195,7 @@ export function Stock() {
           <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
             <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">
-              {stockDocs.filter(d => docsTypeFilter === 'all' || d.doc_type === docsTypeFilter).length} / {stockDocs.length}
+              {(() => { const sq = search.toLowerCase().trim(); return stockDocs.filter(d => { if (docsTypeFilter !== 'all' && d.doc_type !== docsTypeFilter) return false; if (sq) return d.doc_number.toLowerCase().includes(sq) || (d.note || '').toLowerCase().includes(sq); return true; }).length; })() } / {stockDocs.length}
             </span>
             {(['all', 'entry', 'exit', 'transfer', 'inventory'] as const).map(k => {
               const labels: Record<string, string> = { all: 'Tous', entry: 'Entrées', exit: 'Sorties', transfer: 'Transferts', inventory: 'Inventaires' };
@@ -1055,7 +1210,12 @@ export function Stock() {
           </div>
 
           {(() => {
-            const filtered = stockDocs.filter(d => docsTypeFilter === 'all' || d.doc_type === docsTypeFilter);
+            const sq = search.toLowerCase().trim();
+            const filtered = stockDocs.filter(d => {
+              if (docsTypeFilter !== 'all' && d.doc_type !== docsTypeFilter) return false;
+              if (sq) return d.doc_number.toLowerCase().includes(sq) || (d.note || '').toLowerCase().includes(sq);
+              return true;
+            });
             if (filtered.length === 0) {
               return <div className="card-premium"><EmptyState icon={ClipboardList} title="Aucun document" description="Les documents de stock (opérations en masse) apparaîtront ici." /></div>;
             }
@@ -1130,7 +1290,7 @@ export function Stock() {
         onClose={() => setMvPickerOpen(false)}
         from={mvDateFrom}
         to={mvDateTo}
-        onApply={(f, t) => { setMvDateFrom(f); setMvDateTo(t); setMvPickerOpen(false); }}
+        onApply={(f, t) => { setMvDateFrom(f); setMvDateTo(t); setMvPage(1); setMvPickerOpen(false); }}
       />
 
       {/* Adjust modal */}
@@ -1786,6 +1946,7 @@ function StockListEditView({
   canViewPrices, canManageStock, onSaved, successToast, errorToast, stockMethod,
   sites, depots, listTransferTarget, setListTransferTarget,
   listSourceSite, setListSourceSite, stockByLocation, tenantId,
+  sortCol, sortDir, onSort,
 }: {
   filtered: Row[];
   listEditMode: 'in' | 'out' | 'inventory' | 'transfer';
@@ -1810,6 +1971,9 @@ function StockListEditView({
   setListSourceSite: (v: string) => void;
   stockByLocation: Map<string, Map<string, number>>;
   tenantId: string;
+  sortCol: 'name' | 'stock' | 'min' | 'price';
+  sortDir: 'asc' | 'desc';
+  onSort: (col: 'name' | 'stock' | 'min' | 'price') => void;
 }) {
   const lotMode = stockMethod === 'lot';
   const editCount = Array.from(listEdits.values()).filter(e => e.qty !== '' && Number(e.qty) !== 0).length;
@@ -1823,20 +1987,12 @@ function StockListEditView({
     return sourceStockMap.get(articleId) ?? 0;
   };
 
-  // Progressive rendering for table with many rows
+  // Paginated table rendering
   const TABLE_PAGE = 100;
-  const [tableLimit, setTableLimit] = useState(TABLE_PAGE);
-  const tableVisibleRows = useMemo(() => filtered.slice(0, tableLimit), [filtered, tableLimit]);
-  const tableHasMore = tableLimit < filtered.length;
-  const tableObsRef = useRef<IntersectionObserver | null>(null);
-  const tableSentinelRef = useCallback((node: HTMLDivElement | null) => {
-    if (tableObsRef.current) tableObsRef.current.disconnect();
-    if (!node) return;
-    tableObsRef.current = new IntersectionObserver(entries => {
-      if (entries[0]?.isIntersecting) setTableLimit(prev => Math.min(prev + TABLE_PAGE, filtered.length));
-    }, { rootMargin: '200px' });
-    tableObsRef.current.observe(node);
-  }, [filtered.length]);
+  const [tablePage, setTablePage] = useState(1);
+  useEffect(() => { setTablePage(1); }, [filtered.length]);
+  const tableTotalPages = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE));
+  const tableVisibleRows = useMemo(() => filtered.slice((tablePage - 1) * TABLE_PAGE, tablePage * TABLE_PAGE), [filtered, tablePage]);
 
   const updateEdit = (articleId: string, qty: number | '', note?: string, lot_number?: string) => {
     const next = new Map(listEdits);
@@ -1995,9 +2151,9 @@ function StockListEditView({
   };
 
   return (
-    <div className="space-y-2">
-      {/* Mode selector + save button */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 220px)', minHeight: '400px' }}>
+      {/* Mode selector - sticky top */}
+      <div className="shrink-0 flex items-center justify-between gap-2 flex-wrap pb-2">
         <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
           <button
             onClick={() => { setListEditMode('in'); setListEdits(new Map()); }}
@@ -2026,15 +2182,6 @@ function StockListEditView({
             <ClipboardList className="w-3.5 h-3.5 inline mr-1" />Inventaire
           </button>
         </div>
-
-        <button
-          onClick={saveBulk}
-          disabled={editCount === 0 || listSaving}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow hover:shadow-premium disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
-        >
-          {listSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          Enregistrer{editCount > 0 && ` (${editCount})`}
-        </button>
       </div>
 
       {/* Source / Destination pickers */}
@@ -2048,7 +2195,7 @@ function StockListEditView({
         const iconColor = isTransfer ? 'text-amber-600' : 'text-slate-600';
         const selectColor = isTransfer ? 'border-amber-200 focus:ring-amber-400/30' : 'border-slate-200 focus:ring-brand-500/20';
         return (
-          <div className={`grid ${isTransfer && showSourcePicker ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-2`}>
+          <div className={`shrink-0 mb-2 grid ${isTransfer && showSourcePicker ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-2`}>
             {showSourcePicker && (
               <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${wrapperColor}`}>
                 <MapPin className={`w-4 h-4 shrink-0 ${iconColor}`} />
@@ -2090,16 +2237,24 @@ function StockListEditView({
         );
       })()}
 
-      {/* Table */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Table with sticky header and scrollable body */}
+      <div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+        <div className="shrink-0 overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/80">
-                <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[30%]">Article</th>
-                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[80px]">Stock</th>
-                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[60px]">Min</th>
-                {canViewPrices && <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right w-[100px]">P.Achat</th>}
+                <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[30%] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('name')}>
+                  <span className="inline-flex items-center gap-0.5">Article {sortCol === 'name' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
+                </th>
+                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[80px] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('stock')}>
+                  <span className="inline-flex items-center gap-0.5 justify-center">Stock {sortCol === 'stock' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
+                </th>
+                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[60px] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('min')}>
+                  <span className="inline-flex items-center gap-0.5 justify-center">Min {sortCol === 'min' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
+                </th>
+                {canViewPrices && <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right w-[100px] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('price')}>
+                  <span className="inline-flex items-center gap-0.5 justify-end">P.Achat {sortCol === 'price' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
+                </th>}
                 <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[100px]">
                   {listEditMode === 'in' ? 'Qté entrée' : listEditMode === 'out' ? 'Qté sortie' : listEditMode === 'transfer' ? 'Qté transf.' : 'Nvelle qté'}
                 </th>
@@ -2110,6 +2265,10 @@ function StockListEditView({
                 <th className="px-2 py-2 w-[30px]"></th>
               </tr>
             </thead>
+          </table>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
+          <table className="w-full text-left">
             <tbody>
               {tableVisibleRows.map((r, idx) => {
                 const edit = listEdits.get(r.article_id);
@@ -2119,17 +2278,17 @@ function StockListEditView({
                 const low = !out && displayQty <= r.stock_min;
                 return (
                   <tr key={r.article_id} className={`border-b border-slate-50 transition-colors ${hasValue ? 'bg-brand-50/30' : 'hover:bg-slate-50/50'}`}>
-                    <td className="px-3 py-1.5">
+                    <td className="px-3 py-1.5 w-[30%]">
                       <div className="text-[11px] font-semibold text-neutral-900 leading-tight">{r.name}</div>
                     </td>
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-2 py-1.5 text-center w-[80px]">
                       <span className={`inline-block text-xs font-bold num px-1.5 py-0.5 rounded ${out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-700' : 'text-slate-800'}`}>
                         {displayQty}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5 text-center text-[11px] text-slate-500 num">{r.stock_min}</td>
-                    {canViewPrices && <td className="px-2 py-1.5 text-right text-[11px] text-slate-600 num">{formatFCFA(r.purchase_price)}</td>}
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-1.5 text-center text-[11px] text-slate-500 num w-[60px]">{r.stock_min}</td>
+                    {canViewPrices && <td className="px-2 py-1.5 text-right text-[11px] text-slate-600 num w-[100px]">{formatFCFA(r.purchase_price)}</td>}
+                    <td className="px-2 py-1.5 w-[100px]">
                       <input
                         ref={el => { if (el) listInputRefs.current.set(r.article_id, el); }}
                         type="number"
@@ -2143,17 +2302,8 @@ function StockListEditView({
                         }`}
                       />
                     </td>
-                    <td className="px-2 py-1.5 hidden md:table-cell">
-                      <input
-                        type="text"
-                        placeholder="..."
-                        value={edit?.note ?? ''}
-                        onChange={e => updateEdit(r.article_id, edit?.qty ?? '', e.target.value, edit?.lot_number)}
-                        className="w-full text-[10px] px-2 py-1.5 rounded-lg border border-slate-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-500/20 outline-none transition-all bg-white"
-                      />
-                    </td>
                     {lotMode && listEditMode === 'in' && (
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-1.5 w-[110px]">
                         <input
                           type="text"
                           placeholder="LOT-…"
@@ -2167,7 +2317,16 @@ function StockListEditView({
                         />
                       </td>
                     )}
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-1.5 hidden md:table-cell w-[120px]">
+                      <input
+                        type="text"
+                        placeholder="..."
+                        value={edit?.note ?? ''}
+                        onChange={e => updateEdit(r.article_id, edit?.qty ?? '', e.target.value, edit?.lot_number)}
+                        className="w-full text-[10px] px-2 py-1.5 rounded-lg border border-slate-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-500/20 outline-none transition-all bg-white"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5 w-[30px]">
                       {hasValue && <Check className="w-3.5 h-3.5 text-emerald-500" />}
                     </td>
                   </tr>
@@ -2175,16 +2334,35 @@ function StockListEditView({
               })}
             </tbody>
           </table>
+          {tableTotalPages > 1 && (
+            <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+              <span className="text-[10px] text-slate-500">
+                {((tablePage - 1) * TABLE_PAGE) + 1}–{Math.min(tablePage * TABLE_PAGE, filtered.length)} / {filtered.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setTablePage(1)} disabled={tablePage === 1} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setTablePage(p => Math.max(1, p - 1))} disabled={tablePage === 1} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
+                <span className="text-[10px] font-medium text-slate-700 px-1">{tablePage}/{tableTotalPages}</span>
+                <button onClick={() => setTablePage(p => Math.min(tableTotalPages, p + 1))} disabled={tablePage === tableTotalPages} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
+                <button onClick={() => setTablePage(tableTotalPages)} disabled={tablePage === tableTotalPages} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      {tableHasMore && (
-        <div ref={tableSentinelRef} className="flex justify-center py-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
-            <Loader2 className="w-3 h-3 animate-spin" />
-            {tableVisibleRows.length} / {filtered.length} articles
-          </div>
-        </div>
-      )}
+
+      {/* Sticky save button at bottom */}
+      <div className="shrink-0 pt-2 flex items-center justify-between border-t border-slate-100 mt-2 bg-slate-50">
+        <span className="text-[11px] text-slate-500">{editCount > 0 ? `${editCount} article${editCount > 1 ? 's' : ''} modifié${editCount > 1 ? 's' : ''}` : 'Saisissez les quantités puis enregistrez'}</span>
+        <button
+          onClick={saveBulk}
+          disabled={editCount === 0 || listSaving}
+          className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow hover:shadow-premium disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+        >
+          {listSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          Enregistrer{editCount > 0 && ` (${editCount})`}
+        </button>
+      </div>
     </div>
   );
 }

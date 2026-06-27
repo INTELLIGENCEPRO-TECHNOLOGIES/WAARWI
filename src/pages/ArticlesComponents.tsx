@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, ReactNode } from 'react';
-import { Package, Trash2, X, Plus, Search, ChevronDown, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, DollarSign, Boxes, Car, CheckCircle2, Percent, ShieldCheck } from 'lucide-react';
+import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, DollarSign, Boxes, Car, CheckCircle2, Percent, ShieldCheck } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 type TierDefinition = { id: string; tier_name: string; sort_order: number; is_default: boolean };
@@ -435,7 +435,7 @@ export function ImageTab({ currentUrl, uploading, onFileSelect, onDelete }: {
 
 // ── DesktopListView (inline-editable table) ────────────────
 
-export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap, suppliers, categories, listEdits, onUpdateEdit, selectionMode, selectedIds, onToggleSelect, onSelectAll, allSelected, onOpenFullScreen, onDelete, showMargin: _showMargin, showStock, showPurchase: _showPurchase }: {
+export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap, suppliers, categories, listEdits, onUpdateEdit, selectionMode, selectedIds, onToggleSelect, onSelectAll, allSelected, onOpenFullScreen, onDelete, showMargin: _showMargin, showStock, showPurchase: _showPurchase, sortCol, sortDir, onSort }: {
   articles: Article[]; categoryMap: Map<string, Category>; stockMap: Record<string, number>;
   suppliers: any[]; categories: Category[];
   listEdits: Map<string, Partial<Article>>; onUpdateEdit: (id: string, field: string, value: any) => void;
@@ -443,6 +443,7 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
   onSelectAll: () => void; allSelected: boolean;
   onOpenFullScreen: (a: Article) => void; onDelete: (a: Article) => void;
   showMargin: boolean; showStock: boolean; showPurchase: boolean;
+  sortCol?: string; sortDir?: 'asc' | 'desc'; onSort?: (col: string) => void;
 }) {
   const getVal = (a: Article, field: keyof Article) => {
     const edit = listEdits.get(a.id);
@@ -456,27 +457,43 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
     ...categories.filter(s => s.parent_id === c.id).map(s => ({ value: s.id, label: `  ↳ ${s.name}` })),
   ]);
 
+  const SortIcon = ({ col }: { col: string }) => {
+    if (!onSort) return null;
+    if (sortCol === col) return sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />;
+    return <ChevronDown className="w-3 h-3 opacity-30" />;
+  };
+
   return (
     <div className="rounded-2xl bg-white shadow-card border border-slate-100 overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
         <table className="w-full text-xs">
-          <thead className="bg-slate-50/70 text-[9px] uppercase text-slate-500 tracking-wider border-b border-slate-100">
+          <thead className="bg-slate-50/70 text-[9px] uppercase text-slate-500 tracking-wider border-b border-slate-100 sticky top-0 z-10">
             <tr>
               {selectionMode && (
-                <th className="px-2 py-2.5 w-8">
+                <th className="px-2 py-2.5 w-8 bg-slate-50">
                   <button onClick={onSelectAll} className="text-brand-700">{allSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}</button>
                 </th>
               )}
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[280px]">Désignation</th>
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[160px]">Référence</th>
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[120px]">Catégorie</th>
-              <th className="px-2 py-2.5 text-right font-semibold min-w-[90px]">Prix détail</th>
-              <th className="px-2 py-2.5 text-right font-semibold min-w-[90px]">Prix gros</th>
-              <th className="px-2 py-2.5 text-right font-semibold min-w-[60px]">Stk min</th>
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[70px]">Unité</th>
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[100px]">Fournisseur</th>
-              {showStock && <th className="px-2 py-2.5 text-right font-semibold min-w-[50px]">Stock</th>}
-              <th className="px-2 py-2.5 text-center font-semibold w-16">Actions</th>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[280px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('name')}>
+                <span className="inline-flex items-center gap-1">Désignation <SortIcon col="name" /></span>
+              </th>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[160px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('ref')}>
+                <span className="inline-flex items-center gap-1">Référence <SortIcon col="ref" /></span>
+              </th>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[120px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('category')}>
+                <span className="inline-flex items-center gap-1">Catégorie <SortIcon col="category" /></span>
+              </th>
+              <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('price')}>
+                <span className="inline-flex items-center gap-1 justify-end">Prix détail <SortIcon col="price" /></span>
+              </th>
+              <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-slate-50">Prix gros</th>
+              <th className="px-2 py-2.5 text-right font-semibold min-w-[60px] bg-slate-50">Stk min</th>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[70px] bg-slate-50">Unité</th>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[100px] bg-slate-50">Fournisseur</th>
+              {showStock && <th className="px-2 py-2.5 text-right font-semibold min-w-[50px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('stock')}>
+                <span className="inline-flex items-center gap-1 justify-end">Stock <SortIcon col="stock" /></span>
+              </th>}
+              <th className="px-2 py-2.5 text-center font-semibold w-16 bg-slate-50">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">

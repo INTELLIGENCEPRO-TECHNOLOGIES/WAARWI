@@ -739,7 +739,7 @@ function MobileDashboard({
   const { tenant, currentSite, sites, setCurrentSite } = useApp();
 
   // ── Multi-site overview ────────────────────────────────────────────────
-  type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
+  type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; todayDirectCash: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean; expenses: number };
   const [multiSiteStats, setMultiSiteStats] = useState<SiteStat[]>([]);
   const hasMultiSites = sites.length > 1;
 
@@ -750,22 +750,29 @@ function MobileDashboard({
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const results: SiteStat[] = [];
       for (const site of sites) {
-        const [{ data: salesData }, { data: sessData }, { data: pmtData }, { data: collectedPmts }, { data: collectedMovs }] = await Promise.all([
+        const { data: sessData } = await supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1);
+        const session = (sessData || [])[0];
+        const sessionIds = session ? [session.id] : [];
+        const [{ data: salesData }, { data: pmtData }, { data: collectedPmts }, { data: collectedMovs }, { data: sessionMovs }] = await Promise.all([
           supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
-          supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1),
-          supabase.from('sale_payments').select('amount, cash_session_id').eq('tenant_id', tenant.id).in('cash_session_id', (await supabase.from('cash_sessions').select('id').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open')).data?.map((s: any) => s.id) || []),
+          supabase.from('sale_payments').select('amount').eq('tenant_id', tenant.id).in('cash_session_id', sessionIds),
           supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', today.toISOString()),
           supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()),
+          session ? supabase.from('cash_movements').select('kind, amount').eq('tenant_id', tenant.id).eq('cash_session_id', session.id) : Promise.resolve({ data: [] }),
         ]);
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
-        const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
-          + (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
-        const session = (sessData || [])[0];
+        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + todayDirectCash;
         const openingAmount = session ? Number(session.opening_amount || 0) : 0;
         const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-        const cashBalance = session ? openingAmount + sessionPayTotal : 0;
-        results.push({ id: site.id, name: site.name, todaySales, todayCollected, salesCount, cashBalance, openingAmount, sessionOpen: !!session });
+        let sessionMovIncome = 0, sessionMovExpense = 0;
+        for (const m of (sessionMovs || []) as any[]) {
+          if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
+          else sessionMovIncome += Number(m.amount || 0);
+        }
+        const cashBalance = session ? openingAmount + sessionPayTotal + sessionMovIncome - sessionMovExpense : 0;
+        results.push({ id: site.id, name: site.name, todaySales, todayCollected, todayDirectCash, salesCount, cashBalance, openingAmount, sessionOpen: !!session, expenses: sessionMovExpense });
       }
       if (!cancelled) setMultiSiteStats(results);
     })();
@@ -830,7 +837,7 @@ function MobileDashboard({
   }, [stats.webNew]);
 
   return (
-    <div className="space-y-1.5 animate-fade-in pb-1">
+    <div className="space-y-2.5 animate-fade-in pb-16">
 
       {/* ── HERO CARD ── */}
       <button
@@ -917,32 +924,6 @@ function MobileDashboard({
               </div>
             )}
 
-            {/* CAISSE row */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.07)' }}>
-                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
-                </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Solde caisse</span>
-              </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.cashBalance)}
-              </span>
-            </div>
-
-            {/* DEPENSES row */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.15)' }}>
-                  <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
-                </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
-              </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.sessionExpenses)}
-              </span>
-            </div>
-
             {/* VENTES FACTURÉES row */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
@@ -966,6 +947,32 @@ function MobileDashboard({
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.todayDirectCash)}
+              </span>
+            </div>
+
+            {/* DEPENSES row */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.15)' }}>
+                  <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
+              </div>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.sessionExpenses)}
+              </span>
+            </div>
+
+            {/* SOLDE CAISSE row */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.07)' }}>
+                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Solde caisse</span>
+              </div>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.cashBalance)}
               </span>
             </div>
 
@@ -1008,37 +1015,43 @@ function MobileDashboard({
 
       {/* ── MULTI-SITE STRIP (mobile) ── */}
       {sites.length > 1 && multiSiteStats.length > 0 && (
-        <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
-          <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
+        <div className="rounded-[18px] bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
+          <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-neutral-100/50 bg-neutral-50/80">
             <div className="flex items-center gap-1.5">
               <Network className="w-3.5 h-3.5 text-neutral-700" />
               <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Magasins</span>
             </div>
             <span className="text-[9px] font-bold text-neutral-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + x.todayCollected, 0))}</span>
           </div>
-          <div className="flex overflow-x-auto gap-1.5 p-2 no-scrollbar">
+          <div className="flex overflow-x-auto gap-2 p-3 snap-x snap-mandatory no-scrollbar">
             {multiSiteStats.map(site => {
               const isCurrent = site.id === currentSite?.id;
               return (
                 <button
                   key={site.id}
                   onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
-                  className={`shrink-0 p-2.5 rounded-xl border min-w-[135px] text-left transition-all ${isCurrent ? 'border-neutral-400 bg-neutral-50' : 'border-neutral-200 bg-white active:bg-neutral-50'}`}
+                  className={`snap-start shrink-0 w-[calc(50%-4px)] p-2.5 rounded-xl border text-left transition-all ${isCurrent ? 'border-neutral-400 bg-neutral-50' : 'border-neutral-200 bg-white active:bg-neutral-50'}`}
                 >
-                  <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="flex items-center gap-1.5 mb-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
-                    <span className="text-[10px] font-bold text-neutral-800">{site.name}</span>
+                    <span className="text-[10px] font-bold text-neutral-800 truncate">{site.name}</span>
                   </div>
-                  <div className="text-[13px] font-black num text-neutral-900 mb-0.5">{formatCompactFCFA(site.todayCollected)}</div>
-                  <div className="text-[8px] text-neutral-400 font-semibold mb-1">Encaissé · facturé {formatCompactFCFA(site.todaySales)}</div>
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Tickets</span>
-                      <span className="text-[9px] font-bold text-neutral-700 num">{site.salesCount}</span>
+                      <span className="text-[8px] text-neutral-400 font-semibold">Facturées</span>
+                      <span className="text-[9px] font-bold text-neutral-700 num">{formatCompactFCFA(site.todaySales)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Caisse</span>
-                      <span className={`text-[9px] font-bold num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
+                      <span className="text-[8px] text-neutral-400 font-semibold">Encaissé direct</span>
+                      <span className="text-[9px] font-bold text-neutral-900 num">{formatCompactFCFA(site.todayDirectCash)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] text-neutral-400 font-semibold">Dépenses</span>
+                      <span className="text-[9px] font-bold text-red-600 num">{site.expenses > 0 ? `-${formatCompactFCFA(site.expenses)}` : '0'}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-0.5 border-t border-neutral-100">
+                      <span className="text-[8px] text-neutral-500 font-bold">Solde caisse</span>
+                      <span className={`text-[10px] font-black num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
                     </div>
                   </div>
                 </button>
@@ -1049,7 +1062,7 @@ function MobileDashboard({
       )}
 
       {/* ── FINANCES ── */}
-      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
+      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
         <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-200/50 bg-gradient-to-r from-neutral-50/80 to-white">
           <div className="flex items-center gap-1.5">
             <CreditCard className="w-3.5 h-3.5 text-neutral-600" />
@@ -1064,7 +1077,7 @@ function MobileDashboard({
             <div className="text-[8px] text-neutral-400 font-semibold mb-0.5">Créances</div>
             <div className="num text-[14px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.receivables)}</div>
             <div className="flex items-center justify-between mt-0.5">
-              <div className="text-[8px] text-neutral-400">{stats.customersCount} client{stats.customersCount > 1 ? 's' : ''}</div>
+              <div className="text-[8px] text-neutral-400">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''}</div>
               <ChevronRight className="w-2.5 h-2.5 text-neutral-300" />
             </div>
           </button>
@@ -1072,7 +1085,7 @@ function MobileDashboard({
             <div className="text-[8px] text-neutral-400 font-semibold mb-0.5">Fournisseurs</div>
             <div className="num text-[14px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.payables)}</div>
             <div className="flex items-center justify-between mt-0.5">
-              <div className="text-[8px] text-neutral-400">{stats.suppliersCount} fournisseur{stats.suppliersCount > 1 ? 's' : ''}</div>
+              <div className="text-[8px] text-neutral-400">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''}</div>
               <ChevronRight className="w-2.5 h-2.5 text-neutral-300" />
             </div>
           </button>
@@ -1081,7 +1094,7 @@ function MobileDashboard({
 
       {/* ── ALERTES ── */}
       {(stats.lowStockCount > 0 || stats.outOfStockCount > 0 || stats.pendingQuotes > 0) && (
-        <div className="rounded-xl overflow-hidden" style={{ background: '#fffbf0', border: '1px solid rgba(245,158,11,0.2)', boxShadow: '0 2px 8px rgba(245,158,11,0.08), 0 8px 24px rgba(245,158,11,0.05)' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: '#fffbf0', border: '1px solid rgba(245,158,11,0.2)', boxShadow: '0 4px 20px rgba(245,158,11,0.1), 0 12px 40px rgba(245,158,11,0.06)' }}>
           <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'rgba(245,158,11,0.15)' }}>
             <div className="flex items-center gap-1.5">
               <Bell className="w-3.5 h-3.5 text-amber-500" />
@@ -1132,54 +1145,9 @@ function MobileDashboard({
         </div>
       )}
 
-      {/* ── ACTIVITÉ ── */}
-      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
-          <div className="flex items-center gap-1.5">
-            <TrendingUp className="w-3.5 h-3.5 text-neutral-700" />
-            <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Activité</span>
-          </div>
-          <button onClick={() => nav('stock')} className="text-[9px] font-bold text-neutral-400 flex items-center gap-0.5">
-            Voir tout <ChevronRight className="w-2.5 h-2.5" />
-          </button>
-        </div>
-        <div className="grid grid-cols-3 gap-2 p-2">
-          <button onClick={() => nav('stock')} className="flex flex-col p-3 rounded-xl text-left active:scale-95 transition-all" style={{ background: '#fafafa', boxShadow: '0 4px 14px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.08)' }}>
-            <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center mb-2 shadow-sm">
-              <Package className="w-4 h-4 text-white" />
-            </div>
-            <div className="text-[8px] font-bold text-neutral-500 mb-0.5 uppercase tracking-wide">Stock</div>
-            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{stats.articlesInStockCount}</div>
-            <div className="text-[8px] text-neutral-400 mt-0.5 leading-tight">{stats.stockValue > 0 ? formatCompactFCFA(stats.stockValue) : `+${stats.stockInToday} aujourd'hui`}</div>
-          </button>
-          <button
-            ref={webCardRef}
-            onClick={() => { setWebBlink(false); nav('online_orders'); }}
-            className="flex flex-col p-3 rounded-xl text-left transition-all active:scale-95"
-            style={webBlink
-              ? { background: '#f5f5f5', boxShadow: '0 4px 20px rgba(0,0,0,0.12),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.15)' }
-              : { background: '#fafafa', boxShadow: '0 4px 14px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.08)' }}
-          >
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-2 shadow-sm ${webBlink ? 'bg-neutral-900 animate-pulse' : 'bg-neutral-900'}`}>
-              <Globe className="w-4 h-4 text-white" />
-            </div>
-            <div className="text-[8px] font-bold text-neutral-500 mb-0.5 uppercase tracking-wide">Web</div>
-            <div className={`num text-[15px] font-black leading-tight ${webBlink ? 'text-neutral-900' : 'text-neutral-900'}`}>{stats.webNew}</div>
-            <div className="text-[8px] text-neutral-400 mt-0.5">{stats.webNew === 0 ? 'Aucune commande' : `${stats.webNew} nouvelle${stats.webNew > 1 ? 's' : ''}`}</div>
-          </button>
-          <button onClick={() => nav('billing', { target: 'quotes' })} className="flex flex-col p-3 rounded-xl text-left active:scale-95 transition-all" style={{ background: '#fafafa', boxShadow: '0 4px 14px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.08)' }}>
-            <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center mb-2 shadow-sm">
-              <FileText className="w-4 h-4 text-white" />
-            </div>
-            <div className="text-[8px] font-bold text-neutral-500 mb-0.5 uppercase tracking-wide">Devis</div>
-            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{stats.pendingQuotes}</div>
-            <div className="text-[8px] text-neutral-400 mt-0.5">{stats.pendingQuotes === 0 ? 'Aucun devis' : `${stats.pendingQuotes} en attente`}</div>
-          </button>
-        </div>
-      </div>
 
       {/* ── SANTÉ BUSINESS ── */}
-      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04), 0 0 0 1px rgba(226,232,240,0.5)', border: '1px solid rgba(226,232,240,0.6)' }}>
+      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
         <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
           <div className="flex items-center gap-1.5">
             <Activity className="w-3.5 h-3.5 text-neutral-700" />
@@ -1513,7 +1481,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
   const { can } = usePermissions();
 
   // ── Multi-site overview ────────────────────────────────────────────────
-  type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean };
+  type SiteStat = { id: string; name: string; todaySales: number; todayCollected: number; todayDirectCash: number; salesCount: number; cashBalance: number; openingAmount: number; sessionOpen: boolean; expenses: number };
   const [multiSiteStats, setMultiSiteStats] = useState<SiteStat[]>([]);
   const [multiSiteView, setMultiSiteView] = useState<'all' | string>('current');
   const hasMultiSites = sites.length > 1;
@@ -1525,22 +1493,29 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const results: SiteStat[] = [];
       for (const site of sites) {
-        const [{ data: salesData }, { data: sessData }, { data: pmtData }, { data: collectedPmts }, { data: collectedMovs }] = await Promise.all([
+        const { data: sessData } = await supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1);
+        const session = (sessData || [])[0];
+        const sessionIds = session ? [session.id] : [];
+        const [{ data: salesData }, { data: pmtData }, { data: collectedPmts }, { data: collectedMovs }, { data: sessionMovs }] = await Promise.all([
           supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
-          supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1),
-          supabase.from('sale_payments').select('amount, cash_session_id').eq('tenant_id', tenant.id).in('cash_session_id', (await supabase.from('cash_sessions').select('id').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open')).data?.map((s: any) => s.id) || []),
+          supabase.from('sale_payments').select('amount').eq('tenant_id', tenant.id).in('cash_session_id', sessionIds),
           supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', today.toISOString()),
           supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()),
+          session ? supabase.from('cash_movements').select('kind, amount').eq('tenant_id', tenant.id).eq('cash_session_id', session.id) : Promise.resolve({ data: [] }),
         ]);
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
-        const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
-          + (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
-        const session = (sessData || [])[0];
+        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + todayDirectCash;
         const openingAmount = session ? Number(session.opening_amount || 0) : 0;
         const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-        const cashBalance = session ? openingAmount + sessionPayTotal : 0;
-        results.push({ id: site.id, name: site.name, todaySales, todayCollected, salesCount, cashBalance, openingAmount, sessionOpen: !!session });
+        let sessionMovIncome = 0, sessionMovExpense = 0;
+        for (const m of (sessionMovs || []) as any[]) {
+          if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
+          else sessionMovIncome += Number(m.amount || 0);
+        }
+        const cashBalance = session ? openingAmount + sessionPayTotal + sessionMovIncome - sessionMovExpense : 0;
+        results.push({ id: site.id, name: site.name, todaySales, todayCollected, todayDirectCash, salesCount, cashBalance, openingAmount, sessionOpen: !!session, expenses: sessionMovExpense });
       }
       if (!cancelled) setMultiSiteStats(results);
     })();
@@ -1964,58 +1939,66 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
         {/* ── ROW 2: Vue multi-magasins (2+ sites) ou Top articles du jour (1 site) ── */}
         {hasMultiSites ? (multiSiteStats.length > 0 && (
-          <div className="bg-white rounded-xl border border-neutral-200 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <Network className="w-5 h-5 text-neutral-700" />
-                <h3 className="text-base font-bold text-neutral-900">Vue multi-magasins</h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{sites.length} magasins</span>
+          <div className="bg-white rounded-xl border border-neutral-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                <Network className="w-4.5 h-4.5 text-neutral-700" />
+                <h3 className="text-sm font-bold text-neutral-900">Vue multi-magasins</h3>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{sites.length} magasins</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-400">Total encaissé du jour :</span>
-                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + x.todayCollected, 0))}</span>
+                <span className="text-[11px] text-neutral-400">Total encaissé :</span>
+                <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + x.todayCollected, 0))}</span>
               </div>
             </div>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {multiSiteStats.map((site: any) => {
+            <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(multiSiteStats.length, 5)}, minmax(0, 1fr))` }}>
+              {multiSiteStats.slice(0, 5).map((site: any) => {
                 const isCurrent = site.id === currentSite?.id;
                 const avgTicket = site.salesCount > 0 ? Math.round(site.todaySales / site.salesCount) : 0;
                 return (
                   <button
                     key={site.id}
                     onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
-                    className={`p-5 rounded-xl border text-left transition-all duration-200 ${isCurrent ? 'border-neutral-400 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}
+                    className={`p-3 rounded-lg border text-left transition-all duration-200 ${isCurrent ? 'border-neutral-400 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}
                   >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
-                        <span className="text-sm font-bold text-neutral-900">{site.name}</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
+                        <span className="text-[11px] font-bold text-neutral-900 truncate">{site.name}</span>
                       </div>
-                      {isCurrent && <span className="text-[10px] font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded">Actif</span>}
+                      {isCurrent && <span className="text-[8px] font-bold text-neutral-900 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0 ml-1">Actif</span>}
                     </div>
-                    <div className="grid grid-cols-4 gap-4">
-                      <div>
-                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">Encaissé jour</p>
-                        <p className="text-sm font-bold text-neutral-900 num">{formatCompactFCFA(site.todayCollected)}</p>
-                        <p className="text-[9px] text-neutral-400 num mt-0.5">Facturé {formatCompactFCFA(site.todaySales)}</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-neutral-400 font-semibold">Facturé</span>
+                        <span className="text-[11px] font-bold text-neutral-800 num">{formatCompactFCFA(site.todaySales)}</span>
                       </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">Tickets</p>
-                        <p className="text-sm font-bold text-neutral-900 num">{site.salesCount}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-neutral-400 font-semibold">Encaissé direct</span>
+                        <span className="text-[11px] font-bold text-neutral-900 num">{formatCompactFCFA(site.todayDirectCash)}</span>
                       </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">Panier moy.</p>
-                        <p className="text-sm font-bold text-neutral-900 num">{avgTicket > 0 ? formatCompactFCFA(avgTicket) : '--'}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-red-400 font-semibold">Dépenses</span>
+                        <span className="text-[11px] font-bold text-red-600 num">{site.expenses > 0 ? `-${formatCompactFCFA(site.expenses)}` : '0'}</span>
                       </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">Caisse</p>
-                        <p className={`text-sm font-bold num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</p>
+                      <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100">
+                        <span className="text-[9px] text-neutral-600 font-bold">Solde caisse</span>
+                        <span className={`text-[11px] font-black num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-neutral-50">
+                      <span className="text-[8px] text-neutral-400">{site.salesCount} ticket{site.salesCount > 1 ? 's' : ''}</span>
+                      <span className="text-[8px] text-neutral-400">Moy. {avgTicket > 0 ? formatCompactFCFA(avgTicket) : '--'}</span>
                     </div>
                   </button>
                 );
               })}
             </div>
+            {multiSiteStats.length > 5 && (
+              <div className="flex justify-end mt-2">
+                <span className="text-[10px] text-neutral-400 font-medium">+{multiSiteStats.length - 5} autre{multiSiteStats.length - 5 > 1 ? 's' : ''} magasin{multiSiteStats.length - 5 > 1 ? 's' : ''}</span>
+              </div>
+            )}
           </div>
         )) : (
           <div className="bg-white rounded-xl border border-neutral-200 p-5">

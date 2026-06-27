@@ -302,16 +302,16 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       <header
         className={`${isDashboard && !dashMenuOpen ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b border-neutral-200 bg-white sticky top-0 z-30 flex-shrink-0`}
       >
-        <div className={`flex items-center gap-2.5 px-4 h-full border-r border-neutral-200 transition-all duration-200 ${sidebarCollapsed ? 'w-[64px]' : 'w-[240px]'}`}>
+        <div className={`flex items-center gap-2.5 px-4 h-full transition-all duration-200 ${sidebarCollapsed ? 'w-[64px]' : ''}`}>
           {tenant?.logo_url ? (
             <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain flex-shrink-0" />
           ) : (
             <img src="/newlogo.png" alt="WAARWI" className="h-7 w-auto max-w-[120px] object-contain flex-shrink-0" />
           )}
           {!sidebarCollapsed && (
-            <div className="leading-tight min-w-0">
-              {tenant?.logo_url && <div className="text-sm font-bold text-neutral-900 tracking-tight truncate">{tenant?.name || 'WAARWI'}</div>}
-              {tenant?.slogan && <div className="text-[10px] text-neutral-500 leading-tight truncate">{tenant.slogan}</div>}
+            <div className="leading-tight">
+              {tenant?.logo_url && <div className="text-sm font-bold text-neutral-900 tracking-tight whitespace-nowrap">{tenant?.name || 'WAARWI'}</div>}
+              {tenant?.slogan && <div className="text-[10px] text-neutral-500 leading-tight whitespace-nowrap">{tenant.slogan}</div>}
             </div>
           )}
         </div>
@@ -354,7 +354,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       <Settings className="w-4 h-4 text-neutral-400" /> Paramètres
                     </button>
                     <button onClick={signOut} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
-                      <LogOut className="w-4 h-4" /> Deconnexion
+                      <LogOut className="w-4 h-4" /> Déconnexion
                     </button>
                   </div>
                 </>
@@ -396,7 +396,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                             <span className="truncate">{s.name}</span>
                           </button>
                           <button
-                            title={isDefault ? 'Magasin par defaut' : 'Definir comme defaut'}
+                            title={isDefault ? 'Magasin par défaut' : 'Définir comme défaut'}
                             onClick={() => { setDefaultSite(s); setSiteOpen(false); onRoute('dashboard'); }}
                             className={`shrink-0 p-1.5 rounded-lg transition-colors ${isDefault ? 'text-neutral-900' : 'text-neutral-300 hover:text-neutral-600'}`}
                           >
@@ -411,12 +411,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             </div>
           )}
           <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800 transition-colors ${sidebarCollapsed ? 'justify-center' : ''}`}>
-            <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarCollapsed && 'Deconnexion'}
+            <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarCollapsed && 'Déconnexion'}
           </button>
           <button
             onClick={() => setSidebarCollapsed(v => !v)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700 transition-colors justify-center"
-            title={sidebarCollapsed ? 'Ouvrir le menu' : 'Reduire le menu'}
+            title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
           >
             {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
@@ -447,9 +447,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     <img src="/newlogo.png" alt="WAARWI" className="h-6 w-auto max-w-[100px] object-contain shrink-0" />
                   )}
                   <div className="min-w-0">
-                    {tenant?.logo_url && <div className="text-[13px] font-bold text-neutral-900 truncate">{tenant?.name || 'WAARWI'}</div>}
-                    {(tenant?.logo_url ? (tenant?.slogan || profile?.email) : profile?.email) && (
-                      <div className="text-[10px] text-neutral-500 truncate">{tenant?.logo_url ? (tenant?.slogan || profile?.email) : profile?.email}</div>
+                    <div className="text-[13px] font-bold text-neutral-900 truncate">{tenant?.name || 'WAARWI'}</div>
+                    {profile?.full_name && (
+                      <div className="text-[10px] text-neutral-500 truncate">{profile.full_name}</div>
                     )}
                   </div>
                 </div>
@@ -519,7 +519,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                             </button>
                             <button
                               onClick={() => { setDefaultSite(s); onRoute('dashboard'); closeDrawer(); }}
-                              title={isDefault ? 'Defaut' : 'Definir defaut'}
+                              title={isDefault ? 'Défaut' : 'Définir défaut'}
                               className={`shrink-0 p-1.5 transition-colors ${isDefault ? 'text-neutral-900' : 'text-neutral-300 hover:text-neutral-600'}`}
                             >
                               <Star className="w-3 h-3" fill={isDefault ? 'currentColor' : 'none'} />
@@ -532,7 +532,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 )}
                 <button onClick={signOut} className="float-logout-btn">
                   <LogOut className="w-4 h-4" />
-                  <span>Deconnexion</span>
+                  <span>Déconnexion</span>
                 </button>
               </div>
             </div>
@@ -545,23 +545,30 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         onTouchMove={onMainTouchMove}
         onTouchEnd={onMainTouchEnd}
       >
-        {/* Floating mobile hamburger */}
+        {/* Floating mobile hamburger with logo */}
         <button
           onClick={() => setMobileOpen(true)}
           className="lg:hidden fixed z-40 flex items-center justify-center transition-all active:scale-90"
           style={{
-            top: 'calc(env(safe-area-inset-top) + 8px)',
-            left: '10px',
-            width: '40px',
-            height: '40px',
-            borderRadius: '10px',
+            top: 'calc(env(safe-area-inset-top) + 14px)',
+            left: '12px',
+            height: '48px',
+            borderRadius: '12px',
             background: '#ffffff',
             border: '1px solid #e5e5e5',
             boxShadow: '0 2px 8px -2px rgba(0,0,0,0.08)',
+            paddingLeft: '10px',
+            paddingRight: '8px',
+            gap: '8px',
           }}
           aria-label="Menu"
         >
-          <Menu className="w-[18px] h-[18px] text-neutral-800" strokeWidth={2.2} />
+          <Menu className="w-5 h-5 text-neutral-800 shrink-0" strokeWidth={2.2} />
+          {tenant?.logo_url ? (
+            <img src={tenant.logo_url} alt="" className="h-8 w-8 object-contain rounded" />
+          ) : (
+            <img src="/newlogo.png" alt="" className="h-5 w-auto max-w-[48px] object-contain" />
+          )}
         </button>
 
         {/* Desktop dashboard menu button */}
@@ -584,25 +591,27 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
         {/* Mobile header */}
         <header
-          className="lg:hidden sticky top-0 z-30 flex items-center gap-2 px-3 sm:px-5 border-b border-neutral-200 pl-[56px] bg-white"
+          className="lg:hidden sticky top-0 z-30 flex items-center border-b border-neutral-200 bg-white"
           style={{
-            paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
-            paddingBottom: '8px',
-            minHeight: 'calc(52px + env(safe-area-inset-top))',
+            paddingTop: 'calc(env(safe-area-inset-top) + 12px)',
+            paddingBottom: '12px',
+            paddingLeft: '108px',
+            paddingRight: '12px',
+            minHeight: 'calc(76px + env(safe-area-inset-top))',
           }}
         >
-          <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              {tenant?.logo_url ? (
-                <img src={tenant.logo_url} alt={tenant.name} className="h-7 max-w-[36px] object-contain shrink-0" />
-              ) : (
-                <img src="/newlogo.png" alt="WAARWI" className="h-6 w-auto max-w-[90px] object-contain shrink-0" />
-              )}
-              {tenant?.logo_url && (
-                <div className={`font-bold tracking-tight text-neutral-900 leading-tight truncate ${(tenant?.name || '').length > 18 ? 'text-[11px]' : 'text-[13px]'}`}>
-                  {tenant?.name || 'WAARWI'}
-                </div>
-              )}
+          <div className="flex-1 min-w-0 px-2">
+            <div className="font-bold tracking-tight text-neutral-900 text-[13px] leading-[1.2]"
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                wordBreak: 'break-word',
+              }}
+            >
+              {tenant?.name || 'WAARWI'}
             </div>
             {tenant?.slogan && <div className="text-[10px] text-neutral-500 leading-tight mt-0.5 truncate">{tenant.slogan}</div>}
           </div>
@@ -622,7 +631,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           <div className="relative">
             <button
               onClick={() => setUserOpen(v => !v)}
-              className="w-8 h-8 rounded-lg bg-neutral-900 flex items-center justify-center text-white text-[11px] font-bold"
+              className="w-10 h-10 rounded-xl bg-neutral-900 flex items-center justify-center text-white text-[13px] font-bold"
             >
               {(profile?.full_name || profile?.email || '?').charAt(0).toUpperCase()}
             </button>
@@ -638,7 +647,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     <Settings className="w-4 h-4 text-neutral-400" /> Paramètres
                   </button>
                   <button onClick={signOut} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
-                    <LogOut className="w-4 h-4" /> Deconnexion
+                    <LogOut className="w-4 h-4" /> Déconnexion
                   </button>
                 </div>
               </>
@@ -651,7 +660,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           {isPOS ? (
             <div className="flex-1 flex flex-col min-h-0 pb-[60px] lg:pb-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
-            <div className="flex-1 flex flex-col min-h-0 px-2 sm:px-3 lg:px-0 pb-[60px] lg:pb-0">{children}</div>
+            <div className="flex-1 min-h-0 px-2 sm:px-3 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0">{children}</div>
           ) : (
             <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[72px] lg:pb-8">{children}</div>
           )}

@@ -1089,7 +1089,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }
 
     const [{ data: stk }, { data: cs }, { data: cust }, { data: topRows }, { data: tiers }] = await Promise.all([
-      supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId),
+      (async () => {
+        let all: any[] = [];
+        let f = 0;
+        while (true) {
+          const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId).range(f, f + 999);
+          if (e || !data) break;
+          all = all.concat(data);
+          if (data.length < 1000) break;
+          f += 1000;
+        }
+        return { data: all };
+      })(),
       supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, status, user_id, site_id, tenant_id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
       (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
       supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
@@ -1163,8 +1174,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       () => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(async () => {
-          const [{ data: stk }, { data: cust }, { data: newArts }] = await Promise.all([
-            supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId),
+          const fetchStk = async () => {
+            let all: any[] = [];
+            let f = 0;
+            while (true) {
+              const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId).range(f, f + 999);
+              if (e || !data) break;
+              all = all.concat(data);
+              if (data.length < 1000) break;
+              f += 1000;
+            }
+            return all;
+          };
+          const [stk, { data: cust }, { data: newArts }] = await Promise.all([
+            fetchStk(),
             (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
             (() => { let q = supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible').eq('tenant_id', tenant.id).eq('is_active', true); if (!isShared) q = q.eq('site_id', currentSite.id); return q; })(),
           ]);
@@ -1180,7 +1203,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             }));
             setArticles(updatedArticles);
             posCache.articles = updatedArticles;
-          } else if (stk) {
+          } else if (stk.length > 0) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
             setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.get(a.id) || 0 })));
           }

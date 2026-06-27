@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
-  CreditCard as Edit2, Filter, ChevronDown, CheckCircle2,
+  CreditCard as Edit2, Filter, ChevronDown, ChevronUp, CheckCircle2,
   Upload, Camera, CheckSquare, Square,
   Lightbulb, Download,
   List, LayoutGrid, Save, ArrowLeft,
@@ -44,13 +44,17 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'low' | 'out'>('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sortCol, setSortCol] = useState<'name' | 'ref' | 'category' | 'price' | 'stock'>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const handleSearchInput = (val: string) => {
     setSearchInput(val);
@@ -129,7 +133,18 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     }
 
     const [{ data: stk }, { data: sup }, { data: tierDefs }] = await Promise.all([
-      supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id),
+      (async () => {
+        let all: any[] = [];
+        let f = 0;
+        while (true) {
+          const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).range(f, f + 999);
+          if (e || !data) break;
+          all = all.concat(data);
+          if (data.length < 1000) break;
+          f += 1000;
+        }
+        return { data: all };
+      })(),
       supabase.from('suppliers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
       supabase.from('pricing_tier_definitions').select('id, tier_name, sort_order, is_default, tenant_id').eq('tenant_id', tenant.id).order('sort_order'),
     ]);
@@ -143,6 +158,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     (stk || []).forEach((r: any) => { map[r.article_id] = (map[r.article_id] || 0) + Number(r.quantity); });
     setStockMap(map);
     if (!silent) setLoading(false);
+    setInitialLoaded(true);
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id, sharedArticles]);
@@ -155,17 +171,36 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return articles.filter(a => {
+    let result = articles.filter(a => {
       if (categoryFilter && a.category_id !== categoryFilter) return false;
+      if (stockFilter !== 'all') {
+        const qty = stockMap[a.id] || 0;
+        const min = Number(a.stock_min || 0);
+        if (stockFilter === 'out' && qty > 0) return false;
+        if (stockFilter === 'low' && (qty <= 0 || qty > min)) return false;
+        if (stockFilter === 'in' && (qty <= 0 || qty <= min)) return false;
+      }
       if (!q) return true;
       return a.name.toLowerCase().includes(q) || a.internal_ref.toLowerCase().includes(q)
         || (a.oem_ref || '').toLowerCase().includes(q) || (a.supplier_ref || '').toLowerCase().includes(q)
         || (a.barcode || '').toLowerCase().includes(q);
     });
-  }, [articles, search, categoryFilter]);
+    result.sort((a, b) => {
+      let cmp = 0;
+      switch (sortCol) {
+        case 'name': cmp = a.name.localeCompare(b.name); break;
+        case 'ref': cmp = (a.internal_ref || '').localeCompare(b.internal_ref || ''); break;
+        case 'category': cmp = (a.category_id || '').localeCompare(b.category_id || ''); break;
+        case 'price': cmp = (a.sale_price || 0) - (b.sale_price || 0); break;
+        case 'stock': cmp = (stockMap[a.id] || 0) - (stockMap[b.id] || 0); break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return result;
+  }, [articles, search, categoryFilter, stockFilter, stockMap, sortCol, sortDir]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [search, categoryFilter]);
+  useEffect(() => { setPage(0); }, [search, categoryFilter, stockFilter, sortCol, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
@@ -677,16 +712,17 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
       {/* Stats chips */}
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filtered.length} / {articles.length}</span>
-        {stats.inStock > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{stats.inStock} en stock</span>}
-        {stats.low > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-amber-50 text-amber-700">{stats.low} stock bas</span>}
-        {stats.out > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-red-50 text-red-700">{stats.out} rupture{stats.out > 1 ? 's' : ''}</span>}
+        <button onClick={() => setStockFilter('all')} className={`shrink-0 px-2 py-1 rounded-full num transition-all ${stockFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{filtered.length} / {articles.length}</button>
+        {stats.inStock > 0 && <button onClick={() => setStockFilter(f => f === 'in' ? 'all' : 'in')} className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all cursor-pointer ${stockFilter === 'in' ? 'bg-emerald-600 text-white ring-2 ring-emerald-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}><span className={`w-1.5 h-1.5 rounded-full ${stockFilter === 'in' ? 'bg-white' : 'bg-emerald-500'}`} />{stats.inStock} en stock</button>}
+        {stats.low > 0 && <button onClick={() => setStockFilter(f => f === 'low' ? 'all' : 'low')} className={`shrink-0 px-2 py-1 rounded-full transition-all cursor-pointer ${stockFilter === 'low' ? 'bg-amber-600 text-white ring-2 ring-amber-300' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>{stats.low} stock bas</button>}
+        {stats.out > 0 && <button onClick={() => setStockFilter(f => f === 'out' ? 'all' : 'out')} className={`shrink-0 px-2 py-1 rounded-full transition-all cursor-pointer ${stockFilter === 'out' ? 'bg-red-600 text-white ring-2 ring-red-300' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}>{stats.out} rupture{stats.out > 1 ? 's' : ''}</button>}
         {categoryFilter && <button onClick={() => setCategoryFilter('')} className="shrink-0 px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 inline-flex items-center gap-1">{selectedCategoryName} <X className="w-3 h-3" /></button>}
+        {stockFilter !== 'all' && <button onClick={() => setStockFilter('all')} className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-500 border border-slate-200 inline-flex items-center gap-1 hover:bg-slate-100 transition-all"><X className="w-3 h-3" /> Effacer filtre</button>}
       </div>
 
       {/* ── Liste ─────────────────────────────── */}
-      {loading ? (
-        <div className="py-20 flex items-center justify-center rounded-2xl bg-white shadow-card border border-slate-100"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+      {!initialLoaded && loading ? (
+        <div className="py-20 flex items-center justify-center rounded-2xl bg-white shadow-card border border-slate-100 opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl bg-white shadow-card border border-slate-100">
           <EmptyState icon={Package} title={search || categoryFilter ? 'Aucun article trouvé' : 'Aucun article'} description={search || categoryFilter ? 'Essayez d\'autres critères.' : 'Créez votre premier article.'}
@@ -714,20 +750,33 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                 onSelectAll={allFilteredSelected ? clearSelection : selectAllFiltered} allSelected={allFilteredSelected}
                 onOpenFullScreen={openFullScreen} onDelete={setToDelete}
                 showMargin={can('view_margins')} showStock={can('view_stock_levels')} showPurchase={can('view_purchase_prices')}
+                sortCol={sortCol} sortDir={sortDir}
+                onSort={(col) => { setSortCol(col as any); setSortDir(d => sortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}
               />
             ) : (
               <div className="rounded-2xl bg-white shadow-card border border-slate-100 overflow-hidden">
+                <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50/70 text-[10px] uppercase text-slate-500 tracking-wider border-b border-slate-100">
+                  <thead className="bg-slate-50/70 text-[10px] uppercase text-slate-500 tracking-wider border-b border-slate-100 sticky top-0 z-10">
                     <tr>
-                      {selectionMode && <th className="px-3 py-3 w-10"><button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="text-brand-700">{allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}</button></th>}
-                      <th className="px-4 py-3 text-left font-semibold">Article</th>
-                      <th className="px-4 py-3 text-left font-semibold">Référence</th>
-                      <th className="px-4 py-3 text-left font-semibold">Catégorie</th>
-                      <th className="px-4 py-3 text-right font-semibold">Prix vente</th>
-                      {can('view_margins') && <th className="px-4 py-3 text-right font-semibold">Marge</th>}
-                      {can('view_stock_levels') && <th className="px-4 py-3 text-right font-semibold">Stock</th>}
-                      <th className="px-4 py-3 text-right font-semibold"></th>
+                      {selectionMode && <th className="px-3 py-3 w-10 bg-slate-50"><button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="text-brand-700">{allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}</button></th>}
+                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('name'); setSortDir(d => sortCol === 'name' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                        <span className="inline-flex items-center gap-1">Article {sortCol === 'name' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
+                      </th>
+                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('ref'); setSortDir(d => sortCol === 'ref' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                        <span className="inline-flex items-center gap-1">Référence {sortCol === 'ref' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
+                      </th>
+                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('category'); setSortDir(d => sortCol === 'category' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                        <span className="inline-flex items-center gap-1">Catégorie {sortCol === 'category' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('price'); setSortDir(d => sortCol === 'price' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                        <span className="inline-flex items-center gap-1 justify-end">Prix vente {sortCol === 'price' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
+                      </th>
+                      {can('view_margins') && <th className="px-4 py-3 text-right font-semibold bg-slate-50">Marge</th>}
+                      {can('view_stock_levels') && <th className="px-4 py-3 text-right font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('stock'); setSortDir(d => sortCol === 'stock' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                        <span className="inline-flex items-center gap-1 justify-end">Stock {sortCol === 'stock' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
+                      </th>}
+                      <th className="px-4 py-3 text-right font-semibold bg-slate-50"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -753,6 +802,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
 
@@ -773,13 +823,13 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-card mt-3">
-              <div className="text-xs text-slate-500">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length}</div>
+              <div className="text-xs text-slate-500">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length} articles</div>
               <div className="flex items-center gap-1">
-                <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30">1</button>
-                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30">Préc</button>
-                <span className="px-3 py-1 rounded-lg text-xs font-bold bg-brand-50 text-brand-700 border border-brand-200">{page + 1}/{totalPages}</span>
-                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30">Suiv</button>
-                <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1} className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30">{totalPages}</button>
+                <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
+                <span className="px-3 py-1 rounded-lg text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200">{page + 1} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
+                <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
               </div>
             </div>
           )}

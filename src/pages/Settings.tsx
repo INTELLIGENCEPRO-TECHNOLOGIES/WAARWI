@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer } from 'lucide-react';
+import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
 import { PermissionsTab } from '../components/PermissionsTab';
 import { DocumentSettingsTab } from '../components/DocumentSettingsTab';
@@ -1548,8 +1548,162 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
             )}
           </div>
         )}
+
+        {/* RAZ Stock */}
+        <StockResetCard />
       </div>
     </div>
+  );
+}
+
+/* ===================== STOCK RESET CARD ===================== */
+function StockResetCard() {
+  const { tenant, currentSite, sites, profile } = useApp();
+  const { success, error } = useToast();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmText, setConfirmText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [errMsg, setErrMsg] = useState('');
+  const [selectedSite, setSelectedSite] = useState('');
+
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'owner';
+  if (!isAdmin) return null;
+
+  const allSites = [...sites];
+
+  const handleReset = async () => {
+    if (confirmText !== 'CONFIRMER') { setErrMsg('Veuillez taper CONFIRMER pour valider'); return; }
+    if (!password) { setErrMsg('Le mot de passe est requis'); return; }
+    const targetSite = selectedSite || currentSite?.id;
+    if (!targetSite) { setErrMsg('Aucun point de vente sélectionné'); return; }
+    setSaving(true);
+    setErrMsg('');
+    try {
+      const { error: authErr } = await supabase.auth.signInWithPassword({
+        email: profile!.email,
+        password,
+      });
+      if (authErr) { setErrMsg('Mot de passe incorrect'); setSaving(false); return; }
+
+      const siteName = allSites.find(s => s.id === targetSite)?.name || '';
+      const { data, error: rpcErr } = await supabase.rpc('reset_stock_for_site', {
+        p_site_id: targetSite,
+        p_note: `RAZ Stock - ${siteName} - ${new Date().toLocaleDateString('fr-FR')}`,
+      });
+      if (rpcErr) throw rpcErr;
+      const result = data as any;
+      success(`Stock remis à zéro. Document ${result.doc_number} créé (${result.line_count} articles, ${result.total_qty} unités)`);
+      setOpen(false);
+      setPassword('');
+      setConfirmText('');
+      setSelectedSite('');
+    } catch (e: any) {
+      setErrMsg(e.message || 'Erreur lors de la remise à zéro');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="card p-4 space-y-3 border-red-100">
+        <div className="flex items-center gap-2 pb-2 border-b border-red-100">
+          <div className="w-1 h-4 rounded-full bg-red-500" />
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Remise à zéro du stock</span>
+        </div>
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          Remet toutes les quantités en stock à zéro pour un point de vente. Un document de sortie de stock est automatiquement généré comme justificatif. Cette action est irréversible.
+        </p>
+        <button
+          onClick={() => { setOpen(true); setErrMsg(''); setPassword(''); setConfirmText(''); setSelectedSite(currentSite?.id || ''); }}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-semibold hover:bg-red-100 hover:border-red-300 transition-all active:scale-95"
+        >
+          <TrendingDown className="w-3.5 h-3.5" />
+          Remettre à zéro le stock
+        </button>
+      </div>
+
+      <Modal open={open} onClose={() => !saving && setOpen(false)} title="Remise à zéro du stock" size="sm">
+        <div className="space-y-4">
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <div className="text-sm font-bold text-red-800">Action irréversible</div>
+                <div className="text-xs text-red-700 mt-1 leading-relaxed">
+                  Cette opération va remettre à zéro <strong>tout le stock</strong> du point de vente sélectionné.
+                  Un document de sortie de stock sera généré comme justificatif. Les quantités ne pourront pas être restaurées automatiquement.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {allSites.length > 1 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Point de vente</label>
+                <select
+                  value={selectedSite}
+                  onChange={e => setSelectedSite(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-200 outline-none transition-all"
+                >
+                  {allSites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Mot de passe administrateur</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setErrMsg(''); }}
+                placeholder="Saisissez votre mot de passe"
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-200 outline-none transition-all"
+                autoComplete="current-password"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Tapez <span className="font-mono text-red-600 bg-red-50 px-1 rounded">CONFIRMER</span> pour valider
+              </label>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={e => { setConfirmText(e.target.value); setErrMsg(''); }}
+                placeholder="CONFIRMER"
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm font-mono tracking-wider focus:border-red-400 focus:ring-2 focus:ring-red-200 outline-none transition-all"
+                autoComplete="off"
+              />
+            </div>
+          </div>
+
+          {errMsg && (
+            <div className="text-xs text-red-600 font-medium bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+              {errMsg}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => setOpen(false)}
+              disabled={saving}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleReset}
+              disabled={saving || confirmText !== 'CONFIRMER' || !password}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {saving ? 'Remise à zéro...' : 'Remettre à zéro'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 

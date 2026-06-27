@@ -797,10 +797,10 @@ export function Auth() {
 
       {/* ══════════ MOBILE ══════════ */}
       <div className={`flex lg:hidden flex-col h-full relative z-10 overflow-y-auto bg-white transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="flex flex-col min-h-full px-6 pt-8 pb-5">
+        <div className="flex flex-col justify-center min-h-full px-6 py-6">
 
           {/* Logo */}
-          <div className="flex flex-col items-center text-center mb-6">
+          <div className="flex flex-col items-center text-center mb-5">
             <img src={logoSrc} alt={brandName} className="h-9 w-auto object-contain" />
           </div>
 
@@ -824,7 +824,7 @@ export function Auth() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-center gap-3 mt-auto pt-8 text-[11px] text-slate-500">
+          <div className="flex items-center justify-center gap-3 mt-6 text-[11px] text-slate-500">
             <div className="inline-flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5" strokeWidth={1.6} />
               <span>Connexion sécurisée</span>
