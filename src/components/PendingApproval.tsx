@@ -112,7 +112,7 @@ export function PendingApproval() {
               {activityName && (
                 <div className="flex flex-col items-center gap-1">
                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Activite choisie
+                    Activité choisie
                   </div>
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-slate-50">
                     <Building2 className="w-4 h-4 text-[#00b4d8] shrink-0" />
@@ -132,7 +132,7 @@ export function PendingApproval() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Votre espace Waarwi est en preparation.
+                  Votre espace Waarwi est en préparation.
                 </p>
               </div>
             </div>
@@ -179,7 +179,7 @@ export function PendingApproval() {
           className="flex items-center gap-2.5 px-8 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-sm font-bold transition-all"
         >
           <LogOut className="w-4 h-4" />
-          Se deconnecter
+          Se déconnecter
         </button>
 
         <div className="flex items-center gap-3 text-xs text-slate-400 font-medium">
