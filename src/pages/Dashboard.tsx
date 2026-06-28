@@ -1216,66 +1216,6 @@ function MobileDashboard({
       )}
 
 
-      {/* ── ABONNEMENT ── */}
-      {subInfo && (
-        <button
-          onClick={() => nav('settings', { target: 'subscription' })}
-          className="w-full rounded-xl bg-white overflow-hidden text-left active:scale-[0.98] transition-transform"
-          style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
-            <div className="flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-neutral-600" />
-              <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Abonnement</span>
-            </div>
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-              subInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600 border border-blue-100'
-                : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                : subInfo.status === 'expired' ? 'bg-red-50 text-red-600 border border-red-100'
-                : 'bg-amber-50 text-amber-600 border border-amber-100'
-            }`}>
-              {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
-            </span>
-          </div>
-          <div className="px-3 py-2.5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-bold text-neutral-900">Plan {subInfo.planName}</div>
-                <div className="text-[9px] text-neutral-400 mt-0.5">
-                  {subInfo.billingCycle === 'lifetime' ? 'À vie' : subInfo.price > 0 ? `${Number(subInfo.price).toLocaleString('fr-FR')} FCFA/${subInfo.billingCycle === 'yearly' ? 'an' : 'mois'}` : 'Gratuit'}
-                </div>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />
-            </div>
-            {(subInfo.startsAt || subInfo.expiresAt) && (
-              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-neutral-100">
-                {subInfo.startsAt && (
-                  <div className="text-[9px] text-neutral-400">
-                    <span className="font-medium">{subInfo.status === 'trial_active' ? 'Essai depuis' : 'Début'} :</span> {new Date(subInfo.startsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                )}
-                {subInfo.expiresAt && (
-                  <div className="text-[9px]">
-                    <span className="font-medium text-neutral-400">Fin :</span>{' '}
-                    <span className={(() => {
-                      const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
-                      return days <= 0 ? 'text-red-500 font-bold' : days <= 7 ? 'text-amber-600 font-medium' : 'text-neutral-500';
-                    })()}>
-                      {new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      {(() => {
-                        const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
-                        if (days <= 0) return ' (expiré)';
-                        return ` (${days}j)`;
-                      })()}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </button>
-      )}
-
       {/* ── SANTÉ BUSINESS ── */}
       <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
         <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
@@ -1339,6 +1279,66 @@ function MobileDashboard({
           </button>
         </div>
       </div>
+
+      {/* ── ABONNEMENT ── */}
+      {subInfo && (
+        <button
+          onClick={() => nav('settings', { target: 'subscription' })}
+          className="w-full rounded-xl bg-white overflow-hidden text-left active:scale-[0.98] transition-transform"
+          style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
+            <div className="flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5 text-neutral-600" />
+              <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Abonnement</span>
+            </div>
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+              subInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                : subInfo.status === 'expired' ? 'bg-red-50 text-red-600 border border-red-100'
+                : 'bg-amber-50 text-amber-600 border border-amber-100'
+            }`}>
+              {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
+            </span>
+          </div>
+          <div className="px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[11px] font-bold text-neutral-900">Plan {subInfo.planName}</div>
+                <div className="text-[9px] text-neutral-400 mt-0.5">
+                  {subInfo.billingCycle === 'lifetime' ? 'À vie' : subInfo.price > 0 ? `${Number(subInfo.price).toLocaleString('fr-FR')} FCFA/${subInfo.billingCycle === 'yearly' ? 'an' : 'mois'}` : 'Gratuit'}
+                </div>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />
+            </div>
+            {(subInfo.startsAt || subInfo.expiresAt) && (
+              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-neutral-100">
+                {subInfo.startsAt && (
+                  <div className="text-[9px] text-neutral-400">
+                    <span className="font-medium">{subInfo.status === 'trial_active' ? 'Essai depuis' : 'Début'} :</span> {new Date(subInfo.startsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                )}
+                {subInfo.expiresAt && (
+                  <div className="text-[9px]">
+                    <span className="font-medium text-neutral-400">Fin :</span>{' '}
+                    <span className={(() => {
+                      const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
+                      return days <= 0 ? 'text-red-500 font-bold' : days <= 7 ? 'text-amber-600 font-medium' : 'text-neutral-500';
+                    })()}>
+                      {new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {(() => {
+                        const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
+                        if (days <= 0) return ' (expiré)';
+                        return ` (${days}j)`;
+                      })()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </button>
+      )}
 
       {/* ── SHARE SHOP MODAL ── */}
       {shareOpen && (

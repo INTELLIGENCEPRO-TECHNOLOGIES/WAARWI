@@ -1102,7 +1102,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         return { data: all };
       })(),
       supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, status, user_id, site_id, tenant_id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
-      (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
+      (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, balance, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
       supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
     ]);
@@ -1188,7 +1188,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           };
           const [stk, { data: cust }, { data: newArts }] = await Promise.all([
             fetchStk(),
-            (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
+            (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, balance, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
             (() => { let q = supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible').eq('tenant_id', tenant.id).eq('is_active', true); if (!isShared) q = q.eq('site_id', currentSite.id); return q; })(),
           ]);
           if (stk && newArts) {
@@ -1486,10 +1486,24 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const unpaid = (data || [])
       .map((s: any) => ({ ...s, total: Number(s.total), paid: Number(s.paid) }))
       .filter((s: any) => s.paid < s.total);
+
+    const customerBalance = Number((c as any).balance || 0);
+    const invoiceDue = unpaid.reduce((a, s) => a + (s.total - s.paid), 0);
+    const positionedDue = Math.max(0, customerBalance - invoiceDue);
+
+    if (positionedDue > 0) {
+      unpaid.unshift({
+        id: '__balance__',
+        sale_number: 'Report de solde',
+        total: positionedDue,
+        paid: 0,
+        created_at: new Date(0).toISOString(),
+      });
+    }
+
     setCustPayUnpaid(unpaid);
     setCustPaySaleId('');
-    const totalDue = unpaid.reduce((a, s) => a + (s.total - s.paid), 0);
-    setCustPayAmount(totalDue);
+    setCustPayAmount(Math.max(0, customerBalance));
   };
 
   const openMovement = () => {
@@ -1589,7 +1603,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       p_amount: custPayAmount,
       p_reference: custPayRef,
       p_cash_session_id: session.id,
-      p_sale_id: custPaySaleId || null,
+      p_sale_id: (custPaySaleId && custPaySaleId !== '__balance__') ? custPaySaleId : null,
     });
     if (e) { setCustPaySubmitting(false); error(e.message); return; }
 
@@ -3122,12 +3136,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center shrink-0"><User className="w-5 h-5" /></div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-bold text-neutral-900 truncate">{custPayCustomer.name}</div>
-                    <div className="text-[11px] text-neutral-500">{custPayUnpaid.length} facture(s) impayée(s) · Dû total {formatFCFA(custPayUnpaid.reduce((a, s) => a + (s.total - s.paid), 0))}</div>
+                    <div className="text-[11px] text-neutral-500">
+                      {custPayUnpaid.filter(s => s.id !== '__balance__').length} facture(s) impayée(s) · Solde total {formatFCFA(Number((custPayCustomer as any).balance || 0))}
+                    </div>
                   </div>
                   <button onClick={() => setCustPayCustomer(null)} className="text-xs font-semibold text-brand-700 hover:underline shrink-0">Changer</button>
                 </div>
 
-                {custPayUnpaid.length === 0 ? (
+                {custPayUnpaid.length === 0 && Number((custPayCustomer as any).balance || 0) <= 0 ? (
                   <div className="rounded-2xl bg-neutral-100 border border-neutral-200 p-4 text-center">
                     <CheckCircle2 className="w-6 h-6 text-neutral-700 mx-auto mb-1" />
                     <div className="text-sm font-semibold text-neutral-900">Aucune facture en attente</div>
@@ -3142,8 +3158,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           { value: '', label: 'Repartir automatiquement (plus ancienne d\'abord)' },
                           ...custPayUnpaid.map(s => ({
                             value: s.id,
-                            label: `${s.sale_number} · du ${formatFCFA(s.total - s.paid)}`,
-                            sublabel: new Date(s.created_at).toLocaleDateString('fr-FR'),
+                            label: `${s.sale_number} · dû ${formatFCFA(s.total - s.paid)}`,
+                            sublabel: s.id === '__balance__' ? 'Solde positionné' : new Date(s.created_at).toLocaleDateString('fr-FR'),
                           }))
                         ]}
                         value={custPaySaleId}
@@ -4348,6 +4364,15 @@ function PaymentScreen({
                 : <span className="text-neutral-700 font-semibold">Monnaie <span className="num">{formatFCFA(-remaining)}</span></span>}
               </>
             )}
+          </div>
+        )}
+
+        {/* Solde comptable client */}
+        {customer && Number((customer as any).balance || 0) !== 0 && (
+          <div className="flex items-center gap-2 mx-5 mt-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px]">
+            <Wallet className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-amber-700">Solde dû</span>
+            <span className="ml-auto text-amber-900 font-bold num">{formatFCFA(Number((customer as any).balance || 0))}</span>
           </div>
         )}
 

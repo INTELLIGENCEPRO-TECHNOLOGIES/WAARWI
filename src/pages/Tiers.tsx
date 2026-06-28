@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
   X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
-  ShoppingBag, Check, Filter, Printer, Tag, Trash2
+  ShoppingBag, Check, Filter, Printer, Tag, Trash2,
+  Download, Upload, Scale, RotateCcw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -24,6 +25,7 @@ type Supplier = {
   id: string; tenant_id: string; name: string; contact: string;
   phone: string; whatsapp: string; email: string; address: string; country: string;
   delivery_days: number; payment_terms: string; credit_limit: number; credit_blocked: boolean; is_active: boolean;
+  balance: number;
 };
 
 type TabKey = 'customers' | 'suppliers';
@@ -77,11 +79,11 @@ export function Tiers() {
   const load = async (silent = false) => {
     if (!tenant) return;
     if (!silent) setLoading(true);
-    let custQuery = supabase.from('customers').select('id, name, phone, email, address, customer_type, whatsapp, is_active, tenant_id, site_id, credit_limit').eq('tenant_id', tenant.id).order('name');
+    let custQuery = supabase.from('customers').select('id, name, phone, email, address, customer_type, whatsapp, is_active, tenant_id, site_id, credit_limit, balance').eq('tenant_id', tenant.id).order('name');
     if (!sharedCustomers && currentSite) {
       custQuery = custQuery.eq('site_id', currentSite.id);
     }
-    let supQuery = supabase.from('suppliers').select('id, name, phone, email, address, whatsapp, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).order('name');
+    let supQuery = supabase.from('suppliers').select('id, name, phone, email, address, whatsapp, is_active, tenant_id, site_id, balance, credit_limit').eq('tenant_id', tenant.id).order('name');
     if (!sharedSuppliers && currentSite) {
       supQuery = supQuery.eq('site_id', currentSite.id);
     }
@@ -212,6 +214,13 @@ export function Tiers() {
     else { success('Client désactivé (opérations associées conservées)'); setToDeactivateCust(null); load(); }
   };
 
+  const reactivateCust = async (c: Customer) => {
+    if (!can('manage_customers')) { error('Vous n\'avez pas la permission'); return; }
+    const { error: e } = await supabase.from('customers').update({ is_active: true }).eq('id', c.id);
+    if (e) error(e.message);
+    else { success('Client réactivé'); load(); }
+  };
+
   // ── CRUD: Supplier ───────────────────────────────────────────
   const openSupCreate = () => { setSupEdit(null); setSupForm({ country: 'Sénégal', is_active: true }); setSupOpen(true); setFabOpen(false); };
   const openSupEdit = (s: Supplier) => { setSupEdit(s); setSupForm(s); setSupOpen(true); };
@@ -251,12 +260,253 @@ export function Tiers() {
     else { success('Fournisseur désactivé (opérations associées conservées)'); setToDeactivateSup(null); load(); }
   };
 
+  const reactivateSup = async (s: Supplier) => {
+    if (!can('manage_customers')) { error('Vous n\'avez pas la permission'); return; }
+    const { error: e } = await supabase.from('suppliers').update({ is_active: true }).eq('id', s.id);
+    if (e) error(e.message);
+    else { success('Fournisseur réactivé'); load(); }
+  };
+
   const activeCustCount = customers.filter(c => (c as any).is_active !== false).length;
   const activeSupCount = suppliers.filter(s => s.is_active).length;
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const hasFilters = !!(search || typeFilter || statusFilter);
   const clearFilters = () => { setSearch(''); setSearchInput(''); setTypeFilter(''); setStatusFilter(''); setFiltersOpen(false); };
+
+  // Import / Export
+  const [importExportOpen, setImportExportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [importFilename, setImportFilename] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; updated: number; errors: string[] } | null>(null);
+
+  // Balance adjustment
+  const [balanceOpen, setBalanceOpen] = useState(false);
+  const [balanceTarget, setBalanceTarget] = useState<{ id: string; name: string; type: 'customer' | 'supplier'; currentBalance: number } | null>(null);
+  const [balanceAmount, setBalanceAmount] = useState('');
+  const [balanceNote, setBalanceNote] = useState('');
+  const [savingBalance, setSavingBalance] = useState(false);
+
+  const CUST_HEADERS = [
+    { key: 'nom', label: 'Nom *', required: true },
+    { key: 'telephone', label: 'Téléphone', required: false },
+    { key: 'whatsapp', label: 'WhatsApp', required: false },
+    { key: 'email', label: 'Email', required: false },
+    { key: 'adresse', label: 'Adresse', required: false },
+    { key: 'type', label: 'Type', required: false },
+    { key: 'plafond_credit', label: 'Plafond crédit', required: false },
+    { key: 'solde', label: 'Solde comptable', required: false },
+  ];
+  const SUP_HEADERS = [
+    { key: 'nom', label: 'Nom *', required: true },
+    { key: 'contact', label: 'Contact', required: false },
+    { key: 'telephone', label: 'Téléphone', required: false },
+    { key: 'whatsapp', label: 'WhatsApp', required: false },
+    { key: 'email', label: 'Email', required: false },
+    { key: 'adresse', label: 'Adresse', required: false },
+    { key: 'pays', label: 'Pays', required: false },
+    { key: 'delai_livraison', label: 'Délai livraison (jours)', required: false },
+    { key: 'conditions_paiement', label: 'Conditions de paiement', required: false },
+    { key: 'plafond_credit', label: 'Plafond crédit', required: false },
+    { key: 'solde', label: 'Solde comptable', required: false },
+  ];
+
+  const exportTiers = async () => {
+    const XLSX = await import('xlsx');
+    const headers = tab === 'customers' ? CUST_HEADERS : SUP_HEADERS;
+    const headerRow = headers.map(h => h.label);
+
+    let dataRows: any[][];
+    if (tab === 'customers') {
+      dataRows = filteredCustomers.map(c => [
+        c.name || '', c.phone || '', (c as any).whatsapp || '', c.email || '',
+        c.address || '', c.customer_type || 'particulier',
+        Number((c as any).credit_limit || 0),
+        Number((c as any).balance || 0),
+      ]);
+    } else {
+      dataRows = filteredSuppliers.map(s => [
+        s.name || '', s.contact || '', s.phone || '', s.whatsapp || '',
+        s.email || '', s.address || '', s.country || 'Sénégal',
+        Number(s.delivery_days || 0), s.payment_terms || '',
+        Number(s.credit_limit || 0),
+        Number((s as any).balance || 0),
+      ]);
+    }
+
+    if (dataRows.length === 0) { error('Aucune donnée à exporter'); return; }
+
+    const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+    ws['!cols'] = headerRow.map(h => ({ wch: Math.max(16, h.length + 4) }));
+    const wb = XLSX.utils.book_new();
+    const sheetName = tab === 'customers' ? 'Clients' : 'Fournisseurs';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `export-${tab}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    success(`${dataRows.length} ${tab === 'customers' ? 'clients' : 'fournisseurs'} exportés`);
+  };
+
+  const downloadTemplate = async () => {
+    const XLSX = await import('xlsx');
+    const headers = tab === 'customers' ? CUST_HEADERS : SUP_HEADERS;
+    const headerRow = headers.map(h => h.label);
+    const ws = XLSX.utils.aoa_to_sheet([headerRow]);
+    ws['!cols'] = headerRow.map(h => ({ wch: Math.max(16, h.length + 4) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, tab === 'customers' ? 'Clients' : 'Fournisseurs');
+    XLSX.writeFile(wb, `modele-${tab}.xlsx`);
+  };
+
+  const handleImportFile = async (f: File) => {
+    setImportFilename(f.name);
+    const XLSX = await import('xlsx');
+    const buf = await f.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const sheetName = wb.SheetNames[0];
+    if (!sheetName) { error('Fichier vide'); return; }
+    const sheet = wb.Sheets[sheetName];
+    const raw = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '', raw: false });
+
+    const headers = tab === 'customers' ? CUST_HEADERS : SUP_HEADERS;
+    const labelToKey = new Map<string, string>();
+    headers.forEach(h => {
+      const norm = h.label.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_').replace(/_+$/, '').replace(/^_+/, '');
+      labelToKey.set(norm, h.key);
+      labelToKey.set(h.key, h.key);
+    });
+
+    const parsed = raw.map(r => {
+      const row: any = {};
+      for (const k of Object.keys(r)) {
+        const norm = k.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_').replace(/_+$/, '').replace(/^_+/, '');
+        const key = labelToKey.get(norm) || norm;
+        row[key] = String(r[k] ?? '').trim();
+      }
+      return row;
+    }).filter(r => r.nom);
+
+    if (parsed.length === 0) { error('Aucune ligne valide trouvée (colonne "Nom" obligatoire)'); return; }
+    setImportRows(parsed);
+    setImportResult(null);
+  };
+
+  const runImport = async () => {
+    if (!tenant || importRows.length === 0) return;
+    setImporting(true);
+    const errors: string[] = [];
+    let created = 0, updated = 0;
+
+    if (tab === 'customers') {
+      for (const row of importRows) {
+        const payload: any = {
+          tenant_id: tenant.id,
+          name: row.nom,
+          phone: row.telephone || '',
+          whatsapp: row.whatsapp || '',
+          email: row.email || '',
+          address: row.adresse || '',
+          customer_type: row.type || 'particulier',
+          credit_limit: Number(row.plafond_credit || 0),
+        };
+        if (!sharedCustomers && currentSite) payload.site_id = currentSite.id;
+        const balanceVal = Number(row.solde || 0);
+
+        const { data: existing } = await supabase.from('customers')
+          .select('id').eq('tenant_id', tenant.id).eq('name', row.nom).maybeSingle();
+
+        if (existing) {
+          const updatePayload: any = { ...payload };
+          delete updatePayload.tenant_id;
+          if (balanceVal) updatePayload.balance = balanceVal;
+          const { error: e } = await supabase.from('customers').update(updatePayload).eq('id', existing.id);
+          if (e) errors.push(`${row.nom}: ${e.message}`);
+          else updated++;
+        } else {
+          if (balanceVal) payload.balance = balanceVal;
+          const { error: e } = await supabase.from('customers').insert(payload);
+          if (e) errors.push(`${row.nom}: ${e.message}`);
+          else created++;
+        }
+      }
+    } else {
+      for (const row of importRows) {
+        const payload: any = {
+          tenant_id: tenant.id,
+          name: row.nom,
+          contact: row.contact || '',
+          phone: row.telephone || '',
+          whatsapp: row.whatsapp || '',
+          email: row.email || '',
+          address: row.adresse || '',
+          country: row.pays || 'Sénégal',
+          delivery_days: Number(row.delai_livraison || 0),
+          payment_terms: row.conditions_paiement || '',
+          credit_limit: Number(row.plafond_credit || 0),
+        };
+        if (!sharedSuppliers && currentSite) payload.site_id = currentSite.id;
+        const balanceVal = Number(row.solde || 0);
+
+        const { data: existing } = await supabase.from('suppliers')
+          .select('id').eq('tenant_id', tenant.id).eq('name', row.nom).maybeSingle();
+
+        if (existing) {
+          const updatePayload: any = { ...payload };
+          delete updatePayload.tenant_id;
+          if (balanceVal) updatePayload.balance = balanceVal;
+          const { error: e } = await supabase.from('suppliers').update(updatePayload).eq('id', existing.id);
+          if (e) errors.push(`${row.nom}: ${e.message}`);
+          else updated++;
+        } else {
+          if (balanceVal) payload.balance = balanceVal;
+          const { error: e } = await supabase.from('suppliers').insert(payload);
+          if (e) errors.push(`${row.nom}: ${e.message}`);
+          else created++;
+        }
+      }
+    }
+
+    setImportResult({ created, updated, errors });
+    setImporting(false);
+    if (errors.length === 0) success(`Import terminé: ${created} créés, ${updated} mis à jour`);
+    else error(`Import partiel: ${errors.length} erreur(s)`);
+    load();
+  };
+
+  const openBalanceAdjust = (id: string, name: string, type: 'customer' | 'supplier', currentBalance: number) => {
+    setBalanceTarget({ id, name, type, currentBalance });
+    setBalanceAmount(String(currentBalance));
+    setBalanceNote('');
+    setBalanceOpen(true);
+  };
+
+  const saveBalance = async () => {
+    if (!balanceTarget || !tenant) return;
+    setSavingBalance(true);
+    const table = balanceTarget.type === 'customer' ? 'customers' : 'suppliers';
+    const newBalance = Number(balanceAmount || 0);
+    const adjustment = newBalance - balanceTarget.currentBalance;
+    const { error: e } = await supabase.from(table).update({ balance: newBalance }).eq('id', balanceTarget.id);
+    if (!e) {
+      await supabase.from('balance_adjustments').insert({
+        tenant_id: tenant.id,
+        entity_type: balanceTarget.type,
+        entity_id: balanceTarget.id,
+        previous_balance: balanceTarget.currentBalance,
+        new_balance: newBalance,
+        amount: adjustment,
+        note: balanceNote || 'Report de solde',
+        user_id: profile?.id || null,
+      });
+    }
+    setSavingBalance(false);
+    if (e) error(e.message);
+    else {
+      success(`Solde de "${balanceTarget.name}" positionné à ${formatFCFA(newBalance)}`);
+      setBalanceOpen(false);
+      setBalanceTarget(null);
+      load();
+    }
+  };
 
   return (
     <div className="space-y-3 pb-6">
@@ -328,6 +578,32 @@ export function Tiers() {
               </button>
             );
           })}
+          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={exportTiers}
+              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-semibold bg-white text-slate-600 border border-slate-200 hover:border-emerald-300 hover:text-emerald-700 transition-all"
+              title="Exporter en Excel"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Exporter</span>
+            </button>
+            <button
+              onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-semibold bg-white text-slate-600 border border-slate-200 hover:border-blue-300 hover:text-blue-700 transition-all"
+              title="Importer depuis Excel"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Importer</span>
+            </button>
+            <button
+              onClick={() => { setBalanceTarget(null); setBalanceOpen(true); }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-semibold bg-white text-slate-600 border border-slate-200 hover:border-amber-300 hover:text-amber-700 transition-all"
+              title="Positionner un solde"
+            >
+              <Scale className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Solde</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -500,12 +776,14 @@ export function Tiers() {
       {optCust && (
         <OptionsSheet
           title={optCust.name}
-          subtitle={<span className="capitalize">{optCust.customer_type || 'particulier'}</span>}
+          subtitle={<span className="capitalize">{optCust.customer_type || 'particulier'}{(optCust as any).is_active === false ? ' · Inactif' : ''}</span>}
           onClose={() => setOptCust(null)}
           onEdit={() => { const c = optCust; setOptCust(null); openCustEdit(c); }}
           onDeactivate={(optCust as any).is_active !== false ? () => { const c = optCust; setOptCust(null); setToDeactivateCust(c); } : undefined}
+          onReactivate={(optCust as any).is_active === false ? () => { const c = optCust; setOptCust(null); reactivateCust(c); } : undefined}
           actions={[
             { icon: Info, label: 'Interroger le compte', desc: 'Solde, totaux et historique rapide', onClick: () => { setCustView({ c: optCust, key: 'info' }); setOptCust(null); } },
+            { icon: Scale, label: 'Positionner le solde', desc: 'Ajuster manuellement le solde comptable', onClick: () => { const c = optCust; setOptCust(null); openBalanceAdjust(c.id, c.name, 'customer', Number((c as any).balance || 0)); } },
             { icon: Tag, label: 'Tarifs d\'exception', desc: 'Prix spéciaux par article', onClick: () => { setCustView({ c: optCust, key: 'pricing' }); setOptCust(null); } },
             { icon: Wallet, label: 'Saisir un règlement', desc: 'Encaissement + imputation facture', onClick: () => { setCustView({ c: optCust, key: 'payment' }); setOptCust(null); } },
             { icon: FileText, label: 'Documents de ventes', desc: 'Factures filtrées par période', onClick: () => { setCustView({ c: optCust, key: 'docs' }); setOptCust(null); } },
@@ -517,12 +795,14 @@ export function Tiers() {
       {optSup && (
         <OptionsSheet
           title={optSup.name}
-          subtitle={<span>{optSup.country || 'Fournisseur'}</span>}
+          subtitle={<span>{optSup.country || 'Fournisseur'}{!optSup.is_active ? ' · Inactif' : ''}</span>}
           onClose={() => setOptSup(null)}
           onEdit={() => { const s = optSup; setOptSup(null); openSupEdit(s); }}
           onDeactivate={optSup.is_active ? () => { const s = optSup; setOptSup(null); setToDeactivateSup(s); } : undefined}
+          onReactivate={!optSup.is_active ? () => { const s = optSup; setOptSup(null); reactivateSup(s); } : undefined}
           actions={[
             { icon: Info, label: 'Interroger le compte', desc: 'Dette, totaux et derniers mouvements', onClick: () => { setSupView({ s: optSup, key: 'info' }); setOptSup(null); } },
+            { icon: Scale, label: 'Positionner le solde', desc: 'Ajuster manuellement le solde comptable', onClick: () => { const s = optSup; setOptSup(null); openBalanceAdjust(s.id, s.name, 'supplier', Number((s as any).balance || 0)); } },
             { icon: Wallet, label: 'Saisir un règlement', desc: 'Paiement + imputation commande', onClick: () => { setSupView({ s: optSup, key: 'payment' }); setOptSup(null); } },
             { icon: FileText, label: 'Documents d\'achats', desc: 'Commandes filtrées par période', onClick: () => { setSupView({ s: optSup, key: 'docs' }); setOptSup(null); } },
             { icon: ShoppingBag, label: 'Articles liés', desc: 'Catalogue rattaché', onClick: () => { setSupView({ s: optSup, key: 'articles' }); setOptSup(null); } },
@@ -548,17 +828,151 @@ export function Tiers() {
         open={!!toDeactivateCust}
         onClose={() => setToDeactivateCust(null)}
         onConfirm={deactivateCust}
-        title="Désactiver le client ?"
-        message={`"${toDeactivateCust?.name}" sera marqué inactif. L'historique est conservé.`}
+        title="Supprimer le client ?"
+        message={`"${toDeactivateCust?.name}" sera supprimé définitivement si aucune opération n'est liée, sinon il sera désactivé.`}
         danger
       />
       <ConfirmDialog
         open={!!toDeactivateSup}
         onClose={() => setToDeactivateSup(null)}
         onConfirm={deactivateSup}
-        title="Désactiver le fournisseur ?"
-        message={`"${toDeactivateSup?.name}" sera marqué inactif. Les articles associés restent inchangés.`}
+        title="Supprimer le fournisseur ?"
+        message={`"${toDeactivateSup?.name}" sera supprimé définitivement si aucune opération n'est liée, sinon il sera désactivé.`}
         danger
+      />
+
+      {/* Import modal */}
+      <Modal open={importExportOpen} onClose={() => setImportExportOpen(false)} title={`Importer des ${tab === 'customers' ? 'clients' : 'fournisseurs'}`} size="md"
+        footer={importRows.length > 0 && !importResult ? <>
+          <button onClick={() => setImportExportOpen(false)} className="btn-secondary">Annuler</button>
+          <button onClick={runImport} disabled={importing} className="btn-primary">
+            {importing && <Loader2 className="w-4 h-4 animate-spin" />}
+            Importer {importRows.length} ligne{importRows.length > 1 ? 's' : ''}
+          </button>
+        </> : undefined}
+      >
+        <div className="space-y-4">
+          {!importResult && (
+            <>
+              <div className="flex items-center gap-2">
+                <button onClick={downloadTemplate} className="btn-secondary text-xs gap-1.5">
+                  <Download className="w-3.5 h-3.5" />Télécharger le modèle
+                </button>
+              </div>
+              <div
+                className="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:border-brand-400 transition-colors cursor-pointer"
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleImportFile(f); }}
+                onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.csv'; inp.onchange = () => { if (inp.files?.[0]) handleImportFile(inp.files[0]); }; inp.click(); }}
+              >
+                <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-slate-700">Glissez un fichier Excel ici</p>
+                <p className="text-xs text-slate-400 mt-1">ou cliquez pour parcourir (.xlsx, .xls, .csv)</p>
+              </div>
+              {importFilename && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span className="text-xs font-medium text-slate-700 truncate flex-1">{importFilename}</span>
+                  <span className="text-xs text-slate-500">{importRows.length} ligne{importRows.length > 1 ? 's' : ''}</span>
+                </div>
+              )}
+              {importRows.length > 0 && (
+                <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-[11px]">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Nom</th>
+                        <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Tél</th>
+                        <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Solde</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importRows.slice(0, 20).map((r, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="px-2 py-1 text-slate-800 font-medium">{r.nom}</td>
+                          <td className="px-2 py-1 text-slate-500">{r.telephone || '-'}</td>
+                          <td className="px-2 py-1 text-right text-slate-700 num">{Number(r.solde || 0) ? formatFCFA(Number(r.solde)) : '-'}</td>
+                        </tr>
+                      ))}
+                      {importRows.length > 20 && (
+                        <tr><td colSpan={3} className="px-2 py-1.5 text-center text-slate-400 italic">+{importRows.length - 20} autres lignes...</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+          {importResult && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
+                  <div className="text-2xl font-black text-emerald-700 num">{importResult.created}</div>
+                  <div className="text-[10px] font-semibold text-emerald-600 uppercase">Créés</div>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-center">
+                  <div className="text-2xl font-black text-blue-700 num">{importResult.updated}</div>
+                  <div className="text-[10px] font-semibold text-blue-600 uppercase">Mis à jour</div>
+                </div>
+              </div>
+              {importResult.errors.length > 0 && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-1.5">
+                  <div className="text-xs font-bold text-red-700">{importResult.errors.length} erreur{importResult.errors.length > 1 ? 's' : ''}</div>
+                  <div className="max-h-32 overflow-y-auto text-[11px] text-red-600 space-y-0.5">
+                    {importResult.errors.map((e, i) => <div key={i}>{e}</div>)}
+                  </div>
+                </div>
+              )}
+              <button onClick={() => setImportExportOpen(false)} className="btn-primary w-full">Fermer</button>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Balance adjustment modal */}
+      <Modal open={balanceOpen && !!balanceTarget} onClose={() => { setBalanceOpen(false); setBalanceTarget(null); }} title="Positionner le solde" size="sm"
+        footer={<>
+          <button onClick={() => setBalanceOpen(false)} className="btn-secondary">Annuler</button>
+          <button onClick={saveBalance} disabled={savingBalance} className="btn-primary">
+            {savingBalance && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer
+          </button>
+        </>}
+      >
+        {balanceTarget && (
+          <div className="space-y-4">
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="text-xs text-slate-500 mb-0.5">{balanceTarget.type === 'customer' ? 'Client' : 'Fournisseur'}</div>
+              <div className="text-sm font-bold text-slate-900">{balanceTarget.name}</div>
+              <div className="text-xs text-slate-500 mt-1">Solde actuel: <span className="font-bold num">{formatFCFA(balanceTarget.currentBalance)}</span></div>
+            </div>
+            <div>
+              <label className="label">Nouveau solde (FCFA)</label>
+              <input
+                type="number"
+                value={balanceAmount}
+                onChange={e => setBalanceAmount(e.target.value)}
+                className="input"
+                placeholder="0"
+                autoFocus
+              />
+              <p className="text-[10px] text-slate-400 mt-1">Un solde positif indique une créance (le tiers doit de l'argent). Négatif = avoir.</p>
+            </div>
+            <div>
+              <label className="label">Note (optionnel)</label>
+              <input value={balanceNote} onChange={e => setBalanceNote(e.target.value)} className="input" placeholder="Reprise de solde comptable..." />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Balance quick-select: shown when clicking Solde button without preselection */}
+      <BalanceQuickSelect
+        open={balanceOpen && !balanceTarget}
+        onClose={() => setBalanceOpen(false)}
+        customers={tab === 'customers' ? filteredCustomers : []}
+        suppliers={tab === 'suppliers' ? filteredSuppliers : []}
+        onSelect={(id, name, type, bal) => openBalanceAdjust(id, name, type, bal)}
+        tab={tab}
       />
     </div>
   );
@@ -643,8 +1057,8 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClic
             </div>
             {/* Row 2: solde label + amount */}
             <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde dû</span>
-              <span className={`text-[12px] font-black tabular-nums ${due > 0 ? 'text-amber-600' : 'text-slate-300'}`}>{formatFCFA(due)}</span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde comptable</span>
+              <span className={`text-[12px] font-black tabular-nums ${balance > 0 ? 'text-amber-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{formatFCFA(balance)}</span>
             </div>
           </button>
         );
@@ -689,10 +1103,10 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
               </div>
               {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200 shrink-0">Inactif</span>}
             </div>
-            {/* Row 2: dette label + amount */}
+            {/* Row 2: solde label + amount */}
             <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Dette</span>
-              <span className={`text-[12px] font-black tabular-nums ${d.due > 0 ? 'text-red-600' : 'text-slate-300'}`}>{formatFCFA(d.due)}</span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde comptable</span>
+              <span className={`text-[12px] font-black tabular-nums ${Number((s as any).balance || 0) > 0 ? 'text-red-600' : Number((s as any).balance || 0) < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{formatFCFA(Number((s as any).balance || 0))}</span>
             </div>
           </button>
         );
@@ -702,10 +1116,10 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
 }
 
 /* ───────────────────────── Options bottom sheet ───────────────────────── */
-function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate }: {
+function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate, onReactivate }: {
   title: string; subtitle?: React.ReactNode; onClose: () => void;
   actions: { icon: any; label: string; desc?: string; onClick: () => void }[];
-  onEdit?: () => void; onDeactivate?: () => void;
+  onEdit?: () => void; onDeactivate?: () => void; onReactivate?: () => void;
 }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -742,7 +1156,8 @@ function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate 
         </div>
         <div className="px-3 pb-4 pt-1 border-t border-slate-100 flex gap-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           {onEdit && <button onClick={onEdit} className="flex-1 btn-secondary justify-center"><Edit2 className="w-4 h-4" />Modifier</button>}
-          {onDeactivate && <button onClick={onDeactivate} className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-colors"><PowerOff className="w-4 h-4" />Désactiver</button>}
+          {onReactivate && <button onClick={onReactivate} className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors"><RotateCcw className="w-4 h-4" />Réactiver</button>}
+          {onDeactivate && <button onClick={onDeactivate} className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-colors"><Trash2 className="w-4 h-4" />Supprimer</button>}
         </div>
       </div>
     </div>
@@ -751,7 +1166,7 @@ function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate 
 
 /* ───────────────────────── Customer detail modal ───────────────────────── */
 function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: CustomerOptionKey }; onClose: () => void }) {
-  const { c, key } = view;
+  const { c: initialC, key } = view;
   const { tenant, currentSite, profile } = useApp();
   const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
@@ -759,6 +1174,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const [saleItems, setSaleItems] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [methods, setMethods] = useState<any[]>([]);
+  const [customerBalance, setCustomerBalance] = useState<number>(Number((initialC as any).balance || 0));
 
   const [paySale, setPaySale] = useState<string>('');
   const [payAmount, setPayAmount] = useState<string>('');
@@ -774,16 +1190,21 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const [creditMethodIds, setCreditMethodIds] = useState<Set<string>>(new Set());
   const [prepayments, setPrepayments] = useState<{ id: string; amount: number; amount_used: number; method_name: string; reference: string; created_at: string }[]>([]);
   const [avoirs, setAvoirs] = useState<{ id: string; return_number: string; total: number; credit_used: number; created_at: string; refunded_at?: string | null }[]>([]);
+  const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
+
+  const c = useMemo(() => ({ ...initialC, balance: customerBalance } as any), [initialC, customerBalance]);
 
   const reload = async () => {
     if (!tenant) return;
     setLoading(true);
-    const [sRes, pmAllRes] = await Promise.all([
+    const [sRes, pmAllRes, custRes] = await Promise.all([
       supabase.from('sales').select('id, sale_number, total, paid, status, created_at, source').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }).limit(400),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
+      supabase.from('customers').select('balance').eq('id', initialC.id).maybeSingle(),
     ]);
     const ss = sRes.data || [];
     setSales(ss);
+    if (custRes.data) setCustomerBalance(Number(custRes.data.balance || 0));
     const allPm = pmAllRes.data || [];
     const realMethods = allPm.filter((m: any) => m.payment_type !== 'credit');
     setMethods(realMethods);
@@ -792,12 +1213,14 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     if (!payMethod && realMethods.length) setPayMethod(realMethods[0].id);
 
     const salesIds = ss.map(s => s.id);
-    const [{ data: prepays }, { data: avoirRows }] = await Promise.all([
+    const [{ data: prepays }, { data: avoirRows }, { data: adjRows }] = await Promise.all([
       supabase.from('customer_prepayments').select('id, amount, amount_used, method_name, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }),
       supabase.from('sale_returns').select('id, return_number, total, credit_used, created_at, refunded_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('status', 'approved').eq('refund_method', 'avoir').order('created_at', { ascending: false }),
+      supabase.from('balance_adjustments').select('id, amount, note, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'customer').eq('entity_id', c.id).order('created_at', { ascending: false }),
     ]);
     setPrepayments(prepays || []);
     setAvoirs(avoirRows || []);
+    setBalanceAdjs(adjRows || []);
 
     if (salesIds.length) {
       const [{ data: pays }, { data: items }] = await Promise.all([
@@ -809,7 +1232,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     } else { setPayments([]); setSaleItems([]); }
     setLoading(false);
   };
-  useEffect(() => { reload(); }, [c.id]);
+  useEffect(() => { reload(); }, [initialC.id]);
 
   // Filter out credit-type "payments" — they are not real règlements, just markers for credit sales
   const realPayments = useMemo(
@@ -832,7 +1255,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const unpaidSales = useMemo(() => {
     const paidBySale: Record<string, number> = {};
     realPayments.forEach(p => { paidBySale[p.sale_id] = (paidBySale[p.sale_id] || 0) + Number(p.amount); });
-    return sales.filter(s => {
+    const result = sales.filter(s => {
       if (s.status === 'cancelled') return false;
       const realPaid = paidBySale[s.id] || 0;
       return realPaid < Number(s.total);
@@ -840,11 +1263,28 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       const realPaid = paidBySale[s.id] || 0;
       return { ...s, paid: realPaid };
     });
-  }, [sales, realPayments]);
+
+    const customerBalance = Number((c as any).balance || 0);
+    const invoiceDue = result.reduce((a, s) => a + (Number(s.total) - Number(s.paid)), 0);
+    const positionedDue = Math.max(0, customerBalance - invoiceDue);
+    if (positionedDue > 0) {
+      result.unshift({ id: '__balance__', sale_number: 'Report de solde', total: positionedDue, paid: 0, status: 'validated', created_at: new Date(0).toISOString() } as any);
+    }
+
+    return result;
+  }, [sales, realPayments, c]);
 
   const ledger = useMemo(() => {
-    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' };
+    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' | 'adjustment' };
     const rows: Row[] = [];
+    balanceAdjs.forEach(adj => {
+      const amt = Number(adj.amount);
+      if (amt > 0) {
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: amt, credit: 0, kind: 'adjustment' });
+      } else if (amt < 0) {
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Ajustement de solde', ref: '', debit: 0, credit: Math.abs(amt), kind: 'adjustment' });
+      }
+    });
     sales.forEach(s => {
       if (s.status === 'cancelled') {
         rows.push({ id: 'c-' + s.id, ts: s.created_at, label: 'Facture annulée', ref: s.sale_number, debit: 0, credit: 0, kind: 'cancel' });
@@ -865,7 +1305,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     rows.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
     let running = 0;
     return rows.map(r => { running += r.debit - r.credit; return { ...r, running }; });
-  }, [sales, realPayments, prepayments, avoirs]);
+  }, [sales, realPayments, prepayments, avoirs, balanceAdjs]);
 
   const filteredDocs = useMemo(() => sales.filter(s => {
     if (dateFrom && new Date(s.created_at) < new Date(dateFrom)) return false;
@@ -918,12 +1358,25 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
         .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
       sessionId = sess?.id || null;
     }
-    const sale = sales.find(s => s.id === paySale);
-    const ref = payRef || (sale ? `Règlement facture ${sale.sale_number} · ${c.name}` : '');
-    const { error: e } = await supabase.rpc('register_sale_payment', {
-      p_sale_id: paySale, p_payment_method_id: pm.id, p_method_name: pm.name,
-      p_amount: amt, p_reference: ref, p_cash_session_id: sessionId,
-    });
+
+    let e: any = null;
+    if (paySale === '__balance__') {
+      const { error: rpcErr } = await supabase.rpc('register_customer_payment', {
+        p_customer_id: c.id, p_payment_method_id: pm.id, p_method_name: pm.name,
+        p_amount: amt, p_reference: payRef || `Règlement solde · ${c.name}`,
+        p_cash_session_id: sessionId, p_sale_id: null,
+      });
+      e = rpcErr;
+    } else {
+      const sale = sales.find(s => s.id === paySale);
+      const ref = payRef || (sale ? `Règlement facture ${sale.sale_number} · ${c.name}` : '');
+      const { error: rpcErr } = await supabase.rpc('register_sale_payment', {
+        p_sale_id: paySale, p_payment_method_id: pm.id, p_method_name: pm.name,
+        p_amount: amt, p_reference: ref, p_cash_session_id: sessionId,
+      });
+      e = rpcErr;
+    }
+
     setPaying(false);
     if (e) { error(e.message); return; }
     success(sessionId ? 'Règlement enregistré · imputé sur la caisse du jour' : 'Règlement enregistré');
@@ -984,9 +1437,9 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
           </div>
           {key !== 'pricing' && (
           <div className="text-right">
-            <div className={`${totals.due > 0 ? 'text-amber-700' : 'text-slate-500'}`}>
-              <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde dû</div>
-              <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(totals.due)}</div>
+            <div className={`${Number((c as any).balance || 0) > 0 ? 'text-amber-700' : Number((c as any).balance || 0) < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+              <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
+              <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(Number((c as any).balance || 0))}</div>
             </div>
             {totals.unusedAvoir > 0 && (
               <div className="text-teal-700 mt-1">
@@ -1014,7 +1467,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
               payMethod={payMethod} setPayMethod={setPayMethod}
               payRef={payRef} setPayRef={setPayRef}
               paying={paying} onSubmit={submitPayment}
-              onSelectSale={(id: string) => { const s = sales.find(x => x.id === id); if (s) setPayAmount(String(Math.max(0, Number(s.total) - Number(s.paid)))); }}
+              onSelectSale={(id: string) => { const s = unpaidSales.find((x: any) => x.id === id); if (s) setPayAmount(String(Math.max(0, Number(s.total) - Number(s.paid)))); }}
               recentPayments={payments.slice(0, 8).map(p => ({ ...p, sale_number: sales.find(x => x.id === p.sale_id)?.sale_number }))}
             />
           )}
@@ -1246,7 +1699,7 @@ function PaymentForm({
         </div>
         {selected && (
           <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
-            <span className="text-white/60">Dû sur cette facture</span>
+            <span className="text-white/60">{selected.id === '__balance__' ? 'Solde positionné' : 'Dû sur cette facture'}</span>
             <span className="font-bold tabular-nums">{formatFCFA(due)}</span>
           </div>
         )}
@@ -1259,20 +1712,20 @@ function PaymentForm({
       </div>
 
       <div>
-        <label className="label">Imputer sur la facture</label>
+        <label className="label">Imputer sur</label>
         <SearchableSelect
           options={[
-            { value: '', label: '— Sélectionner une facture non soldée —' },
+            { value: '', label: '— Sélectionner une créance —' },
             ...unpaid.map((s: any) => {
               const d = Math.max(0, Number(s.total) - Number(s.paid));
-              return { value: s.id, label: `${s.sale_number} · du ${formatFCFA(d)}` };
+              return { value: s.id, label: `${s.sale_number} · dû ${formatFCFA(d)}` };
             })
           ]}
           value={paySale}
           onChange={v => { setPaySale(v); onSelectSale(v); }}
-          placeholder="— Sélectionner une facture —"
+          placeholder="— Sélectionner une créance —"
         />
-        {unpaid.length === 0 && <div className="text-xs text-emerald-700 mt-1.5 inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" />Toutes les factures sont soldées.</div>}
+        {unpaid.length === 0 && <div className="text-xs text-emerald-700 mt-1.5 inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" />Aucune créance en attente.</div>}
       </div>
 
       <div>
@@ -1532,21 +1985,24 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const [dateTo, setDateTo] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [orderView, setOrderView] = useState<any | null>(null);
+  const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
 
   const reload = async () => {
     if (!tenant) return;
     setLoading(true);
-    const [oRes, pRes, mRes, aRes] = await Promise.all([
+    const [oRes, pRes, mRes, aRes, adjRes] = await Promise.all([
       supabase.from('supplier_orders').select('id, order_number, total, paid, status, created_at, expected_date').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('created_at', { ascending: false }).limit(400),
       supabase.from('supplier_payments').select('*').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('paid_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).neq('payment_type', 'credit').order('sort_order'),
       supabase.from('articles').select('id, name, internal_ref, supplier_ref, sale_price, is_active').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('name').limit(300),
+      supabase.from('balance_adjustments').select('id, amount, note, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'supplier').eq('entity_id', s.id).order('created_at', { ascending: false }),
     ]);
     const oo = oRes.data || [];
     setOrders(oo);
     setPayments(pRes.data || []);
     setMethods(mRes.data || []);
     setArticles(aRes.data || []);
+    setBalanceAdjs(adjRes.data || []);
     if (!payMethod && (mRes.data || []).length) setPayMethod(mRes.data![0].id);
     const ids = oo.map(o => o.id);
     if (ids.length) {
@@ -1567,8 +2023,16 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const unpaidOrders = useMemo(() => orders.filter(o => o.status !== 'cancelled' && Number(o.paid || 0) < Number(o.total)), [orders]);
 
   const ledger = useMemo(() => {
-    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'order' | 'payment' | 'cancel' };
+    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'order' | 'payment' | 'cancel' | 'adjustment' };
     const rows: Row[] = [];
+    balanceAdjs.forEach(adj => {
+      const amt = Number(adj.amount);
+      if (amt > 0) {
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: 0, credit: amt, kind: 'adjustment' });
+      } else if (amt < 0) {
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Ajustement de solde', ref: '', debit: Math.abs(amt), credit: 0, kind: 'adjustment' });
+      }
+    });
     orders.forEach(o => {
       if (o.status === 'cancelled') {
         rows.push({ id: 'c-' + o.id, ts: o.created_at, label: 'Commande annulée', ref: o.order_number, debit: 0, credit: 0, kind: 'cancel' });
@@ -1583,7 +2047,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     rows.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
     let running = 0;
     return rows.map(r => { running += r.credit - r.debit; return { ...r, running }; });
-  }, [orders, payments]);
+  }, [orders, payments, balanceAdjs]);
 
   const filteredDocs = useMemo(() => orders.filter(o => {
     if (dateFrom && new Date(o.created_at) < new Date(dateFrom)) return false;
@@ -1629,6 +2093,9 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
         const newPaid = Number(order.paid || 0) + amt;
         await supabase.from('supplier_orders').update({ paid: newPaid }).eq('id', payOrder);
       }
+    }
+    if (!e) {
+      await supabase.from('suppliers').update({ balance: Number((s as any).balance || 0) - amt }).eq('id', s.id);
     }
     setPaying(false);
     if (e) { error(e.message); return; }
@@ -1688,9 +2155,9 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
             {key === 'docs' && 'Documents d\'achats · statistiques'}
             {key === 'articles' && `${articles.length} article${articles.length > 1 ? 's' : ''} lié${articles.length > 1 ? 's' : ''}`}
           </div>
-          <div className={`text-right ${totals.due > 0 ? 'text-amber-700' : 'text-slate-500'}`}>
-            <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Dette</div>
-            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(totals.due || 0)}</div>
+          <div className={`text-right ${Number((s as any).balance || 0) > 0 ? 'text-amber-700' : Number((s as any).balance || 0) < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+            <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
+            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(Number((s as any).balance || 0))}</div>
           </div>
         </div>
       </div>
@@ -2326,5 +2793,54 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* ───────────────────────── Balance Quick Select ───────────────────────── */
+function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab }: {
+  open: boolean; onClose: () => void;
+  customers: Customer[]; suppliers: Supplier[];
+  onSelect: (id: string, name: string, type: 'customer' | 'supplier', balance: number) => void;
+  tab: 'customers' | 'suppliers';
+}) {
+  const [search, setSearch] = useState('');
+  const items = tab === 'customers'
+    ? customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()))
+    : suppliers.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()));
+
+  if (!open) return null;
+  return (
+    <Modal open={open} onClose={onClose} title={`Positionner un solde - ${tab === 'customers' ? 'Client' : 'Fournisseur'}`} size="md">
+      <div className="space-y-3">
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="input text-xs"
+          placeholder="Rechercher un tiers..."
+          autoFocus
+        />
+        <div className="max-h-72 overflow-y-auto space-y-1">
+          {items.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Aucun résultat</p>}
+          {items.map((item: any) => (
+            <button
+              key={item.id}
+              onClick={() => { onClose(); onSelect(item.id, item.name, tab === 'customers' ? 'customer' : 'supplier', Number(item.balance || 0)); }}
+              className="w-full flex items-center justify-between gap-2 p-2.5 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all text-left"
+            >
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-900 truncate">{item.name}</div>
+                <div className="text-[10px] text-slate-400">{item.phone || item.email || '-'}</div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className={`text-xs font-bold num ${Number(item.balance || 0) > 0 ? 'text-amber-600' : Number(item.balance || 0) < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {formatFCFA(Number(item.balance || 0))}
+                </div>
+                <div className="text-[9px] text-slate-400">solde actuel</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </Modal>
   );
 }

@@ -237,8 +237,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null, extra?: { city?: string; whatsapp_phone?: string; responsible_title?: string; selected_plan?: string; billing_cycle?: string }) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
+    let { data, error } = await supabase.auth.signUp({ email, password });
+    if (error && error.message?.toLowerCase().includes('already registered')) {
+      const signInRes = await supabase.auth.signInWithPassword({ email, password });
+      if (signInRes.error) throw signInRes.error;
+      data = signInRes.data as any;
+    } else if (error) {
+      throw error;
+    }
     if (!data.user) throw new Error('Inscription impossible');
     const { error: rpcErr } = await supabase.rpc('provision_tenant', {
       p_company_name: companyName,

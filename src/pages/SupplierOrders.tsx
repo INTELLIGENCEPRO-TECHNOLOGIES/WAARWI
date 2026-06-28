@@ -558,6 +558,14 @@ export function SupplierOrders() {
   const changeStatus = async (o: SupplierOrder, status: string) => {
     if (!can('edit_supplier_orders')) { error('Vous n\'avez pas la permission de modifier les commandes fournisseurs'); return; }
     await supabase.from('supplier_orders').update({ status }).eq('id', o.id);
+    if (status === 'confirmed' && o.status === 'draft') {
+      const { data: sup } = await supabase.from('suppliers').select('balance').eq('id', o.supplier_id).single();
+      await supabase.from('suppliers').update({ balance: Number(sup?.balance || 0) + Number(o.total) }).eq('id', o.supplier_id);
+    }
+    if (status === 'cancelled' && ['confirmed', 'sent', 'partial'].includes(o.status)) {
+      const { data: sup } = await supabase.from('suppliers').select('balance').eq('id', o.supplier_id).single();
+      await supabase.from('suppliers').update({ balance: Number(sup?.balance || 0) - Number(o.total) }).eq('id', o.supplier_id);
+    }
     success('Statut mis à jour'); load();
     if (selected?.id === o.id) setSelected({ ...o, status });
   };

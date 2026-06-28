@@ -1,29 +1,13 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
-  Loader2, ArrowRight, ArrowLeft, Mail, Lock, Building2, User, Eye, EyeOff,
-  CheckCircle2, ChevronDown, Briefcase, Shield, Package, Receipt, BarChart3,
-  Globe, Monitor, FileText, Zap, ShoppingCart, Users, TrendingUp,
-  Truck, CreditCard, Wallet, Layers, Settings, BookOpen, Phone,
-  MapPin, Check, Star, MessageCircle,
+  Loader2, Mail, Lock, Building2, User, Eye, EyeOff,
+  CheckCircle2, ChevronDown, Briefcase, Package,
+  Users, Phone, MapPin, Check, Star, MessageCircle, ArrowLeft, ArrowRight, Search,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { useTenantBranding } from '../lib/tenantBranding';
 import { supabase } from '../lib/supabase';
-
-const ICON_MAP: Record<string, any> = {
-  Zap, Package, Receipt, Globe, BarChart3, Shield, Monitor, FileText,
-  ShoppingCart, Users, Truck, CreditCard, Wallet, Layers, Settings, BookOpen,
-  TrendingUp,
-};
-
-type LoginConfig = {
-  headline: string;
-  headline_accent: string;
-  subtitle: string;
-  modules: { icon: string; label: string; desc: string }[];
-  login_bg_url: string | null;
-};
 
 type BusinessActivityType = {
   id: string;
@@ -47,9 +31,9 @@ type Plan = {
   sort_order: number;
 };
 
-/* ---- Shared UI primitives ---- */
+/* ---- Registration sub-components ---- */
 
-function AuthInput({ icon: Icon, label, value, onChange, placeholder, type = 'text', required, hint }: {
+function RegInput({ icon: Icon, label, value, onChange, placeholder, type = 'text', required, hint }: {
   icon: any; label: string; value: string; onChange: (v: string) => void;
   placeholder?: string; type?: string; required?: boolean; hint?: string;
 }) {
@@ -67,9 +51,9 @@ function AuthInput({ icon: Icon, label, value, onChange, placeholder, type = 'te
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full h-11 pl-10 pr-4 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400
+          className="w-full h-[48px] md:h-[50px] pl-10 pr-4 rounded-[10px] bg-white border border-[#dbe3ef] text-slate-900 placeholder-slate-400
             focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
-            hover:border-slate-300 transition-all text-sm"
+            hover:border-slate-300 transition-all text-[15px]"
         />
       </div>
       {hint && <p className="mt-1 text-[11px] text-slate-400">{hint}</p>}
@@ -77,13 +61,101 @@ function AuthInput({ icon: Icon, label, value, onChange, placeholder, type = 'te
   );
 }
 
-function AuthPassword({ value, onChange, show, toggleShow, placeholder }: {
-  value: string; onChange: (v: string) => void; show: boolean; toggleShow: () => void; placeholder: string;
+function ActivityTypeSelect({ activityTypes, value, onChange }: {
+  activityTypes: BusinessActivityType[]; value: string; onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (open && inputRef.current) inputRef.current.focus();
+  }, [open]);
+
+  const allOptions = useMemo(() => [
+    ...activityTypes.map(t => ({ id: t.id, slug: t.slug, name: t.name })),
+    { id: '__other__', slug: '__other__', name: 'Autre activité' },
+  ], [activityTypes]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return allOptions;
+    const q = search.toLowerCase();
+    return allOptions.filter(o => o.name.toLowerCase().includes(q));
+  }, [search, allOptions]);
+
+  const selectedLabel = allOptions.find(o => o.slug === value)?.name || 'Sélectionner...';
+
+  return (
+    <div ref={containerRef} className="relative">
+      <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
+        Type d'activité<span className="text-red-400 ml-0.5">*</span>
+      </label>
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setSearch(''); }}
+        className="w-full h-[48px] md:h-[50px] pl-4 pr-10 rounded-[10px] bg-white border border-[#dbe3ef] text-left text-[15px] text-slate-900
+          focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
+          hover:border-slate-300 transition-all cursor-pointer"
+      >
+        {selectedLabel}
+        <ChevronDown className={`absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-[0_8px_24px_rgba(15,23,42,0.08)] overflow-hidden">
+          <div className="p-2 border-b border-[#f1f5f9]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher..."
+                className="w-full h-[36px] pl-8 pr-3 rounded-lg bg-[#f8fafc] border border-[#e2e8f0] text-[13px] text-slate-900 placeholder-slate-400
+                  focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-300"
+              />
+            </div>
+          </div>
+          <div className="max-h-[200px] overflow-y-auto py-1">
+            {filtered.length === 0 && (
+              <p className="text-center text-[13px] text-slate-400 py-3">Aucun résultat</p>
+            )}
+            {filtered.map(opt => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => { onChange(opt.slug); setOpen(false); setSearch(''); }}
+                className={`w-full text-left px-4 py-2.5 text-[14px] transition-colors flex items-center justify-between
+                  ${opt.slug === value ? 'bg-[#f8fafc] text-[#0f172a] font-medium' : 'text-slate-700 hover:bg-[#f8fafc]'}`}
+              >
+                {opt.name}
+                {opt.slug === value && <Check className="w-3.5 h-3.5 text-[#0f172a]" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RegPassword({ value, onChange, show, toggleShow, placeholder, label }: {
+  value: string; onChange: (v: string) => void; show: boolean; toggleShow: () => void; placeholder: string; label?: string;
 }) {
   return (
     <div>
       <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
-        Mot de passe<span className="text-red-400 ml-0.5">*</span>
+        {label || 'Mot de passe'}<span className="text-red-400 ml-0.5">*</span>
       </label>
       <div className="relative">
         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -94,40 +166,15 @@ function AuthPassword({ value, onChange, show, toggleShow, placeholder }: {
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full h-11 pl-10 pr-10 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400
+          className="w-full h-[48px] md:h-[50px] pl-10 pr-10 rounded-[10px] bg-white border border-[#dbe3ef] text-slate-900 placeholder-slate-400
             focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
-            hover:border-slate-300 transition-all text-sm"
+            hover:border-slate-300 transition-all text-[15px]"
         />
-        <button type="button" onClick={toggleShow} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+        <button type="button" onClick={toggleShow} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
           {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>
       </div>
     </div>
-  );
-}
-
-function AuthBtn({ children, loading, disabled, onClick, type = 'button', variant = 'primary' }: {
-  children: React.ReactNode; loading?: boolean; disabled?: boolean;
-  onClick?: () => void; type?: 'button' | 'submit'; variant?: 'primary' | 'secondary';
-}) {
-  if (variant === 'secondary') return (
-    <button type="button" onClick={onClick}
-      className="h-11 px-5 rounded-xl border border-slate-200 bg-white text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] inline-flex items-center justify-center gap-2 text-sm">
-      <ArrowLeft className="w-4 h-4" />{children}
-    </button>
-  );
-  return (
-    <button
-      type={type}
-      disabled={disabled || loading}
-      onClick={onClick}
-      className="w-full h-11 rounded-xl bg-slate-900 text-white font-semibold text-sm
-        hover:bg-black active:scale-[0.98] transition-all
-        disabled:opacity-40 disabled:cursor-not-allowed
-        inline-flex items-center justify-center gap-2"
-    >
-      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>{children}<ArrowRight className="w-4 h-4" /></>}
-    </button>
   );
 }
 
@@ -149,17 +196,6 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 function PlanCard({ plan, selected, onSelect, popular, billingCycle = 'monthly' }: { plan: Plan; selected: boolean; onSelect: () => void; popular?: boolean; billingCycle?: 'monthly' | 'yearly' }) {
   const limits = plan.limits || {};
-  const modules: { key: string; label: string }[] = [
-    { key: 'online_shop', label: 'Boutique en ligne' },
-    { key: 'supplier_orders', label: 'Commandes fournisseurs' },
-    { key: 'accounting', label: 'Comptabilité' },
-    { key: 'has_multi_store', label: 'Multi-magasins' },
-    { key: 'has_advanced_reports', label: 'Rapports avancés' },
-    { key: 'has_whatsapp', label: 'WhatsApp' },
-    { key: 'has_accounting_export', label: 'Export comptable' },
-  ];
-  const enabledModules = modules.filter(m => !!limits[m.key]);
-
   const isYearly = billingCycle === 'yearly';
   const price = isYearly ? plan.price_yearly : plan.price_monthly;
   const monthlyEquivalent = isYearly && plan.price_yearly > 0 ? Math.round(plan.price_yearly / 12) : null;
@@ -184,41 +220,26 @@ function PlanCard({ plan, selected, onSelect, popular, billingCycle = 'monthly' 
           <Check className="w-3 h-3 text-white" />
         </div>
       )}
-
-      <div className="mb-2">
-        <h3 className="text-base font-bold text-slate-900">{plan.name}</h3>
-        {plan.description && <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{plan.description}</p>}
-      </div>
-
-      <div className="mb-3">
+      <h3 className="text-base font-bold text-slate-900">{plan.name}</h3>
+      {plan.description && <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{plan.description}</p>}
+      <div className="mt-2 mb-3">
         {isYearly ? (
           <>
-            <span className="text-xl font-extrabold text-slate-900">
-              {price > 0 ? `${Number(price).toLocaleString('fr-FR')}` : 'Gratuit'}
-            </span>
+            <span className="text-xl font-extrabold text-slate-900">{price > 0 ? `${Number(price).toLocaleString('fr-FR')}` : 'Gratuit'}</span>
             {price > 0 && <span className="text-xs text-slate-500 ml-1">FCFA/an</span>}
-            {monthlyEquivalent && (
-              <span className="block text-[11px] text-slate-500 mt-0.5">
-                soit {monthlyEquivalent.toLocaleString('fr-FR')} FCFA/mois
-              </span>
-            )}
+            {monthlyEquivalent && <span className="block text-[11px] text-slate-500 mt-0.5">soit {monthlyEquivalent.toLocaleString('fr-FR')} FCFA/mois</span>}
           </>
         ) : (
           <>
-            <span className="text-xl font-extrabold text-slate-900">
-              {price > 0 ? `${Number(price).toLocaleString('fr-FR')}` : 'Gratuit'}
-            </span>
+            <span className="text-xl font-extrabold text-slate-900">{price > 0 ? `${Number(price).toLocaleString('fr-FR')}` : 'Gratuit'}</span>
             {price > 0 && <span className="text-xs text-slate-500 ml-1">FCFA/mois</span>}
           </>
         )}
         {plan.trial_days > 0 && (
-          <span className="ml-2 text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-            {plan.trial_days}j d&apos;essai
-          </span>
+          <span className="ml-2 text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{plan.trial_days}j d'essai</span>
         )}
       </div>
-
-      <div className="space-y-1.5 mb-3">
+      <div className="space-y-1.5">
         <div className="flex items-center gap-2 text-xs text-slate-600">
           <Package className="w-3 h-3 text-slate-400" />
           <span>{limits.articles === -1 ? 'Articles illimités' : `${limits.articles || 100} articles`}</span>
@@ -232,16 +253,6 @@ function PlanCard({ plan, selected, onSelect, popular, billingCycle = 'monthly' 
           <span>{limits.sites === -1 ? 'Magasins illimités' : `${limits.sites || 1} magasin${(limits.sites || 1) > 1 ? 's' : ''}`}</span>
         </div>
       </div>
-
-      {enabledModules.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {enabledModules.map(m => (
-            <span key={m.key} className="text-[9px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-              {m.label}
-            </span>
-          ))}
-        </div>
-      )}
     </button>
   );
 }
@@ -275,12 +286,8 @@ export function Auth() {
   const [activityTypes, setActivityTypes] = useState<BusinessActivityType[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [step, setStep] = useState(1);
-  const [mounted, setMounted] = useState(false);
-  const [config, setConfig] = useState<LoginConfig | null>(null);
 
   const TOTAL_STEPS = 5;
-
-  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     (async () => {
@@ -301,21 +308,6 @@ export function Auth() {
           const pro = data.find((p: any) => p.code === 'starter');
           setSelectedPlan(pro ? pro.code : data[0].code);
         }
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from('platform_login_config').select('*').eq('id', 'default').maybeSingle();
-      if (data) {
-        setConfig({
-          headline: data.headline || '',
-          headline_accent: data.headline_accent || '',
-          subtitle: data.subtitle || '',
-          modules: Array.isArray(data.modules) ? data.modules : [],
-          login_bg_url: data.login_bg_url || null,
-        });
       }
     })();
   }, []);
@@ -376,69 +368,38 @@ export function Auth() {
     }
   };
 
-  /* ---- Features for left panel ---- */
-  const allFeatures = [
-    { icon: ShoppingCart, label: 'Point de vente', desc: 'Caisse rapide et intuitive' },
-    { icon: Package, label: 'Stock', desc: 'Maîtrisez vos stocks' },
-    { icon: FileText, label: 'Facturation', desc: 'Devis et factures pro' },
-    { icon: Users, label: 'Clients & Tiers', desc: 'CRM et créances' },
-    { icon: Truck, label: 'Fournisseurs', desc: 'Commandes et dettes' },
-    { icon: Globe, label: 'Boutique en ligne', desc: 'Vitrine et commandes web' },
-    { icon: BarChart3, label: 'Comptabilité', desc: 'Suivi financier complet' },
-    { icon: TrendingUp, label: 'Rapports', desc: 'Analyses et tableaux de bord' },
-    { icon: Shield, label: 'Sécurité', desc: 'Rôles et permissions' },
-  ];
-  const features = config?.modules?.length
-    ? config.modules.map(m => ({ icon: ICON_MAP[m.icon] || Shield, label: m.label, desc: m.desc }))
-    : allFeatures;
-
   const logoSrc = isTenantBranded && branding?.logo_url ? branding.logo_url : '/newlogo.png';
 
   /* ---- Render: Confirmation after signup ---- */
   if (submitted) {
     return (
-      <div className="fixed inset-0 overflow-auto bg-slate-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-8 text-center space-y-5">
+      <div className="min-h-screen bg-white flex items-center justify-center p-5">
+        <div className="w-full max-w-md p-8 text-center space-y-5">
           <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center border border-emerald-100">
             <CheckCircle2 className="w-8 h-8 text-emerald-600" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Demande d'inscription envoyée</h2>
+            <h2 className="text-lg font-bold text-[#0f172a]">Demande d'inscription envoyée</h2>
             <p className="text-sm text-slate-500 leading-relaxed mt-2">
-              Votre compte Waarwi est actuellement en attente de validation.
-              Notre équipe vous contactera par WhatsApp ou par email après vérification.
+              Votre compte est en attente de validation.
+              Notre équipe vous contactera par WhatsApp ou email.
             </p>
           </div>
-
           <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-left space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">Statut</span>
-              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">En attente de validation</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">Plan demandé</span>
-              <span className="text-[11px] font-bold text-slate-800">{selectedPlanObj?.name || selectedPlan}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">Contact WhatsApp</span>
-              <span className="text-[11px] font-bold text-slate-800">{whatsappPhone}</span>
-            </div>
-            {email && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-500">Email</span>
-                <span className="text-[11px] font-bold text-slate-800 truncate ml-2">{email}</span>
+            {[
+              ['Statut', <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">En attente</span>],
+              ['Plan', selectedPlanObj?.name || selectedPlan],
+              ['WhatsApp', whatsappPhone],
+              ['Email', email || '\u2014'],
+            ].map(([k, v]) => (
+              <div key={k as string} className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-500">{k}</span>
+                <span className="text-[11px] font-bold text-slate-800">{v}</span>
               </div>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">Canal de contact principal</span>
-              <span className="text-[11px] font-bold text-emerald-700 inline-flex items-center gap-1">
-                <MessageCircle className="w-3 h-3" />WhatsApp
-              </span>
-            </div>
+            ))}
           </div>
-
           <button onClick={() => { setSubmitted(false); setMode('login'); setStep(1); }}
-            className="text-sm font-semibold text-slate-900 hover:underline underline-offset-4 transition-colors">
+            className="text-sm font-semibold text-[#0f172a] hover:underline underline-offset-4">
             Retour à la connexion
           </button>
         </div>
@@ -446,323 +407,277 @@ export function Auth() {
     );
   }
 
-  /* ---- Render: Registration Steps ---- */
-  const registerContent = (
-    <div className="space-y-5">
-      <StepIndicator current={step} total={TOTAL_STEPS} />
-
-      {step === 1 && (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Votre entreprise</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Parlez-nous de votre activité commerciale.</p>
+  /* ---- Render: Registration multi-step (full-page, white background) ---- */
+  if (mode === 'register') {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-5">
+        <div className="w-full max-w-[460px] p-5 md:p-7">
+          <div className="flex items-center justify-between mb-5">
+            <img src={logoSrc} alt={brandName} className="h-7 w-auto object-contain" />
+            <button onClick={() => { setMode('login'); setStep(1); }} className="text-[13px] font-medium text-slate-500 hover:text-slate-900 transition-colors">
+              Se connecter
+            </button>
           </div>
-          <AuthInput icon={Building2} label="Nom de l'entreprise" value={companyName} onChange={setCompanyName} placeholder="Ex : Saloum Electronique" required />
-          <div>
-            <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
-              Type d'activité<span className="text-red-400 ml-0.5">*</span>
-            </label>
-            <div className="relative">
-              <select
-                value={businessType}
-                onChange={e => setBusinessType(e.target.value)}
-                className="w-full h-11 pl-4 pr-10 rounded-xl bg-white border border-slate-200 text-slate-900
-                  focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
-                  hover:border-slate-300 transition-all text-sm appearance-none cursor-pointer"
-              >
-                {activityTypes.map(bt => (
-                  <option key={bt.id} value={bt.slug}>{bt.name}</option>
-                ))}
-                <option value="__other__">Autre activité</option>
-              </select>
-              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-            {selectedActivity?.description && businessType !== '__other__' && (
-              <p className="mt-1.5 text-[11px] text-slate-500">{selectedActivity.description}</p>
+
+          <div className="space-y-5">
+            <StepIndicator current={step} total={TOTAL_STEPS} />
+
+            {step === 1 && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-bold text-[#0f172a]">Votre entreprise</h3>
+                  <p className="text-sm text-slate-500 mt-0.5">Parlez-nous de votre activité.</p>
+                </div>
+                <RegInput icon={Building2} label="Nom de l'entreprise" value={companyName} onChange={setCompanyName} placeholder="Ex : Saloum Electronique" required />
+                <ActivityTypeSelect
+                  activityTypes={activityTypes}
+                  value={businessType}
+                  onChange={setBusinessType}
+                />
+                {selectedActivity?.description && businessType !== '__other__' && (
+                  <p className="-mt-2 text-[11px] text-slate-500">{selectedActivity.description}</p>
+                )}
+                {businessType === '__other__' && (
+                  <RegInput icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Couture..." required />
+                )}
+                <RegInput icon={MapPin} label="Ville" value={city} onChange={setCity} placeholder="Dakar, Thies, Saint-Louis..." />
+                <RegInput icon={MapPin} label="Adresse" value={address} onChange={setAddress} placeholder="Adresse complète (facultatif)" hint="Optionnel" />
+                <button
+                  type="button"
+                  disabled={!step1Valid}
+                  onClick={() => setStep(2)}
+                  className="w-full h-[50px] md:h-[52px] rounded-[10px] bg-[#0f172a] text-white font-semibold text-[15px]
+                    hover:bg-black transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                    flex items-center justify-center gap-2"
+                >
+                  Continuer <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-bold text-[#0f172a]">Le responsable</h3>
+                  <p className="text-sm text-slate-500 mt-0.5">Vos coordonnées de contact.</p>
+                </div>
+                <RegInput icon={User} label="Nom complet" value={fullName} onChange={setFullName} placeholder="Prénom et nom" required />
+                <RegInput icon={Phone} label="Numéro WhatsApp" value={whatsappPhone} onChange={setWhatsappPhone} placeholder="+221 77 123 45 67" required hint="Canal principal de communication" />
+                <RegInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" type="email" hint="Recommandé" />
+                <RegInput icon={Briefcase} label="Fonction" value={responsibleTitle} onChange={setResponsibleTitle} placeholder="Gérant, Directeur..." hint="Optionnel" />
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setStep(1)}
+                    className="h-[48px] md:h-[50px] px-5 rounded-[10px] border border-[#dbe3ef] bg-white text-slate-600 font-semibold hover:bg-slate-50 transition-all flex items-center gap-2">
+                    <ArrowLeft className="w-4 h-4" />Retour
+                  </button>
+                  <button type="button" disabled={!step2Valid} onClick={() => setStep(3)}
+                    className="flex-1 h-[50px] md:h-[52px] rounded-[10px] bg-[#0f172a] text-white font-semibold text-[15px]
+                      hover:bg-black transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    Continuer <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-bold text-[#0f172a]">Choisissez votre plan</h3>
+                  <p className="text-sm text-slate-500 mt-0.5">Essai gratuit inclus.</p>
+                </div>
+                <div className="flex items-center justify-center gap-1 bg-slate-100 rounded-xl p-1 border border-slate-200">
+                  <button type="button" onClick={() => setBillingCycle('monthly')}
+                    className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${billingCycle === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+                    Mensuel
+                  </button>
+                  <button type="button" onClick={() => setBillingCycle('yearly')}
+                    className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${billingCycle === 'yearly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+                    Annuel <span className="text-[9px] font-bold text-emerald-600 ml-1">-17%</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                  {plans.map(plan => (
+                    <PlanCard key={plan.code} plan={plan} selected={selectedPlan === plan.code} onSelect={() => setSelectedPlan(plan.code)} popular={plan.code === 'pro'} billingCycle={billingCycle} />
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setStep(2)}
+                    className="h-[48px] md:h-[50px] px-5 rounded-[10px] border border-[#dbe3ef] bg-white text-slate-600 font-semibold hover:bg-slate-50 transition-all flex items-center gap-2">
+                    <ArrowLeft className="w-4 h-4" />Retour
+                  </button>
+                  <button type="button" disabled={!step3Valid} onClick={() => setStep(4)}
+                    className="flex-1 h-[50px] md:h-[52px] rounded-[10px] bg-[#0f172a] text-white font-semibold text-[15px]
+                      hover:bg-black transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    Continuer <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 4 && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-bold text-[#0f172a]">Sécurisez votre compte</h3>
+                  <p className="text-sm text-slate-500 mt-0.5">Créez vos identifiants.</p>
+                </div>
+                <RegInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" type="email" required />
+                <RegPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="6 caractères minimum" />
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setStep(3)}
+                    className="h-[48px] md:h-[50px] px-5 rounded-[10px] border border-[#dbe3ef] bg-white text-slate-600 font-semibold hover:bg-slate-50 transition-all flex items-center gap-2">
+                    <ArrowLeft className="w-4 h-4" />Retour
+                  </button>
+                  <button type="button" disabled={!step4Valid} onClick={() => setStep(5)}
+                    className="flex-1 h-[50px] md:h-[52px] rounded-[10px] bg-[#0f172a] text-white font-semibold text-[15px]
+                      hover:bg-black transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    Vérifier <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 5 && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-bold text-[#0f172a]">Récapitulatif</h3>
+                  <p className="text-sm text-slate-500 mt-0.5">Vérifiez avant de valider.</p>
+                </div>
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2.5">
+                  {[
+                    ['Entreprise', companyName],
+                    ['Activité', selectedActivityLabel],
+                    ['Ville', city || '\u2014'],
+                    ['Responsable', fullName],
+                    ['WhatsApp', whatsappPhone],
+                    ['Email', email || '\u2014'],
+                    ['Plan', selectedPlanObj?.name || selectedPlan],
+                    ['Cycle', billingCycle === 'yearly' ? 'Annuel' : 'Mensuel'],
+                    ['Prix', (() => {
+                      if (!selectedPlanObj) return 'Gratuit';
+                      const p = billingCycle === 'yearly' ? selectedPlanObj.price_yearly : selectedPlanObj.price_monthly;
+                      if (!p || p <= 0) return 'Gratuit';
+                      return billingCycle === 'yearly'
+                        ? `${Number(p).toLocaleString('fr-FR')} FCFA/an`
+                        : `${Number(p).toLocaleString('fr-FR')} FCFA/mois`;
+                    })()],
+                    ...(selectedPlanObj?.trial_days ? [['Essai gratuit', `${selectedPlanObj.trial_days} jours`]] : []),
+                  ].map(([k, v]) => (
+                    <div key={k as string} className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500">{k}</span>
+                      <span className="text-[11px] font-semibold text-slate-800 truncate ml-3 max-w-[60%] text-right">{v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setStep(4)}
+                    className="h-[48px] md:h-[50px] px-5 rounded-[10px] border border-[#dbe3ef] bg-white text-slate-600 font-semibold hover:bg-slate-50 transition-all flex items-center gap-2">
+                    <ArrowLeft className="w-4 h-4" />Retour
+                  </button>
+                  <button type="button" disabled={loading} onClick={submit}
+                    className="flex-1 h-[50px] md:h-[52px] rounded-[10px] bg-[#0f172a] text-white font-semibold text-[15px]
+                      hover:bg-black transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Envoyer ma demande'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 text-center">Votre compte sera activé après validation par l'équipe Waarwi.</p>
+              </div>
             )}
           </div>
-          {businessType === '__other__' && (
-            <AuthInput icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Couture..." required />
-          )}
-          <AuthInput icon={MapPin} label="Ville" value={city} onChange={setCity} placeholder="Dakar, Thies, Saint-Louis..." />
-          <AuthInput icon={MapPin} label="Adresse" value={address} onChange={setAddress} placeholder="Adresse complète (facultatif)" hint="Optionnel" />
-          <AuthBtn disabled={!step1Valid} onClick={() => setStep(2)}>Continuer</AuthBtn>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {step === 2 && (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Le responsable</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Vos coordonnées pour la gestion du compte.</p>
-          </div>
-          <AuthInput icon={User} label="Nom complet" value={fullName} onChange={setFullName} placeholder="Prénom et nom" required />
-          <AuthInput icon={Phone} label="Numéro WhatsApp" value={whatsappPhone} onChange={setWhatsappPhone} placeholder="+221 77 123 45 67" required hint="Canal principal de communication" />
-          <AuthInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" type="email" hint="Recommandé mais non obligatoire" />
-          <AuthInput icon={Briefcase} label="Fonction" value={responsibleTitle} onChange={setResponsibleTitle} placeholder="Gérant, Directeur, Responsable..." hint="Optionnel" />
-          <div className="flex gap-3">
-            <AuthBtn variant="secondary" onClick={() => setStep(1)}>Retour</AuthBtn>
-            <div className="flex-1">
-              <AuthBtn disabled={!step2Valid} onClick={() => setStep(3)}>Continuer</AuthBtn>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {step === 3 && (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Choisissez votre plan</h3>
-            <p className="text-xs text-slate-500 mt-0.5">14 jours d'essai gratuit inclus. L'abonnement débute après la période d'essai.</p>
-          </div>
-          <div className="flex items-center justify-center gap-1 bg-slate-100 rounded-xl p-1 border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setBillingCycle('monthly')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${billingCycle === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              Mensuel
-            </button>
-            <button
-              type="button"
-              onClick={() => setBillingCycle('yearly')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${billingCycle === 'yearly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              Annuel <span className="text-[9px] font-bold text-emerald-600 ml-1">-17%</span>
-            </button>
-          </div>
-          <div className="grid grid-cols-1 gap-3 max-h-[40vh] overflow-y-auto pr-1">
-            {plans.map(plan => (
-              <PlanCard
-                key={plan.code}
-                plan={plan}
-                selected={selectedPlan === plan.code}
-                onSelect={() => setSelectedPlan(plan.code)}
-                popular={plan.code === 'pro'}
-                billingCycle={billingCycle}
-              />
-            ))}
-          </div>
-          <div className="flex gap-3">
-            <AuthBtn variant="secondary" onClick={() => setStep(2)}>Retour</AuthBtn>
-            <div className="flex-1">
-              <AuthBtn disabled={!step3Valid} onClick={() => setStep(4)}>Continuer</AuthBtn>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {step === 4 && (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Sécurisez votre compte</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Créez vos identifiants de connexion.</p>
-          </div>
-          <AuthInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" type="email" required />
-          <AuthPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="6 caractères minimum" />
-          <div className="flex gap-3">
-            <AuthBtn variant="secondary" onClick={() => setStep(3)}>Retour</AuthBtn>
-            <div className="flex-1">
-              <AuthBtn disabled={!step4Valid} onClick={() => setStep(5)}>Vérifier</AuthBtn>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {step === 5 && (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Récapitulatif</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Vérifiez vos informations avant de valider.</p>
-          </div>
-          <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2.5">
-            {[
-              ['Entreprise', companyName],
-              ['Activité', selectedActivityLabel],
-              ['Ville', city || '—'],
-              ['Responsable', fullName],
-              ['WhatsApp', whatsappPhone],
-              ['Email', email || '—'],
-              ['Plan choisi', selectedPlanObj?.name || selectedPlan],
-              ['Cycle', billingCycle === 'yearly' ? 'Annuel' : 'Mensuel'],
-              ['Prix', (() => {
-                if (!selectedPlanObj) return 'Gratuit';
-                const p = billingCycle === 'yearly' ? selectedPlanObj.price_yearly : selectedPlanObj.price_monthly;
-                if (!p || p <= 0) return 'Gratuit';
-                return billingCycle === 'yearly'
-                  ? `${Number(p).toLocaleString('fr-FR')} FCFA/an`
-                  : `${Number(p).toLocaleString('fr-FR')} FCFA/mois`;
-              })()],
-              ...(selectedPlanObj?.trial_days ? [['Essai gratuit', `${selectedPlanObj.trial_days} jours`]] : []),
-            ].map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-500">{k}</span>
-                <span className="text-[11px] font-semibold text-slate-800 truncate ml-3 max-w-[60%] text-right">{v}</span>
-              </div>
-            ))}
-          </div>
-
-          {selectedPlanObj && (
-            <div className="rounded-xl border border-slate-200 p-3">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Limites du plan</p>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-sm font-bold text-slate-900">{selectedPlanObj.limits?.articles === -1 ? '∞' : selectedPlanObj.limits?.articles || 100}</div>
-                  <div className="text-[9px] text-slate-500">Articles</div>
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-slate-900">{selectedPlanObj.limits?.users === -1 ? '∞' : selectedPlanObj.limits?.users || 2}</div>
-                  <div className="text-[9px] text-slate-500">Utilisateurs</div>
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-slate-900">{selectedPlanObj.limits?.sites === -1 ? '∞' : selectedPlanObj.limits?.sites || 1}</div>
-                  <div className="text-[9px] text-slate-500">Magasins</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <AuthBtn variant="secondary" onClick={() => setStep(4)}>Retour</AuthBtn>
-            <div className="flex-1">
-              <AuthBtn loading={loading} onClick={submit}>Envoyer ma demande</AuthBtn>
-            </div>
-          </div>
-          <p className="text-[10px] text-slate-400 text-center">Votre compte sera activé après validation par l'équipe Waarwi.</p>
-        </div>
-      )}
-    </div>
-  );
-
-  /* ---- Render: Login form ---- */
-  const loginContent = (
-    <form onSubmit={loginSubmit} className="space-y-4">
-      <AuthInput icon={Mail} type="email" label="Adresse email" value={email} onChange={setEmail} placeholder="votre@email.com" required />
-      <AuthPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="Votre mot de passe" />
-      <AuthBtn loading={loading} type="submit">Se connecter</AuthBtn>
-    </form>
-  );
-
-  /* ---- Render: Main layout ---- */
+  /* ---- Render: Login page (Meta-inspired) ---- */
   return (
-    <div className={`fixed inset-0 overflow-hidden bg-white transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
-      {config?.login_bg_url && (
-        <div className="absolute inset-0 z-[1]">
-          <img src={config.login_bg_url} alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px]" />
-        </div>
-      )}
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Top logo bar - fixed top left on desktop, centered on mobile */}
+      <div className="px-6 md:px-10 pt-6 md:pt-8 flex justify-center md:justify-start">
+        <img src={logoSrc} alt={brandName} className="w-[160px] md:w-[200px] h-auto object-contain" />
+      </div>
 
-      {/* ---- DESKTOP ---- */}
-      <div className="hidden lg:flex h-full relative z-10">
-        {/* Left panel - branding */}
-        <div className="flex-1 flex flex-col justify-center px-14 xl:px-20">
-          <div className="w-full max-w-lg">
-            <img src={logoSrc} alt={brandName} className="h-12 xl:h-14 w-auto object-contain mb-8" />
-            {config?.headline ? (
-              <h1 className="text-3xl xl:text-4xl font-extrabold text-slate-900 leading-[1.15] tracking-tight mb-4">
-                {config.headline}
-                {config.headline_accent && <> <span className="text-slate-900">{config.headline_accent}</span></>}
+      {/* Centered content */}
+      <div className="flex-1 flex items-center justify-center px-5 md:px-10">
+        <div className="w-full" style={{ maxWidth: '1120px' }}>
+          <div className="flex flex-col items-center md:items-stretch md:grid md:grid-cols-[1fr_380px] gap-6 md:gap-[80px]">
+
+            {/* Left: Brand text (hidden on mobile) */}
+            <div className="hidden md:flex md:flex-col md:justify-center max-w-[480px]">
+              <h1 className="text-[clamp(28px,3vw,36px)] leading-[1.15] tracking-[-0.02em] font-semibold text-[#0f172a] mb-4">
+                La plateforme qui simplifie, connecte et propulse votre business.
               </h1>
-            ) : (
-              <h1 className="text-3xl xl:text-4xl font-extrabold text-slate-900 leading-[1.15] tracking-tight mb-4">
-                La plateforme qui simplifie,<br />connecte et propulse votre{' '}
-                <span className="text-slate-900">business.</span>
-              </h1>
-            )}
-            <p className="text-sm xl:text-base text-slate-500 leading-relaxed mb-8">
-              {config?.subtitle || 'Gérez vos ventes, stocks, clients et finances depuis un seul espace, en toute sécurité.'}
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {features.slice(0, 6).map((f, i) => (
-                <div key={i} className="rounded-xl bg-white border border-slate-200 p-3.5">
-                  <f.icon className="w-4 h-4 mb-2.5 text-slate-700" strokeWidth={1.6} />
-                  <p className="text-xs font-bold text-slate-800 mb-0.5">{f.label}</p>
-                  <p className="text-[10px] text-slate-500 leading-snug">{f.desc}</p>
-                </div>
-              ))}
+              <p className="text-[17px] leading-[1.5] text-[#64748b]">
+                Simple. Sécurisé. Évolutif.
+              </p>
             </div>
-          </div>
-        </div>
 
-        {/* Right panel - form */}
-        <div className="w-[480px] xl:w-[520px] flex flex-col justify-center px-10 xl:px-14 border-l border-slate-100 bg-white/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm mx-auto">
-            {/* Tabs */}
-            {!isTenantBranded && (
-              <div className="flex gap-0 bg-slate-100 rounded-xl p-1 border border-slate-200 mb-6">
+            {/* Right: Login form (no card, directly on white) */}
+            <div className="w-full max-w-[380px]">
+              <p className="text-[15px] font-medium text-[#0f172a] mb-5 text-center">
+                Connectez-vous à votre compte
+              </p>
+              <form onSubmit={loginSubmit} className="space-y-3">
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="Adresse email"
+                  className="w-full h-[48px] md:h-[50px] rounded-[10px] border border-[#dbe3ef] px-4 text-[15px] text-slate-900 placeholder-slate-400
+                    focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
+                    hover:border-slate-300 transition-all"
+                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Mot de passe"
+                    className="w-full h-[48px] md:h-[50px] rounded-[10px] border border-[#dbe3ef] px-4 pr-11 text-[15px] text-slate-900 placeholder-slate-400
+                      focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
+                      hover:border-slate-300 transition-all"
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 <button
-                  onClick={() => { setMode('login'); setStep(1); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                    mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-[50px] rounded-[10px] bg-[#0f172a] text-white font-semibold text-[15px]
+                    hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed
+                    flex items-center justify-center mt-1"
                 >
-                  <User className="w-3.5 h-3.5" />Connexion
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Se connecter'}
                 </button>
+              </form>
+
+              <a href="#" className="block text-center mt-4 text-[13px] text-[#475569] hover:underline underline-offset-4">
+                Mot de passe oublié ?
+              </a>
+
+              <div className="h-px bg-[#e5e7eb] my-4" />
+
+              {!isTenantBranded && (
                 <button
+                  type="button"
                   onClick={() => { setMode('register'); setStep(1); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                    mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
+                  className="w-full h-[48px] rounded-[10px] bg-white border border-[#dbe3ef] text-[#0f172a] font-semibold text-[15px]
+                    hover:bg-slate-50 hover:border-slate-300 transition-all"
                 >
-                  <Building2 className="w-3.5 h-3.5" />Inscription
+                  Créer un compte Waarwi
                 </button>
-              </div>
-            )}
-            {isTenantBranded && (
-              <div className="mb-6">
-                <h2 className="text-lg font-bold text-slate-900">Connexion</h2>
-                <p className="text-xs text-slate-500">{brandName}</p>
-              </div>
-            )}
-
-            <div className="max-h-[70vh] overflow-y-auto pr-1">
-              {mode === 'login' ? loginContent : registerContent}
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ---- MOBILE ---- */}
-      <div className="lg:hidden h-full flex flex-col overflow-auto">
-        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-5 py-4">
-          <div className="flex items-center justify-between">
-            <img src={logoSrc} alt={brandName} className="h-8 w-auto object-contain" />
-            {mode === 'register' && step > 1 && !submitted && (
-              <button onClick={() => setStep(step - 1)} className="text-xs font-medium text-slate-600 flex items-center gap-1">
-                <ArrowLeft className="w-3.5 h-3.5" />Retour
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex-1 px-5 py-6">
-          {/* Tabs (mobile) */}
-          {!isTenantBranded && !submitted && (
-            <div className="grid grid-cols-2 border-b border-slate-200 mb-6">
-              <button
-                onClick={() => { setMode('login'); setStep(1); }}
-                className={`relative flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors ${
-                  mode === 'login' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <User className="w-4 h-4" />Connexion
-                {mode === 'login' && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-slate-900" />}
-              </button>
-              <button
-                onClick={() => { setMode('register'); setStep(1); }}
-                className={`relative flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors ${
-                  mode === 'register' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <Building2 className="w-4 h-4" />Inscription
-                {mode === 'register' && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-slate-900" />}
-              </button>
-            </div>
-          )}
-
-          {mode === 'login' ? loginContent : registerContent}
-        </div>
+      {/* Footer */}
+      <div className="py-4 md:py-6 text-center">
+        <p className="text-[12px] text-[#94a3b8]">&copy; 2026 WAARWI</p>
       </div>
     </div>
   );
