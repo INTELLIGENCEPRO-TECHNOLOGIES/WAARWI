@@ -817,10 +817,17 @@ function CategoriesTab() {
   const save = async () => {
     if (!tenant || !form.name) { error('Nom obligatoire'); return; }
     setSaving(true);
-    const payload = { tenant_id: tenant.id, name: form.name, code: form.code || '', parent_id: form.parent_id || null, is_active: form.is_active !== false };
+    const newTrackStock = form.track_stock !== false;
+    const payload = { tenant_id: tenant.id, name: form.name, code: form.code || '', parent_id: form.parent_id || null, is_active: form.is_active !== false, track_stock: newTrackStock };
     const { error: e } = editing
       ? await supabase.from('part_categories').update(payload).eq('id', editing.id)
       : await supabase.from('part_categories').insert(payload);
+    if (!e && editing) {
+      const oldTrackStock = editing.track_stock !== false;
+      if (oldTrackStock !== newTrackStock) {
+        await supabase.from('articles').update({ track_stock: newTrackStock }).eq('tenant_id', tenant.id).eq('category_id', editing.id);
+      }
+    }
     setSaving(false);
     if (e) error(e.message); else { success(editing ? 'Modifié' : 'Créée'); setOpen(false); load(); }
   };
@@ -889,6 +896,7 @@ function CategoriesTab() {
             </select>
           </div>
           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Active</span></label>
+          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.track_stock !== false} onChange={e => setForm({ ...form, track_stock: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Suivi de stock</span><span className="text-[10px] text-slate-400">(appliqué à tous les articles de cette catégorie)</span></label>
         </div>
       </Modal>
 

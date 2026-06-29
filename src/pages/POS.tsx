@@ -28,11 +28,12 @@ type ArticleLite = {
   id: string; internal_ref: string; name: string; oem_ref: string;
   sale_price: number; purchase_price: number; stock_available: number;
   category_id: string | null; image_url: string | null; ipm_eligible: boolean;
+  track_stock: boolean;
 };
 
 type ArticleTier = { article_id: string; tier_name: string; price: number };
 
-type CategoryLite = { id: string; name: string; parent_id: string | null };
+type CategoryLite = { id: string; name: string; parent_id: string | null; track_stock?: boolean };
 
 type ControlLine = {
   payment_method_id: string | null;
@@ -1074,7 +1075,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     while (true) {
       let query = supabase
         .from('articles')
-        .select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible')
+        .select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible, track_stock')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
         .range(from, from + batchSize - 1);
@@ -1114,6 +1115,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       category_id: a.category_id || null,
       image_url: a.image_url || null,
       ipm_eligible: a.ipm_eligible !== false,
+      track_stock: a.track_stock !== false,
     }));
     const newMethods = ((refData?.paymentMethods || []).filter((m: any) => m.payment_type !== 'credit')) as PaymentMethod[];
     const newCustomers = (cust || []) as Customer[];
@@ -1189,7 +1191,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           const [stk, { data: cust }, { data: newArts }] = await Promise.all([
             fetchStk(),
             (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, balance, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
-            (() => { let q = supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible').eq('tenant_id', tenant.id).eq('is_active', true); if (!isShared) q = q.eq('site_id', currentSite.id); return q; })(),
+            (() => { let q = supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible, track_stock').eq('tenant_id', tenant.id).eq('is_active', true); if (!isShared) q = q.eq('site_id', currentSite.id); return q; })(),
           ]);
           if (stk && newArts) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
@@ -1200,6 +1202,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               category_id: a.category_id || null,
               image_url: a.image_url || null,
               ipm_eligible: a.ipm_eligible !== false,
+              track_stock: a.track_stock !== false,
             }));
             setArticles(updatedArticles);
             posCache.articles = updatedArticles;
@@ -1255,16 +1258,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // ─── Cart operations ──────────────────────────────────────────────────────
 
+  const tracksStock = (a: ArticleLite) => a.track_stock !== false;
+
   const addToCart = (a: ArticleLite) => {
     const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
     // If already in cart, just increment qty
     const existing = cart.find(i => i.article_id === a.id);
     if (existing) {
-      if (!allowNeg && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return; }
+      if (!allowNeg && tracksStock(a) && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return; }
       setCart(c => c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i));
       return;
     }
-    if (!allowNeg && a.stock_available <= 0) { error('Article en rupture'); return; }
+    if (!allowNeg && tracksStock(a) && a.stock_available <= 0) { error('Article en rupture'); return; }
 
     // Check pricing tiers for this article (exception price always takes priority)
     const hasException = exceptionPrices.has(a.id);
@@ -1299,18 +1304,22 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const updateQty = (id: string, delta: number) => {
     const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    const art = articles.find(a => a.id === id);
+    const tracked = art ? tracksStock(art) : true;
     setCart(c => c.flatMap(i => {
       if (i.article_id !== id) return [i];
       const q = i.quantity + delta;
       if (q <= 0) return [];
-      if (!allowNeg && q > i.stock_available) { error(`Stock insuffisant (${i.stock_available})`); return [i]; }
+      if (!allowNeg && tracked && q > i.stock_available) { error(`Stock insuffisant (${i.stock_available})`); return [i]; }
       return [{ ...i, quantity: q }];
     }));
   };
 
   const setQty = (id: string, q: number) => {
     const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
-    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: Math.max(1, allowNeg ? q : Math.min(q, i.stock_available)) } : i));
+    const art = articles.find(a => a.id === id);
+    const tracked = art ? tracksStock(art) : true;
+    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: Math.max(1, (allowNeg || !tracked) ? q : Math.min(q, i.stock_available)) } : i));
   };
 
   const setPrice = (id: string, p: number) => {
@@ -2062,7 +2071,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       const a = articles.find(x => x.id === it.article_id);
       if (!a) { missing.push(it.article_name); continue; }
       const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
-      if (!allowNeg && a.stock_available < it.quantity) {
+      if (!allowNeg && tracksStock(a) && a.stock_available < it.quantity) {
         error(`Stock insuffisant pour "${a.name}" (${a.stock_available} dispo / ${it.quantity} requis)`);
         return;
       }
@@ -2693,8 +2702,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5 w-full justify-center">
                 {filtered.map(a => {
                   const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
-                  const out = !allowNeg && a.stock_available <= 0;
-                  const low = a.stock_available > 0 && a.stock_available <= 3;
+                  const tracked = tracksStock(a);
+                  const out = !allowNeg && tracked && a.stock_available <= 0;
+                  const low = tracked && a.stock_available > 0 && a.stock_available <= 3;
                   return (
                     <button key={a.id} onClick={() => addToCart(a)} disabled={out}
                       className="product-card disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2705,9 +2715,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                         ) : (
                           <Package className="w-7 h-7 text-neutral-300" />
                         )}
-                        <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
-                          {a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
-                        </span>
+                        {tracked && (
+                          <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
+                            {a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[12px] font-semibold text-neutral-900 line-clamp-2 leading-[1.25] article-text">{a.name}</div>
                       <div className="flex items-center justify-between mt-auto pt-0.5">
@@ -2724,8 +2736,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div className="flex flex-col gap-0.5">
                 {filtered.map(a => {
                   const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
-                  const out = !allowNeg && a.stock_available <= 0;
-                  const low = a.stock_available > 0 && a.stock_available <= 3;
+                  const tracked = tracksStock(a);
+                  const out = !allowNeg && tracked && a.stock_available <= 0;
+                  const low = tracked && a.stock_available > 0 && a.stock_available <= 3;
                   return (
                     <button
                       key={a.id}
@@ -2734,15 +2747,19 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-red-200/60 bg-red-50/30' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'}`}
                     >
                       <div className="flex-1 min-w-0 flex items-center gap-2">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded num shrink-0 ${
-                          a.stock_available <= 0
-                            ? (allowNeg ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700')
-                            : low
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-neutral-100 text-neutral-700'
-                        }`}>
-                          {a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup.') : `x${a.stock_available}`}
-                        </span>
+                        {tracked ? (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded num shrink-0 ${
+                            a.stock_available <= 0
+                              ? (allowNeg ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700')
+                              : low
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-neutral-100 text-neutral-700'
+                          }`}>
+                            {a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup.') : `x${a.stock_available}`}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded num shrink-0 bg-blue-100 text-blue-700">Svc</span>
+                        )}
                         <span className="text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
                       </div>
                       <span className="text-[12px] font-bold text-neutral-900 num shrink-0">{formatFCFA(a.sale_price)}</span>
@@ -2856,6 +2873,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             category_id: null,
             image_url: null,
             ipm_eligible: true,
+            track_stock: (a as any).track_stock !== false,
           };
           addToCart(article);
         }}

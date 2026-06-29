@@ -199,7 +199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refDirtyRef = useRef(false);
   const loadRefData = useCallback(async (tid: string) => {
     const [{ data: cats }, { data: brands }, { data: models }, { data: pm }] = await Promise.all([
-      supabase.from('part_categories').select('id, name, parent_id, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('name'),
+      supabase.from('part_categories').select('id, name, parent_id, tenant_id, track_stock').eq('tenant_id', tid).eq('is_active', true).order('name'),
       supabase.from('vehicle_brands').select('id, name, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('name'),
       supabase.from('vehicle_models').select('id, name, brand_id, tenant_id').eq('tenant_id', tid).order('name'),
       supabase.from('payment_methods').select('id, name, is_active, sort_order, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('sort_order'),

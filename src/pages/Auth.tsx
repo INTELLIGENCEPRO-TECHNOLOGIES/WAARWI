@@ -269,8 +269,9 @@ export function Auth() {
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => localStorage.getItem('waarwi_remember_email') || '');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('waarwi_remember_email'));
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [city, setCity] = useState('');
@@ -360,6 +361,8 @@ export function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
+      if (rememberMe) localStorage.setItem('waarwi_remember_email', email);
+      else localStorage.removeItem('waarwi_remember_email');
       await signIn(email, password);
     } catch (err: any) {
       showError(err.message || 'Une erreur est survenue');
@@ -613,6 +616,11 @@ export function Auth() {
 
             {/* Right: Login form (no card, directly on white) */}
             <div className="w-full max-w-[380px]">
+              <div className="text-center mb-4">
+                <p className="text-[28px] leading-tight tracking-wide" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+                  <em style={{ fontStyle: 'italic', fontWeight: 400 }}>Bienvenue sur </em><span style={{ fontStyle: 'normal', fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>Waarwi</span>
+                </p>
+              </div>
               <p className="text-[15px] font-medium text-[#0f172a] mb-5 text-center">
                 Connectez-vous à votre compte
               </p>
@@ -654,9 +662,15 @@ export function Auth() {
                 </button>
               </form>
 
-              <a href="#" className="block text-center mt-4 text-[13px] text-[#475569] hover:underline underline-offset-4">
-                Mot de passe oublié ?
-              </a>
+              <label className="flex items-center gap-2 mt-4 cursor-pointer select-none group">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/20 cursor-pointer"
+                />
+                <span className="text-[13px] text-[#475569] group-hover:text-slate-700 transition-colors">Se souvenir de moi</span>
+              </label>
 
               <div className="h-px bg-[#e5e7eb] my-4" />
 
@@ -677,7 +691,12 @@ export function Auth() {
 
       {/* Footer */}
       <div className="py-4 md:py-6 text-center">
-        <p className="text-[12px] text-[#94a3b8]">&copy; 2026 WAARWI</p>
+        <div className="md:hidden mb-1 flex flex-col items-center gap-2">
+          <p className="text-[11px] text-[#94a3b8]">&copy; 2026 WAARWI</p>
+          <div className="w-24 h-px bg-[#e2e8f0]" />
+          <p className="text-[11px] text-[#94a3b8]">Propulsée par INTELLIGENCEPRO TECHNOLOGIES</p>
+        </div>
+        <p className="hidden md:block text-[12px] text-[#94a3b8]">&copy; 2026 WAARWI - Propulsée par INTELLIGENCEPRO TECHNOLOGIES</p>
       </div>
     </div>
   );

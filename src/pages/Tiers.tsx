@@ -2095,7 +2095,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       }
     }
     if (!e) {
-      await supabase.from('suppliers').update({ balance: Number((s as any).balance || 0) - amt }).eq('id', s.id);
+      await supabase.rpc('recompute_supplier_balance', { p_supplier_id: s.id });
     }
     setPaying(false);
     if (e) { error(e.message); return; }
@@ -2155,9 +2155,9 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
             {key === 'docs' && 'Documents d\'achats · statistiques'}
             {key === 'articles' && `${articles.length} article${articles.length > 1 ? 's' : ''} lié${articles.length > 1 ? 's' : ''}`}
           </div>
-          <div className={`text-right ${Number((s as any).balance || 0) > 0 ? 'text-amber-700' : Number((s as any).balance || 0) < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+          <div className={`text-right ${totals.due > 0 ? 'text-amber-700' : totals.due < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
             <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
-            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(Number((s as any).balance || 0))}</div>
+            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{loading ? '…' : formatFCFA(totals.due)}</div>
           </div>
         </div>
       </div>

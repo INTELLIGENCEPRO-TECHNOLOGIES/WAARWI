@@ -181,9 +181,10 @@ export function Stock() {
     while (true) {
       let query = supabase
         .from('articles')
-        .select('id, name, internal_ref, purchase_price, stock_min, stock_max, location')
+        .select('id, name, internal_ref, purchase_price, stock_min, stock_max, location, track_stock, category_id')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
+        .eq('track_stock', true)
         .range(from, from + batchSize - 1);
       if (!sharedArticles && currentSite) {
         query = query.eq('site_id', currentSite.id);

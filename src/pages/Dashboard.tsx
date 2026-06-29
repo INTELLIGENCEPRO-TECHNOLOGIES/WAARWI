@@ -158,6 +158,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
   useEffect(() => {
     if (!tenant || !currentSite) return;
+    const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
     let cancelled = false;
     (async () => {
       const now = new Date();
@@ -206,10 +207,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         periodQuery,
         supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', yest.toISOString()).lt('created_at', today.toISOString()).neq('status', 'cancelled'),
         supabase.from('sales').select('total, sale_items(total, purchase_cost, quantity)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', firstOfMonth.toISOString()).neq('status', 'cancelled'),
-        supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true),
+        supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true).eq('track_stock', true),
         supabase.from('sales').select('id, sale_number, total, created_at, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
         supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
-        supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
+        sharedSuppliers
+          ? supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true)
+          : supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true),
         supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).in('status', ['draft', 'sent']),
         supabase.from('sale_returns').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'pending'),
         supabase.from('tenants').select('public_slug').eq('id', tenant.id).maybeSingle(),
@@ -229,9 +232,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       while (true) {
         const { data, error: stkErr } = await supabase
           .from('stock_levels')
-          .select('quantity, articles!inner(stock_min, purchase_price)')
+          .select('quantity, articles!inner(stock_min, purchase_price, track_stock, category_id)')
           .eq('tenant_id', tenant.id)
           .eq('site_id', siteId)
+          .eq('articles.track_stock', true)
           .range(stkFrom, stkFrom + 999);
         if (stkErr || !data || data.length === 0) break;
         allStockRows = allStockRows.concat(data);
@@ -303,12 +307,14 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const webTodayRows = (webTodayData.data || []) as any[];
       const webTodayTotal = webTodayRows.reduce((s, r) => s + Number(r.total || 0), 0);
 
-      const { data: unpaidOrders } = await supabase
+      const unpaidOrdersQuery = supabase
         .from('supplier_orders')
         .select('total, paid, supplier_id')
         .eq('tenant_id', tenant.id)
         .neq('status', 'cancelled')
         .limit(5000);
+      if (!sharedSuppliers) unpaidOrdersQuery.eq('site_id', siteId);
+      const { data: unpaidOrders } = await unpaidOrdersQuery;
       const payables = (unpaidOrders || []).reduce((s: number, o: any) => {
         const remaining = Number(o.total || 0) - Number(o.paid || 0);
         return s + Math.max(0, remaining);
@@ -422,7 +428,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const [actSales, actQuotes, actSupOrders, actOnline, actReturns, actPayments] = await Promise.all([
         supabase.from('sales').select('id, sale_number, total, created_at, status, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(8),
         supabase.from('quotes').select('id, quote_number, total, created_at, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
-        supabase.from('supplier_orders').select('id, order_number, total, created_at, status, suppliers(name)').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
+        sharedSuppliers
+          ? supabase.from('supplier_orders').select('id, order_number, total, created_at, status, suppliers(name)').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5)
+          : supabase.from('supplier_orders').select('id, order_number, total, created_at, status, suppliers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
         supabase.from('online_orders').select('id, order_number, total, created_at, status, customer_name').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
         supabase.from('sale_returns').select('id, return_number, total, created_at, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(3),
         supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, site_id, customers(name))').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).order('created_at', { ascending: false }).limit(5),
@@ -525,8 +533,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
       // ── Intelligent Alerts ──
       const [alertStockOut, alertStockLow, alertAdjustments, alertModifiedSales] = await Promise.all([
-        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).lte('quantity', 0).limit(10000),
-        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min)').eq('tenant_id', tenant.id).eq('site_id', siteId).gt('quantity', 0).limit(10000),
+        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min, track_stock, category_id)').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('articles.track_stock', true).lte('quantity', 0).limit(10000),
+        supabase.from('stock_levels').select('quantity, articles!inner(id, name, internal_ref, stock_min, track_stock, category_id)').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('articles.track_stock', true).gt('quantity', 0).limit(10000),
         supabase.from('stock_movements').select('id, movement_type, quantity, note, created_at, articles(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['adjustment_in', 'adjustment_out']).order('created_at', { ascending: false }).limit(5),
         supabase.from('sales').select('id, sale_number, total, created_at, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(10),
       ]);

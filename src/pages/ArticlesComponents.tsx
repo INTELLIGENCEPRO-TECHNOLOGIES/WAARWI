@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, ReactNode } from 'react';
-import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, DollarSign, Boxes, Car, CheckCircle2, Percent, ShieldCheck } from 'lucide-react';
+import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, DollarSign, Boxes, Car, CheckCircle2, Percent, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 type TierDefinition = { id: string; tier_name: string; sort_order: number; is_default: boolean };
@@ -65,8 +65,8 @@ export function ArticleCard({ article, category, qty, onEdit, onDelete, selectio
   selectionMode: boolean; selected: boolean; onToggleSelect: () => void;
   showMargin: boolean; showStock: boolean;
 }) {
-  const mStatus = stockStatus(qty, Number(article.stock_min || 0));
-  const margin = article.sale_price > 0 ? ((article.sale_price - article.purchase_price) / article.sale_price) * 100 : 0;
+  const tracksStock = (article as any).track_stock !== false;
+  const mStatus = tracksStock ? stockStatus(qty, Number(article.stock_min || 0)) : { bg: 'bg-slate-50', icon: 'text-slate-400', badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-400', label: 'Non suivi' };
 
   return (
     <div className={`rounded-2xl bg-white shadow-card border transition-all active:scale-[0.99] ${selected ? 'border-brand-400 bg-brand-50/40 ring-2 ring-brand-500/20' : 'border-slate-100 hover:shadow-premium'}`}
@@ -81,6 +81,7 @@ export function ArticleCard({ article, category, qty, onEdit, onDelete, selectio
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-bold text-sm text-slate-900 truncate">{article.name}</span>
+            {!tracksStock && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">Service</span>}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span className="text-[10px] font-mono text-slate-500">{article.internal_ref}</span>
@@ -89,7 +90,7 @@ export function ArticleCard({ article, category, qty, onEdit, onDelete, selectio
         </div>
         <div className="text-right shrink-0">
           <div className="font-bold text-sm text-slate-900 num">{formatFCFA(article.sale_price)}</div>
-          {showStock && (
+          {showStock && tracksStock && (
             <div className={`inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${mStatus.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />{qty}
             </div>
@@ -189,6 +190,18 @@ export function InfosTab({ form, setForm, editing, categories, suppliers, onGene
   onGenerateRef: () => void; autoMode: boolean;
 }) {
   const parents = categories.filter(c => !c.parent_id);
+
+  const handleCategoryChange = (v: string) => {
+    const cat = categories.find(c => c.id === v);
+    setForm(f => ({
+      ...f,
+      category_id: v,
+      // Apply category track_stock default only for new articles
+      ...(!editing && cat && (cat as any).track_stock !== undefined
+        ? { track_stock: (cat as any).track_stock !== false }
+        : {}),
+    }));
+  };
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -202,7 +215,7 @@ export function InfosTab({ form, setForm, editing, categories, suppliers, onGene
           </div>
         </Field>
         <Field label="Catégorie">
-          <PremiumSelect value={form.category_id || ''} onChange={v => setForm(f => ({ ...f, category_id: v }))} placeholder="Choisir"
+          <PremiumSelect value={form.category_id || ''} onChange={handleCategoryChange} placeholder="Choisir"
             options={parents.flatMap(c => [{ value: c.id, label: c.name, bold: true }, ...categories.filter(s => s.parent_id === c.id).map(s => ({ value: s.id, label: `  ↳ ${s.name}` }))])} />
         </Field>
         {autoMode && (
@@ -325,37 +338,70 @@ export function StockTab({ form, setForm, editing, currentArticle, stockMap }: {
   editing: boolean; currentArticle: Article | null; stockMap: Record<string, number>;
 }) {
   const currentQty = currentArticle ? (stockMap[currentArticle.id] || 0) : 0;
-  const mStatus = currentArticle ? stockStatus(currentQty, Number(form.stock_min || 0)) : null;
+  const trackStock = form.track_stock !== false;
+  const mStatus = currentArticle && trackStock ? stockStatus(currentQty, Number(form.stock_min || 0)) : null;
 
   return (
     <div className="space-y-4">
-      {editing && currentArticle && mStatus && (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${mStatus.bg}`}>
-          <div className={`w-10 h-10 rounded-xl bg-white/60 flex items-center justify-center`}>
-            <Package className={`w-5 h-5 ${mStatus.icon}`} />
+      {/* Track stock toggle */}
+      <button
+        type="button"
+        onClick={() => setForm(f => ({ ...f, track_stock: !trackStock }))}
+        className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 transition-all ${trackStock ? 'border-brand-300 bg-brand-50/40' : 'border-slate-200 bg-slate-50/60'}`}
+      >
+        <div className="text-left">
+          <div className={`text-xs font-bold ${trackStock ? 'text-brand-800' : 'text-slate-600'}`}>
+            {trackStock ? 'Stock suivi' : 'Stock non suivi'}
           </div>
-          <div>
-            <div className="text-xs font-bold text-slate-900">Stock actuel : <span className="num">{currentQty}</span> {form.unit || 'unité(s)'}</div>
-            <div className={`text-[10px] font-semibold ${mStatus.icon}`}>{mStatus.label}</div>
+          <div className="text-[10px] text-slate-500 mt-0.5">
+            {trackStock
+              ? 'Les ventes et mouvements de cet article affectent le stock.'
+              : 'Cet article (service, prestation…) ne génère aucun mouvement de stock.'}
           </div>
         </div>
+        {trackStock
+          ? <ToggleRight className="w-6 h-6 text-brand-600 shrink-0" />
+          : <ToggleLeft className="w-6 h-6 text-slate-400 shrink-0" />}
+      </button>
+
+      {trackStock && (
+        <>
+          {editing && currentArticle && mStatus && (
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${mStatus.bg}`}>
+              <div className={`w-10 h-10 rounded-xl bg-white/60 flex items-center justify-center`}>
+                <Package className={`w-5 h-5 ${mStatus.icon}`} />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-900">Stock actuel : <span className="num">{currentQty}</span> {form.unit || 'unité(s)'}</div>
+                <div className={`text-[10px] font-semibold ${mStatus.icon}`}>{mStatus.label}</div>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Stock minimum (alerte)">
+              <input type="number" value={form.stock_min || ''} onChange={e => setForm(f => ({ ...f, stock_min: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
+            </Field>
+            <Field label="Stock maximum">
+              <input type="number" value={form.stock_max || ''} onChange={e => setForm(f => ({ ...f, stock_max: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
+            </Field>
+            <Field label="Emplacement">
+              <input value={form.location || ''} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className="premium-input text-sm" placeholder="Rayon / Étagère" />
+            </Field>
+            {!editing && (
+              <Field label="Stock initial">
+                <input type="number" value={form.stock_init || ''} onChange={e => setForm(f => ({ ...f, stock_init: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
+              </Field>
+            )}
+          </div>
+        </>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Stock minimum (alerte)">
-          <input type="number" value={form.stock_min || ''} onChange={e => setForm(f => ({ ...f, stock_min: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
-        </Field>
-        <Field label="Stock maximum">
-          <input type="number" value={form.stock_max || ''} onChange={e => setForm(f => ({ ...f, stock_max: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
-        </Field>
-        <Field label="Emplacement">
-          <input value={form.location || ''} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className="premium-input text-sm" placeholder="Rayon / Étagère" />
-        </Field>
-        {!editing && (
-          <Field label="Stock initial">
-            <input type="number" value={form.stock_init || ''} onChange={e => setForm(f => ({ ...f, stock_init: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
-          </Field>
-        )}
-      </div>
+
+      {!trackStock && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs">
+          <Package className="w-5 h-5 text-slate-300 shrink-0" />
+          Aucun suivi de stock pour cet article. Il peut être vendu sans contrainte de quantité.
+        </div>
+      )}
     </div>
   );
 }
@@ -500,7 +546,8 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
             {articles.map(a => {
               const edited = listEdits.has(a.id);
               const qty = stockMap[a.id] || 0;
-              const mStatus = stockStatus(qty, Number(a.stock_min || 0));
+              const tracksStock = (a as any).track_stock !== false;
+              const mStatus = tracksStock ? stockStatus(qty, Number(a.stock_min || 0)) : { badge: 'bg-slate-100 text-slate-400', dot: 'bg-slate-300', label: 'Service' };
               return (
                 <tr key={a.id} className={`group transition-colors ${edited ? 'bg-brand-50/40' : 'hover:bg-slate-50/60'} ${selectedIds.has(a.id) ? 'bg-brand-50/60' : ''}`}>
                   {selectionMode && (
@@ -509,9 +556,12 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                     </td>
                   )}
                   <td className="px-2 py-1.5">
-                    <input value={getVal(a, 'name') || ''} onChange={e => onUpdateEdit(a.id, 'name', e.target.value)}
-                      title={getVal(a, 'name') || ''}
-                      className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-semibold text-slate-900 outline-none transition" />
+                    <div className="flex items-center gap-1.5">
+                      <input value={getVal(a, 'name') || ''} onChange={e => onUpdateEdit(a.id, 'name', e.target.value)}
+                        title={getVal(a, 'name') || ''}
+                        className="flex-1 min-w-0 bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-semibold text-slate-900 outline-none transition" />
+                      {!tracksStock && <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 whitespace-nowrap">Service</span>}
+                    </div>
                   </td>
                   <td className="px-2 py-1.5">
                     <input value={getVal(a, 'internal_ref') || ''} onChange={e => onUpdateEdit(a.id, 'internal_ref', e.target.value)}
@@ -557,9 +607,13 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                   </td>
                   {showStock && (
                     <td className="px-2 py-1.5 text-right">
-                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold num ${mStatus.badge}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />{qty}
-                      </span>
+                      {tracksStock ? (
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold num ${mStatus.badge}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />{qty}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-semibold text-purple-500">—</span>
+                      )}
                     </td>
                   )}
                   <td className="px-2 py-1.5 text-center">

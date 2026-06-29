@@ -352,7 +352,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       const pageSize = 1000;
       let from = 0;
       while (true) {
-        let q = supabase.from('articles').select('id, name, sale_price, internal_ref, ipm_eligible').eq('tenant_id', tenant.id).eq('is_active', true).order('name').range(from, from + pageSize - 1);
+        let q = supabase.from('articles').select('id, name, sale_price, internal_ref, ipm_eligible, track_stock, category_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').range(from, from + pageSize - 1);
         if (!isShared && currentSite) q = q.eq('site_id', currentSite.id);
         const { data } = await q;
         if (!data || data.length === 0) break;
@@ -728,13 +728,17 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     // Stock check if negative stock not allowed
     const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
     const articleItems = valid.filter(i => i.article_id);
-    if (!allowNeg && articleItems.length > 0) {
+    const trackedItems = articleItems.filter(i => {
+      const art = articles.find((a: any) => a.id === i.article_id);
+      return art && art.track_stock !== false;
+    });
+    if (!allowNeg && trackedItems.length > 0) {
       const { data: stk } = await supabase.from('stock_levels')
         .select('article_id, quantity')
         .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-        .in('article_id', articleItems.map(i => i.article_id!));
+        .in('article_id', trackedItems.map(i => i.article_id!));
       const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-      const insufficient = articleItems.filter(i => (stockMap.get(i.article_id!) || 0) < i.quantity);
+      const insufficient = trackedItems.filter(i => (stockMap.get(i.article_id!) || 0) < i.quantity);
       if (insufficient.length > 0) {
         error(`Stock insuffisant: ${insufficient.map(i => i.name).join(', ')}`);
         return;
@@ -913,15 +917,19 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
     // Stock check: block if insufficient stock and negative stock not allowed
     const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
-    if (!allowNeg && convertItems.length > 0) {
+    const trackedConvertItems = convertItems.filter(i => {
+      const art = articles.find((a: any) => a.id === i.article_id);
+      return art && art.track_stock !== false;
+    });
+    if (!allowNeg && trackedConvertItems.length > 0) {
       const { data: stk } = await supabase
         .from('stock_levels')
         .select('article_id, quantity')
         .eq('tenant_id', tenant!.id)
         .eq('site_id', currentSite.id)
-        .in('article_id', convertItems.map(i => i.article_id));
+        .in('article_id', trackedConvertItems.map(i => i.article_id));
       const stockMap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-      const insufficient = convertItems.filter(i => (stockMap.get(i.article_id) || 0) < i.quantity);
+      const insufficient = trackedConvertItems.filter(i => (stockMap.get(i.article_id) || 0) < i.quantity);
       if (insufficient.length > 0) {
         error(`Stock insuffisant pour: ${insufficient.map(i => i.name).join(', ')}. Conversion impossible.`);
         return;

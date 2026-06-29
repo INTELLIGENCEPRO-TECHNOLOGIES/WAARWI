@@ -117,7 +117,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     while (true) {
       let query = supabase
         .from('articles')
-        .select('id, tenant_id, internal_ref, name, description, category_id, brand, oem_ref, supplier_ref, barcode, supplier_id, condition, unit, purchase_price, sale_price, min_price, wholesale_price, vat_rate, stock_min, stock_max, location, image_url, is_active, ipm_eligible')
+        .select('id, tenant_id, internal_ref, name, description, category_id, brand, oem_ref, supplier_ref, barcode, supplier_id, condition, unit, purchase_price, sale_price, min_price, wholesale_price, vat_rate, stock_min, stock_max, location, image_url, is_active, ipm_eligible, track_stock')
         .eq('tenant_id', tenant.id)
         .eq('is_active', true)
         .order('name')
@@ -317,6 +317,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         location: form.location || '',
         image_url: finalImageUrl,
         ipm_eligible: form.ipm_eligible !== false,
+        track_stock: form.track_stock !== false,
       };
       if (!sharedArticles && currentSite && !editing) {
         payload.site_id = currentSite.id;
@@ -443,6 +444,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       else if (bulkAction === 'supplier') payload = { supplier_id: bulkActionValue || null };
       else if (bulkAction === 'deactivate') payload = { is_active: false };
       else if (bulkAction === 'unit') payload = { unit: bulkActionValue };
+      else if (bulkAction === 'track_stock_on') payload = { track_stock: true };
+      else if (bulkAction === 'track_stock_off') payload = { track_stock: false };
       else return;
       for (const id of ids) {
         await supabase.from('articles').update(payload).eq('id', id);
@@ -472,6 +475,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         if (patch.unit !== undefined) clean.unit = patch.unit;
         if (patch.supplier_id !== undefined) clean.supplier_id = patch.supplier_id || null;
         if ((patch as any).is_active !== undefined) clean.is_active = (patch as any).is_active;
+        if ((patch as any).track_stock !== undefined) clean.track_stock = (patch as any).track_stock;
         if (Object.keys(clean).length === 0) continue;
         const { error: e } = await supabase.from('articles').update(clean).eq('id', id);
         if (e) throw e;
@@ -923,6 +927,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                 { value: 'category', label: 'Changer la catégorie' },
                 { value: 'supplier', label: 'Changer le fournisseur' },
                 { value: 'unit', label: 'Modifier l\'unité' },
+                { value: 'track_stock_on', label: 'Activer le suivi de stock' },
+                { value: 'track_stock_off', label: 'Désactiver le suivi de stock (services)' },
                 { value: 'deactivate', label: 'Mettre en sommeil' },
               ]} />
           </Field>
@@ -945,6 +951,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             </Field>
           )}
           {bulkAction === 'deactivate' && <p className="text-xs text-slate-500">Les {selectedIds.size} articles sélectionnés seront désactivés (mis en sommeil). Ils ne seront plus visibles dans le catalogue.</p>}
+          {bulkAction === 'track_stock_on' && <p className="text-xs text-slate-500">Le suivi de stock sera <strong>activé</strong> pour les {selectedIds.size} articles sélectionnés.</p>}
+          {bulkAction === 'track_stock_off' && <p className="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2">Le suivi de stock sera <strong>désactivé</strong> pour les {selectedIds.size} articles sélectionnés. Ils pourront être vendus sans contrainte de quantité (services, prestations).</p>}
         </div>
       </Modal>
 
