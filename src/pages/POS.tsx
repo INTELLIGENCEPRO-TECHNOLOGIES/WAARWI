@@ -4,7 +4,7 @@ import {
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
   ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote,
-  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, MapPin, AlertCircle, Shield
+  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -227,7 +227,7 @@ function POSLandingOpen({
           <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">Caisse</h1>
           {currentSite && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-neutral-200 bg-white text-[11px] sm:text-xs font-medium text-neutral-600">
-              <MapPin className="w-3 h-3 text-neutral-400" />
+              <Monitor className="w-3 h-3 text-neutral-400" />
               {currentSite.name}
             </span>
           )}
@@ -240,9 +240,9 @@ function POSLandingOpen({
       </div>
 
       {/* ── Desktop grid (mirrors resume) ── */}
-      <div className="hidden lg:grid lg:grid-cols-[1fr_320px] gap-4 px-6">
+      <div className="hidden lg:grid lg:grid-cols-[1fr_340px] gap-3 px-6">
         {/* Left: Ouvrir la caisse */}
-        <div className="bg-white rounded-2xl border border-neutral-200 p-6 flex flex-col">
+        <div className="bg-white rounded-xl border border-neutral-200 p-6 flex flex-col">
           <h2 className="text-lg font-bold text-neutral-900 mb-5">Ouvrir la caisse</h2>
 
           <div className="space-y-4 flex-1">
@@ -283,23 +283,23 @@ function POSLandingOpen({
             )}
           </div>
 
-          {/* Submit button — same gabarit as "Reprendre la session" */}
-          <div className="mt-5 pt-4 border-t border-neutral-100">
+          {/* Submit button */}
+          <div className="mt-6 pt-5 border-t border-neutral-100">
             <button
               onClick={openSessionSubmit}
               disabled={openingSubmitting}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm"
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all active:scale-[0.98]"
             >
-              {openingSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShoppingCart className="w-3.5 h-3.5" />}
+              {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
               Ouvrir la caisse
             </button>
           </div>
         </div>
 
-        {/* Right column — same spirit as resume */}
-        <div className="flex flex-col gap-4">
+        {/* Right column */}
+        <div className="flex flex-col gap-3">
           {/* Rappel */}
-          <div className="bg-white rounded-2xl border border-neutral-200 p-5">
+          <div className="bg-white rounded-xl border border-neutral-200 p-5">
             <div className="flex items-center gap-2.5 mb-3">
               <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-neutral-700" /></div>
               <h3 className="text-sm font-bold text-neutral-900">Rappel</h3>
@@ -313,9 +313,9 @@ function POSLandingOpen({
 
           {/* Point de vente */}
           {currentSite && (
-            <div className="bg-white rounded-2xl border border-neutral-200 p-5 flex-1">
+            <div className="bg-white rounded-xl border border-neutral-200 p-5 flex-1">
               <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><MapPin className="w-4 h-4 text-neutral-500" /></div>
+                <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><Monitor className="w-4 h-4 text-neutral-500" /></div>
                 <h3 className="text-sm font-bold text-neutral-900">Point de vente</h3>
               </div>
               <p className="text-sm font-semibold text-neutral-900">{currentSite.name}</p>
@@ -373,7 +373,7 @@ function POSLandingOpen({
         {currentSite && (
           <div className="bg-white rounded-xl border border-neutral-200 p-3.5">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-md bg-neutral-100 flex items-center justify-center"><MapPin className="w-3 h-3 text-neutral-500" /></div>
+              <div className="w-6 h-6 rounded-md bg-neutral-100 flex items-center justify-center"><Monitor className="w-3 h-3 text-neutral-500" /></div>
               <h3 className="text-xs font-bold text-neutral-900">Point de vente</h3>
             </div>
             <p className="text-xs font-semibold text-neutral-900">{currentSite.name}</p>
@@ -514,122 +514,142 @@ function POSLandingResume({
   const { summary, loading: loadingSummary } = useDaySummary(tenantId, currentSite?.id, session.id);
   const isOpen = actions?.sessionOpen !== false;
 
-  const actionBtns = actions ? [
+  const shortcutBtns = actions ? [
     { icon: Wallet, label: 'Encaisser', onClick: actions.onCustomerPayment, show: true },
     { icon: ArrowDownRight, label: 'Mouvement', onClick: actions.onMovement, show: actions.canMovement },
     { icon: RotateCcw, label: 'Retour client', onClick: actions.onReturn, show: actions.canReturn },
     { icon: List, label: 'Tickets', onClick: actions.onTickets, show: true },
-    { icon: Lock, label: 'Clôturer', onClick: actions.onClose, show: actions.canClose },
   ].filter(b => b.show) : [];
 
   return (
-    <div className="h-full overflow-hidden pb-4">
+    <div className="h-full overflow-auto pb-6">
       {/* ── Desktop grid ── */}
-      <div className="hidden lg:grid lg:grid-cols-[1fr_320px] gap-4 px-6 pt-4 h-full">
-        {/* Left: Session info */}
-        <div className="bg-white rounded-2xl border border-neutral-200 p-6 flex flex-col">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-0 flex-1">
-            <div className="flex items-center gap-3 py-4 border-b border-neutral-100">
-              <div className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><MapPin className="w-4 h-4 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1">Point de vente</p><p className="text-sm font-semibold text-neutral-900">{currentSite?.name || '-'}</p></div>
+      <div className="hidden lg:grid lg:grid-cols-[1fr_340px] gap-3 px-6 pt-4">
+        {/* Left: Session info + actions */}
+        <div className="bg-white rounded-xl border border-neutral-200 p-6">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-0">
+            <div className="flex items-center gap-4 py-5 border-b border-neutral-100">
+              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Monitor className="w-4.5 h-4.5 text-neutral-400" /></div>
+              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Point de vente</p><p className="text-[15px] font-bold text-neutral-900">{currentSite?.name || '-'}</p></div>
             </div>
-            <div className="flex items-center gap-3 py-4 border-b border-neutral-100">
-              <div className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-4 h-4 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1">Ouverte le</p><p className="text-sm font-semibold text-neutral-900">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {fmtTimeLanding(session.opened_at)}</p></div>
+            <div className="flex items-center gap-4 py-5 border-b border-neutral-100">
+              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-4.5 h-4.5 text-neutral-400" /></div>
+              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Ouverte le</p><p className="text-[15px] font-bold text-neutral-900">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {fmtTimeLanding(session.opened_at)}</p></div>
             </div>
-            <div className="flex items-center gap-3 py-4 border-b border-neutral-100">
-              <div className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-4 h-4 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1">Durée</p><p className="text-sm font-semibold text-neutral-900">{sessionDuration(session.opened_at)}</p></div>
+            <div className="flex items-center gap-4 py-5 border-b border-neutral-100">
+              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-4.5 h-4.5 text-neutral-400" /></div>
+              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Durée</p><p className="text-[15px] font-bold text-neutral-900">{sessionDuration(session.opened_at)}</p></div>
             </div>
-            <div className="flex items-center gap-3 py-4 border-b border-neutral-100">
-              <div className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Banknote className="w-4 h-4 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1">Fond initial</p><p className="text-sm font-semibold text-neutral-700">{formatFCFA(Number(session.opening_amount))}</p></div>
+            <div className="flex items-center gap-4 py-5 border-b border-neutral-100">
+              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Banknote className="w-4.5 h-4.5 text-neutral-400" /></div>
+              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Fond initial</p><p className="text-[15px] font-bold text-neutral-900">{formatFCFA(Number(session.opening_amount))}</p></div>
             </div>
-            <div className="flex items-center gap-3 py-4">
-              <div className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-4 h-4 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1">Vendeur</p><p className="text-sm font-semibold text-neutral-900 uppercase">{cashierName || '-'}</p></div>
+            <div className="flex items-center gap-4 py-5">
+              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-4.5 h-4.5 text-neutral-400" /></div>
+              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Vendeur</p><p className="text-[15px] font-bold text-neutral-900 uppercase">{cashierName || '-'}</p></div>
             </div>
-            <div className="flex items-center gap-3 py-4">
-              <div className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><CheckCircle2 className="w-4 h-4 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1">Statut</p><span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border border-neutral-200 bg-neutral-100 text-neutral-800">OUVERTE</span></div>
+            <div className="flex items-center gap-4 py-5">
+              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><CheckCircle2 className="w-4.5 h-4.5 text-neutral-400" /></div>
+              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Statut</p><span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wide border border-neutral-200 bg-neutral-100 text-neutral-800">OUVERTE</span></div>
             </div>
           </div>
 
-          {/* Buttons */}
-          <div className="flex items-center gap-2 mt-5 pt-4 border-t border-neutral-100">
-            <button onClick={onResume} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm">
-              <Play className="w-3.5 h-3.5 fill-current" /> Reprendre la session
+          {/* Action buttons + shortcuts aligned in 2-column grid */}
+          <div className="grid grid-cols-2 gap-3 mt-6 pt-5 border-t border-neutral-100">
+            <button onClick={onResume} className="flex items-center justify-center gap-2.5 py-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-semibold transition-all active:scale-[0.98]">
+              <Play className="w-4 h-4 fill-current" /> Reprendre la session
             </button>
-            {actionBtns.map(btn => (
-              <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center w-[72px] h-[62px] rounded-xl bg-neutral-900 text-white hover:bg-neutral-800 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
-                <btn.icon className="w-4 h-4 mb-1" />
-                <span className="text-[9px] font-medium leading-tight text-center">{btn.label}</span>
+            {actions?.canClose && (
+              <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2.5 py-4 rounded-xl border-2 border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-800 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-40">
+                <Lock className="w-4 h-4" /> Clôturer
               </button>
-            ))}
+            )}
           </div>
+
+          {/* Shortcut buttons row aligned under the two main buttons */}
+          {shortcutBtns.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="grid grid-cols-2 gap-2">
+                {shortcutBtns.slice(0, 2).map(btn => (
+                  <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                    <btn.icon className="w-5 h-5 text-neutral-600" />
+                    <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {shortcutBtns.slice(2, 4).map(btn => (
+                  <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                    <btn.icon className="w-5 h-5 text-neutral-600" />
+                    <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right column — stretch to match left */}
-        <div className="flex flex-col gap-4">
+        {/* Right column */}
+        <div className="flex flex-col gap-3">
           {/* Résumé de session */}
-          <div className="bg-white rounded-2xl border border-neutral-200 p-5">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-4 h-4 text-neutral-700" /></div>
-              <h3 className="text-sm font-bold text-neutral-900">Résumé de session</h3>
+          <div className="bg-white rounded-xl border border-neutral-200 p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-4.5 h-4.5 text-neutral-700" /></div>
+              <h3 className="text-base font-bold text-neutral-900">Résumé de session</h3>
             </div>
             {loadingSummary ? (
-              <div className="space-y-2 animate-pulse"><div className="h-10 bg-neutral-100 rounded-lg" /><div className="h-10 bg-neutral-100 rounded-lg" /></div>
+              <div className="space-y-3 animate-pulse"><div className="h-12 bg-neutral-100 rounded-lg" /><div className="h-12 bg-neutral-100 rounded-lg" /></div>
             ) : summary ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between py-2.5 border-b border-neutral-100">
-                  <span className="text-xs text-neutral-800 font-medium">Total encaissé</span>
-                  <span className="text-sm font-bold text-neutral-700 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+              <div>
+                <div className="flex items-center justify-between py-3 border-b border-neutral-100">
+                  <span className="text-sm text-neutral-600 font-medium">Total encaissé</span>
+                  <span className="text-base font-bold text-neutral-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
                 </div>
-                <div className="flex items-center justify-between py-2.5 border-b border-neutral-100">
-                  <span className="text-xs text-neutral-600 font-medium">Nombre de ventes</span>
-                  <span className="text-sm font-bold text-neutral-800 tabular-nums">{summary.salesCount}</span>
+                <div className="flex items-center justify-between py-3 border-b border-neutral-100">
+                  <span className="text-sm text-neutral-600 font-medium">Nombre de ventes</span>
+                  <span className="text-base font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
                 </div>
                 {summary.byMethod.length > 0 && (
-                  <div className="pt-1">
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5">Par mode de paiement</p>
+                  <div className="pt-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Par mode de paiement</p>
                     {summary.byMethod.map(m => (
-                      <div key={m.method_name} className="flex items-center justify-between py-1.5">
-                        <span className="text-[11px] text-neutral-500">{m.method_name}</span>
-                        <span className="text-[11px] font-bold text-neutral-700 tabular-nums">{formatFCFA(m.amount)}</span>
+                      <div key={m.method_name} className="flex items-center justify-between py-2">
+                        <span className="text-sm text-neutral-500">{m.method_name}</span>
+                        <span className="text-sm font-bold text-neutral-800 tabular-nums">{formatFCFA(m.amount)}</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-xs text-neutral-400 text-center py-2">Aucune donnée</p>
+              <p className="text-sm text-neutral-400 text-center py-3">Aucune donnée</p>
             )}
           </div>
 
           {/* Accès rapides */}
-          <div className="bg-white rounded-2xl border border-neutral-200 p-5 flex-1">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><ClockIcon className="w-4 h-4 text-neutral-500" /></div>
-              <h3 className="text-sm font-bold text-neutral-900">Accès rapides</h3>
+          <div className="bg-white rounded-xl border border-neutral-200 p-5 flex-1">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center"><ClockIcon className="w-4.5 h-4.5 text-neutral-500" /></div>
+              <h3 className="text-base font-bold text-neutral-900">Accès rapides</h3>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               {onSeeAll && (
-                <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl hover:bg-neutral-50 border border-neutral-100 text-left transition-colors group">
-                  <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0"><ClockIcon className="w-3.5 h-3.5 text-neutral-700" /></div>
+                <button onClick={onSeeAll} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-neutral-50 border border-neutral-100 text-left transition-colors group">
+                  <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0"><ClockIcon className="w-4 h-4 text-neutral-700" /></div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-neutral-800">Historique des sessions</p>
-                    <p className="text-[10px] text-neutral-400">Consulter les sessions précédentes</p>
+                    <p className="text-sm font-semibold text-neutral-800">Historique des sessions</p>
+                    <p className="text-xs text-neutral-400">Consulter les sessions précédentes</p>
                   </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
                 </button>
               )}
-              <button onClick={onResume} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl hover:bg-neutral-50 border border-neutral-100 text-left transition-colors group">
-                <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0"><ShoppingCart className="w-3.5 h-3.5 text-neutral-700" /></div>
+              <button onClick={onResume} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-neutral-50 border border-neutral-100 text-left transition-colors group">
+                <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0"><ShoppingCart className="w-4 h-4 text-neutral-700" /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-neutral-800">Point de vente</p>
-                  <p className="text-[10px] text-neutral-400">Accéder à la caisse</p>
+                  <p className="text-sm font-semibold text-neutral-800">Point de vente</p>
+                  <p className="text-xs text-neutral-400">Accéder à la caisse</p>
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+                <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
               </button>
             </div>
           </div>
@@ -637,47 +657,54 @@ function POSLandingResume({
       </div>
 
       {/* ── Mobile layout ── */}
-      <div className="lg:hidden px-1.5 pt-2 space-y-2.5 h-full overflow-hidden">
+      <div className="lg:hidden px-3 pt-3 space-y-3 overflow-auto">
         {/* Session info card */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-3.5">
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><MapPin className="w-3 h-3 text-neutral-400" /></div>
-              <div><p className="text-[9px] text-neutral-400">Point de vente</p><p className="text-[11px] font-semibold text-neutral-800 truncate">{currentSite?.name || '-'}</p></div>
+        <div className="bg-white rounded-xl border border-neutral-200 p-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Monitor className="w-3.5 h-3.5 text-neutral-400" /></div>
+              <div><p className="text-[10px] text-neutral-400">Point de vente</p><p className="text-xs font-semibold text-neutral-800 truncate">{currentSite?.name || '-'}</p></div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-3 h-3 text-neutral-400" /></div>
-              <div><p className="text-[9px] text-neutral-400">Durée</p><p className="text-[11px] font-semibold text-neutral-800">{sessionDuration(session.opened_at)}</p></div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-3.5 h-3.5 text-neutral-400" /></div>
+              <div><p className="text-[10px] text-neutral-400">Durée</p><p className="text-xs font-semibold text-neutral-800">{sessionDuration(session.opened_at)}</p></div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Banknote className="w-3 h-3 text-neutral-400" /></div>
-              <div><p className="text-[9px] text-neutral-400">Fond initial</p><p className="text-[11px] font-semibold text-neutral-700">{formatFCFA(Number(session.opening_amount))}</p></div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Banknote className="w-3.5 h-3.5 text-neutral-400" /></div>
+              <div><p className="text-[10px] text-neutral-400">Fond initial</p><p className="text-xs font-semibold text-neutral-700">{formatFCFA(Number(session.opening_amount))}</p></div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><CheckCircle2 className="w-3 h-3 text-neutral-400" /></div>
-              <div><p className="text-[9px] text-neutral-400">Statut</p><span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase border border-neutral-200 bg-neutral-100 text-neutral-800">OUVERTE</span></div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><CheckCircle2 className="w-3.5 h-3.5 text-neutral-400" /></div>
+              <div><p className="text-[10px] text-neutral-400">Statut</p><span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border border-neutral-200 bg-neutral-100 text-neutral-800">OUVERTE</span></div>
             </div>
           </div>
           {cashierName && (
-            <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-neutral-100">
-              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-3 h-3 text-neutral-400" /></div>
-              <div><p className="text-[9px] text-neutral-400">Vendeur</p><p className="text-[11px] font-semibold text-neutral-800 uppercase">{cashierName}</p></div>
+            <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-neutral-100">
+              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-3.5 h-3.5 text-neutral-400" /></div>
+              <div><p className="text-[10px] text-neutral-400">Vendeur</p><p className="text-xs font-semibold text-neutral-800 uppercase">{cashierName}</p></div>
             </div>
           )}
         </div>
 
-        {/* Resume button */}
-        <button onClick={onResume} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm">
-          <Play className="w-4 h-4 fill-current" /> Reprendre la session
-        </button>
+        {/* Two action buttons */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <button onClick={onResume} className="flex items-center justify-center gap-2 py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-semibold transition-colors active:scale-[0.98]">
+            <Play className="w-4 h-4 fill-current" /> Reprendre
+          </button>
+          {actions?.canClose && (
+            <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-neutral-200 bg-white text-neutral-800 text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-40">
+              <Lock className="w-4 h-4" /> Clôturer
+            </button>
+          )}
+        </div>
 
-        {/* Action buttons grid */}
-        {actions && (
-          <div className="grid grid-cols-5 gap-1.5">
-            {actionBtns.map(btn => (
-              <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center py-2.5 rounded-lg bg-neutral-900 text-white transition-all active:scale-[0.95] disabled:opacity-40 disabled:pointer-events-none">
-                <btn.icon className="w-4 h-4 mb-0.5" />
-                <span className="text-[8px] font-medium leading-tight text-center">{btn.label}</span>
+        {/* Shortcut cards */}
+        {shortcutBtns.length > 0 && (
+          <div className="grid grid-cols-4 gap-2">
+            {shortcutBtns.map(btn => (
+              <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl border border-neutral-200 bg-white active:bg-neutral-50 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
+                <btn.icon className="w-5 h-5 text-neutral-700" />
+                <span className="text-[10px] font-medium text-neutral-600">{btn.label}</span>
               </button>
             ))}
           </div>
@@ -685,23 +712,23 @@ function POSLandingResume({
 
         {/* Summary card */}
         {!loadingSummary && summary && (
-          <div className="bg-white rounded-xl border border-neutral-200 p-3.5">
-            <div className="flex items-center gap-2 mb-2.5">
-              <div className="w-6 h-6 rounded-md bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-3 h-3 text-neutral-700" /></div>
-              <h3 className="text-xs font-bold text-neutral-900">Résumé</h3>
+          <div className="bg-white rounded-xl border border-neutral-200 p-4">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-3.5 h-3.5 text-neutral-700" /></div>
+              <h3 className="text-sm font-bold text-neutral-900">Résumé</h3>
             </div>
-            <div className="flex items-center justify-between py-1.5">
-              <span className="text-[11px] text-neutral-500">Total encaissé</span>
-              <span className="text-xs font-bold text-neutral-700 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+            <div className="flex items-center justify-between py-2">
+              <span className="text-xs text-neutral-500">Total encaissé</span>
+              <span className="text-sm font-bold text-neutral-700 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
             </div>
-            <div className="flex items-center justify-between py-1.5 border-t border-neutral-100">
-              <span className="text-[11px] text-neutral-500">Ventes</span>
-              <span className="text-xs font-bold text-neutral-800 tabular-nums">{summary.salesCount}</span>
+            <div className="flex items-center justify-between py-2 border-t border-neutral-100">
+              <span className="text-xs text-neutral-500">Ventes</span>
+              <span className="text-sm font-bold text-neutral-800 tabular-nums">{summary.salesCount}</span>
             </div>
             {summary.byMethod.length > 0 && summary.byMethod.map(m => (
-              <div key={m.method_name} className="flex items-center justify-between py-1 border-t border-neutral-50">
-                <span className="text-[10px] text-neutral-400">{m.method_name}</span>
-                <span className="text-[10px] font-bold text-neutral-600 tabular-nums">{formatFCFA(m.amount)}</span>
+              <div key={m.method_name} className="flex items-center justify-between py-1.5 border-t border-neutral-50">
+                <span className="text-[11px] text-neutral-400">{m.method_name}</span>
+                <span className="text-[11px] font-bold text-neutral-600 tabular-nums">{formatFCFA(m.amount)}</span>
               </div>
             ))}
           </div>
@@ -710,14 +737,14 @@ function POSLandingResume({
         {/* Quick links */}
         <div className="flex gap-2">
           {onSeeAll && (
-            <button onClick={onSeeAll} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
-              <ClockIcon className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
-              <span className="text-[11px] font-medium text-neutral-700">Historique</span>
+            <button onClick={onSeeAll} className="flex-1 flex items-center gap-2 px-3 py-3 rounded-xl border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
+              <ClockIcon className="w-4 h-4 text-neutral-700 shrink-0" />
+              <span className="text-xs font-medium text-neutral-700">Historique</span>
             </button>
           )}
-          <button onClick={onResume} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
-            <ShoppingCart className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
-            <span className="text-[11px] font-medium text-neutral-700">Point de vente</span>
+          <button onClick={onResume} className="flex-1 flex items-center gap-2 px-3 py-3 rounded-xl border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
+            <ShoppingCart className="w-4 h-4 text-neutral-700 shrink-0" />
+            <span className="text-xs font-medium text-neutral-700">Point de vente</span>
           </button>
         </div>
       </div>
@@ -2463,11 +2490,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="divide-y divide-neutral-100">
             {cart.map(i => (
               <div key={i.article_id} className="group px-3 py-1 hover:bg-neutral-50 transition-colors flex items-center gap-1.5">
-                <div className="flex items-center bg-neutral-100 rounded-lg shrink-0">
-                  <button onClick={() => updateQty(i.article_id, -1)} className="w-5 h-5 flex items-center justify-center hover:bg-neutral-200 rounded-l-lg active:scale-95 transition-all text-neutral-600"><Minus className="w-2.5 h-2.5" /></button>
-                  <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} className="w-6 text-center bg-transparent text-[11px] font-bold num leading-none py-0" />
-                  <button onClick={() => updateQty(i.article_id, 1)} className="w-5 h-5 flex items-center justify-center hover:bg-neutral-200 rounded-r-lg active:scale-95 transition-all text-neutral-600"><Plus className="w-2.5 h-2.5" /></button>
-                </div>
+                <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-center font-bold num focus:outline-none focus:border-neutral-900 shrink-0" title="Quantité" />
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-semibold text-neutral-900 truncate">{i.name}</div>
                   {i.tier_name && <div className="text-[9px] font-medium text-brand-600 leading-tight">{i.tier_name}</div>}
