@@ -491,7 +491,6 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       if (art) {
         const tiers = articleTiers.filter(t => t.article_id === val);
         if (tiers.length > 1) {
-          // Set name/article first, then show picker for price
           setQuoteItems(prev => {
             const next = [...prev];
             next[idx] = { ...next[idx], article_id: val, name: art.name };
@@ -520,6 +519,17 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
         }
       }
+      const it = next[idx];
+      next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
+      return next;
+    });
+  };
+  const finalizeQuoteItem = (idx: number, field: 'quantity' | 'unit_price' | 'discount') => {
+    setQuoteItems(prev => {
+      const next = [...prev];
+      if (field === 'quantity' && (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1)) next[idx].quantity = 1;
+      if (field === 'unit_price' && (!Number(next[idx].unit_price) || Number(next[idx].unit_price) < 0)) next[idx].unit_price = 0;
+      if (field === 'discount' && (!Number(next[idx].discount) || Number(next[idx].discount) < 0)) next[idx].discount = 0;
       const it = next[idx];
       next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
       return next;
@@ -680,6 +690,17 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           if (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1) next[idx].quantity = 1;
         }
       }
+      const it = next[idx];
+      next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
+      return next;
+    });
+  };
+  const finalizeInvoiceItem = (idx: number, field: 'quantity' | 'unit_price' | 'discount') => {
+    setInvoiceEditorItems(prev => {
+      const next = [...prev];
+      if (field === 'quantity' && (!Number(next[idx].quantity) || Number(next[idx].quantity) < 1)) next[idx].quantity = 1;
+      if (field === 'unit_price' && (!Number(next[idx].unit_price) || Number(next[idx].unit_price) < 0)) next[idx].unit_price = 0;
+      if (field === 'discount' && (!Number(next[idx].discount) || Number(next[idx].discount) < 0)) next[idx].discount = 0;
       const it = next[idx];
       next[idx].total = Math.max(0, Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0));
       return next;
@@ -3158,13 +3179,13 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
                           </div>
                         );
                         case 'qty': return (
-                          <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs text-center" /></div>
+                          <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} onBlur={() => finalizeQuoteItem(idx, 'quantity')} className="input text-xs text-center" /></div>
                         );
                         case 'unit_price': return (
-                          <div key="unit_price"><input type="number" value={it.unit_price || ''} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs text-right num" /></div>
+                          <div key="unit_price"><input type="number" value={it.unit_price || ''} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} onBlur={() => finalizeQuoteItem(idx, 'unit_price')} className="input text-xs text-right num" /></div>
                         );
                         case 'discount': return (
-                          <div key="discount"><input type="number" value={it.discount || ''} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs text-right num" /></div>
+                          <div key="discount"><input type="number" value={it.discount || ''} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} onBlur={() => finalizeQuoteItem(idx, 'discount')} className="input text-xs text-right num" /></div>
                         );
                         case 'total': return (
                           <div key="total" className="text-right"><span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span></div>
@@ -3532,13 +3553,13 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                           </div>
                         );
                         case 'qty': return (
-                          <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateInvoiceItem(idx, 'quantity', Number(e.target.value))} min="1" className="input text-xs text-center" /></div>
+                          <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateInvoiceItem(idx, 'quantity', Number(e.target.value))} onBlur={() => finalizeInvoiceItem(idx, 'quantity')} className="input text-xs text-center" /></div>
                         );
                         case 'unit_price': return (
-                          <div key="unit_price"><input type="number" value={it.unit_price || ''} onChange={e => updateInvoiceItem(idx, 'unit_price', Number(e.target.value))} min="0" className="input text-xs text-right num" /></div>
+                          <div key="unit_price"><input type="number" value={it.unit_price || ''} onChange={e => updateInvoiceItem(idx, 'unit_price', Number(e.target.value))} onBlur={() => finalizeInvoiceItem(idx, 'unit_price')} className="input text-xs text-right num" /></div>
                         );
                         case 'discount': return (
-                          <div key="discount"><input type="number" value={it.discount || ''} onChange={e => updateInvoiceItem(idx, 'discount', Number(e.target.value))} min="0" className="input text-xs text-right num" /></div>
+                          <div key="discount"><input type="number" value={it.discount || ''} onChange={e => updateInvoiceItem(idx, 'discount', Number(e.target.value))} onBlur={() => finalizeInvoiceItem(idx, 'discount')} className="input text-xs text-right num" /></div>
                         );
                         case 'total': return (
                           <div key="total" className="text-right"><span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span></div>

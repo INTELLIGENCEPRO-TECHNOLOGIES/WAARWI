@@ -883,12 +883,12 @@ export function SupplierOrders() {
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-0.5">Quantité</div>
-                            <input type="number" min={minReceived} value={it.quantity_ordered || ''} onChange={e => updateEditItem(idx, 'quantity_ordered', Math.max(minReceived, Number(e.target.value) || 0))} className="input text-xs num" />
+                            <input type="number" value={it.quantity_ordered || ''} onChange={e => updateEditItem(idx, 'quantity_ordered', Number(e.target.value))} onBlur={() => { if (!Number(editItems[idx]?.quantity_ordered) || Number(editItems[idx]?.quantity_ordered) < minReceived) updateEditItem(idx, 'quantity_ordered', Math.max(1, minReceived)); }} className="input text-xs num" />
                             {minReceived > 0 && <div className="text-[10px] text-slate-400 mt-0.5">Min: {minReceived} (déjà reçus)</div>}
                           </div>
                           <div>
                             <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-0.5">P.U. (FCFA)</div>
-                            <input type="number" min={0} value={it.unit_price || ''} onChange={e => updateEditItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))} className="input text-xs num" />
+                            <input type="number" value={it.unit_price || ''} onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value))} onBlur={() => { if (Number(editItems[idx]?.unit_price) < 0) updateEditItem(idx, 'unit_price', 0); }} className="input text-xs num" />
                           </div>
                         </div>
                         <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
@@ -1437,8 +1437,8 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
                 <input
                   type="number"
                   value={it.quantity_ordered || ''}
-                  onChange={e => updateItem(idx, 'quantity_ordered', Math.max(1, Number(e.target.value) || 1))}
-                  min="1"
+                  onChange={e => updateItem(idx, 'quantity_ordered', Number(e.target.value))}
+                  onBlur={() => { if (!Number(orderItems[idx]?.quantity_ordered) || Number(orderItems[idx]?.quantity_ordered) < 1) updateItem(idx, 'quantity_ordered', 1); }}
                   className="input text-xs text-center"
                 />
               </div>
@@ -1446,8 +1446,8 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
                 <input
                   type="number"
                   value={it.unit_price || ''}
-                  onChange={e => updateItem(idx, 'unit_price', Math.max(0, Number(e.target.value) || 0))}
-                  min="0"
+                  onChange={e => updateItem(idx, 'unit_price', Number(e.target.value))}
+                  onBlur={() => { if (Number(orderItems[idx]?.unit_price) < 0) updateItem(idx, 'unit_price', 0); }}
                   className="input text-xs text-right num"
                 />
               </div>

@@ -1315,15 +1315,28 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }));
   };
 
-  const setQty = (id: string, q: number) => {
+  const setQty = (id: string, raw: string) => {
+    const n = raw === '' ? 0 : Number(raw);
+    if (isNaN(n)) return;
     const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
     const art = articles.find(a => a.id === id);
     const tracked = art ? tracksStock(art) : true;
-    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: Math.max(1, (allowNeg || !tracked) ? q : Math.min(q, i.stock_available)) } : i));
+    const val = (allowNeg || !tracked) ? n : Math.min(n, (cart.find(i => i.article_id === id)?.stock_available ?? n));
+    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: val } : i));
   };
 
-  const setPrice = (id: string, p: number) => {
-    setCart(c => c.map(i => i.article_id === id ? { ...i, unit_price: Math.max(0, p) } : i));
+  const finalizeQty = (id: string) => {
+    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: Math.max(1, i.quantity) } : i));
+  };
+
+  const setPrice = (id: string, raw: string) => {
+    const n = raw === '' ? 0 : Number(raw);
+    if (isNaN(n)) return;
+    setCart(c => c.map(i => i.article_id === id ? { ...i, unit_price: n } : i));
+  };
+
+  const finalizePrice = (id: string) => {
+    setCart(c => c.map(i => i.article_id === id ? { ...i, unit_price: Math.max(0, i.unit_price) } : i));
   };
 
   const removeLine = (id: string) => setCart(c => c.filter(i => i.article_id !== id));
@@ -2452,14 +2465,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div key={i.article_id} className="group px-3 py-1 hover:bg-neutral-50 transition-colors flex items-center gap-1.5">
                 <div className="flex items-center bg-neutral-100 rounded-lg shrink-0">
                   <button onClick={() => updateQty(i.article_id, -1)} className="w-5 h-5 flex items-center justify-center hover:bg-neutral-200 rounded-l-lg active:scale-95 transition-all text-neutral-600"><Minus className="w-2.5 h-2.5" /></button>
-                  <input type="number" value={i.quantity} onChange={e => setQty(i.article_id, Number(e.target.value))} className="w-6 text-center bg-transparent text-[11px] font-bold num leading-none py-0" />
+                  <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} className="w-6 text-center bg-transparent text-[11px] font-bold num leading-none py-0" />
                   <button onClick={() => updateQty(i.article_id, 1)} className="w-5 h-5 flex items-center justify-center hover:bg-neutral-200 rounded-r-lg active:scale-95 transition-all text-neutral-600"><Plus className="w-2.5 h-2.5" /></button>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-semibold text-neutral-900 truncate">{i.name}</div>
                   {i.tier_name && <div className="text-[9px] font-medium text-brand-600 leading-tight">{i.tier_name}</div>}
                 </div>
-                <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, Number(e.target.value))} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-right num focus:outline-none focus:border-neutral-900 shrink-0" title="Prix unitaire" />
+                <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-right num focus:outline-none focus:border-neutral-900 shrink-0" title="Prix unitaire" />
                 <div className="text-[11px] font-bold text-neutral-900 num whitespace-nowrap min-w-[48px] text-right shrink-0">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
                 <button onClick={() => removeLine(i.article_id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-red-400 transition-all shrink-0">
                   <Trash2 className="w-3 h-3" />
