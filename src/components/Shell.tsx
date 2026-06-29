@@ -155,6 +155,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
   const isPOS = route === 'pos';
   const isDashboard = route === 'dashboard';
+  const isPlatformAdmin = route === 'platform_admin';
   const [dashMenuOpen, setDashMenuOpen] = useState(false);
   useEffect(() => { if (!isDashboard) setDashMenuOpen(false); }, [isDashboard]);
 
@@ -300,7 +301,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     <div className="min-h-screen h-screen flex flex-col overflow-hidden bg-white">
       {/* Desktop header */}
       <header
-        className={`${isDashboard && !dashMenuOpen ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b border-neutral-200 bg-white sticky top-0 z-30 flex-shrink-0`}
+        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b border-neutral-200 bg-white sticky top-0 z-30 flex-shrink-0`}
       >
         <div className={`flex items-center gap-2.5 px-4 h-full transition-all duration-200 ${sidebarCollapsed ? 'w-[64px]' : ''}`}>
           {tenant?.logo_url ? (
@@ -366,7 +367,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className={`${isDashboard && !dashMenuOpen ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r border-neutral-200 bg-white transition-all duration-200 ${sidebarCollapsed ? 'w-[64px]' : 'w-[240px]'}`}>
+      <aside className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r border-neutral-200 bg-white transition-all duration-200 ${sidebarCollapsed ? 'w-[64px]' : 'w-[240px]'}`}>
         <NavList />
         <div className="p-3 border-t border-neutral-100 space-y-2">
           {sites.length > 0 && !sidebarCollapsed && (
@@ -591,7 +592,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
         {/* Mobile header */}
         <header
-          className="lg:hidden sticky top-0 z-30 flex items-center border-b border-neutral-200 bg-white"
+          className={`${isPlatformAdmin ? 'hidden' : 'lg:hidden'} sticky top-0 z-30 flex items-center border-b border-neutral-200 bg-white`}
           style={{
             paddingTop: 'calc(env(safe-area-inset-top) + 12px)',
             paddingBottom: '12px',
@@ -656,9 +657,11 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         </header>
 
-        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
+        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
           {isPOS ? (
             <div className="flex-1 flex flex-col min-h-0 pb-[60px] lg:pb-0">{children}</div>
+          ) : isPlatformAdmin ? (
+            <div className="flex-1 min-h-0 pb-[60px] lg:pb-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
             <div className="flex-1 min-h-0 px-2 sm:px-3 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0">{children}</div>
           ) : (

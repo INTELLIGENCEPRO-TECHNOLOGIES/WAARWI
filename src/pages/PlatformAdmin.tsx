@@ -36,67 +36,120 @@ const SEV = {
   critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', icon: 'text-red-600', label: 'Critique' },
 } as const;
 
+const sidebarGroups = [
+  {
+    label: 'PLATEFORME',
+    items: [
+      { k: 'overview' as Section, l: 'Vue d\'ensemble', icon: Gauge },
+      { k: 'tenants' as Section, l: 'Tenants', icon: Building2 },
+      { k: 'subscriptions' as Section, l: 'Abonnements', icon: CircleDollarSign },
+      { k: 'plans' as Section, l: 'Plans & tarifs', icon: Layers },
+    ],
+  },
+  {
+    label: 'CONFIGURATION',
+    items: [
+      { k: 'master_catalogs' as Section, l: 'Catalogues métiers', icon: Library },
+      { k: 'login_config' as Section, l: 'Écran d\'accueil', icon: Monitor },
+      { k: 'messages' as Section, l: 'Messages', icon: MessageSquare },
+    ],
+  },
+  {
+    label: 'SURVEILLANCE',
+    items: [
+      { k: 'activity' as Section, l: 'Activité', icon: Activity },
+    ],
+  },
+];
+
 export function PlatformAdmin() {
   const [section, setSection] = useState<Section>('overview');
-
-  const sections: { k: Section; l: string; icon: any }[] = [
-    { k: 'overview', l: 'Vue d\'ensemble', icon: Gauge },
-    { k: 'tenants', l: 'Tenants', icon: Building2 },
-    { k: 'plans', l: 'Plans', icon: Layers },
-    { k: 'subscriptions', l: 'Abonnements', icon: CircleDollarSign },
-    { k: 'messages', l: 'Messages', icon: MessageSquare },
-    { k: 'login_config', l: 'Écran d\'accueil', icon: Store_ },
-    { k: 'master_catalogs', l: 'Catalogues maîtres', icon: Library },
-    { k: 'activity', l: 'Activité', icon: Activity },
-  ];
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="space-y-6">
-      {/* Premium header */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 text-white shadow-premium">
-        <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-emerald-500/20 to-transparent rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-teal-500/20 to-transparent rounded-full blur-3xl" />
-        <div className="relative flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center shadow-lg overflow-hidden p-1">
-            <img src="/newlogo.png" alt="WAARWI" className="w-full h-full object-contain" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">WAARWI · Console plateforme</h1>
-              <span className="text-[10px] font-bold bg-amber-500/20 border border-amber-400/30 text-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Super admin</span>
+    <div className="flex h-full min-h-screen lg:min-h-0">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-screen lg:h-screen w-[240px] bg-white border-r border-[#E5E7EB] flex flex-col overflow-y-auto transition-transform lg:transition-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-4 border-b border-[#E5E7EB]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#111111] flex items-center justify-center overflow-hidden p-0.5">
+              <img src="/newlogo.png" alt="W" className="w-full h-full object-contain invert" />
             </div>
-            <p className="text-sm text-slate-300 mt-0.5">Plateforme Business 2.0 made in Sénégal · Pilotage global</p>
+            <div>
+              <div className="text-sm font-bold text-[#0F172A] leading-tight">Waarwi</div>
+              <div className="text-[10px] text-[#64748B] font-medium">Console plateforme</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Section nav */}
-      <div className="flex overflow-x-auto gap-1 bg-white/60 border border-slate-200/70 rounded-2xl p-1 shadow-sm">
-        {sections.map(s => {
-          const I = s.icon;
-          const active = section === s.k;
-          return (
-            <button
-              key={s.k}
-              onClick={() => setSection(s.k)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-semibold whitespace-nowrap transition-all ${
-                active ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:bg-white hover:text-slate-900'
-              }`}
-            >
-              <I className="w-4 h-4" />{s.l}
-            </button>
-          );
-        })}
-      </div>
+        <nav className="flex-1 p-3 space-y-5">
+          {sidebarGroups.map(group => (
+            <div key={group.label}>
+              <div className="text-[10px] font-bold text-[#64748B] tracking-wider uppercase px-2.5 mb-1.5">{group.label}</div>
+              <div className="space-y-0.5">
+                {group.items.map(item => {
+                  const I = item.icon;
+                  const active = section === item.k;
+                  return (
+                    <button
+                      key={item.k}
+                      onClick={() => { setSection(item.k); setSidebarOpen(false); }}
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                        active
+                          ? 'bg-[#0F172A] text-white'
+                          : 'text-[#64748B] hover:bg-[#F7F8FA] hover:text-[#0F172A]'
+                      }`}
+                    >
+                      <I className="w-4 h-4 shrink-0" />
+                      <span>{item.l}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
 
-      {section === 'overview' && <OverviewSection />}
-      {section === 'tenants' && <TenantsSection />}
-      {section === 'plans' && <PlansSection />}
-      {section === 'subscriptions' && <SubscriptionsSection />}
-      {section === 'messages' && <MessagesSection />}
-      {section === 'login_config' && <LoginConfigSection />}
-      {section === 'master_catalogs' && <MasterCatalogAdmin />}
-      {section === 'activity' && <ActivitySection />}
+        <div className="p-3 border-t border-[#E5E7EB]">
+          <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-[#64748B]">
+            <Shield className="w-3.5 h-3.5" />
+            <span className="font-medium">Super admin</span>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 min-w-0 bg-[#F7F8FA]">
+        {/* Compact top bar */}
+        <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-[#E5E7EB] px-4 sm:px-6 py-3 flex items-center gap-3">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1.5 rounded-lg hover:bg-[#F7F8FA] text-[#64748B]">
+            <Layers className="w-5 h-5" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-bold text-[#0F172A]">
+              {sidebarGroups.flatMap(g => g.items).find(i => i.k === section)?.l || 'Console'}
+            </h1>
+            <p className="text-[11px] text-[#64748B]">Pilotage global de Waarwi</p>
+          </div>
+        </div>
+
+        {/* Page content */}
+        <div className="p-4 sm:p-6">
+          {section === 'overview' && <OverviewSection />}
+          {section === 'tenants' && <TenantsSection />}
+          {section === 'plans' && <PlansSection />}
+          {section === 'subscriptions' && <SubscriptionsSection />}
+          {section === 'messages' && <MessagesSection />}
+          {section === 'login_config' && <LoginConfigSection />}
+          {section === 'master_catalogs' && <MasterCatalogAdmin />}
+          {section === 'activity' && <ActivitySection />}
+        </div>
+      </main>
     </div>
   );
 }
@@ -115,47 +168,47 @@ function OverviewSection() {
     })();
   }, []);
 
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
+  if (loading) return <div className="py-20 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#64748B]" /></div>;
   if (!data) return null;
 
   const planColors: Record<string, string> = {
-    trial: 'from-slate-500 to-slate-700',
-    starter: 'from-neutral-700 to-neutral-900',
-    pro: 'from-emerald-500 to-teal-700',
-    enterprise: 'from-amber-500 to-amber-700',
+    trial: 'bg-[#94A3B8]',
+    starter: 'bg-[#0F172A]',
+    pro: 'bg-[#10B981]',
+    enterprise: 'bg-[#F59E0B]',
   };
 
+  const pendingTenants = data.tenants_total - data.tenants_active - data.tenants_suspended;
+  const hasAlerts = data.tenants_suspended > 0 || data.expiring_soon?.length > 0;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={Building2} label="Tenants" value={data.tenants_total} sub={`${data.tenants_active} actifs`} trend="up" color="emerald" />
-        <KpiCard icon={CircleDollarSign} label="MRR" value={formatCompactFCFA(data.mrr)} sub="Revenu mensuel récurrent" color="amber" />
-        <KpiCard icon={Users} label="Utilisateurs" value={data.users_total} sub="Tous tenants" color="sky" />
-        <KpiCard icon={Ban} label="Suspendus" value={data.tenants_suspended} sub="À surveiller" color="red" />
+        <KpiCard icon={Building2} label="Tenants actifs" value={data.tenants_active} sub={`${data.tenants_total} total`} />
+        <KpiCard icon={Wallet} label="MRR" value={formatCompactFCFA(data.mrr)} sub="Revenu mensuel" />
+        <KpiCard icon={Users} label="Utilisateurs" value={data.users_total} sub="Tous tenants" />
+        <KpiCard icon={AlertTriangle} label="Alertes" value={data.tenants_suspended + (data.expiring_soon?.length || 0)} sub={hasAlerts ? 'Actions requises' : 'Aucune alerte'} alert={hasAlerts} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Plan distribution */}
-        <div className="lg:col-span-2 bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
+        <div className="lg:col-span-2 bg-white border border-[#E5E7EB] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Répartition par plan</h3>
-              <p className="text-xs text-slate-500">Distribution des tenants actifs</p>
-            </div>
-            <Layers className="w-5 h-5 text-slate-300" />
+            <h3 className="text-sm font-semibold text-[#0F172A]">Répartition par plan</h3>
+            <span className="text-[11px] text-[#64748B] font-medium">{data.tenants_total} tenants</span>
           </div>
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {Object.entries(data.by_plan as Record<string, number>).map(([plan, count]) => {
               const pct = data.tenants_total ? (count as number) / data.tenants_total * 100 : 0;
               return (
                 <div key={plan}>
-                  <div className="flex items-center justify-between text-xs font-semibold mb-1">
-                    <span className="capitalize text-slate-700">{plan}</span>
-                    <span className="text-slate-500">{count} <span className="text-slate-400">· {pct.toFixed(0)}%</span></span>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="capitalize font-medium text-[#0F172A]">{plan}</span>
+                    <span className="text-[#64748B]">{count} <span className="text-[#94A3B8]">({pct.toFixed(0)}%)</span></span>
                   </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div className={`h-full bg-gradient-to-r ${planColors[plan] || 'from-slate-400 to-slate-600'} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                  <div className="h-1.5 rounded-full bg-[#F1F5F9] overflow-hidden">
+                    <div className={`h-full rounded-full ${planColors[plan] || 'bg-[#94A3B8]'} transition-all duration-500`} style={{ width: `${Math.max(pct, 2)}%` }} />
                   </div>
                 </div>
               );
@@ -164,22 +217,22 @@ function OverviewSection() {
         </div>
 
         {/* Expiring soon */}
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Expirations proches</h3>
-              <p className="text-xs text-slate-500">7 prochains jours</p>
-            </div>
-            <Clock className="w-5 h-5 text-amber-400" />
+            <h3 className="text-sm font-semibold text-[#0F172A]">Expirations proches</h3>
+            <Clock className="w-4 h-4 text-[#F59E0B]" />
           </div>
           {data.expiring_soon.length === 0 ? (
-            <p className="text-sm text-slate-400 py-6 text-center">Aucune expiration proche.</p>
+            <div className="py-8 text-center">
+              <Check className="w-8 h-8 text-[#10B981] mx-auto mb-2 opacity-50" />
+              <p className="text-xs text-[#64748B]">Aucune expiration dans les 7 jours.</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {data.expiring_soon.slice(0, 6).map((t: any) => (
-                <div key={t.id} className="flex items-center justify-between text-xs border-b border-slate-100 pb-2 last:border-0">
-                  <span className="font-semibold text-slate-700 truncate">{t.name}</span>
-                  <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-semibold shrink-0 ml-2">{formatDate(t.plan_expires_at)}</span>
+                <div key={t.id} className="flex items-center justify-between text-xs py-2 border-b border-[#F1F5F9] last:border-0">
+                  <span className="font-medium text-[#0F172A] truncate">{t.name}</span>
+                  <span className="text-[#F59E0B] bg-[#FFFBEB] px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 ml-2">{formatDate(t.plan_expires_at)}</span>
                 </div>
               ))}
             </div>
@@ -187,45 +240,81 @@ function OverviewSection() {
         </div>
       </div>
 
-      {/* Recent activity */}
-      <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Activité récente</h3>
-            <p className="text-xs text-slate-500">Dernières actions plateforme</p>
+      {/* Actions and activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Actions a traiter */}
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-[#0F172A]">Actions à traiter</h3>
+            <Bell className="w-4 h-4 text-[#64748B]" />
           </div>
-          <Activity className="w-5 h-5 text-slate-300" />
+          <div className="space-y-2">
+            {data.tenants_suspended > 0 && (
+              <ActionItem icon={Ban} label={`${data.tenants_suspended} tenant(s) suspendu(s)`} severity="critical" />
+            )}
+            {data.expiring_soon?.length > 0 && (
+              <ActionItem icon={Clock} label={`${data.expiring_soon.length} expiration(s) dans 7 jours`} severity="warning" />
+            )}
+            {pendingTenants > 0 && (
+              <ActionItem icon={Clock} label={`${pendingTenants} tenant(s) en attente d'approbation`} severity="info" />
+            )}
+            {data.tenants_suspended === 0 && (data.expiring_soon?.length || 0) === 0 && pendingTenants <= 0 && (
+              <div className="py-6 text-center">
+                <Check className="w-8 h-8 text-[#10B981] mx-auto mb-2 opacity-50" />
+                <p className="text-xs text-[#64748B]">Aucune action en attente.</p>
+              </div>
+            )}
+          </div>
         </div>
-        {data.recent_events.length === 0 ? (
-          <p className="text-sm text-slate-400 py-4 text-center">Aucune activité.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {data.recent_events.map((ev: any) => (
-              <EventRow key={ev.id} ev={ev} />
-            ))}
+
+        {/* Recent activity */}
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-[#0F172A]">Activité récente</h3>
+            <Activity className="w-4 h-4 text-[#64748B]" />
           </div>
-        )}
+          {data.recent_events.length === 0 ? (
+            <div className="py-6 text-center">
+              <p className="text-xs text-[#64748B]">Aucune activité récente.</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {data.recent_events.slice(0, 8).map((ev: any) => (
+                <EventRow key={ev.id} ev={ev} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function KpiCard({ icon: Icon, label, value, sub, color }: any) {
-  const colors: Record<string, string> = {
-    emerald: 'from-emerald-500 to-teal-600 shadow-emerald-500/30',
-    amber: 'from-amber-500 to-orange-600 shadow-amber-500/30',
-    sky: 'from-neutral-700 to-neutral-900 shadow-neutral-500/30',
-    red: 'from-red-500 to-rose-600 shadow-red-500/30',
+function ActionItem({ icon: Icon, label, severity }: { icon: any; label: string; severity: 'critical' | 'warning' | 'info' }) {
+  const styles = {
+    critical: 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]',
+    warning: 'bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]',
+    info: 'bg-[#F8FAFC] border-[#E2E8F0] text-[#475569]',
   };
   return (
-    <div className="relative overflow-hidden bg-white border border-slate-200/70 rounded-3xl p-4 shadow-card">
-      <div className={`absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br ${colors[color]} opacity-10 blur-xl`} />
-      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colors[color]} text-white flex items-center justify-center mb-3 shadow-lg`}>
-        <Icon className="w-5 h-5" />
+    <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-xs font-medium ${styles[severity]}`}>
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function KpiCard({ icon: Icon, label, value, sub, alert }: { icon: any; label: string; value: any; sub: string; alert?: boolean }) {
+  return (
+    <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${alert ? 'bg-[#FEF2F2] text-[#EF4444]' : 'bg-[#F8FAFC] text-[#64748B]'}`}>
+          <Icon className="w-4 h-4" />
+        </div>
       </div>
-      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="text-2xl font-bold text-slate-900 leading-tight">{value}</div>
-      <div className="text-[11px] text-slate-500 mt-0.5">{sub}</div>
+      <div className="text-2xl font-bold text-[#0F172A] leading-tight">{value}</div>
+      <div className="text-[11px] font-medium text-[#64748B] mt-0.5">{label}</div>
+      <div className="text-[10px] text-[#94A3B8] mt-0.5">{sub}</div>
     </div>
   );
 }
@@ -240,15 +329,15 @@ function EventRow({ ev }: { ev: any }) {
   const I = icons[ev.action] || Activity;
   const tenantName = ev.tenants?.name || (ev.payload?.name) || (ev.tenant_id ? 'Tenant' : 'Plateforme');
   return (
-    <div className="flex items-start gap-2.5 text-[12px] py-1.5">
-      <div className="w-7 h-7 shrink-0 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
-        <I className="w-3.5 h-3.5" />
+    <div className="flex items-center gap-2.5 text-[12px] py-2 border-b border-[#F1F5F9] last:border-0">
+      <div className="w-6 h-6 shrink-0 rounded-md bg-[#F8FAFC] text-[#64748B] flex items-center justify-center">
+        <I className="w-3 h-3" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-slate-800">{ev.action}</div>
-        <div className="text-[11px] text-slate-500 truncate">{tenantName} · {ev.actor_email}</div>
+        <span className="font-medium text-[#0F172A]">{ev.action}</span>
+        <span className="text-[#94A3B8] ml-1.5">{tenantName}</span>
       </div>
-      <div className="text-[10px] text-slate-400 shrink-0 uppercase tracking-wider">{formatDateTime(ev.created_at)}</div>
+      <div className="text-[10px] text-[#94A3B8] shrink-0">{formatDateTime(ev.created_at)}</div>
     </div>
   );
 }
@@ -259,8 +348,9 @@ function TenantsSection() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'suspended' | 'expiring' | 'expired'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'suspended' | 'expiring' | 'expired' | 'never_connected'>('all');
   const [detail, setDetail] = useState<any>(null);
+  const [actionsOpen, setActionsOpen] = useState<string | null>(null);
   const { success, error } = useToast();
 
   const load = async () => {
@@ -278,7 +368,7 @@ function TenantsSection() {
     const now = new Date();
     const in7 = new Date(Date.now() + 7 * 86400000);
     return tenants.filter(t => {
-      if (q && !`${t.name} ${t.email} ${t.phone}`.toLowerCase().includes(q.toLowerCase())) return false;
+      if (q && !`${t.name} ${t.email} ${t.phone} ${t.subdomain || ''} ${t.custom_domain || ''}`.toLowerCase().includes(q.toLowerCase())) return false;
       const exp = t.plan_expires_at ? new Date(t.plan_expires_at) : null;
       const approval = t.approval_status || 'approved';
       if (filter === 'pending' && approval !== 'pending') return false;
@@ -286,6 +376,7 @@ function TenantsSection() {
       if (filter === 'suspended' && t.is_active) return false;
       if (filter === 'expiring' && (!exp || exp < now || exp > in7)) return false;
       if (filter === 'expired' && (!exp || exp >= now)) return false;
+      if (filter === 'never_connected' && t.last_active_at) return false;
       return true;
     });
   }, [tenants, q, filter]);
@@ -330,131 +421,194 @@ function TenantsSection() {
 
   const pendingCount = tenants.filter(t => (t.approval_status || 'approved') === 'pending').length;
 
+  const filterDefs: { k: typeof filter; l: string }[] = [
+    { k: 'all', l: 'Tous' },
+    { k: 'active', l: 'Actifs' },
+    { k: 'pending', l: 'En attente' },
+    { k: 'suspended', l: 'Suspendus' },
+    { k: 'expiring', l: 'Expirent bientôt' },
+    { k: 'expired', l: 'Expirés' },
+    { k: 'never_connected', l: 'Jamais connectés' },
+  ];
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un tenant…" className="input pl-9" />
+    <div className="space-y-4">
+      {/* Search + filters */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Rechercher un tenant..."
+            className="w-full h-10 pl-10 pr-4 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A] transition-colors"
+          />
         </div>
-        <div className="flex gap-1 overflow-x-auto">
-          {(['all', 'pending', 'active', 'suspended', 'expiring', 'expired'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`relative px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                filter === f
-                  ? (f === 'pending' ? 'bg-amber-500 text-white' : 'bg-slate-900 text-white')
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          {filterDefs.map(f => (
+            <button key={f.k} onClick={() => setFilter(f.k)}
+              className={`relative px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
+                filter === f.k
+                  ? 'bg-[#0F172A] text-white'
+                  : 'bg-white border border-[#E5E7EB] text-[#64748B] hover:border-[#CBD5E1] hover:text-[#0F172A]'
               }`}>
-              {f === 'all' ? 'Tous'
-                : f === 'pending' ? 'En attente'
-                : f === 'active' ? 'Actifs'
-                : f === 'suspended' ? 'Suspendus'
-                : f === 'expiring' ? 'Expirent bientôt' : 'Expirés'}
-              {f === 'pending' && pendingCount > 0 && filter !== f && (
-                <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold">{pendingCount}</span>
+              {f.l}
+              {f.k === 'pending' && pendingCount > 0 && filter !== f.k && (
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-[#F59E0B] text-white text-[9px] font-bold">{pendingCount}</span>
               )}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Tenant count */}
+      {!loading && (
+        <div className="text-[11px] text-[#94A3B8] font-medium">
+          {filtered.length} tenant{filtered.length !== 1 ? 's' : ''} {filter !== 'all' ? 'filtrés' : 'au total'}
+        </div>
+      )}
+
       {loading ? (
-        <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+        <div className="py-20 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#64748B]" /></div>
       ) : (
         <div className="space-y-2">
           {filtered.map(t => {
             const plan = planByCode[t.plan];
             const exp = t.plan_expires_at ? new Date(t.plan_expires_at) : null;
-            const expired = exp && exp < new Date();
+            const now = new Date();
+            const expired = exp && exp < now;
+            const expiringSoon = exp && !expired && exp < new Date(Date.now() + 7 * 86400000);
             const approval = t.approval_status || 'approved';
             const isPending = approval === 'pending';
             const isRejected = approval === 'rejected';
+            const neverConnected = !t.last_active_at;
+
+            const getStatusBadge = () => {
+              if (isPending) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#F8FAFC] text-[#64748B] border border-[#E2E8F0] font-medium">En attente</span>;
+              if (isRejected) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Rejeté</span>;
+              if (!t.is_active) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Suspendu</span>;
+              if (expired) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] font-medium">Expiré</span>;
+              if (expiringSoon) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] font-medium">Expire bientôt</span>;
+              if (neverConnected) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#F8FAFC] text-[#94A3B8] border border-[#E2E8F0] font-medium">Jamais connecté</span>;
+              return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] font-medium">Actif</span>;
+            };
+
             return (
-              <div key={t.id} className={`bg-white border rounded-2xl shadow-card p-4 hover:border-slate-300 transition-colors ${
-                isPending ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200/70'
-              }`}>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br text-white font-extrabold flex items-center justify-center shrink-0 ${
-                      isPending ? 'from-amber-500 to-orange-600' : t.is_active ? 'from-emerald-500 to-teal-700' : 'from-slate-400 to-slate-600'
+              <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-xl p-4 hover:border-[#CBD5E1] transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                  {/* Left: avatar + info */}
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className={`w-10 h-10 rounded-lg font-bold text-sm flex items-center justify-center shrink-0 ${
+                      isPending ? 'bg-[#FEF3C7] text-[#D97706]'
+                        : !t.is_active ? 'bg-[#FEE2E2] text-[#DC2626]'
+                        : 'bg-[#F1F5F9] text-[#0F172A]'
                     }`}>
                       {(t.name || '?').charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
+                      {/* Row 1: Name + plan badge */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-900 truncate">{t.name}</span>
+                        <span className="font-semibold text-[#0F172A] text-sm">{t.name}</span>
                         <PlanBadge plan={plan} code={t.plan} />
-                        {isPending && <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">En attente</span>}
-                        {isRejected && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Rejeté</span>}
-                        {!isPending && !isRejected && !t.is_active && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Suspendu</span>}
-                        {expired && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Expiré</span>}
+                        {getStatusBadge()}
                       </div>
-                      <div className="text-xs text-slate-500 truncate">
-                        {t.email || '—'} · {(t.profiles || []).length} utilisateur(s) · Créé {formatDate(t.created_at)}{t.last_active_at ? ` · Actif ${formatDate(t.last_active_at)}` : ''}
+                      {/* Row 2: Details */}
+                      <div className="text-xs text-[#64748B] mt-0.5 leading-relaxed">
+                        {t.email || '—'}
+                        <span className="text-[#CBD5E1] mx-1.5">|</span>
+                        {(t.profiles || []).length} utilisateur{(t.profiles || []).length !== 1 ? 's' : ''}
+                        <span className="text-[#CBD5E1] mx-1.5">|</span>
+                        Créé {formatDate(t.created_at)}
+                        {t.last_active_at && <><span className="text-[#CBD5E1] mx-1.5">|</span>Actif {formatDate(t.last_active_at)}</>}
                       </div>
+                      {/* Row 3: Pending extra info */}
                       {isPending && (t.whatsapp_phone || t.city || t.selected_plan_code) && (
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                          {t.whatsapp_phone && <span className="text-[10px] text-emerald-700 font-medium">WhatsApp: {t.whatsapp_phone}</span>}
-                          {t.city && <span className="text-[10px] text-slate-500">Ville: {t.city}</span>}
-                          {t.selected_plan_code && <span className="text-[10px] text-blue-600 font-medium">Plan: {t.selected_plan_code}</span>}
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                          {t.whatsapp_phone && <span className="text-[10px] text-[#16A34A] font-medium">WhatsApp: {t.whatsapp_phone}</span>}
+                          {t.city && <span className="text-[10px] text-[#64748B]">Ville: {t.city}</span>}
+                          {t.selected_plan_code && <span className="text-[10px] text-[#2563EB] font-medium">Plan souhaité: {t.selected_plan_code}</span>}
+                        </div>
+                      )}
+                      {/* Expiration date if exists */}
+                      {exp && (
+                        <div className="mt-1">
+                          <span className={`text-[11px] font-medium ${expired ? 'text-[#DC2626]' : expiringSoon ? 'text-[#D97706]' : 'text-[#64748B]'}`}>
+                            {expired ? 'Expiré le' : 'Expire le'} {formatDate(exp)}
+                          </span>
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 text-xs shrink-0">
-                    {exp && (
-                      <div className="text-right">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400">Expire</div>
-                        <div className={`font-bold ${expired ? 'text-red-600' : 'text-slate-700'}`}>{formatDate(exp)}</div>
-                      </div>
+
+                  {/* Right: actions */}
+                  <div className="flex items-center gap-2 shrink-0 sm:pt-0.5">
+                    {isPending && (
+                      <>
+                        <button
+                          onClick={() => approve(t)}
+                          className="h-8 px-3 rounded-md bg-[#16A34A] text-white text-xs font-medium hover:bg-[#15803D] flex items-center gap-1.5 transition-colors"
+                        ><Check className="w-3.5 h-3.5" />Approuver</button>
+                        <button
+                          onClick={() => { const reason = prompt('Motif du rejet ? (optionnel)') || ''; reject(t, reason); }}
+                          className="h-8 w-8 rounded-md bg-[#FEF2F2] text-[#DC2626] hover:bg-[#FEE2E2] flex items-center justify-center transition-colors"
+                          title="Rejeter"
+                        ><Ban className="w-3.5 h-3.5" /></button>
+                      </>
                     )}
-                    <div className="flex gap-1">
-                      {isPending && (
+                    <button
+                      onClick={() => setDetail(t)}
+                      className="h-8 px-3 rounded-md bg-[#0F172A] text-white text-xs font-medium hover:bg-[#1E293B] flex items-center gap-1.5 transition-colors"
+                    >Gérer<ArrowUpRight className="w-3 h-3" /></button>
+
+                    {/* Actions menu */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setActionsOpen(actionsOpen === t.id ? null : t.id)}
+                        className="h-8 w-8 rounded-md border border-[#E5E7EB] text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] flex items-center justify-center transition-colors"
+                      >
+                        <span className="text-sm leading-none font-bold tracking-wider">...</span>
+                      </button>
+                      {actionsOpen === t.id && (
                         <>
-                          <button
-                            onClick={() => approve(t)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 flex items-center gap-1"
-                            title="Approuver"
-                          ><Check className="w-3.5 h-3.5" />Approuver</button>
-                          <button
-                            onClick={() => {
-                              const reason = prompt('Motif du rejet ? (optionnel)') || '';
-                              reject(t, reason);
-                            }}
-                            className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
-                            title="Rejeter"
-                          ><Ban className="w-3.5 h-3.5" /></button>
+                          <div className="fixed inset-0 z-40" onClick={() => setActionsOpen(null)} />
+                          <div className="absolute right-0 top-full mt-1 z-50 w-44 bg-white border border-[#E5E7EB] rounded-lg shadow-lg py-1">
+                            {!isPending && t.is_active && (
+                              <button
+                                onClick={() => { setActionsOpen(null); const reason = prompt('Raison de la suspension ?') || ''; suspend(t, reason); }}
+                                className="w-full text-left px-3 py-2 text-xs text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] flex items-center gap-2"
+                              ><Pause className="w-3.5 h-3.5" />Suspendre</button>
+                            )}
+                            {!isPending && !t.is_active && (
+                              <button
+                                onClick={() => { setActionsOpen(null); reactivate(t); }}
+                                className="w-full text-left px-3 py-2 text-xs text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] flex items-center gap-2"
+                              ><Power className="w-3.5 h-3.5" />Réactiver</button>
+                            )}
+                            <button
+                              onClick={() => { setActionsOpen(null); setDeleting(t); setDeleteConfirmName(''); setDeleteReason(''); }}
+                              className="w-full text-left px-3 py-2 text-xs text-[#DC2626] hover:bg-[#FEF2F2] flex items-center gap-2"
+                            ><Trash2 className="w-3.5 h-3.5" />Supprimer</button>
+                          </div>
                         </>
                       )}
-                      <button onClick={() => setDetail(t)} className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 flex items-center gap-1">
-                        Gérer <ArrowUpRight className="w-3 h-3" />
-                      </button>
-                      {!isPending && (t.is_active ? (
-                        <button
-                          onClick={() => {
-                            const reason = prompt('Raison de la suspension ?') || '';
-                            suspend(t, reason);
-                          }}
-                          className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
-                          title="Suspendre"
-                        ><Pause className="w-3.5 h-3.5" /></button>
-                      ) : (
-                        <button onClick={() => reactivate(t)} className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100" title="Réactiver">
-                          <Power className="w-3.5 h-3.5" />
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => { setDeleting(t); setDeleteConfirmName(''); setDeleteReason(''); }}
-                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
-                        title="Supprimer définitivement"
-                      ><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                 </div>
               </div>
             );
           })}
-          {filtered.length === 0 && <div className="text-center text-slate-400 py-10 text-sm">Aucun tenant ne correspond.</div>}
+          {filtered.length === 0 && (
+            <div className="text-center py-16">
+              <Building2 className="w-10 h-10 text-[#E2E8F0] mx-auto mb-3" />
+              <p className="text-sm font-medium text-[#64748B]">Aucun tenant trouvé</p>
+              <p className="text-xs text-[#94A3B8] mt-1">Essayez de modifier votre recherche ou vos filtres.</p>
+              {filter !== 'all' && (
+                <button onClick={() => { setFilter('all'); setQ(''); }} className="mt-3 text-xs font-medium text-[#0F172A] hover:underline">
+                  Réinitialiser les filtres
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -465,47 +619,47 @@ function TenantsSection() {
         {deleting && (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+              <div className="w-10 h-10 rounded-lg bg-[#FEF2F2] flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-[#DC2626]" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-red-900">Supprimer définitivement</h3>
-                <p className="text-sm text-red-700">Cette action est irreversible !</p>
+                <h3 className="text-base font-bold text-[#0F172A]">Supprimer définitivement</h3>
+                <p className="text-xs text-[#DC2626]">Cette action est irréversible</p>
               </div>
             </div>
 
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
-              <p className="text-sm text-red-800 font-semibold">Toutes les données suivantes seront supprimées :</p>
-              <ul className="text-xs text-red-700 space-y-1 ml-4 list-disc">
-                <li>Tous les articles, categories et compatibilites</li>
+            <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-lg p-4 space-y-2">
+              <p className="text-xs text-[#991B1B] font-semibold">Toutes les données suivantes seront supprimées :</p>
+              <ul className="text-[11px] text-[#991B1B] space-y-1 ml-4 list-disc">
+                <li>Tous les articles, catégories et compatibilités</li>
                 <li>Toutes les ventes, factures, devis et avoirs</li>
-                <li>Tous les clients, fournisseurs et commandes fournisseurs</li>
+                <li>Tous les clients, fournisseurs et commandes</li>
                 <li>Tout le stock, mouvements et sessions de caisse</li>
                 <li>La boutique en ligne et les commandes</li>
-                <li>La comptabilite et les ecritures</li>
+                <li>La comptabilité et les écritures</li>
                 <li>Les abonnements et sauvegardes</li>
                 <li>Tous les comptes utilisateurs du tenant</li>
               </ul>
             </div>
 
             <div>
-              <label className="label text-red-800">Motif de la suppression</label>
+              <label className="block text-xs font-medium text-[#0F172A] mb-1">Motif de la suppression</label>
               <input
                 value={deleteReason}
                 onChange={e => setDeleteReason(e.target.value)}
-                className="input border-red-200 focus:ring-red-500 focus:border-red-500"
+                className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
                 placeholder="Ex: Demande du client, compte test, doublon..."
               />
             </div>
 
             <div>
-              <label className="label text-red-800">
-                Tapez <span className="font-mono font-bold bg-red-100 px-1.5 py-0.5 rounded">{deleting.name}</span> pour confirmer
+              <label className="block text-xs font-medium text-[#0F172A] mb-1">
+                Tapez <span className="font-mono font-bold bg-[#FEF2F2] text-[#DC2626] px-1.5 py-0.5 rounded">{deleting.name}</span> pour confirmer
               </label>
               <input
                 value={deleteConfirmName}
                 onChange={e => setDeleteConfirmName(e.target.value)}
-                className="input border-red-200 focus:ring-red-500 focus:border-red-500 font-mono"
+                className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] font-mono placeholder:text-[#94A3B8] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
                 placeholder={deleting.name}
                 autoComplete="off"
                 spellCheck={false}
@@ -516,12 +670,12 @@ function TenantsSection() {
               <button
                 onClick={() => { setDeleting(null); setDeleteConfirmName(''); setDeleteReason(''); }}
                 disabled={deleteLoading}
-                className="btn-secondary"
+                className="h-9 px-4 rounded-lg border border-[#E5E7EB] text-sm font-medium text-[#64748B] hover:bg-[#F8FAFC] transition-colors"
               >Annuler</button>
               <button
                 onClick={deleteTenant}
                 disabled={deleteConfirmName !== deleting.name || deleteLoading}
-                className="px-4 py-2 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                className="h-9 px-4 rounded-lg bg-[#DC2626] text-white text-sm font-medium hover:bg-[#B91C1C] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
               >
                 {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 Supprimer définitivement
@@ -536,13 +690,13 @@ function TenantsSection() {
 
 function PlanBadge({ plan, code }: { plan: any; code: string }) {
   const colors: Record<string, string> = {
-    trial: 'bg-slate-100 text-slate-700 border-slate-200',
-    starter: 'bg-neutral-50 text-neutral-800 border-neutral-200',
-    pro: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    enterprise: 'bg-amber-50 text-amber-700 border-amber-200',
+    trial: 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]',
+    starter: 'bg-[#F8FAFC] text-[#0F172A] border-[#E2E8F0]',
+    pro: 'bg-[#F0FDF4] text-[#16A34A] border-[#BBF7D0]',
+    enterprise: 'bg-[#FFFBEB] text-[#D97706] border-[#FDE68A]',
   };
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border uppercase tracking-wider ${colors[code] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold border ${colors[code] || 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]'}`}>
       {plan?.name || code}
     </span>
   );
@@ -605,12 +759,13 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Activity type */}
       <div>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h4 className="text-sm font-bold text-slate-900">Type de commerce</h4>
-            <p className="text-xs text-slate-500">Aligné sur les catalogues maîtres: détermine le catalogue importable pour ce tenant.</p>
+            <h4 className="text-sm font-semibold text-[#0F172A]">Type de commerce</h4>
+            <p className="text-[11px] text-[#64748B] mt-0.5">Determine le catalogue maitre importable pour ce tenant.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -621,56 +776,46 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
             const I = ACTIVITY_ICONS[a.slug] || ACTIVITY_ICONS[a.legacy_business_type || ''] || Store_;
             return (
               <button key={a.id} onClick={() => selectActivity(a)}
-                className={`text-left p-3 rounded-2xl border-2 transition-all ${active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <I className={`w-4 h-4 ${active ? 'text-amber-400' : 'text-slate-500'}`} />
-                  <span className="font-bold text-sm">{a.name}</span>
+                className={`text-left p-3 rounded-lg border transition-all ${active ? 'border-[#0F172A] bg-[#0F172A] text-white' : 'border-[#E5E7EB] bg-white hover:border-[#CBD5E1]'}`}>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <I className={`w-3.5 h-3.5 ${active ? 'text-white/70' : 'text-[#64748B]'}`} />
+                  <span className="font-medium text-xs">{a.name}</span>
                 </div>
-                <div className={`text-[11px] leading-snug ${active ? 'text-slate-300' : 'text-slate-500'}`}>{a.description}</div>
+                {a.description && <div className={`text-[10px] leading-snug ${active ? 'text-white/60' : 'text-[#94A3B8]'}`}>{a.description}</div>}
               </button>
             );
           })}
         </div>
-        {form.business_activity_type_id || form.business_type === 'auto_parts' ? (
-          <div className="mt-2 flex items-start gap-2 text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-2.5">
-            <Info_ className="w-4 h-4 shrink-0 mt-px text-amber-600" />
-            <span>Le tenant pourra importer depuis le catalogue maître correspondant. Les articles ne sont copiés que sur action du tenant.</span>
-          </div>
-        ) : (
-          <div className="mt-2 flex items-start gap-2 text-[11px] bg-neutral-50 border border-neutral-200 text-neutral-800 rounded-xl p-2.5">
-            <Info_ className="w-4 h-4 shrink-0 mt-px text-neutral-700" />
-            <span>Sélectionnez un type d'activité pour activer l'accès au catalogue maître correspondant.</span>
-          </div>
-        )}
       </div>
 
+      {/* Modules */}
       <div>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h4 className="text-sm font-bold text-slate-900">Modules accessibles</h4>
-            <p className="text-xs text-slate-500">Cochez les pages que le tenant pourra voir dans la barre latérale.</p>
+            <h4 className="text-sm font-semibold text-[#0F172A]">Modules accessibles</h4>
+            <p className="text-[11px] text-[#64748B] mt-0.5">Pages visibles dans la barre laterale du tenant.</p>
           </div>
-          <div className="flex gap-1">
-            <button onClick={minimal} className="text-[11px] px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold">Minimal</button>
-            <button onClick={allOn} className="text-[11px] px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold">Tout activer</button>
+          <div className="flex gap-1.5">
+            <button onClick={minimal} className="text-[11px] px-2.5 py-1 rounded-md border border-[#E5E7EB] text-[#64748B] hover:bg-[#F8FAFC] font-medium">Minimal</button>
+            <button onClick={allOn} className="text-[11px] px-2.5 py-1 rounded-md bg-[#0F172A] text-white hover:bg-[#1E293B] font-medium">Tout activer</button>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
           {MODULE_DEFS.map(m => {
             const on = modules.includes(m.key);
             const I = m.icon;
             return (
               <button key={m.key} onClick={() => toggle(m.key)}
-                className={`flex items-center gap-3 p-3 rounded-2xl border-2 transition-all text-left ${on ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${on ? 'bg-gradient-to-br from-emerald-500 to-teal-700 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  <I className="w-5 h-5" />
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${on ? 'border-[#0F172A] bg-[#F8FAFC]' : 'border-[#E5E7EB] bg-white hover:border-[#CBD5E1]'}`}>
+                <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${on ? 'bg-[#0F172A] text-white' : 'bg-[#F1F5F9] text-[#64748B]'}`}>
+                  <I className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm text-slate-900 truncate">{m.name}</div>
-                  <div className="text-[11px] text-slate-500 truncate">{m.desc}</div>
+                  <div className="font-medium text-xs text-[#0F172A] truncate">{m.name}</div>
+                  <div className="text-[10px] text-[#94A3B8] truncate">{m.desc}</div>
                 </div>
-                <div className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-                  <span className={`absolute top-0.5 ${on ? 'right-0.5' : 'left-0.5'} w-4 h-4 bg-white rounded-full shadow transition-all`} />
+                <div className={`shrink-0 w-8 h-4.5 rounded-full relative transition-colors ${on ? 'bg-[#0F172A]' : 'bg-[#E2E8F0]'}`}>
+                  <span className={`absolute top-0.5 ${on ? 'right-0.5' : 'left-0.5'} w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-all`} />
                 </div>
               </button>
             );
@@ -678,36 +823,20 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
         </div>
       </div>
 
+      {/* Usage */}
       {usage && (
-        <div className="rounded-2xl border border-slate-200 p-3 bg-slate-50">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Usage vs limites du plan ({usage.plan_code || 'aucun'})</div>
-          <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-lg border border-[#E5E7EB] p-4 bg-[#F8FAFC]">
+          <div className="text-[11px] font-semibold text-[#64748B] mb-3">Usage vs limites du plan ({usage.plan_code || 'aucun'})</div>
+          <div className="grid grid-cols-3 gap-3">
             <UsageBar label="Magasins" current={usage.sites_count} limit={usage.plan_limits?.sites} />
             <UsageBar label="Utilisateurs" current={usage.users_count} limit={usage.plan_limits?.users} />
             <UsageBar label="Articles" current={usage.articles_count} limit={usage.plan_limits?.articles} />
           </div>
-          {usage.plan_limits && (
-            <div className="mt-2 pt-2 border-t border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 mb-1">Modules inclus</div>
-              <div className="flex flex-wrap gap-1">
-                {Object.entries(usage.plan_limits).filter(([, v]) => v === true).map(([k]) => (
-                  <span key={k} className="text-[9px] bg-emerald-100 text-emerald-700 font-semibold px-1.5 py-0.5 rounded">
-                    {k.replace(/^has_/, '').replace(/_/g, ' ')}
-                  </span>
-                ))}
-                {Object.entries(usage.plan_limits).filter(([, v]) => v === false).map(([k]) => (
-                  <span key={k} className="text-[9px] bg-slate-100 text-slate-400 font-semibold px-1.5 py-0.5 rounded line-through">
-                    {k.replace(/^has_/, '').replace(/_/g, ' ')}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      <div className="flex justify-end">
-        <button onClick={onSave} disabled={saving} className="btn-primary">
+      <div className="flex justify-end pt-2">
+        <button onClick={onSave} disabled={saving} className="h-9 px-4 rounded-lg bg-[#0F172A] text-white text-sm font-medium hover:bg-[#1E293B] flex items-center gap-2 transition-colors disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer
         </button>
       </div>
@@ -720,15 +849,15 @@ function UsageBar({ label, current, limit }: { label: string; current: number; l
   const pct = unlimited ? 20 : Math.min(100, (current / Math.max(1, limit!)) * 100);
   const reached = !unlimited && current >= limit!;
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-2.5">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
-        <span className={`text-xs font-bold ${reached ? 'text-red-600' : 'text-slate-800'}`}>
-          {current}{unlimited ? ' / ∞' : ` / ${limit}`}
+    <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-medium text-[#64748B]">{label}</span>
+        <span className={`text-[11px] font-semibold ${reached ? 'text-[#DC2626]' : 'text-[#0F172A]'}`}>
+          {current}{unlimited ? ' / --' : ` / ${limit}`}
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-        <div className={`h-full ${reached ? 'bg-red-500' : 'bg-emerald-500'} transition-all`} style={{ width: `${pct}%` }} />
+      <div className="h-1 rounded-full bg-[#F1F5F9] overflow-hidden">
+        <div className={`h-full rounded-full ${reached ? 'bg-[#DC2626]' : 'bg-[#0F172A]'} transition-all`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -736,7 +865,7 @@ function UsageBar({ label, current, limit }: { label: string; current: number; l
 
 function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { tenant: any; plans: any[]; onClose: () => void; onRefresh: () => void; onDelete?: (t: any) => void }) {
   const [detail, setDetail] = useState<any>(null);
-  const [tab, setTab] = useState<'info' | 'sub' | 'modules' | 'users' | 'history'>('info');
+  const [tab, setTab] = useState<'info' | 'sub' | 'modules' | 'users' | 'history' | 'danger'>('info');
   const [form, setForm] = useState<any>({
     ...tenant,
     plan_expires_at: tenant.plan_expires_at?.slice(0, 10) || '',
@@ -814,184 +943,225 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
     } catch (e: any) { error(e.message); }
   };
 
+  const tabs: { k: typeof tab; l: string }[] = [
+    { k: 'info', l: 'Résumé' },
+    { k: 'sub', l: 'Abonnement' },
+    { k: 'modules', l: 'Modules' },
+    { k: 'users', l: 'Utilisateurs' },
+    { k: 'history', l: 'Historique' },
+    { k: 'danger', l: 'Zone danger' },
+  ];
+
   return (
     <Modal open onClose={onClose} title="" size="lg" footer={null}>
-      <div className="-m-6">
+      <div className="-m-6 flex flex-col" style={{ height: 'min(85vh, 720px)' }}>
         {/* Header */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white p-5 rounded-t-2xl">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
-          <div className="relative flex items-center gap-3">
-            <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 backdrop-blur flex items-center justify-center font-extrabold text-xl">
+        <div className="shrink-0 px-5 pt-5 pb-0 bg-white border-b border-[#E5E7EB]">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-[#F1F5F9] text-[#0F172A] font-bold text-sm flex items-center justify-center shrink-0">
               {tenant.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-lg font-bold truncate">{tenant.name}</div>
-              <div className="text-xs text-slate-300 truncate">{tenant.email || '—'}</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-[#0F172A] truncate">{tenant.name}</span>
+                <PlanBadge plan={plans.find(p => p.code === tenant.plan)} code={tenant.plan} />
+                {tenant.is_active ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] font-medium">Actif</span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Suspendu</span>
+                )}
+              </div>
+              <div className="text-xs text-[#64748B] truncate mt-0.5">{tenant.email || '—'}</div>
             </div>
-            <button onClick={onClose} className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center">
+            <button onClick={onClose} className="w-8 h-8 rounded-md border border-[#E5E7EB] hover:bg-[#F8FAFC] flex items-center justify-center text-[#64748B] transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="mt-4 flex gap-1">
-            {(['info', 'sub', 'modules', 'users', 'history'] as const).map(k => (
-              <button key={k} onClick={() => setTab(k)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${tab === k ? 'bg-white text-slate-900' : 'text-slate-300 hover:bg-white/10'}`}>
-                {k === 'info' ? 'Infos' : k === 'sub' ? 'Abonnement' : k === 'modules' ? 'Modules & Commerce' : k === 'users' ? 'Utilisateurs' : 'Historique'}
+
+          {/* Tabs */}
+          <div className="flex gap-0.5 overflow-x-auto -mb-px">
+            {tabs.map(t => (
+              <button key={t.k} onClick={() => setTab(t.k)}
+                className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  tab === t.k
+                    ? 'border-[#0F172A] text-[#0F172A]'
+                    : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
+                } ${t.k === 'danger' ? 'ml-auto text-[#DC2626]' : ''}`}>
+                {t.l}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="p-5 bg-white max-h-[60vh] overflow-y-auto">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-5 bg-[#F8FAFC]">
           {!detail ? (
-            <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+            <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#64748B]" /></div>
           ) : (
             <>
               {tab === 'info' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="sm:col-span-2"><label className="label">Nom</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
-                  <div><label className="label">Raison sociale</label><input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="input" /></div>
-                  <div><label className="label">Email</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="input" /></div>
-                  <div><label className="label">Téléphone</label><input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
-                  <div><label className="label">Statut</label>
-                    <select value={form.status || 'active'} onChange={e => setForm({ ...form, status: e.target.value })} className="input">
-                      <option value="active">Actif</option><option value="suspended">Suspendu</option><option value="cancelled">Annulé</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Sous-domaine</label>
-                    <div className="flex items-center gap-1.5">
-                      <input value={form.subdomain || ''} onChange={e => setForm({ ...form, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} placeholder="sad" className="input flex-1" />
-                      <span className="text-xs text-slate-500 whitespace-nowrap">.votreapp.com</span>
+                <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Nom</label>
+                      <input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">Accès instantané sans DNS client</p>
-                  </div>
-                  <div>
-                    <label className="label">Domaine personnalisé</label>
-                    <input value={form.custom_domain || ''} onChange={e => setForm({ ...form, custom_domain: e.target.value.toLowerCase().trim() })} placeholder="caisse.sadpiecesauto.sn" className="input" />
-                    <p className="text-[10px] text-slate-400 mt-1">CNAME à configurer vers votreapp.com</p>
-                  </div>
-                  <label className="sm:col-span-2 flex items-center gap-2 text-sm cursor-pointer mt-1">
-                    <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded" />
-                    Tenant actif (accès à l'application)
-                  </label>
-
-                  <div className="sm:col-span-2 flex justify-end mt-2">
-                    <button onClick={saveInfo} disabled={saving} className="btn-primary">
-                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer
-                    </button>
-                  </div>
-
-                  {/* Danger zone */}
-                  {onDelete && (
-                    <div className="sm:col-span-2 mt-6 border-t border-red-200 pt-4">
-                      <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-2xl p-4">
-                        <div className="flex items-center gap-3">
-                          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-                          <div>
-                            <div className="text-sm font-bold text-red-900">Zone de danger</div>
-                            <div className="text-xs text-red-700">Supprimer définitivement ce tenant et toutes ses données.</div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => { onClose(); setTimeout(() => onDelete(tenant), 150); }}
-                          className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700 flex items-center gap-1.5 shrink-0 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />Supprimer
-                        </button>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Raison sociale</label>
+                      <input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Email</label>
+                      <input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Téléphone</label>
+                      <input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Statut</label>
+                      <select value={form.status || 'active'} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]">
+                        <option value="active">Actif</option><option value="suspended">Suspendu</option><option value="cancelled">Annulé</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Sous-domaine</label>
+                      <div className="flex items-center gap-1.5">
+                        <input value={form.subdomain || ''} onChange={e => setForm({ ...form, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} placeholder="nom" className="flex-1 h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                        <span className="text-[11px] text-[#94A3B8]">.votreapp.com</span>
                       </div>
                     </div>
-                  )}
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Domaine personnalisé</label>
+                      <input value={form.custom_domain || ''} onChange={e => setForm({ ...form, custom_domain: e.target.value.toLowerCase().trim() })} placeholder="caisse.domain.sn" className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="flex items-center gap-2 text-xs text-[#0F172A] cursor-pointer">
+                        <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-[#E5E7EB]" />
+                        Tenant actif (accès à l'application)
+                      </label>
+                    </div>
+                    <div className="sm:col-span-2 flex justify-end pt-2">
+                      <button onClick={saveInfo} disabled={saving} className="h-9 px-4 rounded-lg bg-[#0F172A] text-white text-sm font-medium hover:bg-[#1E293B] flex items-center gap-2 transition-colors disabled:opacity-50">
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {tab === 'sub' && (
                 <div className="space-y-4">
-                  {/* Current subscription summary */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">État actuel</div>
+                  {/* Current state */}
+                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                    <div className="text-[11px] font-medium text-[#64748B] mb-2">État actuel</div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-slate-900">Plan {tenant.plan || '—'}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        tenant.subscription_status === 'active' ? 'bg-emerald-100 text-emerald-700'
-                          : tenant.subscription_status === 'trial_active' ? 'bg-blue-100 text-blue-700'
-                          : tenant.subscription_status === 'expired' ? 'bg-red-100 text-red-700'
-                          : 'bg-amber-100 text-amber-700'
+                      <span className="text-sm font-semibold text-[#0F172A]">Plan {tenant.plan || '—'}</span>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${
+                        tenant.subscription_status === 'active' ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0]'
+                          : tenant.subscription_status === 'trial_active' ? 'bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]'
+                          : tenant.subscription_status === 'expired' ? 'bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA]'
+                          : 'bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]'
                       }`}>{tenant.subscription_status || 'N/A'}</span>
-                      <span className="text-xs text-slate-500">{tenant.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'}</span>
-                      {tenant.plan_expires_at && <span className="text-xs text-slate-500">· Expire : {formatDate(tenant.plan_expires_at)}</span>}
-                      {tenant.auto_renew && <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">Auto-renew</span>}
+                      <span className="text-xs text-[#64748B]">{tenant.billing_cycle === 'yearly' ? 'Annuel' : tenant.billing_cycle === 'lifetime' ? 'A vie' : 'Mensuel'}</span>
+                      {tenant.plan_expires_at && <span className="text-xs text-[#64748B]">Expire : {formatDate(tenant.plan_expires_at)}</span>}
+                      {tenant.auto_renew && <span className="text-[10px] bg-[#F1F5F9] text-[#64748B] px-1.5 py-0.5 rounded border border-[#E5E7EB]">Auto-renew</span>}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {plans.map(p => {
-                      const active = subForm.plan_code === p.code;
-                      return (
-                        <button key={p.code} onClick={() => setSubForm({ ...subForm, plan_code: p.code, amount: subForm.billing_cycle === 'lifetime' ? (p.price_lifetime || 0) : subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly })}
-                          className={`text-left p-3 rounded-2xl border-2 transition-all ${active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                          <div className="text-[10px] uppercase tracking-wider font-bold opacity-70">{p.code}</div>
-                          <div className="font-bold">{p.name}</div>
-                          <div className="text-xs mt-1">{subForm.billing_cycle === 'lifetime' ? `${formatCompactFCFA(p.price_lifetime || 0)} (à vie)` : `${formatCompactFCFA(subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly)}/${subForm.billing_cycle === 'yearly' ? 'an' : 'mois'}`}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div><label className="label">Cycle</label>
-                      <select value={subForm.billing_cycle} onChange={e => {
-                        const plan = plans.find(p => p.code === subForm.plan_code);
-                        const cycle = e.target.value;
-                        const amount = plan ? (cycle === 'lifetime' ? (plan.price_lifetime || 0) : cycle === 'yearly' ? plan.price_yearly : plan.price_monthly) : subForm.amount;
-                        setSubForm({ ...subForm, billing_cycle: cycle, amount, ends_at: cycle === 'lifetime' ? '' : subForm.ends_at });
-                      }} className="input">
-                        <option value="monthly">Mensuel</option><option value="yearly">Annuel</option><option value="lifetime">À vie</option>
-                      </select>
+                  {/* Plan picker */}
+                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                    <div className="text-[11px] font-medium text-[#64748B] mb-3">Sélectionner un plan</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {plans.map(p => {
+                        const active = subForm.plan_code === p.code;
+                        return (
+                          <button key={p.code} onClick={() => setSubForm({ ...subForm, plan_code: p.code, amount: subForm.billing_cycle === 'lifetime' ? (p.price_lifetime || 0) : subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly })}
+                            className={`text-left p-3 rounded-lg border transition-all ${active ? 'border-[#0F172A] bg-[#0F172A] text-white' : 'border-[#E5E7EB] bg-white hover:border-[#CBD5E1]'}`}>
+                            <div className={`text-[10px] font-medium ${active ? 'text-white/60' : 'text-[#94A3B8]'}`}>{p.code}</div>
+                            <div className="font-semibold text-sm mt-0.5">{p.name}</div>
+                            <div className={`text-[11px] mt-1 ${active ? 'text-white/70' : 'text-[#64748B]'}`}>
+                              {subForm.billing_cycle === 'lifetime' ? `${formatCompactFCFA(p.price_lifetime || 0)} (a vie)` : `${formatCompactFCFA(subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly)}/${subForm.billing_cycle === 'yearly' ? 'an' : 'mois'}`}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div><label className="label">Montant (FCFA)</label><input type="number" value={subForm.amount || 0} onChange={e => setSubForm({ ...subForm, amount: Number(e.target.value) })} className="input" /></div>
-                    <div><label className="label">Début</label><input type="date" value={subForm.started_at} onChange={e => setSubForm({ ...subForm, started_at: e.target.value })} className="input" /></div>
-                    <div><label className="label">Fin</label><input type="date" value={subForm.ends_at} onChange={e => setSubForm({ ...subForm, ends_at: e.target.value })} className="input" /></div>
-                    <label className="sm:col-span-2 flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="checkbox" checked={subForm.auto_renew} onChange={e => setSubForm({ ...subForm, auto_renew: e.target.checked })} className="rounded" />
-                      Renouvellement automatique
-                    </label>
-                    <div className="sm:col-span-2"><label className="label">Notes</label><input value={subForm.notes || ''} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} className="input" placeholder="Réf. facture, conditions particulières…" /></div>
-                  </div>
-                  <button onClick={applyPlan} className="btn-primary w-full"><Zap className="w-4 h-4" />Appliquer ce plan</button>
 
-                  <div className="border-t border-slate-200 pt-3">
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Limites personnalisées (override)</div>
-                    <p className="text-[10px] text-slate-400 mb-2">Laisser vide pour utiliser les limites du plan. Renseigner pour surcharger uniquement pour ce tenant.</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {([['articles', 'Articles'], ['sites', 'Magasins'], ['users', 'Utilisateurs']] as [string, string][]).map(([key, label]) => (
-                        <div key={key}>
-                          <label className="text-[9px] font-medium text-slate-500">{label}</label>
-                          <input type="number" placeholder="plan" value={subForm.custom_limits?.[key] ?? ''} onChange={e => setSubForm({ ...subForm, custom_limits: { ...(subForm.custom_limits || {}), [key]: e.target.value === '' ? undefined : Number(e.target.value) } })} className="input text-xs" />
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Cycle</label>
+                        <select value={subForm.billing_cycle} onChange={e => {
+                          const plan = plans.find(p => p.code === subForm.plan_code);
+                          const cycle = e.target.value;
+                          const amount = plan ? (cycle === 'lifetime' ? (plan.price_lifetime || 0) : cycle === 'yearly' ? plan.price_yearly : plan.price_monthly) : subForm.amount;
+                          setSubForm({ ...subForm, billing_cycle: cycle, amount, ends_at: cycle === 'lifetime' ? '' : subForm.ends_at });
+                        }} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]">
+                          <option value="monthly">Mensuel</option><option value="yearly">Annuel</option><option value="lifetime">A vie</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Montant (FCFA)</label>
+                        <input type="number" value={subForm.amount || 0} onChange={e => setSubForm({ ...subForm, amount: Number(e.target.value) })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Début</label>
+                        <input type="date" value={subForm.started_at} onChange={e => setSubForm({ ...subForm, started_at: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Fin</label>
+                        <input type="date" value={subForm.ends_at} onChange={e => setSubForm({ ...subForm, ends_at: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      </div>
+                      <label className="sm:col-span-2 flex items-center gap-2 text-xs text-[#0F172A] cursor-pointer">
+                        <input type="checkbox" checked={subForm.auto_renew} onChange={e => setSubForm({ ...subForm, auto_renew: e.target.checked })} className="rounded border-[#E5E7EB]" />
+                        Renouvellement automatique
+                      </label>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Notes</label>
+                        <input value={subForm.notes || ''} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" placeholder="Réf. facture, conditions..." />
+                      </div>
                     </div>
+
+                    {/* Custom limits */}
+                    <div className="mt-4 pt-4 border-t border-[#F1F5F9]">
+                      <div className="text-[11px] font-medium text-[#64748B] mb-1">Limites personnalisées (override)</div>
+                      <p className="text-[10px] text-[#94A3B8] mb-2">Laisser vide pour utiliser les limites du plan.</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([['articles', 'Articles'], ['sites', 'Magasins'], ['users', 'Utilisateurs']] as [string, string][]).map(([key, label]) => (
+                          <div key={key}>
+                            <label className="text-[10px] font-medium text-[#94A3B8]">{label}</label>
+                            <input type="number" placeholder="plan" value={subForm.custom_limits?.[key] ?? ''} onChange={e => setSubForm({ ...subForm, custom_limits: { ...(subForm.custom_limits || {}), [key]: e.target.value === '' ? undefined : Number(e.target.value) } })} className="w-full h-8 px-2 bg-white border border-[#E5E7EB] rounded-md text-xs text-[#0F172A] focus:outline-none focus:border-[#0F172A]" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button onClick={applyPlan} className="mt-4 w-full h-9 rounded-lg bg-[#0F172A] text-white text-sm font-medium hover:bg-[#1E293B] flex items-center justify-center gap-2 transition-colors">
+                      <Zap className="w-4 h-4" />Appliquer ce plan
+                    </button>
                   </div>
 
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Historique d'abonnements</div>
+                  {/* Subscription history */}
+                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                    <div className="text-[11px] font-medium text-[#64748B] mb-3">Historique d'abonnements</div>
                     <div className="space-y-1.5">
                       {(detail.subscriptions || []).map((s: any) => (
-                        <div key={s.id} className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${s.status === 'active' ? 'bg-emerald-500' : s.status === 'cancelled' ? 'bg-red-400' : 'bg-slate-400'}`} />
-                          <span className="font-bold uppercase tracking-wider">{s.plan_code}</span>
-                          <span className="text-slate-500">·</span>
-                          <span>{formatFCFA(s.amount)} {s.billing_cycle === 'lifetime' ? '(à vie)' : `/ ${s.billing_cycle === 'yearly' ? 'an' : 'mois'}`}</span>
-                          <span className="text-slate-500">·</span>
-                          <span>{formatDate(s.started_at)}{s.ends_at ? ` → ${formatDate(s.ends_at)}` : ''}</span>
-                          <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${s.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{s.status}</span>
+                        <div key={s.id} className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-3 py-2 text-xs">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.status === 'active' ? 'bg-[#16A34A]' : s.status === 'cancelled' ? 'bg-[#DC2626]' : 'bg-[#94A3B8]'}`} />
+                          <span className="font-semibold text-[#0F172A] uppercase">{s.plan_code}</span>
+                          <span className="text-[#94A3B8]">·</span>
+                          <span className="text-[#64748B]">{formatFCFA(s.amount)} {s.billing_cycle === 'lifetime' ? '(a vie)' : `/ ${s.billing_cycle === 'yearly' ? 'an' : 'mois'}`}</span>
+                          <span className="text-[#94A3B8]">·</span>
+                          <span className="text-[#64748B]">{formatDate(s.started_at)}{s.ends_at ? ` → ${formatDate(s.ends_at)}` : ''}</span>
+                          <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-medium ${s.status === 'active' ? 'bg-[#F0FDF4] text-[#16A34A]' : 'bg-[#F8FAFC] text-[#64748B]'}`}>{s.status}</span>
                           {s.status === 'active' && (
-                            <button onClick={() => cancelSub(s.id)} className="text-red-500 hover:bg-red-50 p-1 rounded" title="Annuler">
+                            <button onClick={() => cancelSub(s.id)} className="text-[#DC2626] hover:bg-[#FEF2F2] p-1 rounded" title="Annuler">
                               <X className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
                       ))}
-                      {(detail.subscriptions || []).length === 0 && <div className="text-sm text-slate-400 py-2">Aucun abonnement.</div>}
+                      {(detail.subscriptions || []).length === 0 && <div className="text-xs text-[#94A3B8] py-4 text-center">Aucun abonnement.</div>}
                     </div>
                   </div>
                 </div>
@@ -1002,27 +1172,91 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
               )}
 
               {tab === 'users' && (
-                <div className="space-y-2">
-                  {(detail.users || []).map((u: any) => (
-                    <div key={u.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 text-white font-bold flex items-center justify-center shrink-0">
+                <div className="bg-white border border-[#E5E7EB] rounded-xl divide-y divide-[#F1F5F9]">
+                  {(detail.users || []).length === 0 ? (
+                    <div className="py-10 text-center">
+                      <Users className="w-8 h-8 text-[#E2E8F0] mx-auto mb-2" />
+                      <p className="text-xs text-[#94A3B8]">Aucun utilisateur.</p>
+                    </div>
+                  ) : (detail.users || []).map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="w-8 h-8 rounded-md bg-[#F1F5F9] text-[#0F172A] font-semibold text-xs flex items-center justify-center shrink-0">
                         {(u.full_name || u.email).charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold truncate">{u.full_name || u.email}</div>
-                        <div className="text-xs text-slate-500 truncate">{u.email}</div>
+                        <div className="text-sm font-medium text-[#0F172A] truncate">{u.full_name || u.email}</div>
+                        <div className="text-[11px] text-[#64748B] truncate">{u.email}</div>
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{u.role}</span>
-                      {!u.is_active && <span className="text-[10px] bg-red-50 text-red-700 px-1.5 py-0.5 rounded">Inactif</span>}
+                      <span className="text-[10px] font-medium text-[#64748B] bg-[#F8FAFC] border border-[#E5E7EB] px-2 py-0.5 rounded">{u.role}</span>
+                      {!u.is_active && <span className="text-[10px] bg-[#FEF2F2] text-[#DC2626] px-1.5 py-0.5 rounded font-medium">Inactif</span>}
                     </div>
                   ))}
                 </div>
               )}
 
               {tab === 'history' && (
-                <div className="space-y-1">
-                  {(detail.events || []).map((ev: any) => <EventRow key={ev.id} ev={ev} />)}
-                  {(detail.events || []).length === 0 && <div className="text-sm text-slate-400 py-2">Aucune action enregistrée.</div>}
+                <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                  {(detail.events || []).length === 0 ? (
+                    <div className="py-10 text-center">
+                      <Activity className="w-8 h-8 text-[#E2E8F0] mx-auto mb-2" />
+                      <p className="text-xs text-[#94A3B8]">Aucun historique disponible pour ce tenant.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {(detail.events || []).map((ev: any) => <EventRow key={ev.id} ev={ev} />)}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab === 'danger' && (
+                <div className="space-y-4">
+                  <div className="bg-white border border-[#FECACA] rounded-xl p-5">
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className="w-9 h-9 rounded-lg bg-[#FEF2F2] flex items-center justify-center shrink-0">
+                        <AlertTriangle className="w-4.5 h-4.5 text-[#DC2626]" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-[#0F172A]">Zone de danger</h4>
+                        <p className="text-[11px] text-[#64748B] mt-0.5">Ces actions peuvent affecter l'acces du tenant ou supprimer definitivement ses donnees.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {/* Suspend / Reactivate */}
+                      <div className="flex items-center justify-between py-3 border-t border-[#F1F5F9]">
+                        <div>
+                          <div className="text-xs font-medium text-[#0F172A]">{tenant.is_active ? 'Suspendre le tenant' : 'Réactiver le tenant'}</div>
+                          <div className="text-[11px] text-[#64748B]">{tenant.is_active ? 'Bloque l\'acces a l\'application pour tous les utilisateurs.' : 'Restaure l\'acces a l\'application.'}</div>
+                        </div>
+                        {tenant.is_active ? (
+                          <button
+                            onClick={() => { const reason = prompt('Raison de la suspension ?') || ''; if (reason || confirm('Suspendre sans motif ?')) { call('suspend_tenant', { tenant_id: tenant.id, reason }).then(() => { onRefresh(); onClose(); }); } }}
+                            className="h-8 px-3 rounded-md border border-[#FDE68A] bg-[#FFFBEB] text-[#D97706] text-xs font-medium hover:bg-[#FEF3C7] transition-colors flex items-center gap-1.5"
+                          ><Pause className="w-3.5 h-3.5" />Suspendre</button>
+                        ) : (
+                          <button
+                            onClick={() => { call('reactivate_tenant', { tenant_id: tenant.id }).then(() => { onRefresh(); onClose(); }); }}
+                            className="h-8 px-3 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] text-[#16A34A] text-xs font-medium hover:bg-[#DCFCE7] transition-colors flex items-center gap-1.5"
+                          ><Power className="w-3.5 h-3.5" />Réactiver</button>
+                        )}
+                      </div>
+
+                      {/* Delete */}
+                      {onDelete && (
+                        <div className="flex items-center justify-between py-3 border-t border-[#FECACA]">
+                          <div>
+                            <div className="text-xs font-medium text-[#DC2626]">Supprimer definitivement</div>
+                            <div className="text-[11px] text-[#64748B]">Supprime toutes les donnees du tenant de maniere irreversible.</div>
+                          </div>
+                          <button
+                            onClick={() => { onClose(); setTimeout(() => onDelete(tenant), 150); }}
+                            className="h-8 px-3 rounded-md bg-[#DC2626] text-white text-xs font-medium hover:bg-[#B91C1C] transition-colors flex items-center gap-1.5"
+                          ><Trash2 className="w-3.5 h-3.5" />Supprimer</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </>
@@ -1036,16 +1270,21 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
 /* ============== PLANS ============== */
 function PlansSection() {
   const [plans, setPlans] = useState<any[]>([]);
+  const [tenants, setTenants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>({});
   const [toDelete, setToDelete] = useState<any>(null);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const { success, error } = useToast();
 
   const load = async () => {
     setLoading(true);
-    try { setPlans((await call('list_plans')).plans || []); }
-    catch (e: any) { error(e.message); }
+    try {
+      const [p, t] = await Promise.all([call('list_plans'), call('list_tenants')]);
+      setPlans(p.plans || []);
+      setTenants(t.tenants || []);
+    } catch (e: any) { error(e.message); }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -1079,101 +1318,265 @@ function PlansSection() {
     } catch (e: any) { error(e.message); }
   };
 
+  const planUsage = useMemo(() => {
+    const usage: Record<string, number> = {};
+    for (const t of tenants) { usage[t.plan] = (usage[t.plan] || 0) + 1; }
+    return usage;
+  }, [tenants]);
+
+  const mostUsedPlan = useMemo(() => {
+    let max = 0; let code = '-';
+    for (const [k, v] of Object.entries(planUsage)) { if (v > max) { max = v; code = k; } }
+    return code;
+  }, [planUsage]);
+
+  const publicPlans = plans.filter(p => p.is_public !== false).length;
+
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#0F172A]" /></div>;
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{plans.length} plan{plans.length > 1 ? 's' : ''} configuré(s)</p>
-        <button onClick={() => { setForm({ features: '', is_public: true, sort_order: plans.length, limits: { articles: -1, sites: 1, users: 2, max_clients: -1, max_suppliers: -1, max_invoices_month: -1, monthly_sales: -1, online_shop: false, accounting: false, supplier_orders: false, has_whatsapp: false, has_multi_store: false, has_advanced_reports: false, has_accounting_export: false } }); setOpen(true); }} className="btn-primary">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-[#0F172A]">Plans & tarifs</h2>
+          <p className="text-sm text-[#64748B] mt-0.5">Configurez les offres commerciales de Waarwi</p>
+        </div>
+        <button
+          onClick={() => { setForm({ features: '', is_public: true, sort_order: plans.length, limits: { articles: -1, sites: 1, users: 2, max_clients: -1, max_suppliers: -1, max_invoices_month: -1, monthly_sales: -1, online_shop: false, accounting: false, supplier_orders: false, has_whatsapp: false, has_multi_store: false, has_advanced_reports: false, has_accounting_export: false } }); setOpen(true); }}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-[#111111] hover:bg-[#333333] text-white text-sm font-medium transition-colors"
+        >
           <Plus className="w-4 h-4" />Nouveau plan
         </button>
       </div>
 
-      {loading ? (
-        <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          {plans.map(p => (
-            <div key={p.code} className="relative overflow-hidden bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
-              {p.code === 'pro' && <div className="absolute top-3 right-3 text-[9px] font-bold bg-gradient-to-r from-amber-400 to-amber-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">Populaire</div>}
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{p.code}</div>
-              <div className="text-xl font-bold text-slate-900">{p.name}</div>
-              <p className="text-xs text-slate-500 mt-1 h-8 line-clamp-2">{p.description}</p>
-              <div className="my-3 pb-3 border-b border-slate-100">
-                <div className="text-2xl font-extrabold text-slate-900">{formatCompactFCFA(p.price_monthly)}<span className="text-xs text-slate-400 font-semibold"> /mois</span></div>
-                <div className="text-[11px] text-slate-500">{formatCompactFCFA(p.price_yearly)} /an</div>
-              </div>
-              <div className="space-y-1 mb-3">
-                {p.limits && (
-                  <div className="flex flex-wrap gap-1 mb-1.5">
-                    <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded">{p.limits.articles === -1 ? '∞' : p.limits.articles} art.</span>
-                    <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded">{p.limits.sites === -1 ? '∞' : p.limits.sites} sites</span>
-                    <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded">{p.limits.users === -1 ? '∞' : p.limits.users} users</span>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
+              <Layers className="w-4 h-4 text-[#0F172A]" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-[#0F172A]">{publicPlans}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">Plans actifs</div>
+        </div>
+        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-[#0F172A] truncate">{mostUsedPlan}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">Plan le plus utilisé</div>
+        </div>
+        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
+              <Building2 className="w-4 h-4 text-[#64748B]" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-[#0F172A]">{tenants.length}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">Tenants abonnés</div>
+        </div>
+        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-blue-500" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-[#0F172A]">{tenants.filter(t => t.plan === 'trial' || t.plan === 'free').length}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">Tenants en essai</div>
+        </div>
+      </div>
+
+      {/* Plan Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {plans.map(p => {
+          const usage = planUsage[p.code] || 0;
+          const isPopular = p.code === mostUsedPlan && usage > 0;
+          const isInactive = p.is_public === false;
+          return (
+            <div key={p.code} className={`relative bg-white rounded-lg border border-[#E5E7EB] p-5 transition-all hover:shadow-sm ${isInactive ? 'opacity-60' : ''}`}>
+              {/* Header row */}
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-[#0F172A]">{p.name}</h3>
+                    {isPopular && <span className="text-[10px] font-medium bg-[#0F172A] text-white px-2 py-0.5 rounded">Populaire</span>}
+                    {isInactive && <span className="text-[10px] font-medium bg-slate-100 text-[#64748B] border border-[#E5E7EB] px-2 py-0.5 rounded">Inactif</span>}
                   </div>
+                  <div className="text-[11px] font-mono text-[#94A3B8] mt-0.5">{p.code}</div>
+                </div>
+                <div className="relative">
+                  <button
+                    onClick={() => setMenuOpen(menuOpen === p.code ? null : p.code)}
+                    className="p-1.5 rounded-md hover:bg-[#F7F8FA] text-[#64748B] transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="4" r="2"/><circle cx="10" cy="10" r="2"/><circle cx="10" cy="16" r="2"/></svg>
+                  </button>
+                  {menuOpen === p.code && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(null)} />
+                      <div className="absolute right-0 top-8 z-20 bg-white border border-[#E5E7EB] rounded-lg shadow-lg py-1 w-40">
+                        <button
+                          onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); setMenuOpen(null); }}
+                          className="w-full text-left px-3 py-2 text-sm text-[#0F172A] hover:bg-[#F7F8FA] flex items-center gap-2"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />Modifier
+                        </button>
+                        <button
+                          onClick={() => { setToDelete(p); setMenuOpen(null); }}
+                          className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />Supprimer
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Description */}
+              {p.description && <p className="text-xs text-[#64748B] mb-4 line-clamp-2">{p.description}</p>}
+
+              {/* Pricing */}
+              <div className="mb-4 pb-4 border-b border-[#E5E7EB]">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold text-[#0F172A]">{formatCompactFCFA(p.price_monthly)}</span>
+                  <span className="text-sm text-[#64748B]">/ mois</span>
+                </div>
+                {p.price_yearly > 0 && (
+                  <div className="text-xs text-[#94A3B8] mt-0.5">{formatCompactFCFA(p.price_yearly)} / an</div>
                 )}
-                {(Array.isArray(p.features) ? p.features : []).slice(0, 4).map((f: string, i: number) => (
-                  <div key={i} className="flex items-start gap-1.5 text-xs text-slate-600">
-                    <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
-                    <span className="truncate">{f}</span>
-                  </div>
-                ))}
               </div>
-              <div className="flex gap-1">
-                <button onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); }} className="flex-1 btn-secondary text-xs"><Edit2 className="w-3 h-3" />Modifier</button>
-                <button onClick={() => setToDelete(p)} className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100"><Trash2 className="w-3.5 h-3.5" /></button>
+
+              {/* Limits */}
+              {p.limits && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[#0F172A] border border-[#E5E7EB] px-2 py-1 rounded">
+                    {p.limits.users === -1 ? 'Illimité' : p.limits.users} utilisateur{(p.limits.users !== 1) ? 's' : ''}
+                  </span>
+                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[#0F172A] border border-[#E5E7EB] px-2 py-1 rounded">
+                    {p.limits.sites === -1 ? 'Illimité' : p.limits.sites} site{(p.limits.sites !== 1) ? 's' : ''}
+                  </span>
+                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[#0F172A] border border-[#E5E7EB] px-2 py-1 rounded">
+                    {p.limits.articles === -1 ? 'Illimité' : p.limits.articles} article{(p.limits.articles !== 1) ? 's' : ''}
+                  </span>
+                </div>
+              )}
+
+              {/* Features */}
+              {Array.isArray(p.features) && p.features.length > 0 && (
+                <div className="space-y-1.5 mb-4">
+                  {p.features.slice(0, 5).map((f: string, i: number) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-[#64748B]">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                  {p.features.length > 5 && (
+                    <div className="text-[11px] text-[#94A3B8] pl-5">+{p.features.length - 5} fonctionnalité{p.features.length - 5 > 1 ? 's' : ''}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="flex items-center justify-between pt-3 border-t border-[#E5E7EB]">
+                <span className="text-[11px] text-[#94A3B8]">{usage} tenant{usage !== 1 ? 's' : ''}</span>
+                <button
+                  onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); }}
+                  className="px-3.5 py-1.5 rounded-md bg-[#111111] hover:bg-[#333333] text-white text-xs font-medium transition-colors"
+                >
+                  Modifier
+                </button>
               </div>
             </div>
-          ))}
+          );
+        })}
+      </div>
+
+      {plans.length === 0 && (
+        <div className="bg-white rounded-lg border border-[#E5E7EB] py-12 text-center">
+          <Layers className="w-8 h-8 text-[#94A3B8] mx-auto mb-2" />
+          <div className="text-sm text-[#64748B]">Aucun plan configuré</div>
+          <p className="text-xs text-[#94A3B8] mt-1">Créez votre premier plan pour démarrer.</p>
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={form.code ? 'Modifier plan' : 'Nouveau plan'} size="lg"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} className="btn-primary">Enregistrer</button></>}>
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="label">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="starter" /></div>
-            <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
-            <div className="sm:col-span-2"><label className="label">Description</label><input value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="input" /></div>
-            <div><label className="label">Prix mensuel</label><input type="number" value={form.price_monthly || 0} onChange={e => setForm({ ...form, price_monthly: e.target.value })} className="input" /></div>
-            <div><label className="label">Prix annuel</label><input type="number" value={form.price_yearly || 0} onChange={e => setForm({ ...form, price_yearly: e.target.value })} className="input" /></div>
+      {/* Modal */}
+      <Modal open={open} onClose={() => setOpen(false)} title={form.code && plans.some(p => p.code === form.code) ? 'Modifier le plan' : 'Nouveau plan'} size="lg"
+        footer={<>
+          <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-md border border-[#E5E7EB] text-sm font-medium text-[#0F172A] hover:bg-[#F7F8FA] transition-colors">Annuler</button>
+          <button onClick={save} className="px-4 py-2 rounded-md bg-[#111111] hover:bg-[#333333] text-white text-sm font-medium transition-colors">Enregistrer</button>
+        </>}>
+        <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+          {/* General info */}
+          <div>
+            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-3">Informations générales</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] font-mono focus:outline-none focus:ring-1 focus:ring-[#0F172A]" placeholder="starter" /></div>
+              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
+              <div className="sm:col-span-2"><label className="text-[11px] font-medium text-[#64748B] block mb-1">Description</label><input value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
+            </div>
           </div>
 
-          <div className="border-t border-slate-200 pt-3">
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Limites techniques <span className="text-slate-400 font-normal normal-case">(-1 = illimité)</span></p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {/* Pricing */}
+          <div className="border-t border-[#E5E7EB] pt-4">
+            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-3">Tarifs</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Prix mensuel (FCFA)</label><input type="number" value={form.price_monthly || 0} onChange={e => setForm({ ...form, price_monthly: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
+              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Prix annuel (FCFA)</label><input type="number" value={form.price_yearly || 0} onChange={e => setForm({ ...form, price_yearly: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
+            </div>
+          </div>
+
+          {/* Limits */}
+          <div className="border-t border-[#E5E7EB] pt-4">
+            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">Limites</p>
+            <p className="text-[11px] text-[#94A3B8] mb-3">-1 = illimité</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {([['articles', 'Articles max'], ['sites', 'Magasins max'], ['users', 'Utilisateurs max'], ['max_clients', 'Clients max'], ['max_suppliers', 'Fournisseurs max'], ['max_invoices_month', 'Factures/mois max'], ['monthly_sales', 'Ventes/mois max']] as [string, string][]).map(([key, label]) => (
                 <div key={key}>
-                  <label className="text-[10px] font-medium text-slate-500">{label}</label>
-                  <input type="number" value={form.limits?.[key] ?? ''} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.value === '' ? -1 : Number(e.target.value) } })} className="input text-sm" placeholder="-1" />
+                  <label className="text-[11px] font-medium text-[#64748B] block mb-1">{label}</label>
+                  <input type="number" value={form.limits?.[key] ?? ''} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.value === '' ? -1 : Number(e.target.value) } })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" placeholder="-1" />
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="border-t border-slate-200 pt-3">
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Modules inclus dans le plan</p>
-            <p className="text-[10px] text-slate-400 mb-2">Les modules liés au type d'activité (IPM, Garanties, Lots/Péremptions) sont gérés au niveau du tenant, pas du plan.</p>
-            <div className="grid grid-cols-2 gap-1.5">
+          {/* Modules */}
+          <div className="border-t border-[#E5E7EB] pt-4">
+            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">Modules inclus</p>
+            <p className="text-[11px] text-[#94A3B8] mb-3">Les modules liés au type d'activité sont gérés au niveau du tenant.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {([['online_shop', 'Boutique en ligne'], ['accounting', 'Comptabilité'], ['supplier_orders', 'Commandes fournisseurs'], ['has_whatsapp', 'Notifications WhatsApp'], ['has_multi_store', 'Multi-magasins'], ['has_advanced_reports', 'Rapports avancés'], ['has_accounting_export', 'Export comptable']] as [string, string][]).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 text-xs cursor-pointer py-1 px-2 rounded-lg hover:bg-slate-50">
-                  <input type="checkbox" checked={!!form.limits?.[key]} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.checked } })} className="rounded text-brand-600" />
-                  {label}
+                <label key={key} className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[#E5E7EB] hover:bg-[#F7F8FA] transition-colors">
+                  <input type="checkbox" checked={!!form.limits?.[key]} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.checked } })} className="rounded border-[#E5E7EB] text-[#0F172A] focus:ring-[#0F172A]" />
+                  <span className="text-[#0F172A] text-xs">{label}</span>
                 </label>
               ))}
             </div>
           </div>
 
-          <div className="border-t border-slate-200 pt-3">
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Texte marketing (affiché aux clients)</p>
-            <textarea value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} className="input resize-none text-xs" rows={4} placeholder="Une fonctionnalité par ligne" />
-            <p className="text-[10px] text-slate-400 mt-1">Ces textes sont purement informatifs et ne contrôlent pas les limites réelles</p>
+          {/* Marketing features */}
+          <div className="border-t border-[#E5E7EB] pt-4">
+            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">Fonctionnalités marketing</p>
+            <p className="text-[11px] text-[#94A3B8] mb-3">Texte affiché aux clients (une par ligne)</p>
+            <textarea value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] resize-none focus:outline-none focus:ring-1 focus:ring-[#0F172A]" rows={4} placeholder="Une fonctionnalité par ligne" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="label">Ordre</label><input type="number" value={form.sort_order || 0} onChange={e => setForm({ ...form, sort_order: e.target.value })} className="input" /></div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer self-end pb-2">
-              <input type="checkbox" checked={form.is_public !== false} onChange={e => setForm({ ...form, is_public: e.target.checked })} className="rounded" />
-              Visible publiquement
-            </label>
+          {/* Status */}
+          <div className="border-t border-[#E5E7EB] pt-4">
+            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-3">Statut</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Ordre d'affichage</label><input type="number" value={form.sort_order || 0} onChange={e => setForm({ ...form, sort_order: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[#E5E7EB] hover:bg-[#F7F8FA] transition-colors">
+                  <input type="checkbox" checked={form.is_public !== false} onChange={e => setForm({ ...form, is_public: e.target.checked })} className="rounded border-[#E5E7EB] text-[#0F172A] focus:ring-[#0F172A]" />
+                  <span className="text-xs text-[#0F172A]">Visible publiquement</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </Modal>
@@ -1193,8 +1596,10 @@ function SubscriptionsSection() {
   const [tenants, setTenants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expiring, setExpiring] = useState<any[]>([]);
-  const [reminderDays, setReminderDays] = useState(5);
+  const [reminderDays, setReminderDays] = useState(7);
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const { success, error } = useToast();
 
   const loadExpiring = async (days: number) => {
@@ -1224,62 +1629,166 @@ function SubscriptionsSection() {
     const out: any[] = [];
     for (const t of tenants) {
       for (const s of (t.tenant_subscriptions || [])) {
-        out.push({ ...s, tenant_name: t.name, tenant_id: t.id });
+        out.push({ ...s, tenant_name: t.name, tenant_id: t.id, tenant_email: t.email, tenant_subdomain: t.subdomain });
       }
     }
     return out.sort((a, b) => (b.started_at || '').localeCompare(a.started_at || ''));
   }, [tenants]);
 
   const totalMRR = rows.filter(r => r.status === 'active' && r.billing_cycle !== 'lifetime').reduce((s, r) => s + Number(r.amount || 0) / (r.billing_cycle === 'yearly' ? 12 : 1), 0);
+  const activeCount = rows.filter(r => r.status === 'active').length;
+  const pendingCount = rows.filter(r => r.status === 'pending').length;
 
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
+  const statusLabel = (s: string) => {
+    const map: Record<string, string> = { active: 'Actif', pending: 'En attente', superseded: 'Remplacé', expired: 'Expiré', cancelled: 'Annulé', trial: 'Essai', suspended: 'Suspendu' };
+    return map[s] || s;
+  };
+  const statusStyle = (s: string) => {
+    const map: Record<string, string> = {
+      active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      pending: 'bg-slate-50 text-slate-600 border-slate-200',
+      superseded: 'bg-gray-50 text-gray-500 border-gray-200',
+      expired: 'bg-orange-50 text-orange-700 border-orange-200',
+      cancelled: 'bg-red-50 text-red-600 border-red-200',
+      trial: 'bg-blue-50 text-blue-600 border-blue-200',
+      suspended: 'bg-red-50 text-red-700 border-red-200',
+    };
+    return map[s] || 'bg-slate-50 text-slate-600 border-slate-200';
+  };
+  const cycleLabel = (c: string) => {
+    const map: Record<string, string> = { monthly: 'Mensuel', yearly: 'Annuel', lifetime: 'Illimité', trial: 'Essai' };
+    return map[c] || c;
+  };
+
+  const filters: { key: string; label: string }[] = [
+    { key: 'all', label: 'Tous' },
+    { key: 'active', label: 'Actifs' },
+    { key: 'pending', label: 'En attente' },
+    { key: 'expired', label: 'Expirés' },
+    { key: 'superseded', label: 'Remplacés' },
+    { key: 'cancelled', label: 'Annulés' },
+    { key: 'expiring_soon', label: 'Expirent bientôt' },
+  ];
+
+  const filtered = useMemo(() => {
+    const now = Date.now();
+    const in7 = now + 7 * 86400000;
+    return rows.filter(r => {
+      if (q) {
+        const search = q.toLowerCase();
+        if (!`${r.tenant_name} ${r.plan_code} ${statusLabel(r.status)}`.toLowerCase().includes(search)) return false;
+      }
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'expiring_soon') {
+        if (r.status !== 'active') return false;
+        const end = r.ends_at ? new Date(r.ends_at).getTime() : 0;
+        return end > now && end < in7;
+      }
+      return r.status === statusFilter;
+    });
+  }, [rows, q, statusFilter]);
+
+  const resetFilters = () => { setQ(''); setStatusFilter('all'); };
+
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#0F172A]" /></div>;
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2">
-        <KpiCard icon={TrendingUp} label="MRR" value={formatCompactFCFA(totalMRR)} sub="Actifs mensuels" color="emerald" />
-        <KpiCard icon={CircleDollarSign} label="Abonnements actifs" value={rows.filter(r => r.status === 'active').length} sub={`sur ${rows.length}`} color="sky" />
-        <KpiCard icon={X} label="Annulés" value={rows.filter(r => r.status === 'cancelled').length} sub="Total historique" color="red" />
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-xl font-semibold text-[#0F172A]">Abonnements</h2>
+        <p className="text-sm text-[#64748B] mt-0.5">Suivi des plans, cycles, paiements et expirations des tenants</p>
       </div>
 
-      {/* Payment reminders section */}
-      <div className="bg-white border border-amber-200/70 rounded-2xl overflow-hidden shadow-card">
-        <div className="flex items-center justify-between px-4 py-3 bg-amber-50/80 border-b border-amber-100">
-          <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-amber-600" />
-            <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Rappels de paiement</span>
-            {expiring.length > 0 && <span className="text-[10px] font-bold bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">{expiring.length}</span>}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-[#0F172A]" />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <select value={reminderDays} onChange={e => { const d = Number(e.target.value); setReminderDays(d); loadExpiring(d); }} className="text-xs border border-amber-200 rounded-lg px-2 py-1 bg-white">
-              <option value={3}>3 jours</option>
-              <option value={5}>5 jours</option>
-              <option value={7}>7 jours</option>
-              <option value={14}>14 jours</option>
-              <option value={30}>30 jours</option>
-            </select>
+          <div className="text-2xl font-bold text-[#0F172A]">{formatCompactFCFA(totalMRR)}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">MRR (revenu mensuel)</div>
+        </div>
+        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <Check className="w-4 h-4 text-emerald-600" />
+            </div>
           </div>
+          <div className="text-2xl font-bold text-[#0F172A]">{activeCount}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">Abonnements actifs</div>
+        </div>
+        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-[#64748B]" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-[#0F172A]">{pendingCount}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">En attente</div>
+        </div>
+        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
+              <Bell className="w-4 h-4 text-orange-500" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-[#0F172A]">{expiring.length}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">Expirations proches</div>
+        </div>
+      </div>
+
+      {/* Payment Reminders */}
+      <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E5E7EB]">
+          <div className="flex items-center gap-2.5">
+            <Bell className="w-4 h-4 text-[#0F172A]" />
+            <span className="text-sm font-semibold text-[#0F172A]">Rappels de paiement</span>
+            {expiring.length > 0 && <span className="text-[11px] font-medium bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">{expiring.length}</span>}
+          </div>
+          <select
+            value={reminderDays}
+            onChange={e => { const d = Number(e.target.value); setReminderDays(d); loadExpiring(d); }}
+            className="text-xs border border-[#E5E7EB] rounded-md px-2.5 py-1.5 bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]"
+          >
+            <option value={3}>3 jours</option>
+            <option value={5}>5 jours</option>
+            <option value={7}>7 jours</option>
+            <option value={14}>14 jours</option>
+            <option value={30}>30 jours</option>
+          </select>
         </div>
         {expiring.length === 0 ? (
-          <div className="px-4 py-6 text-center text-sm text-slate-400">Aucun tenant n'expire dans les {reminderDays} prochains jours.</div>
+          <div className="px-5 py-8 text-center text-sm text-[#64748B]">Aucun rappel de paiement pour le moment.</div>
         ) : (
-          <div className="divide-y divide-amber-100">
+          <div className="divide-y divide-[#E5E7EB]">
             {expiring.map(t => {
               const days = Math.ceil((new Date(t.plan_expires_at).getTime() - Date.now()) / 86400000);
+              const isUrgent = days <= 3;
               return (
-                <div key={t.id} className="px-4 py-2.5 flex items-center gap-3">
+                <div key={t.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-[#F7F8FA] transition-colors">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-slate-800 truncate">{t.name}</div>
-                    <div className="text-[11px] text-slate-500">
-                      Plan {t.plan} · {t.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'} · Expire dans <span className={`font-bold ${days <= 3 ? 'text-red-600' : 'text-amber-600'}`}>{days}j</span>
-                      {' '}({new Date(t.plan_expires_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })})
-                      {t.auto_renew && <span className="ml-1.5 text-[10px] bg-slate-100 text-slate-500 px-1 rounded">auto-renew</span>}
+                    <div className="text-sm font-medium text-[#0F172A] truncate">{t.name}</div>
+                    <div className="text-xs text-[#64748B] mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>Plan {t.plan}</span>
+                      <span className="text-[#E5E7EB]">|</span>
+                      <span>{t.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'}</span>
+                      <span className="text-[#E5E7EB]">|</span>
+                      <span className={`font-medium ${isUrgent ? 'text-red-600' : 'text-orange-600'}`}>
+                        {days <= 0 ? 'Expiré' : `Expire dans ${days}j`}
+                      </span>
+                      <span className="text-[#94A3B8]">
+                        ({new Date(t.plan_expires_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })})
+                      </span>
+                      {t.auto_renew && <span className="text-[10px] bg-[#F7F8FA] text-[#64748B] border border-[#E5E7EB] px-1.5 py-0.5 rounded">auto-renew</span>}
                     </div>
                   </div>
                   <button
                     onClick={() => sendReminder(t.id)}
                     disabled={sendingReminder === t.id}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold transition-all disabled:opacity-50"
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#111111] hover:bg-[#333333] text-white text-xs font-medium transition-colors disabled:opacity-50"
                   >
                     {sendingReminder === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bell className="w-3 h-3" />}
                     Rappeler
@@ -1291,30 +1800,125 @@ function SubscriptionsSection() {
         )}
       </div>
 
-      <div className="bg-white border border-slate-200/70 rounded-3xl overflow-hidden shadow-card">
-        <div className="hidden sm:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-          <div>Tenant</div><div>Plan</div><div>Cycle</div><div>Montant</div><div>Période</div><div>Statut</div>
+      {/* Search + Filters */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Rechercher par tenant, plan ou statut..."
+            className="w-full pl-10 pr-4 py-2.5 text-sm border border-[#E5E7EB] rounded-lg bg-white text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-1 focus:ring-[#0F172A] focus:border-[#0F172A]"
+          />
         </div>
-        <div className="divide-y divide-slate-100">
-          {rows.map(r => (
-            <div key={r.id} className="px-4 py-3 grid grid-cols-2 sm:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-x-3 gap-y-1 text-sm hover:bg-slate-50/50">
-              <div className="font-semibold text-slate-800 truncate col-span-2 sm:col-span-1">{r.tenant_name}</div>
-              <div className="text-xs text-slate-600 uppercase tracking-wider font-bold">{r.plan_code}</div>
-              <div className="text-xs text-slate-500">{r.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'}</div>
-              <div className="text-xs font-bold">{formatFCFA(r.amount)}</div>
-              <div className="text-xs text-slate-500">{formatDate(r.started_at)}{r.ends_at ? ` → ${formatDate(r.ends_at)}` : ''}</div>
-              <div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                  r.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                  r.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                  'bg-slate-200 text-slate-600'
-                }`}>{r.status}</span>
-              </div>
-            </div>
+        <div className="flex flex-wrap gap-2">
+          {filters.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setStatusFilter(f.key)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                statusFilter === f.key
+                  ? 'bg-[#111111] text-white border-[#111111]'
+                  : 'bg-white text-[#64748B] border-[#E5E7EB] hover:border-[#0F172A] hover:text-[#0F172A]'
+              }`}
+            >
+              {f.label}
+            </button>
           ))}
-          {rows.length === 0 && <div className="text-center text-slate-400 py-10 text-sm">Aucun abonnement.</div>}
         </div>
       </div>
+
+      {/* Table (desktop) / Cards (mobile) */}
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-lg border border-[#E5E7EB] py-12 text-center">
+          <div className="text-sm text-[#64748B]">Aucun abonnement trouvé</div>
+          <p className="text-xs text-[#94A3B8] mt-1">Essayez de modifier votre recherche ou vos filtres.</p>
+          {(q || statusFilter !== 'all') && (
+            <button onClick={resetFilters} className="mt-3 text-xs font-medium text-[#0F172A] border border-[#E5E7EB] px-3 py-1.5 rounded-md hover:bg-[#F7F8FA] transition-colors">
+              Réinitialiser les filtres
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
+            <div className="grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3 bg-[#F7F8FA] border-b border-[#E5E7EB]">
+              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Tenant</div>
+              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Plan</div>
+              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Cycle</div>
+              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider text-right">Montant</div>
+              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Période</div>
+              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Statut</div>
+            </div>
+            <div className="divide-y divide-[#E5E7EB]">
+              {filtered.map(r => (
+                <div
+                  key={r.id}
+                  className={`grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3.5 items-center hover:bg-[#F7F8FA] transition-colors ${r.status === 'superseded' ? 'opacity-50' : ''}`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-[#0F172A] truncate">{r.tenant_name}</div>
+                    {(r.tenant_email || r.tenant_subdomain) && (
+                      <div className="text-xs text-[#94A3B8] truncate mt-0.5">{r.tenant_subdomain || r.tenant_email}</div>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-xs font-medium text-[#0F172A] bg-[#F7F8FA] border border-[#E5E7EB] px-2 py-0.5 rounded">{r.plan_code}</span>
+                  </div>
+                  <div className="text-xs text-[#64748B]">{cycleLabel(r.billing_cycle)}</div>
+                  <div className="text-sm font-semibold text-[#0F172A] text-right">{formatFCFA(r.amount)}</div>
+                  <div className="text-xs text-[#64748B]">
+                    {formatDate(r.started_at)}{r.ends_at ? ` - ${formatDate(r.ends_at)}` : ''}
+                  </div>
+                  <div>
+                    <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border ${statusStyle(r.status)}`}>
+                      {statusLabel(r.status)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {filtered.map(r => (
+              <div key={r.id} className={`bg-white rounded-lg border border-[#E5E7EB] p-4 ${r.status === 'superseded' ? 'opacity-50' : ''}`}>
+                <div className="flex items-start justify-between mb-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-[#0F172A] truncate">{r.tenant_name}</div>
+                    {(r.tenant_email || r.tenant_subdomain) && (
+                      <div className="text-xs text-[#94A3B8] truncate">{r.tenant_subdomain || r.tenant_email}</div>
+                    )}
+                  </div>
+                  <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${statusStyle(r.status)}`}>
+                    {statusLabel(r.status)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-y-2 gap-x-4 mt-3">
+                  <div>
+                    <div className="text-[10px] uppercase text-[#94A3B8] font-medium tracking-wider">Plan</div>
+                    <div className="text-xs text-[#0F172A] font-medium mt-0.5">{r.plan_code}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-[#94A3B8] font-medium tracking-wider">Cycle</div>
+                    <div className="text-xs text-[#64748B] mt-0.5">{cycleLabel(r.billing_cycle)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-[#94A3B8] font-medium tracking-wider">Montant</div>
+                    <div className="text-sm font-semibold text-[#0F172A] mt-0.5">{formatFCFA(r.amount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-[#94A3B8] font-medium tracking-wider">Période</div>
+                    <div className="text-xs text-[#64748B] mt-0.5">{formatDate(r.started_at)}{r.ends_at ? ` - ${formatDate(r.ends_at)}` : ''}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

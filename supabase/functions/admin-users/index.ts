@@ -470,15 +470,16 @@ Deno.serve(async (req: Request) => {
       const { days } = body;
       const daysAhead = days || 5;
       const now = new Date();
-      const limit = new Date(now.getTime() + daysAhead * 86400000);
+      const futureLimit = new Date(now.getTime() + daysAhead * 86400000);
+      const pastLimit = new Date(now.getTime() - 30 * 86400000);
       const { data } = await admin.from("tenants")
         .select("id, name, email, plan, plan_expires_at, billing_cycle, whatsapp_phone, auto_renew")
         .eq("approval_status", "approved")
         .eq("is_active", true)
         .neq("billing_cycle", "lifetime")
         .not("plan_expires_at", "is", null)
-        .lte("plan_expires_at", limit.toISOString())
-        .gte("plan_expires_at", now.toISOString())
+        .lte("plan_expires_at", futureLimit.toISOString())
+        .gte("plan_expires_at", pastLimit.toISOString())
         .order("plan_expires_at");
       return json({ tenants: data || [] });
     }
