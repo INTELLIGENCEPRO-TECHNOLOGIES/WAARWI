@@ -340,7 +340,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   useEffect(() => {
-    if (!tenant) return;
+    if (!tenant || !currentSite) return;
     const isShared = (tenant as any)?.settings?.shared_articles !== false;
     const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
     let custQuery = supabase.from('customers').select('id, name, phone').eq('tenant_id', tenant.id).eq('is_active', true).order('name');
@@ -365,7 +365,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     Promise.all([
       custQuery,
       fetchAllArticles(),
-      supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, customers(name)').eq('tenant_id', tenant.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(200),
+      supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
     ]).then(([c, a, sl, pm, tr]) => {
@@ -375,7 +375,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       setPaymentMethods((pm.data || []).filter((m: any) => m.payment_type !== 'credit'));
       setArticleTiers((tr.data || []) as { article_id: string; tier_name: string; price: number }[]);
     });
-  }, [tenant?.id]);
+  }, [tenant?.id, currentSite?.id]);
 
   // ── Filtering helpers ─────────────────────────────────────────
   const matchesCommon = (
