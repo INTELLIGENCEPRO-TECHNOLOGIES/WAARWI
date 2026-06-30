@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowUpRight, Ban, Building2, Check, CircleDollarSign, Clock,
-  CreditCard as Edit2, Gauge, Layers, LineChart, Loader2, Mail, MessageSquare, Pause, Plus,
+  CreditCard as Edit2, Gauge, Layers, LineChart, Loader2, LogOut, Mail, MessageSquare, Pause, Plus,
   Power, Search, Send, Shield, RotateCcw, Trash2, TrendingUp, Users, Zap, X,
   Wrench as Wrench_, Store as Store_, ShoppingBag as ShoppingBag_, Shirt as Shirt_, Cpu as Cpu_,
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
@@ -136,6 +136,14 @@ export function PlatformAdmin() {
             </h1>
             <p className="text-[11px] text-[#64748B]">Pilotage global de Waarwi</p>
           </div>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#E5E7EB] text-xs font-medium text-[#64748B] hover:text-[#0F172A] hover:bg-[#F7F8FA] transition-colors"
+            title="Déconnexion"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Déconnexion</span>
+          </button>
         </div>
 
         {/* Page content */}

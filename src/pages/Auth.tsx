@@ -413,8 +413,8 @@ export function Auth() {
   /* ---- Render: Registration multi-step (full-page, white background) ---- */
   if (mode === 'register') {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-5">
-        <div className="w-full max-w-[460px] p-5 md:p-7">
+      <div className="min-h-screen bg-white flex items-center justify-center px-4 py-6">
+        <div className="w-full max-w-[520px]">
           <div className="flex items-center justify-between mb-5">
             <img src={logoSrc} alt={brandName} className="h-7 w-auto object-contain" />
             <button onClick={() => { setMode('login'); setStep(1); }} className="text-[13px] font-medium text-slate-500 hover:text-slate-900 transition-colors">
@@ -431,7 +431,7 @@ export function Auth() {
                   <h3 className="text-lg font-bold text-[#0f172a]">Votre entreprise</h3>
                   <p className="text-sm text-slate-500 mt-0.5">Parlez-nous de votre activité.</p>
                 </div>
-                <RegInput icon={Building2} label="Nom de l'entreprise" value={companyName} onChange={setCompanyName} placeholder="Ex : Saloum Electronique" required />
+                <RegInput icon={Building2} label="Nom de l'entreprise" value={companyName} onChange={setCompanyName} required />
                 <ActivityTypeSelect
                   activityTypes={activityTypes}
                   value={businessType}
@@ -441,10 +441,10 @@ export function Auth() {
                   <p className="-mt-2 text-[11px] text-slate-500">{selectedActivity.description}</p>
                 )}
                 {businessType === '__other__' && (
-                  <RegInput icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} placeholder="Import/Export, Couture..." required />
+                  <RegInput icon={Briefcase} label="Précisez votre activité" value={customActivity} onChange={setCustomActivity} required />
                 )}
-                <RegInput icon={MapPin} label="Ville" value={city} onChange={setCity} placeholder="Dakar, Thies, Saint-Louis..." />
-                <RegInput icon={MapPin} label="Adresse" value={address} onChange={setAddress} placeholder="Adresse complète (facultatif)" hint="Optionnel" />
+                <RegInput icon={MapPin} label="Ville" value={city} onChange={setCity} />
+                <RegInput icon={MapPin} label="Adresse" value={address} onChange={setAddress} hint="Optionnel" />
                 <button
                   type="button"
                   disabled={!step1Valid}
@@ -464,10 +464,10 @@ export function Auth() {
                   <h3 className="text-lg font-bold text-[#0f172a]">Le responsable</h3>
                   <p className="text-sm text-slate-500 mt-0.5">Vos coordonnées de contact.</p>
                 </div>
-                <RegInput icon={User} label="Nom complet" value={fullName} onChange={setFullName} placeholder="Prénom et nom" required />
-                <RegInput icon={Phone} label="Numéro WhatsApp" value={whatsappPhone} onChange={setWhatsappPhone} placeholder="+221 77 123 45 67" required hint="Canal principal de communication" />
-                <RegInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" type="email" hint="Recommandé" />
-                <RegInput icon={Briefcase} label="Fonction" value={responsibleTitle} onChange={setResponsibleTitle} placeholder="Gérant, Directeur..." hint="Optionnel" />
+                <RegInput icon={User} label="Nom complet" value={fullName} onChange={setFullName} required />
+                <RegInput icon={Phone} label="Numéro WhatsApp" value={whatsappPhone} onChange={setWhatsappPhone} required hint="Canal principal de communication" />
+                <RegInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} type="email" hint="Recommandé" />
+                <RegInput icon={Briefcase} label="Fonction" value={responsibleTitle} onChange={setResponsibleTitle} hint="Optionnel" />
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setStep(1)}
                     className="h-[48px] md:h-[50px] px-5 rounded-[10px] border border-[#dbe3ef] bg-white text-slate-600 font-semibold hover:bg-slate-50 transition-all flex items-center gap-2">
@@ -523,8 +523,8 @@ export function Auth() {
                   <h3 className="text-lg font-bold text-[#0f172a]">Sécurisez votre compte</h3>
                   <p className="text-sm text-slate-500 mt-0.5">Créez vos identifiants.</p>
                 </div>
-                <RegInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} placeholder="vous@entreprise.sn" type="email" required />
-                <RegPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="6 caractères minimum" />
+                <RegInput icon={Mail} label="Adresse email" value={email} onChange={setEmail} type="email" required />
+                <RegPassword value={password} onChange={setPassword} show={showPassword} toggleShow={() => setShowPassword(!showPassword)} placeholder="" />
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setStep(3)}
                     className="h-[48px] md:h-[50px] px-5 rounded-[10px] border border-[#dbe3ef] bg-white text-slate-600 font-semibold hover:bg-slate-50 transition-all flex items-center gap-2">

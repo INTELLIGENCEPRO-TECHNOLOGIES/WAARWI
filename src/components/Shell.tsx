@@ -4,7 +4,7 @@ import {
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
-  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck,
+  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -126,6 +126,16 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [fabOpen, setFabOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarDark, setSidebarDark] = useState(() => {
+    try { return localStorage.getItem('sidebar_dark') === '1'; } catch { return false; }
+  });
+  const toggleSidebarTheme = () => {
+    setSidebarDark(prev => {
+      const next = !prev;
+      try { localStorage.setItem('sidebar_dark', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!tenant) return;
@@ -233,13 +243,13 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     <nav className={`flex-1 overflow-y-auto py-4 space-y-4 ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
       {isSuperAdmin ? (
         <div>
-          {!sidebarCollapsed && <div className="px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-neutral-400">Plateforme</div>}
+          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Plateforme</div>}
           <button
             onClick={() => { onRoute('platform_admin'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item ${route === 'platform_admin' ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarCollapsed ? 'Console plateforme' : undefined}
           >
-            <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? 'text-white' : 'text-neutral-400'}`} />
+            <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
             {!sidebarCollapsed && <span>Console plateforme</span>}
           </button>
         </div>
@@ -248,7 +258,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       {visibleNav.map(group => (
         <div key={group.title}>
           {!sidebarCollapsed && (
-            <div className="px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-neutral-400">
+            <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>
               {group.title}
             </div>
           )}
@@ -261,10 +271,10 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 <button
                   key={item.key}
                   onClick={() => { onRoute(item.key); setMobileOpen(false); }}
-                  className={`nav-item ${active ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                  className={`nav-item ${active ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
                   title={sidebarCollapsed ? item.label : undefined}
                 >
-                  <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-white' : 'text-neutral-400'}`} />
+                  <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
                   {!sidebarCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
                   {!sidebarCollapsed && badge > 0 && (
                     <span className={`ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-neutral-900' : 'bg-red-500 text-white'}`}>{badge > 99 ? '99+' : badge}</span>
@@ -281,13 +291,13 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       ))}
       {routeVisible('settings') && (
         <div>
-          {!sidebarCollapsed && <div className="px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-neutral-400">Systeme</div>}
+          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Systeme</div>}
           <button
             onClick={() => { onRoute('settings'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item ${route === 'settings' ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarCollapsed ? 'Paramètres' : undefined}
           >
-            <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-white' : 'text-neutral-400'}`} />
+            <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
             {!sidebarCollapsed && <span className="whitespace-nowrap">Paramètres</span>}
           </button>
         </div>
@@ -367,39 +377,45 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r border-neutral-200 bg-white transition-all duration-200 ${sidebarCollapsed ? 'w-[64px]' : 'w-[240px]'}`}>
+      <aside
+        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[64px]' : 'w-[240px]'} ${sidebarDark ? 'border-white/10' : 'border-neutral-200'}`}
+        style={sidebarDark
+          ? { background: 'linear-gradient(180deg, #0a0a0a 0%, #171717 40%, #262626 100%)' }
+          : { background: '#ffffff' }
+        }
+      >
         <NavList />
-        <div className="p-3 border-t border-neutral-100 space-y-2">
+        <div className={`p-3 border-t space-y-2 ${sidebarDark ? 'border-white/10' : 'border-neutral-100'}`}>
           {sites.length > 0 && !sidebarCollapsed && (
             <div className="relative">
-              <div className="text-[10px] font-semibold tracking-widest uppercase text-neutral-400 px-1 mb-1">Point de vente</div>
+              <div className={`text-[10px] font-semibold tracking-widest uppercase px-1 mb-1 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Point de vente</div>
               <button
                 onClick={() => setSiteOpen(v => !v)}
-                className="w-full flex items-center gap-2 px-3 h-10 rounded-lg bg-white border border-neutral-200 hover:border-neutral-300 text-[13px] font-medium text-neutral-800 transition-all"
+                className={`w-full flex items-center gap-2 px-3 h-10 rounded-lg border text-[13px] font-medium transition-all ${sidebarDark ? 'bg-white/6 border-white/10 text-white/80 hover:border-white/20' : 'bg-white border-neutral-200 hover:border-neutral-300 text-neutral-800'}`}
               >
-                <Store className="w-4 h-4 text-neutral-500 shrink-0" />
+                <Store className={`w-4 h-4 shrink-0 ${sidebarDark ? 'text-white/50' : 'text-neutral-500'}`} />
                 <span className="flex-1 text-left truncate">{currentSite?.name || 'Selectionner'}</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${siteOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${siteOpen ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
               </button>
               {siteOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setSiteOpen(false)} />
-                  <div className="absolute left-0 right-0 bottom-[calc(100%+6px)] bg-white border border-neutral-200 rounded-xl shadow-elevated py-1 animate-slide-down z-20 max-h-64 overflow-auto">
+                  <div className={`absolute left-0 right-0 bottom-[calc(100%+6px)] border rounded-xl shadow-elevated py-1 animate-slide-down z-20 max-h-64 overflow-auto ${sidebarDark ? 'bg-neutral-900 border-white/10' : 'bg-white border-neutral-200'}`}>
                     {sites.map(s => {
                       const isDefault = (profile as any)?.default_site_id === s.id;
                       return (
-                        <div key={s.id} className={`flex items-center gap-1 px-2 py-0.5 transition-colors ${currentSite?.id === s.id ? 'bg-neutral-50' : 'hover:bg-neutral-50'}`}>
+                        <div key={s.id} className={`flex items-center gap-1 px-2 py-0.5 transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'bg-white/8' : 'bg-neutral-50') : (sidebarDark ? 'hover:bg-white/6' : 'hover:bg-neutral-50')}`}>
                           <button
                             onClick={() => { setCurrentSite(s); setSiteOpen(false); onRoute('dashboard'); }}
-                            className={`flex-1 text-left flex items-center gap-2 px-1.5 py-1.5 text-sm rounded-lg transition-colors ${currentSite?.id === s.id ? 'text-neutral-900 font-semibold' : 'text-neutral-600'}`}
+                            className={`flex-1 text-left flex items-center gap-2 px-1.5 py-1.5 text-sm rounded-lg transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'text-white font-semibold' : 'text-neutral-900 font-semibold') : (sidebarDark ? 'text-white/70' : 'text-neutral-600')}`}
                           >
-                            <Store className={`w-4 h-4 ${currentSite?.id === s.id ? 'text-neutral-900' : 'text-neutral-400'}`} />
+                            <Store className={`w-4 h-4 ${currentSite?.id === s.id ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
                             <span className="truncate">{s.name}</span>
                           </button>
                           <button
                             title={isDefault ? 'Magasin par défaut' : 'Définir comme défaut'}
                             onClick={() => { setDefaultSite(s); setSiteOpen(false); onRoute('dashboard'); }}
-                            className={`shrink-0 p-1.5 rounded-lg transition-colors ${isDefault ? 'text-neutral-900' : 'text-neutral-300 hover:text-neutral-600'}`}
+                            className={`shrink-0 p-1.5 rounded-lg transition-colors ${isDefault ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/30 hover:text-white/60' : 'text-neutral-300 hover:text-neutral-600')}`}
                           >
                             <Star className="w-3.5 h-3.5" fill={isDefault ? 'currentColor' : 'none'} />
                           </button>
@@ -411,16 +427,25 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               )}
             </div>
           )}
-          <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800 transition-colors ${sidebarCollapsed ? 'justify-center' : ''}`}>
+          <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarCollapsed ? 'justify-center' : ''} ${sidebarDark ? 'text-white/50 hover:bg-white/8 hover:text-white/80' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}>
             <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarCollapsed && 'Déconnexion'}
           </button>
-          <button
-            onClick={() => setSidebarCollapsed(v => !v)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700 transition-colors justify-center"
-            title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-          </button>
+          <div className={`flex items-center ${sidebarCollapsed ? 'flex-col gap-1' : 'gap-1'}`}>
+            <button
+              onClick={() => setSidebarCollapsed(v => !v)}
+              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center ${sidebarDark ? 'text-white/40 hover:bg-white/8 hover:text-white/70' : 'text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700'}`}
+              title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={toggleSidebarTheme}
+              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${sidebarDark ? 'text-white/40 hover:bg-white/8 hover:text-white/70' : 'text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700'}`}
+              title="Changer le thème du menu"
+            >
+              <Palette className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -439,42 +464,54 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
           >
-            <div className="float-sidebar-content">
+            <div
+              className="float-sidebar-content"
+              style={sidebarDark ? { background: 'linear-gradient(180deg, #0a0a0a 0%, #171717 40%, #262626 100%)', border: '1px solid rgba(255,255,255,0.08)' } : undefined}
+            >
               <div className="flex items-center justify-between px-4 pt-4 pb-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {tenant?.logo_url ? (
                     <img src={tenant.logo_url} alt={tenant.name} className="w-8 h-8 object-contain shrink-0" />
                   ) : (
-                    <img src="/newlogo.png" alt="WAARWI" className="h-6 w-auto max-w-[100px] object-contain shrink-0" />
+                    <img src="/newlogo.png" alt="WAARWI" className={`h-6 w-auto max-w-[100px] object-contain shrink-0 ${sidebarDark ? 'brightness-0 invert' : ''}`} />
                   )}
                   <div className="min-w-0">
-                    <div className="text-[13px] font-bold text-neutral-900 truncate">{tenant?.name || 'WAARWI'}</div>
+                    <div className={`text-[13px] font-bold truncate ${sidebarDark ? 'text-white' : 'text-neutral-900'}`}>{tenant?.name || 'WAARWI'}</div>
                     {profile?.full_name && (
-                      <div className="text-[10px] text-neutral-500 truncate">{profile.full_name}</div>
+                      <div className={`text-[10px] truncate ${sidebarDark ? 'text-white/50' : 'text-neutral-500'}`}>{profile.full_name}</div>
                     )}
                   </div>
                 </div>
-                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className="float-close-btn shrink-0">
-                  <Settings className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={toggleSidebarTheme}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/40 hover:bg-white/10 hover:text-white/70' : 'text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600'}`}
+                    title="Changer le thème"
+                  >
+                    <Palette className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/60 hover:bg-white/10' : 'float-close-btn'}`}>
+                    <Settings className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto px-2.5 pb-1 space-y-1.5 scrollbar-hide">
                 {isSuperAdmin && (
                   <div>
-                    <div className="px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase text-neutral-400">Plateforme</div>
+                    <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Plateforme</div>
                     <button
                       onClick={() => { onRoute('platform_admin'); closeDrawer(); }}
-                      className={`float-nav-item-compact ${route === 'platform_admin' ? 'float-nav-item-active' : ''}`}
+                      className={`float-nav-item-compact ${route === 'platform_admin' ? 'float-nav-item-active' : ''} ${sidebarDark && route !== 'platform_admin' ? 'float-nav-dark' : ''}`}
                     >
-                      <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? 'text-white' : 'text-neutral-400'}`} />
+                      <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
                       <span className="truncate">Console plateforme</span>
                     </button>
                   </div>
                 )}
                 {!isSuperAdmin && visibleNav.map(group => (
                   <div key={group.title}>
-                    <div className="px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase text-neutral-400">
+                    <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>
                       {group.title}
                     </div>
                     <div>
@@ -486,9 +523,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                           <button
                             key={item.key}
                             onClick={() => { onRoute(item.key); closeDrawer(); }}
-                            className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''}`}
+                            className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''} ${sidebarDark && !active ? 'float-nav-dark' : ''}`}
                           >
-                            <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-neutral-500'}`} />
+                            <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
                             <span className="truncate">{item.label}</span>
                             {badge > 0 && (
                               <span className="ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold bg-red-500 text-white">{badge > 99 ? '99+' : badge}</span>
@@ -502,26 +539,26 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 ))}
               </div>
 
-              <div className="px-3 pt-2 pb-2.5 border-t border-neutral-100 space-y-1.5" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+              <div className={`px-3 pt-2 pb-2.5 border-t space-y-1.5 ${sidebarDark ? 'border-white/10' : 'border-neutral-100'}`} style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
                 {sites.length > 0 && (
                   <div>
-                    <div className="px-1 mb-1 text-[9px] font-semibold tracking-widest uppercase text-neutral-400">Point de vente</div>
+                    <div className={`px-1 mb-1 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Point de vente</div>
                     <div className="max-h-28 overflow-auto space-y-0.5">
                       {sites.map(s => {
                         const isDefault = (profile as any)?.default_site_id === s.id;
                         return (
-                          <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors ${currentSite?.id === s.id ? 'bg-neutral-100' : 'hover:bg-neutral-50'}`}>
+                          <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'bg-white/10' : 'bg-neutral-100') : (sidebarDark ? 'hover:bg-white/6' : 'hover:bg-neutral-50')}`}>
                             <button
                               onClick={() => { setCurrentSite(s); onRoute('dashboard'); closeDrawer(); }}
-                              className={`flex-1 flex items-center gap-2 px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? 'text-neutral-900 font-semibold' : 'text-neutral-600'}`}
+                              className={`flex-1 flex items-center gap-2 px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'text-white font-semibold' : 'text-neutral-900 font-semibold') : (sidebarDark ? 'text-white/70' : 'text-neutral-600')}`}
                             >
-                              <Store className={`w-3.5 h-3.5 ${currentSite?.id === s.id ? 'text-neutral-900' : 'text-neutral-400'}`} />
+                              <Store className={`w-3.5 h-3.5 ${currentSite?.id === s.id ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
                               <span className="truncate flex-1 text-left">{s.name}</span>
                             </button>
                             <button
                               onClick={() => { setDefaultSite(s); onRoute('dashboard'); closeDrawer(); }}
                               title={isDefault ? 'Défaut' : 'Définir défaut'}
-                              className={`shrink-0 p-1.5 transition-colors ${isDefault ? 'text-neutral-900' : 'text-neutral-300 hover:text-neutral-600'}`}
+                              className={`shrink-0 p-1.5 transition-colors ${isDefault ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/30 hover:text-white/60' : 'text-neutral-300 hover:text-neutral-600')}`}
                             >
                               <Star className="w-3 h-3" fill={isDefault ? 'currentColor' : 'none'} />
                             </button>
@@ -531,7 +568,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     </div>
                   </div>
                 )}
-                <button onClick={signOut} className="float-logout-btn">
+                <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sidebarDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'}`}>
                   <LogOut className="w-4 h-4" />
                   <span>Déconnexion</span>
                 </button>
@@ -657,7 +694,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         </header>
 
-        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
+        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
           {isPOS ? (
             <div className="flex-1 flex flex-col min-h-0 pb-[60px] lg:pb-0">{children}</div>
           ) : isPlatformAdmin ? (

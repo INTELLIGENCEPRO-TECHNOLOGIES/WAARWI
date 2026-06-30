@@ -494,6 +494,13 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
   background: #171717;
   color: #ffffff;
 }
+.float-nav-item-compact.float-nav-dark {
+  color: rgba(255, 255, 255, 0.7);
+}
+.float-nav-item-compact.float-nav-dark:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
 
 .float-close-btn {
   width: 36px;

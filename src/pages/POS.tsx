@@ -220,22 +220,21 @@ function POSLandingOpen({
   const { sessions, loading: loadingSessions } = useRecentSessions(tenantId, currentSite?.id);
 
   return (
-    <div className="pb-4">
-      {/* ── Header (matches resume screen) ── */}
-      <div className="px-1.5 lg:px-6 pt-3 sm:pt-5 pb-2.5 sm:pb-4">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">Caisse</h1>
-          {currentSite && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-neutral-200 bg-white text-[11px] sm:text-xs font-medium text-neutral-600">
-              <Monitor className="w-3 h-3 text-neutral-400" />
-              {currentSite.name}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
-          <span className="text-xs sm:text-sm font-medium text-neutral-500">Caisse fermée</span>
-          <span className="hidden sm:inline text-xs sm:text-sm text-neutral-400 ml-1">Aucune session en cours sur ce point de vente</span>
+    <div className="pb-2">
+      {/* ── Header ── */}
+      <div className="px-0 lg:px-6 pt-2 sm:pt-5 pb-2 sm:pb-4">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-white border border-neutral-200 shadow-sm">
+          <div className="leading-tight">
+            <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
+            {currentSite && (
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
+            )}
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
+            <span className="text-[11px] font-medium text-neutral-500">Fermée</span>
+          </div>
         </div>
       </div>
 
@@ -243,8 +242,6 @@ function POSLandingOpen({
       <div className="hidden lg:grid lg:grid-cols-[1fr_340px] gap-3 px-6">
         {/* Left: Ouvrir la caisse */}
         <div className="bg-white rounded-xl border border-neutral-200 p-6 flex flex-col">
-          <h2 className="text-lg font-bold text-neutral-900 mb-5">Ouvrir la caisse</h2>
-
           <div className="space-y-4 flex-1">
             <div>
               <label className="text-[11px] text-neutral-400 leading-none mb-1.5 block">Fond de caisse initial (FCFA)</label>
@@ -291,7 +288,7 @@ function POSLandingOpen({
               className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all active:scale-[0.98]"
             >
               {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-              Ouvrir la caisse
+              Ouverture de caisse
             </button>
           </div>
         </div>
@@ -326,17 +323,16 @@ function POSLandingOpen({
       </div>
 
       {/* ── Mobile layout ── */}
-      <div className="lg:hidden px-1.5 space-y-2.5">
-        <div className="bg-white rounded-xl border border-neutral-200 p-3.5">
-          <h2 className="text-sm font-bold text-neutral-900 mb-3">Ouvrir la caisse</h2>
-          <div className="space-y-2.5">
+      <div className="lg:hidden px-0 space-y-2">
+        <div className="bg-white rounded-xl border border-neutral-200 p-3">
+          <div className="space-y-2">
             <div>
               <label className="text-[10px] text-neutral-400 mb-1 block">Fond de caisse (FCFA)</label>
               <input
                 type="number"
                 value={openingAmount || ''}
                 onChange={e => setOpeningAmount(Number(e.target.value))}
-                className="w-full h-11 px-3 rounded-lg border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold tabular-nums"
+                className="w-full h-10 px-3 rounded-lg border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold tabular-nums"
                 placeholder="0"
                 min="0"
                 autoFocus={desktopAutoFocus}
@@ -348,13 +344,13 @@ function POSLandingOpen({
               <input
                 value={openingNote}
                 onChange={e => setOpeningNote(e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-xs"
+                className="w-full h-9 px-3 rounded-lg border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-xs"
                 placeholder="Ex: monnaie disponible..."
               />
             </div>
             {cashierName && (
               <div className="flex items-center gap-2 pt-2 border-t border-neutral-100">
-                <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-3 h-3 text-neutral-400" /></div>
+                <div className="w-6 h-6 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-3 h-3 text-neutral-400" /></div>
                 <div><p className="text-[9px] text-neutral-400">Vendeur</p><p className="text-[11px] font-semibold text-neutral-800 uppercase">{cashierName}</p></div>
               </div>
             )}
@@ -367,24 +363,13 @@ function POSLandingOpen({
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm"
         >
           {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-          Ouvrir la caisse
+          Ouverture de caisse
         </button>
-
-        {currentSite && (
-          <div className="bg-white rounded-xl border border-neutral-200 p-3.5">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-md bg-neutral-100 flex items-center justify-center"><Monitor className="w-3 h-3 text-neutral-500" /></div>
-              <h3 className="text-xs font-bold text-neutral-900">Point de vente</h3>
-            </div>
-            <p className="text-xs font-semibold text-neutral-900">{currentSite.name}</p>
-            <p className="text-[10px] text-neutral-400 mt-0.5">La session sera liée à ce point de vente.</p>
-          </div>
-        )}
       </div>
 
       {/* ── Recent sessions (cleaner, aligned with the rest) ── */}
       {!loadingSessions && sessions.length > 0 && (
-        <div className="mt-4 px-1.5 lg:px-6">
+        <div className="mt-3 px-0 lg:px-6">
           <div className="flex items-center justify-between mb-2 px-1">
             <h3 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Dernières sessions</h3>
             {onSeeAll && (
@@ -522,7 +507,7 @@ function POSLandingResume({
   ].filter(b => b.show) : [];
 
   return (
-    <div className="h-full overflow-auto pb-6">
+    <div className="h-full overflow-hidden lg:overflow-auto pb-0 lg:pb-6">
       {/* ── Desktop grid ── */}
       <div className="hidden lg:grid lg:grid-cols-[1fr_340px] gap-3 px-6 pt-4">
         {/* Left: Session info + actions */}
@@ -657,42 +642,49 @@ function POSLandingResume({
       </div>
 
       {/* ── Mobile layout ── */}
-      <div className="lg:hidden px-3 pt-3 space-y-3 overflow-auto">
+      <div className="lg:hidden px-0 pt-2 space-y-2">
+        {/* Header card matching Sales page style */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-white border border-neutral-200 shadow-sm">
+          <div className="leading-tight">
+            <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
+            {currentSite && (
+              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
+            )}
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="text-[11px] font-medium text-emerald-600">Ouverte</span>
+          </div>
+        </div>
+
         {/* Session info card */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Monitor className="w-3.5 h-3.5 text-neutral-400" /></div>
-              <div><p className="text-[10px] text-neutral-400">Point de vente</p><p className="text-xs font-semibold text-neutral-800 truncate">{currentSite?.name || '-'}</p></div>
+        <div className="bg-white rounded-xl border border-neutral-200 p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-3 h-3 text-neutral-400" /></div>
+              <div className="min-w-0"><p className="text-[10px] text-neutral-400">Durée</p><p className="text-xs font-semibold text-neutral-800 truncate">{sessionDuration(session.opened_at)}</p></div>
             </div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-3.5 h-3.5 text-neutral-400" /></div>
-              <div><p className="text-[10px] text-neutral-400">Durée</p><p className="text-xs font-semibold text-neutral-800">{sessionDuration(session.opened_at)}</p></div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Banknote className="w-3.5 h-3.5 text-neutral-400" /></div>
-              <div><p className="text-[10px] text-neutral-400">Fond initial</p><p className="text-xs font-semibold text-neutral-700">{formatFCFA(Number(session.opening_amount))}</p></div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><CheckCircle2 className="w-3.5 h-3.5 text-neutral-400" /></div>
-              <div><p className="text-[10px] text-neutral-400">Statut</p><span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border border-neutral-200 bg-neutral-100 text-neutral-800">OUVERTE</span></div>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Banknote className="w-3 h-3 text-neutral-400" /></div>
+              <div className="min-w-0"><p className="text-[10px] text-neutral-400">Fond initial</p><p className="text-xs font-semibold text-neutral-700 truncate">{formatFCFA(Number(session.opening_amount))}</p></div>
             </div>
           </div>
           {cashierName && (
-            <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-neutral-100">
-              <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-3.5 h-3.5 text-neutral-400" /></div>
-              <div><p className="text-[10px] text-neutral-400">Vendeur</p><p className="text-xs font-semibold text-neutral-800 uppercase">{cashierName}</p></div>
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-100">
+              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-3 h-3 text-neutral-400" /></div>
+              <div className="min-w-0"><p className="text-[10px] text-neutral-400">Vendeur</p><p className="text-xs font-semibold text-neutral-800 uppercase truncate">{cashierName}</p></div>
             </div>
           )}
         </div>
 
         {/* Two action buttons */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <button onClick={onResume} className="flex items-center justify-center gap-2 py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-semibold transition-colors active:scale-[0.98]">
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={onResume} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-semibold transition-colors active:scale-[0.98]">
             <Play className="w-4 h-4 fill-current" /> Reprendre
           </button>
           {actions?.canClose && (
-            <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-neutral-200 bg-white text-neutral-800 text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-40">
+            <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-neutral-200 bg-white text-neutral-800 text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-40">
               <Lock className="w-4 h-4" /> Clôturer
             </button>
           )}
@@ -700,11 +692,11 @@ function POSLandingResume({
 
         {/* Shortcut cards */}
         {shortcutBtns.length > 0 && (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-1.5">
             {shortcutBtns.map(btn => (
-              <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl border border-neutral-200 bg-white active:bg-neutral-50 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
-                <btn.icon className="w-5 h-5 text-neutral-700" />
-                <span className="text-[10px] font-medium text-neutral-600">{btn.label}</span>
+              <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl border border-neutral-200 bg-white active:bg-neutral-50 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
+                <btn.icon className="w-4.5 h-4.5 text-neutral-700" />
+                <span className="text-[9px] font-medium text-neutral-600">{btn.label}</span>
               </button>
             ))}
           </div>
@@ -712,21 +704,21 @@ function POSLandingResume({
 
         {/* Summary card */}
         {!loadingSummary && summary && (
-          <div className="bg-white rounded-xl border border-neutral-200 p-4">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-3.5 h-3.5 text-neutral-700" /></div>
-              <h3 className="text-sm font-bold text-neutral-900">Résumé</h3>
+          <div className="bg-white rounded-xl border border-neutral-200 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-3 h-3 text-neutral-700" /></div>
+              <h3 className="text-xs font-bold text-neutral-900">Résumé</h3>
             </div>
-            <div className="flex items-center justify-between py-2">
+            <div className="flex items-center justify-between py-1.5">
               <span className="text-xs text-neutral-500">Total encaissé</span>
               <span className="text-sm font-bold text-neutral-700 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
             </div>
-            <div className="flex items-center justify-between py-2 border-t border-neutral-100">
+            <div className="flex items-center justify-between py-1.5 border-t border-neutral-100">
               <span className="text-xs text-neutral-500">Ventes</span>
               <span className="text-sm font-bold text-neutral-800 tabular-nums">{summary.salesCount}</span>
             </div>
             {summary.byMethod.length > 0 && summary.byMethod.map(m => (
-              <div key={m.method_name} className="flex items-center justify-between py-1.5 border-t border-neutral-50">
+              <div key={m.method_name} className="flex items-center justify-between py-1 border-t border-neutral-50">
                 <span className="text-[11px] text-neutral-400">{m.method_name}</span>
                 <span className="text-[11px] font-bold text-neutral-600 tabular-nums">{formatFCFA(m.amount)}</span>
               </div>
@@ -735,15 +727,15 @@ function POSLandingResume({
         )}
 
         {/* Quick links */}
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {onSeeAll && (
-            <button onClick={onSeeAll} className="flex-1 flex items-center gap-2 px-3 py-3 rounded-xl border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
-              <ClockIcon className="w-4 h-4 text-neutral-700 shrink-0" />
+            <button onClick={onSeeAll} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
+              <ClockIcon className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
               <span className="text-xs font-medium text-neutral-700">Historique</span>
             </button>
           )}
-          <button onClick={onResume} className="flex-1 flex items-center gap-2 px-3 py-3 rounded-xl border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
-            <ShoppingCart className="w-4 h-4 text-neutral-700 shrink-0" />
+          <button onClick={onResume} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
+            <ShoppingCart className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
             <span className="text-xs font-medium text-neutral-700">Point de vente</span>
           </button>
         </div>
@@ -2403,8 +2395,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Screen: open form (no active session)
   if (screen === 'open-form') {
     return (
-      <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[92px] lg:pb-8">
+      <div className="flex-1 overflow-y-auto lg:overflow-y-auto">
+        <div className="w-full max-w-[1600px] mx-auto px-1.5 sm:px-5 lg:px-8 pt-2 sm:pt-4 lg:pt-6 pb-2 lg:pb-8">
           <POSGuide tenantId={tenant?.id} hasSession={false} businessType={(tenant as any)?.business_type} />
           <POSLandingOpen
             currentSite={currentSite}
@@ -2553,8 +2545,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   return (
     <>
     {isResumeScreen && session ? (
-      <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[92px] lg:pb-8">
+      <div className="flex-1 overflow-y-auto lg:overflow-y-auto">
+        <div className="w-full max-w-[1600px] mx-auto px-1.5 sm:px-5 lg:px-8 pt-2 sm:pt-4 lg:pt-6 pb-2 lg:pb-8">
           <POSGuide tenantId={tenant?.id} hasSession={true} businessType={(tenant as any)?.business_type} />
           <POSLandingResume
             session={session}

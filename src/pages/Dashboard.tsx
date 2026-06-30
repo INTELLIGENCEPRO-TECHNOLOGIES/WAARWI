@@ -142,6 +142,15 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       return next;
     });
   };
+  const [heroLight, setHeroLight] = useState(() => {
+    try { return localStorage.getItem('dashboard_hero_light') === '1'; } catch { return false; }
+  });
+  const toggleHeroTheme = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !heroLight;
+    setHeroLight(next);
+    try { localStorage.setItem('dashboard_hero_light', next ? '1' : '0'); } catch {}
+  };
   const { can } = usePermissions();
 
   const [period, setPeriod] = useState<string>('today');
@@ -723,6 +732,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           nav={nav}
           balanceHidden={balanceHidden || !can('view_dashboard_stats')}
           toggleBalanceHidden={toggleBalanceHidden}
+          heroLight={heroLight}
+          toggleHeroTheme={toggleHeroTheme}
         />
       </div>
 
@@ -742,6 +753,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           setShowPeriodMenu={setShowPeriodMenu}
           periodOptions={periodOptions}
           periodLabel={periodLabel}
+          heroLight={heroLight}
+          toggleHeroTheme={toggleHeroTheme}
         />
       </div>
     </>
@@ -763,7 +776,7 @@ function getTimeAgo(dateStr: string): string {
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
   stats, shopInfo, dayDelta, marginPct, dayMarginPct, nav,
-  balanceHidden, toggleBalanceHidden,
+  balanceHidden, toggleBalanceHidden, heroLight, toggleHeroTheme,
 }: any) {
   const { tenant, currentSite, sites, setCurrentSite } = useApp();
 
@@ -868,16 +881,6 @@ function MobileDashboard({
   const [copied, setCopied] = useState(false);
   const shopUrl = shopInfo?.slug ? `${window.location.origin}/shop/${shopInfo.slug}` : '';
 
-  // ── Hero card theme toggle ─────────────────────────────────────────────
-  const [heroLight, setHeroLight] = useState(() => {
-    try { return localStorage.getItem('dashboard_hero_light') === '1'; } catch { return false; }
-  });
-  const toggleHeroTheme = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const next = !heroLight;
-    setHeroLight(next);
-    try { localStorage.setItem('dashboard_hero_light', next ? '1' : '0'); } catch {}
-  };
 
   const copyLink = () => {
     navigator.clipboard.writeText(shopUrl).then(() => {
@@ -1614,7 +1617,7 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
   );
 }
 
-function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel }: any) {
+function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, heroLight, toggleHeroTheme }: any) {
   const { tenant, currentSite, sites, setCurrentSite, profile } = useApp();
   const { can } = usePermissions();
 
@@ -1924,9 +1927,11 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
   const [fabOpen, setFabOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-white animate-fade-in">
+    <div className="min-h-full bg-white animate-fade-in">
+      {/* ── STICKY: TOP BAR + HERO ── */}
+      <div className="sticky top-0 z-10 bg-white border-b border-neutral-100">
       {/* ── TOP BAR ── */}
-      <div className="sticky top-0 z-20 bg-white border-b border-neutral-200">
+      <div className="border-b border-neutral-200">
         <div className="pl-[120px] pr-5 xl:pr-8 py-3 flex items-center gap-4">
           <div className="flex items-center gap-3 shrink-0">
             <div className="relative">
@@ -2040,68 +2045,91 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         </div>
       )}
 
-      <div className="px-5 xl:px-8 py-4 space-y-4">
+      <div className="px-5 xl:px-8 pt-4 pb-3">
 
         {/* ── ROW 1: Situation du jour (left) + Right column (Créances, Dettes, Stock) ── */}
         <div className="grid grid-cols-[minmax(0,2fr)_380px] gap-4" style={{ height: 320 }}>
           {/* Situation du jour */}
-          <div className="h-[320px] overflow-hidden bg-white rounded-xl border border-neutral-200 p-5 flex flex-col">
+          <div
+            className="relative h-[320px] overflow-hidden rounded-xl p-5 flex flex-col transition-all duration-300"
+            style={heroLight
+              ? { background: '#ffffff', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 0 0 1px rgba(226,232,240,0.6)' }
+              : { background: 'linear-gradient(160deg, #0a0a0a 0%, #171717 35%, #262626 65%, #404040 100%)', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
+            }
+          >
+            {!heroLight && (
+              <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+                <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-white/5 to-transparent blur-3xl" />
+                <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-white/3 to-transparent blur-3xl" />
+              </div>
+            )}
+            <div className="relative flex flex-col h-full">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-neutral-700" />
-                <h3 className="text-base font-bold text-neutral-900">Situation {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}</h3>
+                <TrendingUp className={`w-5 h-5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
+                <h3 className={`text-base font-bold ${heroLight ? 'text-neutral-900' : 'text-white'}`}>Situation {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}</h3>
               </div>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${dayDelta >= 0 ? 'border-neutral-200 text-neutral-700' : 'border-red-200 text-red-600'}`}>
-                {dayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {dayDelta >= 0 ? '+' : ''}{dayDelta}% vs hier
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${heroLight ? (dayDelta >= 0 ? 'border-neutral-200 text-neutral-700' : 'border-red-200 text-red-600') : (dayDelta >= 0 ? 'bg-white/10 border-white/15 text-white/80' : 'bg-rose-400/15 border-rose-400/20 text-rose-200')}`}>
+                  {dayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {dayDelta >= 0 ? '+' : ''}{dayDelta}% vs hier
+                </span>
+                <button
+                  onClick={toggleHeroTheme}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-90 ${heroLight ? 'bg-neutral-100 border border-neutral-200' : 'bg-white/10 border border-white/15'}`}
+                  aria-label="Changer le thème"
+                >
+                  <Palette className={`w-3 h-3 ${heroLight ? 'text-neutral-500' : 'text-white/60'}`} />
+                </button>
+              </div>
             </div>
 
             {/* Main amount */}
             <div className="mb-4">
-              <p className="text-[11px] text-neutral-400 font-medium mb-1">Encaissements {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
-              <p className="text-3xl font-bold text-neutral-900 num tracking-tight leading-none">{formatFCFA(stats.todayCollected)}</p>
+              <p className={`text-[11px] font-medium mb-1 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>Encaissements {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
+              <p className={`text-3xl font-bold num tracking-tight leading-none ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatFCFA(stats.todayCollected)}</p>
             </div>
 
             {/* KPI Grid */}
             <div className="grid grid-cols-3 gap-3 flex-1">
-              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Ventes facturées</p>
-                <p className="text-lg font-bold text-neutral-900 num leading-tight">{formatCompactFCFA(stats.todaySales)}</p>
+              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
+                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Ventes facturées</p>
+                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatCompactFCFA(stats.todaySales)}</p>
               </div>
-              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Encaissements directs</p>
-                <p className="text-lg font-bold text-neutral-900 num leading-tight">{formatCompactFCFA(stats.todayDirectCash)}</p>
+              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
+                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Encaissements directs</p>
+                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatCompactFCFA(stats.todayDirectCash)}</p>
               </div>
-              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Ventes</p>
-                <p className="text-lg font-bold text-neutral-900 num leading-tight">{stats.todayCount}</p>
+              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
+                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Ventes</p>
+                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{stats.todayCount}</p>
               </div>
-              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Solde caisse</p>
-                <p className="text-lg font-bold text-neutral-900 num leading-tight">{formatCompactFCFA(stats.cashBalance)}</p>
+              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
+                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Solde caisse</p>
+                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatCompactFCFA(stats.cashBalance)}</p>
               </div>
-              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Dépenses</p>
-                <p className="text-lg font-bold text-red-600 num leading-tight">{formatCompactFCFA(stats.sessionExpenses)}</p>
+              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
+                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Dépenses</p>
+                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-red-600' : 'text-rose-300'}`}>{formatCompactFCFA(stats.sessionExpenses)}</p>
               </div>
-              <div className="rounded-lg bg-neutral-50 px-3.5 py-3 flex flex-col justify-center border border-neutral-100">
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Ticket moyen</p>
-                <p className="text-lg font-bold text-neutral-900 num leading-tight">{stats.todayCount > 0 ? formatCompactFCFA(Math.round(stats.todaySales / stats.todayCount)) : '--'}</p>
+              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
+                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Ticket moyen</p>
+                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{stats.todayCount > 0 ? formatCompactFCFA(Math.round(stats.todaySales / stats.todayCount)) : '--'}</p>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between pt-3 mt-3 border-t border-neutral-100">
+            <div className={`flex items-center justify-between pt-3 mt-3 border-t ${heroLight ? 'border-neutral-100' : 'border-white/10'}`}>
               {lastSaleTime && (
-                <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                <div className={`flex items-center gap-1.5 text-xs ${heroLight ? 'text-neutral-400' : 'text-white/40'}`}>
                   <Clock className="w-3.5 h-3.5" />
                   Dernière vente à {lastSaleTime}
                 </div>
               )}
-              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-semibold text-neutral-900 hover:text-neutral-600 transition-colors ml-auto">
+              <button onClick={() => nav('sales')} className={`flex items-center gap-1 text-xs font-semibold transition-colors ml-auto ${heroLight ? 'text-neutral-900 hover:text-neutral-600' : 'text-white/80 hover:text-white'}`}>
                 Voir le détail <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
+            </div>
             </div>
           </div>
 
@@ -2171,6 +2199,11 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             </div>
           </div>
         </div>
+      </div>
+      </div>{/* closes sticky wrapper */}
+
+      {/* ── Cards area (scrolls behind sticky hero) ── */}
+      <div className="relative px-5 xl:px-8 pt-4 pb-6 space-y-4">
 
         {/* ── ROW 2: Vue multi-magasins (2+ sites) ou Top articles du jour (1 site) ── */}
         {hasMultiSites ? (multiSiteStats.length > 0 && (
