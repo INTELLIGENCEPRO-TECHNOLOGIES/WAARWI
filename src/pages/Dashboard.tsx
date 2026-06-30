@@ -1929,7 +1929,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
   return (
     <div className="min-h-full bg-white animate-fade-in">
       {/* ── STICKY: TOP BAR + HERO ── */}
-      <div className="sticky top-0 z-10 bg-white border-b border-neutral-100">
+      <div className="sticky top-0 z-20 bg-white border-b border-neutral-100">
       {/* ── TOP BAR ── */}
       <div className="border-b border-neutral-200">
         <div className="pl-[120px] pr-5 xl:pr-8 py-3 flex items-center gap-4">
@@ -2203,7 +2203,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       </div>{/* closes sticky wrapper */}
 
       {/* ── Cards area (scrolls behind sticky hero) ── */}
-      <div className="relative px-5 xl:px-8 pt-4 pb-6 space-y-4">
+      <div className="relative z-0 px-5 xl:px-8 pt-4 pb-6 space-y-4">
 
         {/* ── ROW 2: Vue multi-magasins (2+ sites) ou Top articles du jour (1 site) ── */}
         {hasMultiSites ? (multiSiteStats.length > 0 && (
