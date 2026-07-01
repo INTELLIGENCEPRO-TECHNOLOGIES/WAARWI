@@ -75,6 +75,7 @@ const PlatformAdmin = lazyWithRetry(() => import('./pages/PlatformAdmin').then(m
 const Reports = lazyWithRetry(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 const IPM = lazyWithRetry(() => import('./pages/IPM').then(m => ({ default: m.IPM })));
 const Warranties = lazyWithRetry(() => import('./pages/Warranties').then(m => ({ default: m.Warranties })));
+const MoneyTransfer = lazyWithRetry(() => import('./pages/MoneyTransfer').then(m => ({ default: m.MoneyTransfer })));
 
 function getShopRoute(): { slug: string; initialView: 'shop' | 'track' } | null {
   const m = window.location.pathname.match(/^\/shop\/([^/]+)(\/track)?/);
@@ -180,7 +181,7 @@ const ROUTE_MODULE: Record<string, string> = {
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
   acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting',
-  ipm: 'ipm', settings: 'settings', reports: 'reports',
+  ipm: 'ipm', money_transfer: 'money_transfer', settings: 'settings', reports: 'reports',
 };
 
 const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
@@ -203,6 +204,7 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
   acc_tiers: 'view_accounting',
   acc_search: 'view_accounting',
   acc_cloture: 'view_accounting',
+  money_transfer: 'access_money_transfer',
   settings: 'manage_settings',
 };
 
@@ -306,6 +308,7 @@ function Inner() {
         {route === 'reports' && <Reports />}
         {route === 'ipm' && <IPM />}
         {route === 'warranties' && <Warranties />}
+        {route === 'money_transfer' && <MoneyTransfer />}
         {route === 'platform_admin' && isSuperAdmin && <PlatformAdmin />}
       </Suspense>
       <TenantMessagePopup />

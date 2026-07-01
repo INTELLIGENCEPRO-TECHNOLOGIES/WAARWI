@@ -1,0 +1,1 @@
+ALTER TABLE mt_services ADD COLUMN IF NOT EXISTS logo_url text;

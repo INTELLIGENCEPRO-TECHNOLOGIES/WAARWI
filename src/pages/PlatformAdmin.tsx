@@ -6,7 +6,7 @@ import {
   Wrench as Wrench_, Store as Store_, ShoppingBag as ShoppingBag_, Shirt as Shirt_, Cpu as Cpu_,
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
-  ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse, Bell,
+  ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse, Bell, ArrowRightLeft,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -737,6 +737,7 @@ const MODULE_DEFS: { key: string; name: string; desc: string; icon: any; color: 
   { key: 'accounting', name: 'Comptabilité', desc: 'Plan comptable SYSCOHADA', icon: BookOpen_, color: 'amber' },
   { key: 'reports', name: 'États / Rapports', desc: 'Statistiques et rapports', icon: BarChart3, color: 'sky' },
   { key: 'ipm', name: 'IPM / Tiers payant', desc: 'Gestion mutuelle pharmacie', icon: HeartPulse, color: 'emerald' },
+  { key: 'money_transfer', name: 'Transfert d\'argent', desc: 'Gestion des transferts nationaux et internationaux', icon: ArrowRightLeft, color: 'sky' },
   { key: 'settings', name: 'Paramètres', desc: 'Configuration tenant', icon: Settings_, color: 'slate' },
 ];
 

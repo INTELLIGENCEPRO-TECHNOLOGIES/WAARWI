@@ -4,7 +4,7 @@ import {
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
-  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette,
+  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -14,7 +14,7 @@ export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'articles' | 'stock' | 'tiers'
   | 'sales' | 'billing' | 'supplier_orders' | 'online_orders' | 'master_catalog'
   | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture'
-  | 'ipm' | 'warranties'
+  | 'ipm' | 'warranties' | 'money_transfer'
   | 'settings' | 'platform_admin' | 'reports';
 
 const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any }[] }[] = [
@@ -49,6 +49,9 @@ const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any
     { key: 'acc_search', label: 'Recherche', icon: Search },
     { key: 'acc_cloture', label: 'Clôtures', icon: Lock },
   ]},
+  { title: 'Transfert', items: [
+    { key: 'money_transfer', label: 'Transfert d\'argent', icon: ArrowRightLeft },
+  ]},
   { title: 'Rapports', items: [
     { key: 'reports', label: 'Etats', icon: BarChart3 },
   ]},
@@ -70,7 +73,7 @@ const ROUTE_MODULE: Record<string, string> = {
   billing: 'billing', online_orders: 'online_orders', warranties: 'billing',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
   acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting',
-  ipm: 'ipm',
+  ipm: 'ipm', money_transfer: 'money_transfer',
   settings: 'settings', reports: 'reports',
 };
 
@@ -94,6 +97,7 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
   acc_tiers: 'view_accounting',
   acc_search: 'view_accounting',
   acc_cloture: 'view_accounting',
+  money_transfer: 'access_money_transfer',
   settings: 'manage_settings',
 };
 
