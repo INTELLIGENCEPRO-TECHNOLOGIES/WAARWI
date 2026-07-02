@@ -301,7 +301,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
   const topPoints = [...pointStats].sort((a, b) => b.opsCount - a.opsCount || b.volume - a.volume);
 
   return (
-    <div className="space-y-4 max-w-[1400px] mx-auto">
+    <div className="-mx-1 sm:-mx-2 lg:mx-0 space-y-2.5 lg:space-y-4 lg:max-w-[1400px] lg:mx-auto">
 
       {/* ── MOBILE HERO: Tableau de bord Transfert ── */}
       <div className="lg:hidden">
@@ -355,13 +355,29 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
               </div>
             )}
 
-            {/* Main Amount - Solde total toutes caisses */}
+            {/* Main Amount - Liquidités totales */}
             <div className="mb-3">
-              <p className="text-[9px] font-bold uppercase tracking-[0.07em] text-white/50 mb-0.5">Solde caisse espèces</p>
-              <p className="text-[clamp(22px,7vw,30px)] font-black text-white num leading-none">{fmt(totalCash)} <span className="text-[11px] font-normal text-white/40">FCFA</span></p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.07em] text-white/50 mb-0.5">Liquidités totales (Cash + UV + Crédit)</p>
+              <p className="text-[clamp(24px,8vw,32px)] font-black text-white num leading-none">{fmt(totalCash + totalUV + totalCredit)} <span className="text-[11px] font-normal text-white/40">FCFA</span></p>
             </div>
 
             {/* Key metrics grid */}
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
+                <p className="text-[8px] font-bold uppercase tracking-wider text-white/50 mb-0.5">Caisse</p>
+                <p className="text-[13px] font-black num text-white">{fmt(totalCash)}</p>
+              </div>
+              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
+                <p className="text-[8px] font-bold uppercase tracking-wider text-sky-400/70 mb-0.5">Solde UV</p>
+                <p className="text-[13px] font-black num text-sky-300">{fmt(totalUV)}</p>
+              </div>
+              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
+                <p className="text-[8px] font-bold uppercase tracking-wider text-amber-400/70 mb-0.5">Stock crédit</p>
+                <p className="text-[13px] font-black num text-amber-300">{fmt(totalCredit)}</p>
+              </div>
+            </div>
+
+            {/* Flows du jour */}
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
                 <p className="text-[8px] font-bold uppercase tracking-wider text-emerald-400/70 mb-0.5">Dépôts du jour</p>
@@ -370,14 +386,6 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
               <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
                 <p className="text-[8px] font-bold uppercase tracking-wider text-rose-400/70 mb-0.5">Retraits du jour</p>
                 <p className="text-[13px] font-black num text-rose-300">-{fmt(withdrawals)}</p>
-              </div>
-              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
-                <p className="text-[8px] font-bold uppercase tracking-wider text-sky-400/70 mb-0.5">Solde UV total</p>
-                <p className="text-[13px] font-black num text-sky-300">{fmt(totalUV)}</p>
-              </div>
-              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
-                <p className="text-[8px] font-bold uppercase tracking-wider text-amber-400/70 mb-0.5">Stock crédit</p>
-                <p className="text-[13px] font-black num text-amber-300">{fmt(totalCredit)}</p>
               </div>
             </div>
 
@@ -538,35 +546,16 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
         </div>
       </div>
 
-      {/* ── MOBILE: Quick stats row (visible only on mobile, replaces right column) ── */}
-      <div className="lg:hidden grid grid-cols-3 gap-2">
-        <div className="rounded-xl border border-neutral-200 bg-white p-3">
-          <TrendingUp className="w-3.5 h-3.5 text-neutral-400 mb-1" />
-          <p className="text-[9px] text-neutral-400 font-semibold uppercase">Points actifs</p>
-          <p className="text-base font-bold text-neutral-900 num">{points.length}</p>
-        </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-3">
-          <Wallet className="w-3.5 h-3.5 text-neutral-400 mb-1" />
-          <p className="text-[9px] text-neutral-400 font-semibold uppercase">Liquidités</p>
-          <p className="text-base font-bold text-neutral-900 num">{fmt(totalCash + totalUV)}</p>
-        </div>
-        <div className={`rounded-xl border ${uvAlerts > 0 ? 'border-orange-200 bg-orange-50/50' : 'border-neutral-200 bg-white'} p-3`}>
-          <AlertTriangle className={`w-3.5 h-3.5 mb-1 ${uvAlerts > 0 ? 'text-orange-500' : 'text-neutral-400'}`} />
-          <p className="text-[9px] text-neutral-400 font-semibold uppercase">Alertes</p>
-          <p className={`text-base font-bold num ${uvAlerts > 0 ? 'text-orange-600' : 'text-neutral-900'}`}>{uvAlerts}</p>
-        </div>
-      </div>
-
       {/* ── Détail par service ── */}
       {services.length > 0 && (
-        <div className="bg-white rounded-xl border border-neutral-200 p-4">
-          <div className="flex items-center gap-2.5 mb-3">
-            <ArrowRightLeft className="w-4 h-4 text-neutral-700" />
-            <h3 className="text-sm font-bold text-neutral-900">Activité par service</h3>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{services.length} service{services.length > 1 ? 's' : ''}</span>
+        <div className="bg-white rounded-[18px] lg:rounded-xl border border-neutral-200 overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
+          <div className="flex items-center gap-2.5 px-3.5 lg:px-4 py-2.5 lg:py-3 border-b border-neutral-100/50 bg-neutral-50/80">
+            <ArrowRightLeft className="w-3.5 h-3.5 text-neutral-700" />
+            <span className="text-[10px] lg:text-sm font-bold text-neutral-700 uppercase tracking-wider lg:tracking-normal lg:normal-case">Activité par service</span>
+            <span className="text-[9px] lg:text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{services.length}</span>
           </div>
           {/* Mobile: horizontal scroll */}
-          <div className="lg:hidden flex overflow-x-auto gap-2.5 snap-x snap-mandatory no-scrollbar -mx-4 px-4 pb-1">
+          <div className="lg:hidden flex overflow-x-auto gap-2 p-3 snap-x snap-mandatory no-scrollbar">
             {services.map(svc => {
               const st = serviceStats.find(s => s.id === svc.id);
               const svcDeposits = st?.deposits || 0;
@@ -574,34 +563,35 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
               const svcOps = st?.opsCount || 0;
               const svcUV = st?.uvBalance || 0;
               return (
-                <div key={svc.id} className="snap-start shrink-0 w-[calc(50%-6px)] p-3 rounded-lg border border-neutral-200 bg-neutral-50/50">
+                <div key={svc.id} className="snap-start shrink-0 w-[calc(50%-4px)] p-2.5 rounded-xl border border-neutral-200 bg-white">
                   <div className="flex items-center gap-1.5 mb-2">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${svcOps > 0 ? 'bg-sky-500' : 'bg-neutral-300'}`} />
-                    <span className="text-[11px] font-bold text-neutral-900 truncate">{svc.name}</span>
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${svcOps > 0 ? 'bg-sky-500' : 'bg-neutral-300'}`} />
+                    <span className="text-[10px] font-bold text-neutral-800 truncate">{svc.name}</span>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-neutral-400 font-semibold">Dépôts</span>
-                      <span className="text-[11px] font-bold text-emerald-700 num">{fmt(svcDeposits)}</span>
+                      <span className="text-[8px] text-neutral-400 font-semibold">Dépôts</span>
+                      <span className="text-[9px] font-bold text-emerald-700 num">{fmt(svcDeposits)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-neutral-400 font-semibold">Retraits</span>
-                      <span className="text-[11px] font-bold text-red-600 num">{fmt(svcWithdrawals)}</span>
+                      <span className="text-[8px] text-neutral-400 font-semibold">Retraits</span>
+                      <span className="text-[9px] font-bold text-red-600 num">{fmt(svcWithdrawals)}</span>
                     </div>
-                    <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100">
-                      <span className="text-[9px] text-neutral-600 font-bold">Solde UV</span>
-                      <span className="text-[11px] font-black text-neutral-900 num">{fmt(svcUV)}</span>
+                    <div className="flex items-center justify-between pt-1 border-t border-neutral-100">
+                      <span className="text-[8px] text-neutral-600 font-bold">Solde UV</span>
+                      <span className="text-[9px] font-bold text-neutral-900 num">{fmt(svcUV)}</span>
                     </div>
                   </div>
                   <div className="mt-1.5 pt-1 border-t border-neutral-50">
-                    <span className="text-[8px] text-neutral-400">{svcOps} opération{svcOps > 1 ? 's' : ''}</span>
+                    <span className="text-[8px] text-neutral-400">{svcOps} op.</span>
                   </div>
                 </div>
               );
             })}
           </div>
           {/* Desktop: grid */}
-          <div className="hidden lg:grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(services.length, 5)}, minmax(0, 1fr))` }}>
+          <div className="hidden lg:block p-4">
+            <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(services.length, 5)}, minmax(0, 1fr))` }}>
             {services.map(svc => {
               const st = serviceStats.find(s => s.id === svc.id);
               const svcDeposits = st?.deposits || 0;
@@ -634,6 +624,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       )}
