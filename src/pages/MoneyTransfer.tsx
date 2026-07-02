@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, Search, X, Check, AlertTriangle, Loader2, CreditCard as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, ChevronDown, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Zap, Smartphone, Activity, Package, Users } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, Search, X, Check, AlertTriangle, Loader2, CreditCard as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, ChevronDown, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Smartphone, Activity, Package, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -18,8 +18,11 @@ const SUB_NAV: { key: SubPage; label: string; icon: any }[] = [
 ];
 
 const OP_TYPE_LABELS: Record<string, string> = {
-  depot: 'Dépôt client',
-  retrait: 'Retrait client',
+  depot: 'Total dépôt du jour',
+  retrait: 'Total retrait du jour',
+  vente_credit: 'Vente crédit du jour',
+  reappro_credit: 'Réapprovisionnement stock crédit',
+  ajustement_credit: 'Ajustement stock crédit',
   achat_uv: 'Achat UV',
   recharge_grossiste: 'Recharge via grossiste',
   dechargement_grossiste: 'Déchargement vers grossiste',
@@ -257,7 +260,11 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
   const deposits = validOps.filter(o => o.type === 'depot').reduce((s, o) => s + Number(o.amount), 0);
   const withdrawals = validOps.filter(o => o.type === 'retrait').reduce((s, o) => s + Number(o.amount), 0);
   const opsCount = validOps.filter(o => !isOpeningOp(o)).length;
+  const totalCredit = filteredAccounts.filter(a => a.type === 'stock_credit').reduce((s, a) => s + Number(a.balance), 0);
+  const creditSales = validOps.filter(o => o.type === 'vente_credit').reduce((s, o) => s + Number(o.amount), 0);
   const uvAlerts = filteredAccounts.filter(a => a.type === 'uv' && Number(a.balance) < 50000).length;
+  const creditAlerts = filteredAccounts.filter(a => a.type === 'stock_credit' && Number(a.balance) < 20000).length;
+  const totalAlerts = uvAlerts + creditAlerts;
 
   // Per-service stats (filtered)
   const serviceStats = services.map(svc => {
@@ -296,8 +303,117 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto">
 
-      {/* ── ROW 1: Situation du jour (left) + 3 cards (right) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_380px] gap-4">
+      {/* ── MOBILE HERO: Tableau de bord Transfert ── */}
+      <div className="lg:hidden">
+        <div
+          className="w-full relative overflow-hidden rounded-[18px] p-4"
+          style={{ background: 'linear-gradient(160deg, #0a0a0a 0%, #171717 35%, #262626 65%, #404040 100%)', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }}
+        >
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[18px]">
+            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-white/5 to-transparent blur-3xl" />
+            <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-white/3 to-transparent blur-3xl" />
+          </div>
+          <div className="relative">
+            {/* Header with module name + point context */}
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-white/70" />
+                <span className="text-[10px] font-bold text-white/90">Transfert d'argent</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-bold text-white/50 num">
+                  {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+                <button onClick={() => load()} className="p-1 rounded-full hover:bg-white/10 transition-colors">
+                  <RefreshCw className="w-3 h-3 text-white/60" />
+                </button>
+              </div>
+            </div>
+
+            {/* Point de service context */}
+            <div className="flex items-center gap-1.5 mb-3">
+              <MapPin className="w-2.5 h-2.5 text-sky-400" />
+              <span className="text-[9px] font-semibold text-sky-300/80">
+                {selectedPointId ? getPointName(selectedPointId) : `Tous les points (${points.length})`}
+              </span>
+              {selectedPointId && (
+                <button onClick={() => setSelectedPointId(null)} className="ml-1 text-white/40 hover:text-white"><X className="w-2.5 h-2.5" /></button>
+              )}
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-auto" />
+              <span className="text-[8px] font-bold uppercase tracking-wider text-emerald-400/80">En direct</span>
+            </div>
+
+            {/* Alert banner if any */}
+            {totalAlerts > 0 && (
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-rose-500/15 border border-rose-400/20 mb-3">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                <span className="text-[9px] font-bold text-rose-200">
+                  {totalAlerts} {totalAlerts > 1 ? 'comptes' : 'compte'} en solde bas
+                  {uvAlerts > 0 && <span className="text-rose-300/70"> ({uvAlerts} UV{creditAlerts > 0 ? `, ${creditAlerts} crédit` : ''})</span>}
+                  {uvAlerts === 0 && creditAlerts > 0 && <span className="text-rose-300/70"> ({creditAlerts} crédit)</span>}
+                </span>
+              </div>
+            )}
+
+            {/* Main Amount - Solde total toutes caisses */}
+            <div className="mb-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.07em] text-white/50 mb-0.5">Solde caisse espèces</p>
+              <p className="text-[clamp(22px,7vw,30px)] font-black text-white num leading-none">{fmt(totalCash)} <span className="text-[11px] font-normal text-white/40">FCFA</span></p>
+            </div>
+
+            {/* Key metrics grid */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
+                <p className="text-[8px] font-bold uppercase tracking-wider text-emerald-400/70 mb-0.5">Dépôts du jour</p>
+                <p className="text-[13px] font-black num text-emerald-300">+{fmt(deposits)}</p>
+              </div>
+              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
+                <p className="text-[8px] font-bold uppercase tracking-wider text-rose-400/70 mb-0.5">Retraits du jour</p>
+                <p className="text-[13px] font-black num text-rose-300">-{fmt(withdrawals)}</p>
+              </div>
+              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
+                <p className="text-[8px] font-bold uppercase tracking-wider text-sky-400/70 mb-0.5">Solde UV total</p>
+                <p className="text-[13px] font-black num text-sky-300">{fmt(totalUV)}</p>
+              </div>
+              <div className="rounded-lg bg-white/5 border border-white/8 px-2.5 py-2">
+                <p className="text-[8px] font-bold uppercase tracking-wider text-amber-400/70 mb-0.5">Stock crédit</p>
+                <p className="text-[13px] font-black num text-amber-300">{fmt(totalCredit)}</p>
+              </div>
+            </div>
+
+            {/* Activity summary row */}
+            <div className="flex items-center justify-between py-2 rounded-lg bg-white/5 border border-white/8 px-2.5">
+              <div className="flex items-center gap-1.5">
+                <Activity className="w-3 h-3 text-white/50" />
+                <span className="text-[9px] font-bold text-white/60">Opérations du jour</span>
+              </div>
+              <span className="text-[13px] font-black num text-white/90">{opsCount}</span>
+            </div>
+
+            {/* Credit sales row if any */}
+            {creditSales > 0 && (
+              <div className="flex items-center justify-between py-2 mt-2 rounded-lg bg-amber-500/10 border border-amber-400/15 px-2.5">
+                <div className="flex items-center gap-1.5">
+                  <Smartphone className="w-3 h-3 text-amber-400" />
+                  <span className="text-[9px] font-bold text-amber-300/80">Ventes crédit du jour</span>
+                </div>
+                <span className="text-[13px] font-black num text-amber-300">{fmt(creditSales)}</span>
+              </div>
+            )}
+
+            {/* Footer - derniere operation */}
+            {filteredOps.length > 0 && (
+              <div className="flex items-center gap-1.5 pt-2 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <Clock className="w-3 h-3 text-white/30" />
+                <span className="text-[9px] text-white/40">Dernière opération à {new Date(filteredOps[0].operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── DESKTOP: Situation du jour (left) + 3 cards (right) ── */}
+      <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_380px] gap-4">
 
         {/* Situation du jour */}
         <div
@@ -392,7 +508,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-neutral-100 text-neutral-600' : 'bg-orange-50 text-orange-600'}`}>{i + 1}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-neutral-900 truncate">{pt.name}</p>
-                      <p className="text-[10px] text-neutral-400">{pt.opsCount} ops · D: {fmt(pt.deposits)} · R: {fmt(pt.withdrawals)}</p>
+                      <p className="text-[10px] text-neutral-400">{pt.opsCount} op. · Dép: {fmt(pt.deposits)} · Ret: {fmt(pt.withdrawals)}</p>
                     </div>
                   </div>
                 ))}
@@ -422,7 +538,26 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
         </div>
       </div>
 
-      {/* ── ROW 2: Détail par service ── */}
+      {/* ── MOBILE: Quick stats row (visible only on mobile, replaces right column) ── */}
+      <div className="lg:hidden grid grid-cols-3 gap-2">
+        <div className="rounded-xl border border-neutral-200 bg-white p-3">
+          <TrendingUp className="w-3.5 h-3.5 text-neutral-400 mb-1" />
+          <p className="text-[9px] text-neutral-400 font-semibold uppercase">Points actifs</p>
+          <p className="text-base font-bold text-neutral-900 num">{points.length}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3">
+          <Wallet className="w-3.5 h-3.5 text-neutral-400 mb-1" />
+          <p className="text-[9px] text-neutral-400 font-semibold uppercase">Liquidités</p>
+          <p className="text-base font-bold text-neutral-900 num">{fmt(totalCash + totalUV)}</p>
+        </div>
+        <div className={`rounded-xl border ${uvAlerts > 0 ? 'border-orange-200 bg-orange-50/50' : 'border-neutral-200 bg-white'} p-3`}>
+          <AlertTriangle className={`w-3.5 h-3.5 mb-1 ${uvAlerts > 0 ? 'text-orange-500' : 'text-neutral-400'}`} />
+          <p className="text-[9px] text-neutral-400 font-semibold uppercase">Alertes</p>
+          <p className={`text-base font-bold num ${uvAlerts > 0 ? 'text-orange-600' : 'text-neutral-900'}`}>{uvAlerts}</p>
+        </div>
+      </div>
+
+      {/* ── Détail par service ── */}
       {services.length > 0 && (
         <div className="bg-white rounded-xl border border-neutral-200 p-4">
           <div className="flex items-center gap-2.5 mb-3">
@@ -430,7 +565,43 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
             <h3 className="text-sm font-bold text-neutral-900">Activité par service</h3>
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{services.length} service{services.length > 1 ? 's' : ''}</span>
           </div>
-          <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(services.length, 5)}, minmax(0, 1fr))` }}>
+          {/* Mobile: horizontal scroll */}
+          <div className="lg:hidden flex overflow-x-auto gap-2.5 snap-x snap-mandatory no-scrollbar -mx-4 px-4 pb-1">
+            {services.map(svc => {
+              const st = serviceStats.find(s => s.id === svc.id);
+              const svcDeposits = st?.deposits || 0;
+              const svcWithdrawals = st?.withdrawals || 0;
+              const svcOps = st?.opsCount || 0;
+              const svcUV = st?.uvBalance || 0;
+              return (
+                <div key={svc.id} className="snap-start shrink-0 w-[calc(50%-6px)] p-3 rounded-lg border border-neutral-200 bg-neutral-50/50">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${svcOps > 0 ? 'bg-sky-500' : 'bg-neutral-300'}`} />
+                    <span className="text-[11px] font-bold text-neutral-900 truncate">{svc.name}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-neutral-400 font-semibold">Dépôts</span>
+                      <span className="text-[11px] font-bold text-emerald-700 num">{fmt(svcDeposits)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-neutral-400 font-semibold">Retraits</span>
+                      <span className="text-[11px] font-bold text-red-600 num">{fmt(svcWithdrawals)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100">
+                      <span className="text-[9px] text-neutral-600 font-bold">Solde UV</span>
+                      <span className="text-[11px] font-black text-neutral-900 num">{fmt(svcUV)}</span>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 pt-1 border-t border-neutral-50">
+                    <span className="text-[8px] text-neutral-400">{svcOps} opération{svcOps > 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* Desktop: grid */}
+          <div className="hidden lg:grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(services.length, 5)}, minmax(0, 1fr))` }}>
             {services.map(svc => {
               const st = serviceStats.find(s => s.id === svc.id);
               const svcDeposits = st?.deposits || 0;
@@ -467,83 +638,124 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
         </div>
       )}
 
-      {/* ── ROW 3: Vue multi-points de vente (clickable filter) ── */}
+      {/* ── Points de service (multi-point like multi-store mobile) ── */}
       {pointStats.length > 0 && (
-        <div className="bg-white rounded-xl border border-neutral-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2.5">
-              <MapPin className="w-4.5 h-4.5 text-neutral-700" />
-              <h3 className="text-sm font-bold text-neutral-900">Points de service</h3>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{points.length} point{points.length > 1 ? 's' : ''}</span>
+        <div className="bg-white rounded-[18px] lg:rounded-xl border border-neutral-200 overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-3.5 lg:px-4 py-2.5 lg:py-3 border-b border-neutral-100/50 bg-neutral-50/80">
+            <div className="flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-neutral-700" />
+              <span className="text-[10px] lg:text-sm font-bold text-neutral-700 uppercase tracking-wider lg:tracking-normal lg:normal-case">Points de service</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{points.length}</span>
             </div>
             <div className="flex items-center gap-2">
               {selectedPointId && (
-                <button onClick={() => setSelectedPointId(null)} className="text-[11px] font-medium text-sky-600 hover:text-sky-800 transition-colors">
-                  Afficher tous
+                <button onClick={() => setSelectedPointId(null)} className="text-[10px] font-medium text-sky-600 hover:text-sky-800 transition-colors">
+                  Tous
                 </button>
               )}
-              <span className="text-[11px] text-neutral-400">Cliquez pour filtrer</span>
+              <span className="hidden lg:inline text-[11px] text-neutral-400">Cliquez pour filtrer</span>
             </div>
           </div>
-          <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(pointStats.length, 5)}, minmax(0, 1fr))` }}>
-            {pointStats.slice(0, 10).map(pt => {
+
+          {/* Mobile: horizontal scroll cards */}
+          <div className="lg:hidden flex overflow-x-auto gap-2 p-3 snap-x snap-mandatory no-scrollbar">
+            {pointStats.map(pt => {
               const isSelected = selectedPointId === pt.id;
               return (
                 <button
                   key={pt.id}
                   onClick={() => setSelectedPointId(isSelected ? null : pt.id)}
-                  className={`p-3 rounded-lg border text-left transition-all duration-200 ${isSelected ? 'border-sky-400 bg-sky-50/50 ring-1 ring-sky-200' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}
+                  className={`snap-start shrink-0 w-[calc(50%-4px)] p-2.5 rounded-xl border text-left transition-all ${isSelected ? 'border-neutral-400 bg-neutral-50' : 'border-neutral-200 bg-white active:bg-neutral-50'}`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${pt.opsCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
-                      <span className="text-[11px] font-bold text-neutral-900 truncate">{pt.name}</span>
-                    </div>
-                    {isSelected && <span className="text-[8px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded shrink-0 ml-1">Filtre actif</span>}
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${pt.opsCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+                    <span className="text-[10px] font-bold text-neutral-900 truncate">{pt.name}</span>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-neutral-400 font-semibold">Dépôts</span>
-                      <span className="text-[11px] font-bold text-emerald-700 num">{fmt(pt.deposits)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-neutral-400 font-semibold">Retraits</span>
-                      <span className="text-[11px] font-bold text-red-600 num">{fmt(pt.withdrawals)}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100">
-                      <span className="text-[9px] text-neutral-600 font-bold">Cash</span>
-                      <span className="text-[11px] font-black text-neutral-900 num">{fmt(pt.cash)}</span>
+                      <span className="text-[8px] text-neutral-400 font-semibold">Dépôts</span>
+                      <span className="text-[9px] font-bold text-emerald-700 num">{fmt(pt.deposits)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-neutral-600 font-bold">UV</span>
-                      <span className="text-[11px] font-black text-neutral-900 num">{fmt(pt.uv)}</span>
+                      <span className="text-[8px] text-neutral-400 font-semibold">Retraits</span>
+                      <span className="text-[9px] font-bold text-red-600 num">{fmt(pt.withdrawals)}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-neutral-50">
-                    <span className="text-[8px] text-neutral-400">{pt.opsCount} opération{pt.opsCount > 1 ? 's' : ''}</span>
-                    <span className="text-[8px] text-neutral-400">{pt.servicesCount} service{pt.servicesCount > 1 ? 's' : ''}</span>
+                    <div className="flex items-center justify-between pt-0.5 border-t border-neutral-100">
+                      <span className="text-[8px] text-neutral-600 font-bold">Cash</span>
+                      <span className="text-[9px] font-bold text-neutral-900 num">{fmt(pt.cash)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] text-neutral-600 font-bold">UV</span>
+                      <span className="text-[9px] font-bold text-neutral-900 num">{fmt(pt.uv)}</span>
+                    </div>
                   </div>
                 </button>
               );
             })}
           </div>
-          {pointStats.length > 10 && (
-            <div className="flex justify-end mt-2">
-              <span className="text-[10px] text-neutral-400 font-medium">+{pointStats.length - 10} autre{pointStats.length - 10 > 1 ? 's' : ''} point{pointStats.length - 10 > 1 ? 's' : ''}</span>
+
+          {/* Desktop: grid */}
+          <div className="hidden lg:block p-4">
+            <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(pointStats.length, 5)}, minmax(0, 1fr))` }}>
+              {pointStats.slice(0, 10).map(pt => {
+                const isSelected = selectedPointId === pt.id;
+                return (
+                  <button
+                    key={pt.id}
+                    onClick={() => setSelectedPointId(isSelected ? null : pt.id)}
+                    className={`p-3 rounded-lg border text-left transition-all duration-200 ${isSelected ? 'border-sky-400 bg-sky-50/50 ring-1 ring-sky-200' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${pt.opsCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+                        <span className="text-[11px] font-bold text-neutral-900 truncate">{pt.name}</span>
+                      </div>
+                      {isSelected && <span className="text-[8px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded shrink-0 ml-1">Filtre actif</span>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-neutral-400 font-semibold">Dépôts</span>
+                        <span className="text-[11px] font-bold text-emerald-700 num">{fmt(pt.deposits)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-neutral-400 font-semibold">Retraits</span>
+                        <span className="text-[11px] font-bold text-red-600 num">{fmt(pt.withdrawals)}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100">
+                        <span className="text-[9px] text-neutral-600 font-bold">Cash</span>
+                        <span className="text-[11px] font-black text-neutral-900 num">{fmt(pt.cash)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-neutral-600 font-bold">UV</span>
+                        <span className="text-[11px] font-black text-neutral-900 num">{fmt(pt.uv)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-neutral-50">
+                      <span className="text-[8px] text-neutral-400">{pt.opsCount} opération{pt.opsCount > 1 ? 's' : ''}</span>
+                      <span className="text-[8px] text-neutral-400">{pt.servicesCount} service{pt.servicesCount > 1 ? 's' : ''}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-          )}
+            {pointStats.length > 10 && (
+              <div className="flex justify-end mt-2">
+                <span className="text-[10px] text-neutral-400 font-medium">+{pointStats.length - 10} autre{pointStats.length - 10 > 1 ? 's' : ''} point{pointStats.length - 10 > 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ── ROW 4: Dernières opérations (détaillées) ── */}
+      {/* ── Dernières opérations ── */}
       <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden flex flex-col" style={{ maxHeight: 420 }}>
-        <div className="px-5 py-3.5 border-b border-neutral-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
+        <div className="px-3.5 lg:px-5 py-3 lg:py-3.5 border-b border-neutral-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-neutral-700" />
             <h3 className="text-sm font-bold text-neutral-900">Dernières opérations</h3>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-bold border border-neutral-200">Temps réel</span>
           </div>
-          <span className="text-xs text-neutral-400">{filteredOps.length} opération{filteredOps.length > 1 ? 's' : ''} aujourd'hui</span>
+          <span className="text-[10px] lg:text-xs text-neutral-400">{filteredOps.length} op.</span>
         </div>
         {filteredOps.length === 0 ? (
           <div className="py-16 text-center">
@@ -557,48 +769,30 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
               const isDeposit = op.type === 'depot';
               const isWithdraw = op.type === 'retrait';
               return (
-                <div key={op.id} className="px-5 py-3 flex items-center gap-3 hover:bg-neutral-50/50 transition-colors">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isDeposit ? 'bg-emerald-50' : isWithdraw ? 'bg-red-50' : 'bg-neutral-100'}`}>
-                    {isDeposit ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" /> : isWithdraw ? <ArrowUpRight className="w-4 h-4 text-red-500" /> : <ArrowRightLeft className="w-4 h-4 text-neutral-500" />}
+                <div key={op.id} className="px-3.5 lg:px-5 py-3 flex items-center gap-2.5 lg:gap-3 hover:bg-neutral-50/50 transition-colors">
+                  <div className={`w-8 h-8 lg:w-9 lg:h-9 rounded-full flex items-center justify-center shrink-0 ${isDeposit ? 'bg-emerald-50' : isWithdraw ? 'bg-red-50' : 'bg-neutral-100'}`}>
+                    {isDeposit ? <ArrowDownLeft className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-emerald-600" /> : isWithdraw ? <ArrowUpRight className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-red-500" /> : <ArrowRightLeft className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-500" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-semibold text-neutral-900 truncate">{OP_TYPE_LABELS[op.type] || op.type}</p>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <p className="text-xs lg:text-sm font-semibold text-neutral-900 truncate">{OP_TYPE_LABELS[op.type] || op.type}</p>
                       {op.service_id && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 font-medium shrink-0">{getServiceName(op.service_id)}</span>
+                        <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 font-medium shrink-0">{getServiceName(op.service_id)}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />{getPointName(op.service_point_id)}
+                    <div className="flex items-center gap-1.5 text-[10px] lg:text-xs text-neutral-400 flex-wrap">
+                      <span className="flex items-center gap-0.5">
+                        <MapPin className="w-2.5 h-2.5 lg:w-3 lg:h-3" />{getPointName(op.service_point_id)}
                       </span>
                       <span className="text-neutral-200">|</span>
-                      <span className="flex items-center gap-1">
-                        <User className="w-3 h-3" />{getUserName(op.operated_by)}
-                      </span>
-                      <span className="text-neutral-200">|</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />{opTime}
-                      </span>
-                      {op.client_name && (
-                        <>
-                          <span className="text-neutral-200">|</span>
-                          <span>Client: {op.client_name}</span>
-                        </>
-                      )}
-                      {op.reference && (
-                        <>
-                          <span className="text-neutral-200">|</span>
-                          <span>Réf: {op.reference}</span>
-                        </>
-                      )}
+                      <span>{opTime}</span>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className={`text-sm font-bold num ${isDeposit ? 'text-emerald-700' : isWithdraw ? 'text-red-600' : 'text-neutral-900'}`}>
-                      {isDeposit ? '+' : isWithdraw ? '-' : ''}{fmt(op.amount)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span>
+                    <p className={`text-xs lg:text-sm font-bold num ${isDeposit ? 'text-emerald-700' : isWithdraw ? 'text-red-600' : 'text-neutral-900'}`}>
+                      {isDeposit ? '+' : isWithdraw ? '-' : ''}{fmt(op.amount)}
                     </p>
-                    <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded mt-0.5 ${STATUS_COLORS[op.status] || 'bg-neutral-100 text-neutral-600'}`}>
+                    <span className={`inline-block text-[9px] lg:text-[10px] font-medium px-1 lg:px-1.5 py-0.5 rounded mt-0.5 ${STATUS_COLORS[op.status] || 'bg-neutral-100 text-neutral-600'}`}>
                       {STATUS_LABELS[op.status] || op.status}
                     </span>
                   </div>
@@ -1092,7 +1286,7 @@ function MTServices() {
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', type: 'national', currency: 'XOF', alert_min_balance: '0', description: '' });
+  const [form, setForm] = useState({ name: '', type: 'national', family: 'transfert', currency: 'XOF', alert_min_balance: '0', description: '' });
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -1123,13 +1317,30 @@ function MTServices() {
   const save = async () => {
     if (!tenant || !form.name.trim()) return;
     setSaving(true);
-    const payload = { name: form.name, type: form.type, currency: form.currency, alert_min_balance: Number(form.alert_min_balance) || 0, description: form.description };
+    const payload = { name: form.name, type: form.type, family: form.family, currency: form.currency, alert_min_balance: Number(form.alert_min_balance) || 0, description: form.description };
     let serviceId = editId;
     if (editId) {
       await supabase.from('mt_services').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editId);
     } else {
       const { data } = await supabase.from('mt_services').insert({ ...payload, tenant_id: tenant.id }).select('id').single();
       serviceId = data?.id || null;
+      if (serviceId) {
+        const { data: activePoints } = await supabase.from('mt_service_points').select('id').eq('tenant_id', tenant.id).eq('status', 'active');
+        if (activePoints && activePoints.length > 0) {
+          const accType = form.family === 'credit_telephone' ? 'stock_credit' : 'uv';
+          const accLabel = form.family === 'credit_telephone' ? `Stock crédit ${form.name}` : `UV ${form.name}`;
+          const newAccounts = activePoints.map(pt => ({
+            tenant_id: tenant.id,
+            service_point_id: pt.id,
+            service_id: serviceId,
+            type: accType,
+            label: accLabel,
+            currency: form.currency || 'XOF',
+            balance: 0,
+          }));
+          await supabase.from('mt_accounts').insert(newAccounts);
+        }
+      }
     }
     if (serviceId && logoFile) {
       const logoUrl = await uploadLogo(serviceId);
@@ -1142,8 +1353,8 @@ function MTServices() {
     setEditId(null);
     setLogoFile(null);
     setLogoPreview('');
-    setForm({ name: '', type: 'national', currency: 'XOF', alert_min_balance: '0', description: '' });
-    toast.success(editId ? 'Service modifie' : 'Service cree');
+    setForm({ name: '', type: 'national', family: 'transfert', currency: 'XOF', alert_min_balance: '0', description: '' });
+    toast.success(editId ? 'Service modifié' : 'Service créé et initialisé');
     load();
   };
 
@@ -1165,7 +1376,7 @@ function MTServices() {
   };
 
   const edit = (s: any) => {
-    setForm({ name: s.name, type: s.type, currency: s.currency || 'XOF', alert_min_balance: String(s.alert_min_balance || 0), description: s.description || '' });
+    setForm({ name: s.name, type: s.type, family: s.family || 'transfert', currency: s.currency || 'XOF', alert_min_balance: String(s.alert_min_balance || 0), description: s.description || '' });
     setEditId(s.id);
     setLogoFile(null);
     setLogoPreview(s.logo_url || '');
@@ -1178,7 +1389,7 @@ function MTServices() {
     <div className="max-w-[1000px] mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-neutral-900">Services de transfert</h2>
-        <button onClick={() => { setShowForm(true); setEditId(null); setLogoFile(null); setLogoPreview(''); setForm({ name: '', type: 'national', currency: 'XOF', alert_min_balance: '0', description: '' }); }}
+        <button onClick={() => { setShowForm(true); setEditId(null); setLogoFile(null); setLogoPreview(''); setForm({ name: '', type: 'national', family: 'transfert', currency: 'XOF', alert_min_balance: '0', description: '' }); }}
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors">
           <Plus className="w-4 h-4" />Ajouter
         </button>
@@ -1213,6 +1424,10 @@ function MTServices() {
             </div>
             <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nom du service *" className="input" />
+              <select value={form.family} onChange={e => setForm({ ...form, family: e.target.value })} className="input">
+                <option value="transfert">Transfert d'argent</option>
+                <option value="credit_telephone">Crédit téléphonique</option>
+              </select>
               <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} className="input">
                 <option value="national">National</option>
                 <option value="international">International</option>
@@ -1227,7 +1442,7 @@ function MTServices() {
           <div className="flex gap-2 pt-2">
             <button onClick={() => { setShowForm(false); setEditId(null); setLogoFile(null); setLogoPreview(''); }} className="px-3 py-2 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
             <button onClick={save} disabled={saving || uploadingLogo || !form.name.trim()} className="px-4 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 disabled:opacity-50 flex items-center gap-2">
-              {(saving || uploadingLogo) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{editId ? 'Modifier' : 'Creer'}
+              {(saving || uploadingLogo) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{editId ? 'Modifier' : 'Créer'}
             </button>
           </div>
         </div>
@@ -1236,7 +1451,7 @@ function MTServices() {
       {services.length === 0 ? (
         <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
           <ArrowRightLeft className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucun service configure</p>
+          <p className="text-sm text-neutral-500">Aucun service configuré</p>
           <p className="text-xs text-neutral-400 mt-1">Ajoutez Orange Money, Wave, Ria, etc.</p>
         </div>
       ) : (
@@ -1252,7 +1467,7 @@ function MTServices() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-neutral-900">{s.name}</p>
-                <p className="text-xs text-neutral-400">{s.type === 'national' ? 'National' : s.type === 'international' ? 'International' : 'Mixte'} · {s.currency}{Number(s.alert_min_balance) > 0 ? ` · Alerte si < ${fmt(s.alert_min_balance)}` : ''}</p>
+                <p className="text-xs text-neutral-400">{s.family === 'credit_telephone' ? 'Crédit téléphonique' : 'Transfert'} · {s.type === 'national' ? 'National' : s.type === 'international' ? 'International' : 'Mixte'} · {s.currency}{Number(s.alert_min_balance) > 0 ? ` · Alerte si < ${fmt(s.alert_min_balance)}` : ''}</p>
               </div>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>{s.status === 'active' ? 'Actif' : 'Inactif'}</span>
               {s.logo_url && (
@@ -1287,7 +1502,7 @@ function MTOperations() {
   const [actionModal, setActionModal] = useState<any>(null);
   const [opModal, setOpModal] = useState<{ type: string; service: any } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [form, setForm] = useState({ amount: '', client_phone: '' });
+  const [form, setForm] = useState({ amount: '', note: '', reference: '' });
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState({ type: '', search: '' });
 
@@ -1338,7 +1553,7 @@ function MTOperations() {
     return filtered.filter(o => !isOpeningOp(o));
   }, [ops, selectedPoint, lastClosureAt]);
 
-  const todayDeposits = useMemo(() => todayOps.filter(o => o.type === 'depot').reduce((s, o) => s + Number(o.amount), 0), [todayOps]);
+  const todayDeposits = useMemo(() => todayOps.filter(o => ['depot', 'vente_credit'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0), [todayOps]);
   const todayWithdrawals = useMemo(() => todayOps.filter(o => o.type === 'retrait').reduce((s, o) => s + Number(o.amount), 0), [todayOps]);
 
   const getBalance = async (spId: string | null, svcId: string | null, type: string): Promise<number> => {
@@ -1355,20 +1570,36 @@ function MTOperations() {
     const amount = Number(form.amount) || 0;
     const sp = selectedPoint;
     const svc = opModal.service?.id || '';
+    const svcName = opModal.service?.name || '';
+    const svcFamily = opModal.service?.family || 'transfert';
     const opType = opModal.type;
+    const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const operatorName = profile?.full_name || 'Opérateur';
 
+    // Balance validation
     if (opType === 'depot' && svc) {
       const uvBal = await getBalance(sp, svc, 'uv');
-      if (uvBal < amount) { toast.error(`Solde UV insuffisant (${fmt(uvBal)} disponible)`); setSaving(false); return; }
+      if (uvBal < amount) { toast.error(`Solde UV ${svcName} insuffisant (${fmt(uvBal)} disponible)`); setSaving(false); return; }
     } else if (opType === 'retrait') {
       const cashBal = await getBalance(sp, null, 'cash');
       if (cashBal < amount) { toast.error(`Solde cash insuffisant (${fmt(cashBal)} disponible)`); setSaving(false); return; }
+    } else if (opType === 'vente_credit' && svc) {
+      const stockBal = await getBalance(sp, svc, 'stock_credit');
+      if (stockBal < amount) { toast.error(`Stock crédit ${svcName} insuffisant (${fmt(stockBal)} disponible)`); setSaving(false); return; }
     }
+
+    // Auto-generate label
+    let comment = '';
+    if (opType === 'depot') comment = `Total dépôt ${svcName} du jour - ${today} - ${selectedPointName} - ${operatorName}`;
+    else if (opType === 'retrait') comment = `Total retrait ${svcName} du jour - ${today} - ${selectedPointName} - ${operatorName}`;
+    else if (opType === 'vente_credit') comment = `Vente crédit ${svcName} du jour - ${today} - ${selectedPointName} - ${operatorName}`;
+    if (form.note) comment += ` | ${form.note}`;
 
     const { error } = await supabase.from('mt_operations').insert({
       tenant_id: tenant.id, service_point_id: sp, service_id: svc || null,
       type: opType, amount, commission: 0,
-      client_phone: form.client_phone || null, status: 'validee',
+      comment, reference: form.reference || null,
+      status: 'validee',
       operated_by: profile?.id || null, validated_by: profile?.id || null,
     });
 
@@ -1379,14 +1610,17 @@ function MTOperations() {
       } else if (opType === 'retrait') {
         await updateBalance(tenant.id, sp, null, 'cash', -amount);
         if (svc) await updateBalance(tenant.id, sp, svc, 'uv', amount);
+      } else if (opType === 'vente_credit') {
+        await updateBalance(tenant.id, sp, null, 'cash', amount);
+        if (svc) await updateBalance(tenant.id, sp, svc, 'stock_credit', -amount);
       }
-      toast.success('Operation validee');
+      toast.success('Opération enregistrée');
     } else {
       toast.error('Erreur: ' + error.message);
     }
     setSaving(false);
     setOpModal(null);
-    setForm({ amount: '', client_phone: '' });
+    setForm({ amount: '', note: '', reference: '' });
     load();
   };
 
@@ -1405,12 +1639,15 @@ function MTOperations() {
     } else if (op.type === 'achat_uv') {
       await updateBalance(tenant!.id, sp, null, 'cash', amount);
       if (svc) await updateBalance(tenant!.id, sp, svc, 'uv', -amount);
+    } else if (op.type === 'vente_credit') {
+      await updateBalance(tenant!.id, sp, null, 'cash', -amount);
+      if (svc) await updateBalance(tenant!.id, sp, svc, 'stock_credit', amount);
     }
-    toast.success('Operation annulee');
+    toast.success('Opération annulée');
     load();
   };
 
-  const clientOpTypes = ['depot', 'retrait', 'achat_uv', 'ajustement', 'annulation'];
+  const clientOpTypes = ['depot', 'retrait', 'vente_credit', 'reappro_credit', 'ajustement_credit', 'achat_uv', 'ajustement', 'annulation'];
   const historyOps = useMemo(() => {
     let r = ops.filter(o => clientOpTypes.includes(o.type));
     if (!can('mt_client_operation_view_all')) r = r.filter(o => o.operated_by === profile?.id);
@@ -1418,7 +1655,7 @@ function MTOperations() {
     if (filter.type) r = r.filter(o => o.type === filter.type);
     if (filter.search) {
       const q = filter.search.toLowerCase();
-      r = r.filter(o => (o.client_name || '').toLowerCase().includes(q) || (o.client_phone || '').toLowerCase().includes(q) || (o.reference || '').toLowerCase().includes(q));
+      r = r.filter(o => (o.comment || '').toLowerCase().includes(q) || (o.reference || '').toLowerCase().includes(q));
     }
     return r;
   }, [ops, filter, profile, selectedPoint]);
@@ -1428,7 +1665,16 @@ function MTOperations() {
     if (name.includes('wave')) return { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-700', icon: 'text-sky-600' };
     if (name.includes('orange')) return { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', icon: 'text-orange-600' };
     if (name.includes('free')) return { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', icon: 'text-teal-600' };
+    if (name.includes('expresso')) return { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: 'text-amber-600' };
     return { bg: 'bg-neutral-50', border: 'border-neutral-200', text: 'text-neutral-700', icon: 'text-neutral-600' };
+  };
+
+  const transferServices = useMemo(() => availableServices.filter(s => s.family !== 'credit_telephone'), [availableServices]);
+  const creditServices = useMemo(() => availableServices.filter(s => s.family === 'credit_telephone'), [availableServices]);
+
+  const getServiceStock = (svcId: string): number => {
+    const accs = selectedPoint ? accounts.filter(a => a.type === 'stock_credit' && a.service_id === svcId && a.service_point_id === selectedPoint) : accounts.filter(a => a.type === 'stock_credit' && a.service_id === svcId);
+    return accs.reduce((s, a) => s + Number(a.balance), 0);
   };
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
@@ -1436,7 +1682,7 @@ function MTOperations() {
   const selectedPointName = points.find(p => p.id === selectedPoint)?.name || '';
 
   return (
-    <div className="max-w-[900px] mx-auto flex flex-col h-[calc(100vh-180px)] overflow-hidden">
+    <div className="max-w-[900px] mx-auto flex flex-col h-[calc(100dvh-160px)] lg:h-[calc(100vh-180px)] overflow-hidden">
       {/* Top bar: point selector */}
       <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-2.5">
@@ -1445,7 +1691,7 @@ function MTOperations() {
           </div>
           {points.length > 1 ? (
             <select value={selectedPoint} onChange={e => setSelectedPoint(e.target.value)} className="text-sm font-semibold text-neutral-900 bg-transparent border-none p-0 focus:ring-0 cursor-pointer">
-              <option value="">Selectionner un point</option>
+              <option value="">Sélectionner un point</option>
               {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           ) : (
@@ -1466,7 +1712,7 @@ function MTOperations() {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <MapPin className="w-10 h-10 text-neutral-200 mx-auto mb-3" />
-            <p className="text-sm text-neutral-400">Selectionnez un point de service</p>
+            <p className="text-sm text-neutral-400">Sélectionnez un point de service</p>
           </div>
         </div>
       ) : (
@@ -1484,51 +1730,86 @@ function MTOperations() {
             </div>
             <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-neutral-100">
               <div>
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Depots</p>
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Entrées cash</p>
                 <p className="text-sm font-bold text-emerald-600 num mt-0.5">+{fmt(todayDeposits)}</p>
               </div>
               <div>
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Retraits</p>
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Sorties cash</p>
                 <p className="text-sm font-bold text-red-500 num mt-0.5">-{fmt(todayWithdrawals)}</p>
               </div>
               <div>
-                <p className="text-[10px] font-medium text-neutral-400 uppercase">Operations</p>
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Opérations</p>
                 <p className="text-sm font-bold text-neutral-900 num mt-0.5">{todayOps.length}</p>
               </div>
             </div>
           </div>
 
-          {/* Service cards - centered, square, premium */}
-          <div className="shrink-0">
-            <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-4 text-center">Services</p>
-            <div className="flex flex-wrap justify-center gap-4">
-              {availableServices.length === 0 ? (
-                <p className="text-xs text-neutral-400">Aucun service configure</p>
-              ) : (
-                availableServices.map(svc => {
-                  const color = getServiceColor(svc);
-                  const uvBal = getServiceUV(svc.id);
-                  return (
-                    <button
-                      key={svc.id}
-                      onClick={() => setActionModal(svc)}
-                      className="w-[150px] h-[150px] rounded-2xl bg-white border border-neutral-100 shadow-lg shadow-neutral-200/60 hover:shadow-xl hover:shadow-neutral-300/50 hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center justify-center gap-2 p-4"
-                    >
-                      <div className="w-16 h-16 flex items-center justify-center">
-                        {svc.logo_url ? <img src={svc.logo_url} alt="" className="w-14 h-14 object-contain" /> : <Smartphone className={`w-10 h-10 ${color.icon}`} />}
-                      </div>
-                      <p className="text-xs font-semibold text-neutral-900 text-center truncate w-full">{svc.name}</p>
-                      <p className={`text-sm font-bold num ${svc.alert_min_balance > 0 && uvBal < svc.alert_min_balance ? 'text-red-600' : color.text}`}>{fmt(uvBal)}</p>
-                    </button>
-                  );
-                })
-              )}
-            </div>
+          {/* Service cards - split by family */}
+          <div className="flex-1 min-h-0 overflow-y-auto pb-4 space-y-6">
+            {/* Transfert d'argent */}
+            {transferServices.length > 0 && (
+              <div>
+                <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <ArrowRightLeft className="w-3.5 h-3.5" />Transfert d'argent
+                </p>
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+                  {transferServices.map(svc => {
+                    const color = getServiceColor(svc);
+                    const uvBal = getServiceUV(svc.id);
+                    return (
+                      <button
+                        key={svc.id}
+                        onClick={() => setActionModal(svc)}
+                        className="w-[130px] h-[130px] sm:w-[150px] sm:h-[150px] rounded-2xl bg-white border border-neutral-100 shadow-lg shadow-neutral-200/60 hover:shadow-xl hover:shadow-neutral-300/50 hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-3 sm:p-4"
+                      >
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center">
+                          {svc.logo_url ? <img src={svc.logo_url} alt="" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" /> : <Smartphone className={`w-8 h-8 sm:w-10 sm:h-10 ${color.icon}`} />}
+                        </div>
+                        <p className="text-[10px] sm:text-xs font-semibold text-neutral-900 text-center truncate w-full">{svc.name}</p>
+                        <p className={`text-xs sm:text-sm font-bold num ${svc.alert_min_balance > 0 && uvBal < svc.alert_min_balance ? 'text-red-600' : color.text}`}>{fmt(uvBal)}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Crédit téléphonique */}
+            {creditServices.length > 0 && (
+              <div>
+                <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Smartphone className="w-3.5 h-3.5" />Crédit téléphonique
+                </p>
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+                  {creditServices.map(svc => {
+                    const color = getServiceColor(svc);
+                    const stockBal = getServiceStock(svc.id);
+                    return (
+                      <button
+                        key={svc.id}
+                        onClick={() => { setOpModal({ type: 'vente_credit', service: svc }); }}
+                        className="w-[130px] h-[130px] sm:w-[150px] sm:h-[150px] rounded-2xl bg-white border border-neutral-100 shadow-lg shadow-neutral-200/60 hover:shadow-xl hover:shadow-neutral-300/50 hover:-translate-y-0.5 transition-all duration-200 flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-3 sm:p-4"
+                      >
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center">
+                          {svc.logo_url ? <img src={svc.logo_url} alt="" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" /> : <Smartphone className={`w-8 h-8 sm:w-10 sm:h-10 ${color.icon}`} />}
+                        </div>
+                        <p className="text-[10px] sm:text-xs font-semibold text-neutral-900 text-center truncate w-full">{svc.name}</p>
+                        <p className={`text-xs sm:text-sm font-bold num ${svc.alert_min_balance > 0 && stockBal < svc.alert_min_balance ? 'text-red-600' : color.text}`}>{fmt(stockBal)}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {transferServices.length === 0 && creditServices.length === 0 && (
+              <p className="text-xs text-neutral-400 text-center">Aucun service configuré</p>
+            )}
           </div>
         </div>
       )}
 
-      {/* Action modal - choose deposit or withdrawal */}
+      {/* Action modal - choose deposit or withdrawal for transfer services */}
       {actionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setActionModal(null)}>
           <div className="bg-white rounded-2xl shadow-2xl p-5 w-[280px] animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
@@ -1544,14 +1825,14 @@ function MTOperations() {
                 <button onClick={() => { setOpModal({ type: 'depot', service: actionModal }); setActionModal(null); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors">
                   <ArrowDownLeft className="w-5 h-5 text-emerald-600" />
-                  <span className="text-sm font-semibold text-emerald-800">Depot client</span>
+                  <span className="text-sm font-semibold text-emerald-800">Dépôt du jour</span>
                 </button>
               )}
               {can('mt_client_withdrawal_create') && (
                 <button onClick={() => { setOpModal({ type: 'retrait', service: actionModal }); setActionModal(null); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 hover:bg-red-100 transition-colors">
                   <ArrowUpRight className="w-5 h-5 text-red-500" />
-                  <span className="text-sm font-semibold text-red-700">Retrait client</span>
+                  <span className="text-sm font-semibold text-red-700">Retrait du jour</span>
                 </button>
               )}
             </div>
@@ -1559,38 +1840,52 @@ function MTOperations() {
         </div>
       )}
 
-      {/* Operation modal - compact: amount + phone */}
+      {/* Operation modal - daily consolidated entry */}
       {opModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => { setOpModal(null); setForm({ amount: '', client_phone: '' }); }}>
-          <div className="bg-white rounded-2xl shadow-2xl p-5 w-[320px] animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
-            <div className={`flex items-center gap-2 mb-4 pb-3 border-b ${opModal.type === 'depot' ? 'border-emerald-100' : 'border-red-100'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${opModal.type === 'depot' ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                {opModal.type === 'depot' ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" /> : <ArrowUpRight className="w-4 h-4 text-red-500" />}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => { setOpModal(null); setForm({ amount: '', note: '', reference: '' }); }}>
+          <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-[340px] animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
+            <div className={`flex items-center gap-2 mb-4 pb-3 border-b ${opModal.type === 'depot' || opModal.type === 'vente_credit' ? 'border-emerald-100' : 'border-red-100'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${opModal.type === 'depot' || opModal.type === 'vente_credit' ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                {opModal.type === 'depot' ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" /> : opModal.type === 'vente_credit' ? <Smartphone className="w-4 h-4 text-emerald-600" /> : <ArrowUpRight className="w-4 h-4 text-red-500" />}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-neutral-900">{opModal.type === 'depot' ? 'Depot' : 'Retrait'}</p>
+                <p className="text-sm font-semibold text-neutral-900">
+                  {opModal.type === 'depot' ? 'Total dépôt du jour' : opModal.type === 'retrait' ? 'Total retrait du jour' : 'Vente crédit du jour'}
+                </p>
                 <p className="text-[10px] text-neutral-400">{opModal.service.name} - {selectedPointName}</p>
               </div>
-              <button onClick={() => { setOpModal(null); setForm({ amount: '', client_phone: '' }); }} className="p-1 rounded-lg hover:bg-neutral-100"><X className="w-4 h-4 text-neutral-400" /></button>
+              <button onClick={() => { setOpModal(null); setForm({ amount: '', note: '', reference: '' }); }} className="p-1 rounded-lg hover:bg-neutral-100"><X className="w-4 h-4 text-neutral-400" /></button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-medium text-neutral-500 uppercase mb-1">Montant (FCFA)</label>
+                <label className="block text-[10px] font-medium text-neutral-500 uppercase mb-1">Montant total (FCFA)</label>
                 <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} type="number" placeholder="0" autoFocus
                   className="w-full px-3 py-2.5 text-xl font-bold text-neutral-900 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent text-center num" />
               </div>
               <div>
-                <label className="block text-[10px] font-medium text-neutral-500 uppercase mb-1">Telephone client</label>
-                <input value={form.client_phone} onChange={e => setForm({ ...form, client_phone: e.target.value })} type="tel" placeholder="7X XXX XX XX"
+                <label className="block text-[10px] font-medium text-neutral-500 uppercase mb-1">Référence opérateur (optionnel)</label>
+                <input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} type="text" placeholder="Ex: TX-12345"
+                  className="w-full px-3 py-2 text-sm bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-neutral-500 uppercase mb-1">Note (optionnel)</label>
+                <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} type="text" placeholder="Observation du jour..."
                   className="w-full px-3 py-2 text-sm bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent" />
               </div>
             </div>
+            <div className="mt-3 px-3 py-2 bg-neutral-50 rounded-lg">
+              <p className="text-[9px] text-neutral-400 leading-relaxed">
+                Libellé automatique : <span className="font-medium text-neutral-600">
+                  {opModal.type === 'depot' ? `Total dépôt ${opModal.service.name} du jour` : opModal.type === 'retrait' ? `Total retrait ${opModal.service.name} du jour` : `Vente crédit ${opModal.service.name} du jour`}
+                </span>
+              </p>
+            </div>
             <button onClick={createOp} disabled={saving || !form.amount}
               className={`w-full mt-4 py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
-                opModal.type === 'depot' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-500 hover:bg-red-600'
+                opModal.type === 'depot' || opModal.type === 'vente_credit' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-500 hover:bg-red-600'
               }`}>
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Valider {opModal.type === 'depot' ? 'le depot' : 'le retrait'}
+              Valider
             </button>
           </div>
         </div>
@@ -1634,7 +1929,7 @@ function MTOperations() {
                     <th className="text-left px-5 py-2.5">Date / Heure</th>
                     <th className="text-left px-3 py-2.5">Type</th>
                     <th className="text-left px-3 py-2.5">Service</th>
-                    <th className="text-left px-3 py-2.5">Client</th>
+                    <th className="text-left px-3 py-2.5">Libellé</th>
                     <th className="text-right px-3 py-2.5">Montant</th>
                     <th className="text-center px-3 py-2.5">Statut</th>
                     <th className="text-right px-5 py-2.5">Action</th>
@@ -1651,8 +1946,8 @@ function MTOperations() {
                           <p className="text-[10px] text-neutral-400">{new Date(op.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                         </td>
                         <td className="px-3 py-2.5">
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${op.type === 'depot' ? 'text-emerald-700' : op.type === 'retrait' ? 'text-red-600' : 'text-neutral-600'}`}>
-                            {op.type === 'depot' ? <ArrowDownLeft className="w-3 h-3" /> : op.type === 'retrait' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowRightLeft className="w-3 h-3" />}
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${op.type === 'depot' || op.type === 'vente_credit' ? 'text-emerald-700' : op.type === 'retrait' ? 'text-red-600' : 'text-neutral-600'}`}>
+                            {op.type === 'depot' ? <ArrowDownLeft className="w-3 h-3" /> : op.type === 'retrait' ? <ArrowUpRight className="w-3 h-3" /> : op.type === 'vente_credit' ? <Smartphone className="w-3 h-3" /> : <ArrowRightLeft className="w-3 h-3" />}
                             {OP_TYPE_LABELS[op.type] || op.type}
                           </span>
                         </td>
@@ -1661,12 +1956,11 @@ function MTOperations() {
                           {pt && <p className="text-[10px] text-neutral-400">{pt.name}</p>}
                         </td>
                         <td className="px-3 py-2.5">
-                          <p className="text-xs text-neutral-700">{op.client_name || op.client_phone || '—'}</p>
-                          {op.reference && <p className="text-[10px] text-neutral-400">{op.reference}</p>}
+                          <p className="text-xs text-neutral-700 truncate max-w-[200px]">{op.comment || op.reference || '—'}</p>
                         </td>
                         <td className="px-3 py-2.5 text-right">
-                          <p className={`text-xs font-bold num ${op.type === 'depot' ? 'text-emerald-700' : op.type === 'retrait' ? 'text-red-600' : 'text-neutral-900'}`}>
-                            {op.type === 'depot' ? '+' : op.type === 'retrait' ? '-' : ''}{fmt(op.amount)}
+                          <p className={`text-xs font-bold num ${['depot', 'vente_credit'].includes(op.type) ? 'text-emerald-700' : op.type === 'retrait' ? 'text-red-600' : 'text-neutral-900'}`}>
+                            {['depot', 'vente_credit'].includes(op.type) ? '+' : op.type === 'retrait' ? '-' : ''}{fmt(op.amount)}
                           </p>
                         </td>
                         <td className="px-3 py-2.5 text-center">
@@ -1700,7 +1994,6 @@ async function updateBalance(tenantId: string, spId: string | null, svcId: strin
   if (data) {
     await supabase.from('mt_accounts').update({ balance: Number(data.balance) + delta, updated_at: new Date().toISOString() }).eq('id', data.id);
   } else {
-    // Try without service_id filter for cash/bank accounts
     if (!svcId && (type === 'cash' || type === 'bank')) {
       let q2 = supabase.from('mt_accounts').select('*').eq('tenant_id', tenantId).eq('type', type);
       if (spId) q2 = q2.eq('service_point_id', spId);
@@ -1710,7 +2003,7 @@ async function updateBalance(tenantId: string, spId: string | null, svcId: strin
         return;
       }
     }
-    const label = type === 'cash' ? 'Caisse' : type === 'uv' ? 'UV' : type === 'bank' ? 'Banque' : 'Écarts';
+    const label = type === 'cash' ? 'Caisse' : type === 'uv' ? 'UV' : type === 'bank' ? 'Banque' : type === 'stock_credit' ? 'Stock crédit' : 'Écarts';
     await supabase.from('mt_accounts').insert({ tenant_id: tenantId, service_point_id: spId || null, service_id: svcId || null, type, label, balance: delta, currency: 'XOF' });
   }
 }
@@ -1893,14 +2186,14 @@ function MTWholesalerOperations() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [opType, setOpType] = useState<'recharge_grossiste' | 'dechargement_grossiste'>('recharge_grossiste');
+  const [opType, setOpType] = useState<'recharge_grossiste' | 'dechargement_grossiste' | 'reappro_credit'>('recharge_grossiste');
   const [form, setForm] = useState({ wholesaler_id: '', service_id: '', service_point_id: '', amount: '', comment: '' });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!tenant) return;
     const [{ data: o }, { data: w }, { data: s }, { data: p }, { data: a }] = await Promise.all([
-      supabase.from('mt_operations').select('*').eq('tenant_id', tenant.id).in('type', ['recharge_grossiste', 'dechargement_grossiste', 'versement_banque', 'retrait_banque']).order('operated_at', { ascending: false }).limit(100),
+      supabase.from('mt_operations').select('*').eq('tenant_id', tenant.id).in('type', ['recharge_grossiste', 'dechargement_grossiste', 'reappro_credit', 'versement_banque', 'retrait_banque']).order('operated_at', { ascending: false }).limit(100),
       supabase.from('mt_wholesalers').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
       supabase.from('mt_services').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
       supabase.from('mt_service_points').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
@@ -1919,6 +2212,7 @@ function MTWholesalerOperations() {
 
   const cashTotal = accounts.filter(a => a.type === 'cash').reduce((s, a) => s + Number(a.balance), 0);
   const getServiceUV = (svcId: string) => accounts.filter(a => a.type === 'uv' && a.service_id === svcId).reduce((s, a) => s + Number(a.balance), 0);
+  const getServiceCredit = (svcId: string) => accounts.filter(a => a.type === 'stock_credit' && a.service_id === svcId).reduce((s, a) => s + Number(a.balance), 0);
 
   const createOp = async () => {
     if (!tenant || !form.service_point_id || !form.amount || !form.service_id) return;
@@ -1937,11 +2231,14 @@ function MTWholesalerOperations() {
 
     const cashBefore = await getBalance(sp, null, 'cash');
     const uvBefore = await getBalance(sp, svc, 'uv');
+    const creditBefore = await getBalance(sp, svc, 'stock_credit');
 
     if (opType === 'recharge_grossiste') {
       if (cashBefore < amount) { toast.error(`Solde cash insuffisant (${fmt(cashBefore)} FCFA disponible)`); setSaving(false); return; }
-    } else {
+    } else if (opType === 'dechargement_grossiste') {
       if (uvBefore < amount) { toast.error(`Solde UV insuffisant (${fmt(uvBefore)} FCFA disponible)`); setSaving(false); return; }
+    } else if (opType === 'reappro_credit') {
+      if (cashBefore < amount) { toast.error(`Solde cash insuffisant (${fmt(cashBefore)} FCFA disponible)`); setSaving(false); return; }
     }
 
     const { error } = await supabase.from('mt_operations').insert({
@@ -1957,18 +2254,21 @@ function MTWholesalerOperations() {
       operated_by: profile?.id || null,
       validated_by: profile?.id || null,
       balance_before_cash: cashBefore,
-      balance_after_cash: opType === 'recharge_grossiste' ? cashBefore - amount : cashBefore + amount,
-      balance_before_uv: uvBefore,
-      balance_after_uv: opType === 'recharge_grossiste' ? uvBefore + amount : uvBefore - amount,
+      balance_after_cash: opType === 'dechargement_grossiste' ? cashBefore + amount : cashBefore - amount,
+      balance_before_uv: opType === 'reappro_credit' ? creditBefore : uvBefore,
+      balance_after_uv: opType === 'recharge_grossiste' ? uvBefore + amount : opType === 'dechargement_grossiste' ? uvBefore - amount : creditBefore + amount,
     });
 
     if (!error) {
       if (opType === 'recharge_grossiste') {
         await updateBalance(tenant.id, sp, null, 'cash', -amount);
         await updateBalance(tenant.id, sp, svc, 'uv', amount);
-      } else {
+      } else if (opType === 'dechargement_grossiste') {
         await updateBalance(tenant.id, sp, svc, 'uv', -amount);
         await updateBalance(tenant.id, sp, null, 'cash', amount);
+      } else if (opType === 'reappro_credit') {
+        await updateBalance(tenant.id, sp, null, 'cash', -amount);
+        await updateBalance(tenant.id, sp, svc, 'stock_credit', amount);
       }
       toast.success('Opération grossiste enregistrée');
     } else {
@@ -1989,9 +2289,12 @@ function MTWholesalerOperations() {
     if (op.type === 'recharge_grossiste') {
       await updateBalance(tenant!.id, sp, null, 'cash', amount);
       await updateBalance(tenant!.id, sp, svc, 'uv', -amount);
-    } else {
+    } else if (op.type === 'dechargement_grossiste') {
       await updateBalance(tenant!.id, sp, svc, 'uv', amount);
       await updateBalance(tenant!.id, sp, null, 'cash', -amount);
+    } else if (op.type === 'reappro_credit') {
+      await updateBalance(tenant!.id, sp, null, 'cash', amount);
+      await updateBalance(tenant!.id, sp, svc, 'stock_credit', -amount);
     }
     toast.success('Opération grossiste annulée');
     load();
@@ -2035,18 +2338,22 @@ function MTWholesalerOperations() {
       {/* Formulaire nouvelle opération grossiste */}
       {showForm && can('mt_wholesaler_operation_create') && (
         <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
             <button onClick={() => setOpType('recharge_grossiste')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${opType === 'recharge_grossiste' ? 'bg-emerald-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}>
-              Recharge via grossiste
+              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${opType === 'recharge_grossiste' ? 'bg-emerald-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}>
+              Recharge UV
             </button>
             <button onClick={() => setOpType('dechargement_grossiste')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${opType === 'dechargement_grossiste' ? 'bg-red-500 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}>
-              Déchargement vers grossiste
+              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${opType === 'dechargement_grossiste' ? 'bg-red-500 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}>
+              Déchargement UV
+            </button>
+            <button onClick={() => setOpType('reappro_credit')}
+              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${opType === 'reappro_credit' ? 'bg-amber-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}>
+              Réappro. crédit
             </button>
           </div>
           <p className="text-xs text-neutral-500">
-            {opType === 'recharge_grossiste' ? 'Vous donnez du cash au grossiste et recevez du solde électronique.' : 'Vous envoyez du solde électronique au grossiste et recevez du cash.'}
+            {opType === 'recharge_grossiste' ? 'Vous donnez du cash au grossiste et recevez du solde électronique (UV).' : opType === 'dechargement_grossiste' ? 'Vous envoyez du solde électronique au grossiste et recevez du cash.' : 'Vous achetez du stock de crédit téléphonique (cash vers stock crédit).'}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <select value={form.wholesaler_id} onChange={e => setForm({ ...form, wholesaler_id: e.target.value })} className="input">
@@ -2055,7 +2362,7 @@ function MTWholesalerOperations() {
             </select>
             <select value={form.service_id} onChange={e => setForm({ ...form, service_id: e.target.value })} className="input">
               <option value="">Service *</option>
-              {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {services.filter(s => opType === 'reappro_credit' ? s.family === 'credit_telephone' : s.family !== 'credit_telephone').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             {points.length > 1 && (
               <select value={form.service_point_id} onChange={e => setForm({ ...form, service_point_id: e.target.value })} className="input">
@@ -2077,14 +2384,14 @@ function MTWholesalerOperations() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-neutral-400 mb-0.5">Caisse</p>
-                  <p className={`text-sm font-bold ${opType === 'recharge_grossiste' ? 'text-red-600' : 'text-emerald-600'}`}>
-                    {opType === 'recharge_grossiste' ? '-' : '+'}{fmt(Number(form.amount))} FCFA
+                  <p className={`text-sm font-bold ${opType === 'dechargement_grossiste' ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {opType === 'dechargement_grossiste' ? '+' : '-'}{fmt(Number(form.amount))} FCFA
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-neutral-400 mb-0.5">Solde UV {getServiceName(form.service_id)}</p>
-                  <p className={`text-sm font-bold ${opType === 'recharge_grossiste' ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {opType === 'recharge_grossiste' ? '+' : '-'}{fmt(Number(form.amount))} FCFA
+                  <p className="text-xs text-neutral-400 mb-0.5">{opType === 'reappro_credit' ? `Stock crédit ${getServiceName(form.service_id)}` : `Solde UV ${getServiceName(form.service_id)}`}</p>
+                  <p className={`text-sm font-bold ${opType === 'dechargement_grossiste' ? 'text-red-600' : 'text-emerald-600'}`}>
+                    {opType === 'dechargement_grossiste' ? '-' : '+'}{fmt(Number(form.amount))} FCFA
                   </p>
                 </div>
               </div>
@@ -2095,10 +2402,10 @@ function MTWholesalerOperations() {
             <button onClick={() => setShowForm(false)} className="px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
             <button onClick={createOp} disabled={saving || !form.amount || !form.service_id || !form.service_point_id}
               className={`px-6 py-2.5 text-sm font-semibold text-white rounded-lg flex items-center gap-2 disabled:opacity-50 transition-colors ${
-                opType === 'recharge_grossiste' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-500 hover:bg-red-600'
+                opType === 'recharge_grossiste' ? 'bg-emerald-600 hover:bg-emerald-700' : opType === 'dechargement_grossiste' ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-700'
               }`}>
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Valider {opType === 'recharge_grossiste' ? 'la recharge' : 'le déchargement'}
+              Valider {opType === 'recharge_grossiste' ? 'la recharge' : opType === 'dechargement_grossiste' ? 'le déchargement' : 'le réapprovisionnement'}
             </button>
           </div>
         </div>
@@ -2119,9 +2426,9 @@ function MTWholesalerOperations() {
             {ops.map(op => (
               <div key={op.id} className="px-4 py-3 flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                  (op.type === 'recharge_grossiste' || op.type === 'retrait_banque') ? 'bg-emerald-50' : 'bg-red-50'
+                  (op.type === 'recharge_grossiste' || op.type === 'retrait_banque' || op.type === 'reappro_credit') ? 'bg-emerald-50' : 'bg-red-50'
                 }`}>
-                  {(op.type === 'recharge_grossiste' || op.type === 'retrait_banque') ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" /> : <ArrowUpRight className="w-4 h-4 text-red-500" />}
+                  {(op.type === 'recharge_grossiste' || op.type === 'retrait_banque' || op.type === 'reappro_credit') ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" /> : <ArrowUpRight className="w-4 h-4 text-red-500" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-neutral-900">{OP_TYPE_LABELS[op.type] || op.type}</p>
@@ -2198,16 +2505,19 @@ function MTBalances() {
   const getName = (id: string | null, list: any[]) => list.find(i => i.id === id)?.name || '—';
   const totalCash = filteredAccounts.filter(a => a.type === 'cash').reduce((s, a) => s + Number(a.balance), 0);
   const totalUV = filteredAccounts.filter(a => a.type === 'uv').reduce((s, a) => s + Number(a.balance), 0);
+  const totalCredit = filteredAccounts.filter(a => a.type === 'stock_credit').reduce((s, a) => s + Number(a.balance), 0);
 
-  const cashEntries = filteredOps.filter(o => ['depot', 'dechargement_grossiste'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
+  const cashEntries = filteredOps.filter(o => ['depot', 'dechargement_grossiste', 'vente_credit'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
   const cashExits = filteredOps.filter(o => ['retrait', 'recharge_grossiste', 'achat_uv'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
   const uvEntries = filteredOps.filter(o => ['retrait', 'recharge_grossiste', 'achat_uv'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
   const uvExits = filteredOps.filter(o => ['depot', 'dechargement_grossiste'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
+  const creditSales = filteredOps.filter(o => o.type === 'vente_credit').reduce((s, o) => s + Number(o.amount), 0);
 
   const availableSvcIds = selectedPointId ? pointServiceLinks.filter(ps => ps.service_point_id === selectedPointId).map(ps => ps.service_id) : null;
   const filteredUVAccounts = filteredAccounts.filter(a => a.type === 'uv' && (!availableSvcIds || availableSvcIds.length === 0 || availableSvcIds.includes(a.service_id)));
+  const filteredCreditAccounts = filteredAccounts.filter(a => a.type === 'stock_credit' && (!availableSvcIds || availableSvcIds.length === 0 || availableSvcIds.includes(a.service_id)));
 
-  const lowBalanceAlerts = filteredUVAccounts.filter(a => {
+  const lowBalanceAlerts = [...filteredUVAccounts, ...filteredCreditAccounts].filter(a => {
     const svc = services.find(s => s.id === a.service_id);
     const threshold = svc?.alert_min_balance;
     if (!threshold || threshold <= 0) return false;
@@ -2218,7 +2528,7 @@ function MTBalances() {
   const periodLabel = dateRange === 'today' ? "aujourd'hui" : dateRange === 'week' ? '7 derniers jours' : '30 derniers jours';
 
   return (
-    <div className="max-w-[900px] mx-auto flex flex-col h-[calc(100vh-180px)] overflow-hidden">
+    <div className="max-w-[900px] mx-auto flex flex-col h-[calc(100dvh-160px)] lg:h-[calc(100vh-180px)] overflow-hidden">
       {/* Barre du haut */}
       <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-2.5">
@@ -2247,13 +2557,13 @@ function MTBalances() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Solde total disponible</p>
-              <p className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight num">{fmt(totalCash + totalUV)} <span className="text-base font-medium text-neutral-400">FCFA</span></p>
+              <p className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight num">{fmt(totalCash + totalUV + totalCredit)} <span className="text-base font-medium text-neutral-400">FCFA</span></p>
             </div>
             <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
               <Wallet className="w-5 h-5 text-emerald-600" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-neutral-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-neutral-100">
             <div>
               <p className="text-[10px] font-medium text-neutral-400 uppercase">Caisse (Cash)</p>
               <p className="text-sm font-bold text-neutral-900 num mt-0.5">{fmt(totalCash)}</p>
@@ -2261,6 +2571,10 @@ function MTBalances() {
             <div>
               <p className="text-[10px] font-medium text-neutral-400 uppercase">Unités Virtuelles</p>
               <p className="text-sm font-bold text-sky-700 num mt-0.5">{fmt(totalUV)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-neutral-400 uppercase">Stock crédit</p>
+              <p className="text-sm font-bold text-amber-700 num mt-0.5">{fmt(totalCredit)}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-neutral-400 uppercase">Opérations</p>
@@ -2274,7 +2588,7 @@ function MTBalances() {
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2.5">
               <AlertTriangle className="w-4 h-4 text-amber-600" />
-              <h3 className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Alertes - Solde UV bas</h3>
+              <h3 className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Alertes - Solde bas</h3>
             </div>
             <div className="space-y-2">
               {lowBalanceAlerts.map(a => {
@@ -2339,6 +2653,17 @@ function MTBalances() {
                 <p className="text-sm font-bold text-orange-600 num">-{fmt(uvExits)}</p>
               </div>
             </div>
+            {creditSales > 0 && (
+              <div className="col-span-2 flex items-center gap-3 bg-amber-50/60 rounded-xl px-3.5 py-3">
+                <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                  <Smartphone className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-neutral-500 uppercase">Ventes crédit téléphonique</p>
+                  <p className="text-sm font-bold text-amber-700 num">{fmt(creditSales)}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2371,7 +2696,7 @@ function MTBalances() {
         {filteredUVAccounts.length > 0 && (
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-neutral-100">
-              <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">Solde UV par service</h3>
+              <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">Solde UV par service (Transfert)</h3>
             </div>
             <div className="divide-y divide-neutral-100">
               {filteredUVAccounts.map(a => {
@@ -2384,6 +2709,40 @@ function MTBalances() {
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 flex items-center justify-center">
                         {svc?.logo_url ? <img src={svc.logo_url} className="w-6 h-6 object-contain" /> : <Smartphone className="w-4 h-4 text-sky-500" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-neutral-900">{svcName}</p>
+                        {!selectedPointId && <p className="text-[10px] text-neutral-400">{ptName}</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-sm font-bold num ${isLow ? 'text-amber-700' : 'text-neutral-900'}`}>{fmt(a.balance)} FCFA</p>
+                      {isLow && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Bas</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Stock crédit par service */}
+        {filteredCreditAccounts.length > 0 && (
+          <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-neutral-100">
+              <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">Stock crédit par service (Crédit téléphonique)</h3>
+            </div>
+            <div className="divide-y divide-neutral-100">
+              {filteredCreditAccounts.map(a => {
+                const svc = services.find(s => s.id === a.service_id);
+                const svcName = svc?.name || '—';
+                const ptName = getName(a.service_point_id, points);
+                const isLow = svc?.alert_min_balance > 0 && Number(a.balance) < svc.alert_min_balance;
+                return (
+                  <div key={a.id} className="px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 flex items-center justify-center">
+                        {svc?.logo_url ? <img src={svc.logo_url} className="w-6 h-6 object-contain" /> : <Smartphone className="w-4 h-4 text-amber-500" />}
                       </div>
                       <div>
                         <p className="text-sm font-medium text-neutral-900">{svcName}</p>
@@ -2423,11 +2782,12 @@ function MTClosures() {
   const [points, setPoints] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showOpeningForm, setShowOpeningForm] = useState(false);
   const [selectedPointId, setSelectedPointId] = useState('');
-  const [theoretical, setTheoretical] = useState<{ cash: number; uvByService: { serviceId: string; name: string; amount: number }[] } | null>(null);
+  const [theoretical, setTheoretical] = useState<{ cash: number; uvByService: { serviceId: string; name: string; amount: number }[]; creditByService: { serviceId: string; name: string; amount: number }[] } | null>(null);
   const [actualInputs, setActualInputs] = useState<Record<string, string>>({});
   const [openingInputs, setOpeningInputs] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
@@ -2436,16 +2796,18 @@ function MTClosures() {
 
   const load = useCallback(async () => {
     if (!tenant) return;
-    const [{ data: c }, { data: p }, { data: s }, { data: a }] = await Promise.all([
-      supabase.from('mt_closures').select('*').eq('tenant_id', tenant.id).order('closure_date', { ascending: false }).limit(50),
+    const [{ data: c }, { data: p }, { data: s }, { data: a }, { data: pr }] = await Promise.all([
+      supabase.from('mt_closures').select('*').eq('tenant_id', tenant.id).order('closed_at', { ascending: false }).limit(50),
       supabase.from('mt_service_points').select('*').eq('tenant_id', tenant.id).eq('status', 'active'),
       supabase.from('mt_services').select('*').eq('tenant_id', tenant.id).eq('status', 'active'),
       supabase.from('mt_accounts').select('*').eq('tenant_id', tenant.id),
+      supabase.from('profiles').select('id,full_name').eq('tenant_id', tenant.id),
     ]);
     setClosures(c || []);
     setPoints(p || []);
     setServices(s || []);
     setAccounts(a || []);
+    setProfiles(pr || []);
     setLoading(false);
   }, [tenant]);
 
@@ -2458,15 +2820,25 @@ function MTClosures() {
 
     const pointAccounts = accounts.filter(a => a.service_point_id === pointId);
     const cashBalance = pointAccounts.filter(a => a.type === 'cash').reduce((s, a) => s + Number(a.balance), 0);
-    const uvAccounts = pointAccounts.filter(a => a.type === 'uv');
-    const uvByService = uvAccounts.map(a => {
-      const svc = services.find(s => s.id === a.service_id);
-      return { serviceId: a.service_id || '', name: svc?.name || 'Service', amount: Number(a.balance) };
+
+    const transferSvcs = services.filter(s => s.family !== 'credit_telephone');
+    const creditSvcs = services.filter(s => s.family === 'credit_telephone');
+
+    const uvByService = transferSvcs.map(svc => {
+      const acc = pointAccounts.find(a => a.type === 'uv' && a.service_id === svc.id);
+      return { serviceId: svc.id, name: svc.name, amount: acc ? Number(acc.balance) : 0 };
     });
 
-    setTheoretical({ cash: cashBalance, uvByService });
-    setActualInputs({ cash: String(cashBalance) });
-    uvByService.forEach(uv => { setActualInputs(prev => ({ ...prev, [`uv_${uv.serviceId}`]: String(uv.amount) })); });
+    const creditByService = creditSvcs.map(svc => {
+      const acc = pointAccounts.find(a => a.type === 'stock_credit' && a.service_id === svc.id);
+      return { serviceId: svc.id, name: svc.name, amount: acc ? Number(acc.balance) : 0 };
+    });
+
+    setTheoretical({ cash: cashBalance, uvByService, creditByService });
+    const inputs: Record<string, string> = { cash: String(cashBalance) };
+    uvByService.forEach(uv => { inputs[`uv_${uv.serviceId}`] = String(uv.amount); });
+    creditByService.forEach(cr => { inputs[`credit_${cr.serviceId}`] = String(cr.amount); });
+    setActualInputs(inputs);
     setLoadingTheoretical(false);
   };
 
@@ -2484,11 +2856,16 @@ function MTClosures() {
     const cashDiff = cashActual - theoretical.cash;
 
     const { data: todayOps } = await supabase.from('mt_operations').select('*').eq('tenant_id', tenant.id).eq('service_point_id', selectedPointId).gte('operated_at', today + 'T00:00:00').eq('status', 'validee');
-    const cashIn = (todayOps || []).filter(o => ['depot', 'dechargement_grossiste'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
+    const cashIn = (todayOps || []).filter(o => ['depot', 'dechargement_grossiste', 'vente_credit'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
     const cashOut = (todayOps || []).filter(o => ['retrait', 'recharge_grossiste', 'achat_uv'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
 
     const uvTheoreticalTotal = theoretical.uvByService.reduce((s, uv) => s + uv.amount, 0);
     const uvActualTotal = theoretical.uvByService.reduce((s, uv) => s + Number(actualInputs[`uv_${uv.serviceId}`] || 0), 0);
+
+    const creditTheoreticalTotal = theoretical.creditByService.reduce((s, cr) => s + cr.amount, 0);
+    const creditActualTotal = theoretical.creditByService.reduce((s, cr) => s + Number(actualInputs[`credit_${cr.serviceId}`] || 0), 0);
+
+    const totalVentesCredit = (todayOps || []).filter(o => o.type === 'vente_credit').reduce((s, o) => s + Number(o.amount), 0);
 
     await supabase.from('mt_closures').insert({
       tenant_id: tenant.id,
@@ -2505,8 +2882,8 @@ function MTClosures() {
       uv_theoretical: uvTheoreticalTotal,
       uv_actual: uvActualTotal,
       uv_difference: uvActualTotal - uvTheoreticalTotal,
-      bank_theoretical: 0,
-      commissions_generated: 0,
+      bank_theoretical: creditTheoreticalTotal,
+      commissions_generated: totalVentesCredit,
       status: 'cloturee',
       closed_by: profile?.id,
       closed_at: new Date().toISOString(),
@@ -2531,15 +2908,40 @@ function MTClosures() {
     load();
   };
 
-  const startOpening = (pointId: string) => {
+  const startOpening = async (pointId: string) => {
     setSelectedPointId(pointId);
     setShowOpeningForm(true);
     const pointAccounts = accounts.filter(a => a.service_point_id === pointId);
     const inputs: Record<string, string> = {};
     inputs.cash = String(pointAccounts.filter(a => a.type === 'cash').reduce((s, a) => s + Number(a.balance), 0));
-    pointAccounts.filter(a => a.type === 'uv').forEach(a => {
-      inputs[`uv_${a.service_id}`] = String(Number(a.balance));
-    });
+
+    const transferSvcs = services.filter(s => s.family !== 'credit_telephone');
+    const creditSvcs = services.filter(s => s.family === 'credit_telephone');
+
+    // Create missing UV accounts for transfer services
+    const missingTransfer = transferSvcs.filter(svc => !pointAccounts.find(a => a.type === 'uv' && a.service_id === svc.id));
+    // Create missing stock_credit accounts for credit services
+    const missingCredit = creditSvcs.filter(svc => !pointAccounts.find(a => a.type === 'stock_credit' && a.service_id === svc.id));
+
+    const newAccounts: any[] = [
+      ...missingTransfer.map(svc => ({ tenant_id: tenant!.id, service_point_id: pointId, service_id: svc.id, type: 'uv', label: `UV ${svc.name}`, currency: svc.currency || 'XOF', balance: 0 })),
+      ...missingCredit.map(svc => ({ tenant_id: tenant!.id, service_point_id: pointId, service_id: svc.id, type: 'stock_credit', label: `Stock crédit ${svc.name}`, currency: svc.currency || 'XOF', balance: 0 })),
+    ];
+
+    if (newAccounts.length > 0 && tenant) {
+      const { data: inserted } = await supabase.from('mt_accounts').insert(newAccounts).select('*');
+      if (inserted) {
+        const updatedAccounts = [...accounts, ...inserted];
+        setAccounts(updatedAccounts);
+        const allPointAccounts = updatedAccounts.filter(a => a.service_point_id === pointId);
+        allPointAccounts.filter(a => a.type === 'uv').forEach(a => { inputs[`uv_${a.service_id}`] = String(Number(a.balance)); });
+        allPointAccounts.filter(a => a.type === 'stock_credit').forEach(a => { inputs[`credit_${a.service_id}`] = String(Number(a.balance)); });
+      }
+    } else {
+      pointAccounts.filter(a => a.type === 'uv').forEach(a => { inputs[`uv_${a.service_id}`] = String(Number(a.balance)); });
+      pointAccounts.filter(a => a.type === 'stock_credit').forEach(a => { inputs[`credit_${a.service_id}`] = String(Number(a.balance)); });
+    }
+
     setOpeningInputs(inputs);
   };
 
@@ -2559,13 +2961,42 @@ function MTClosures() {
       }
     }
 
-    const uvAccs = pointAccounts.filter(a => a.type === 'uv');
-    for (const uvAcc of uvAccs) {
-      const newUv = Number(openingInputs[`uv_${uvAcc.service_id}`] || 0);
-      const diff = newUv - Number(uvAcc.balance);
-      if (Math.abs(diff) >= 1) {
-        await supabase.from('mt_accounts').update({ balance: newUv, updated_at: new Date().toISOString() }).eq('id', uvAcc.id);
-        await supabase.from('mt_operations').insert({ tenant_id: tenant.id, service_point_id: selectedPointId, service_id: uvAcc.service_id, type: 'ajustement', amount: Math.abs(diff), commission: 0, status: 'validee', reference: 'OUVERTURE-JOUR', comment: `Ajustement d'ouverture UV: nouveau solde ${newUv}`, operated_by: profile?.id, validated_by: profile?.id });
+    const transferSvcs = services.filter(s => s.family !== 'credit_telephone');
+    const creditSvcs = services.filter(s => s.family === 'credit_telephone');
+
+    // Handle transfer services (UV accounts)
+    for (const svc of transferSvcs) {
+      const uvAcc = pointAccounts.find(a => a.type === 'uv' && a.service_id === svc.id);
+      const newUv = Number(openingInputs[`uv_${svc.id}`] || 0);
+      if (uvAcc) {
+        const diff = newUv - Number(uvAcc.balance);
+        if (Math.abs(diff) >= 1) {
+          await supabase.from('mt_accounts').update({ balance: newUv, updated_at: new Date().toISOString() }).eq('id', uvAcc.id);
+          await supabase.from('mt_operations').insert({ tenant_id: tenant.id, service_point_id: selectedPointId, service_id: svc.id, type: 'ajustement', amount: Math.abs(diff), commission: 0, status: 'validee', reference: 'OUVERTURE-JOUR', comment: `Ajustement d'ouverture UV ${svc.name}: nouveau solde ${newUv}`, operated_by: profile?.id, validated_by: profile?.id });
+        }
+      } else if (newUv > 0) {
+        const { data: newAcc } = await supabase.from('mt_accounts').insert({ tenant_id: tenant.id, service_point_id: selectedPointId, service_id: svc.id, type: 'uv', label: `UV ${svc.name}`, currency: svc.currency || 'XOF', balance: newUv }).select('id').single();
+        if (newAcc) {
+          await supabase.from('mt_operations').insert({ tenant_id: tenant.id, service_point_id: selectedPointId, service_id: svc.id, type: 'ajustement', amount: newUv, commission: 0, status: 'validee', reference: 'OUVERTURE-JOUR', comment: `Initialisation UV ${svc.name}: solde ${newUv}`, operated_by: profile?.id, validated_by: profile?.id });
+        }
+      }
+    }
+
+    // Handle credit services (stock_credit accounts)
+    for (const svc of creditSvcs) {
+      const creditAcc = pointAccounts.find(a => a.type === 'stock_credit' && a.service_id === svc.id);
+      const newCredit = Number(openingInputs[`credit_${svc.id}`] || 0);
+      if (creditAcc) {
+        const diff = newCredit - Number(creditAcc.balance);
+        if (Math.abs(diff) >= 1) {
+          await supabase.from('mt_accounts').update({ balance: newCredit, updated_at: new Date().toISOString() }).eq('id', creditAcc.id);
+          await supabase.from('mt_operations').insert({ tenant_id: tenant.id, service_point_id: selectedPointId, service_id: svc.id, type: 'ajustement_credit', amount: Math.abs(diff), commission: 0, status: 'validee', reference: 'OUVERTURE-JOUR', comment: `Ajustement d'ouverture stock crédit ${svc.name}: nouveau solde ${newCredit}`, operated_by: profile?.id, validated_by: profile?.id });
+        }
+      } else if (newCredit > 0) {
+        const { data: newAcc } = await supabase.from('mt_accounts').insert({ tenant_id: tenant.id, service_point_id: selectedPointId, service_id: svc.id, type: 'stock_credit', label: `Stock crédit ${svc.name}`, currency: svc.currency || 'XOF', balance: newCredit }).select('id').single();
+        if (newAcc) {
+          await supabase.from('mt_operations').insert({ tenant_id: tenant.id, service_point_id: selectedPointId, service_id: svc.id, type: 'ajustement_credit', amount: newCredit, commission: 0, status: 'validee', reference: 'OUVERTURE-JOUR', comment: `Initialisation stock crédit ${svc.name}: solde ${newCredit}`, operated_by: profile?.id, validated_by: profile?.id });
+        }
       }
     }
 
@@ -2617,12 +3048,12 @@ function MTClosures() {
                 <p className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-3">Soldes théoriques vs réels</p>
                 <div className="space-y-3">
                   {/* Cash */}
-                  <div className="grid grid-cols-4 gap-3 items-center">
-                    <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 items-center">
+                    <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
                       <Banknote className="w-4 h-4 text-emerald-500" />
                       <span className="text-sm font-medium text-neutral-900">Cash</span>
                     </div>
-                    <div className="text-center">
+                    <div className="text-left sm:text-center">
                       <p className="text-[10px] text-neutral-400">Théorique</p>
                       <p className="text-sm font-semibold text-neutral-700">{fmt(theoretical.cash)}</p>
                     </div>
@@ -2637,31 +3068,74 @@ function MTClosures() {
                       </p>
                     </div>
                   </div>
-                  {/* UV per service */}
-                  {theoretical.uvByService.map(uv => (
-                    <div key={uv.serviceId} className="grid grid-cols-4 gap-3 items-center">
-                      <div className="flex items-center gap-2">
-                        <Smartphone className="w-4 h-4 text-sky-500" />
-                        <span className="text-sm font-medium text-neutral-900">{uv.name}</span>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-[10px] text-neutral-400">Théorique</p>
-                        <p className="text-sm font-semibold text-neutral-700">{fmt(uv.amount)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-neutral-400 mb-0.5">Réel</p>
-                        <input type="number" value={actualInputs[`uv_${uv.serviceId}`] || ''} onChange={e => setActualInputs(prev => ({ ...prev, [`uv_${uv.serviceId}`]: e.target.value }))} className="input text-sm font-semibold py-1.5" />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-[10px] text-neutral-400">Écart</p>
-                        <p className={`text-sm font-bold ${getEcart(`uv_${uv.serviceId}`, uv.amount) === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {getEcart(`uv_${uv.serviceId}`, uv.amount) >= 0 ? '+' : ''}{fmt(getEcart(`uv_${uv.serviceId}`, uv.amount))}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
+
+              {/* Transfer services - UV */}
+              {theoretical.uvByService.length > 0 && (
+                <div className="rounded-lg border border-sky-100 bg-sky-50/30 p-4">
+                  <p className="text-[11px] font-medium text-sky-700 uppercase tracking-wide mb-3 flex items-center gap-2">
+                    <ArrowRightLeft className="w-3.5 h-3.5" />Transfert d'argent - Soldes UV
+                  </p>
+                  <div className="space-y-3">
+                    {theoretical.uvByService.map(uv => (
+                      <div key={uv.serviceId} className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 items-center">
+                        <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
+                          <Smartphone className="w-4 h-4 text-sky-500" />
+                          <span className="text-sm font-medium text-neutral-900">{uv.name}</span>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-neutral-400">Théorique</p>
+                          <p className="text-sm font-semibold text-neutral-700">{fmt(uv.amount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-neutral-400 mb-0.5">Réel</p>
+                          <input type="number" value={actualInputs[`uv_${uv.serviceId}`] || ''} onChange={e => setActualInputs(prev => ({ ...prev, [`uv_${uv.serviceId}`]: e.target.value }))} className="input text-sm font-semibold py-1.5" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-neutral-400">Écart</p>
+                          <p className={`text-sm font-bold ${getEcart(`uv_${uv.serviceId}`, uv.amount) === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {getEcart(`uv_${uv.serviceId}`, uv.amount) >= 0 ? '+' : ''}{fmt(getEcart(`uv_${uv.serviceId}`, uv.amount))}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Credit services - Stock */}
+              {theoretical.creditByService.length > 0 && (
+                <div className="rounded-lg border border-amber-100 bg-amber-50/30 p-4">
+                  <p className="text-[11px] font-medium text-amber-700 uppercase tracking-wide mb-3 flex items-center gap-2">
+                    <Smartphone className="w-3.5 h-3.5" />Crédit téléphonique - Stock
+                  </p>
+                  <div className="space-y-3">
+                    {theoretical.creditByService.map(cr => (
+                      <div key={cr.serviceId} className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 items-center">
+                        <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
+                          <Smartphone className="w-4 h-4 text-amber-500" />
+                          <span className="text-sm font-medium text-neutral-900">{cr.name}</span>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-neutral-400">Théorique</p>
+                          <p className="text-sm font-semibold text-neutral-700">{fmt(cr.amount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-neutral-400 mb-0.5">Réel</p>
+                          <input type="number" value={actualInputs[`credit_${cr.serviceId}`] || ''} onChange={e => setActualInputs(prev => ({ ...prev, [`credit_${cr.serviceId}`]: e.target.value }))} className="input text-sm font-semibold py-1.5" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-neutral-400">Écart</p>
+                          <p className={`text-sm font-bold ${getEcart(`credit_${cr.serviceId}`, cr.amount) === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {getEcart(`credit_${cr.serviceId}`, cr.amount) >= 0 ? '+' : ''}{fmt(getEcart(`credit_${cr.serviceId}`, cr.amount))}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes / observations (optionnel)" className="input text-sm" />
 
@@ -2692,25 +3166,54 @@ function MTClosures() {
             <div className="space-y-3">
               <div className="rounded-lg border border-neutral-100 bg-neutral-50/50 p-4">
                 <p className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-3">Montants de départ</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-4">
+                  {/* Cash */}
                   <div className="space-y-1.5">
                     <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
                       <Banknote className="w-3.5 h-3.5 text-emerald-500" />Caisse (Cash)
                     </label>
                     <input type="number" value={openingInputs.cash || ''} onChange={e => setOpeningInputs(prev => ({ ...prev, cash: e.target.value }))} className="input text-base font-semibold" placeholder="0" />
                   </div>
-                  {accounts.filter(a => a.service_point_id === selectedPointId && a.type === 'uv').map(a => {
-                    const svc = services.find(s => s.id === a.service_id);
-                    return (
-                      <div key={a.id} className="space-y-1.5">
-                        <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
-                          {svc?.logo_url ? <img src={svc.logo_url} alt="" className="w-4 h-4 rounded object-contain" /> : <Smartphone className="w-3.5 h-3.5 text-sky-500" />}
-                          {svc?.name || 'Service'}
-                        </label>
-                        <input type="number" value={openingInputs[`uv_${a.service_id}`] || ''} onChange={e => setOpeningInputs(prev => ({ ...prev, [`uv_${a.service_id}`]: e.target.value }))} className="input text-base font-semibold" placeholder="0" />
+
+                  {/* Transfer services section */}
+                  {services.filter(s => s.family !== 'credit_telephone').length > 0 && (
+                    <div className="pt-3 border-t border-neutral-200">
+                      <p className="text-[10px] font-semibold text-sky-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <ArrowRightLeft className="w-3 h-3" />Transfert d'argent - UV
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {services.filter(s => s.family !== 'credit_telephone').map(svc => (
+                          <div key={svc.id} className="space-y-1.5">
+                            <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
+                              {svc?.logo_url ? <img src={svc.logo_url} alt="" className="w-4 h-4 rounded object-contain" /> : <Smartphone className="w-3.5 h-3.5 text-sky-500" />}
+                              {svc?.name || 'Service'}
+                            </label>
+                            <input type="number" value={openingInputs[`uv_${svc.id}`] || ''} onChange={e => setOpeningInputs(prev => ({ ...prev, [`uv_${svc.id}`]: e.target.value }))} className="input text-base font-semibold" placeholder="0" />
+                          </div>
+                        ))}
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+
+                  {/* Credit services section */}
+                  {services.filter(s => s.family === 'credit_telephone').length > 0 && (
+                    <div className="pt-3 border-t border-neutral-200">
+                      <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <Smartphone className="w-3 h-3" />Crédit téléphonique - Stock
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {services.filter(s => s.family === 'credit_telephone').map(svc => (
+                          <div key={svc.id} className="space-y-1.5">
+                            <label className="flex items-center gap-2 text-[11px] font-medium text-neutral-500 uppercase tracking-wide">
+                              {svc?.logo_url ? <img src={svc.logo_url} alt="" className="w-4 h-4 rounded object-contain" /> : <Smartphone className="w-3.5 h-3.5 text-amber-500" />}
+                              {svc?.name || 'Service'}
+                            </label>
+                            <input type="number" value={openingInputs[`credit_${svc.id}`] || ''} onChange={e => setOpeningInputs(prev => ({ ...prev, [`credit_${svc.id}`]: e.target.value }))} className="input text-base font-semibold" placeholder="0" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -2763,37 +3266,65 @@ function MTClosures() {
           <div className="px-4 py-3 border-b border-neutral-100">
             <h3 className="text-sm font-semibold text-neutral-900">Historique des clôtures</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
-                <tr>
-                  <th className="text-left px-4 py-2.5 font-medium text-neutral-500">Date</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-neutral-500">Point</th>
-                  <th className="text-right px-4 py-2.5 font-medium text-neutral-500">Cash théorique</th>
-                  <th className="text-right px-4 py-2.5 font-medium text-neutral-500">Cash réel</th>
-                  <th className="text-right px-4 py-2.5 font-medium text-neutral-500">Écart cash</th>
-                  <th className="text-right px-4 py-2.5 font-medium text-neutral-500">UV théorique</th>
-                  <th className="text-right px-4 py-2.5 font-medium text-neutral-500">Écart UV</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {closures.map(c => {
-                  const pt = points.find(p => p.id === c.service_point_id);
-                  const hasEcart = Math.abs(Number(c.cash_difference)) >= 1 || Math.abs(Number(c.uv_difference)) >= 1;
-                  return (
-                    <tr key={c.id} className={hasEcart ? 'bg-red-50/30' : ''}>
-                      <td className="px-4 py-2.5 text-neutral-600">{new Date(c.closure_date).toLocaleDateString('fr-FR')}</td>
-                      <td className="px-4 py-2.5 text-neutral-700 font-medium">{pt?.name || '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-neutral-700">{fmt(c.cash_theoretical)}</td>
-                      <td className="px-4 py-2.5 text-right text-neutral-700">{c.cash_actual != null ? fmt(c.cash_actual) : '—'}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${Number(c.cash_difference) === 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(c.cash_difference)}</td>
-                      <td className="px-4 py-2.5 text-right text-neutral-700">{fmt(c.uv_theoretical)}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${Number(c.uv_difference) === 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(c.uv_difference)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="divide-y divide-neutral-100">
+            {closures.map(c => {
+              const pt = points.find(p => p.id === c.service_point_id);
+              const closedByProfile = profiles.find(p => p.id === c.closed_by);
+              const hasEcart = Math.abs(Number(c.cash_difference)) >= 1 || Math.abs(Number(c.uv_difference)) >= 1;
+              return (
+                <div key={c.id} className={`px-4 py-4 ${hasEcart ? 'bg-red-50/30' : ''}`}>
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${hasEcart ? 'bg-red-100' : 'bg-emerald-50'}`}>
+                        <Lock className={`w-4 h-4 ${hasEcart ? 'text-red-500' : 'text-emerald-600'}`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-neutral-900">{pt?.name || '—'}</p>
+                        <p className="text-xs text-neutral-400">
+                          {c.closed_at ? new Date(c.closed_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date(c.closure_date).toLocaleDateString('fr-FR')}
+                          {closedByProfile && <span className="ml-2">par {closedByProfile.full_name}</span>}
+                        </p>
+                      </div>
+                    </div>
+                    {hasEcart && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 shrink-0">Écart</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3 pt-3 border-t border-neutral-100">
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase">Dépôts</p>
+                      <p className="text-sm font-semibold text-emerald-700 mt-0.5">+{fmt(c.cash_in)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase">Retraits</p>
+                      <p className="text-sm font-semibold text-red-600 mt-0.5">-{fmt(c.cash_out)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase">Cash clôture</p>
+                      <p className="text-sm font-semibold text-neutral-900 mt-0.5">{fmt(c.cash_actual)}</p>
+                      {Number(c.cash_difference) !== 0 && (
+                        <p className="text-[9px] text-red-500">Écart: {Number(c.cash_difference) > 0 ? '+' : ''}{fmt(c.cash_difference)}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase">UV clôture</p>
+                      <p className="text-sm font-semibold text-sky-700 mt-0.5">{fmt(c.uv_actual)}</p>
+                      {Number(c.uv_difference) !== 0 && (
+                        <p className="text-[9px] text-red-500">Écart: {Number(c.uv_difference) > 0 ? '+' : ''}{fmt(c.uv_difference)}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase">Ventes crédit</p>
+                      <p className="text-sm font-semibold text-amber-700 mt-0.5">{fmt(c.commissions_generated)}</p>
+                      {Number(c.bank_theoretical) > 0 && (
+                        <p className="text-[9px] text-neutral-400">Stock: {fmt(c.bank_theoretical)}</p>
+                      )}
+                    </div>
+                  </div>
+                  {c.notes && <p className="text-xs text-neutral-400 italic mt-2">{c.notes}</p>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
