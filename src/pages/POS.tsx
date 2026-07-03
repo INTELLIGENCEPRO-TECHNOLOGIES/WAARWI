@@ -72,7 +72,7 @@ function printXReport(
   session: CashSession & { opening_note?: string; closing_note?: string },
   controls: ControlLine[],
   salesStats: {
-    count: number; total: number;
+    count: number; total: number; totalPayments?: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
     movements?: { kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
@@ -92,7 +92,7 @@ function printXReport(
     closedAt: session.closed_at,
     openingAmount: Number(session.opening_amount),
     salesCount: salesStats.count,
-    salesTotal: salesStats.total + (salesStats.movIncome || 0) + (salesStats.movPrepay || 0),
+    salesTotal: (salesStats.totalPayments ?? salesStats.total) + (salesStats.movIncome || 0) + (salesStats.movPrepay || 0),
     byMethod: salesStats.byMethod,
     movements: salesStats.movements,
     controls: controls.map(c => ({
@@ -154,7 +154,7 @@ function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
       }
       for (const m of movementsArr) {
         if (m.kind !== 'income' && m.kind !== 'customer_prepayment') continue;
-        if (m.kind === 'income' && (m.reason || '').startsWith('Reglement ')) continue;
+        if (m.kind === 'income' && (m.reason || '').startsWith('Règlement ')) continue;
         const amt = Number(m.amount);
         const method = m.method_name || 'Especes';
         byMethod[method] = (byMethod[method] || 0) + amt;
@@ -1017,7 +1017,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
   const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
-  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | null>('tickets');
+  const [sessionInvPayments, setSessionInvPayments] = useState<{ sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string }[]>([]);
+  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'reglements' | null>('tickets');
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [sessionEncaisse, setSessionEncaisse] = useState(0);
 
@@ -1029,7 +1030,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [closingNote, setClosingNote] = useState('');
   const [closing, setClosing] = useState(false);
   const [statsData, setStatsData] = useState<{
-    count: number; total: number;
+    count: number; total: number; totalPayments: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
     movements: { kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
@@ -2025,9 +2026,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         .order('created_at', { ascending: false }),
       supabase
         .from('sale_payments')
-        .select('amount')
+        .select('amount, reference, method_name, created_at, sales(sale_number, cash_session_id, customers(name))')
         .eq('tenant_id', tenant!.id)
-        .eq('cash_session_id', session!.id),
+        .eq('cash_session_id', session!.id)
+        .order('created_at'),
     ]);
     const sales: SessionSale[] = (data || []).map((s: any) => ({
       id: s.id, sale_number: s.sale_number, total: Number(s.total), paid: Math.min(Number(s.total || 0), Number(s.paid || 0)),
@@ -2048,11 +2050,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       method_name: m.method_name || '', reference: m.reference || '',
       customer_name: m.customers?.name || null,
       created_at: m.created_at || '',
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ')));
     setSessionMovements(movs);
+    const invPayments = (pmtData || [])
+      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== session!.id)
+      .map((p: any) => ({
+        sale_number: p.sales?.sale_number || '',
+        amount: Number(p.amount),
+        method_name: p.method_name || '',
+        customer_name: p.sales?.customers?.name || null,
+        created_at: p.created_at || '',
+      }));
+    setSessionInvPayments(invPayments);
     const pmtTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const movEncaisseTotal = (mvData || [])
-      .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement ')))
+      .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ')))
       .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     setSessionEncaisse(pmtTotal + movEncaisseTotal);
     setTicketsExpanded('tickets');
@@ -2187,7 +2199,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ')));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movs.forEach(m => {
@@ -2196,7 +2208,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
     });
     const invoicePayments = pmtList
-      .filter((p: any) => !p.sales || p.sales.cash_session_id !== session.id)
+      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== session.id)
       .map((p: any) => ({
         sale_number: p.sales?.sale_number || '',
         amount: Number(p.amount),
@@ -2221,6 +2233,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setStatsData({
       count: salesList.length,
       total: totalPayments,
+      totalPayments,
       byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
       topArticles,
       movements: movs,
@@ -2245,7 +2258,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setCloseOpen(true);
 
     const [{ data: pmts }, { data: regs }, salesResult, { data: mvs }] = await Promise.all([
-      supabase.from('sale_payments').select('payment_method_id, method_name, amount, created_at, sales(sale_number, cash_session_id, customers(name))').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
+      supabase.from('sale_payments').select('payment_method_id, method_name, amount, created_at, reference, sales(sale_number, cash_session_id, customers(name))').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
       supabase.from('cash_regularizations').select('reg_type, amount, reason, note').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
       supabase.from('sales').select('id, total, sale_items(name, quantity, total)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).neq('status', 'cancelled'),
       supabase.from('cash_movements').select('kind, amount, payment_method_id, method_name, reason, customers(name)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
@@ -2260,7 +2273,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       theoretical[key].amount += Number(p.amount);
     });
     (mvs || []).forEach((m: any) => {
-      if (m.kind === 'income' && m.reason && m.reason.startsWith('Reglement ')) return;
+      if (m.kind === 'income' && m.reason && m.reason.startsWith('Règlement ')) return;
       const key = m.method_name || (m.kind === 'expense' ? 'Espèces' : '—');
       if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
       if (m.kind === 'expense') {
@@ -2289,7 +2302,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Reglement ')));
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ')));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movList.forEach(m => {
@@ -2298,7 +2311,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
     });
     const invoicePayments = pmtList
-      .filter((p: any) => !p.sales || p.sales.cash_session_id !== session.id)
+      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== session.id)
       .map((p: any) => ({
         sale_number: p.sales?.sale_number || '',
         amount: Number(p.amount),
@@ -2323,6 +2336,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setStatsData({
       count: salesList.length,
       total: totalSales,
+      totalPayments,
       byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
       topArticles: Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10),
       movements: movList,
@@ -3598,6 +3612,46 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Reglements factures */}
+              {sessionInvPayments.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40' : 'border-neutral-200 bg-white'}`}>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'reglements' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
+                        <Wallet className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-neutral-800">Reglements factures</div>
+                        <div className="text-[10px] text-neutral-500">{sessionInvPayments.length} reglement{sessionInvPayments.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-neutral-800 num">+{formatFCFA(sessionInvPayments.reduce((s, p) => s + p.amount, 0))}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {ticketsExpanded === 'reglements' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {sessionInvPayments.map((p, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-neutral-900">
+                              <span className="font-mono">{p.sale_number}</span>
+                              {p.customer_name && <span className="text-neutral-600 font-medium ml-1">- {p.customer_name}</span>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
+                              {p.created_at && <span className="num">{new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                              {p.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{p.method_name}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-neutral-800 num shrink-0">+{formatFCFA(p.amount)}</span>
                         </div>
                       ))}
                     </div>

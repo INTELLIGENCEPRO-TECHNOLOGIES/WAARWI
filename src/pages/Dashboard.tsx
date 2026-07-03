@@ -272,7 +272,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const [{ data: periodPayments }, { data: periodMovs }] = await Promise.all([periodPaymentsQuery, periodMovsQuery]);
       const todayPaymentsTotal = (periodPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
       const todayMovIncome = (periodMovs || [])
-        .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement ')))
+        .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ')))
         .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
       const todayCollected = todayPaymentsTotal + todayMovIncome;
       let todayMargin = 0;
@@ -292,7 +292,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         .eq('site_id', siteId)
         .gte('created_at', firstOfMonth.toISOString());
       const monthDirectIncome = (monthDirectMovs || [])
-        .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement ')))
+        .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ')))
         .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
       const monthSales = monthInvoicedSales + monthDirectIncome;
 
@@ -853,7 +853,7 @@ function MobileDashboard({
         ]);
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
-        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + todayDirectCash;
         const openingAmount = session ? Number(session.opening_amount || 0) : 0;
         const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
@@ -1695,7 +1695,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         ]);
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
-        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Reglement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement '))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + todayDirectCash;
         const openingAmount = session ? Number(session.opening_amount || 0) : 0;
         const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);

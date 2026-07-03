@@ -109,14 +109,14 @@ export function CashHistory() {
     const byMethodMap: Record<string, number> = {};
     (pmtData || []).forEach((p: any) => { byMethodMap[p.method_name] = (byMethodMap[p.method_name] || 0) + Number(p.amount); });
     (mvData || []).forEach((m: any) => {
-      const isReglement = m.kind === 'income' && (m.reason || '').startsWith('Reglement ');
+      const isReglement = m.kind === 'income' && (m.reason || '').startsWith('Règlement ');
       if (isReglement) return;
       if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
       const method = m.method_name || 'Especes';
       byMethodMap[method] = (byMethodMap[method] || 0) + Number(m.amount);
     });
     const invoicePayments: InvoicePayment[] = (pmtData || [])
-      .filter((p: any) => !p.sales || p.sales.cash_session_id !== s.id)
+      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== s.id)
       .map((p: any) => ({
         id: p.id, amount: Number(p.amount), method_name: p.method_name,
         created_at: p.created_at, reference: p.reference || '',
@@ -133,7 +133,7 @@ export function CashHistory() {
       created_at: m.created_at,
     }));
     const movements = allMovements.filter(m =>
-      !(m.kind === 'income' && m.reason.startsWith('Reglement '))
+      !(m.kind === 'income' && m.reason.startsWith('Règlement '))
     );
     setDetail({
       session: s,

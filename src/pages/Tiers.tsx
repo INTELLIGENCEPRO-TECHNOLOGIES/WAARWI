@@ -1026,7 +1026,7 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClic
         const inactive = (c as any).is_active === false;
         const limit = Number((c as any).credit_limit || 0);
         const blocked = (c as any).credit_blocked === true;
-        const balance = Number((c as any).balance || 0);
+        const balance = due || Number((c as any).balance || 0);
         const nearLimit = limit > 0 && balance >= limit * 0.8;
         const overLimit = limit > 0 && balance >= limit;
         return (
@@ -1082,6 +1082,7 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
     <div className="space-y-1.5">
       {list.map(s => {
         const d = dueMap[s.id] || { total: 0, paid: 0, due: 0 };
+        const balance = d.due || Number((s as any).balance || 0);
         return (
           <button
             key={s.id}
@@ -1106,7 +1107,7 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
             {/* Row 2: solde label + amount */}
             <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
               <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde comptable</span>
-              <span className={`text-[12px] font-black tabular-nums ${Number((s as any).balance || 0) > 0 ? 'text-red-600' : Number((s as any).balance || 0) < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{formatFCFA(Number((s as any).balance || 0))}</span>
+              <span className={`text-[12px] font-black tabular-nums ${balance > 0 ? 'text-red-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{formatFCFA(balance)}</span>
             </div>
           </button>
         );
@@ -1435,11 +1436,11 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
             {key === 'docs' && 'Documents de ventes · statistiques'}
             {key === 'pricing' && 'Prix spéciaux par article'}
           </div>
-          {key !== 'pricing' && (
+          {key !== 'pricing' && !loading && (
           <div className="text-right">
-            <div className={`${Number((c as any).balance || 0) > 0 ? 'text-amber-700' : Number((c as any).balance || 0) < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+            <div className={`${totals.due > 0 ? 'text-amber-700' : totals.due < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
               <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
-              <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(Number((c as any).balance || 0))}</div>
+              <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(totals.due)}</div>
             </div>
             {totals.unusedAvoir > 0 && (
               <div className="text-teal-700 mt-1">

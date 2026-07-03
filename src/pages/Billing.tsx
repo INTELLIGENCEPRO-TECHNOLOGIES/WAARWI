@@ -782,8 +782,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       }
 
       const status = invoiceIsCredit
-        ? (ipmBeneficiaire && ipmPartIpm > 0 && totalPaid >= clientDueAmount ? 'paid' : 'partial')
-        : (totalPaid >= clientDueAmount ? 'paid' : 'partial');
+        ? (ipmBeneficiaire && ipmPartIpm > 0 && totalPaid >= clientDueAmount ? 'paid' : 'validated')
+        : (totalPaid >= clientDueAmount ? 'paid' : totalPaid > 0 ? 'partial' : 'validated');
 
       const ipmCoverage = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartIpm : 0;
       const effectivePaid = totalPaid + ipmCoverage;
@@ -830,11 +830,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         }
       }
 
-      // Update customer balance if credit
-      if (invoiceIsCredit && invoiceForm.customer_id) {
-        const creditAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : subtotal;
-        const { data: cust } = await supabase.from('customers').select('balance').eq('id', invoiceForm.customer_id).single();
-        await supabase.from('customers').update({ balance: Number(cust?.balance || 0) + creditAmount }).eq('id', invoiceForm.customer_id);
+      // Update customer balance for unpaid portion
+      if (invoiceForm.customer_id) {
+        const unpaidAmount = subtotal - effectivePaid;
+        if (unpaidAmount > 0) {
+          const { data: cust } = await supabase.from('customers').select('balance').eq('id', invoiceForm.customer_id).single();
+          await supabase.from('customers').update({ balance: Number(cust?.balance || 0) + unpaidAmount }).eq('id', invoiceForm.customer_id);
+        }
       }
 
       // Deduct stock

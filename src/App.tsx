@@ -9,6 +9,7 @@ import { Shell, type Route } from './components/Shell';
 import { Dashboard } from './pages/Dashboard';
 import { TenantMessagePopup } from './components/TenantMessagePopup';
 import { PendingApproval } from './components/PendingApproval';
+import UpdateNotification from './components/UpdateNotification';
 
 function SuspendedTenant() {
   const { tenant, signOut } = useApp();
@@ -312,6 +313,7 @@ function Inner() {
         {route === 'platform_admin' && isSuperAdmin && <PlatformAdmin />}
       </Suspense>
       <TenantMessagePopup />
+      <UpdateNotification />
     </Shell>
     </>
   );

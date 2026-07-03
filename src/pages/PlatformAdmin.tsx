@@ -7,6 +7,7 @@ import {
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
   ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse, Bell, ArrowRightLeft,
+  Rocket, Sparkles, Bug,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -14,7 +15,7 @@ import { Modal, ConfirmDialog } from '../components/Modal';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
 
-type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config';
+type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'releases';
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const { data: sess } = await supabase.auth.getSession();
@@ -51,6 +52,7 @@ const sidebarGroups = [
     items: [
       { k: 'master_catalogs' as Section, l: 'Catalogues métiers', icon: Library },
       { k: 'login_config' as Section, l: 'Écran d\'accueil', icon: Monitor },
+      { k: 'releases' as Section, l: 'Mises à jour', icon: Rocket },
       { k: 'messages' as Section, l: 'Messages', icon: MessageSquare },
     ],
   },
@@ -155,6 +157,7 @@ export function PlatformAdmin() {
           {section === 'messages' && <MessagesSection />}
           {section === 'login_config' && <LoginConfigSection />}
           {section === 'master_catalogs' && <MasterCatalogAdmin />}
+          {section === 'releases' && <ReleasesSection />}
           {section === 'activity' && <ActivitySection />}
         </div>
       </main>
@@ -2598,6 +2601,209 @@ function LoginConfigSection() {
           Enregistrer les modifications
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Releases Section ────────────────────────────────────────────────────────
+
+interface AppRelease {
+  id: string;
+  version: string;
+  title: string;
+  release_date: string;
+  features: string[];
+  fixes: string[];
+  is_published: boolean;
+  published_at: string | null;
+  created_at: string;
+}
+
+function ReleasesSection() {
+  const { success, error } = useToast();
+  const [releases, setReleases] = useState<AppRelease[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState({ version: '', title: 'Mise à jour', release_date: new Date().toISOString().split('T')[0], features: '', fixes: '' });
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('app_releases')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setReleases((data || []) as AppRelease[]);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openNew = () => {
+    setEditId(null);
+    setForm({ version: '', title: 'Mise à jour', release_date: new Date().toISOString().split('T')[0], features: '', fixes: '' });
+    setEditOpen(true);
+  };
+
+  const openEdit = (r: AppRelease) => {
+    setEditId(r.id);
+    setForm({
+      version: r.version,
+      title: r.title,
+      release_date: r.release_date,
+      features: (r.features || []).join('\n'),
+      fixes: (r.fixes || []).join('\n'),
+    });
+    setEditOpen(true);
+  };
+
+  const save = async () => {
+    if (!form.version.trim()) { error('La version est requise'); return; }
+    setSaving(true);
+    const payload = {
+      version: form.version.trim(),
+      title: form.title.trim() || 'Mise à jour',
+      release_date: form.release_date,
+      features: form.features.split('\n').map(s => s.trim()).filter(Boolean),
+      fixes: form.fixes.split('\n').map(s => s.trim()).filter(Boolean),
+    };
+    if (editId) {
+      const { error: e } = await supabase.from('app_releases').update(payload).eq('id', editId);
+      if (e) { error(e.message); setSaving(false); return; }
+    } else {
+      const { error: e } = await supabase.from('app_releases').insert(payload);
+      if (e) { error(e.message); setSaving(false); return; }
+    }
+    setSaving(false);
+    setEditOpen(false);
+    success(editId ? 'Mise à jour modifiée' : 'Mise à jour créée');
+    load();
+  };
+
+  const togglePublish = async (r: AppRelease) => {
+    const newState = !r.is_published;
+    await supabase.from('app_releases').update({
+      is_published: newState,
+      published_at: newState ? new Date().toISOString() : null,
+    }).eq('id', r.id);
+    success(newState ? 'Publiée ! Les utilisateurs verront la notification.' : 'Dépubliée.');
+    load();
+  };
+
+  const deleteRelease = async (id: string) => {
+    await supabase.from('app_releases').delete().eq('id', id);
+    setDeleteConfirm(null);
+    success('Supprimée');
+    load();
+  };
+
+  return (
+    <div className="p-6 max-w-4xl">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-black text-slate-900">Mises à jour</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Gérez les notifications de mise à jour affichées aux utilisateurs</p>
+        </div>
+        <button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all shadow-sm">
+          <Plus className="w-4 h-4" />Nouvelle version
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
+      ) : releases.length === 0 ? (
+        <div className="py-16 text-center text-sm text-slate-400">Aucune mise à jour créée</div>
+      ) : (
+        <div className="space-y-3">
+          {releases.map(r => (
+            <div key={r.id} className={`rounded-xl border p-4 transition-all ${r.is_published ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-white'}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-black text-slate-900">{r.title}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold">v{r.version}</span>
+                    {r.is_published && (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />Publiée
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">{formatDate(r.release_date)}</div>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                    {r.features.length > 0 && (
+                      <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-emerald-500" />{r.features.length} nouveauté{r.features.length > 1 ? 's' : ''}</span>
+                    )}
+                    {r.fixes.length > 0 && (
+                      <span className="flex items-center gap-1"><Bug className="w-3 h-3 text-sky-500" />{r.fixes.length} correction{r.fixes.length > 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button onClick={() => togglePublish(r)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${r.is_published ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
+                    {r.is_published ? 'Dépublier' : 'Publier'}
+                  </button>
+                  <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><Edit2 className="w-4 h-4" /></button>
+                  <button onClick={() => setDeleteConfirm(r.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Edit/Create Modal */}
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title={editId ? 'Modifier la mise à jour' : 'Nouvelle mise à jour'} size="lg">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Version *</label>
+              <input value={form.version} onChange={e => setForm({ ...form, version: e.target.value })} placeholder="ex: 2.5.0" className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Date</label>
+              <input type="date" value={form.release_date} onChange={e => setForm({ ...form, release_date: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Titre</label>
+            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Mise à jour majeure" className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-emerald-500" />Nouveautés</span>
+            </label>
+            <textarea value={form.features} onChange={e => setForm({ ...form, features: e.target.value })} rows={4} placeholder="Une nouveauté par ligne..." className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none resize-none" />
+            <p className="text-[10px] text-slate-400 mt-0.5">Une nouveauté par ligne</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <span className="flex items-center gap-1.5"><Bug className="w-3.5 h-3.5 text-sky-500" />Corrections</span>
+            </label>
+            <textarea value={form.fixes} onChange={e => setForm({ ...form, fixes: e.target.value })} rows={4} placeholder="Une correction par ligne..." className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none resize-none" />
+            <p className="text-[10px] text-slate-400 mt-0.5">Une correction par ligne</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={() => setEditOpen(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">Annuler</button>
+            <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all disabled:opacity-50">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {editId ? 'Enregistrer' : 'Créer'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => deleteConfirm && deleteRelease(deleteConfirm)}
+        title="Supprimer cette mise à jour ?"
+        message="Cette action est irréversible."
+        confirmLabel="Supprimer"
+        danger
+      />
     </div>
   );
 }

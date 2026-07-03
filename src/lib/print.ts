@@ -631,7 +631,7 @@ export function printXReport80(opts: {
   const mvExpense = movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
   const mvIncome = movements.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
   const mvPrepay = movements.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-  const netTotal = opts.salesTotal + mvIncome + mvPrepay - mvExpense;
+  const netTotal = opts.salesTotal - mvExpense;
   const variance = controls.length > 0
     ? controls.reduce((s, c) => s + Number(c.difference_amount ?? (c.counted_amount - c.theoretical_amount)), 0)
     : 0;
