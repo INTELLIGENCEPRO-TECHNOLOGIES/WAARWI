@@ -156,7 +156,7 @@ function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
         if (m.kind !== 'income' && m.kind !== 'customer_prepayment') continue;
         if (m.kind === 'income' && (m.reason || '').startsWith('Règlement ')) continue;
         const amt = Number(m.amount);
-        const method = m.method_name || 'Especes';
+        const method = m.method_name || 'Espèces';
         byMethod[method] = (byMethod[method] || 0) + amt;
         total += amt;
       }
@@ -2204,7 +2204,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movs.forEach(m => {
       if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
-      const method = m.method_name || 'Especes';
+      const method = m.method_name || 'Espèces';
       byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
     });
     const invoicePayments = pmtList
@@ -2307,7 +2307,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movList.forEach(m => {
       if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
-      const method = m.method_name || 'Especes';
+      const method = m.method_name || 'Espèces';
       byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
     });
     const invoicePayments = pmtList
@@ -3598,7 +3598,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                 printEncaissementTicket80({
                                   receiptNumber: `ENC-${String(m.id).slice(0, 8).toUpperCase()}`,
                                   amount: m.amount,
-                                  method: m.method_name || 'Especes',
+                                  method: m.method_name || 'Espèces',
                                   label: m.reason || undefined,
                                   reference: m.reference || undefined,
                                   customerName: m.customer_name,
@@ -3697,7 +3697,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                 printEncaissementTicket80({
                                   receiptNumber: `ACO-${String(m.id).slice(0, 8).toUpperCase()}`,
                                   amount: m.amount,
-                                  method: m.method_name || 'Especes',
+                                  method: m.method_name || 'Espèces',
                                   label: m.reason ? `Acompte · ${m.reason}` : 'Acompte client',
                                   reference: m.reference || undefined,
                                   customerName: m.customer_name,
@@ -3755,7 +3755,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                 printDecaissementTicket80({
                                   receiptNumber: `DEC-${String(m.id).slice(0, 8).toUpperCase()}`,
                                   amount: m.amount,
-                                  method: m.method_name || 'Especes',
+                                  method: m.method_name || 'Espèces',
                                   label: m.reason || undefined,
                                   reference: m.reference || undefined,
                                   beneficiary: m.customer_name,

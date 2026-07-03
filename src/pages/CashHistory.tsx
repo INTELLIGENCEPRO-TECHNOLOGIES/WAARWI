@@ -112,7 +112,7 @@ export function CashHistory() {
       const isReglement = m.kind === 'income' && (m.reason || '').startsWith('Règlement ');
       if (isReglement) return;
       if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
-      const method = m.method_name || 'Especes';
+      const method = m.method_name || 'Espèces';
       byMethodMap[method] = (byMethodMap[method] || 0) + Number(m.amount);
     });
     const invoicePayments: InvoicePayment[] = (pmtData || [])

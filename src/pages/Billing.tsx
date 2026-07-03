@@ -70,6 +70,7 @@ function invoiceStatus(s: Invoice) {
   if (s.status === 'cancelled') return { label: 'Annulée', pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' };
   if (s.paid >= s.total)        return { label: 'Payée', pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' };
   if (Number(s.paid) > 0)       return { label: 'Partiellement payée', pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' };
+  if (s.status === 'validated' && Number(s.paid) === 0) return { label: 'À crédit', pill: 'bg-slate-100 text-slate-700 border-slate-300', dot: 'bg-slate-500' };
   return { label: 'Validée', pill: 'bg-neutral-50 text-neutral-800 border-neutral-200', dot: 'bg-neutral-500' };
 }
 
@@ -1410,7 +1411,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const statusOptions = useMemo(() => {
     if (tab === 'quotes') return Object.entries(QUOTE_STATUS).map(([v, s]) => ({ value: v, label: s.label }));
     if (tab === 'invoices') return [
-      { value: 'validated', label: 'Validée' },
+      { value: 'validated', label: 'À crédit' },
       { value: 'partial', label: 'Partiellement payée' },
       { value: 'paid', label: 'Payée' },
       { value: 'cancelled', label: 'Annulée' },

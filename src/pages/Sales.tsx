@@ -44,10 +44,10 @@ const STATUS_OPTIONS = [
 
 function statusStyles(status: string, sale?: Sale) {
   const hasIpm = sale?.ipm_ventes && sale.ipm_ventes.length > 0;
-  if (status === 'paid' && hasIpm) return { pill: 'bg-neutral-100 text-neutral-700 border-neutral-300', dot: 'bg-neutral-900', label: 'Reglee (IPM a recouvrer)' };
-  if (status === 'paid') return { pill: 'bg-neutral-100 text-neutral-700 border-neutral-200', dot: 'bg-neutral-900', label: 'Payee' };
-  if (status === 'cancelled') return { pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500', label: 'Annulee' };
-  if (status === 'validated') return { pill: 'bg-slate-50 text-slate-700 border-slate-200', dot: 'bg-slate-500', label: 'Credit' };
+  if (status === 'paid' && hasIpm) return { pill: 'bg-neutral-100 text-neutral-700 border-neutral-300', dot: 'bg-neutral-900', label: 'Réglée (IPM à recouvrer)' };
+  if (status === 'paid') return { pill: 'bg-neutral-100 text-neutral-700 border-neutral-200', dot: 'bg-neutral-900', label: 'Payée' };
+  if (status === 'cancelled') return { pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500', label: 'Annulée' };
+  if (status === 'validated') return { pill: 'bg-slate-50 text-slate-700 border-slate-200', dot: 'bg-slate-500', label: 'Crédit' };
   if (hasIpm) return { pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500', label: 'Partielle (IPM)' };
   return { pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500', label: 'Partielle' };
 }
