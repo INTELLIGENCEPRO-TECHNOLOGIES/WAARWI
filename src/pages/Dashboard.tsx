@@ -376,12 +376,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
         const { data: sessionMovs } = await supabase
           .from('cash_movements')
-          .select('kind, amount')
+          .select('kind, amount, reason')
           .eq('tenant_id', tenant.id)
           .eq('cash_session_id', currentSession.id);
         for (const m of (sessionMovs || []) as any[]) {
           if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
-          else sessionMovIncome += Number(m.amount || 0);
+          else if (!(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement '))) sessionMovIncome += Number(m.amount || 0);
         }
 
         cashBalance = Number(currentSession.opening_amount || 0) + sessionPaymentsTotal + sessionMovIncome - sessionMovExpense;
@@ -849,7 +849,7 @@ function MobileDashboard({
           supabase.from('sale_payments').select('amount').eq('tenant_id', tenant.id).in('cash_session_id', sessionIds),
           supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', today.toISOString()),
           supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()),
-          session ? supabase.from('cash_movements').select('kind, amount').eq('tenant_id', tenant.id).eq('cash_session_id', session.id) : Promise.resolve({ data: [] }),
+          session ? supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('cash_session_id', session.id) : Promise.resolve({ data: [] }),
         ]);
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
@@ -860,7 +860,7 @@ function MobileDashboard({
         let sessionMovIncome = 0, sessionMovExpense = 0;
         for (const m of (sessionMovs || []) as any[]) {
           if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
-          else sessionMovIncome += Number(m.amount || 0);
+          else if (!(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement '))) sessionMovIncome += Number(m.amount || 0);
         }
         const cashBalance = session ? openingAmount + sessionPayTotal + sessionMovIncome - sessionMovExpense : 0;
         results.push({ id: site.id, name: site.name, todaySales, todayCollected, todayDirectCash, salesCount, cashBalance, openingAmount, sessionOpen: !!session, expenses: sessionMovExpense });
@@ -1691,7 +1691,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           supabase.from('sale_payments').select('amount').eq('tenant_id', tenant.id).in('cash_session_id', sessionIds),
           supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', today.toISOString()),
           supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()),
-          session ? supabase.from('cash_movements').select('kind, amount').eq('tenant_id', tenant.id).eq('cash_session_id', session.id) : Promise.resolve({ data: [] }),
+          session ? supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('cash_session_id', session.id) : Promise.resolve({ data: [] }),
         ]);
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
@@ -1702,7 +1702,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         let sessionMovIncome = 0, sessionMovExpense = 0;
         for (const m of (sessionMovs || []) as any[]) {
           if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
-          else sessionMovIncome += Number(m.amount || 0);
+          else if (!(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement '))) sessionMovIncome += Number(m.amount || 0);
         }
         const cashBalance = session ? openingAmount + sessionPayTotal + sessionMovIncome - sessionMovExpense : 0;
         results.push({ id: site.id, name: site.name, todaySales, todayCollected, todayDirectCash, salesCount, cashBalance, openingAmount, sessionOpen: !!session, expenses: sessionMovExpense });
