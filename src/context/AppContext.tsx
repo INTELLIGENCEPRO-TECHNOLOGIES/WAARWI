@@ -150,7 +150,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const timer = setTimeout(async () => {
       const [{ data: ten }, { data: s }, { data: prof }] = await Promise.all([
         supabase.from('tenants').select('*').eq('id', tid).maybeSingle(),
-        supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id').eq('tenant_id', tid).eq('is_active', true).order('name'),
+        supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id, logo_url, legal_name, ninea, rccm, email, website, ticket_header_config').eq('tenant_id', tid).eq('is_active', true).order('name'),
         supabase.from('profiles').select('*').eq('id', pid).maybeSingle(),
       ]);
       if (ten) {

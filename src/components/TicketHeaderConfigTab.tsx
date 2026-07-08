@@ -55,7 +55,7 @@ export function TicketHeaderConfigTab() {
       setConfig(mergeTicketHeaderConfig(tenant.ticket_header_config || null));
     }
     setLoading(false);
-  }, [tenant?.id, tenant?.ticket_header_config, targetSiteId]);
+  }, [tenant?.id, tenant?.ticket_header_config, targetSiteId, selectedSite?.ticket_header_config]);
 
   const move = (idx: number, dir: -1 | 1) => {
     setConfig(prev => {

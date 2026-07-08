@@ -219,7 +219,10 @@ function printHtml(html: string, delayMs = 300) {
   doc.write(html);
   doc.close();
 
+  let triggered = false;
   const trigger = () => {
+    if (triggered) return;
+    triggered = true;
     try {
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
@@ -230,13 +233,40 @@ function printHtml(html: string, delayMs = 300) {
     setTimeout(cleanup, 60_000);
   };
 
+  const waitForImages = (): Promise<void> => {
+    try {
+      const idoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!idoc) return Promise.resolve();
+      const imgs = Array.from(idoc.images || []);
+      if (imgs.length === 0) return Promise.resolve();
+      return Promise.all(
+        imgs.map(img => {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+          return new Promise<void>(resolve => {
+            const done = () => resolve();
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', done, { once: true });
+            setTimeout(done, 5000);
+          });
+        })
+      ).then(() => undefined);
+    } catch {
+      return Promise.resolve();
+    }
+  };
+
+  const runWhenReady = () => {
+    waitForImages().then(() => setTimeout(trigger, delayMs));
+  };
+
   const win = iframe.contentWindow;
   if (win && win.document.readyState !== 'complete') {
-    win.addEventListener('load', () => setTimeout(trigger, delayMs), { once: true });
-    setTimeout(trigger, delayMs + 800);
+    win.addEventListener('load', runWhenReady, { once: true });
+    setTimeout(runWhenReady, 800);
   } else {
-    setTimeout(trigger, delayMs);
+    runWhenReady();
   }
+  setTimeout(trigger, 8000);
 }
 
 // ── 80mm Thermal Receipt Style ────────────────────────────────────────────────
