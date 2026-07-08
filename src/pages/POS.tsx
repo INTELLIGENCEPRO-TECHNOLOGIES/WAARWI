@@ -23,6 +23,7 @@ import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from
 import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments } from '../lib/ipm';
+import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
 
 type ArticleLite = {
   id: string; internal_ref: string; name: string; oem_ref: string;
@@ -845,6 +846,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [articleTiers, setArticleTiers] = useState<ArticleTier[]>([]);
   const [tierPickerOpen, setTierPickerOpen] = useState(false);
   const [tierPickerArticle, setTierPickerArticle] = useState<ArticleLite | null>(null);
+
+  // Quick-create modals
+  const [quickArticleOpen, setQuickArticleOpen] = useState(false);
+  const [quickArticleName, setQuickArticleName] = useState('');
+  const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
+  const [quickCustomerName, setQuickCustomerName] = useState('');
 
   // Source site/depot selector for stock deduction
   const [saleSourceSiteId, setSaleSourceSiteId] = useState<string>('');
@@ -2464,6 +2471,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           onChange={v => setCustomer(customers.find(c => c.id === v) || null)}
           placeholder="Client comptoir"
         />
+        <QuickCreateButton label="Créer un client" onClick={() => { setQuickCustomerName(''); setQuickCustomerOpen(true); }} />
         {customer && (() => {
           const limit = Number((customer as any).credit_limit || 0);
           const balance = Number((customer as any).balance || 0);
@@ -2739,7 +2747,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <div className="p-3 sm:p-4 w-full max-w-full mx-auto">
             {filtered.length === 0 ? (
-              <EmptyState icon={Package} title="Aucun article" description="Créez des articles dans le catalogue." />
+              <div>
+                <EmptyState icon={Package} title="Aucun article" description="Créez des articles dans le catalogue." />
+                <div className="mt-3 flex justify-center">
+                  <QuickCreateButton label="Créer un article" onClick={() => { setQuickArticleName(search); setQuickArticleOpen(true); }} />
+                </div>
+              </div>
             ) : articleView === 'grid' ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5 w-full justify-center">
                 {filtered.map(a => {
@@ -4372,6 +4385,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         )}
       </Modal>
+
+      <QuickCreateArticleModal
+        open={quickArticleOpen}
+        onClose={() => setQuickArticleOpen(false)}
+        onCreated={(a) => {
+          setArticles(prev => [{ ...a, stock_available: 0, track_stock: a.track_stock !== false } as ArticleLite, ...prev]);
+        }}
+        initialName={quickArticleName}
+      />
+      <QuickCreateCustomerModal
+        open={quickCustomerOpen}
+        onClose={() => setQuickCustomerOpen(false)}
+        onCreated={(c) => { setCustomers(prev => [c, ...prev]); }}
+        initialName={quickCustomerName}
+      />
     </>
   );
 }

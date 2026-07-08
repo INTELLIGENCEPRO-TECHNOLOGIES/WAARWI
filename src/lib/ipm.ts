@@ -216,5 +216,5 @@ export function determinerStatutFactureIpm(
   if (montantPayeParClient >= totalFacture) {
     return { statut_client: 'paid', label: 'Payee' };
   }
-  return { statut_client: 'credit', label: 'A credit' };
+  return { statut_client: 'credit', label: 'A crédit' };
 }

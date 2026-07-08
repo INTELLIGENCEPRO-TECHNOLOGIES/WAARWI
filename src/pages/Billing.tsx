@@ -3,7 +3,7 @@ import {
   Plus, FileText, Loader2, Eye, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, CalendarDays, User,
   CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen,
-  Tag, ShieldCheck, Smartphone,
+  Tag, ShieldCheck, Smartphone, Pencil,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -23,6 +23,7 @@ import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayo
 import { MobileBillingWizard, type WizardHeaderField } from '../components/MobileBillingWizard';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
+import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
 
 const tenantForPrint = (t: any, site?: any): PrintTenant => buildPrintTenantForSite(t, site);
 
@@ -155,6 +156,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [convertItems, setConvertItems] = useState<{ article_id: string; name: string; quantity: number }[]>([]);
   const [lotPickerConvertOpen, setLotPickerConvertOpen] = useState(false);
   const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
+
+  // Quick-create modals
+  const [quickArticleOpen, setQuickArticleOpen] = useState(false);
+  const [quickArticleName, setQuickArticleName] = useState('');
+  const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
+  const [quickCustomerName, setQuickCustomerName] = useState('');
+
   // IPM for conversion
   const [convertIpmBeneficiaire, setConvertIpmBeneficiaire] = useState<any>(null);
   const [convertIpmConvention, setConvertIpmConvention] = useState<any>(null);
@@ -188,6 +196,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   // Direct invoice creation
   const [invoiceEditorOpen, setInvoiceEditorOpen] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [invoiceForm, setInvoiceForm] = useState<{ customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
   const [invoiceEditorItems, setInvoiceEditorItems] = useState<QuoteItem[]>([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
   const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
@@ -712,6 +721,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const openInvoiceEditor = () => {
     setInvoiceEditorOpen(true);
+    setEditingInvoiceId(null);
     setInvoiceForm({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
     setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setInvoicePayList([]);
@@ -719,10 +729,33 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
   const closeInvoiceEditor = () => {
     setInvoiceEditorOpen(false);
+    setEditingInvoiceId(null);
     setInvoiceForm({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
     setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setInvoicePayList([]);
     setInvoiceIsCredit(false);
+  };
+  const openInvoiceForEdit = async (inv: Invoice) => {
+    const { data: items } = await supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id);
+    setEditingInvoiceId(inv.id);
+    setInvoiceForm({
+      customer_id: inv.customer_id || '',
+      note: inv.note || '',
+      delivery_date: (inv as any).doc_header?.delivery_date || '',
+      reference: (inv as any).doc_header?.reference || '',
+      warranty: (inv as any).doc_header?.warranty || '',
+      representative: (inv as any).doc_header?.representative || '',
+      imei: (inv as any).doc_header?.imei || '',
+    });
+    setInvoiceEditorItems((items || []).map((i: any) => ({
+      article_id: i.article_id, name: i.name,
+      quantity: Number(i.quantity), unit_price: Number(i.unit_price),
+      discount: Number(i.discount || 0), total: Number(i.total),
+    })));
+    setInvoicePayList([]);
+    setInvoiceIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
+    setInvoiceEditorOpen(true);
+    setInvoiceDetail(null);
   };
 
   const saveInvoice = async () => {
@@ -730,6 +763,43 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; }
     const valid = invoiceEditorItems.filter(i => i.name.trim());
     if (valid.length === 0) { error('Ajoutez au moins un article'); return; }
+
+    // Edit existing invoice via RPC (handles stock + balance recalculation)
+    if (editingInvoiceId) {
+      setSavingInvoice(true);
+      try {
+        const docHeader = (invoiceForm.delivery_date || invoiceForm.reference || invoiceForm.warranty || invoiceForm.representative || invoiceForm.imei)
+          ? { delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invoiceForm.representative || null, imei: invoiceForm.imei || null }
+          : null;
+        const { data: result, error: rpcErr } = await supabase.rpc('update_sale_items_and_totals', {
+          p_sale_id: editingInvoiceId,
+          p_tenant_id: tenant.id,
+          p_items: valid.map(i => ({
+            article_id: i.article_id, name: i.name,
+            quantity: i.quantity, unit_price: i.unit_price,
+            discount: i.discount,
+          })),
+          p_customer_id: invoiceForm.customer_id || null,
+          p_doc_header: docHeader,
+        });
+        if (rpcErr) throw rpcErr;
+        if (result && !(result as any).success) throw new Error((result as any).error || 'Erreur');
+
+        // Update note separately (not in RPC)
+        if (invoiceForm.note !== undefined) {
+          await supabase.from('sales').update({ note: invoiceForm.note || null }).eq('id', editingInvoiceId);
+        }
+
+        success('Facture mise à jour');
+        closeInvoiceEditor();
+        load();
+      } catch (err: any) {
+        error(err.message || 'Erreur');
+      } finally {
+        setSavingInvoice(false);
+      }
+      return;
+    }
 
     // IPM document validation
     if (ipmBeneficiaire && ipmConfig && !ipmDocValidation.valide) {
@@ -743,7 +813,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (!invoiceIsCredit && totalPaid > clientDueAmount) { error('Le montant paye depasse la part client'); return; }
 
     if (invoiceIsCredit && !invoiceForm.customer_id) {
-      error('Un client est requis pour une facture a credit');
+      error('Un client est requis pour une facture a crédit');
       return;
     }
 
@@ -1916,13 +1986,16 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           ipmDocuments={ipmDocuments}
           setIpmDocuments={setIpmDocuments}
           ipmDocValidation={ipmDocValidation}
+          onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
+          onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
+          editingInvoiceId={editingInvoiceId}
         />
       )}
       {invoiceEditorOpen && !isDesktop && (
         <MobileBillingWizard
           open={true}
           onClose={closeInvoiceEditor}
-          title="Nouvelle facture"
+          title={editingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}
           headerFields={[
             { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
             { key: 'reference', label: 'Référence', type: 'text', placeholder: 'REF-...' },
@@ -1940,7 +2013,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           saving={savingInvoice}
           onSave={saveInvoice}
           total={invoiceEditorSubtotal}
-          saveLabel="Enregistrer facture"
+          saveLabel={editingInvoiceId ? 'Mettre à jour' : 'Enregistrer facture'}
+          onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
+          onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
           banner={isPharmacy && invoiceForm.customer_id && ipmBeneficiaire ? (
             <div className="px-4 py-2 bg-teal-50 border-b border-teal-200 space-y-2">
               <div className="flex items-center gap-2">
@@ -2010,6 +2085,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
             printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0, docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || quoteForm.representative ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: quoteForm.representative || null } : null });
           }}
+          onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
+          onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
         />
       )}
 
@@ -2038,6 +2115,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           onSave={() => saveQuote()}
           total={quoteSubtotal}
           saveLabel="Enregistrer devis"
+          onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
+          onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
           banner={isPharmacy && quoteForm.customer_id && quoteIpmBeneficiaire ? (
             <div className="px-4 py-2 bg-teal-50 border-b border-teal-200">
               <div className="flex items-center gap-2">
@@ -2243,6 +2322,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       <DocPanel open={!!invoiceDetail} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
         footer={<>
           <div className="flex gap-1.5 mr-auto">
+            {invoiceDetail && invoiceDetail.status !== 'cancelled' && invoiceDetail.accounting_status !== 'accounted' && (
+              <button onClick={() => openInvoiceForEdit(invoiceDetail)} className="btn-icon text-brand-700 hover:bg-brand-50" title="Modifier"><Pencil className="w-4 h-4" /></button>
+            )}
             {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Coins className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDetail.accounting_status !== 'accounted' && invoiceDetail.status !== 'cancelled' && (
@@ -2728,6 +2810,19 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           siteId={currentSite.id}
         />
       )}
+
+      <QuickCreateArticleModal
+        open={quickArticleOpen}
+        onClose={() => setQuickArticleOpen(false)}
+        onCreated={(a) => { setArticles(prev => [a, ...prev]); }}
+        initialName={quickArticleName}
+      />
+      <QuickCreateCustomerModal
+        open={quickCustomerOpen}
+        onClose={() => setQuickCustomerOpen(false)}
+        onCreated={(c) => { setCustomers(prev => [c, ...prev]); }}
+        initialName={quickCustomerName}
+      />
     </div>
   );
 }
@@ -2736,12 +2831,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
    QuoteFullPanel — Sage 100 Cloud-inspired full-screen document editor
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-function ArticleSearchInput({ articles, value, onSelect, onNameChange, placeholder }: {
+function ArticleSearchInput({ articles, value, onSelect, onNameChange, placeholder, onCreateNew }: {
   articles: any[];
   value: string;
   onSelect: (a: any) => void;
   onNameChange: (name: string) => void;
   placeholder?: string;
+  onCreateNew?: (name: string) => void;
 }) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
@@ -2793,7 +2889,7 @@ function ArticleSearchInput({ articles, value, onSelect, onNameChange, placehold
           autoComplete="off"
         />
       </div>
-      {open && filtered.length > 0 && (
+      {open && (
         <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
           {filtered.map((a, i) => (
             <button
@@ -2810,17 +2906,21 @@ function ArticleSearchInput({ articles, value, onSelect, onNameChange, placehold
               <span className="text-[11px] font-bold text-slate-500 num flex-shrink-0">{formatFCFA(a.sale_price)}</span>
             </button>
           ))}
+          {onCreateNew && (
+            <QuickCreateButton label="Créer un article" onClick={() => { onCreateNew(query); setOpen(false); }} />
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function CustomerSearchInput({ customers, value, onSelect, placeholder }: {
+function CustomerSearchInput({ customers, value, onSelect, placeholder, onCreateNew }: {
   customers: any[];
   value: string;
   onSelect: (c: any) => void;
   placeholder?: string;
+  onCreateNew?: (name: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -2894,13 +2994,16 @@ function CustomerSearchInput({ customers, value, onSelect, placeholder }: {
           {filtered.length === 0 && query.trim() && (
             <div className="px-3 py-3 text-center text-xs text-slate-400">Aucun client trouvé</div>
           )}
+          {onCreateNew && (
+            <QuickCreateButton label="Créer un client" onClick={() => { onCreateNew(query); setOpen(false); setQuery(''); }} />
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint, docSettings, isPharmacy, ipmBeneficiaire, ipmTaux, ipmPartIpm, ipmPartClient }: {
+function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint, docSettings, isPharmacy, ipmBeneficiaire, ipmTaux, ipmPartIpm, ipmPartClient, onCreateArticle, onCreateCustomer }: {
   articles: any[];
   customers: any[];
   quoteForm: { customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
@@ -2926,6 +3029,8 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
   ipmTaux?: number;
   ipmPartIpm?: number;
   ipmPartClient?: number;
+  onCreateArticle?: (name: string) => void;
+  onCreateCustomer?: (name: string) => void;
 }) {
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const [headerValidated, setHeaderValidated] = useState(!docSettings.require_header_lock);
@@ -3058,6 +3163,7 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
                 value={quoteForm.customer_id}
                 onSelect={(c) => setQuoteForm((f: any) => ({ ...f, customer_id: c?.id || '' }))}
                 placeholder="Rechercher client..."
+                onCreateNew={onCreateCustomer}
               />
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -3172,7 +3278,7 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
                       switch (col.key) {
                         case 'article': return (
                           <div key="article">
-                            <ArticleSearchInput articles={articles} value={it.article_id ? (articles.find(a => a.id === it.article_id)?.name || '') : ''} onSelect={a => updateQuoteItem(idx, 'article_id', a.id)} onNameChange={() => {}} placeholder="Rechercher..." />
+                            <ArticleSearchInput articles={articles} value={it.article_id ? (articles.find(a => a.id === it.article_id)?.name || '') : ''} onSelect={a => updateQuoteItem(idx, 'article_id', a.id)} onNameChange={() => {}} placeholder="Rechercher..." onCreateNew={onCreateArticle} />
                           </div>
                         );
                         case 'designation': return (
@@ -3244,7 +3350,7 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
 }
 
 // ── Invoice Full Panel ─────────────────────────────────────────
-function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, invoiceItems, setInvoiceItems, updateInvoiceItem, invoiceSubtotal, paymentMethods, payments, setPayments, totalPaid, saving, saveInvoice, onClose, autoMode, onVehiclePicker, isCredit, setIsCredit, docSettings, isPharmacy, ipmLoading, ipmBeneficiaire, ipmTaux, ipmConvention, ipmPartIpm, ipmPartClient, ipmConfig, ipmDocuments, setIpmDocuments, ipmDocValidation }: {
+function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, invoiceItems, setInvoiceItems, updateInvoiceItem, invoiceSubtotal, paymentMethods, payments, setPayments, totalPaid, saving, saveInvoice, onClose, autoMode, onVehiclePicker, isCredit, setIsCredit, docSettings, isPharmacy, ipmLoading, ipmBeneficiaire, ipmTaux, ipmConvention, ipmPartIpm, ipmPartClient, ipmConfig, ipmDocuments, setIpmDocuments, ipmDocValidation, onCreateArticle, onCreateCustomer, editingInvoiceId }: {
   articles: any[];
   customers: any[];
   invoiceForm: { customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
@@ -3276,6 +3382,9 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
   ipmDocuments: IpmDocsType;
   setIpmDocuments: (fn: any) => void;
   ipmDocValidation: { valide: boolean; champs_manquants: string[] };
+  onCreateArticle?: (name: string) => void;
+  onCreateCustomer?: (name: string) => void;
+  editingInvoiceId?: string | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
@@ -3347,7 +3456,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
               <Receipt className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Nouvelle facture</h2>
+              <h2 className="text-base font-bold text-slate-900">{editingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}</h2>
               <p className="text-[11px] text-slate-500">Entrée valide la ligne et ajoute une suivante</p>
             </div>
           </div>
@@ -3356,7 +3465,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
             <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">Fermer</button>
             <button onClick={saveInvoice} disabled={saving || (ipmBeneficiaire && !ipmDocValidation.valide)} className="btn-primary text-xs px-4 py-1.5">
               {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Enregistrer
+              {editingInvoiceId ? 'Mettre à jour' : 'Enregistrer'}
             </button>
           </div>
         </div>
@@ -3402,6 +3511,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                 value={invoiceForm.customer_id}
                 onSelect={(c) => setInvoiceForm((f: any) => ({ ...f, customer_id: c?.id || '' }))}
                 placeholder="Rechercher client..."
+                onCreateNew={onCreateCustomer}
               />
               <div className="flex items-center gap-1.5 min-w-[160px] flex-1 max-w-[220px]">
                 <MessageCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -3546,6 +3656,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                               onSelect={a => updateInvoiceItem(idx, 'article_id', a.id)}
                               onNameChange={() => {}}
                               placeholder="Rechercher..."
+                              onCreateNew={onCreateArticle}
                             />
                           </div>
                         );
@@ -3582,7 +3693,8 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                   </button>
                 </div>
 
-                {/* Payment section */}
+                {/* Payment section - hidden when editing existing invoice */}
+                {!editingInvoiceId && (
                 <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/30">
                   {ipmBeneficiaire && ipmPartIpm > 0 && (
                     <div className="flex items-center gap-2 px-3 py-2.5 mb-3 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-800 font-medium">
@@ -3605,7 +3717,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                     <label className="inline-flex items-center gap-2 cursor-pointer select-none">
                       <input type="checkbox" checked={isCredit} onChange={e => setIsCredit(e.target.checked)} className="sr-only peer" />
                       <div className="relative w-9 h-5 bg-slate-200 peer-checked:bg-amber-500 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4"></div>
-                      <span className={`text-xs font-semibold ${isCredit ? 'text-amber-700' : 'text-slate-500'}`}>A credit</span>
+                      <span className={`text-xs font-semibold ${isCredit ? 'text-amber-700' : 'text-slate-500'}`}>A crédit</span>
                     </label>
                     )}
                   </div>
@@ -3649,6 +3761,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                     </>
                   )}
                 </div>
+                )}
               </div>
             </>
           );

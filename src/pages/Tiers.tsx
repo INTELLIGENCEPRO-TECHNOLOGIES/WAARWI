@@ -1026,7 +1026,7 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClic
         const inactive = (c as any).is_active === false;
         const limit = Number((c as any).credit_limit || 0);
         const blocked = (c as any).credit_blocked === true;
-        const balance = due || Number((c as any).balance || 0);
+        const balance = Number((c as any).balance || 0);
         const nearLimit = limit > 0 && balance >= limit * 0.8;
         const overLimit = limit > 0 && balance >= limit;
         return (
@@ -1082,7 +1082,7 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
     <div className="space-y-1.5">
       {list.map(s => {
         const d = dueMap[s.id] || { total: 0, paid: 0, due: 0 };
-        const balance = d.due || Number((s as any).balance || 0);
+        const balance = Number((s as any).balance || 0);
         return (
           <button
             key={s.id}
@@ -1438,9 +1438,9 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
           </div>
           {key !== 'pricing' && !loading && (
           <div className="text-right">
-            <div className={`${totals.due > 0 ? 'text-amber-700' : totals.due < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+            <div className={`${customerBalance > 0 ? 'text-amber-700' : customerBalance < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
               <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
-              <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(totals.due)}</div>
+              <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(customerBalance)}</div>
             </div>
             {totals.unusedAvoir > 0 && (
               <div className="text-teal-700 mt-1">
@@ -1987,16 +1987,18 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const [pickerOpen, setPickerOpen] = useState(false);
   const [orderView, setOrderView] = useState<any | null>(null);
   const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
+  const [supplierBalance, setSupplierBalance] = useState<number>(Number((s as any).balance || 0));
 
   const reload = async () => {
     if (!tenant) return;
     setLoading(true);
-    const [oRes, pRes, mRes, aRes, adjRes] = await Promise.all([
+    const [oRes, pRes, mRes, aRes, adjRes, balRes] = await Promise.all([
       supabase.from('supplier_orders').select('id, order_number, total, paid, status, created_at, expected_date').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('created_at', { ascending: false }).limit(400),
       supabase.from('supplier_payments').select('*').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('paid_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).neq('payment_type', 'credit').order('sort_order'),
       supabase.from('articles').select('id, name, internal_ref, supplier_ref, sale_price, is_active').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('name').limit(300),
       supabase.from('balance_adjustments').select('id, amount, note, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'supplier').eq('entity_id', s.id).order('created_at', { ascending: false }),
+      supabase.from('suppliers').select('balance').eq('id', s.id).maybeSingle(),
     ]);
     const oo = oRes.data || [];
     setOrders(oo);
@@ -2004,6 +2006,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     setMethods(mRes.data || []);
     setArticles(aRes.data || []);
     setBalanceAdjs(adjRes.data || []);
+    if (balRes.data) setSupplierBalance(Number(balRes.data.balance || 0));
     if (!payMethod && (mRes.data || []).length) setPayMethod(mRes.data![0].id);
     const ids = oo.map(o => o.id);
     if (ids.length) {
@@ -2156,9 +2159,9 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
             {key === 'docs' && 'Documents d\'achats · statistiques'}
             {key === 'articles' && `${articles.length} article${articles.length > 1 ? 's' : ''} lié${articles.length > 1 ? 's' : ''}`}
           </div>
-          <div className={`text-right ${totals.due > 0 ? 'text-amber-700' : totals.due < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
+          <div className={`text-right ${supplierBalance > 0 ? 'text-amber-700' : supplierBalance < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
             <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
-            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{loading ? '…' : formatFCFA(totals.due)}</div>
+            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{loading ? '…' : formatFCFA(supplierBalance)}</div>
           </div>
         </div>
       </div>

@@ -742,7 +742,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       ) : (
         <>
           {/* Mobile: cartes */}
-          <div className="md:hidden space-y-2.5">
+          <div className="md:hidden grid grid-cols-1 gap-2">
             {paginated.map(a => (
               <ArticleCard key={a.id} article={a} category={categoryMap.get(a.category_id || '')} qty={stockMap[a.id] || 0}
                 onEdit={() => selectionMode ? toggleSelected(a.id) : openEdit(a)} onDelete={() => setToDelete(a)}

@@ -66,41 +66,27 @@ export function ArticleCard({ article, category, qty, onEdit, onDelete, selectio
   showMargin: boolean; showStock: boolean;
 }) {
   const tracksStock = (article as any).track_stock !== false;
-  const mStatus = tracksStock ? stockStatus(qty, Number(article.stock_min || 0)) : { bg: 'bg-slate-50', icon: 'text-slate-400', badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-400', label: 'Non suivi' };
+  const out = tracksStock && qty <= 0;
+  const low = tracksStock && !out && qty <= Number(article.stock_min || 0);
 
   return (
-    <div className={`rounded-2xl bg-white shadow-card border transition-all active:scale-[0.99] ${selected ? 'border-brand-400 bg-brand-50/40 ring-2 ring-brand-500/20' : 'border-slate-100 hover:shadow-premium'}`}
+    <div className={`rounded-2xl bg-white shadow-card border transition-all active:scale-[0.99] h-[72px] flex flex-col justify-between ${selected ? 'border-brand-400 bg-brand-50/40 ring-2 ring-brand-500/20' : 'border-slate-100 hover:shadow-premium'}`}
       onClick={selectionMode ? onToggleSelect : onEdit}>
-      <div className="p-3 flex items-center gap-3">
+      <div className="px-3 pt-2.5 flex items-start gap-2 min-w-0">
         {selectionMode && (
-          <span className="shrink-0 text-brand-700">{selected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 text-slate-400" />}</span>
+          <span className="shrink-0 text-brand-700 mt-0.5">{selected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-400" />}</span>
         )}
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${mStatus.bg}`}>
-          {article.image_url ? <img src={article.image_url} className="w-10 h-10 rounded-xl object-cover" alt="" /> : <Package className={`w-5 h-5 ${mStatus.icon}`} />}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-sm text-slate-900 truncate">{article.name}</span>
-            {!tracksStock && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">Service</span>}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px] font-mono text-slate-500">{article.internal_ref}</span>
-            {category && <span className="text-[10px] text-slate-400">• {category.name}</span>}
-          </div>
-        </div>
-        <div className="text-right shrink-0">
-          <div className="font-bold text-sm text-slate-900 num">{formatFCFA(article.sale_price)}</div>
-          {showStock && tracksStock && (
-            <div className={`inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${mStatus.badge}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />{qty}
-            </div>
-          )}
-        </div>
-        {!selectionMode && (
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50">
-            <Trash2 className="w-4 h-4" />
-          </button>
+        <span className="text-[12px] font-semibold text-slate-900 leading-tight line-clamp-2 min-w-0">{article.name}</span>
+      </div>
+      <div className="px-3 pb-2.5 flex items-center justify-between gap-2">
+        {tracksStock ? (
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums ${out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-800' : 'bg-neutral-100 text-neutral-800'}`}>
+            {qty}
+          </span>
+        ) : (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">Service</span>
         )}
+        <span className="text-[12px] font-bold text-slate-900 tabular-nums">{formatFCFA(article.sale_price)}</span>
       </div>
     </div>
   );

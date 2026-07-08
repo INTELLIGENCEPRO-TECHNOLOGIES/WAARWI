@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 import { SearchableSelect } from './SearchableSelect';
+import { QuickCreateButton } from './QuickCreate';
 
 export type WizardItem = {
   article_id: string | null;
@@ -44,6 +45,8 @@ type Props = {
   saveLabel?: string;
   itemPriceField?: 'sale_price' | 'purchase_price';
   banner?: ReactNode;
+  onCreateArticle?: (name: string) => void;
+  onCreateCustomer?: (name: string) => void;
 };
 
 export function MobileBillingWizard({
@@ -64,6 +67,8 @@ export function MobileBillingWizard({
   saveLabel = 'Enregistrer',
   itemPriceField = 'sale_price',
   banner,
+  onCreateArticle,
+  onCreateCustomer,
 }: Props) {
   const [step, setStep] = useState<1 | 2>(1);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -125,6 +130,7 @@ export function MobileBillingWizard({
             fields={headerFields}
             values={headerValues}
             onChange={onHeaderChange}
+            onCreateCustomer={onCreateCustomer}
           />
         )}
         {step === 2 && (
@@ -226,6 +232,11 @@ export function MobileBillingWizard({
                 </button>
               ))}
             </div>
+            {onCreateArticle && (
+              <div className="mt-2">
+                <QuickCreateButton label="Créer un article" onClick={() => { onCreateArticle(searchQuery); setSearchOpen(false); }} />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -256,10 +267,11 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
   );
 }
 
-function Step1Header({ fields, values, onChange }: {
+function Step1Header({ fields, values, onChange, onCreateCustomer }: {
   fields: WizardHeaderField[];
   values: Record<string, string>;
   onChange: (key: string, val: string) => void;
+  onCreateCustomer?: (name: string) => void;
 }) {
   return (
     <div className="px-4 py-4 space-y-2.5">
@@ -269,13 +281,20 @@ function Step1Header({ fields, values, onChange }: {
             {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
           {f.type === 'select' && f.options ? (
-            <SearchableSelect
-              options={f.options}
-              value={values[f.key] || ''}
-              onChange={v => onChange(f.key, v)}
-              placeholder={f.placeholder || '— Choisir —'}
-              className="!h-11 !rounded-xl !text-sm"
-            />
+            <>
+              <SearchableSelect
+                options={f.options}
+                value={values[f.key] || ''}
+                onChange={v => onChange(f.key, v)}
+                placeholder={f.placeholder || '— Choisir —'}
+                className="!h-11 !rounded-xl !text-sm"
+              />
+              {f.key === 'customer_id' && onCreateCustomer && (
+                <div className="mt-1">
+                  <QuickCreateButton label="Créer un client" onClick={() => onCreateCustomer('')} />
+                </div>
+              )}
+            </>
           ) : f.type === 'date' ? (
             <input
               type="date"

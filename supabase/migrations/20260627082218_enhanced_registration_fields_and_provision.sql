@@ -97,7 +97,7 @@ RETURNING id INTO v_site_id;
 
 -- Common: payment methods + accounting
 INSERT INTO payment_methods (tenant_id, name, code, payment_type, account_code, sort_order) VALUES
-(v_tenant_id,'Especes','CASH','cash','5710000',1),
+(v_tenant_id,'Espèces','CASH','cash','5710000',1),
 (v_tenant_id,'Wave','WAVE','mobile','5211000',2),
 (v_tenant_id,'Orange Money','OM','mobile','5212000',3),
 (v_tenant_id,'Free Money','FM','mobile','5213000',4),
