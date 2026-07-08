@@ -2503,17 +2503,23 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : (
           <div className="divide-y divide-neutral-100">
             {cart.map(i => (
-              <div key={i.article_id} className="group px-3 py-1 hover:bg-neutral-50 transition-colors flex items-center gap-1.5">
-                <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-center font-bold num focus:outline-none focus:border-neutral-900 shrink-0" title="Quantité" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-semibold text-neutral-900 truncate">{i.name}</div>
-                  {i.tier_name && <div className="text-[9px] font-medium text-brand-600 leading-tight">{i.tier_name}</div>}
+              <div key={i.article_id} className="group px-3 py-1.5 hover:bg-neutral-50 transition-colors">
+                <div className="flex items-start justify-between gap-1">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-semibold text-neutral-900 leading-snug">{i.name}</div>
+                    {i.tier_name && <div className="text-[9px] font-medium text-brand-600 leading-tight">{i.tier_name}</div>}
+                  </div>
+                  <button onClick={() => removeLine(i.article_id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-red-400 transition-all shrink-0 mt-0.5">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
-                <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-right num focus:outline-none focus:border-neutral-900 shrink-0" title="Prix unitaire" />
-                <div className="text-[11px] font-bold text-neutral-900 num whitespace-nowrap min-w-[48px] text-right shrink-0">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
-                <button onClick={() => removeLine(i.article_id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-red-400 transition-all shrink-0">
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                <div className="flex items-center gap-2 mt-1">
+                  <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} className="w-12 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-center font-bold num focus:outline-none focus:border-neutral-900 shrink-0" title="Quantité" />
+                  <span className="text-[10px] text-neutral-400">x</span>
+                  <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-right num focus:outline-none focus:border-neutral-900 shrink-0" title="Prix unitaire" />
+                  <span className="text-[10px] text-neutral-400">=</span>
+                  <div className="text-[11px] font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
+                </div>
               </div>
             ))}
           </div>

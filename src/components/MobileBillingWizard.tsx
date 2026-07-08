@@ -345,9 +345,9 @@ function Step2Articles({ items, allItems, onEdit }: {
           <button
             key={realIdx}
             onClick={() => onEdit(realIdx)}
-            className="w-full h-[72px] text-left bg-white rounded-xl px-3 py-2.5 border border-slate-200/80 active:scale-[0.98] transition-all flex flex-col justify-between"
+            className="w-full text-left bg-white rounded-xl px-3 py-2.5 border border-slate-200/80 active:scale-[0.98] transition-all flex flex-col gap-1"
           >
-            <p className="text-[13px] font-semibold text-slate-900 leading-snug line-clamp-2 w-full">{item.name}</p>
+            <p className="text-[13px] font-semibold text-slate-900 leading-snug w-full">{item.name}</p>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3 text-[11px] text-slate-500">
                 <span>{item.quantity} x <span className="font-bold text-slate-700 num">{formatFCFA(item.unit_price)}</span></span>
