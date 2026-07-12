@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Loader2, Printer, Eye, BarChart3, Package, Users, Truck,
-  ShoppingCart, Calendar, ChevronDown, Monitor, Store, Check, X,
+  ShoppingCart, Calendar, ChevronDown, Monitor, Store, Check, X, TrendingDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -310,6 +310,66 @@ async function fetchSupplierStats(tenantId: string, from: string, to: string) {
   return Array.from(map.values()).sort((a, b) => b.totalOrdered - a.totalOrdered);
 }
 
+async function fetchExpenseStats(
+  tenantId: string, siteId: string | undefined, from: string, to: string
+) {
+  let salesQ = supabase
+    .from('sales')
+    .select('total, sale_items(quantity, purchase_cost)')
+    .eq('tenant_id', tenantId)
+    .neq('status', 'cancelled')
+    .gte('created_at', `${from}T00:00:00`)
+    .lte('created_at', `${to}T23:59:59`);
+  if (siteId) salesQ = salesQ.eq('site_id', siteId);
+
+  let movQ = supabase
+    .from('cash_movements')
+    .select('amount, reason, note, created_at, expense_category_id, expense_categories(name)')
+    .eq('tenant_id', tenantId)
+    .eq('kind', 'expense')
+    .gte('created_at', `${from}T00:00:00`)
+    .lte('created_at', `${to}T23:59:59`)
+    .order('created_at');
+  if (siteId) movQ = movQ.eq('site_id', siteId);
+
+  const [salesRes, movRes] = await Promise.all([salesQ, movQ]);
+  if (salesRes.error) throw salesRes.error;
+  if (movRes.error) throw movRes.error;
+
+  let totalRevenue = 0, totalCost = 0;
+  for (const row of (salesRes.data || [])) {
+    totalRevenue += row.total || 0;
+    totalCost += ((row.sale_items || []) as any[])
+      .reduce((s: number, i: any) => s + ((i.purchase_cost || 0) * i.quantity), 0);
+  }
+
+  const byCategory = new Map<string, { count: number; amount: number }>();
+  const detail: { date: string; category: string; note: string; amount: number }[] = [];
+  let totalExpenses = 0;
+
+  for (const m of (movRes.data || []) as any[]) {
+    const category = (m.expense_categories as any)?.name || m.reason || 'Non catégorisé';
+    const amount = Number(m.amount) || 0;
+    totalExpenses += amount;
+    const prev = byCategory.get(category) || { count: 0, amount: 0 };
+    byCategory.set(category, { count: prev.count + 1, amount: prev.amount + amount });
+    detail.push({
+      date: m.created_at,
+      category,
+      note: [m.reason && m.reason !== category ? m.reason : '', m.note].filter(Boolean).join(' · '),
+      amount,
+    });
+  }
+
+  return {
+    totalRevenue, totalCost, totalExpenses,
+    byCategory: Array.from(byCategory.entries())
+      .sort((a, b) => b[1].amount - a[1].amount)
+      .map(([category, v]) => ({ category, ...v })),
+    detail,
+  };
+}
+
 // ── Report HTML builders ───────────────────────────────────────────────────────
 
 function buildCashReport(
@@ -603,9 +663,83 @@ function buildSupplierReport(
     ${docFooter(now)}`;
 }
 
+function buildExpenseReport(
+  tenant: TenantMeta, range: DateRange,
+  stats: Awaited<ReturnType<typeof fetchExpenseStats>>,
+  siteName?: string
+): string {
+  const { totalRevenue, totalCost, totalExpenses, byCategory, detail } = stats;
+  const grossMargin = totalRevenue - totalCost;
+  const netMargin = grossMargin - totalExpenses;
+  const netPct = totalRevenue > 0 ? Math.round((netMargin / totalRevenue) * 100) : 0;
+  const period = labelRange(range);
+  const now = new Date().toLocaleString('fr-FR');
+
+  const catRows = byCategory.map((c, i) => `<tr>
+    <td class="num c">${i + 1}</td>
+    <td class="b">${esc(c.category)}</td>
+    <td class="r num">${fmtNum(c.count)}</td>
+    <td class="r num b">${fmtMoney(c.amount)}</td>
+    <td class="r num">${pct(c.amount, totalExpenses)}</td>
+  </tr>`).join('');
+
+  const detailRows = detail.slice(0, 200).map((d, i) => `<tr>
+    <td class="num c">${i + 1}</td>
+    <td>${esc(new Date(d.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}</td>
+    <td class="b">${esc(d.category)}</td>
+    <td class="muted">${esc(d.note || '—')}</td>
+    <td class="r num b">${fmtMoney(d.amount)}</td>
+  </tr>`).join('');
+
+  return `
+    ${docHeader(tenant, 'État des Dépenses', 'Dépenses par type · Marge nette après dépenses', period, siteName)}
+    <div class="kpi-row">
+      <div class="kpi-cell accent"><div class="kpi-label">CA Total</div><div class="kpi-value">${fmtMoney(totalRevenue)} FCFA</div></div>
+      <div class="kpi-cell success"><div class="kpi-label">Marge brute</div><div class="kpi-value ${grossMargin >= 0 ? 'green' : 'red'}">${fmtMoney(grossMargin)} FCFA</div></div>
+      <div class="kpi-cell danger"><div class="kpi-label">Total dépenses</div><div class="kpi-value red">${fmtMoney(totalExpenses)} FCFA</div></div>
+      <div class="kpi-cell ${netMargin >= 0 ? 'success' : 'danger'}"><div class="kpi-label">Marge nette après dépenses</div><div class="kpi-value ${netMargin >= 0 ? 'green' : 'red'}">${fmtMoney(netMargin)} FCFA</div></div>
+      <div class="kpi-cell"><div class="kpi-label">Taux de marge nette</div><div class="kpi-value ${netMargin >= 0 ? 'green' : 'red'}">${netPct} %</div></div>
+    </div>
+
+    <div class="section-title">Synthèse — marge nette après dépenses</div>
+    <table>
+      <thead><tr><th>Élément</th><th class="r">Montant (FCFA)</th></tr></thead>
+      <tbody>
+        <tr><td>Chiffre d'affaires</td><td class="r num b">${fmtMoney(totalRevenue)}</td></tr>
+        <tr><td>Coût des marchandises vendues</td><td class="r num mr">− ${fmtMoney(totalCost)}</td></tr>
+        <tr><td class="b">Marge brute</td><td class="r num ${grossMargin >= 0 ? 'mc' : 'mr'}">${fmtMoney(grossMargin)}</td></tr>
+        <tr><td>Total des dépenses</td><td class="r num mr">− ${fmtMoney(totalExpenses)}</td></tr>
+        <tr class="total-row"><td class="b">MARGE NETTE APRÈS DÉPENSES</td><td class="r num ${netMargin >= 0 ? 'mc' : 'mr'}">${fmtMoney(netMargin)}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-title">Dépenses par type</div>
+    <table>
+      <thead><tr><th class="c">#</th><th>Type de dépense</th><th class="r">Nombre</th><th class="r">Montant (FCFA)</th><th class="r">Part</th></tr></thead>
+      <tbody>
+        ${catRows || '<tr><td colspan="5" class="c muted">Aucune dépense sur la période</td></tr>'}
+        ${byCategory.length ? `<tr class="total-row">
+          <td></td><td class="b">TOTAL</td>
+          <td class="r num">${fmtNum(byCategory.reduce((s, c) => s + c.count, 0))}</td>
+          <td class="r num">${fmtMoney(totalExpenses)}</td>
+          <td class="r">100 %</td>
+        </tr>` : ''}
+      </tbody>
+    </table>
+
+    <div class="section-title">Détail des dépenses${detail.length > 200 ? ` — 200 premières sur ${detail.length}` : ''}</div>
+    <table>
+      <thead><tr><th class="c">#</th><th>Date</th><th>Type</th><th>Motif / note</th><th class="r">Montant (FCFA)</th></tr></thead>
+      <tbody>
+        ${detailRows || '<tr><td colspan="5" class="c muted">Aucune dépense sur la période</td></tr>'}
+      </tbody>
+    </table>
+    ${docFooter(now)}`;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
-type ReportType = 'cash' | 'articles' | 'customers' | 'suppliers';
+type ReportType = 'cash' | 'articles' | 'customers' | 'suppliers' | 'expenses';
 
 const REPORT_DEFS: {
   key: ReportType; label: string; sublabel: string; icon: any; hasMargin: boolean;
@@ -614,6 +748,7 @@ const REPORT_DEFS: {
   { key: 'articles',  label: 'Articles',     sublabel: "Classement des articles vendus par chiffre d'affaires", icon: Package, hasMargin: true  },
   { key: 'customers', label: 'Clients',      sublabel: "Portefeuille client, CA et encours de crédit",       icon: Users,        hasMargin: true  },
   { key: 'suppliers', label: 'Fournisseurs', sublabel: "Achats et règlements par fournisseur",               icon: Truck,        hasMargin: false },
+  { key: 'expenses',  label: 'Dépenses',     sublabel: "Dépenses par type et marge nette après dépenses",    icon: TrendingDown, hasMargin: false },
 ];
 
 function isMobile() {
@@ -717,6 +852,9 @@ export function Reports() {
       } else if (reportType === 'customers') {
         const rows = await fetchCustomerStats(tenant.id, siteIdParam, from, to);
         html = buildCustomerReport(tenantMeta, range, rows, showMargin, siteName);
+      } else if (reportType === 'expenses') {
+        const stats = await fetchExpenseStats(tenant.id, siteIdParam, from, to);
+        html = buildExpenseReport(tenantMeta, range, stats, siteName);
       } else {
         const rows = await fetchSupplierStats(tenant.id, from, to);
         html = buildSupplierReport(tenantMeta, range, rows, siteName);
@@ -838,7 +976,7 @@ export function Reports() {
       </div>
 
       {/* ── Cards 2×2 ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 shrink-0">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 shrink-0">
         {REPORT_DEFS.map(d => {
           const Icon = d.icon;
           const active = reportType === d.key;

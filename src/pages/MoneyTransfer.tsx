@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, Search, X, Check, AlertTriangle, Loader2, CreditCard as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, ChevronDown, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Smartphone, Activity, Package, Users } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, Search, X, Check, AlertTriangle, Loader2, CreditCard as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, ChevronDown, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Smartphone, Activity, Package, Users, Receipt, HandCoins, Phone } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 
-type SubPage = 'dashboard' | 'operations' | 'operations_grossiste' | 'soldes' | 'clotures' | 'rapports' | 'parametres';
+type SubPage = 'dashboard' | 'operations' | 'operations_grossiste' | 'depenses' | 'clients' | 'soldes' | 'clotures' | 'rapports' | 'parametres';
 
 const SUB_NAV: { key: SubPage; label: string; icon: any }[] = [
   { key: 'dashboard', label: 'Tableau de bord', icon: BarChart3 },
   { key: 'operations', label: 'Opérations clients', icon: RefreshCw },
   { key: 'operations_grossiste', label: 'Opérations grossiste', icon: Package },
+  { key: 'depenses', label: 'Dépenses', icon: Receipt },
+  { key: 'clients', label: 'Clients & créances', icon: Users },
   { key: 'soldes', label: 'Soldes', icon: Wallet },
   { key: 'clotures', label: 'Clôtures', icon: Lock },
   { key: 'rapports', label: 'Rapports', icon: FileText },
@@ -75,11 +77,13 @@ export function MoneyTransfer() {
   useEffect(() => { loadInitStatus(); }, [loadInitStatus]);
 
   const isInitialized = initStatus === 'valide';
-  const blockedPages: SubPage[] = ['operations', 'operations_grossiste', 'soldes', 'clotures', 'rapports'];
+  const blockedPages: SubPage[] = ['operations', 'operations_grossiste', 'depenses', 'clients', 'soldes', 'clotures', 'rapports'];
 
   const isNavVisible = (key: SubPage): boolean => {
     if (permsLoading) return true;
     if (key === 'operations_grossiste') return can('mt_wholesaler_operation_view');
+    if (key === 'depenses') return can('mt_expense_view');
+    if (key === 'clients') return can('mt_customer_view');
     if (key === 'parametres') return can('mt_settings_manage');
     if (key === 'rapports') return can('mt_report_view_site');
     return true;
@@ -133,6 +137,8 @@ export function MoneyTransfer() {
         {sub === 'dashboard' && <MTDashboard isInitialized={isInitialized} onGoInit={() => setSub('parametres')} />}
         {sub === 'operations' && isInitialized && <MTOperations />}
         {sub === 'operations_grossiste' && isInitialized && can('mt_wholesaler_operation_view') && <MTWholesalerOperations />}
+        {sub === 'depenses' && isInitialized && can('mt_expense_view') && <MTExpenses />}
+        {sub === 'clients' && isInitialized && can('mt_customer_view') && <MTCustomers />}
         {sub === 'soldes' && isInitialized && <MTBalances />}
         {sub === 'clotures' && isInitialized && <MTClosures />}
         {sub === 'rapports' && isInitialized && can('mt_report_view_site') && <MTReports />}
@@ -1989,7 +1995,7 @@ async function updateBalance(tenantId: string, spId: string | null, svcId: strin
   if (data) {
     await supabase.from('mt_accounts').update({ balance: Number(data.balance) + delta, updated_at: new Date().toISOString() }).eq('id', data.id);
   } else {
-    if (!svcId && (type === 'cash' || type === 'bank')) {
+    if (!svcId && type === 'cash') {
       let q2 = supabase.from('mt_accounts').select('*').eq('tenant_id', tenantId).eq('type', type);
       if (spId) q2 = q2.eq('service_point_id', spId);
       const { data: fallback } = await q2.limit(1).maybeSingle();
@@ -1998,7 +2004,7 @@ async function updateBalance(tenantId: string, spId: string | null, svcId: strin
         return;
       }
     }
-    const label = type === 'cash' ? 'Caisse' : type === 'uv' ? 'UV' : type === 'bank' ? 'Banque' : type === 'stock_credit' ? 'Stock crédit' : 'Écarts';
+    const label = type === 'cash' ? 'Caisse' : type === 'uv' ? 'UV' : type === 'stock_credit' ? 'Stock crédit' : 'Écarts';
     await supabase.from('mt_accounts').insert({ tenant_id: tenantId, service_point_id: spId || null, service_id: svcId || null, type, label, balance: delta, currency: 'XOF' });
   }
 }
@@ -2170,6 +2176,22 @@ function MTWholesalers() {
 /* ============================================ */
 /* OPÉRATIONS GROSSISTE                         */
 /* ============================================ */
+type WhOpType = 'recharge_grossiste' | 'dechargement_grossiste' | 'reappro_credit' | 'transfert_interne';
+type TransferKind = 'cash' | 'uv' | 'stock_credit';
+
+const WH_OP_META: Record<WhOpType, { label: string; short: string; verb: string; hint: string }> = {
+  recharge_grossiste: { label: 'Recharge UV', short: 'Recharge UV', verb: 'la recharge', hint: 'Vous donnez du cash au grossiste et recevez du solde électronique (UV).' },
+  dechargement_grossiste: { label: 'Déchargement UV', short: 'Déchargement UV', verb: 'le déchargement', hint: 'Vous renvoyez du solde électronique au grossiste et recevez du cash.' },
+  reappro_credit: { label: 'Réappro. crédit', short: 'Réappro. crédit', verb: 'le réapprovisionnement', hint: 'Vous achetez du stock de crédit téléphonique (cash vers stock crédit).' },
+  transfert_interne: { label: 'Transfert interne', short: 'Transfert interne', verb: 'le transfert interne', hint: 'Vous déplacez du cash, de l\'UV ou du stock crédit entre deux points de service.' },
+};
+
+function balanceLabel(kind: 'cash' | 'uv' | 'stock_credit', svcName?: string) {
+  if (kind === 'cash') return 'Cash disponible';
+  if (kind === 'uv') return `UV ${svcName || ''}`.trim();
+  return `Stock crédit ${svcName || ''}`.trim();
+}
+
 function MTWholesalerOperations() {
   const { tenant, profile } = useApp();
   const toast = useToast();
@@ -2181,14 +2203,15 @@ function MTWholesalerOperations() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [opType, setOpType] = useState<'recharge_grossiste' | 'dechargement_grossiste' | 'reappro_credit'>('recharge_grossiste');
-  const [form, setForm] = useState({ wholesaler_id: '', service_id: '', service_point_id: '', amount: '', comment: '' });
+  const [opType, setOpType] = useState<WhOpType>('recharge_grossiste');
+  const [transferKind, setTransferKind] = useState<TransferKind>('cash');
+  const [form, setForm] = useState({ wholesaler_id: '', service_id: '', service_point_id: '', dest_service_point_id: '', amount: '', comment: '' });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!tenant) return;
     const [{ data: o }, { data: w }, { data: s }, { data: p }, { data: a }] = await Promise.all([
-      supabase.from('mt_operations').select('*').eq('tenant_id', tenant.id).in('type', ['recharge_grossiste', 'dechargement_grossiste', 'reappro_credit', 'versement_banque', 'retrait_banque']).order('operated_at', { ascending: false }).limit(100),
+      supabase.from('mt_operations').select('*').eq('tenant_id', tenant.id).in('type', ['recharge_grossiste', 'dechargement_grossiste', 'reappro_credit', 'transfert_interne']).order('operated_at', { ascending: false }).limit(150),
       supabase.from('mt_wholesalers').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
       supabase.from('mt_services').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
       supabase.from('mt_service_points').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
@@ -2196,102 +2219,182 @@ function MTWholesalerOperations() {
     ]);
     setOps(o || []);
     setWholesalers(w || []);
-    setServices(s || []);
+    setServices((s || []).filter((x: any) => (x.name || '').trim() !== ''));
     setPoints(p || []);
     setAccounts(a || []);
-    if (p && p.length === 1) setForm(f => ({ ...f, service_point_id: p[0].id }));
+    if (p && p.length === 1) setForm(f => ({ ...f, service_point_id: f.service_point_id || p[0].id }));
     setLoading(false);
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
 
-  const cashTotal = accounts.filter(a => a.type === 'cash').reduce((s, a) => s + Number(a.balance), 0);
-  const getServiceUV = (svcId: string) => accounts.filter(a => a.type === 'uv' && a.service_id === svcId).reduce((s, a) => s + Number(a.balance), 0);
-  const getServiceCredit = (svcId: string) => accounts.filter(a => a.type === 'stock_credit' && a.service_id === svcId).reduce((s, a) => s + Number(a.balance), 0);
+  const getBal = useCallback((spId: string | null, svcId: string | null, type: string): number => {
+    return accounts
+      .filter(a => a.type === type
+        && (spId ? a.service_point_id === spId : true)
+        && (svcId ? a.service_id === svcId : (type === 'cash' ? true : a.service_id === null)))
+      .reduce((s, a) => s + Number(a.balance || 0), 0);
+  }, [accounts]);
+
+  const resetForm = () => {
+    setForm({ wholesaler_id: '', service_id: '', service_point_id: points.length === 1 ? points[0].id : '', dest_service_point_id: '', amount: '', comment: '' });
+  };
+
+  const isTransfer = opType === 'transfert_interne';
+  const needsService = !isTransfer || transferKind === 'uv' || transferKind === 'stock_credit';
+  const filteredServices = services.filter(s => {
+    if (opType === 'reappro_credit') return s.family === 'credit_telephone';
+    if (isTransfer && transferKind === 'stock_credit') return s.family === 'credit_telephone';
+    if (isTransfer && transferKind === 'uv') return s.family !== 'credit_telephone';
+    return s.family !== 'credit_telephone';
+  });
+
+  const amount = Number(form.amount) || 0;
+  const svc = form.service_id;
+  const sp = form.service_point_id;
+  const dp = form.dest_service_point_id;
+
+  const preview = useMemo(() => {
+    if (amount <= 0) return null;
+    if (isTransfer) {
+      if (!sp || !dp || sp === dp) return null;
+      if (needsService && !svc) return null;
+      const bal = transferKind;
+      const svcId = bal === 'cash' ? null : svc;
+      const srcBefore = getBal(sp, svcId, bal);
+      const dstBefore = getBal(dp, svcId, bal);
+      const svcName = services.find(s => s.id === svc)?.name || '';
+      return {
+        rows: [
+          { label: `${balanceLabel(bal, svcName)} · ${points.find(p => p.id === sp)?.name || ''}`, before: srcBefore, after: srcBefore - amount, delta: -amount, isSource: true },
+          { label: `${balanceLabel(bal, svcName)} · ${points.find(p => p.id === dp)?.name || ''}`, before: dstBefore, after: dstBefore + amount, delta: amount, isSource: false },
+        ],
+        insufficient: srcBefore < amount ? balanceLabel(bal, svcName) : null,
+      };
+    }
+    if (!sp || !svc) return null;
+    const targetType: 'uv' | 'stock_credit' = opType === 'reappro_credit' ? 'stock_credit' : 'uv';
+    const svcName = services.find(s => s.id === svc)?.name || '';
+    const sourceBefore = getBal(sp, null, 'cash');
+    const targetBefore = getBal(sp, svc, targetType);
+    if (opType === 'dechargement_grossiste') {
+      return {
+        rows: [
+          { label: `${balanceLabel('uv', svcName)} · ${points.find(p => p.id === sp)?.name || ''}`, before: targetBefore, after: targetBefore - amount, delta: -amount, isSource: true },
+          { label: `${balanceLabel('cash')} · ${points.find(p => p.id === sp)?.name || ''}`, before: sourceBefore, after: sourceBefore + amount, delta: amount, isSource: false },
+        ],
+        insufficient: targetBefore < amount ? balanceLabel('uv', svcName) : null,
+      };
+    }
+    return {
+      rows: [
+        { label: `${balanceLabel('cash')} · ${points.find(p => p.id === sp)?.name || ''}`, before: sourceBefore, after: sourceBefore - amount, delta: -amount, isSource: true },
+        { label: `${balanceLabel(targetType, svcName)} · ${points.find(p => p.id === sp)?.name || ''}`, before: targetBefore, after: targetBefore + amount, delta: amount, isSource: false },
+      ],
+      insufficient: sourceBefore < amount ? balanceLabel('cash') : null,
+    };
+  }, [amount, isTransfer, sp, dp, svc, needsService, transferKind, opType, getBal, points, services]);
+
+  const validationError = useMemo(() => {
+    if (amount <= 0) return 'Veuillez saisir un montant supérieur à zéro.';
+    if (isTransfer) {
+      if (!sp) return 'Veuillez sélectionner le point source.';
+      if (!dp) return 'Veuillez sélectionner le point destination.';
+      if (sp === dp) return 'Le point source et le point destination doivent être différents.';
+      if (needsService && !svc) return 'Veuillez sélectionner un service.';
+    } else {
+      if (!form.wholesaler_id) return 'Veuillez sélectionner un grossiste.';
+      if (!svc) return 'Veuillez sélectionner un service.';
+      if (!sp) return 'Veuillez sélectionner un point de service.';
+    }
+    if (preview?.insufficient) {
+      if (preview.insufficient.startsWith('Cash')) return 'Cash insuffisant pour cette opération.';
+      if (preview.insufficient.startsWith('UV')) return 'Solde UV insuffisant pour cette opération.';
+      if (preview.insufficient.startsWith('Stock')) return 'Stock crédit insuffisant pour cette opération.';
+    }
+    return null;
+  }, [amount, isTransfer, sp, dp, svc, needsService, form.wholesaler_id, preview]);
+
+  const applyDeltas = async (op: WhOpType, kind: TransferKind, srcSp: string, dstSp: string | null, svcId: string | null, amt: number) => {
+    if (op === 'recharge_grossiste') {
+      await updateBalance(tenant!.id, srcSp, null, 'cash', -amt);
+      await updateBalance(tenant!.id, srcSp, svcId, 'uv', amt);
+    } else if (op === 'dechargement_grossiste') {
+      await updateBalance(tenant!.id, srcSp, svcId, 'uv', -amt);
+      await updateBalance(tenant!.id, srcSp, null, 'cash', amt);
+    } else if (op === 'reappro_credit') {
+      await updateBalance(tenant!.id, srcSp, null, 'cash', -amt);
+      await updateBalance(tenant!.id, srcSp, svcId, 'stock_credit', amt);
+    } else if (op === 'transfert_interne' && dstSp) {
+      const svcForDelta = kind === 'cash' ? null : svcId;
+      await updateBalance(tenant!.id, srcSp, svcForDelta, kind, -amt);
+      await updateBalance(tenant!.id, dstSp, svcForDelta, kind, amt);
+    }
+  };
 
   const createOp = async () => {
-    if (!tenant || !form.service_point_id || !form.amount || !form.service_id) return;
+    if (!tenant || validationError) { if (validationError) toast.error(validationError); return; }
     setSaving(true);
-    const amount = Number(form.amount) || 0;
-    const sp = form.service_point_id;
-    const svc = form.service_id;
+    const cashBefore = getBal(sp, null, 'cash');
+    const uvBefore = svc ? getBal(sp, svc, 'uv') : 0;
+    const creditBefore = svc ? getBal(sp, svc, 'stock_credit') : 0;
+    const kindMeta = isTransfer ? transferKind : null;
 
-    const getBalance = async (spId: string | null, svcId: string | null, type: string): Promise<number> => {
-      let q = supabase.from('mt_accounts').select('balance').eq('tenant_id', tenant.id).eq('type', type);
-      if (spId) q = q.eq('service_point_id', spId);
-      if (svcId) q = q.eq('service_id', svcId);
-      const { data } = await q;
-      return (data || []).reduce((sum, row) => sum + Number(row.balance || 0), 0);
-    };
-
-    const cashBefore = await getBalance(sp, null, 'cash');
-    const uvBefore = await getBalance(sp, svc, 'uv');
-    const creditBefore = await getBalance(sp, svc, 'stock_credit');
-
-    if (opType === 'recharge_grossiste') {
-      if (cashBefore < amount) { toast.error(`Solde cash insuffisant (${fmt(cashBefore)} FCFA disponible)`); setSaving(false); return; }
-    } else if (opType === 'dechargement_grossiste') {
-      if (uvBefore < amount) { toast.error(`Solde UV insuffisant (${fmt(uvBefore)} FCFA disponible)`); setSaving(false); return; }
-    } else if (opType === 'reappro_credit') {
-      if (cashBefore < amount) { toast.error(`Solde cash insuffisant (${fmt(cashBefore)} FCFA disponible)`); setSaving(false); return; }
-    }
-
-    const { error } = await supabase.from('mt_operations').insert({
+    const commentPrefix = isTransfer ? `[transfert_${transferKind}] ` : '';
+    const payload: any = {
       tenant_id: tenant.id,
       service_point_id: sp,
-      service_id: svc,
-      wholesaler_id: form.wholesaler_id || null,
+      dest_service_point_id: isTransfer ? dp : null,
+      service_id: isTransfer && transferKind === 'cash' ? null : (svc || null),
+      wholesaler_id: !isTransfer ? (form.wholesaler_id || null) : null,
       type: opType,
       amount,
       commission: 0,
       status: 'validee',
-      comment: form.comment || null,
+      comment: (commentPrefix + (form.comment || '')).trim() || null,
       operated_by: profile?.id || null,
       validated_by: profile?.id || null,
       balance_before_cash: cashBefore,
-      balance_after_cash: opType === 'dechargement_grossiste' ? cashBefore + amount : cashBefore - amount,
+      balance_after_cash: opType === 'dechargement_grossiste' ? cashBefore + amount : opType === 'recharge_grossiste' || opType === 'reappro_credit' ? cashBefore - amount : cashBefore,
       balance_before_uv: opType === 'reappro_credit' ? creditBefore : uvBefore,
-      balance_after_uv: opType === 'recharge_grossiste' ? uvBefore + amount : opType === 'dechargement_grossiste' ? uvBefore - amount : creditBefore + amount,
-    });
+      balance_after_uv: opType === 'recharge_grossiste' ? uvBefore + amount : opType === 'dechargement_grossiste' ? uvBefore - amount : opType === 'reappro_credit' ? creditBefore + amount : uvBefore,
+    };
 
-    if (!error) {
-      if (opType === 'recharge_grossiste') {
-        await updateBalance(tenant.id, sp, null, 'cash', -amount);
-        await updateBalance(tenant.id, sp, svc, 'uv', amount);
-      } else if (opType === 'dechargement_grossiste') {
-        await updateBalance(tenant.id, sp, svc, 'uv', -amount);
-        await updateBalance(tenant.id, sp, null, 'cash', amount);
-      } else if (opType === 'reappro_credit') {
-        await updateBalance(tenant.id, sp, null, 'cash', -amount);
-        await updateBalance(tenant.id, sp, svc, 'stock_credit', amount);
-      }
-      toast.success('Opération grossiste enregistrée');
-    } else {
-      toast.error('Erreur : ' + error.message);
-    }
+    const { error } = await supabase.from('mt_operations').insert(payload);
+    if (error) { toast.error('Erreur : ' + error.message); setSaving(false); return; }
+
+    await applyDeltas(opType, kindMeta || 'cash', sp, isTransfer ? dp : null, isTransfer && transferKind === 'cash' ? null : (svc || null), amount);
+    toast.success('Opération enregistrée');
     setSaving(false);
     setShowForm(false);
-    setForm({ wholesaler_id: '', service_id: '', service_point_id: points.length === 1 ? points[0].id : '', amount: '', comment: '' });
+    resetForm();
     load();
   };
 
   const cancelOp = async (op: any) => {
     if (op.status !== 'validee') return;
     await supabase.from('mt_operations').update({ status: 'annulee', cancelled_by: profile?.id, cancelled_at: new Date().toISOString() }).eq('id', op.id);
-    const sp = op.service_point_id;
-    const svc = op.service_id;
-    const amount = Number(op.amount);
-    if (op.type === 'recharge_grossiste') {
-      await updateBalance(tenant!.id, sp, null, 'cash', amount);
-      await updateBalance(tenant!.id, sp, svc, 'uv', -amount);
+    const amt = Number(op.amount);
+    const svcId = op.service_id;
+    const srcSp = op.service_point_id;
+    const dstSp = op.dest_service_point_id;
+    const cmt: string = op.comment || '';
+    const tk: TransferKind = cmt.includes('[transfert_uv]') ? 'uv' : cmt.includes('[transfert_stock_credit]') ? 'stock_credit' : 'cash';
+    if (op.type === 'transfert_interne' && dstSp) {
+      const svcForDelta = tk === 'cash' ? null : svcId;
+      await updateBalance(tenant!.id, srcSp, svcForDelta, tk, amt);
+      await updateBalance(tenant!.id, dstSp, svcForDelta, tk, -amt);
+    } else if (op.type === 'recharge_grossiste') {
+      await updateBalance(tenant!.id, srcSp, null, 'cash', amt);
+      await updateBalance(tenant!.id, srcSp, svcId, 'uv', -amt);
     } else if (op.type === 'dechargement_grossiste') {
-      await updateBalance(tenant!.id, sp, svc, 'uv', amount);
-      await updateBalance(tenant!.id, sp, null, 'cash', -amount);
+      await updateBalance(tenant!.id, srcSp, svcId, 'uv', amt);
+      await updateBalance(tenant!.id, srcSp, null, 'cash', -amt);
     } else if (op.type === 'reappro_credit') {
-      await updateBalance(tenant!.id, sp, null, 'cash', amount);
-      await updateBalance(tenant!.id, sp, svc, 'stock_credit', -amount);
+      await updateBalance(tenant!.id, srcSp, null, 'cash', amt);
+      await updateBalance(tenant!.id, srcSp, svcId, 'stock_credit', -amt);
     }
-    toast.success('Opération grossiste annulée');
+    toast.success('Opération annulée');
     load();
   };
 
@@ -2299,16 +2402,24 @@ function MTWholesalerOperations() {
   const getServiceName = (id: string | null) => services.find(s => s.id === id)?.name || '—';
   const getPointName = (id: string | null) => points.find(p => p.id === id)?.name || '—';
 
+  const decodeOp = (op: any) => {
+    const cmt: string = op.comment || '';
+    const tk: TransferKind = cmt.includes('[transfert_uv]') ? 'uv' : cmt.includes('[transfert_stock_credit]') ? 'stock_credit' : 'cash';
+    return { tk };
+  };
+
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
+
+  const canValidate = !saving && !validationError;
 
   return (
     <div className="lg:max-w-[1200px] lg:mx-auto space-y-5 pb-28 lg:pb-0">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-bold text-neutral-900">Opérations grossiste</h2>
-          <p className="text-xs text-neutral-500 mt-0.5">Recharges et déchargements de solde électronique via vos grossistes.</p>
+          <p className="text-xs text-neutral-500 mt-0.5">Alimentation et transferts internes des soldes cash, UV et stock crédit.</p>
         </div>
-        {can('mt_wholesaler_operation_create') && (
+        {can('mt_wholesaler_operation_create') && !showForm && (
           <button onClick={() => setShowForm(true)}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors">
             <Plus className="w-4 h-4" />Nouvelle opération
@@ -2316,132 +2427,182 @@ function MTWholesalerOperations() {
         )}
       </div>
 
-      {/* Résumé soldes */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
-          <div className="flex items-center gap-2 mb-1"><Banknote className="w-4 h-4 text-emerald-500" /><span className="text-[11px] font-medium text-neutral-500 uppercase">Cash disponible</span></div>
-          <p className="text-lg font-bold text-neutral-900">{fmt(cashTotal)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
-        </div>
-        {services.slice(0, 3).map(svc => (
-          <div key={svc.id} className="rounded-xl border border-neutral-200 bg-white p-3.5">
-            <div className="flex items-center gap-2 mb-1"><Smartphone className="w-4 h-4 text-sky-500" /><span className="text-[11px] font-medium text-neutral-500 uppercase">{svc.name}</span></div>
-            <p className="text-lg font-bold text-neutral-900">{fmt(getServiceUV(svc.id))} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
-          </div>
-        ))}
-      </div>
-
-      {/* Formulaire nouvelle opération grossiste */}
       {showForm && can('mt_wholesaler_operation_create') && (
-        <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-            <button onClick={() => setOpType('recharge_grossiste')}
-              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${opType === 'recharge_grossiste' ? 'bg-emerald-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}>
-              Recharge UV
-            </button>
-            <button onClick={() => setOpType('dechargement_grossiste')}
-              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${opType === 'dechargement_grossiste' ? 'bg-red-500 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}>
-              Déchargement UV
-            </button>
-            <button onClick={() => setOpType('reappro_credit')}
-              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${opType === 'reappro_credit' ? 'bg-amber-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}>
-              Réappro. crédit
-            </button>
-          </div>
-          <p className="text-xs text-neutral-500">
-            {opType === 'recharge_grossiste' ? 'Vous donnez du cash au grossiste et recevez du solde électronique (UV).' : opType === 'dechargement_grossiste' ? 'Vous envoyez du solde électronique au grossiste et recevez du cash.' : 'Vous achetez du stock de crédit téléphonique (cash vers stock crédit).'}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <select value={form.wholesaler_id} onChange={e => setForm({ ...form, wholesaler_id: e.target.value })} className="input">
-              <option value="">Grossiste *</option>
-              {wholesalers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-            <select value={form.service_id} onChange={e => setForm({ ...form, service_id: e.target.value })} className="input">
-              <option value="">Service *</option>
-              {services.filter(s => opType === 'reappro_credit' ? s.family === 'credit_telephone' : s.family !== 'credit_telephone').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            {points.length > 1 && (
-              <select value={form.service_point_id} onChange={e => setForm({ ...form, service_point_id: e.target.value })} className="input">
-                <option value="">Point de service *</option>
-                {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            )}
-            <div>
-              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant *</label>
-              <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" type="number" className="input text-lg font-semibold" />
-            </div>
-            <input value={form.comment} onChange={e => setForm({ ...form, comment: e.target.value })} placeholder="Commentaire (optionnel)" className="input" />
+        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-neutral-900">Nouvelle opération</h3>
+            <button onClick={() => { setShowForm(false); resetForm(); }} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
           </div>
 
-          {/* Aperçu impact */}
-          {Number(form.amount) > 0 && form.service_id && (
-            <div className="rounded-lg border border-neutral-100 bg-neutral-50/50 p-4">
-              <p className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-2">Impact prévisionnel</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-neutral-400 mb-0.5">Caisse</p>
-                  <p className={`text-sm font-bold ${opType === 'dechargement_grossiste' ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {opType === 'dechargement_grossiste' ? '+' : '-'}{fmt(Number(form.amount))} FCFA
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-neutral-400 mb-0.5">{opType === 'reappro_credit' ? `Stock crédit ${getServiceName(form.service_id)}` : `Solde UV ${getServiceName(form.service_id)}`}</p>
-                  <p className={`text-sm font-bold ${opType === 'dechargement_grossiste' ? 'text-red-600' : 'text-emerald-600'}`}>
-                    {opType === 'dechargement_grossiste' ? '-' : '+'}{fmt(Number(form.amount))} FCFA
-                  </p>
-                </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {(['recharge_grossiste', 'dechargement_grossiste', 'reappro_credit', 'transfert_interne'] as WhOpType[]).map(t => (
+              <button key={t} onClick={() => { setOpType(t); setForm(f => ({ ...f, service_id: '', dest_service_point_id: '' })); }}
+                className={`px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg border transition-colors ${opType === t ? 'bg-neutral-900 border-neutral-900 text-white' : 'bg-white border-neutral-200 text-neutral-700 hover:border-neutral-300'}`}>
+                {WH_OP_META[t].short}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-neutral-500 -mt-1">{WH_OP_META[opType].hint}</p>
+
+          {isTransfer && (
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1.5">Type de transfert</label>
+              <div className="flex gap-2 flex-wrap">
+                {([{ k: 'cash', l: 'Cash' }, { k: 'uv', l: 'UV' }, { k: 'stock_credit', l: 'Stock crédit' }] as { k: TransferKind; l: string }[]).map(({ k, l }) => (
+                  <button key={k} onClick={() => { setTransferKind(k); setForm(f => ({ ...f, service_id: '' })); }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${transferKind === k ? 'bg-neutral-900 border-neutral-900 text-white' : 'bg-white border-neutral-200 text-neutral-600 hover:border-neutral-300'}`}>
+                    {l}
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {!isTransfer && (
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Grossiste *</label>
+                <select value={form.wholesaler_id} onChange={e => setForm({ ...form, wholesaler_id: e.target.value })} className="input">
+                  <option value="">Sélectionner...</option>
+                  {wholesalers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+            )}
+            {needsService && (
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Service *</label>
+                <select value={form.service_id} onChange={e => setForm({ ...form, service_id: e.target.value })} className="input">
+                  <option value="">Sélectionner...</option>
+                  {filteredServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">{isTransfer ? 'Point source *' : 'Point de service *'}</label>
+              <select value={form.service_point_id} onChange={e => setForm({ ...form, service_point_id: e.target.value })} className="input">
+                <option value="">Sélectionner...</option>
+                {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            {isTransfer && (
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Point destination *</label>
+                <select value={form.dest_service_point_id} onChange={e => setForm({ ...form, dest_service_point_id: e.target.value })} className="input">
+                  <option value="">Sélectionner...</option>
+                  {points.filter(p => p.id !== form.service_point_id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            )}
+            {!isTransfer && (
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Source des fonds</label>
+                <div className="px-3 py-2 text-xs font-medium rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700">
+                  Cash
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant (FCFA) *</label>
+              <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" type="number" min="0" className="input text-base font-semibold" />
+            </div>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Commentaire</label>
+              <input value={form.comment} onChange={e => setForm({ ...form, comment: e.target.value })} placeholder="Optionnel" className="input" />
+            </div>
+          </div>
+
+          {/* Cartes dynamiques */}
+          {(sp && (isTransfer ? dp : svc)) ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {preview ? preview.rows.map((r, i) => (
+                <div key={i} className={`rounded-xl border p-3.5 ${r.isSource ? 'border-neutral-200 bg-white' : 'border-neutral-200 bg-neutral-50/60'}`}>
+                  <p className="text-[11px] font-medium text-neutral-500 uppercase truncate">{r.label}</p>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <p className="text-sm text-neutral-400 line-through">{fmt(r.before)}</p>
+                    <p className="text-base font-bold text-neutral-900">{fmt(r.after)}</p>
+                    <span className="text-[10px] text-neutral-400">FCFA</span>
+                  </div>
+                  <p className={`text-[11px] font-medium mt-0.5 ${r.delta >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{r.delta >= 0 ? '+' : ''}{fmt(r.delta)} FCFA</p>
+                </div>
+              )) : (
+                <div className="col-span-full rounded-lg border border-dashed border-neutral-200 p-4 text-center">
+                  <p className="text-xs text-neutral-500">Saisissez un montant pour voir les soldes avant et après opération.</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-neutral-200 p-6 text-center">
+              <Wallet className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
+              <p className="text-sm text-neutral-500">Sélectionnez {isTransfer ? 'les points source et destination' : 'un service et un point'} pour afficher les soldes disponibles.</p>
+            </div>
+          )}
+
+          {validationError && amount > 0 && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
+              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+              <p className="text-xs text-red-700">{validationError}</p>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-1">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-            <button onClick={createOp} disabled={saving || !form.amount || !form.service_id || !form.service_point_id}
-              className={`px-6 py-2.5 text-sm font-semibold text-white rounded-lg flex items-center gap-2 disabled:opacity-50 transition-colors ${
-                opType === 'recharge_grossiste' ? 'bg-emerald-600 hover:bg-emerald-700' : opType === 'dechargement_grossiste' ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-700'
-              }`}>
+            <button onClick={() => { setShowForm(false); resetForm(); }} className="px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
+            <button onClick={createOp} disabled={!canValidate}
+              className="px-6 py-2.5 text-sm font-semibold text-white rounded-lg flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-neutral-900 hover:bg-neutral-800 transition-colors">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Valider {opType === 'recharge_grossiste' ? 'la recharge' : opType === 'dechargement_grossiste' ? 'le déchargement' : 'le réapprovisionnement'}
+              Valider {WH_OP_META[opType].verb}
             </button>
           </div>
         </div>
       )}
 
-      {/* Historique des opérations grossiste */}
+      {/* Historique */}
       {ops.length === 0 ? (
         <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
           <Package className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-          <p className="text-sm text-neutral-500">Aucune opération grossiste</p>
+          <p className="text-sm text-neutral-500">Aucune opération enregistrée</p>
+          <p className="text-xs text-neutral-400 mt-1">Créez une nouvelle opération pour alimenter ou déplacer vos soldes.</p>
         </div>
       ) : (
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-neutral-100">
-            <h3 className="text-sm font-semibold text-neutral-900">Historique des opérations grossiste</h3>
+          <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-neutral-900">Historique récent</h3>
+            <span className="text-[11px] text-neutral-400">{ops.length} opération{ops.length > 1 ? 's' : ''}</span>
           </div>
-          <div className="divide-y divide-neutral-100 max-h-[500px] overflow-y-auto">
-            {ops.map(op => (
-              <div key={op.id} className="px-4 py-3 flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                  (op.type === 'recharge_grossiste' || op.type === 'retrait_banque' || op.type === 'reappro_credit') ? 'bg-emerald-50' : 'bg-red-50'
-                }`}>
-                  {(op.type === 'recharge_grossiste' || op.type === 'retrait_banque' || op.type === 'reappro_credit') ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" /> : <ArrowUpRight className="w-4 h-4 text-red-500" />}
+          <div className="divide-y divide-neutral-100 max-h-[600px] overflow-y-auto">
+            {ops.map(op => {
+              const { tk } = decodeOp(op);
+              const isTr = op.type === 'transfert_interne';
+              const isIn = ['dechargement_grossiste'].includes(op.type);
+              const badge = isTr ? `Transfert ${tk === 'cash' ? 'cash' : tk === 'uv' ? 'UV' : 'stock crédit'}` : (OP_TYPE_LABELS[op.type] || op.type);
+              return (
+                <div key={op.id} className="px-4 py-3 flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isTr ? 'bg-neutral-100' : isIn ? 'bg-emerald-50' : 'bg-neutral-50'}`}>
+                    {isTr ? <ArrowRightLeft className="w-4 h-4 text-neutral-600" /> : isIn ? <ArrowDownLeft className="w-4 h-4 text-emerald-600" /> : <ArrowUpRight className="w-4 h-4 text-neutral-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-neutral-900">{badge}</p>
+                      {op.service_id && <span className="text-[10px] font-medium text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded">{getServiceName(op.service_id)}</span>}
+                    </div>
+                    <p className="text-xs text-neutral-500 mt-0.5 truncate">
+                      {isTr
+                        ? `${getPointName(op.service_point_id)} → ${getPointName(op.dest_service_point_id)}`
+                        : `${getWholesalerName(op.wholesaler_id)} · ${getPointName(op.service_point_id)}`}
+                    </p>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">{new Date(op.operated_at).toLocaleDateString('fr-FR')} {new Date(op.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-neutral-900">{fmt(op.amount)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${STATUS_COLORS[op.status] || ''}`}>{STATUS_LABELS[op.status] || op.status}</span>
+                  </div>
+                  {op.status === 'validee' && can('mt_wholesaler_operation_cancel') && (
+                    <button onClick={() => cancelOp(op)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 transition-colors shrink-0" title="Annuler">
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-neutral-900">{OP_TYPE_LABELS[op.type] || op.type}</p>
-                  <p className="text-xs text-neutral-400">
-                    {getWholesalerName(op.wholesaler_id)} · {getServiceName(op.service_id)} · {getPointName(op.service_point_id)} · {new Date(op.operated_at).toLocaleDateString('fr-FR')} {new Date(op.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-neutral-900">{fmt(op.amount)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${STATUS_COLORS[op.status] || ''}`}>{STATUS_LABELS[op.status] || op.status}</span>
-                </div>
-                {op.status === 'validee' && can('mt_wholesaler_operation_cancel') && (
-                  <button onClick={() => cancelOp(op)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 transition-colors shrink-0" title="Annuler">
-                    <XCircle className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -2452,6 +2613,15 @@ function MTWholesalerOperations() {
 /* ============================================ */
 /* SOLDES                                       */
 /* ============================================ */
+type AggAccount = {
+  service_point_id: string | null;
+  service_id: string | null;
+  type: string;
+  currency: string;
+  balance: number;
+  initialized: boolean;
+};
+
 function MTBalances() {
   const { tenant } = useApp();
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -2459,6 +2629,8 @@ function MTBalances() {
   const [services, setServices] = useState<any[]>([]);
   const [ops, setOps] = useState<any[]>([]);
   const [pointServiceLinks, setPointServiceLinks] = useState<any[]>([]);
+  const [initBalances, setInitBalances] = useState<any[]>([]);
+  const [reconciliations, setReconciliations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPointId, setSelectedPointId] = useState<string>('');
   const [dateRange, setDateRange] = useState<string>('today');
@@ -2472,13 +2644,15 @@ function MTBalances() {
       else if (dateRange === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); startDate = d.toISOString().split('T')[0]; }
       else { const d = new Date(now); d.setMonth(d.getMonth() - 1); startDate = d.toISOString().split('T')[0]; }
 
-      const [{ data: a }, { data: p }, { data: s }, { data: o }, { data: ps }, { data: cl }] = await Promise.all([
+      const [{ data: a }, { data: p }, { data: s }, { data: o }, { data: ps }, { data: cl }, { data: ib }, { data: rec }] = await Promise.all([
         supabase.from('mt_accounts').select('*').eq('tenant_id', tenant.id).order('type'),
-        supabase.from('mt_service_points').select('*').eq('tenant_id', tenant.id).eq('status', 'active'),
-        supabase.from('mt_services').select('*').eq('tenant_id', tenant.id),
+        supabase.from('mt_service_points').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
+        supabase.from('mt_services').select('*').eq('tenant_id', tenant.id).eq('status', 'active'),
         supabase.from('mt_operations').select('*').eq('tenant_id', tenant.id).gte('operated_at', startDate + 'T00:00:00').eq('status', 'validee').order('operated_at', { ascending: false }),
         supabase.from('mt_service_point_services').select('*').eq('tenant_id', tenant.id),
         supabase.from('mt_closures').select('closed_at').eq('tenant_id', tenant.id).eq('status', 'cloturee').order('closed_at', { ascending: false }).limit(1),
+        supabase.from('mt_init_balances').select('service_point_id, service_id, account_type').eq('tenant_id', tenant.id),
+        supabase.from('mt_reconciliations').select('*').eq('tenant_id', tenant.id).eq('status', 'pending').order('created_at', { ascending: false }).limit(50),
       ]);
       setAccounts(a || []);
       setPoints(p || []);
@@ -2486,6 +2660,8 @@ function MTBalances() {
       const closureTime = cl && cl.length > 0 && dateRange === 'today' ? cl[0].closed_at : null;
       setOps(closureTime ? (o || []).filter(op => op.operated_at > closureTime) : (o || []));
       setPointServiceLinks(ps || []);
+      setInitBalances(ib || []);
+      setReconciliations(rec || []);
       if (p && p.length === 1 && !selectedPointId) setSelectedPointId(p[0].id);
       setLoading(false);
     })();
@@ -2493,37 +2669,134 @@ function MTBalances() {
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
-  const filteredAccounts = selectedPointId ? accounts.filter(a => a.service_point_id === selectedPointId) : accounts;
+  // ─── Normalization: valid services (with a name) only ────────────
+  const validServiceIds = new Set(services.filter(s => (s.name || '').trim()).map(s => s.id));
+  const svcById = new Map(services.map(s => [s.id, s]));
+  const ptById = new Map(points.map(p => [p.id, p]));
+  const validPointIds = new Set(points.map(p => p.id));
+
+  // ─── Deduplicate accounts: group by (point, service, type, currency) ────
+  const aggMap = new Map<string, AggAccount>();
+  const initSet = new Set(initBalances.map(i => `${i.service_point_id || 'null'}|${i.service_id || 'null'}|${i.account_type}`));
+  for (const a of accounts) {
+    if (a.type !== 'cash' && a.type !== 'uv' && a.type !== 'stock_credit') continue;
+    if (a.service_point_id && !validPointIds.has(a.service_point_id)) continue;
+    if (a.service_id && !validServiceIds.has(a.service_id)) continue;
+    if ((a.type === 'uv' || a.type === 'stock_credit') && !a.service_id) continue;
+    const key = `${a.service_point_id || 'null'}|${a.service_id || 'null'}|${a.type}|${a.currency || 'XOF'}`;
+    const initKey = `${a.service_point_id || 'null'}|${a.service_id || 'null'}|${a.type}`;
+    const prev = aggMap.get(key);
+    if (prev) {
+      prev.balance += Number(a.balance) || 0;
+    } else {
+      aggMap.set(key, {
+        service_point_id: a.service_point_id,
+        service_id: a.service_id,
+        type: a.type,
+        currency: a.currency || 'XOF',
+        balance: Number(a.balance) || 0,
+        initialized: initSet.has(initKey),
+      });
+    }
+  }
+  const aggAccounts = Array.from(aggMap.values());
+
+  const scopedAccounts = selectedPointId ? aggAccounts.filter(a => a.service_point_id === selectedPointId) : aggAccounts;
   const isOpeningOp = (o: any) => o.reference === 'INIT-OUVERTURE' || o.reference === 'OUVERTURE-JOUR';
-  const filteredOps = (selectedPointId ? ops.filter(o => o.service_point_id === selectedPointId) : ops).filter(o => !isOpeningOp(o));
+  const scopedOps = (selectedPointId ? ops.filter(o => o.service_point_id === selectedPointId) : ops).filter(o => !isOpeningOp(o));
 
-  const getName = (id: string | null, list: any[]) => list.find(i => i.id === id)?.name || '—';
-  const totalCash = filteredAccounts.filter(a => a.type === 'cash').reduce((s, a) => s + Number(a.balance), 0);
-  const totalUV = filteredAccounts.filter(a => a.type === 'uv').reduce((s, a) => s + Number(a.balance), 0);
-  const totalCredit = filteredAccounts.filter(a => a.type === 'stock_credit').reduce((s, a) => s + Number(a.balance), 0);
+  const totals = {
+    cash: scopedAccounts.filter(a => a.type === 'cash').reduce((s, a) => s + a.balance, 0),
+    uv: scopedAccounts.filter(a => a.type === 'uv').reduce((s, a) => s + a.balance, 0),
+    credit: scopedAccounts.filter(a => a.type === 'stock_credit').reduce((s, a) => s + a.balance, 0),
+  };
 
-  const cashEntries = filteredOps.filter(o => ['depot', 'dechargement_grossiste', 'vente_credit'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
-  const cashExits = filteredOps.filter(o => ['retrait', 'recharge_grossiste', 'achat_uv'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
-  const uvEntries = filteredOps.filter(o => ['retrait', 'recharge_grossiste', 'achat_uv'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
-  const uvExits = filteredOps.filter(o => ['depot', 'dechargement_grossiste'].includes(o.type)).reduce((s, o) => s + Number(o.amount), 0);
-  const creditSales = filteredOps.filter(o => o.type === 'vente_credit').reduce((s, o) => s + Number(o.amount), 0);
+  const hasAnyInit = scopedAccounts.some(a => a.initialized);
+  const cashInitialized = scopedAccounts.some(a => a.type === 'cash' && a.initialized);
+  const uvInitialized = scopedAccounts.some(a => a.type === 'uv' && a.initialized);
+  const creditInitialized = scopedAccounts.some(a => a.type === 'stock_credit' && a.initialized);
 
-  const availableSvcIds = selectedPointId ? pointServiceLinks.filter(ps => ps.service_point_id === selectedPointId).map(ps => ps.service_id) : null;
-  const filteredUVAccounts = filteredAccounts.filter(a => a.type === 'uv' && (!availableSvcIds || availableSvcIds.length === 0 || availableSvcIds.includes(a.service_id)));
-  const filteredCreditAccounts = filteredAccounts.filter(a => a.type === 'stock_credit' && (!availableSvcIds || availableSvcIds.length === 0 || availableSvcIds.includes(a.service_id)));
+  const commissionsToday = scopedOps.reduce((s, o) => s + (Number(o.commission_amount) || 0), 0);
 
-  const lowBalanceAlerts = [...filteredUVAccounts, ...filteredCreditAccounts].filter(a => {
-    const svc = services.find(s => s.id === a.service_id);
-    const threshold = svc?.alert_min_balance;
-    if (!threshold || threshold <= 0) return false;
-    return Number(a.balance) < threshold;
+  // ─── Low balance alerts (dedup, valid services only) ────
+  const lowBalanceAlerts = scopedAccounts
+    .filter(a => a.service_id)
+    .map(a => ({ acc: a, svc: svcById.get(a.service_id!) }))
+    .filter(x => x.svc && Number(x.svc.alert_min_balance) > 0 && x.acc.balance < Number(x.svc.alert_min_balance));
+
+  const pendingEcarts = selectedPointId ? reconciliations.filter(r => r.service_point_id === selectedPointId) : reconciliations;
+
+  // ─── Per-point aggregation (for Tous les points view) ────
+  const pointCards = points.map(pt => {
+    const pointAccs = aggAccounts.filter(a => a.service_point_id === pt.id);
+    const cash = pointAccs.filter(a => a.type === 'cash').reduce((s, a) => s + a.balance, 0);
+    const uv = pointAccs.filter(a => a.type === 'uv').reduce((s, a) => s + a.balance, 0);
+    const credit = pointAccs.filter(a => a.type === 'stock_credit').reduce((s, a) => s + a.balance, 0);
+    const opsCount = ops.filter(o => o.service_point_id === pt.id && !isOpeningOp(o)).length;
+    const anyInit = pointAccs.some(a => a.initialized);
+    const hasLow = pointAccs.some(a => {
+      const svc = a.service_id ? svcById.get(a.service_id) : null;
+      return svc && Number(svc.alert_min_balance) > 0 && a.balance < Number(svc.alert_min_balance);
+    });
+    const hasEcart = reconciliations.some(r => r.service_point_id === pt.id);
+    const status: 'ok' | 'low' | 'ecart' | 'uninit' =
+      !anyInit ? 'uninit' : hasEcart ? 'ecart' : hasLow ? 'low' : 'ok';
+    return { pt, cash, uv, credit, opsCount, initialized: anyInit, status };
   });
 
-  const selectedPointName = points.find(p => p.id === selectedPointId)?.name || 'Tous les points';
+  // ─── UV per service (grouped by service, breakdown per point) ────
+  const buildServiceGroups = (family: 'transfert' | 'credit_telephone', type: 'uv' | 'stock_credit') => {
+    const svcList = services.filter(s => s.family === family && (s.name || '').trim());
+    return svcList.map(svc => {
+      const scoped = selectedPointId
+        ? aggAccounts.filter(a => a.service_id === svc.id && a.type === type && a.service_point_id === selectedPointId)
+        : aggAccounts.filter(a => a.service_id === svc.id && a.type === type);
+      const total = scoped.reduce((s, a) => s + a.balance, 0);
+      const anyInit = scoped.some(a => a.initialized);
+      const perPoint = scoped
+        .map(a => ({ pt: a.service_point_id ? ptById.get(a.service_point_id) : null, balance: a.balance, initialized: a.initialized }))
+        .filter(x => x.pt)
+        .sort((x, y) => (x.pt.name || '').localeCompare(y.pt.name || ''));
+      const isLow = Number(svc.alert_min_balance) > 0 && total < Number(svc.alert_min_balance) && anyInit;
+      return { svc, total, perPoint, initialized: anyInit, isLow };
+    }).filter(g => g.perPoint.length > 0 || g.total > 0 || g.initialized);
+  };
+
+  const uvGroups = buildServiceGroups('transfert', 'uv');
+  const creditGroups = buildServiceGroups('credit_telephone', 'stock_credit');
+
+  const selectedPoint = selectedPointId ? ptById.get(selectedPointId) : null;
+  const selectedPointName = selectedPoint?.name || 'Tous les points';
   const periodLabel = dateRange === 'today' ? "aujourd'hui" : dateRange === 'week' ? '7 derniers jours' : '30 derniers jours';
 
+  const fmtBalance = (bal: number, isInitialized: boolean) =>
+    !isInitialized && bal === 0 ? <span className="text-neutral-400 italic text-xs">Non initialisé</span> : <span className="num">{fmt(bal)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></span>;
+
+  const StatusPill = ({ status }: { status: 'ok' | 'low' | 'ecart' | 'uninit' }) => {
+    const map = {
+      ok: { label: 'Normal', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+      low: { label: 'Solde bas', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+      ecart: { label: 'Écart détecté', cls: 'bg-red-50 text-red-700 border-red-200' },
+      uninit: { label: 'Non initialisé', cls: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
+    };
+    return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${map[status].cls}`}>{map[status].label}</span>;
+  };
+
+  const hasAnyAccounts = aggAccounts.length > 0;
+  if (!hasAnyAccounts) {
+    return (
+      <div className="pb-28 lg:pb-6">
+        <div className="bg-white border border-neutral-200 rounded-2xl py-16 text-center max-w-md mx-auto">
+          <Wallet className="w-10 h-10 text-neutral-200 mx-auto mb-3" />
+          <p className="text-sm text-neutral-700 font-medium">Aucun solde initialisé pour le moment</p>
+          <p className="text-xs text-neutral-400 mt-1 px-6">Veuillez initialiser les soldes d'ouverture avant d'exploiter cette page.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col min-h-0 lg:max-w-[900px] lg:mx-auto lg:h-[calc(100vh-180px)] lg:overflow-hidden pb-28 lg:pb-0">
+    <div className="flex flex-col min-h-0 lg:max-w-[1100px] lg:mx-auto pb-28 lg:pb-6">
       {/* Barre du haut */}
       <div className="flex items-center justify-between gap-2 mb-4 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -2546,221 +2819,234 @@ function MTBalances() {
         </select>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-        {/* Carte blanche - Solde global */}
-        <div className="bg-white border border-neutral-200 rounded-2xl p-4 sm:p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Solde total disponible</p>
-              <p className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight num">{fmt(totalCash + totalUV + totalCredit)} <span className="text-base font-medium text-neutral-400">FCFA</span></p>
+      <div className="flex-1 space-y-5">
+        {/* ─── Bloc 1 : Synthèse ─── */}
+        <section>
+          <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">
+            {selectedPointId ? `Synthèse — ${selectedPointName}` : 'Synthèse globale'}
+          </h2>
+          <div className="bg-white border border-neutral-200 rounded-2xl p-4 sm:p-5">
+            <div className="flex items-start justify-between mb-4">
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">Solde total disponible</p>
+                {hasAnyInit ? (
+                  <p className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight num">{fmt(totals.cash + totals.uv + totals.credit)} <span className="text-base font-medium text-neutral-400">FCFA</span></p>
+                ) : (
+                  <p className="text-lg font-semibold text-neutral-400 italic">Non initialisé</p>
+                )}
+              </div>
+              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                <Wallet className="w-5 h-5 text-emerald-600" />
+              </div>
             </div>
-            <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
-              <Wallet className="w-5 h-5 text-emerald-600" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-neutral-100">
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Cash total</p>
+                <p className="text-sm font-bold text-neutral-900 mt-0.5">
+                  {cashInitialized ? <span className="num">{fmt(totals.cash)}</span> : <span className="text-neutral-400 italic text-xs">Non initialisé</span>}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">UV transfert</p>
+                <p className="text-sm font-bold text-sky-700 mt-0.5">
+                  {uvInitialized ? <span className="num">{fmt(totals.uv)}</span> : <span className="text-neutral-400 italic text-xs">Non initialisé</span>}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Stock crédit</p>
+                <p className="text-sm font-bold text-amber-700 mt-0.5">
+                  {creditInitialized ? <span className="num">{fmt(totals.credit)}</span> : <span className="text-neutral-400 italic text-xs">Non initialisé</span>}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Opérations {periodLabel}</p>
+                <p className="text-sm font-bold text-neutral-900 num mt-0.5">{scopedOps.length}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4 mt-3 border-t border-neutral-100">
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Commissions {periodLabel}</p>
+                <p className="text-sm font-bold text-emerald-700 num mt-0.5">{fmt(commissionsToday)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Écarts non résolus</p>
+                <p className={`text-sm font-bold mt-0.5 ${pendingEcarts.length > 0 ? 'text-red-600' : 'text-neutral-900'} num`}>{pendingEcarts.length}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium text-neutral-400 uppercase">Alertes solde bas</p>
+                <p className={`text-sm font-bold mt-0.5 ${lowBalanceAlerts.length > 0 ? 'text-amber-700' : 'text-neutral-900'} num`}>{lowBalanceAlerts.length}</p>
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-neutral-100">
-            <div>
-              <p className="text-[10px] font-medium text-neutral-400 uppercase">Caisse (Cash)</p>
-              <p className="text-sm font-bold text-neutral-900 num mt-0.5">{fmt(totalCash)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-medium text-neutral-400 uppercase">Unités Virtuelles</p>
-              <p className="text-sm font-bold text-sky-700 num mt-0.5">{fmt(totalUV)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-medium text-neutral-400 uppercase">Stock crédit</p>
-              <p className="text-sm font-bold text-amber-700 num mt-0.5">{fmt(totalCredit)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-medium text-neutral-400 uppercase">Opérations</p>
-              <p className="text-sm font-bold text-neutral-900 num mt-0.5">{filteredOps.length}</p>
-            </div>
-          </div>
-        </div>
+        </section>
 
-        {/* Alertes solde bas */}
-        {lowBalanceAlerts.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2.5">
-              <AlertTriangle className="w-4 h-4 text-amber-600" />
-              <h3 className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Alertes - Solde bas</h3>
+        {/* ─── Bloc 2 : Soldes par point (vue Tous les points) ─── */}
+        {!selectedPointId && points.length > 1 && (
+          <section>
+            <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">Soldes par point de service</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {pointCards.map(({ pt, cash, uv, credit, opsCount, initialized, status }) => (
+                <div key={pt.id} className="bg-white border border-neutral-200 rounded-xl p-4 hover:border-neutral-300 transition-colors">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center shrink-0">
+                        <MapPin className="w-4 h-4 text-neutral-600" />
+                      </div>
+                      <p className="text-sm font-bold text-neutral-900 truncate">{pt.name}</p>
+                    </div>
+                    <StatusPill status={status} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase font-medium">Cash</p>
+                      <p className="text-sm font-bold text-neutral-900 mt-0.5">{fmtBalance(cash, initialized)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase font-medium">UV transfert</p>
+                      <p className="text-sm font-bold text-sky-700 mt-0.5">{fmtBalance(uv, initialized)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase font-medium">Stock crédit</p>
+                      <p className="text-sm font-bold text-amber-700 mt-0.5">{fmtBalance(credit, initialized)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-400 uppercase font-medium">Opérations</p>
+                      <p className="text-sm font-bold text-neutral-900 num mt-0.5">{opsCount}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
+          </section>
+        )}
+
+        {/* ─── Bloc 3 : UV transfert par service ─── */}
+        {uvGroups.length > 0 && (
+          <section>
+            <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">
+              {selectedPointId ? 'Services de transfert' : 'Soldes UV par service de transfert'}
+            </h2>
+            <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden divide-y divide-neutral-100">
+              {uvGroups.map(({ svc, total, perPoint, initialized, isLow }) => (
+                <div key={svc.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-sky-50 flex items-center justify-center shrink-0 overflow-hidden">
+                        {svc.logo_url ? <img src={svc.logo_url} className="w-full h-full object-contain" alt={svc.name} /> : <Smartphone className="w-4 h-4 text-sky-500" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-neutral-900 truncate">{svc.name}</p>
+                        {!selectedPointId && perPoint.length > 0 && (
+                          <p className="text-[10px] text-neutral-400">{perPoint.length} point{perPoint.length > 1 ? 's' : ''}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <p className={`text-sm font-bold ${isLow ? 'text-amber-700' : 'text-sky-700'}`}>{fmtBalance(total, initialized)}</p>
+                      {isLow && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Bas</span>}
+                    </div>
+                  </div>
+                  {!selectedPointId && perPoint.length > 1 && (
+                    <div className="mt-2 pl-10 space-y-0.5">
+                      {perPoint.map((pp, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[11px]">
+                          <span className="text-neutral-500">{pp.pt.name}</span>
+                          <span className="text-neutral-700 font-medium">{fmtBalance(pp.balance, pp.initialized)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ─── Bloc 4 : Stock crédit téléphonique par service ─── */}
+        {creditGroups.length > 0 && (
+          <section>
+            <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">
+              {selectedPointId ? 'Crédit téléphonique' : 'Stock crédit par service téléphonique'}
+            </h2>
+            <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden divide-y divide-neutral-100">
+              {creditGroups.map(({ svc, total, perPoint, initialized, isLow }) => (
+                <div key={svc.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0 overflow-hidden">
+                        {svc.logo_url ? <img src={svc.logo_url} className="w-full h-full object-contain" alt={svc.name} /> : <Smartphone className="w-4 h-4 text-amber-500" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-neutral-900 truncate">{svc.name}</p>
+                        {!selectedPointId && perPoint.length > 0 && (
+                          <p className="text-[10px] text-neutral-400">{perPoint.length} point{perPoint.length > 1 ? 's' : ''}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <p className={`text-sm font-bold ${isLow ? 'text-amber-700' : 'text-amber-800'}`}>{fmtBalance(total, initialized)}</p>
+                      {isLow && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Bas</span>}
+                    </div>
+                  </div>
+                  {!selectedPointId && perPoint.length > 1 && (
+                    <div className="mt-2 pl-10 space-y-0.5">
+                      {perPoint.map((pp, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[11px]">
+                          <span className="text-neutral-500">{pp.pt.name}</span>
+                          <span className="text-neutral-700 font-medium">{fmtBalance(pp.balance, pp.initialized)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ─── Bloc 5 : Alertes et anomalies ─── */}
+        {(lowBalanceAlerts.length > 0 || pendingEcarts.length > 0) && (
+          <section>
+            <h2 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2 px-1">Alertes et anomalies</h2>
             <div className="space-y-2">
-              {lowBalanceAlerts.map(a => {
-                const svc = services.find(s => s.id === a.service_id);
-                const svcName = svc?.name || '—';
-                const ptName = getName(a.service_point_id, points);
-                const minBal = svc?.alert_min_balance || 0;
-                return (
-                  <div key={a.id} className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2.5">
-                      {svc?.logo_url ? <img src={svc.logo_url} className="w-5 h-5 object-contain" /> : <Smartphone className="w-4 h-4 text-amber-600" />}
-                      <div>
-                        <p className="text-xs font-semibold text-amber-900">{svcName}</p>
-                        <p className="text-[10px] text-amber-600">{ptName} &middot; Seuil : {fmt(minBal)} FCFA</p>
-                      </div>
-                    </div>
-                    <p className="text-sm font-bold text-amber-900 num">{fmt(a.balance)} FCFA</p>
+              {lowBalanceAlerts.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <h3 className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Solde bas</h3>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Mouvements de la période */}
-        <div className="bg-white border border-neutral-200 rounded-xl p-4">
-          <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-3">Mouvements {periodLabel}</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center gap-3 bg-emerald-50/60 rounded-xl px-3.5 py-3">
-              <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-neutral-500 uppercase">Entrées cash</p>
-                <p className="text-sm font-bold text-emerald-700 num">+{fmt(cashEntries)}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-red-50/60 rounded-xl px-3.5 py-3">
-              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <ArrowUpRight className="w-4 h-4 text-red-500" />
-              </div>
-              <div>
-                <p className="text-[10px] text-neutral-500 uppercase">Sorties cash</p>
-                <p className="text-sm font-bold text-red-600 num">-{fmt(cashExits)}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-sky-50/60 rounded-xl px-3.5 py-3">
-              <div className="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center shrink-0">
-                <ArrowDownLeft className="w-4 h-4 text-sky-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-neutral-500 uppercase">Entrées UV</p>
-                <p className="text-sm font-bold text-sky-700 num">+{fmt(uvEntries)}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 bg-orange-50/60 rounded-xl px-3.5 py-3">
-              <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-                <ArrowUpRight className="w-4 h-4 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-[10px] text-neutral-500 uppercase">Sorties UV</p>
-                <p className="text-sm font-bold text-orange-600 num">-{fmt(uvExits)}</p>
-              </div>
-            </div>
-            {creditSales > 0 && (
-              <div className="col-span-2 flex items-center gap-3 bg-amber-50/60 rounded-xl px-3.5 py-3">
-                <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                  <Smartphone className="w-4 h-4 text-amber-600" />
+                  <div className="space-y-1.5">
+                    {lowBalanceAlerts.map((x, idx) => {
+                      const ptName = x.acc.service_point_id ? ptById.get(x.acc.service_point_id)?.name : null;
+                      return (
+                        <div key={idx} className="flex items-center justify-between bg-white/70 rounded-lg px-3 py-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {x.svc.logo_url ? <img src={x.svc.logo_url} className="w-5 h-5 object-contain" /> : <Smartphone className="w-4 h-4 text-amber-600" />}
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-amber-900 truncate">{x.svc.name}</p>
+                              <p className="text-[10px] text-amber-600 truncate">{ptName ? `${ptName} · ` : ''}Seuil : {fmt(x.svc.alert_min_balance)} FCFA</p>
+                            </div>
+                          </div>
+                          <p className="text-sm font-bold text-amber-900 num shrink-0">{fmt(x.acc.balance)}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] text-neutral-500 uppercase">Ventes crédit téléphonique</p>
-                  <p className="text-sm font-bold text-amber-700 num">{fmt(creditSales)}</p>
+              )}
+              {pendingEcarts.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                    <h3 className="text-xs font-semibold text-red-800 uppercase tracking-wide">Écarts non résolus</h3>
+                  </div>
+                  <p className="text-[11px] text-red-700">
+                    {pendingEcarts.length} écart{pendingEcarts.length > 1 ? 's en attente de traitement' : ' en attente de traitement'} — consultez l'onglet Clôtures.
+                  </p>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Caisse par point */}
-        {!selectedPointId && filteredAccounts.filter(a => a.type === 'cash').length > 1 && (
-          <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-neutral-100">
-              <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">Caisse par point de service</h3>
+              )}
             </div>
-            <div className="divide-y divide-neutral-100">
-              {filteredAccounts.filter(a => a.type === 'cash').map(a => {
-                const ptName = getName(a.service_point_id, points);
-                return (
-                  <div key={a.id} className="px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center">
-                        <MapPin className="w-3.5 h-3.5 text-neutral-500" />
-                      </div>
-                      <p className="text-sm font-medium text-neutral-900">{ptName}</p>
-                    </div>
-                    <p className={`text-sm font-bold num ${Number(a.balance) < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{fmt(a.balance)} FCFA</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Soldes UV par service */}
-        {filteredUVAccounts.length > 0 && (
-          <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-neutral-100">
-              <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">Solde UV par service (Transfert)</h3>
-            </div>
-            <div className="divide-y divide-neutral-100">
-              {filteredUVAccounts.map(a => {
-                const svc = services.find(s => s.id === a.service_id);
-                const svcName = svc?.name || '—';
-                const ptName = getName(a.service_point_id, points);
-                const isLow = svc?.alert_min_balance > 0 && Number(a.balance) < svc.alert_min_balance;
-                return (
-                  <div key={a.id} className="px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 flex items-center justify-center">
-                        {svc?.logo_url ? <img src={svc.logo_url} className="w-6 h-6 object-contain" /> : <Smartphone className="w-4 h-4 text-sky-500" />}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-neutral-900">{svcName}</p>
-                        {!selectedPointId && <p className="text-[10px] text-neutral-400">{ptName}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <p className={`text-sm font-bold num ${isLow ? 'text-amber-700' : 'text-neutral-900'}`}>{fmt(a.balance)} FCFA</p>
-                      {isLow && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Bas</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Stock crédit par service */}
-        {filteredCreditAccounts.length > 0 && (
-          <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-neutral-100">
-              <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">Stock crédit par service (Crédit téléphonique)</h3>
-            </div>
-            <div className="divide-y divide-neutral-100">
-              {filteredCreditAccounts.map(a => {
-                const svc = services.find(s => s.id === a.service_id);
-                const svcName = svc?.name || '—';
-                const ptName = getName(a.service_point_id, points);
-                const isLow = svc?.alert_min_balance > 0 && Number(a.balance) < svc.alert_min_balance;
-                return (
-                  <div key={a.id} className="px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 flex items-center justify-center">
-                        {svc?.logo_url ? <img src={svc.logo_url} className="w-6 h-6 object-contain" /> : <Smartphone className="w-4 h-4 text-amber-500" />}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-neutral-900">{svcName}</p>
-                        {!selectedPointId && <p className="text-[10px] text-neutral-400">{ptName}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <p className={`text-sm font-bold num ${isLow ? 'text-amber-700' : 'text-neutral-900'}`}>{fmt(a.balance)} FCFA</p>
-                      {isLow && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Bas</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {accounts.length === 0 && (
-          <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
-            <Wallet className="w-10 h-10 text-neutral-200 mx-auto mb-3" />
-            <p className="text-sm text-neutral-500">Aucun compte créé</p>
-            <p className="text-xs text-neutral-400 mt-1">Les comptes sont créés automatiquement lors de l'initialisation</p>
-          </div>
+          </section>
         )}
       </div>
     </div>
@@ -3506,6 +3792,818 @@ function MTSettings({ onValidated }: { onValidated: () => void }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ============================================ */
+/* DÉPENSES                                     */
+/* ============================================ */
+function MTExpenses() {
+  const { tenant, profile } = useApp();
+  const toast = useToast();
+  const { can } = usePermissions();
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [points, setPoints] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [showCatForm, setShowCatForm] = useState(false);
+  const [filterPoint, setFilterPoint] = useState<string>('');
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterPeriod, setFilterPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
+  const [form, setForm] = useState({ service_point_id: '', category_id: '', amount: '', description: '' });
+  const [catForm, setCatForm] = useState({ name: '' });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!tenant) return;
+    const [{ data: e }, { data: c }, { data: p }] = await Promise.all([
+      supabase.from('mt_expenses').select('*').eq('tenant_id', tenant.id).order('expense_date', { ascending: false }).limit(200),
+      supabase.from('mt_expense_categories').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
+      supabase.from('mt_service_points').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
+    ]);
+    setExpenses(e || []);
+    setCategories(c || []);
+    setPoints(p || []);
+    if (p && p.length === 1) setForm(f => ({ ...f, service_point_id: f.service_point_id || p[0].id }));
+    setLoading(false);
+  }, [tenant]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    let out = expenses;
+    if (filterPoint) out = out.filter(e => e.service_point_id === filterPoint);
+    if (filterCategory) out = out.filter(e => e.category_id === filterCategory);
+    if (filterPeriod !== 'all') {
+      const now = new Date();
+      const start = new Date(now);
+      if (filterPeriod === 'today') start.setHours(0, 0, 0, 0);
+      else if (filterPeriod === 'week') start.setDate(now.getDate() - 7);
+      else if (filterPeriod === 'month') start.setDate(now.getDate() - 30);
+      out = out.filter(e => new Date(e.expense_date) >= start);
+    }
+    return out;
+  }, [expenses, filterPoint, filterCategory, filterPeriod]);
+
+  const stats = useMemo(() => {
+    const valid = filtered.filter(e => e.status === 'validee');
+    const total = valid.reduce((s, e) => s + Number(e.amount || 0), 0);
+    const byCat = new Map<string, number>();
+    for (const e of valid) {
+      const key = e.category_id || 'none';
+      byCat.set(key, (byCat.get(key) || 0) + Number(e.amount || 0));
+    }
+    return { total, count: valid.length, byCat };
+  }, [filtered]);
+
+  const saveCat = async () => {
+    if (!tenant || !catForm.name.trim()) return;
+    setSaving(true);
+    const { error } = await supabase.from('mt_expense_categories').insert({ tenant_id: tenant.id, name: catForm.name.trim() });
+    if (error) toast.error('Erreur : ' + error.message);
+    else { toast.success('Catégorie créée'); setCatForm({ name: '' }); setShowCatForm(false); load(); }
+    setSaving(false);
+  };
+
+  const save = async () => {
+    if (!tenant) return;
+    if (!form.service_point_id) { toast.error('Sélectionnez un point de service.'); return; }
+    if (!Number(form.amount) || Number(form.amount) <= 0) { toast.error('Montant invalide.'); return; }
+    setSaving(true);
+    const amt = Number(form.amount);
+    const { error } = await supabase.from('mt_expenses').insert({
+      tenant_id: tenant.id,
+      service_point_id: form.service_point_id,
+      category_id: form.category_id || null,
+      amount: amt,
+      source: 'cash',
+      description: form.description || null,
+      operated_by: profile?.id || null,
+    });
+    if (error) { toast.error('Erreur : ' + error.message); setSaving(false); return; }
+    await updateBalance(tenant.id, form.service_point_id, null, 'cash', -amt);
+    toast.success('Dépense enregistrée');
+    setForm({ service_point_id: points.length === 1 ? points[0].id : '', category_id: '', amount: '', description: '' });
+    setShowForm(false);
+    setSaving(false);
+    load();
+  };
+
+  const cancelExpense = async (e: any) => {
+    if (e.status !== 'validee') return;
+    if (!confirm('Annuler cette dépense ? Le solde sera recrédité.')) return;
+    await supabase.from('mt_expenses').update({ status: 'annulee', cancelled_by: profile?.id, cancelled_at: new Date().toISOString() }).eq('id', e.id);
+    await updateBalance(tenant!.id, e.service_point_id, null, 'cash', Number(e.amount));
+    toast.success('Dépense annulée');
+    load();
+  };
+
+  const getCatName = (id: string | null) => categories.find(c => c.id === id)?.name || 'Sans catégorie';
+  const getPointName = (id: string | null) => points.find(p => p.id === id)?.name || '—';
+
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
+
+  return (
+    <div className="lg:max-w-[1200px] lg:mx-auto space-y-5 pb-28 lg:pb-0">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-neutral-900">Dépenses</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">Dépenses propres au module Transfert d'argent (carburant, salaires, fournitures…).</p>
+        </div>
+        {can('mt_expense_manage') && !showForm && (
+          <div className="flex gap-2">
+            <button onClick={() => setShowCatForm(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50">
+              <Settings2 className="w-4 h-4" />Catégories
+            </button>
+            <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800">
+              <Plus className="w-4 h-4" />Nouvelle dépense
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Synthèse */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
+          <p className="text-[11px] font-medium text-neutral-500 uppercase">Total période</p>
+          <p className="text-lg font-bold text-neutral-900 mt-1">{fmt(stats.total)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
+          <p className="text-[10px] text-neutral-400 mt-0.5">{stats.count} dépense{stats.count > 1 ? 's' : ''}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
+          <p className="text-[11px] font-medium text-neutral-500 uppercase">Points concernés</p>
+          <p className="text-lg font-bold text-neutral-900 mt-1">{new Set(filtered.filter(e => e.status === 'validee').map(e => e.service_point_id)).size}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
+          <p className="text-[11px] font-medium text-neutral-500 uppercase">Catégories actives</p>
+          <p className="text-lg font-bold text-neutral-900 mt-1">{categories.length}</p>
+        </div>
+      </div>
+
+      {showCatForm && (
+        <div className="bg-white border border-neutral-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-neutral-900">Catégories de dépense</h3>
+            <button onClick={() => setShowCatForm(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {categories.map(c => <span key={c.id} className="px-2.5 py-1 text-xs font-medium bg-neutral-100 text-neutral-700 rounded-full">{c.name}</span>)}
+            {categories.length === 0 && <span className="text-xs text-neutral-400">Aucune catégorie créée.</span>}
+          </div>
+          <div className="flex gap-2">
+            <input value={catForm.name} onChange={e => setCatForm({ name: e.target.value })} placeholder="Ex. Carburant, Salaires, Fournitures…" className="input flex-1" />
+            <button onClick={saveCat} disabled={saving || !catForm.name.trim()} className="px-4 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg disabled:opacity-40">Ajouter</button>
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="bg-white border border-neutral-200 rounded-xl p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-neutral-900">Nouvelle dépense</h3>
+            <button onClick={() => setShowForm(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Point de service *</label>
+              <select value={form.service_point_id} onChange={e => setForm({ ...form, service_point_id: e.target.value })} className="input">
+                <option value="">Sélectionner...</option>
+                {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Catégorie</label>
+              <select value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })} className="input">
+                <option value="">Sans catégorie</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Source</label>
+              <div className="px-3 py-2 text-xs font-medium rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700">Cash</div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant (FCFA) *</label>
+              <input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" type="number" min="0" className="input text-base font-semibold" />
+            </div>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Description</label>
+              <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Optionnel" className="input" />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={() => setShowForm(false)} className="px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
+            <button onClick={save} disabled={saving || !form.service_point_id || !form.amount} className="px-6 py-2.5 text-sm font-semibold text-white rounded-lg flex items-center gap-2 disabled:opacity-40 bg-neutral-900 hover:bg-neutral-800">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer la dépense
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filtres */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select value={filterPoint} onChange={e => setFilterPoint(e.target.value)} className="input h-9 text-xs w-auto">
+          <option value="">Tous les points</option>
+          {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="input h-9 text-xs w-auto">
+          <option value="">Toutes catégories</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <div className="flex gap-1 bg-neutral-100 rounded-lg p-0.5">
+          {(['today', 'week', 'month', 'all'] as const).map(p => (
+            <button key={p} onClick={() => setFilterPeriod(p)} className={`px-2.5 py-1 text-xs font-medium rounded-md ${filterPeriod === p ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500'}`}>
+              {p === 'today' ? "Aujourd'hui" : p === 'week' ? '7 jours' : p === 'month' ? '30 jours' : 'Tout'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Liste */}
+      {filtered.length === 0 ? (
+        <div className="bg-white border border-neutral-200 rounded-xl py-16 text-center">
+          <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
+          <p className="text-sm text-neutral-500">Aucune dépense sur cette période</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+          <div className="divide-y divide-neutral-100 max-h-[600px] overflow-y-auto">
+            {filtered.map(e => (
+              <div key={e.id} className="px-4 py-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-neutral-50 flex items-center justify-center shrink-0">
+                  <Receipt className="w-4 h-4 text-neutral-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-neutral-900">{getCatName(e.category_id)}</p>
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-0.5 truncate">{getPointName(e.service_point_id)}{e.description ? ` · ${e.description}` : ''}</p>
+                  <p className="text-[11px] text-neutral-400 mt-0.5">{new Date(e.expense_date).toLocaleDateString('fr-FR')} {new Date(e.expense_date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-red-600">-{fmt(e.amount)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${e.status === 'validee' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{e.status === 'validee' ? 'Validée' : 'Annulée'}</span>
+                </div>
+                {e.status === 'validee' && can('mt_expense_cancel') && (
+                  <button onClick={() => cancelExpense(e)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 shrink-0" title="Annuler">
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================ */
+/* CLIENTS & CRÉANCES                           */
+/* ============================================ */
+type MTCustomer = { id: string; code: string | null; name: string; phone: string | null; address: string | null; notes: string | null; status: string };
+type LedgerEntry = { id: string; customer_id: string; entry_type: string; amount: number; balance_delta: number; creance_delta: number; comment: string | null; operated_at: string; operation_id: string | null };
+type CustomerAgg = { balance: number; creance: number };
+
+function MTCustomers() {
+  const { tenant, profile } = useApp();
+  const toast = useToast();
+  const { can } = usePermissions();
+  const [customers, setCustomers] = useState<MTCustomer[]>([]);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [points, setPoints] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<MTCustomer | null>(null);
+  const [movementModal, setMovementModal] = useState<'depot' | 'retrait' | 'remboursement' | null>(null);
+  const [movementForm, setMovementForm] = useState({ amount: '', service_point_id: '', comment: '' });
+  const [customerForm, setCustomerForm] = useState({ code: '', name: '', phone: '', address: '', notes: '' });
+  const [operationModal, setOperationModal] = useState(false);
+  const [opForm, setOpForm] = useState({ service_point_id: '', service_id: '', amount: '', comment: '' });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!tenant) return;
+    const [{ data: c }, { data: l }, { data: p }, { data: s }, { data: a }] = await Promise.all([
+      supabase.from('mt_customers').select('*').eq('tenant_id', tenant.id).order('name'),
+      supabase.from('mt_customer_ledger').select('*').eq('tenant_id', tenant.id).order('operated_at', { ascending: false }).limit(500),
+      supabase.from('mt_service_points').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
+      supabase.from('mt_services').select('*').eq('tenant_id', tenant.id).eq('status', 'active').order('name'),
+      supabase.from('mt_accounts').select('*').eq('tenant_id', tenant.id),
+    ]);
+    setCustomers(c || []);
+    setLedger(l || []);
+    setPoints(p || []);
+    setServices((s || []).filter((x: any) => (x.name || '').trim() !== ''));
+    setAccounts(a || []);
+    setLoading(false);
+  }, [tenant]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const aggregates = useMemo(() => {
+    const map = new Map<string, CustomerAgg>();
+    for (const e of ledger) {
+      const cur = map.get(e.customer_id) || { balance: 0, creance: 0 };
+      cur.balance += Number(e.balance_delta || 0);
+      cur.creance += Number(e.creance_delta || 0);
+      map.set(e.customer_id, cur);
+    }
+    return map;
+  }, [ledger]);
+
+  const totals = useMemo(() => {
+    let balance = 0, creance = 0;
+    for (const v of aggregates.values()) { balance += v.balance; creance += v.creance; }
+    return { balance, creance, count: customers.filter(c => c.status === 'actif').length, withCreance: [...aggregates.values()].filter(v => v.creance > 0.01).length };
+  }, [aggregates, customers]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return customers;
+    return customers.filter(c => c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q));
+  }, [customers, search]);
+
+  const selected = customers.find(c => c.id === selectedId) || null;
+  const selectedAgg = selectedId ? aggregates.get(selectedId) || { balance: 0, creance: 0 } : null;
+  const selectedLedger = selectedId ? ledger.filter(e => e.customer_id === selectedId) : [];
+
+  const openNewCustomer = () => { setEditingCustomer(null); setCustomerForm({ code: '', name: '', phone: '', address: '', notes: '' }); setShowCustomerForm(true); };
+  const openEditCustomer = (c: MTCustomer) => { setEditingCustomer(c); setCustomerForm({ code: c.code || '', name: c.name, phone: c.phone || '', address: c.address || '', notes: c.notes || '' }); setShowCustomerForm(true); };
+
+  const saveCustomer = async () => {
+    if (!tenant || !customerForm.name.trim()) return;
+    setSaving(true);
+    const payload = { code: customerForm.code.trim() || null, name: customerForm.name.trim(), phone: customerForm.phone.trim() || null, address: customerForm.address.trim() || null, notes: customerForm.notes.trim() || null, updated_at: new Date().toISOString() };
+    if (editingCustomer) {
+      const { error } = await supabase.from('mt_customers').update(payload).eq('id', editingCustomer.id);
+      if (error) toast.error('Erreur : ' + error.message);
+      else { toast.success('Client mis à jour'); setShowCustomerForm(false); load(); }
+    } else {
+      const { error } = await supabase.from('mt_customers').insert({ ...payload, tenant_id: tenant.id });
+      if (error) toast.error('Erreur : ' + error.message);
+      else { toast.success('Client créé'); setShowCustomerForm(false); load(); }
+    }
+    setSaving(false);
+  };
+
+  const toggleStatus = async (c: MTCustomer) => {
+    const newStatus = c.status === 'actif' ? 'inactif' : 'actif';
+    await supabase.from('mt_customers').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', c.id);
+    load();
+  };
+
+  const openMovement = (kind: 'depot' | 'retrait' | 'remboursement') => {
+    setMovementForm({ amount: '', service_point_id: points.length === 1 ? points[0].id : '', comment: '' });
+    setMovementModal(kind);
+  };
+
+  const saveMovement = async () => {
+    if (!tenant || !selectedId || !movementModal) return;
+    const amt = Number(movementForm.amount);
+    if (!amt || amt <= 0) { toast.error('Montant invalide.'); return; }
+    if (!movementForm.service_point_id) { toast.error('Sélectionnez un point de service.'); return; }
+    if (movementModal === 'retrait' && (selectedAgg?.balance || 0) < amt) { toast.error('Solde client insuffisant.'); return; }
+    if (movementModal === 'remboursement' && (selectedAgg?.creance || 0) < amt - 0.01) { toast.error('Créance inférieure au montant remboursé.'); return; }
+    setSaving(true);
+    let balance_delta = 0, creance_delta = 0;
+    if (movementModal === 'depot') balance_delta = amt;
+    else if (movementModal === 'retrait') balance_delta = -amt;
+    else if (movementModal === 'remboursement') creance_delta = -amt;
+    const { error } = await supabase.from('mt_customer_ledger').insert({
+      tenant_id: tenant.id,
+      customer_id: selectedId,
+      service_point_id: movementForm.service_point_id,
+      entry_type: movementModal,
+      amount: amt,
+      balance_delta,
+      creance_delta,
+      comment: movementForm.comment || null,
+      operated_by: profile?.id || null,
+    });
+    if (error) { toast.error('Erreur : ' + error.message); setSaving(false); return; }
+    // Contrepartie cash au point
+    if (movementModal === 'depot' || movementModal === 'remboursement') {
+      await updateBalance(tenant.id, movementForm.service_point_id, null, 'cash', amt);
+    } else if (movementModal === 'retrait') {
+      await updateBalance(tenant.id, movementForm.service_point_id, null, 'cash', -amt);
+    }
+    const labels = { depot: 'Dépôt enregistré', retrait: 'Retrait enregistré', remboursement: 'Remboursement enregistré' };
+    toast.success(labels[movementModal]);
+    setMovementModal(null);
+    setSaving(false);
+    load();
+  };
+
+  const openOperation = () => {
+    setOpForm({ service_point_id: points.length === 1 ? points[0].id : '', service_id: '', amount: '', comment: '' });
+    setOperationModal(true);
+  };
+
+  const opService = services.find(s => s.id === opForm.service_id) || null;
+  const opTargetType: 'stock_credit' | 'uv' = opService?.family === 'credit_telephone' ? 'stock_credit' : 'uv';
+  const opAmount = Number(opForm.amount) || 0;
+  const opServiceBalance = useMemo(() => accounts
+    .filter(a => a.type === opTargetType && a.service_point_id === opForm.service_point_id && a.service_id === opForm.service_id)
+    .reduce((s, a) => s + Number(a.balance || 0), 0),
+    [accounts, opTargetType, opForm.service_point_id, opForm.service_id]);
+  const custBalance = selectedAgg?.balance || 0;
+  const balancePart = Math.min(opAmount, Math.max(0, custBalance));
+  const creancePart = Math.max(0, opAmount - balancePart);
+
+  const opError = useMemo(() => {
+    if (!operationModal) return null;
+    if (!opForm.service_point_id) return 'Sélectionnez un point de service.';
+    if (!opForm.service_id) return 'Sélectionnez un service.';
+    if (opAmount <= 0) return 'Montant invalide.';
+    if (opServiceBalance < opAmount) return `Solde ${opTargetType === 'stock_credit' ? 'stock crédit' : 'UV'} insuffisant sur ce point (${fmt(opServiceBalance)} FCFA disponibles).`;
+    return null;
+  }, [operationModal, opForm, opAmount, opServiceBalance, opTargetType]);
+
+  const saveOperation = async () => {
+    if (!tenant || !selectedId || !operationModal) return;
+    if (opError) { toast.error(opError); return; }
+    setSaving(true);
+    const opType = opService?.family === 'credit_telephone' ? 'vente_credit' : 'transfert_service';
+    const commentTag = `[client:${selectedId}]`;
+    const balBefore = opServiceBalance;
+    const balAfter = opServiceBalance - opAmount;
+
+    const opPayload: any = {
+      tenant_id: tenant.id,
+      service_point_id: opForm.service_point_id,
+      service_id: opForm.service_id,
+      type: opType,
+      amount: opAmount,
+      commission: 0,
+      status: 'validee',
+      comment: `${commentTag}${opForm.comment ? ' ' + opForm.comment : ''}`,
+      operated_by: profile?.id || null,
+      validated_by: profile?.id || null,
+      balance_before_uv: balBefore,
+      balance_after_uv: balAfter,
+    };
+    const { data: opRow, error: opErr } = await supabase.from('mt_operations').insert(opPayload).select().maybeSingle();
+    if (opErr || !opRow) { toast.error('Erreur : ' + (opErr?.message || 'insertion échouée')); setSaving(false); return; }
+
+    await updateBalance(tenant.id, opForm.service_point_id, opForm.service_id, opTargetType, -opAmount);
+
+    const svcName = opService?.name || '';
+    const entryType = balancePart > 0 ? 'operation_solde' : 'creance';
+    const comment = creancePart > 0 && balancePart > 0
+      ? `${svcName} · ${fmt(balancePart)} sur solde, ${fmt(creancePart)} en créance`
+      : balancePart > 0
+        ? `${svcName} · réglé sur solde`
+        : `${svcName} · totalement en créance`;
+
+    const { error: ledErr } = await supabase.from('mt_customer_ledger').insert({
+      tenant_id: tenant.id,
+      customer_id: selectedId,
+      service_point_id: opForm.service_point_id,
+      operation_id: opRow.id,
+      entry_type: entryType,
+      amount: opAmount,
+      balance_delta: -balancePart,
+      creance_delta: creancePart,
+      comment: opForm.comment ? `${comment} · ${opForm.comment}` : comment,
+      operated_by: profile?.id || null,
+    });
+    if (ledErr) { toast.error('Erreur ledger : ' + ledErr.message); setSaving(false); return; }
+
+    toast.success(creancePart > 0 ? `Opération enregistrée (${fmt(creancePart)} FCFA en créance)` : 'Opération enregistrée');
+    setOperationModal(false);
+    setSaving(false);
+    load();
+  };
+
+  const cancelLedgerEntry = async (e: LedgerEntry) => {
+    if (!tenant) return;
+    if (!confirm('Annuler cette opération ? Les soldes seront recrédités.')) return;
+    if (e.operation_id) {
+      const { data: op } = await supabase.from('mt_operations').select('*').eq('id', e.operation_id).maybeSingle();
+      if (op) {
+        await supabase.from('mt_operations').update({ status: 'annulee', cancelled_by: profile?.id, cancelled_at: new Date().toISOString() }).eq('id', op.id);
+        const svc = services.find(s => s.id === op.service_id);
+        const targetType = svc?.family === 'credit_telephone' ? 'stock_credit' : 'uv';
+        await updateBalance(tenant.id, op.service_point_id, op.service_id, targetType, Number(op.amount));
+      }
+    }
+    await supabase.from('mt_customer_ledger').insert({
+      tenant_id: tenant.id,
+      customer_id: e.customer_id,
+      service_point_id: e.service_point_id || null,
+      operation_id: e.operation_id || null,
+      entry_type: 'ajustement',
+      amount: Math.abs(Number(e.amount)),
+      balance_delta: -Number(e.balance_delta || 0),
+      creance_delta: -Number(e.creance_delta || 0),
+      comment: `Annulation · ${e.comment || ''}`.trim(),
+      operated_by: profile?.id || null,
+    });
+    toast.success('Opération annulée');
+    load();
+  };
+
+  const getPointName = (id: string | null) => points.find(p => p.id === id)?.name || '—';
+
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
+
+  return (
+    <div className="lg:max-w-[1200px] lg:mx-auto space-y-5 pb-28 lg:pb-0">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-neutral-900">Clients & créances</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">Fichier clients propre au module MT, avec solde et créances autonomes.</p>
+        </div>
+        {can('mt_customer_manage') && (
+          <button onClick={openNewCustomer} className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800">
+            <Plus className="w-4 h-4" />Nouveau client
+          </button>
+        )}
+      </div>
+
+      {/* Synthèse */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
+          <p className="text-[11px] font-medium text-neutral-500 uppercase">Clients actifs</p>
+          <p className="text-lg font-bold text-neutral-900 mt-1">{totals.count}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
+          <p className="text-[11px] font-medium text-neutral-500 uppercase">Solde total clients</p>
+          <p className="text-lg font-bold text-neutral-900 mt-1">{fmt(totals.balance)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
+          <p className="text-[11px] font-medium text-neutral-500 uppercase">Créances en cours</p>
+          <p className="text-lg font-bold text-red-600 mt-1">{fmt(totals.creance)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
+          <p className="text-[11px] font-medium text-neutral-500 uppercase">Clients avec créance</p>
+          <p className="text-lg font-bold text-neutral-900 mt-1">{totals.withCreance}</p>
+        </div>
+      </div>
+
+      {/* Liste + détail */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-4">
+        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+          <div className="p-3 border-b border-neutral-100">
+            <div className="relative">
+              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." className="input pl-9 h-9 text-sm" />
+            </div>
+          </div>
+          <div className="divide-y divide-neutral-100 max-h-[600px] overflow-y-auto">
+            {filtered.length === 0 && <p className="text-sm text-neutral-400 p-6 text-center">Aucun client</p>}
+            {filtered.map(c => {
+              const agg = aggregates.get(c.id) || { balance: 0, creance: 0 };
+              return (
+                <button key={c.id} onClick={() => setSelectedId(c.id)}
+                  className={`w-full text-left px-3 py-2.5 hover:bg-neutral-50 ${selectedId === c.id ? 'bg-neutral-50' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-neutral-900 truncate flex-1">{c.name}</p>
+                    {c.status === 'inactif' && <span className="text-[10px] text-neutral-400">inactif</span>}
+                  </div>
+                  {c.phone && <p className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5"><Phone className="w-3 h-3" />{c.phone}</p>}
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-[11px] text-neutral-500">Solde <span className="font-semibold text-neutral-900">{fmt(agg.balance)}</span></span>
+                    {agg.creance > 0.01 && <span className="text-[11px] text-red-600 font-medium">Créance {fmt(agg.creance)}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+          {!selected ? (
+            <div className="py-16 text-center">
+              <Users className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
+              <p className="text-sm text-neutral-500">Sélectionnez un client pour voir son détail</p>
+            </div>
+          ) : (
+            <div className="flex flex-col h-full">
+              <div className="p-4 border-b border-neutral-100">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-neutral-900">{selected.name}</h3>
+                    <p className="text-xs text-neutral-500">{selected.phone || '—'}{selected.address ? ` · ${selected.address}` : ''}</p>
+                    {selected.code && <p className="text-[11px] text-neutral-400 mt-0.5">Code : {selected.code}</p>}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    {can('mt_customer_manage') && (
+                      <>
+                        <button onClick={() => openEditCustomer(selected)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500" title="Modifier"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => toggleStatus(selected)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500" title={selected.status === 'actif' ? 'Désactiver' : 'Activer'}>{selected.status === 'actif' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div className="rounded-lg bg-neutral-50 p-3">
+                    <p className="text-[11px] font-medium text-neutral-500 uppercase">Solde disponible</p>
+                    <p className="text-lg font-bold text-neutral-900 mt-1">{fmt(selectedAgg?.balance || 0)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
+                  </div>
+                  <div className={`rounded-lg p-3 ${(selectedAgg?.creance || 0) > 0.01 ? 'bg-red-50' : 'bg-neutral-50'}`}>
+                    <p className="text-[11px] font-medium text-neutral-500 uppercase">Créance en cours</p>
+                    <p className={`text-lg font-bold mt-1 ${(selectedAgg?.creance || 0) > 0.01 ? 'text-red-600' : 'text-neutral-900'}`}>{fmt(selectedAgg?.creance || 0)} <span className="text-xs font-normal text-neutral-400">FCFA</span></p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  {can('mt_customer_credit') && <button onClick={openOperation} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800"><ArrowRightLeft className="w-3.5 h-3.5" />Opération</button>}
+                  {can('mt_customer_manage') && <button onClick={() => openMovement('depot')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50"><ArrowDownLeft className="w-3.5 h-3.5" />Dépôt</button>}
+                  {can('mt_customer_manage') && <button onClick={() => openMovement('retrait')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50"><ArrowUpRight className="w-3.5 h-3.5" />Retrait</button>}
+                  {can('mt_customer_repay') && (selectedAgg?.creance || 0) > 0.01 && <button onClick={() => openMovement('remboursement')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"><HandCoins className="w-3.5 h-3.5" />Remboursement</button>}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-[400px]">
+                {selectedLedger.length === 0 ? (
+                  <p className="text-sm text-neutral-400 p-6 text-center">Aucun mouvement</p>
+                ) : (
+                  <div className="divide-y divide-neutral-100">
+                    {selectedLedger.map(e => {
+                      const isPositive = Number(e.balance_delta) > 0 || Number(e.creance_delta) < 0;
+                      const label = ({ depot: 'Dépôt', retrait: 'Retrait', operation_solde: 'Opération (solde)', creance: 'Opération (créance)', remboursement: 'Remboursement', ajustement: 'Ajustement' } as any)[e.entry_type] || e.entry_type;
+                      const cancellable = (e.entry_type === 'operation_solde' || e.entry_type === 'creance') && can('mt_customer_credit');
+                      return (
+                        <div key={e.id} className="px-4 py-2.5 flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-medium text-neutral-900">{label}</p>
+                              {Number(e.creance_delta) > 0 && <span className="text-[10px] font-medium bg-red-50 text-red-600 px-1.5 py-0.5 rounded">+créance {fmt(Number(e.creance_delta))}</span>}
+                              {Number(e.balance_delta) < 0 && e.entry_type !== 'retrait' && <span className="text-[10px] font-medium bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded">solde -{fmt(Math.abs(Number(e.balance_delta)))}</span>}
+                            </div>
+                            <p className="text-[11px] text-neutral-400">{new Date(e.operated_at).toLocaleDateString('fr-FR')} {new Date(e.operated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}{e.comment ? ` · ${e.comment}` : ''}</p>
+                          </div>
+                          <p className={`text-sm font-bold shrink-0 ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>{isPositive ? '+' : '-'}{fmt(Math.abs(Number(e.amount)))} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
+                          {cancellable && (
+                            <button onClick={() => cancelLedgerEntry(e)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 shrink-0" title="Annuler l'opération">
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modale formulaire client */}
+      {showCustomerForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowCustomerForm(false)}>
+          <div className="bg-white rounded-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-neutral-900">{editingCustomer ? 'Modifier client' : 'Nouveau client'}</h3>
+              <button onClick={() => setShowCustomerForm(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-2">
+              <input value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} placeholder="Nom du client *" className="input" />
+              <input value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} placeholder="Téléphone" className="input" />
+              <input value={customerForm.code} onChange={e => setCustomerForm({ ...customerForm, code: e.target.value })} placeholder="Code interne (optionnel)" className="input" />
+              <input value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} placeholder="Adresse" className="input" />
+              <textarea value={customerForm.notes} onChange={e => setCustomerForm({ ...customerForm, notes: e.target.value })} placeholder="Notes" rows={2} className="input" />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowCustomerForm(false)} className="flex-1 px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
+              <button onClick={saveCustomer} disabled={saving || !customerForm.name.trim()} className="flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg disabled:opacity-40 bg-neutral-900 hover:bg-neutral-800">{editingCustomer ? 'Mettre à jour' : 'Créer'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale mouvement */}
+      {movementModal && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setMovementModal(null)}>
+          <div className="bg-white rounded-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-neutral-900">
+                {movementModal === 'depot' ? 'Dépôt de solde' : movementModal === 'retrait' ? 'Retrait de solde' : 'Remboursement de créance'}
+              </h3>
+              <button onClick={() => setMovementModal(null)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-xs text-neutral-500">
+              {movementModal === 'depot' && `Le client apporte du cash pour approvisionner son solde. Cash +, solde client +.`}
+              {movementModal === 'retrait' && `Le client retire du cash de son solde. Cash −, solde client −.`}
+              {movementModal === 'remboursement' && `Le client rembourse sa créance en cash. Cash +, créance −.`}
+            </p>
+            <div className="space-y-2">
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Point de service *</label>
+                <select value={movementForm.service_point_id} onChange={e => setMovementForm({ ...movementForm, service_point_id: e.target.value })} className="input">
+                  <option value="">Sélectionner...</option>
+                  {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant (FCFA) *</label>
+                <input value={movementForm.amount} onChange={e => setMovementForm({ ...movementForm, amount: e.target.value })} placeholder="0" type="number" className="input text-base font-semibold" />
+              </div>
+              <input value={movementForm.comment} onChange={e => setMovementForm({ ...movementForm, comment: e.target.value })} placeholder="Commentaire (optionnel)" className="input" />
+            </div>
+            <div className="rounded-lg bg-neutral-50 p-2.5 text-[11px] text-neutral-600 space-y-0.5">
+              <p>Solde actuel : <span className="font-semibold text-neutral-900">{fmt(selectedAgg?.balance || 0)} FCFA</span></p>
+              <p>Créance actuelle : <span className={`font-semibold ${(selectedAgg?.creance || 0) > 0.01 ? 'text-red-600' : 'text-neutral-900'}`}>{fmt(selectedAgg?.creance || 0)} FCFA</span></p>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setMovementModal(null)} className="flex-1 px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
+              <button onClick={saveMovement} disabled={saving || !movementForm.amount || !movementForm.service_point_id} className="flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg disabled:opacity-40 bg-neutral-900 hover:bg-neutral-800">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale opération client */}
+      {operationModal && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOperationModal(false)}>
+          <div className="bg-white rounded-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-neutral-900">Opération pour {selected.name}</h3>
+              <button onClick={() => setOperationModal(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-xs text-neutral-500">
+              Réalisez une opération de service pour le client. Si son solde couvre le montant, il sera débité en priorité ;
+              le reste devient une créance. Le cash n'est pas mouvementé.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Point de service *</label>
+                <select value={opForm.service_point_id} onChange={e => setOpForm({ ...opForm, service_point_id: e.target.value, service_id: '' })} className="input">
+                  <option value="">Sélectionner...</option>
+                  {points.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Service *</label>
+                <select value={opForm.service_id} onChange={e => setOpForm({ ...opForm, service_id: e.target.value })} className="input" disabled={!opForm.service_point_id}>
+                  <option value="">Sélectionner...</option>
+                  {services.map(s => <option key={s.id} value={s.id}>{s.name}{s.family === 'credit_telephone' ? ' (crédit)' : ''}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-medium text-neutral-500 uppercase mb-1">Montant demandé (FCFA) *</label>
+                <input value={opForm.amount} onChange={e => setOpForm({ ...opForm, amount: e.target.value })} placeholder="0" type="number" min="0" className="input text-lg font-bold" />
+              </div>
+              <div className="sm:col-span-2">
+                <input value={opForm.comment} onChange={e => setOpForm({ ...opForm, comment: e.target.value })} placeholder="Commentaire (optionnel)" className="input" />
+              </div>
+            </div>
+
+            {opAmount > 0 && opForm.service_id && opForm.service_point_id && (
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-3 space-y-2">
+                <p className="text-[11px] font-semibold text-neutral-500 uppercase">Répartition du règlement</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg bg-white border border-neutral-200 p-2.5">
+                    <p className="text-[10px] font-medium text-neutral-500 uppercase">Sur solde client</p>
+                    <p className="text-sm font-bold text-neutral-900 mt-0.5">{fmt(balancePart)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">Solde disponible : {fmt(custBalance)}</p>
+                  </div>
+                  <div className={`rounded-lg border p-2.5 ${creancePart > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-neutral-200'}`}>
+                    <p className="text-[10px] font-medium text-neutral-500 uppercase">Passe en créance</p>
+                    <p className={`text-sm font-bold mt-0.5 ${creancePart > 0 ? 'text-red-600' : 'text-neutral-900'}`}>{fmt(creancePart)} <span className="text-[10px] font-normal text-neutral-400">FCFA</span></p>
+                    {creancePart > 0 && <p className="text-[10px] text-red-500 mt-0.5">Créance actuelle : {fmt(selectedAgg?.creance || 0)}</p>}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-white border border-neutral-200 p-2.5 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-medium text-neutral-500 uppercase">Solde {opTargetType === 'stock_credit' ? 'stock crédit' : 'UV'} du service</p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">{opService?.name} · {getPointName(opForm.service_point_id)}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-baseline gap-1 justify-end">
+                      <span className="text-xs text-neutral-400 line-through">{fmt(opServiceBalance)}</span>
+                      <span className="text-sm font-bold text-neutral-900">{fmt(opServiceBalance - opAmount)}</span>
+                    </div>
+                    <p className="text-[10px] text-red-500">-{fmt(opAmount)} FCFA</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {opError && opAmount > 0 && (
+              <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                <p className="text-xs text-red-700">{opError}</p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setOperationModal(false)} className="flex-1 px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
+              <button onClick={saveOperation} disabled={saving || !!opError} className="flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg disabled:opacity-40 flex items-center justify-center gap-2 bg-neutral-900 hover:bg-neutral-800">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Valider l'opération
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

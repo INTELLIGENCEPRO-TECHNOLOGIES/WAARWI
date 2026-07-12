@@ -53,7 +53,7 @@ function statusStyles(status: string, sale?: Sale) {
 }
 
 export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite, dataTick, profile } = useApp();
+  const { tenant, currentSite, dataTick } = useApp();
   const { success: toastSuccess, error: toastError } = useToast();
   const { can } = usePermissions();
   const [sales, setSales] = useState<Sale[]>([]);
@@ -70,6 +70,18 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [docSettings, setDocSettings] = useState<{ allow_edit: boolean; allow_delete: boolean; loaded: boolean }>({ allow_edit: false, allow_delete: false, loaded: false });
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!tenant) return;
+    supabase.from('profiles').select('id, full_name, email').eq('tenant_id', tenant.id).then(({ data }) => {
+      const m: Record<string, string> = {};
+      (data || []).forEach((p: any) => { m[p.id] = p.full_name || p.email || ''; });
+      setProfileNames(m);
+    });
+  }, [tenant?.id]);
+
+  const creatorName = (userId?: string | null) => (userId && profileNames[userId]) || 'Utilisateur non renseigné';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -181,7 +193,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         docHeader: (selected as any).doc_header ?? null,
       },
       tenantForPrint,
-      profile?.full_name || profile?.email || ''
+      creatorName(selected.user_id)
     );
   };
 
@@ -209,7 +221,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       total: Number(selected.total),
       payments: pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: paidTotal,
-      issuedBy: profile?.full_name || undefined,
+      issuedBy: creatorName(selected.user_id),
       docHeader: (selected as any).doc_header ?? null,
     });
   };

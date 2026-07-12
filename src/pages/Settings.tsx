@@ -3,6 +3,8 @@ import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, Credi
 import { BackupTab } from '../components/BackupTab';
 import { PermissionsTab } from '../components/PermissionsTab';
 import { DocumentSettingsTab } from '../components/DocumentSettingsTab';
+import { RepCommissionSettingsTab } from '../components/RepCommissionSettingsTab';
+import { ExpenseCategoriesTab } from '../components/ExpenseCategoriesTab';
 import { TicketHeaderConfigTab } from '../components/TicketHeaderConfigTab';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -12,7 +14,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
 
-type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription';
+type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription' | 'rep_commissions' | 'expense_types';
 
 type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
 
@@ -39,6 +41,7 @@ export function Settings() {
         ...(autoMode ? [{ k: 'brands' as TabKey, label: 'Marques véhicules', icon: Car, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' }] : []),
         { k: 'payments', label: 'Modes de paiement', icon: CreditCard, color: 'text-teal-700', bg: 'bg-teal-50/80 border-teal-200' },
         { k: 'pricing_tiers', label: 'Catégories tarifaires', icon: Layers, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
+        { k: 'expense_types', label: 'Types de dépenses', icon: TrendingDown, color: 'text-red-700', bg: 'bg-red-50/80 border-red-200' },
         { k: 'stock', label: 'Gestion des stocks', icon: Package, color: 'text-orange-700', bg: 'bg-orange-50/80 border-orange-200' },
         { k: 'tiers', label: 'Tiers', icon: Users, color: 'text-lime-700', bg: 'bg-lime-50/80 border-lime-200' },
       ],
@@ -49,6 +52,7 @@ export function Settings() {
         { k: 'accounting', label: 'Comptabilité', icon: BookOpen, color: 'text-cyan-700', bg: 'bg-cyan-50/80 border-cyan-200' },
         { k: 'boutique', label: 'Boutique en ligne', icon: ShoppingBag, color: 'text-pink-700', bg: 'bg-pink-50/80 border-pink-200' },
         { k: 'documents', label: 'Paramètres documents', icon: FileText, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
+        { k: 'rep_commissions', label: 'Représentants & commissions', icon: Users, color: 'text-teal-700', bg: 'bg-teal-50/80 border-teal-200' },
         { k: 'ticket_header', label: 'En-tête tickets', icon: Printer, color: 'text-fuchsia-700', bg: 'bg-fuchsia-50/80 border-fuchsia-200' },
         { k: 'backup', label: 'Sauvegarde', icon: Database, color: 'text-green-700', bg: 'bg-green-50/80 border-green-200' },
       ],
@@ -121,6 +125,8 @@ export function Settings() {
       {tab === 'pricing_tiers' && <PricingTiersTab />}
       {tab === 'backup' && <BackupTab />}
       {tab === 'documents' && <DocumentSettingsTab />}
+      {tab === 'rep_commissions' && <RepCommissionSettingsTab />}
+      {tab === 'expense_types' && <ExpenseCategoriesTab />}
       {tab === 'ticket_header' && <TicketHeaderConfigTab />}
       {tab === 'subscription' && <SubscriptionTab />}
     </div>

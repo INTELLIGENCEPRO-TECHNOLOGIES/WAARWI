@@ -4,7 +4,7 @@ import {
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
-  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft,
+  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft, UserCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -14,7 +14,7 @@ export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'articles' | 'stock' | 'tiers'
   | 'sales' | 'billing' | 'supplier_orders' | 'online_orders' | 'master_catalog'
   | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture'
-  | 'ipm' | 'warranties' | 'money_transfer'
+  | 'ipm' | 'warranties' | 'money_transfer' | 'representatives'
   | 'settings' | 'platform_admin' | 'reports';
 
 const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any }[] }[] = [
@@ -35,6 +35,7 @@ const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any
     { key: 'billing', label: 'Facturation', icon: ClipboardList },
     { key: 'online_orders', label: 'Commandes en ligne', icon: Globe },
     { key: 'warranties', label: 'Garanties & IMEI', icon: ShieldCheck },
+    { key: 'representatives', label: 'Représentants', icon: UserCheck },
   ]},
   { title: 'Tiers', items: [
     { key: 'tiers', label: 'Gestion des tiers', icon: Users },
@@ -70,7 +71,7 @@ const MOBILE_TABS: { key: Route; label: string; icon: any }[] = [
 const ROUTE_MODULE: Record<string, string> = {
   dashboard: 'dashboard', pos: 'pos', sales: 'sales', cash_history: 'cash_history',
   articles: 'articles', master_catalog: 'articles', stock: 'stock',
-  billing: 'billing', online_orders: 'online_orders', warranties: 'billing',
+  billing: 'billing', online_orders: 'online_orders', warranties: 'billing', representatives: 'billing',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
   acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer',
@@ -98,6 +99,7 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
   acc_search: 'view_accounting',
   acc_cloture: 'view_accounting',
   money_transfer: 'access_money_transfer',
+  representatives: 'rep_view',
   settings: 'manage_settings',
 };
 

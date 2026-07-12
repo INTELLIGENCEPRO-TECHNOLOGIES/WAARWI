@@ -1168,7 +1168,7 @@ function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate,
 /* ───────────────────────── Customer detail modal ───────────────────────── */
 function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: CustomerOptionKey }; onClose: () => void }) {
   const { c: initialC, key } = view;
-  const { tenant, currentSite, profile } = useApp();
+  const { tenant, currentSite } = useApp();
   const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
@@ -1189,6 +1189,16 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const [invoiceView, setInvoiceView] = useState<any | null>(null);
 
   const [creditMethodIds, setCreditMethodIds] = useState<Set<string>>(new Set());
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!tenant) return;
+    supabase.from('profiles').select('id, full_name, email').eq('tenant_id', tenant.id).then(({ data }) => {
+      const m: Record<string, string> = {};
+      (data || []).forEach((p: any) => { m[p.id] = p.full_name || p.email || ''; });
+      setProfileNames(m);
+    });
+  }, [tenant?.id]);
+  const creatorName = (userId?: string | null) => (userId && profileNames[userId]) || 'Utilisateur non renseigné';
   const [prepayments, setPrepayments] = useState<{ id: string; amount: number; amount_used: number; method_name: string; reference: string; created_at: string }[]>([]);
   const [avoirs, setAvoirs] = useState<{ id: string; return_number: string; total: number; credit_used: number; created_at: string; refunded_at?: string | null }[]>([]);
   const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
@@ -1199,7 +1209,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     if (!tenant) return;
     setLoading(true);
     const [sRes, pmAllRes, custRes] = await Promise.all([
-      supabase.from('sales').select('id, sale_number, total, paid, status, created_at, source').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }).limit(400),
+      supabase.from('sales').select('id, sale_number, total, paid, status, created_at, source, user_id').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }).limit(400),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('customers').select('balance').eq('id', initialC.id).maybeSingle(),
     ]);
@@ -1411,7 +1421,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       items, subtotal, total: Number(data.sale.total),
       payments: data.pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(data.sale.paid),
-      issuedBy: profile?.full_name || undefined,
+      issuedBy: creatorName(data.sale.user_id),
     });
   };
 
@@ -1967,7 +1977,7 @@ function Line({ label, value, strong, tone }: { label: string; value: string; st
 /* ───────────────────────── Supplier detail modal ───────────────────────── */
 function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: SupplierOptionKey }; siteId: string | null; onClose: () => void }) {
   const { s, key } = view;
-  const { tenant, profile } = useApp();
+  const { tenant, currentSite } = useApp();
   const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1988,12 +1998,22 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const [orderView, setOrderView] = useState<any | null>(null);
   const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
   const [supplierBalance, setSupplierBalance] = useState<number>(Number((s as any).balance || 0));
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!tenant) return;
+    supabase.from('profiles').select('id, full_name, email').eq('tenant_id', tenant.id).then(({ data }) => {
+      const m: Record<string, string> = {};
+      (data || []).forEach((p: any) => { m[p.id] = p.full_name || p.email || ''; });
+      setProfileNames(m);
+    });
+  }, [tenant?.id]);
+  const creatorName = (userId?: string | null) => (userId && profileNames[userId]) || 'Utilisateur non renseigné';
 
   const reload = async () => {
     if (!tenant) return;
     setLoading(true);
     const [oRes, pRes, mRes, aRes, adjRes, balRes] = await Promise.all([
-      supabase.from('supplier_orders').select('id, order_number, total, paid, status, created_at, expected_date').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('created_at', { ascending: false }).limit(400),
+      supabase.from('supplier_orders').select('id, order_number, total, paid, status, created_at, expected_date, user_id').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('created_at', { ascending: false }).limit(400),
       supabase.from('supplier_payments').select('*').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('paid_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).neq('payment_type', 'credit').order('sort_order'),
       supabase.from('articles').select('id, name, internal_ref, supplier_ref, sale_price, is_active').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('name').limit(300),
@@ -2135,7 +2155,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       items, subtotal, total: Number(data.order.total),
       payments: data.pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: paidTotal,
-      issuedBy: profile?.full_name || undefined,
+      issuedBy: creatorName(data.order.user_id),
     });
   };
 

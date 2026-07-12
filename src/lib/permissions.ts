@@ -83,6 +83,13 @@ export const PERMISSION_KEYS = [
   'mt_report_export',
   'mt_settings_manage',
   'mt_services_manage',
+  // Commercial - Représentants
+  'rep_view',
+  'rep_manage',
+  'rep_stats_view',
+  'rep_commission_view',
+  'rep_settings_edit',
+  'rep_export',
 ] as const;
 
 export type PermissionKey = typeof PERMISSION_KEYS[number];
@@ -159,6 +166,12 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   mt_report_export: 'Exporter les rapports transfert d\'argent',
   mt_settings_manage: 'Gérer les paramètres du module transfert',
   mt_services_manage: 'Gérer les services (Wave, Orange Money, etc.)',
+  rep_view: 'Voir la liste des représentants',
+  rep_manage: 'Créer / modifier / activer / désactiver les représentants',
+  rep_stats_view: 'Voir les statistiques par représentant',
+  rep_commission_view: 'Voir les montants de commission',
+  rep_settings_edit: 'Modifier les paramètres de commission',
+  rep_export: 'Imprimer / exporter les rapports représentants',
 };
 
 export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] = [
@@ -207,6 +220,10 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
   {
     label: 'Transfert d\'argent - Rapports & Configuration',
     keys: ['mt_report_view_site', 'mt_report_view_grossiste', 'mt_report_export', 'mt_settings_manage', 'mt_services_manage'],
+  },
+  {
+    label: 'Commercial - Représentants',
+    keys: ['rep_view', 'rep_manage', 'rep_stats_view', 'rep_commission_view', 'rep_settings_edit', 'rep_export'],
   },
   {
     label: 'Administration',

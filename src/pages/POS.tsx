@@ -24,6 +24,7 @@ import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments } from '../lib/ipm';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
+import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 
 type ArticleLite = {
   id: string; internal_ref: string; name: string; oem_ref: string;
@@ -67,6 +68,7 @@ type SessionSale = {
   items: { article_id: string; name: string; quantity: number; unit_price: number; returned?: number }[];
   fullyReturned?: boolean;
   doc_header?: Record<string, string | null> | null;
+  user_id?: string | null;
 };
 
 function printXReport(
@@ -773,7 +775,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       reference: docReference || null,
       warranty: docWarranty || null,
       imei: docImei || null,
-      representative: docRepresentative || null,
+      representative: posRepLabel(docRepresentative) || docRepresentative || null,
     };
   };
 
@@ -790,7 +792,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }, tenantForPrint, cashierName);
   };
 
-  const printSaleInvoice = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }, docHeaderOverride?: Record<string, string | null> | null) => {
+  const printSaleInvoice = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }, docHeaderOverride?: Record<string, string | null> | null, issuedByOverride?: string) => {
     const items = sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     const paid = sale.payments.reduce((s, p) => s + p.amount, 0);
@@ -803,7 +805,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
       items, subtotal, discount: sale.discount, total: sale.total,
       payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
-      paid, cashier: cashierName, issuedBy: profile?.full_name || undefined,
+      paid, cashier: cashierName, issuedBy: issuedByOverride ?? (profile?.full_name || undefined),
       docHeader: docHeaderOverride !== undefined ? docHeaderOverride : buildDocHeader(),
     });
   };
@@ -967,6 +969,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [docWarranty, setDocWarranty] = useState('');
   const [docImei, setDocImei] = useState('');
   const [docRepresentative, setDocRepresentative] = useState('');
+  const [posReps, setPosReps] = useState<SalesRepresentative[]>([]);
+  const [posRepSettings, setPosRepSettings] = useState<RepCommissionSettings>(DEFAULT_REP_SETTINGS);
 
   useEffect(() => {
     if (!tenant) return;
@@ -980,16 +984,39 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           show_representative: data.show_representative ?? false,
           default_representative: data.default_representative ?? '',
         });
-        if (data.default_representative) setDocRepresentative(data.default_representative);
+      }
+    });
+    supabase.from('sales_representatives').select('*').eq('tenant_id', tenant.id).eq('status', 'actif').order('code').then(({ data }) => {
+      setPosReps((data as SalesRepresentative[]) || []);
+    });
+    supabase.from('expense_categories').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name').then(({ data }) => {
+      setExpenseCats((data as { id: string; name: string }[]) || []);
+    });
+    supabase.from('rep_commission_settings').select('enabled, commission_type, commission_base, rate, fixed_amount').eq('tenant_id', tenant.id).maybeSingle().then(({ data }) => {
+      if (data) {
+        setPosRepSettings({
+          enabled: data.enabled === true,
+          commission_type: (data.commission_type || 'pct_ca') as any,
+          commission_base: (data.commission_base || 'ttc') as any,
+          rate: Number(data.rate || 0),
+          fixed_amount: Number(data.fixed_amount || 0),
+        });
       }
     });
   }, [tenant?.id]);
+
+  const posRepLabel = (id?: string | null) => {
+    const r = posReps.find(x => x.id === id);
+    return r ? repDisplayName(r) : '';
+  };
 
   // Cash movement (expense / income / customer prepayment)
   const [mvOpen, setMvOpen] = useState(false);
   const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment'>('expense');
   const [mvAmount, setMvAmount] = useState(0);
   const [mvReason, setMvReason] = useState('');
+  const [mvExpenseCat, setMvExpenseCat] = useState('');
+  const [expenseCats, setExpenseCats] = useState<{ id: string; name: string }[]>([]);
   const [mvNote, setMvNote] = useState('');
   const [mvRef, setMvRef] = useState('');
   const [mvMethod, setMvMethod] = useState<PaymentMethod | null>(null);
@@ -1023,6 +1050,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Session tickets list
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
+  const [sessionProfileNames, setSessionProfileNames] = useState<Record<string, string>>({});
   const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
   const [sessionInvPayments, setSessionInvPayments] = useState<{ sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string }[]>([]);
   const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'reglements' | null>('tickets');
@@ -1479,6 +1507,25 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (e) { error(e.message); return; }
     const saleNum = (data as any)?.sale_number || `VTE-${Date.now()}`;
     const creditSaleId = (data as any)?.sale_id || (data as any)?.id || null;
+    if (creditSaleId && (docDeliveryDate || docReference || docWarranty || docRepresentative || docImei)) {
+      const docHeader: Record<string, string | null> = {};
+      if (docDeliveryDate) docHeader.delivery_date = docDeliveryDate;
+      if (docReference) docHeader.reference = docReference;
+      if (docWarranty) docHeader.warranty = docWarranty;
+      if (docImei) docHeader.imei = docImei;
+      if (docRepresentative) docHeader.representative = posRepLabel(docRepresentative) || docRepresentative;
+      supabase.from('sales').update({ doc_header: docHeader }).eq('id', creditSaleId).then(() => {});
+    }
+    if (creditSaleId && docRepresentative) {
+      const rep = posReps.find(r => r.id === docRepresentative) || null;
+      if (rep) {
+        const subtotal = cart.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+        const net = Math.max(0, subtotal - (discount || 0));
+        const margin = cart.reduce((s, i) => s + (i.unit_price - (i.purchase_cost || 0)) * i.quantity - (i.discount || 0), 0);
+        const snapshot = computeRepCommission(rep, posRepSettings, { subtotal, net, margin });
+        supabase.from('sales').update({ representative_id: rep.id, rep_commission: snapshot }).eq('id', creditSaleId).then(() => {});
+      }
+    }
     // Create IPM vente record if client is IPM beneficiary
     if (ipmBeneficiaire && ipmPartIpm > 0 && creditSaleId && tenant) {
       await supabase.from('ipm_ventes').insert({
@@ -1505,6 +1552,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setPrintInvoice(false);
     success('Vente à crédit enregistrée');
     setCart([]); setDiscount(0); setCustomer(null); setPayments([]); setPayOpen(false); setMobileCartOpen(false);
+    setDocDeliveryDate(''); setDocReference(''); setDocWarranty(''); setDocImei(''); setDocRepresentative('');
     load();
   };
 
@@ -1559,7 +1607,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (!session) { error('Ouvrez d\'abord la caisse'); return; }
     setMvOpen(true);
     setMvKind('expense');
-    setMvAmount(0); setMvReason(''); setMvNote(''); setMvRef('');
+    setMvAmount(0); setMvReason(''); setMvNote(''); setMvRef(''); setMvExpenseCat('');
     setMvMethod(methods[0] || null);
     setMvCustomer(null); setMvCustSearch('');
     setMvPrint(true);
@@ -1571,13 +1619,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (mvAmount <= 0) { error('Montant invalide'); return; }
     if (mvKind !== 'expense' && !mvMethod) { error('Mode de règlement requis'); return; }
     if (mvKind === 'customer_prepayment' && !mvCustomer) { error('Client obligatoire'); return; }
+    if (mvKind === 'expense' && expenseCats.length > 0 && !mvExpenseCat) { error('Sélectionnez un type de dépense'); return; }
+    const expenseCatName = mvKind === 'expense' ? (expenseCats.find(c => c.id === mvExpenseCat)?.name || '') : '';
     setMvSubmitting(true);
     const { data, error: e } = await supabase.rpc('record_cash_movement', {
       p_cash_session_id: session.id,
       p_site_id: currentSite.id,
       p_kind: mvKind,
       p_amount: mvAmount,
-      p_reason: mvReason,
+      p_reason: mvKind === 'expense' ? (expenseCatName || mvReason) : mvReason,
+      p_expense_category_id: mvKind === 'expense' ? (mvExpenseCat || null) : null,
       p_note: mvNote,
       p_reference: mvRef,
       p_customer_id: mvCustomer?.id || null,
@@ -1808,8 +1859,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       if (docReference) docHeader.reference = docReference;
       if (docWarranty) docHeader.warranty = docWarranty;
       if (docImei) docHeader.imei = docImei;
-      if (docRepresentative) docHeader.representative = docRepresentative;
+      if (docRepresentative) docHeader.representative = posRepLabel(docRepresentative) || docRepresentative;
       supabase.from('sales').update({ doc_header: docHeader }).eq('id', saleId).then(() => {});
+    }
+
+    // Representative + commission snapshot (computed at validation only)
+    if (saleId && docRepresentative) {
+      const rep = posReps.find(r => r.id === docRepresentative) || null;
+      if (rep) {
+        const subtotal = cart.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+        const net = Math.max(0, subtotal - (discount || 0));
+        const margin = cart.reduce((s, i) => s + (i.unit_price - (i.purchase_cost || 0)) * i.quantity - (i.discount || 0), 0);
+        const snapshot = computeRepCommission(rep, posRepSettings, { subtotal, net, margin });
+        supabase.from('sales').update({ representative_id: rep.id, rep_commission: snapshot }).eq('id', saleId).then(() => {});
+      }
     }
 
     setLastSale({
@@ -1857,7 +1920,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }
     success(`Vente enregistrée${ipmBeneficiaire && ipmPartIpm > 0 ? ` · IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : ''}`);
     setCart([]); setDiscount(0); setCustomer(null); setPayments([]); setPayOpen(false); setMobileCartOpen(false);
-    setDocDeliveryDate(''); setDocReference(''); setDocWarranty(''); setDocRepresentative(posDocSettings.default_representative || '');
+    setDocDeliveryDate(''); setDocReference(''); setDocWarranty(''); setDocRepresentative('');
     setIpmDocuments({ numero_ordonnance: '', medecin: '', numero_bon: '' });
     load();
   };
@@ -2012,10 +2075,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openTickets = async () => {
     setTicketsOpen(true); setLoadingTickets(true);
-    const [{ data }, { data: retData }, { data: mvData }, { data: pmtData }] = await Promise.all([
+    const [{ data }, { data: retData }, { data: mvData }, { data: pmtData }, { data: profData }] = await Promise.all([
       supabase
         .from('sales')
-        .select('id, sale_number, total, paid, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price), doc_header')
+        .select('id, sale_number, total, paid, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price), doc_header, user_id')
         .eq('tenant_id', tenant!.id)
         .eq('cash_session_id', session!.id)
         .order('created_at', { ascending: false }),
@@ -2037,12 +2100,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         .eq('tenant_id', tenant!.id)
         .eq('cash_session_id', session!.id)
         .order('created_at'),
+      supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .eq('tenant_id', tenant!.id),
     ]);
+    const profMap: Record<string, string> = {};
+    (profData || []).forEach((p: any) => { profMap[p.id] = p.full_name || p.email || ''; });
+    setSessionProfileNames(profMap);
     const sales: SessionSale[] = (data || []).map((s: any) => ({
       id: s.id, sale_number: s.sale_number, total: Number(s.total), paid: Math.min(Number(s.total || 0), Number(s.paid || 0)),
       created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
       items: (s.sale_items || []).map((i: any) => ({ article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
       doc_header: s.doc_header || null,
+      user_id: s.user_id || null,
     }));
     const returns: SessionSale[] = (retData || []).map((r: any) => ({
       id: r.id, sale_number: r.return_number, total: -Number(r.total), paid: -Number(r.total),
@@ -3057,9 +3128,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   className="input text-sm font-bold num h-9" placeholder="0" min={0} />
               </div>
               <div>
-                <label className="label">Motif</label>
-                <input value={mvReason} onChange={e => setMvReason(e.target.value)}
-                  className="input h-9 text-xs" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
+                <label className="label">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</label>
+                {mvKind === 'expense' && expenseCats.length > 0 ? (
+                  <select value={mvExpenseCat} onChange={e => setMvExpenseCat(e.target.value)}
+                    className="input h-9 text-xs">
+                    <option value="">Sélectionner…</option>
+                    {expenseCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                ) : (
+                  <input value={mvReason} onChange={e => setMvReason(e.target.value)}
+                    className="input h-9 text-xs" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
+                )}
               </div>
             </div>
 
@@ -3309,6 +3388,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           docSettings={posDocSettings}
           docFields={{ deliveryDate: docDeliveryDate, reference: docReference, warranty: docWarranty, imei: docImei, representative: docRepresentative }}
           setDocFields={{ setDeliveryDate: setDocDeliveryDate, setReference: setDocReference, setWarranty: setDocWarranty, setImei: setDocImei, setRepresentative: setDocRepresentative }}
+          reps={posReps}
           ipmInfo={ipmBeneficiaire && ipmPartIpm > 0 ? { organisme: ipmBeneficiaire.ipm_organismes?.nom, partIpm: ipmPartIpm, taux: ipmTaux } : null}
           ipmDocRequired={ipmBeneficiaire && ipmPartIpm > 0 && ipmConfig ? {
             ordonnance: !!(ipmConfig.ordonnance_obligatoire || ipmConfig.numero_ordonnance_obligatoire),
@@ -3568,7 +3648,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                     payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
                                     customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
                                   };
-                                  printSaleInvoice(fakeSale as any, s.doc_header);
+                                  printSaleInvoice(fakeSale as any, s.doc_header, (s.user_id && sessionProfileNames[s.user_id]) || 'Utilisateur non renseigné');
                                 }} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600">
                                   <FileText className="w-4 h-4" />
                                 </button>
@@ -4416,7 +4496,7 @@ function PaymentScreen({
   total, customer, methods, payments, setPayments, paying,
   onClose, onValidate, onValidateCredit,
   docSettings, docFields, setDocFields, ipmInfo,
-  ipmDocRequired, ipmDocuments, setIpmDocuments,
+  ipmDocRequired, ipmDocuments, setIpmDocuments, reps,
 }: {
   total: number;
   customer: Customer | null;
@@ -4430,6 +4510,7 @@ function PaymentScreen({
   docSettings: { show_delivery_date: boolean; show_reference: boolean; show_warranty: boolean; show_imei: boolean; show_representative: boolean; default_representative: string };
   docFields: { deliveryDate: string; reference: string; warranty: string; imei: string; representative: string };
   setDocFields: { setDeliveryDate: (v: string) => void; setReference: (v: string) => void; setWarranty: (v: string) => void; setImei: (v: string) => void; setRepresentative: (v: string) => void };
+  reps?: SalesRepresentative[];
   ipmInfo?: { organisme: string; partIpm: number; taux: number } | null;
   ipmDocRequired?: { ordonnance: boolean; medecin: boolean; bon: boolean } | null;
   ipmDocuments?: { numero_ordonnance: string; medecin: string; numero_bon: string };
@@ -4606,7 +4687,10 @@ function PaymentScreen({
               {docSettings.show_representative && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Représentant</label>
-                  <input value={docFields.representative} onChange={e => setDocFields.setRepresentative(e.target.value)} placeholder="Nom du commercial" className="w-full h-9 rounded-xl bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                  <select value={docFields.representative} onChange={e => setDocFields.setRepresentative(e.target.value)} className="w-full h-9 rounded-xl bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors">
+                    <option value="">Aucun représentant</option>
+                    {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
+                  </select>
                 </div>
               )}
             </div>

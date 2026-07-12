@@ -50,7 +50,7 @@ const FILTERS: { key: string; label: string }[] = [
 ];
 
 export function SupplierOrders() {
-  const { tenant, currentSite, sites, dataTick, profile } = useApp();
+  const { tenant, currentSite, sites, dataTick } = useApp();
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
@@ -102,6 +102,17 @@ export function SupplierOrders() {
     setList((data as any) || []);
     setLoading(false); setRefreshing(false);
   };
+
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!tenant) return;
+    supabase.from('profiles').select('id, full_name, email').eq('tenant_id', tenant.id).then(({ data }) => {
+      const m: Record<string, string> = {};
+      (data || []).forEach((p: any) => { m[p.id] = p.full_name || p.email || ''; });
+      setProfileNames(m);
+    });
+  }, [tenant?.id]);
+  const creatorName = (userId?: string | null) => (userId && profileNames[userId]) || 'Utilisateur non renseigné';
 
   useEffect(() => { load(); }, [tenant?.id, currentSite?.id]);
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
@@ -327,7 +338,7 @@ export function SupplierOrders() {
       items: detailItems.map(i => ({ name: i.name, supplier_ref: i.supplier_ref || null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity_ordered), unit_price: Number(i.unit_price), discount: 0 })),
       subtotal: Number(selected.total), total: Number(selected.total),
       footerNote: 'Merci de confirmer réception et délai de livraison.',
-      issuedBy: profile?.full_name || undefined,
+      issuedBy: creatorName((selected as any).user_id),
       docHeader: selected.doc_header ?? null,
     });
   };

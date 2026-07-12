@@ -24,6 +24,7 @@ import { MobileBillingWizard, type WizardHeaderField } from '../components/Mobil
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
+import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 
 const tenantForPrint = (t: any, site?: any): PrintTenant => buildPrintTenantForSite(t, site);
 
@@ -33,6 +34,8 @@ type Quote = {
   id: string; quote_number: string; total: number; subtotal: number; discount: number;
   status: string; created_at: string; valid_until: string | null; note: string;
   converted_sale_id: string | null; customer_id: string | null;
+  user_id?: string | null;
+  representative_id?: string | null;
   customers: { name: string } | null;
   doc_header?: { delivery_date?: string; reference?: string; warranty?: string; representative?: string; imei?: string } | null;
 };
@@ -47,6 +50,9 @@ type Invoice = {
   created_at: string;
   public_code?: string | null;
   accounting_status?: string;
+  user_id?: string | null;
+  representative_id?: string | null;
+  rep_commission?: any;
   customers: { name: string } | null;
 };
 type SaleReturn = {
@@ -128,6 +134,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [billSourceSiteId, setBillSourceSiteId] = useState<string>('');
   const [sales, setSales] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [salesReps, setSalesReps] = useState<SalesRepresentative[]>([]);
+  const [repSettings, setRepSettings] = useState<RepCommissionSettings>(DEFAULT_REP_SETTINGS);
+  const [profileNames, setProfileNames] = useState<Record<string, string>>({});
 
   // Quote modals
   const [quoteOpen, setQuoteOpen] = useState(false);
@@ -202,6 +211,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [invoiceIsCredit, setInvoiceIsCredit] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
+  const editingInvoicePrevRep = useRef<string | null>(null);
 
   // IPM (pharmacy only)
   const isPharmacy = (tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie';
@@ -301,7 +311,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const siteId = currentSite.id;
     const [q, s, r] = await Promise.all([
       supabase.from('quotes').select('*, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
-      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, doc_header, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
+      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, user_id, representative_id, rep_commission, created_at, public_code, doc_header, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
       supabase.from('sale_returns').select('*, customers(name, phone, address), sales(sale_number)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
     ]);
     setQuotes((q.data as any) || []);
@@ -378,14 +388,60 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
-    ]).then(([c, a, sl, pm, tr]) => {
+      supabase.from('sales_representatives').select('*').eq('tenant_id', tenant.id).order('code'),
+      supabase.from('rep_commission_settings').select('enabled, commission_type, commission_base, rate, fixed_amount').eq('tenant_id', tenant.id).maybeSingle(),
+      supabase.from('profiles').select('id, full_name, email').eq('tenant_id', tenant.id),
+    ]).then(([c, a, sl, pm, tr, reps, rcs, profs]) => {
       setCustomers(c.data || []);
       setArticles(a as any[]);
       setSales((sl.data as any) || []);
       setPaymentMethods((pm.data || []).filter((m: any) => m.payment_type !== 'credit'));
       setArticleTiers((tr.data || []) as { article_id: string; tier_name: string; price: number }[]);
+      setSalesReps((reps.data as any) || []);
+      if (rcs.data) {
+        setRepSettings({
+          enabled: rcs.data.enabled === true,
+          commission_type: rcs.data.commission_type || 'pct_ca',
+          commission_base: rcs.data.commission_base || 'ttc',
+          rate: Number(rcs.data.rate || 0),
+          fixed_amount: Number(rcs.data.fixed_amount || 0),
+        });
+      }
+      const pmap: Record<string, string> = {};
+      for (const p of (profs.data || [])) pmap[p.id] = p.full_name || p.email || '';
+      setProfileNames(pmap);
     });
   }, [tenant?.id, currentSite?.id]);
+
+  const activeReps = useMemo(() => salesReps.filter(r => r.status === 'actif'), [salesReps]);
+  const repById = useCallback((id?: string | null) => salesReps.find(r => r.id === id) || null, [salesReps]);
+  const repLabelOf = useCallback((id?: string | null) => {
+    const r = repById(id);
+    return r ? repDisplayName(r) : null;
+  }, [repById]);
+  const creatorName = useCallback((userId?: string | null) => {
+    if (!userId) return 'Utilisateur non renseigné';
+    return profileNames[userId] || 'Utilisateur non renseigné';
+  }, [profileNames]);
+
+  const computeItemsMargin = async (items: QuoteItem[]): Promise<number> => {
+    const ids = items.filter(i => i.article_id).map(i => i.article_id!) as string[];
+    const pmap = new Map<string, number>();
+    if (ids.length > 0) {
+      const { data } = await supabase.from('articles').select('id, purchase_price').in('id', ids);
+      for (const a of (data || [])) pmap.set(a.id, Number((a as any).purchase_price || 0));
+    }
+    return items.reduce((s, i) => s + (Number(i.total || 0) - (pmap.get(i.article_id || '') || 0) * Number(i.quantity || 0)), 0);
+  };
+
+  const buildRepSnapshot = async (repId: string | null | undefined, items: QuoteItem[], subtotal: number) => {
+    const rep = repById(repId);
+    if (!rep || !repSettings.enabled) return null;
+    const needsMargin = repSettings.commission_base === 'marge' || repSettings.commission_type === 'pct_marge'
+      || (rep.commission_override && (rep.commission_type === 'pct_marge' || rep.commission_base === 'marge'));
+    const margin = needsMargin ? await computeItemsMargin(items) : 0;
+    return computeRepCommission(rep, repSettings, { subtotal, net: subtotal, margin });
+  };
 
   // ── Filtering helpers ─────────────────────────────────────────
   const matchesCommon = (
@@ -567,17 +623,27 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setSaving(true);
     const valid = quoteItems.filter(i => i.name.trim());
     const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
-    const docHeader = (quoteForm.delivery_date || quoteForm.reference || quoteForm.warranty || quoteForm.representative || quoteForm.imei)
-      ? { delivery_date: quoteForm.delivery_date || null, reference: quoteForm.reference || null, warranty: quoteForm.warranty || null, representative: quoteForm.representative || null, imei: quoteForm.imei || null }
+    const quoteRepLabel = repLabelOf(quoteForm.representative);
+    const docHeader = (quoteForm.delivery_date || quoteForm.reference || quoteForm.warranty || quoteRepLabel || quoteForm.imei)
+      ? { delivery_date: quoteForm.delivery_date || null, reference: quoteForm.reference || null, warranty: quoteForm.warranty || null, representative: quoteRepLabel, imei: quoteForm.imei || null }
       : null;
 
     if (editingQuoteId) {
+      const prevRepId = (editingQuote as any)?.representative_id || null;
       await supabase.from('quotes').update({
         customer_id: quoteForm.customer_id || null,
         subtotal, discount: 0, total: subtotal,
         valid_until: quoteForm.valid_until || null, note: quoteForm.note,
+        representative_id: quoteForm.representative || null,
         doc_header: docHeader,
       }).eq('id', editingQuoteId);
+      if (prevRepId !== (quoteForm.representative || null)) {
+        await supabase.from('audit_logs').insert({
+          tenant_id: tenant.id, user_id: profile?.id || null,
+          action: 'representative_change', module: 'billing', reference_id: editingQuoteId,
+          old_value: { representative_id: prevRepId }, new_value: { representative_id: quoteForm.representative || null },
+        });
+      }
       await supabase.from('quote_items').delete().eq('quote_id', editingQuoteId);
       await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: editingQuoteId, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
       setSaving(false);
@@ -592,6 +658,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         customer_id: quoteForm.customer_id || null,
         quote_number: qNum, subtotal, discount: 0, total: subtotal,
         valid_until: quoteForm.valid_until || null, note: quoteForm.note, status: 'draft',
+        user_id: profile?.id || null,
+        representative_id: quoteForm.representative || null,
         doc_header: docHeader,
       }).select().single();
       if (e || !q) { error(e?.message || 'Erreur'); setSaving(false); return; }
@@ -620,7 +688,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
     setEditingQuoteId(q.id);
     setEditingQuote(q);
-    setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '', delivery_date: q.doc_header?.delivery_date || '', reference: q.doc_header?.reference || '', warranty: q.doc_header?.warranty || '', representative: q.doc_header?.representative || '', imei: q.doc_header?.imei || '' });
+    setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '', delivery_date: q.doc_header?.delivery_date || '', reference: q.doc_header?.reference || '', warranty: q.doc_header?.warranty || '', representative: (q as any).representative_id || '', imei: q.doc_header?.imei || '' });
     setQuoteItems((data || []).map((i: any) => ({
       article_id: i.article_id, name: i.name,
       quantity: Number(i.quantity), unit_price: Number(i.unit_price),
@@ -660,7 +728,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       customer: quoteDetail.customers ? { name: quoteDetail.customers.name, phone: (quoteDetail.customers as any).phone || undefined, address: (quoteDetail.customers as any).address || undefined } : null,
       items, subtotal, total: Number(quoteDetail.total),
       footerNote: 'Devis valable 30 jours à compter de la date d\'émission.',
-      issuedBy: profile?.full_name || undefined,
+      issuedBy: creatorName((quoteDetail as any).user_id),
       docHeader: (quoteDetail as any).doc_header ?? null,
     });
   };
@@ -744,9 +812,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       delivery_date: (inv as any).doc_header?.delivery_date || '',
       reference: (inv as any).doc_header?.reference || '',
       warranty: (inv as any).doc_header?.warranty || '',
-      representative: (inv as any).doc_header?.representative || '',
+      representative: (inv as any).representative_id || '',
       imei: (inv as any).doc_header?.imei || '',
     });
+    editingInvoicePrevRep.current = (inv as any).representative_id || null;
     setInvoiceEditorItems((items || []).map((i: any) => ({
       article_id: i.article_id, name: i.name,
       quantity: Number(i.quantity), unit_price: Number(i.unit_price),
@@ -768,8 +837,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (editingInvoiceId) {
       setSavingInvoice(true);
       try {
-        const docHeader = (invoiceForm.delivery_date || invoiceForm.reference || invoiceForm.warranty || invoiceForm.representative || invoiceForm.imei)
-          ? { delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invoiceForm.representative || null, imei: invoiceForm.imei || null }
+        const invRepLabel = repLabelOf(invoiceForm.representative);
+        const docHeader = (invoiceForm.delivery_date || invoiceForm.reference || invoiceForm.warranty || invRepLabel || invoiceForm.imei)
+          ? { delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invRepLabel, imei: invoiceForm.imei || null }
           : null;
         const { data: result, error: rpcErr } = await supabase.rpc('update_sale_items_and_totals', {
           p_sale_id: editingInvoiceId,
@@ -788,6 +858,20 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         // Update note separately (not in RPC)
         if (invoiceForm.note !== undefined) {
           await supabase.from('sales').update({ note: invoiceForm.note || null }).eq('id', editingInvoiceId);
+        }
+
+        const editSubtotal = valid.reduce((s, i) => s + Number(i.total), 0);
+        const editSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, editSubtotal);
+        await supabase.from('sales').update({
+          representative_id: invoiceForm.representative || null,
+          rep_commission: editSnapshot,
+        }).eq('id', editingInvoiceId);
+        if (editingInvoicePrevRep.current !== (invoiceForm.representative || null)) {
+          await supabase.from('audit_logs').insert({
+            tenant_id: tenant.id, user_id: profile?.id || null,
+            action: 'representative_change', module: 'billing', reference_id: editingInvoiceId,
+            old_value: { representative_id: editingInvoicePrevRep.current }, new_value: { representative_id: invoiceForm.representative || null },
+          });
         }
 
         success('Facture mise à jour');
@@ -859,6 +943,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       const ipmCoverage = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartIpm : 0;
       const effectivePaid = totalPaid + ipmCoverage;
 
+      const repSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, subtotal);
+      const newInvRepLabel = repLabelOf(invoiceForm.representative);
+
       const { data: sale, error: e } = await supabase.from('sales').insert({
         tenant_id: tenant.id, site_id: currentSite.id,
         customer_id: invoiceForm.customer_id || null,
@@ -867,8 +954,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         paid: effectivePaid, status,
         source: 'billing', note: invoiceForm.note || (ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : ''),
         cash_session_id: sessionId,
-        doc_header: (invoiceForm.delivery_date || invoiceForm.reference || invoiceForm.warranty || invoiceForm.representative || invoiceForm.imei)
-          ? { delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invoiceForm.representative || null, imei: invoiceForm.imei || null }
+        representative_id: invoiceForm.representative || null,
+        rep_commission: repSnapshot,
+        doc_header: (invoiceForm.delivery_date || invoiceForm.reference || invoiceForm.warranty || newInvRepLabel || invoiceForm.imei)
+          ? { delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null }
           : null,
       }).select('id').single();
       if (e || !sale) { error(e?.message || 'Erreur'); return; }
@@ -1099,6 +1188,19 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       await supabase.rpc('auto_apply_customer_avoirs', { p_sale_id: (data as any).sale_id });
     }
 
+    // Carry representative + commission snapshot onto the new sale
+    const convRepId = (convertFrom as any).representative_id || null;
+    const newSaleId = (data as any)?.sale_id;
+    if (convRepId && newSaleId) {
+      const { data: sItems } = await supabase.from('sale_items').select('article_id, quantity, total').eq('sale_id', newSaleId);
+      const convItems: QuoteItem[] = (sItems || []).map((i: any) => ({
+        article_id: i.article_id, name: '', quantity: Number(i.quantity), unit_price: 0, discount: 0, total: Number(i.total),
+      }));
+      const convSubtotal = convItems.reduce((s, i) => s + Number(i.total), 0) || Number(convertFrom.total);
+      const convSnapshot = await buildRepSnapshot(convRepId, convItems, convSubtotal);
+      await supabase.from('sales').update({ representative_id: convRepId, rep_commission: convSnapshot }).eq('id', newSaleId);
+    }
+
     // Create IPM vente record if beneficiary
     const saleId = (data as any)?.sale_id;
     if (convertIpmBeneficiaire && tenant && saleId) {
@@ -1172,7 +1274,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       items, subtotal, total: Number(invoiceDetail.total),
       payments: invoicePays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) })),
       paid: Number(invoiceDetail.paid),
-      issuedBy: profile?.full_name || undefined,
+      issuedBy: creatorName((invoiceDetail as any).user_id),
       docHeader: (invoiceDetail as any).doc_header ?? null,
     });
   };
@@ -1464,7 +1566,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       extraMeta: extra,
       items, subtotal, total: Number(returnDetail.total),
       footerNote: returnDetail.reason ? `Motif : ${returnDetail.reason}` : undefined,
-      issuedBy: profile?.full_name || undefined,
+      issuedBy: creatorName((returnDetail as any).user_id),
     });
   };
 
@@ -1989,6 +2091,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
           onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
           editingInvoiceId={editingInvoiceId}
+          reps={activeReps}
         />
       )}
       {invoiceEditorOpen && !isDesktop && (
@@ -2001,6 +2104,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             { key: 'reference', label: 'Référence', type: 'text', placeholder: 'REF-...' },
             { key: 'delivery_date', label: 'Date de livraison', type: 'date' },
             { key: 'warranty', label: 'Garantie', type: 'text', placeholder: 'Ex: 6 mois' },
+            ...(docSettings.show_representative ? [{ key: 'representative', label: 'Représentant', type: 'select' as const, options: activeReps.map(r => ({ value: r.id, label: repDisplayName(r) })), placeholder: 'Aucun représentant' }] : []),
             { key: 'note', label: 'Note', type: 'text', placeholder: 'Note optionnelle...' },
           ]}
           headerValues={invoiceForm}
@@ -2083,10 +2187,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             if (!editingQuote || !tenant) return;
             const items = quoteItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
             const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-            printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0, docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || quoteForm.representative ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: quoteForm.representative || null } : null });
+            printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0, issuedBy: creatorName((editingQuote as any).user_id), docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || repLabelOf(quoteForm.representative) ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: repLabelOf(quoteForm.representative) } : null });
           }}
           onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
           onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
+          reps={activeReps}
         />
       )}
 
@@ -2102,6 +2207,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             { key: 'reference', label: 'Référence', type: 'text', placeholder: 'REF-...' },
             { key: 'delivery_date', label: 'Date de livraison', type: 'date' },
             { key: 'warranty', label: 'Garantie', type: 'text', placeholder: 'Ex: 6 mois' },
+            ...(quoteDocSettings.show_representative ? [{ key: 'representative', label: 'Représentant', type: 'select' as const, options: activeReps.map(r => ({ value: r.id, label: repDisplayName(r) })), placeholder: 'Aucun représentant' }] : []),
             { key: 'note', label: 'Note', type: 'text', placeholder: 'Note optionnelle...' },
           ]}
           headerValues={quoteForm}
@@ -3003,7 +3109,7 @@ function CustomerSearchInput({ customers, value, onSelect, placeholder, onCreate
   );
 }
 
-function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint, docSettings, isPharmacy, ipmBeneficiaire, ipmTaux, ipmPartIpm, ipmPartClient, onCreateArticle, onCreateCustomer }: {
+function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint, docSettings, isPharmacy, ipmBeneficiaire, ipmTaux, ipmPartIpm, ipmPartClient, onCreateArticle, onCreateCustomer, reps }: {
   articles: any[];
   customers: any[];
   quoteForm: { customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
@@ -3031,12 +3137,14 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
   ipmPartClient?: number;
   onCreateArticle?: (name: string) => void;
   onCreateCustomer?: (name: string) => void;
+  reps?: SalesRepresentative[];
 }) {
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const [headerValidated, setHeaderValidated] = useState(!docSettings.require_header_lock);
   const panelRef = useRef<HTMLDivElement>(null);
   const resizing = useRef(false);
   const readOnly = editingQuote ? ['converted', 'rejected'].includes(editingQuote.status) : false;
+  const repLabel = (id?: string | null) => { const r = (reps || []).find(x => x.id === id); return r ? repDisplayName(r) : ''; };
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -3150,7 +3258,7 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
                 {quoteForm.reference && <span className="text-[11px] text-slate-500">Réf : {quoteForm.reference}</span>}
                 {quoteForm.delivery_date && <span className="text-[11px] text-slate-500">Livraison : {new Date(quoteForm.delivery_date).toLocaleDateString('fr-FR')}</span>}
                 {quoteForm.warranty && <span className="text-[11px] text-slate-500">Garantie : {quoteForm.warranty}</span>}
-                {quoteForm.representative && <span className="text-[11px] text-slate-500">Représentant : {quoteForm.representative}</span>}
+                {quoteForm.representative && <span className="text-[11px] text-slate-500">Représentant : {repLabel(quoteForm.representative) || quoteForm.representative}</span>}
               </div>
               <button onClick={() => setHeaderValidated(false)} className="shrink-0 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors">Modifier</button>
             </div>
@@ -3198,9 +3306,12 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
                 </div>
               )}
               {docSettings.show_representative && (
-                <div className="flex items-center gap-1.5 min-w-[130px] flex-1 max-w-[180px]">
+                <div className="flex items-center gap-1.5 min-w-[220px] flex-1 max-w-[320px]">
                   <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <input value={quoteForm.representative} onChange={e => setQuoteForm((f: any) => ({ ...f, representative: e.target.value }))} placeholder="Représentant…" className="input text-xs h-8 flex-1" />
+                  <select value={quoteForm.representative} onChange={e => setQuoteForm((f: any) => ({ ...f, representative: e.target.value }))} className="input text-xs h-8 flex-1 min-w-0 truncate pr-7" title={repLabel(quoteForm.representative) || 'Représentant'}>
+                    <option value="">Aucun représentant</option>
+                    {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
+                  </select>
                 </div>
               )}
               {autoMode && !readOnly && (
@@ -3350,7 +3461,7 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
 }
 
 // ── Invoice Full Panel ─────────────────────────────────────────
-function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, invoiceItems, setInvoiceItems, updateInvoiceItem, invoiceSubtotal, paymentMethods, payments, setPayments, totalPaid, saving, saveInvoice, onClose, autoMode, onVehiclePicker, isCredit, setIsCredit, docSettings, isPharmacy, ipmLoading, ipmBeneficiaire, ipmTaux, ipmConvention, ipmPartIpm, ipmPartClient, ipmConfig, ipmDocuments, setIpmDocuments, ipmDocValidation, onCreateArticle, onCreateCustomer, editingInvoiceId }: {
+function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, invoiceItems, setInvoiceItems, updateInvoiceItem, invoiceSubtotal, paymentMethods, payments, setPayments, totalPaid, saving, saveInvoice, onClose, autoMode, onVehiclePicker, isCredit, setIsCredit, docSettings, isPharmacy, ipmLoading, ipmBeneficiaire, ipmTaux, ipmConvention, ipmPartIpm, ipmPartClient, ipmConfig, ipmDocuments, setIpmDocuments, ipmDocValidation, onCreateArticle, onCreateCustomer, editingInvoiceId, reps }: {
   articles: any[];
   customers: any[];
   invoiceForm: { customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
@@ -3385,6 +3496,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
   onCreateArticle?: (name: string) => void;
   onCreateCustomer?: (name: string) => void;
   editingInvoiceId?: string | null;
+  reps?: SalesRepresentative[];
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
@@ -3392,6 +3504,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
   const [payMethodId, setPayMethodId] = useState(paymentMethods[0]?.id || '');
   const [payAmt, setPayAmt] = useState('');
   const [headerValidated, setHeaderValidated] = useState(!docSettings.require_header_lock);
+  const repLabel = (id?: string | null) => { const r = (reps || []).find(x => x.id === id); return r ? repDisplayName(r) : ''; };
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -3485,7 +3598,7 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                 {invoiceForm.delivery_date && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Livraison:</span> {invoiceForm.delivery_date}</span>}
                 {invoiceForm.warranty && <span className="text-[11px] text-slate-500 truncate max-w-[120px]"><span className="text-slate-400">Garantie:</span> {invoiceForm.warranty}</span>}
                 {invoiceForm.imei && <span className="text-[11px] text-slate-500 truncate max-w-[140px]"><span className="text-slate-400">IMEI:</span> {invoiceForm.imei}</span>}
-                {invoiceForm.representative && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Rep.:</span> {invoiceForm.representative}</span>}
+                {invoiceForm.representative && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Rep.:</span> {repLabel(invoiceForm.representative) || invoiceForm.representative}</span>}
                 {invoiceForm.note && <span className="text-[11px] text-slate-400 italic truncate max-w-[160px]">"{invoiceForm.note}"</span>}
               </div>
               <button
@@ -3542,9 +3655,12 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                 </div>
               )}
               {docSettings.show_representative && (
-                <div className="flex items-center gap-1.5 min-w-[130px] flex-1 max-w-[180px]">
+                <div className="flex items-center gap-1.5 min-w-[220px] flex-1 max-w-[320px]">
                   <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <input value={invoiceForm.representative} onChange={e => setInvoiceForm((f: any) => ({ ...f, representative: e.target.value }))} placeholder="Représentant…" className="input text-xs h-8 flex-1" />
+                  <select value={invoiceForm.representative} onChange={e => setInvoiceForm((f: any) => ({ ...f, representative: e.target.value }))} className="input text-xs h-8 flex-1 min-w-0 truncate pr-7" title={repLabel(invoiceForm.representative) || 'Représentant'}>
+                    <option value="">Aucun représentant</option>
+                    {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
+                  </select>
                 </div>
               )}
               {autoMode && (

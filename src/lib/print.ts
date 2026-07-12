@@ -1613,3 +1613,52 @@ export function printWarrantyCertificate(opts: WarrantyCertificateOpts) {
 </body></html>`;
   printHtml(html, 400);
 }
+
+// ── Generic HTML report (A4) ─────────────────────────────────────────────────
+
+export function printHtmlReport(opts: {
+  title: string;
+  subtitle?: string;
+  kpis?: { label: string; value: string }[];
+  tableHead: string;
+  tableBody: string;
+}) {
+  const kpisHtml = (opts.kpis && opts.kpis.length > 0)
+    ? `<div class="summary">${opts.kpis.map(k => `<div class="card"><div class="lbl">${esc(k.label)}</div><div class="val">${esc(k.value)}</div></div>`).join('')}</div>`
+    : '';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.title)}</title>
+<style>
+  @page { size: A4; margin: 12mm 10mm 14mm 10mm; }
+  @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; font-size: 9pt; line-height: 1.4; background: #fff; }
+  .doc { max-width: 190mm; margin: 0 auto; }
+  .doc-title { text-align: center; font-size: 13pt; font-weight: 800; letter-spacing: 1px; color: #0f766e; margin: 2mm 0; text-transform: uppercase; }
+  .doc-subtitle { text-align: center; font-size: 8.5pt; color: #64748b; font-weight: 600; letter-spacing: 0.6px; margin-bottom: 4mm; }
+  .summary { display: flex; flex-wrap: wrap; gap: 3mm; margin-bottom: 4mm; }
+  .summary .card { flex: 1; min-width: 30mm; padding: 2.5mm 3mm; border: 1px solid #e2e8f0; border-radius: 1.5mm; background: #f8fafc; }
+  .summary .card .lbl { font-size: 7pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
+  .summary .card .val { font-size: 10pt; font-weight: 800; color: #0f172a; margin-top: 0.3mm; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  thead tr { background: #f1f5f9; }
+  thead th { text-align: left; font-size: 7.5pt; padding: 2mm 2.5mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; border-bottom: 1.5px solid #cbd5e1; }
+  tbody tr { page-break-inside: avoid; border-bottom: 0.5px solid #e2e8f0; }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+  tbody td { padding: 1.8mm 2.5mm; font-size: 8.5pt; vertical-align: top; font-variant-numeric: tabular-nums; }
+  .brand-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 7.5pt; color: #94a3b8; }
+</style></head><body>
+<div class="doc">
+  <div class="doc-title">${esc(opts.title)}</div>
+  ${opts.subtitle ? `<div class="doc-subtitle">${esc(opts.subtitle)}</div>` : ''}
+  ${kpisHtml}
+  <table>
+    <thead>${opts.tableHead}</thead>
+    <tbody>${opts.tableBody}</tbody>
+  </table>
+  <div class="brand-footer">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
+</div>
+</body></html>`;
+  printHtml(html, 400);
+}
