@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Check, Bug, X, Rocket } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'waarwi_last_seen_release';
@@ -51,15 +50,15 @@ export default function UpdateNotification() {
     if (!release) return;
     setInstalling(true);
     setProgress(0);
-    setPhase('Téléchargement des composants...');
+    setPhase('Téléchargement des composants…');
 
     const phases = [
-      { at: 12, text: 'Installation des modules...' },
-      { at: 30, text: 'Mise à jour de la base de données...' },
-      { at: 50, text: 'Compilation des interfaces...' },
-      { at: 70, text: 'Optimisation des performances...' },
-      { at: 88, text: 'Finalisation...' },
-      { at: 100, text: 'Mise à jour terminée !' },
+      { at: 12, text: 'Installation des modules…' },
+      { at: 30, text: 'Mise à jour de la base de données…' },
+      { at: 50, text: 'Compilation des interfaces…' },
+      { at: 70, text: 'Optimisation des performances…' },
+      { at: 88, text: 'Finalisation…' },
+      { at: 100, text: 'Mise à jour terminée' },
     ];
 
     let current = 0;
@@ -92,63 +91,49 @@ export default function UpdateNotification() {
   });
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
-        onClick={!installing ? handleDismiss : undefined}
-      />
-
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in slide-in-from-bottom-4 duration-500">
-        {/* Header */}
-        <div className="relative overflow-hidden bg-white px-7 pt-7 pb-5 border-b border-neutral-100">
-          {/* Subtle decorative background */}
-          <div className="absolute -top-20 -right-20 w-56 h-56 bg-gradient-to-bl from-emerald-50 to-transparent rounded-full opacity-80" />
-          <div className="absolute -bottom-16 -left-16 w-40 h-40 bg-gradient-to-tr from-sky-50 to-transparent rounded-full opacity-60" />
-
+    <div className="fixed inset-0 z-[9999] bg-white flex flex-col animate-in fade-in duration-300">
+      {/* Top bar */}
+      <div className="shrink-0 border-b border-neutral-100">
+        <div className="max-w-2xl mx-auto w-full px-6 sm:px-8 h-16 flex items-center justify-between">
+          <img src="/newlogoo.png" alt="Waarwi" className="h-8 object-contain" />
           {!installing && (
             <button
               onClick={handleDismiss}
-              className="absolute top-4 right-4 p-2 rounded-full text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-all"
+              className="text-[13px] font-semibold text-neutral-400 hover:text-neutral-900 transition-colors"
             >
-              <X className="w-4 h-4" />
+              Plus tard
             </button>
           )}
+        </div>
+      </div>
 
-          <div className="relative flex items-center gap-4">
-            <div className="w-14 h-14 bg-white rounded-2xl shadow-md border border-neutral-100 flex items-center justify-center p-2">
-              <img src="/newlogoo.png" alt="Waarwi" className="w-full h-full object-contain" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-neutral-900 tracking-tight">{release.title}</h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">
-                  <Rocket className="w-3 h-3" />v{release.version}
-                </span>
-                <span className="text-xs text-neutral-400 font-medium">{formattedDate}</span>
-              </div>
-            </div>
+      {/* Content */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-2xl mx-auto w-full px-6 sm:px-8 py-10 sm:py-14">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-bold tracking-widest uppercase text-neutral-400">Mise à jour</span>
+            <span className="h-px flex-1 bg-neutral-100" />
+            <span className="text-[12px] font-bold text-neutral-900 tabular-nums border border-neutral-200 rounded-full px-2.5 py-0.5">v{release.version}</span>
           </div>
 
-          <p className="relative mt-4 text-sm text-neutral-500 leading-relaxed">
-            Une nouvelle version de Waarwi est disponible avec des améliorations et des corrections importantes pour votre expérience.
-          </p>
-        </div>
+          <h1 className="mt-5 text-3xl sm:text-4xl font-black tracking-tight text-neutral-900 leading-tight">
+            {release.title}
+          </h1>
+          <p className="mt-2 text-sm text-neutral-400 font-medium">{formattedDate}</p>
 
-        {/* Content */}
-        <div className="px-7 py-5 max-h-[42vh] overflow-y-auto bg-neutral-50/50">
+          <p className="mt-6 text-[15px] text-neutral-600 leading-relaxed max-w-xl">
+            Une nouvelle version de Waarwi est disponible. Appliquez la mise à jour pour bénéficier
+            des dernières améliorations et corrections.
+          </p>
+
           {release.features.length > 0 && (
-            <div className="mb-5">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center shadow-sm">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                </div>
-                <h3 className="text-xs font-black text-neutral-900 uppercase tracking-wider">Nouveautés</h3>
-              </div>
-              <ul className="space-y-2.5 pl-1">
+            <div className="mt-10">
+              <h2 className="text-[11px] font-bold tracking-widest uppercase text-neutral-400">Nouveautés</h2>
+              <ul className="mt-4 divide-y divide-neutral-100 border-t border-b border-neutral-100">
                 {release.features.map((f, i) => (
-                  <li key={i} className="flex items-start gap-3 group">
-                    <span className="mt-2 w-2 h-2 rounded-full bg-emerald-500 shrink-0 shadow-sm shadow-emerald-200 group-hover:scale-150 transition-transform duration-200" />
-                    <span className="text-[13px] text-neutral-700 leading-relaxed font-medium">{f}</span>
+                  <li key={i} className="flex items-baseline gap-4 py-3.5">
+                    <span className="text-[11px] font-bold text-neutral-300 tabular-nums shrink-0 w-6">{String(i + 1).padStart(2, '0')}</span>
+                    <span className="text-[14px] text-neutral-800 leading-relaxed font-medium">{f}</span>
                   </li>
                 ))}
               </ul>
@@ -156,62 +141,48 @@ export default function UpdateNotification() {
           )}
 
           {release.fixes.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center shadow-sm">
-                  <Bug className="w-3.5 h-3.5 text-sky-600" />
-                </div>
-                <h3 className="text-xs font-black text-neutral-900 uppercase tracking-wider">Corrections</h3>
-              </div>
-              <ul className="space-y-2.5 pl-1">
+            <div className="mt-10">
+              <h2 className="text-[11px] font-bold tracking-widest uppercase text-neutral-400">Corrections</h2>
+              <ul className="mt-4 divide-y divide-neutral-100 border-t border-b border-neutral-100">
                 {release.fixes.map((f, i) => (
-                  <li key={i} className="flex items-start gap-3 group">
-                    <span className="mt-2 w-2 h-2 rounded-full bg-sky-500 shrink-0 shadow-sm shadow-sky-200 group-hover:scale-150 transition-transform duration-200" />
-                    <span className="text-[13px] text-neutral-700 leading-relaxed font-medium">{f}</span>
+                  <li key={i} className="flex items-baseline gap-4 py-3.5">
+                    <span className="text-[11px] font-bold text-neutral-300 tabular-nums shrink-0 w-6">{String(i + 1).padStart(2, '0')}</span>
+                    <span className="text-[14px] text-neutral-800 leading-relaxed font-medium">{f}</span>
                   </li>
                 ))}
               </ul>
             </div>
           )}
         </div>
+      </div>
 
-        {/* Footer */}
-        <div className="px-7 pb-7 pt-4 bg-white border-t border-neutral-100">
+      {/* Bottom bar */}
+      <div className="shrink-0 border-t border-neutral-100 bg-white">
+        <div className="max-w-2xl mx-auto w-full px-6 sm:px-8 py-5">
           {!installing ? (
             <button
               onClick={handleInstall}
-              className="w-full relative overflow-hidden group bg-neutral-900 hover:bg-neutral-800 text-white font-bold py-4 px-6 rounded-2xl shadow-lg shadow-neutral-900/15 hover:shadow-xl hover:shadow-neutral-900/25 transition-all duration-300 active:scale-[0.98]"
+              className="w-full h-14 rounded-2xl bg-neutral-900 text-white text-[15px] font-bold tracking-tight hover:bg-neutral-800 active:scale-[0.99] transition-all"
             >
-              <span className="relative z-10 flex items-center justify-center gap-2.5 text-[15px]">
-                <Check className="w-5 h-5" />
-                Appliquer la mise à jour
-              </span>
-              <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl" />
-              <span className="absolute inset-0 z-10 flex items-center justify-center gap-2.5 text-[15px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                <Check className="w-5 h-5" />
-                Appliquer la mise à jour
-              </span>
+              Appliquer la mise à jour
             </button>
           ) : (
             <div className="space-y-3">
-              <div className="relative h-3.5 bg-neutral-100 rounded-full overflow-hidden shadow-inner">
+              <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
                 <div
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-150 ease-out"
+                  className="h-full bg-neutral-900 rounded-full transition-all duration-150 ease-out"
                   style={{ width: `${progress}%` }}
                 />
-                {progress < 100 && (
-                  <div
-                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-white/20 to-transparent rounded-full"
-                    style={{ width: `${progress}%`, animation: 'pulse 1.5s ease-in-out infinite' }}
-                  />
-                )}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-neutral-600 font-semibold">{phase}</span>
+                <span className="text-xs text-neutral-500 font-semibold">{phase}</span>
                 <span className="text-sm font-black text-neutral-900 tabular-nums">{progress}%</span>
               </div>
             </div>
           )}
+          <p className="mt-4 text-center text-[10px] font-semibold tracking-widest uppercase text-neutral-300">
+            Propulsé par Waarwi — Plateforme Business 2.0
+          </p>
         </div>
       </div>
     </div>
