@@ -20,8 +20,27 @@ export type Route =
   | 'ipm' | 'warranties' | 'money_transfer' | 'representatives'
   | 'settings' | 'platform_admin' | 'reports';
 
-type NavItem = { key: Route; labelKey: string; icon: any; children?: { key: Route; labelKey: string; icon: any }[] };
+type NavItem = { key: Route; labelKey: string; icon: any; children?: { key: Route; labelKey: string; icon: any }[]; aliases?: string[] };
 type NavGroup = { titleKey: string; items: NavItem[] };
+
+const NAV_ALIASES: Partial<Record<Route, string[]>> = {
+  billing: ['devis', 'retour', 'retours', 'avoir', 'avoirs', 'facture', 'factures', 'quote', 'quotes', 'return', 'returns', 'credit', 'credits', 'invoice', 'invoices'],
+  pos: ['vente', 'ventes', 'sale', 'sales', 'caisse', 'encaissement'],
+  articles: ['produit', 'produits', 'piece', 'pieces', 'article', 'catalogue'],
+  stock: ['inventaire', 'entrepot', 'depot', 'magasin'],
+  tiers: ['client', 'clients', 'fournisseur', 'fournisseurs', 'customer', 'supplier'],
+  sales: ['journal', 'historique', 'historique des ventes'],
+  cash_history: ['caisse', 'session', 'sessions', 'cash'],
+  supplier_orders: ['commande', 'commandes', 'achat', 'achats', 'purchase', 'orders'],
+  online_orders: ['commande en ligne', 'commandes en ligne', 'online'],
+  warranties: ['garantie', 'garanties', 'warranty', 'warranties'],
+  representatives: ['representant', 'representants', 'rep', 'commission', 'commissions'],
+  reports: ['rapport', 'rapports', 'statistique', 'statistiques', 'report', 'statistics'],
+  money_transfer: ['transfert', 'transfert d argent', 'money', 'transfer', 'western union', 'ria', 'moneygram'],
+  ipm: ['ipm', 'bordereau', 'bordereaux'],
+  accounting: ['comptabilite', 'compte', 'comptes', 'journal', 'balance', 'grand livre', 'cloture'],
+  settings: ['parametre', 'parametres', 'configuration', 'config', 'setting', 'reglage', 'reglages'],
+};
 
 const NAV_GROUPS: NavGroup[] = [
   { titleKey: 'nav.pilotage', items: [
@@ -269,10 +288,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
   const searchResults = useMemo(() => {
     if (!navSearch.trim()) return [];
-    const q = navSearch.toLowerCase();
+    const q = navSearch.toLowerCase().trim();
     return allNavItems.filter(item => {
       if (!routeVisible(item.key)) return false;
-      return t(item.labelKey).toLowerCase().includes(q) || item.key.toLowerCase().includes(q);
+      const label = t(item.labelKey).toLowerCase();
+      const aliases = NAV_ALIASES[item.key] || [];
+      return label.includes(q) || item.key.toLowerCase().includes(q) || aliases.some(a => a.includes(q) || q.includes(a));
     }).slice(0, 8);
   }, [navSearch, usageTick]);
 
@@ -322,6 +343,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
 
   const onTouchStart = (e: React.TouchEvent) => {
     if (!panelRef.current) return;
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('button[role="search-clear"]')) return;
     const t = e.touches[0];
     touch.current = { x: t.clientX, y: t.clientY, active: true, dx: 0 };
   };
@@ -361,7 +384,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileOpen]);
 
-  const NavList = () => (
+  const navList = (
     <nav className={`flex-1 overflow-y-auto py-4 space-y-4 ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
       {isSuperAdmin ? (
         <div>
@@ -388,7 +411,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
             placeholder={t('nav.search')}
-            className={`w-full pl-8 pr-7 py-1.5 rounded-lg text-[13px] border outline-none transition-colors ${sidebarDark ? 'bg-white/8 border-white/10 text-white placeholder-white/40' : 'bg-neutral-100 border-neutral-200 text-neutral-700 placeholder-neutral-400 focus:bg-white focus:border-neutral-300'}`}
+            className={`w-full pl-8 pr-7 py-1.5 rounded-lg text-[13px] border outline-none transition-colors ${sidebarDark ? 'bg-white/10 border-white/10 text-white placeholder:text-white/50' : 'bg-neutral-100 border-neutral-200 text-neutral-700 placeholder-neutral-400 focus:bg-white focus:border-neutral-300'}`}
           />
           {navSearch && (
             <button onClick={() => setNavSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
@@ -497,7 +520,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       )}
     </nav>
   );
-
   return (
     <div className="min-h-screen h-screen flex flex-col overflow-hidden bg-white">
       {/* Desktop header */}
@@ -576,7 +598,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           : { background: '#ffffff' }
         }
       >
-        <NavList />
+        {navList}
         <div className={`p-3 border-t space-y-2 ${sidebarDark ? 'border-white/10' : 'border-neutral-100'}`}>
           {sites.length > 0 && !sidebarCollapsed && (
             <div className="relative">
@@ -661,18 +683,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               style={sidebarDark ? { background: 'linear-gradient(180deg, #0a0a0a 0%, #171717 40%, #262626 100%)', border: '1px solid rgba(255,255,255,0.08)' } : undefined}
             >
               <div className="flex items-center justify-between px-4 pt-4 pb-3">
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center min-w-0">
                   {tenant?.logo_url ? (
-                    <img src={tenant.logo_url} alt={tenant.name} className="w-8 h-8 object-contain shrink-0" />
+                    <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain shrink-0" />
                   ) : (
-                    <img src="/newlogo.png" alt="WAARWI" className={`h-6 w-auto max-w-[100px] object-contain shrink-0 ${sidebarDark ? 'brightness-0 invert' : ''}`} />
+                    <img src="/newlogo.png" alt="WAARWI" className={`h-7 w-auto max-w-[110px] object-contain shrink-0 ${sidebarDark ? 'brightness-0 invert' : ''}`} />
                   )}
-                  <div className="min-w-0">
-                    <div className={`text-[13px] font-bold truncate ${sidebarDark ? 'text-white' : 'text-neutral-900'}`}>{tenant?.name || 'WAARWI'}</div>
-                    {profile?.full_name && (
-                      <div className={`text-[10px] truncate ${sidebarDark ? 'text-white/50' : 'text-neutral-500'}`}>{profile.full_name}</div>
-                    )}
-                  </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
@@ -710,7 +726,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       value={navSearch}
                       onChange={e => setNavSearch(e.target.value)}
                       placeholder={t('nav.search')}
-                      className={`w-full pl-8 pr-7 py-2 rounded-lg text-[13px] border outline-none ${sidebarDark ? 'bg-white/8 border-white/10 text-white placeholder-white/40' : 'bg-neutral-100 border-neutral-200 text-neutral-700 placeholder-neutral-400'}`}
+                      className={`w-full pl-8 pr-7 py-2 rounded-lg text-[13px] border outline-none ${sidebarDark ? 'bg-white/10 border-white/10 text-white placeholder:text-white/50' : 'bg-neutral-100 border-neutral-200 text-neutral-700 placeholder-neutral-400'}`}
                     />
                     {navSearch && (
                       <button onClick={() => setNavSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
