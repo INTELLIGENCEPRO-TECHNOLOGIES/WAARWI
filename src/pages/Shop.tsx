@@ -1628,7 +1628,7 @@ function ShopNotFound({ slug }: { slug: string }) {
         <AlertCircle className="w-9 h-9 text-red-400" />
       </div>
       <div>
-        <h1 className="text-xl font-bold text-slate-800 mb-1">Boutique introuvable</h1>
+        <h2 className="text-xl font-bold text-slate-800 mb-1">Boutique introuvable</h2>
         <p className="text-sm text-slate-500 max-w-xs">La boutique <span className="font-mono text-slate-700">« {slug} »</span> n'existe pas ou n'est pas encore ouverte.</p>
       </div>
       <a href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-700 text-white text-sm font-bold shadow-glow hover:shadow-premium active:scale-95 transition-all">

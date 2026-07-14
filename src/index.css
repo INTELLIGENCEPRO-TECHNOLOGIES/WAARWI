@@ -19,7 +19,9 @@ html, body, #root {
   overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
-  line-height: 1.35;
+  line-height: 1.6;
+  letter-spacing: 0;
+  word-spacing: 0.05em;
 }
 .line-clamp-2 {
   display: -webkit-box;
@@ -34,10 +36,17 @@ body {
   color: #0a0a0a;
   background: #ffffff;
   background-attachment: fixed;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
+  line-height: 1.5;
 }
 
-h1, h2, h3, h4 { letter-spacing: -0.02em; }
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+h1 { letter-spacing: -0.01em; }
+
+p { line-height: 1.6; }
 
 @layer components {
   /* ── Buttons ────────────────────────────────────────────── */
@@ -564,4 +573,118 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* ── RTL / LTR logical property utilities ──────────────────── */
+/* These work alongside the `rtl:` / `ltr:` Tailwind variants. */
+/* Use logical properties where possible: ms-* (margin-inline-start),
+   me-* (margin-inline-end), ps-* (padding-inline-start), pe-* (padding-inline-end) */
+
+[dir="rtl"] .flip-rtl {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .mirror-rtl {
+  transform: scaleX(-1);
+}
+
+/* Ensure text inputs align correctly in RTL */
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select {
+  text-align: right;
+}
+
+[dir="rtl"] .input,
+[dir="rtl"] .premium-input {
+  text-align: right;
+}
+
+/* Modal/drawer positioning respects direction */
+[dir="rtl"] .float-sidebar-panel {
+  left: auto;
+  right: 10px;
+}
+
+/* Icon spacing flips in RTL */
+[dir="rtl"] .nav-item {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .btn-primary,
+[dir="rtl"] .btn-secondary,
+[dir="rtl"] .btn-ghost,
+[dir="rtl"] .btn-danger {
+  flex-direction: row-reverse;
+}
+
+/* Smooth direction transitions */
+html {
+  transition: none;
+}
+
+/* ── Accessibility: reduced motion ───────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Accessibility: visible focus ─────────────────────── */
+:focus-visible {
+  outline: 2px solid #0a0a0a;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── Accessibility: high contrast mode ────────────────── */
+@media (prefers-contrast: more) {
+  body {
+    color: #000000;
+    background: #ffffff;
+  }
+  .card, .card-premium, .glass {
+    border-color: #000000 !important;
+    border-width: 2px !important;
+  }
+  .btn-secondary {
+    border-color: #000000 !important;
+    border-width: 2px !important;
+  }
+  .input, .premium-input {
+    border-color: #000000 !important;
+    border-width: 2px !important;
+  }
+}
+
+/* ── Accessibility: dyslexia-friendly mode ────────────── */
+.dyslexia-friendly {
+  font-family: 'Verdana', 'Tahoma', sans-serif;
+  letter-spacing: 0.05em;
+  word-spacing: 0.1em;
+  line-height: 1.8;
+  font-size: 1.05rem;
+}
+.dyslexia-friendly p {
+  margin-bottom: 1.2em;
+}
+
+/* ── Accessibility: contrast overrides for WCAG AA ─────── */
+/* neutral-400 (#a3a3a3) = 2.3:1 on white — fails AA.
+   neutral-500 (#737373) = 4.0:1 — fails AA for normal text.
+   Bump both to neutral-600 (#525252) = 7.5:1 — passes AAA. */
+.text-neutral-400 {
+  color: #525252 !important;
+}
+.text-neutral-500 {
+  color: #525252 !important;
+}
+.placeholder\:text-neutral-400::placeholder {
+  color: #737373 !important;
 }

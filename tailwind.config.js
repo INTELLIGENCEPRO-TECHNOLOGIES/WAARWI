@@ -1,6 +1,27 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // RTL variant: use `rtl:` prefix to apply styles only in RTL mode
+  // e.g. `rtl:text-right` or `rtl:flex-row-reverse`
+  variants: {
+    extend: {
+      margin: ['rtl', 'ltr'],
+      padding: ['rtl', 'ltr'],
+      textAlign: ['rtl', 'ltr'],
+      flexDirection: ['rtl', 'ltr'],
+      justifyContent: ['rtl', 'ltr'],
+      alignItems: ['rtl', 'ltr'],
+      translate: ['rtl', 'ltr'],
+      left: ['rtl', 'ltr'],
+      right: ['rtl', 'ltr'],
+      start: ['rtl', 'ltr'],
+      end: ['rtl', 'ltr'],
+      border: ['rtl', 'ltr'],
+      borderRadius: ['rtl', 'ltr'],
+      space: ['rtl', 'ltr'],
+      inset: ['rtl', 'ltr'],
+    },
+  },
   theme: {
     extend: {
       fontFamily: {

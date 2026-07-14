@@ -1,14 +1,17 @@
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft, UserCheck,
+  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'articles' | 'stock' | 'tiers'
@@ -17,56 +20,50 @@ export type Route =
   | 'ipm' | 'warranties' | 'money_transfer' | 'representatives'
   | 'settings' | 'platform_admin' | 'reports';
 
-const NAV_GROUPS: { title: string; items: { key: Route; label: string; icon: any }[] }[] = [
-  { title: 'Pilotage', items: [
-    { key: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+type NavItem = { key: Route; labelKey: string; icon: any; children?: { key: Route; labelKey: string; icon: any }[] };
+type NavGroup = { titleKey: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  { titleKey: 'nav.pilotage', items: [
+    { key: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
   ]},
-  { title: 'Caisse', items: [
-    { key: 'pos', label: 'Caisse', icon: ShoppingCart },
-    { key: 'sales', label: 'Journal des ventes', icon: Calculator },
-    { key: 'cash_history', label: 'Historique caisse', icon: History },
+  { titleKey: 'nav.pos', items: [
+    { key: 'pos', labelKey: 'nav.pos', icon: ShoppingCart },
+    { key: 'sales', labelKey: 'nav.sales', icon: Calculator },
+    { key: 'cash_history', labelKey: 'nav.cashHistory', icon: History },
   ]},
-  { title: 'Catalogue & Stock', items: [
-    { key: 'articles', label: 'Articles', icon: Package },
-    { key: 'master_catalog', label: 'Catalogue maitre', icon: Library },
-    { key: 'stock', label: 'Stock', icon: Boxes },
+  { titleKey: 'nav.catalogStock', items: [
+    { key: 'articles', labelKey: 'nav.articles', icon: Package },
+    { key: 'master_catalog', labelKey: 'nav.masterCatalog', icon: Library },
+    { key: 'stock', labelKey: 'nav.stock', icon: Boxes },
   ]},
-  { title: 'Commercial', items: [
-    { key: 'billing', label: 'Facturation', icon: ClipboardList },
-    { key: 'online_orders', label: 'Commandes en ligne', icon: Globe },
-    { key: 'warranties', label: 'Garanties & IMEI', icon: ShieldCheck },
-    { key: 'representatives', label: 'Représentants', icon: UserCheck },
+  { titleKey: 'nav.commercial', items: [
+    { key: 'billing', labelKey: 'nav.billing', icon: ClipboardList },
+    { key: 'online_orders', labelKey: 'nav.onlineOrders', icon: Globe },
+    { key: 'warranties', labelKey: 'nav.warranties', icon: ShieldCheck },
+    { key: 'representatives', labelKey: 'nav.representatives', icon: UserCheck },
+    { key: 'tiers', labelKey: 'nav.tiers', icon: Users },
+    { key: 'supplier_orders', labelKey: 'nav.supplierOrders', icon: ShoppingBag },
   ]},
-  { title: 'Tiers', items: [
-    { key: 'tiers', label: 'Gestion des tiers', icon: Users },
-    { key: 'supplier_orders', label: 'Commandes fournisseurs', icon: ShoppingBag },
+  { titleKey: 'nav.accounting', items: [
+    { key: 'acc_plan', labelKey: 'nav.accounting', icon: BookOpen, children: [
+      { key: 'acc_plan', labelKey: 'nav.accountingPlan', icon: BookOpen },
+      { key: 'acc_journals', labelKey: 'nav.journals', icon: FileText },
+      { key: 'acc_balance', labelKey: 'nav.balance', icon: TrendingUp },
+      { key: 'acc_grandlivre', labelKey: 'nav.generalLedger', icon: BookOpen },
+      { key: 'acc_tiers', labelKey: 'nav.tiers', icon: Users },
+      { key: 'acc_search', labelKey: 'nav.journal', icon: Search },
+      { key: 'acc_cloture', labelKey: 'nav.closings', icon: Lock },
+    ]},
   ]},
-  { title: 'Comptabilite', items: [
-    { key: 'acc_plan', label: 'Plan comptable', icon: BookOpen },
-    { key: 'acc_journals', label: 'Journaux', icon: FileText },
-    { key: 'acc_balance', label: 'Balance', icon: TrendingUp },
-    { key: 'acc_grandlivre', label: 'Grand Livre', icon: BookOpen },
-    { key: 'acc_tiers', label: 'Tiers', icon: Users },
-    { key: 'acc_search', label: 'Recherche', icon: Search },
-    { key: 'acc_cloture', label: 'Clôtures', icon: Lock },
-  ]},
-  { title: 'Transfert', items: [
-    { key: 'money_transfer', label: 'Transfert d\'argent', icon: ArrowRightLeft },
-  ]},
-  { title: 'Rapports', items: [
-    { key: 'reports', label: 'Etats', icon: BarChart3 },
-  ]},
-  { title: 'Pharmacie', items: [
-    { key: 'ipm', label: 'IPM / Tiers payant', icon: HeartPulse },
+  { titleKey: 'nav.tools', items: [
+    { key: 'money_transfer', labelKey: 'nav.moneyTransfer', icon: ArrowRightLeft },
+    { key: 'reports', labelKey: 'nav.reports', icon: BarChart3 },
+    { key: 'ipm', labelKey: 'nav.ipm', icon: HeartPulse },
   ]},
 ];
 
-const MOBILE_TABS: { key: Route; label: string; icon: any }[] = [
-  { key: 'dashboard', label: 'Accueil', icon: LayoutDashboard },
-  { key: 'pos', label: 'Caisse', icon: ShoppingCart },
-  { key: 'online_orders', label: 'Commandes', icon: Globe },
-  { key: 'sales', label: 'Journal', icon: Calculator },
-];
+// Mobile tabs are now contextual — see POS_MOBILE_TABS and DEFAULT_MOBILE_TABS below
 
 const ROUTE_MODULE: Record<string, string> = {
   dashboard: 'dashboard', pos: 'pos', sales: 'sales', cash_history: 'cash_history',
@@ -103,7 +100,61 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
   settings: 'manage_settings',
 };
 
+const BREADCRUMB_MAP: Record<string, { group: string; labelKey: string }> = {
+  dashboard: { group: 'nav.pilotage', labelKey: 'nav.dashboard' },
+  pos: { group: 'nav.pos', labelKey: 'nav.pos' },
+  sales: { group: 'nav.pos', labelKey: 'nav.sales' },
+  cash_history: { group: 'nav.pos', labelKey: 'nav.cashHistory' },
+  articles: { group: 'nav.catalogStock', labelKey: 'nav.articles' },
+  master_catalog: { group: 'nav.catalogStock', labelKey: 'nav.masterCatalog' },
+  stock: { group: 'nav.catalogStock', labelKey: 'nav.stock' },
+  billing: { group: 'nav.commercial', labelKey: 'nav.billing' },
+  online_orders: { group: 'nav.commercial', labelKey: 'nav.onlineOrders' },
+  warranties: { group: 'nav.commercial', labelKey: 'nav.warranties' },
+  representatives: { group: 'nav.commercial', labelKey: 'nav.representatives' },
+  tiers: { group: 'nav.commercial', labelKey: 'nav.tiers' },
+  supplier_orders: { group: 'nav.commercial', labelKey: 'nav.supplierOrders' },
+  acc_plan: { group: 'nav.accounting', labelKey: 'nav.accountingPlan' },
+  acc_journals: { group: 'nav.accounting', labelKey: 'nav.journals' },
+  acc_balance: { group: 'nav.accounting', labelKey: 'nav.balance' },
+  acc_grandlivre: { group: 'nav.accounting', labelKey: 'nav.generalLedger' },
+  acc_tiers: { group: 'nav.accounting', labelKey: 'nav.tiers' },
+  acc_search: { group: 'nav.accounting', labelKey: 'nav.journal' },
+  acc_cloture: { group: 'nav.accounting', labelKey: 'nav.closings' },
+  money_transfer: { group: 'nav.tools', labelKey: 'nav.moneyTransfer' },
+  reports: { group: 'nav.tools', labelKey: 'nav.reports' },
+  ipm: { group: 'nav.tools', labelKey: 'nav.ipm' },
+  settings: { group: 'nav.system', labelKey: 'nav.settings' },
+  platform_admin: { group: 'nav.platform', labelKey: 'nav.platform' },
+};
+
+const POS_MOBILE_TABS: { key: Route; labelKey: string; icon: any }[] = [
+  { key: 'dashboard', labelKey: 'nav.home', icon: LayoutDashboard },
+  { key: 'pos', labelKey: 'nav.pos', icon: ShoppingCart },
+  { key: 'tiers', labelKey: 'nav.tiers', icon: Users },
+  { key: 'settings', labelKey: 'nav.settings', icon: Settings },
+];
+
+const DEFAULT_MOBILE_TABS: { key: Route; labelKey: string; icon: any }[] = [
+  { key: 'dashboard', labelKey: 'nav.home', icon: LayoutDashboard },
+  { key: 'billing', labelKey: 'nav.billing', icon: ClipboardList },
+  { key: 'articles', labelKey: 'nav.articles', icon: Package },
+  { key: 'settings', labelKey: 'nav.settings', icon: Settings },
+];
+
+function getUsageMap(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem('nav_usage') || '{}'); } catch { return {}; }
+}
+function trackUsage(key: Route) {
+  try {
+    const map = getUsageMap();
+    map[key] = (map[key] || 0) + 1;
+    localStorage.setItem('nav_usage', JSON.stringify(map));
+  } catch {}
+}
+
 export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r: Route) => void; children: ReactNode }) {
+  const { t } = useTranslation();
   const { tenant, profile, signOut, sites, currentSite, setCurrentSite, setDefaultSite, posCartCount, posCartOpen, setPosCart } = useApp();
   const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
@@ -125,10 +176,20 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   };
 
   const visibleNav = NAV_GROUPS
-    .map(g => ({ ...g, items: g.items.filter(i => routeVisible(i.key)) }))
+    .map(g => ({
+      ...g,
+      items: g.items
+        .filter(i => routeVisible(i.key))
+        .map(i => (i as NavItem).children
+          ? { ...i, children: (i as NavItem).children!.filter(c => routeVisible(c.key)) }
+          : i
+        ),
+    }))
     .filter(g => g.items.length > 0);
-  const visibleMobileTabs = MOBILE_TABS.filter(t => routeVisible(t.key));
+  const visibleMobileTabs = (route === 'pos' ? POS_MOBILE_TABS : DEFAULT_MOBILE_TABS).filter(t => routeVisible(t.key));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileAcctOpen, setMobileAcctOpen] = useState<Route | null>(null);
+  const [desktopAcctOpen, setDesktopAcctOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -174,6 +235,61 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const isPlatformAdmin = route === 'platform_admin';
   const [dashMenuOpen, setDashMenuOpen] = useState(false);
   useEffect(() => { if (!isDashboard) setDashMenuOpen(false); }, [isDashboard]);
+
+  const accRoutes = ['acc_plan', 'acc_journals', 'acc_balance', 'acc_grandlivre', 'acc_tiers', 'acc_search', 'acc_cloture'];
+  useEffect(() => {
+    if (accRoutes.includes(route)) { setDesktopAcctOpen(true); setMobileAcctOpen('acc_plan'); }
+  }, [route]);
+
+  // Track page usage for dynamic nav ordering
+  const [usageTick, setUsageTick] = useState(0);
+  useEffect(() => { trackUsage(route); setUsageTick(t => t + 1); }, [route]);
+
+  // Sidebar search
+  const [navSearch, setNavSearch] = useState('');
+  const navSearchRef = useRef<HTMLInputElement | null>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  // Build a flat searchable list of all nav items (including children)
+  const allNavItems = useMemo(() => {
+    const items: { key: Route; labelKey: string; icon: any; group: string }[] = [];
+    for (const g of NAV_GROUPS) {
+      for (const item of g.items) {
+        items.push({ key: item.key, labelKey: item.labelKey, icon: item.icon, group: g.titleKey });
+        if ((item as NavItem).children) {
+          for (const child of (item as NavItem).children!) {
+            items.push({ key: child.key, labelKey: child.labelKey, icon: child.icon, group: g.titleKey });
+          }
+        }
+      }
+    }
+    items.push({ key: 'settings' as Route, labelKey: 'nav.settings', icon: Settings, group: 'nav.system' });
+    return items;
+  }, []);
+
+  const searchResults = useMemo(() => {
+    if (!navSearch.trim()) return [];
+    const q = navSearch.toLowerCase();
+    return allNavItems.filter(item => {
+      if (!routeVisible(item.key)) return false;
+      return t(item.labelKey).toLowerCase().includes(q) || item.key.toLowerCase().includes(q);
+    }).slice(0, 8);
+  }, [navSearch, usageTick]);
+
+  // Sort nav groups items by usage (most used first) — only when not searching
+  const sortedNav = useMemo(() => {
+    if (navSearch.trim()) return visibleNav;
+    const usage = getUsageMap();
+    return visibleNav.map(g => ({
+      ...g,
+      items: [...g.items].sort((a, b) => {
+        const aUsage = usage[a.key] || 0;
+        const bUsage = usage[b.key] || 0;
+        if (bUsage !== aUsage) return bUsage - aUsage;
+        return 0;
+      }),
+    }));
+  }, [navSearch, usageTick]);
 
   const panelRef = useRef<HTMLElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -253,19 +369,61 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           <button
             onClick={() => { onRoute('platform_admin'); setMobileOpen(false); }}
             className={`nav-item ${route === 'platform_admin' ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-            title={sidebarCollapsed ? 'Console plateforme' : undefined}
+            title={sidebarCollapsed ? t('nav.platform') : undefined}
           >
             <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
-            {!sidebarCollapsed && <span>Console plateforme</span>}
+            {!sidebarCollapsed && <span>{t('nav.platform')}</span>}
           </button>
         </div>
       ) : (
       <>
-      {visibleNav.map(group => (
-        <div key={group.title}>
+      {!sidebarCollapsed && (
+        <div className="relative px-1 mb-1">
+          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+          <input
+            ref={navSearchRef}
+            type="text"
+            value={navSearch}
+            onChange={e => setNavSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+            placeholder={t('nav.search')}
+            className={`w-full pl-8 pr-7 py-1.5 rounded-lg text-[13px] border outline-none transition-colors ${sidebarDark ? 'bg-white/8 border-white/10 text-white placeholder-white/40' : 'bg-neutral-100 border-neutral-200 text-neutral-700 placeholder-neutral-400 focus:bg-white focus:border-neutral-300'}`}
+          />
+          {navSearch && (
+            <button onClick={() => setNavSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+      {navSearch.trim() && searchResults.length > 0 && (
+        <div className="space-y-0.5 px-1">
+          {!sidebarCollapsed && <div className={`px-2 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.searchResults')}</div>}
+          {searchResults.map(item => {
+            const Icon = item.icon;
+            const active = route === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => { onRoute(item.key); setNavSearch(''); setMobileOpen(false); }}
+                className={`nav-item ${active ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
+              >
+                <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+                {!sidebarCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {navSearch.trim() && searchResults.length === 0 && !sidebarCollapsed && (
+        <div className={`px-3 py-4 text-center text-[13px] ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.noResults')}</div>
+      )}
+      {!navSearch.trim() && sortedNav.map(group => (
+        <div key={group.titleKey}>
           {!sidebarCollapsed && (
             <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>
-              {group.title}
+              {t(group.titleKey)}
             </div>
           )}
           <div className="space-y-0.5">
@@ -273,23 +431,50 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               const Icon = item.icon;
               const active = route === item.key;
               const badge = badgeFor(item.key);
+              const hasChildren = !!(item as NavItem).children && (item as NavItem).children!.length > 0;
+              const childActive = hasChildren && (item as NavItem).children!.some(c => c.key === route);
               return (
-                <button
-                  key={item.key}
-                  onClick={() => { onRoute(item.key); setMobileOpen(false); }}
-                  className={`nav-item ${active ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-                  title={sidebarCollapsed ? item.label : undefined}
-                >
-                  <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
-                  {!sidebarCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
-                  {!sidebarCollapsed && badge > 0 && (
-                    <span className={`ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-neutral-900' : 'bg-red-500 text-white'}`}>{badge > 99 ? '99+' : badge}</span>
+                <div key={item.key}>
+                  <button
+                    onClick={() => {
+                      if (hasChildren) { setDesktopAcctOpen(o => !o); }
+                      else { onRoute(item.key); setMobileOpen(false); }
+                    }}
+                    className={`nav-item ${(active || childActive) ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                    title={sidebarCollapsed ? t(item.labelKey) : undefined}
+                  >
+                    <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+                    {!sidebarCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
+                    {!sidebarCollapsed && hasChildren && (
+                      <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${desktopAcctOpen ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+                    )}
+                    {!sidebarCollapsed && !hasChildren && badge > 0 && (
+                      <span className={`ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-neutral-900' : 'bg-red-500 text-white'}`}>{badge > 99 ? '99+' : badge}</span>
+                    )}
+                    {!sidebarCollapsed && !hasChildren && badge === 0 && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
+                    {sidebarCollapsed && !hasChildren && badge > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">{badge > 9 ? '9+' : badge}</span>
+                    )}
+                  </button>
+                  {hasChildren && desktopAcctOpen && !sidebarCollapsed && (
+                    <div className="ml-6 mt-0.5 space-y-0.5 animate-[fadeIn_0.15s_ease]">
+                      {(item as NavItem).children!.filter(c => routeVisible(c.key)).map(child => {
+                        const ChildIcon = child.icon;
+                        const childActive2 = route === child.key;
+                        return (
+                          <button
+                            key={child.key}
+                            onClick={() => { onRoute(child.key); setMobileOpen(false); }}
+                            className={`nav-item text-[13px] ${childActive2 ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/60 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
+                          >
+                            <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? 'text-white' : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
+                            <span className="whitespace-nowrap">{t(child.labelKey)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                  {!sidebarCollapsed && badge === 0 && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
-                  {sidebarCollapsed && badge > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">{badge > 9 ? '9+' : badge}</span>
-                  )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -297,14 +482,14 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       ))}
       {routeVisible('settings') && (
         <div>
-          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Systeme</div>}
+          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.system')}</div>}
           <button
             onClick={() => { onRoute('settings'); setMobileOpen(false); }}
             className={`nav-item ${route === 'settings' ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-            title={sidebarCollapsed ? 'Paramètres' : undefined}
+            title={sidebarCollapsed ? t('nav.settings') : undefined}
           >
             <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
-            {!sidebarCollapsed && <span className="whitespace-nowrap">Paramètres</span>}
+            {!sidebarCollapsed && <span className="whitespace-nowrap">{t('nav.settings')}</span>}
           </button>
         </div>
       )}
@@ -335,6 +520,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         <div className="flex-1 flex items-center gap-3 px-5">
           <div className="flex-1" />
           <div className="flex items-center gap-2 shrink-0">
+            <LanguageSwitcher compact />
             {newOrdersCount > 0 && (
               <button
                 onClick={() => onRoute('online_orders')}
@@ -368,7 +554,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       <div className="text-xs text-neutral-500 truncate">{profile?.email}</div>
                     </div>
                     <button onClick={() => { setUserOpen(false); onRoute('settings'); }} className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 transition-colors">
-                      <Settings className="w-4 h-4 text-neutral-400" /> Paramètres
+                      <Settings className="w-4 h-4 text-neutral-400" /> {t('nav.settings')}
                     </button>
                     <button onClick={signOut} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
                       <LogOut className="w-4 h-4" /> Déconnexion
@@ -499,6 +685,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/60 hover:bg-white/10' : 'float-close-btn'}`}>
                     <Settings className="w-4 h-4" />
                   </button>
+                  <LanguageSwitcher />
                 </div>
               </div>
 
@@ -511,33 +698,99 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       className={`float-nav-item-compact ${route === 'platform_admin' ? 'float-nav-item-active' : ''} ${sidebarDark && route !== 'platform_admin' ? 'float-nav-dark' : ''}`}
                     >
                       <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
-                      <span className="truncate">Console plateforme</span>
+                      <span className="truncate">{t('nav.platform')}</span>
                     </button>
                   </div>
                 )}
-                {!isSuperAdmin && visibleNav.map(group => (
-                  <div key={group.title}>
+                {!isSuperAdmin && (
+                  <div className="relative px-1 mb-1">
+                    <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+                    <input
+                      type="text"
+                      value={navSearch}
+                      onChange={e => setNavSearch(e.target.value)}
+                      placeholder={t('nav.search')}
+                      className={`w-full pl-8 pr-7 py-2 rounded-lg text-[13px] border outline-none ${sidebarDark ? 'bg-white/8 border-white/10 text-white placeholder-white/40' : 'bg-neutral-100 border-neutral-200 text-neutral-700 placeholder-neutral-400'}`}
+                    />
+                    {navSearch && (
+                      <button onClick={() => setNavSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                {navSearch.trim() && searchResults.length > 0 && (
+                  <div className="space-y-0.5 px-1">
+                    <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.searchResults')}</div>
+                    {searchResults.map(item => {
+                      const Icon = item.icon;
+                      const active = route === item.key;
+                      return (
+                        <button
+                          key={item.key}
+                          onClick={() => { onRoute(item.key); setNavSearch(''); closeDrawer(); }}
+                          className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''} ${sidebarDark && !active ? 'float-nav-dark' : ''}`}
+                        >
+                          <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
+                          <span className="truncate">{t(item.labelKey)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {navSearch.trim() && searchResults.length === 0 && (
+                  <div className={`px-3 py-4 text-center text-[13px] ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.noResults')}</div>
+                )}
+                {!isSuperAdmin && !navSearch.trim() && sortedNav.map(group => (
+                  <div key={group.titleKey}>
                     <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>
-                      {group.title}
+                      {t(group.titleKey)}
                     </div>
                     <div>
                       {group.items.map(item => {
                         const Icon = item.icon;
                         const active = route === item.key;
                         const badge = badgeFor(item.key);
+                        const hasChildren = !!(item as NavItem).children && (item as NavItem).children!.length > 0;
+                        const childActive = hasChildren && (item as NavItem).children!.some(c => c.key === route);
                         return (
-                          <button
-                            key={item.key}
-                            onClick={() => { onRoute(item.key); closeDrawer(); }}
-                            className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''} ${sidebarDark && !active ? 'float-nav-dark' : ''}`}
-                          >
-                            <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
-                            <span className="truncate">{item.label}</span>
-                            {badge > 0 && (
-                              <span className="ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold bg-red-500 text-white">{badge > 99 ? '99+' : badge}</span>
+                          <div key={item.key}>
+                            <button
+                              onClick={() => {
+                                if (hasChildren) { setMobileAcctOpen(o => o === item.key ? null : item.key); }
+                                else { onRoute(item.key); closeDrawer(); }
+                              }}
+                              className={`float-nav-item-compact ${(active || childActive) ? 'float-nav-item-active' : ''} ${sidebarDark && !active && !childActive ? 'float-nav-dark' : ''}`}
+                            >
+                              <Icon className={`w-4 h-4 shrink-0 ${(active || childActive) ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
+                              <span className="truncate">{t(item.labelKey)}</span>
+                              {hasChildren && (
+                                <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${mobileAcctOpen === item.key ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+                              )}
+                              {!hasChildren && badge > 0 && (
+                                <span className="ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold bg-red-500 text-white">{badge > 99 ? '99+' : badge}</span>
+                              )}
+                              {!hasChildren && badge === 0 && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white" />}
+                            </button>
+                            {hasChildren && mobileAcctOpen === item.key && (
+                              <div className="ml-5 mt-0.5 space-y-0.5 animate-[fadeIn_0.15s_ease]">
+                                {(item as NavItem).children!.filter(c => routeVisible(c.key)).map(child => {
+                                  const ChildIcon = child.icon;
+                                  const childActive2 = route === child.key;
+                                  return (
+                                    <button
+                                      key={child.key}
+                                      onClick={() => { onRoute(child.key); closeDrawer(); }}
+                                      className={`float-nav-item-compact text-[13px] ${childActive2 ? 'float-nav-item-active' : ''} ${sidebarDark && !childActive2 ? 'float-nav-dark' : ''}`}
+                                    >
+                                      <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? 'text-white' : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
+                                      <span className="truncate">{t(child.labelKey)}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             )}
-                            {badge === 0 && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white" />}
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -700,6 +953,15 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         </header>
 
+        {/* Desktop breadcrumb bar */}
+        {!isPOS && !isPlatformAdmin && !isSuperAdmin && BREADCRUMB_MAP[route] && (
+          <div className="hidden lg:flex items-center gap-1.5 px-8 pt-3 pb-0 text-[12px] text-neutral-500">
+            <span>{t(BREADCRUMB_MAP[route].group)}</span>
+            <ChevronRight className="w-3 h-3 text-neutral-300" />
+            <span className="font-medium text-neutral-700">{t(BREADCRUMB_MAP[route].labelKey)}</span>
+          </div>
+        )}
+
         <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
           {isPOS ? (
             <div className="flex-1 flex flex-col min-h-0 pb-[60px] lg:pb-0">{children}</div>
@@ -717,7 +979,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           <div className="pointer-events-auto">
             <div className="relative flex items-center justify-around h-[52px] bg-neutral-900 border-t border-neutral-800">
               {(() => {
-                const tabs = isSuperAdmin ? [{ key: 'platform_admin' as Route, label: 'Plateforme', icon: Crown }] : visibleMobileTabs;
+                const tabs = isSuperAdmin ? [{ key: 'platform_admin' as Route, labelKey: 'nav.platform', icon: Crown }] : visibleMobileTabs;
                 const mid = Math.floor(tabs.length / 2);
                 const left = tabs.slice(0, mid);
                 const right = tabs.slice(mid);
@@ -741,12 +1003,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                               </span>
                             )}
                           </div>
-                          <span className={`text-[8px] font-medium leading-none ${active ? 'text-white' : 'text-neutral-500'}`}>{tab.label}</span>
+                          <span className={`text-[8px] font-medium leading-none ${active ? 'text-white' : 'text-neutral-500'}`}>{t(tab.labelKey)}</span>
                           {active && <span className="absolute bottom-[5px] left-1/2 -translate-x-1/2 w-3 h-[1.5px] rounded-full bg-white" />}
                         </button>
                       );
                     })}
-                    <div className="w-[56px] shrink-0" />
+                    <div className="w-[72px] shrink-0" />
                     {right.map(tab => {
                       const Icon = tab.icon;
                       const active = route === tab.key;
@@ -765,7 +1027,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                               </span>
                             )}
                           </div>
-                          <span className={`text-[8px] font-medium leading-none ${active ? 'text-white' : 'text-neutral-500'}`}>{tab.label}</span>
+                          <span className={`text-[8px] font-medium leading-none ${active ? 'text-white' : 'text-neutral-500'}`}>{t(tab.labelKey)}</span>
                           {active && <span className="absolute bottom-[5px] left-1/2 -translate-x-1/2 w-3 h-[1.5px] rounded-full bg-white" />}
                         </button>
                       );
@@ -787,16 +1049,16 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           <div className="lg:hidden fixed inset-x-0 z-[44] flex justify-center px-3 animate-scale-in" style={{ bottom: 'calc(max(6px, env(safe-area-inset-bottom)) + 68px)' }}>
             <div className="w-full max-w-[320px] rounded-xl overflow-hidden bg-white border border-neutral-200 shadow-premium">
               <div className="px-4 pt-3 pb-2 border-b border-neutral-100">
-                <div className="text-[12px] font-bold text-neutral-900">Actions rapides</div>
+                <div className="text-[12px] font-bold text-neutral-900">{t('quickAction.title')}</div>
               </div>
               <div className="p-1.5 space-y-0.5">
                 {[
-                  { icon: CreditCard, label: 'Encaisser client', desc: 'Reglement facture', route: 'tiers' as Route },
-                  { icon: Wallet, label: 'Saisir acompte', desc: 'Paiement partiel', route: 'tiers' as Route },
-                  { icon: Receipt, label: 'Reimprimer ticket', desc: 'Session en cours', route: 'sales' as Route },
-                  { icon: ShoppingCart, label: 'Vente rapide', desc: 'Ouvrir la caisse', route: 'pos' as Route },
-                  { icon: Package, label: 'Entrée stock', desc: 'Réception rapide', route: 'stock' as Route },
-                  { icon: FileText, label: 'Nouveau devis', desc: 'Creer un devis', route: 'billing' as Route },
+                  { icon: CreditCard, labelKey: 'quickAction.encaisser', descKey: 'quickAction.encaisserDesc', route: 'tiers' as Route },
+                  { icon: Wallet, labelKey: 'quickAction.acompte', descKey: 'quickAction.acompteDesc', route: 'tiers' as Route },
+                  { icon: Receipt, labelKey: 'quickAction.reprint', descKey: 'quickAction.reprintDesc', route: 'sales' as Route },
+                  { icon: ShoppingCart, labelKey: 'quickAction.quickSale', descKey: 'quickAction.quickSaleDesc', route: 'pos' as Route },
+                  { icon: Package, labelKey: 'quickAction.stockIn', descKey: 'quickAction.stockInDesc', route: 'stock' as Route },
+                  { icon: FileText, labelKey: 'quickAction.newQuote', descKey: 'quickAction.newQuoteDesc', route: 'billing' as Route },
                 ].map((a, i) => {
                   const Icon = a.icon;
                   return (
@@ -809,8 +1071,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                         <Icon className="w-4 h-4 text-neutral-700" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-[12px] font-semibold text-neutral-900">{a.label}</div>
-                        <div className="text-[10px] text-neutral-400">{a.desc}</div>
+                        <div className="text-[12px] font-semibold text-neutral-900">{t(a.labelKey)}</div>
+                        <div className="text-[10px] text-neutral-400">{t(a.descKey)}</div>
                       </div>
                       <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
                     </button>

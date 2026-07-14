@@ -20,6 +20,8 @@ import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../l
 import { DocItems, DocTotals, DocPayments, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocPayment } from '../components/DocLayout';
 import type { Customer } from '../lib/types';
+import { CollapsibleSection, FormField, ValidatedInput } from '../components/FormPrimitives';
+import { useTranslation } from 'react-i18next';
 
 type Supplier = {
   id: string; tenant_id: string; name: string; contact: string;
@@ -35,6 +37,7 @@ type SupplierOptionKey = 'info' | 'payment' | 'docs' | 'articles' | null;
 export function Tiers() {
   const { tenant, currentSite, sites, profile, dataTick } = useApp();
   const { can } = usePermissions();
+  const { t } = useTranslation();
   const { success, error } = useToast();
   const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
@@ -58,9 +61,13 @@ export function Tiers() {
   const [custOpen, setCustOpen] = useState(false);
   const [custEdit, setCustEdit] = useState<Customer | null>(null);
   const [custForm, setCustForm] = useState<any>({});
+  const [custErrors, setCustErrors] = useState<Record<string, string>>({});
+  const [custTouched, setCustTouched] = useState<Record<string, boolean>>({});
   const [supOpen, setSupOpen] = useState(false);
   const [supEdit, setSupEdit] = useState<Supplier | null>(null);
   const [supForm, setSupForm] = useState<Partial<Supplier>>({});
+  const [supErrors, setSupErrors] = useState<Record<string, string>>({});
+  const [supTouched, setSupTouched] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [toDeactivateCust, setToDeactivateCust] = useState<Customer | null>(null);
   const [toDeactivateSup, setToDeactivateSup] = useState<Supplier | null>(null);
@@ -177,11 +184,53 @@ export function Tiers() {
   }, [suppliers, search, statusFilter]);
 
   // ── CRUD: Customer ───────────────────────────────────────────
-  const openCustCreate = () => { setCustEdit(null); setCustForm({ customer_type: 'particulier', is_active: true }); setCustOpen(true); setFabOpen(false); };
-  const openCustEdit = (c: Customer) => { setCustEdit(c); setCustForm(c); setCustOpen(true); };
+  const validateCustField = (field: string, val: any, _all: any): string | undefined => {
+    switch (field) {
+      case 'name':
+        if (!val?.trim()) return t('tiers.nameRequired');
+        break;
+      case 'phone':
+        if (val && !/^[+]?[\d\s()-]{6,}$/.test(String(val).trim())) return t('tiers.phoneInvalid', { defaultValue: 'Numéro invalide' });
+        break;
+      case 'email':
+        if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(val).trim())) return t('tiers.emailInvalid');
+        break;
+    }
+    return undefined;
+  };
+  const validateCustAll = (): boolean => {
+    const fields = ['name', 'phone', 'email'];
+    const errs: Record<string, string> = {};
+    let ok = true;
+    for (const f of fields) {
+      const e = validateCustField(f, custForm[f], custForm);
+      if (e) { errs[f] = e; ok = false; }
+    }
+    setCustErrors(errs);
+    setCustTouched(Object.fromEntries(fields.map(f => [f, true])));
+    return ok;
+  };
+  const setCustField = (field: string, value: any) => {
+    setCustForm((prev: any) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'phone' && !prev.whatsapp) next.whatsapp = value;
+      const blurOnlyFields = ['email', 'phone'];
+      if (!blurOnlyFields.includes(field)) {
+        const err = validateCustField(field, value, next);
+        setCustErrors(pe => ({ ...pe, [field]: err || '' }));
+      } else if (custTouched[field]) {
+        const err = validateCustField(field, value, next);
+        setCustErrors(pe => ({ ...pe, [field]: err || '' }));
+      }
+      return next;
+    });
+  };
+  const openCustCreate = () => { setCustEdit(null); setCustForm({ customer_type: 'particulier', is_active: true }); setCustErrors({}); setCustTouched({}); setCustOpen(true); setFabOpen(false); };
+  const openCustEdit = (c: Customer) => { setCustEdit(c); setCustForm(c); setCustErrors({}); setCustTouched({}); setCustOpen(true); };
   const saveCust = async () => {
-    if (!tenant || !custForm.name?.trim()) { error('Nom obligatoire'); return; }
-    if (!can('manage_customers')) { error('Vous n\'avez pas la permission de gerer les clients'); return; }
+    if (!validateCustAll()) { error(t('tiers.fixErrors')); return; }
+    if (!can('manage_customers')) { error(t('tiers.noPermissionCustomers')); return; }
+    if (!tenant) return;
     setSaving(true);
     const payload: any = {
       tenant_id: tenant.id, name: custForm.name.trim(), phone: custForm.phone || '',
@@ -201,8 +250,8 @@ export function Tiers() {
     setSaving(false);
     if (e) {
       const msg = e.message || '';
-      error(msg.includes('Limite du plan') ? 'Limite de clients atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
-    } else { success(custEdit ? 'Client modifié' : 'Client créé'); setCustOpen(false); load(); }
+      error(msg.includes('Limite du plan') ? t('tiers.planLimitCustomers') : msg);
+    } else { success(custEdit ? t('tiers.customerModified') : t('tiers.customerCreated')); setCustOpen(false); load(); }
   };
   const deactivateCust = async () => {
     if (!toDeactivateCust) return;
@@ -222,11 +271,53 @@ export function Tiers() {
   };
 
   // ── CRUD: Supplier ───────────────────────────────────────────
-  const openSupCreate = () => { setSupEdit(null); setSupForm({ country: 'Sénégal', is_active: true }); setSupOpen(true); setFabOpen(false); };
-  const openSupEdit = (s: Supplier) => { setSupEdit(s); setSupForm(s); setSupOpen(true); };
+  const validateSupField = (field: string, val: any): string | undefined => {
+    switch (field) {
+      case 'name':
+        if (!val?.trim()) return t('tiers.nameRequired');
+        break;
+      case 'phone':
+        if (val && !/^[+]?[\d\s()-]{6,}$/.test(String(val).trim())) return t('tiers.phoneInvalid', { defaultValue: 'Numéro invalide' });
+        break;
+      case 'email':
+        if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(val).trim())) return t('tiers.emailInvalid');
+        break;
+    }
+    return undefined;
+  };
+  const validateSupAll = (): boolean => {
+    const fields = ['name', 'phone', 'email'];
+    const errs: Record<string, string> = {};
+    let ok = true;
+    for (const f of fields) {
+      const e = validateSupField(f, (supForm as any)[f]);
+      if (e) { errs[f] = e; ok = false; }
+    }
+    setSupErrors(errs);
+    setSupTouched(Object.fromEntries(fields.map(f => [f, true])));
+    return ok;
+  };
+  const setSupField = (field: string, value: any) => {
+    setSupForm((prev: any) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'phone' && !prev.whatsapp) next.whatsapp = value;
+      const blurOnlyFields = ['email', 'phone'];
+      if (!blurOnlyFields.includes(field)) {
+        const err = validateSupField(field, value);
+        setSupErrors(pe => ({ ...pe, [field]: err || '' }));
+      } else if (supTouched[field]) {
+        const err = validateSupField(field, value);
+        setSupErrors(pe => ({ ...pe, [field]: err || '' }));
+      }
+      return next;
+    });
+  };
+  const openSupCreate = () => { setSupEdit(null); setSupForm({ country: 'Sénégal', is_active: true }); setSupErrors({}); setSupTouched({}); setSupOpen(true); setFabOpen(false); };
+  const openSupEdit = (s: Supplier) => { setSupEdit(s); setSupForm(s); setSupErrors({}); setSupTouched({}); setSupOpen(true); };
   const saveSup = async () => {
-    if (!tenant || !supForm.name?.trim()) { error('Nom obligatoire'); return; }
-    if (!can('manage_customers')) { error('Vous n\'avez pas la permission de gerer les fournisseurs'); return; }
+    if (!validateSupAll()) { error(t('tiers.fixErrors')); return; }
+    if (!can('manage_customers')) { error(t('tiers.noPermissionSuppliers')); return; }
+    if (!tenant || !supForm.name?.trim()) { error(t('tiers.nameRequired')); return; }
     setSaving(true);
     const payload: any = {
       tenant_id: tenant.id, name: supForm.name.trim(), contact: supForm.contact || '',
@@ -248,7 +339,7 @@ export function Tiers() {
     if (e) {
       const msg = e.message || '';
       error(msg.includes('Limite du plan') ? 'Limite de fournisseurs atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
-    } else { success(supEdit ? 'Fournisseur modifié' : 'Fournisseur créé'); setSupOpen(false); load(); }
+    } else { success(supEdit ? t('tiers.supplierModified') : t('tiers.supplierCreated')); setSupOpen(false); load(); }
   };
   const deactivateSup = async () => {
     if (!toDeactivateSup) return;
@@ -683,92 +774,180 @@ export function Tiers() {
       </div>
 
       {/* Customer form */}
-      <Modal open={custOpen} onClose={() => setCustOpen(false)} title={custEdit ? 'Modifier le client' : 'Nouveau client'}
+      <Modal open={custOpen} onClose={() => setCustOpen(false)} title={custEdit ? t('tiers.editCustomer') : t('tiers.addCustomer')}
         size="md"
         footer={<>
-          <button onClick={() => setCustOpen(false)} className="btn-secondary">Annuler</button>
+          <button onClick={() => setCustOpen(false)} className="btn-secondary">{t('common.cancel')}</button>
           <button onClick={saveCust} disabled={saving} className="btn-primary">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}
           </button>
         </>}>
         <div className="space-y-4">
-          <FieldSection title="Identité">
-            <Field label="Nom *" full>
-              <input value={custForm.name || ''} onChange={e => setCustForm((f: any) => ({ ...f, name: e.target.value }))} className="input" autoFocus={desktopAutoFocus} />
-            </Field>
-            <Field label="Type">
-              <select value={custForm.customer_type || 'particulier'} onChange={e => setCustForm((f: any) => ({ ...f, customer_type: e.target.value }))} className="input">
-                <option value="particulier">Particulier</option>
-                <option value="professionnel">Professionnel</option>
-                <option value="garage">Garage</option>
-                <option value="revendeur">Revendeur</option>
-                <option value="societe">Société</option>
-                <option value="administration">Administration</option>
+          <CollapsibleSection title={t('tiers.identity')} subtitle={t('tiers.identitySubtitle')}>
+            <ValidatedInput
+              label={t('tiers.name')}
+              required
+              full
+              value={custForm.name || ''}
+              onChange={v => setCustField('name', v)}
+              onBlur={() => setCustTouched(prev => ({ ...prev, name: true }))}
+              error={custErrors.name}
+              touched={custTouched.name}
+              placeholder={t('tiers.name')}
+              autoFocus={desktopAutoFocus}
+            />
+            <FormField label={t('tiers.type')}>
+              <select value={custForm.customer_type || 'particulier'} onChange={e => setCustField('customer_type', e.target.value)} className="input">
+                <option value="particulier">{t('tiers.customerType.particulier')}</option>
+                <option value="professionnel">{t('tiers.customerType.professionnel')}</option>
+                <option value="garage">{t('tiers.customerType.garage')}</option>
+                <option value="revendeur">{t('tiers.customerType.revendeur')}</option>
+                <option value="societe">{t('tiers.customerType.societe')}</option>
+                <option value="administration">{t('tiers.customerType.administration')}</option>
               </select>
-            </Field>
+            </FormField>
             {custEdit && (
-              <Field label="Statut">
+              <FormField label={t('tiers.status')}>
                 <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
                   <input type="checkbox" checked={custForm.is_active !== false} onChange={e => setCustForm((f: any) => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4" />
-                  <span className="text-sm">Actif</span>
+                  <span className="text-sm">{t('common.active')}</span>
                 </label>
-              </Field>
+              </FormField>
             )}
-          </FieldSection>
-          <FieldSection title="Coordonnées">
-            <Field label="Téléphone"><input value={custForm.phone || ''} onChange={e => setCustForm((f: any) => ({ ...f, phone: e.target.value }))} className="input" placeholder="+221 77 000 00 00" /></Field>
-            <Field label="WhatsApp"><input value={custForm.whatsapp || ''} onChange={e => setCustForm((f: any) => ({ ...f, whatsapp: e.target.value }))} className="input" placeholder="+221 77 000 00 00" /></Field>
-            <Field label="Email" full><input type="email" value={custForm.email || ''} onChange={e => setCustForm((f: any) => ({ ...f, email: e.target.value }))} className="input" /></Field>
-            <Field label="Adresse" full><input value={custForm.address || ''} onChange={e => setCustForm((f: any) => ({ ...f, address: e.target.value }))} className="input" /></Field>
-          </FieldSection>
-          <FieldSection title="Solvabilité / Crédit">
-            <Field label="Plafond crédit (FCFA)">
-              <input type="number" min={0} value={custForm.credit_limit || ''} onChange={e => setCustForm((f: any) => ({ ...f, credit_limit: Number(e.target.value) }))} className="input" placeholder="0 = illimité" />
-            </Field>
-            <Field label="Bloquer le crédit">
+          </CollapsibleSection>
+          <CollapsibleSection title={t('tiers.contact')} subtitle={t('tiers.contactSubtitle')}>
+            <ValidatedInput
+              label={t('tiers.phone')}
+              value={custForm.phone || ''}
+              onChange={v => setCustField('phone', v)}
+              onBlur={() => { setCustTouched(prev => ({ ...prev, phone: true })); const err = validateCustField('phone', custForm.phone, custForm); setCustErrors(pe => ({ ...pe, phone: err || '' })); }}
+              error={custErrors.phone}
+              touched={custTouched.phone}
+              placeholder={t('tiers.phonePlaceholder')}
+              hint={t('tiers.phoneHint')}
+            />
+            <ValidatedInput
+              label={t('tiers.whatsapp')}
+              value={custForm.whatsapp || ''}
+              onChange={v => setCustField('whatsapp', v)}
+              placeholder={t('tiers.phonePlaceholder')}
+            />
+            <ValidatedInput
+              label={t('tiers.email')}
+              full
+              type="email"
+              value={custForm.email || ''}
+              onChange={v => setCustField('email', v)}
+              onBlur={() => { setCustTouched(prev => ({ ...prev, email: true })); const err = validateCustField('email', custForm.email, custForm); setCustErrors(pe => ({ ...pe, email: err || '' })); }}
+              error={custErrors.email}
+              touched={custTouched.email}
+            />
+            <ValidatedInput
+              label={t('tiers.address')}
+              full
+              value={custForm.address || ''}
+              onChange={v => setCustField('address', v)}
+            />
+          </CollapsibleSection>
+          <CollapsibleSection title={t('tiers.credit')} subtitle={t('tiers.creditSubtitle')} defaultOpen={!!custEdit}>
+            <FormField label={t('tiers.creditLimit')} hint={t('tiers.creditLimitHint')}>
+              <input type="number" min={0} value={custForm.credit_limit || ''} onChange={e => setCustField('credit_limit', Number(e.target.value))} className="input" placeholder={t('tiers.creditLimitHint')} />
+            </FormField>
+            <FormField label={t('tiers.blockCredit')}>
               <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
-                <input type="checkbox" checked={custForm.credit_blocked === true} onChange={e => setCustForm((f: any) => ({ ...f, credit_blocked: e.target.checked }))} className="w-4 h-4" />
-                <span className="text-sm text-slate-700">Ventes à crédit bloquées</span>
+                <input type="checkbox" checked={custForm.credit_blocked === true} onChange={e => setCustField('credit_blocked', e.target.checked)} className="w-4 h-4" />
+                <span className="text-sm text-slate-700">{t('tiers.blockCreditCustomer')}</span>
               </label>
-            </Field>
-          </FieldSection>
+            </FormField>
+          </CollapsibleSection>
         </div>
       </Modal>
 
       {/* Supplier form */}
-      <Modal open={supOpen} onClose={() => setSupOpen(false)} title={supEdit ? 'Modifier le fournisseur' : 'Nouveau fournisseur'}
+      <Modal open={supOpen} onClose={() => setSupOpen(false)} title={supEdit ? t('tiers.editSupplier') : t('tiers.addSupplier')}
         size="md"
         footer={<>
-          <button onClick={() => setSupOpen(false)} className="btn-secondary">Annuler</button>
+          <button onClick={() => setSupOpen(false)} className="btn-secondary">{t('common.cancel')}</button>
           <button onClick={saveSup} disabled={saving} className="btn-primary">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}
           </button>
         </>}>
         <div className="space-y-4">
-          <FieldSection title="Identité">
-            <Field label="Nom *" full><input value={supForm.name || ''} onChange={e => setSupForm(f => ({ ...f, name: e.target.value }))} className="input" autoFocus={desktopAutoFocus} /></Field>
-            <Field label="Personne de contact"><input value={supForm.contact || ''} onChange={e => setSupForm(f => ({ ...f, contact: e.target.value }))} className="input" /></Field>
-            <Field label="Pays"><input value={supForm.country || 'Sénégal'} onChange={e => setSupForm(f => ({ ...f, country: e.target.value }))} className="input" /></Field>
-          </FieldSection>
-          <FieldSection title="Coordonnées">
-            <Field label="Téléphone"><input value={supForm.phone || ''} onChange={e => setSupForm(f => ({ ...f, phone: e.target.value }))} className="input" placeholder="+221 33 000 00 00" /></Field>
-            <Field label="WhatsApp"><input value={supForm.whatsapp || ''} onChange={e => setSupForm(f => ({ ...f, whatsapp: e.target.value }))} className="input" placeholder="+221 77 000 00 00" /></Field>
-            <Field label="Email" full><input type="email" value={supForm.email || ''} onChange={e => setSupForm(f => ({ ...f, email: e.target.value }))} className="input" /></Field>
-            <Field label="Adresse" full><input value={supForm.address || ''} onChange={e => setSupForm(f => ({ ...f, address: e.target.value }))} className="input" /></Field>
-          </FieldSection>
-          <FieldSection title="Conditions commerciales">
-            <Field label="Délai livraison (jours)"><input type="number" value={supForm.delivery_days ?? ''} onChange={e => setSupForm(f => ({ ...f, delivery_days: Number(e.target.value) }))} className="input" min={0} /></Field>
-            <Field label="Conditions de paiement"><input value={supForm.payment_terms || ''} onChange={e => setSupForm(f => ({ ...f, payment_terms: e.target.value }))} className="input" placeholder="30 jours, comptant…" /></Field>
-            <Field label="Plafond crédit (FCFA)">
-              <input type="number" min={0} value={(supForm as any).credit_limit || ''} onChange={e => setSupForm(f => ({ ...f, credit_limit: Number(e.target.value) } as any))} className="input" placeholder="0 = illimité" />
-            </Field>
-            <Field label="Bloquer le crédit">
+          <CollapsibleSection title={t('tiers.identity')} subtitle={t('tiers.identitySubtitle')}>
+            <ValidatedInput
+              label={t('tiers.name')}
+              required
+              full
+              value={supForm.name || ''}
+              onChange={v => setSupField('name', v)}
+              onBlur={() => setSupTouched(prev => ({ ...prev, name: true }))}
+              error={supErrors.name}
+              touched={supTouched.name}
+              placeholder={t('tiers.name')}
+              autoFocus={desktopAutoFocus}
+            />
+            <ValidatedInput
+              label={t('tiers.contactPerson')}
+              value={supForm.contact || ''}
+              onChange={v => setSupField('contact', v)}
+            />
+            <ValidatedInput
+              label={t('tiers.country')}
+              value={supForm.country || 'Sénégal'}
+              onChange={v => setSupField('country', v)}
+            />
+          </CollapsibleSection>
+          <CollapsibleSection title={t('tiers.contact')} subtitle={t('tiers.contactSubtitle')}>
+            <ValidatedInput
+              label={t('tiers.phone')}
+              value={supForm.phone || ''}
+              onChange={v => setSupField('phone', v)}
+              onBlur={() => { setSupTouched(prev => ({ ...prev, phone: true })); const err = validateSupField('phone', supForm.phone); setSupErrors(pe => ({ ...pe, phone: err || '' })); }}
+              error={supErrors.phone}
+              touched={supTouched.phone}
+              placeholder="+221 33 000 00 00"
+              hint={t('tiers.phoneHint')}
+            />
+            <ValidatedInput
+              label={t('tiers.whatsapp')}
+              value={supForm.whatsapp || ''}
+              onChange={v => setSupField('whatsapp', v)}
+              placeholder={t('tiers.phonePlaceholder')}
+            />
+            <ValidatedInput
+              label={t('tiers.email')}
+              full
+              type="email"
+              value={supForm.email || ''}
+              onChange={v => setSupField('email', v)}
+              onBlur={() => { setSupTouched(prev => ({ ...prev, email: true })); const err = validateSupField('email', supForm.email); setSupErrors(pe => ({ ...pe, email: err || '' })); }}
+              error={supErrors.email}
+              touched={supTouched.email}
+            />
+            <ValidatedInput
+              label={t('tiers.address')}
+              full
+              value={supForm.address || ''}
+              onChange={v => setSupField('address', v)}
+            />
+          </CollapsibleSection>
+          <CollapsibleSection title={t('tiers.commercialTerms')} subtitle={t('tiers.commercialTermsSubtitle')} defaultOpen={!!supEdit}>
+            <FormField label={t('tiers.deliveryDays')}>
+              <input type="number" value={supForm.delivery_days ?? ''} onChange={e => setSupField('delivery_days', Number(e.target.value))} className="input" min={0} />
+            </FormField>
+            <FormField label={t('tiers.paymentTerms')}>
+              <input value={supForm.payment_terms || ''} onChange={e => setSupField('payment_terms', e.target.value)} className="input" placeholder={t('tiers.paymentTermsPlaceholder')} />
+            </FormField>
+            <FormField label={t('tiers.creditLimit')} hint={t('tiers.creditLimitHint')}>
+              <input type="number" min={0} value={(supForm as any).credit_limit || ''} onChange={e => setSupField('credit_limit', Number(e.target.value))} className="input" placeholder={t('tiers.creditLimitHint')} />
+            </FormField>
+            <FormField label={t('tiers.blockCredit')}>
               <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
-                <input type="checkbox" checked={(supForm as any).credit_blocked === true} onChange={e => setSupForm(f => ({ ...f, credit_blocked: e.target.checked } as any))} className="w-4 h-4" />
-                <span className="text-sm text-slate-700">Commandes à crédit bloquées</span>
+                <input type="checkbox" checked={(supForm as any).credit_blocked === true} onChange={e => setSupField('credit_blocked', e.target.checked)} className="w-4 h-4" />
+                <span className="text-sm text-slate-700">{t('tiers.blockCreditSupplier')}</span>
               </label>
-            </Field>
-          </FieldSection>
+            </FormField>
+          </CollapsibleSection>
         </div>
       </Modal>
 
@@ -979,23 +1158,6 @@ export function Tiers() {
 }
 
 /* ───────────────────────── UI primitives ───────────────────────── */
-function FieldSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-[10px] font-bold tracking-[0.1em] uppercase text-slate-400 mb-2 px-0.5">{title}</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div>
-    </div>
-  );
-}
-function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
-  return (
-    <div className={full ? 'sm:col-span-2' : ''}>
-      <label className="label">{label}</label>
-      {children}
-    </div>
-  );
-}
-
 function Badge({ tone, children }: { tone: 'neutral' | 'emerald' | 'amber' | 'red' | 'slate' | 'sky'; children: React.ReactNode }) {
   const tones: Record<string, string> = {
     neutral: 'bg-slate-100 text-slate-700',

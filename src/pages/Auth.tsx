@@ -8,6 +8,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { useTenantBranding } from '../lib/tenantBranding';
 import { supabase } from '../lib/supabase';
+import { Stepper } from '../components/FormPrimitives';
 
 type BusinessActivityType = {
   id: string;
@@ -178,21 +179,7 @@ function RegPassword({ value, onChange, show, toggleShow, placeholder, label }: 
   );
 }
 
-function StepIndicator({ current, total }: { current: number; total: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      {Array.from({ length: total }).map((_, i) => (
-        <div key={i} className="flex-1 h-1 rounded-full overflow-hidden bg-slate-100">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${i < current ? 'bg-slate-900' : ''}`}
-            style={{ width: i < current ? '100%' : '0%' }}
-          />
-        </div>
-      ))}
-      <span className="text-[10px] font-bold text-slate-400 tabular-nums shrink-0">{current}/{total}</span>
-    </div>
-  );
-}
+
 
 function PlanCard({ plan, selected, onSelect, popular, billingCycle = 'monthly' }: { plan: Plan; selected: boolean; onSelect: () => void; popular?: boolean; billingCycle?: 'monthly' | 'yearly' }) {
   const limits = plan.limits || {};
@@ -423,7 +410,16 @@ export function Auth() {
           </div>
 
           <div className="space-y-5">
-            <StepIndicator current={step} total={TOTAL_STEPS} />
+            <Stepper
+              current={step}
+              steps={[
+                { label: 'Entreprise' },
+                { label: 'Responsable' },
+                { label: 'Plan' },
+                { label: 'Compte' },
+                { label: 'Récap' },
+              ]}
+            />
 
             {step === 1 && (
               <div className="space-y-4">

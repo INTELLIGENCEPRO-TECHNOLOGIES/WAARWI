@@ -91,6 +91,7 @@ export function MoneyTransfer() {
 
   return (
     <div className="h-full flex flex-col -mx-3 sm:-mx-5 lg:mx-0">
+      <h1 className="sr-only">Transfert d'argent</h1>
       {/* Sous-navigation */}
       <div className="shrink-0 border-b border-neutral-200 bg-white mx-3 sm:mx-5 lg:mx-0">
         {/* Desktop */}

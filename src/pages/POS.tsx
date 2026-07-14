@@ -649,7 +649,7 @@ function POSLandingResume({
         {/* Header card matching Sales page style */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-white border border-neutral-200 shadow-sm">
           <div className="leading-tight">
-            <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
+            <h2 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h2>
             {currentSite && (
               <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
             )}

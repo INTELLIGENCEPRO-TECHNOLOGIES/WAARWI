@@ -2703,7 +2703,7 @@ function ReleasesSection() {
     <div className="p-6 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-black text-slate-900">Mises à jour</h1>
+          <h2 className="text-xl font-black text-slate-900">Mises à jour</h2>
           <p className="text-sm text-slate-500 mt-0.5">Gérez les notifications de mise à jour affichées aux utilisateurs</p>
         </div>
         <button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all shadow-sm">

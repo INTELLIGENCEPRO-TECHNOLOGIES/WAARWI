@@ -577,6 +577,7 @@ export function SupplierOrders() {
 
   return (
     <div className="space-y-3">
+      <h1 className="sr-only">Commandes fournisseurs</h1>
       {/* Header: title + search integrated */}
       <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2 bg-white border border-slate-200/70 rounded-2xl shadow-card px-3 py-2">

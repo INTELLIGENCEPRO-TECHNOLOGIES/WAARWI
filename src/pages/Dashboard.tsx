@@ -722,6 +722,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
   return (
     <>
+      <h1 className="sr-only">Tableau de bord</h1>
       <div className="lg:hidden space-y-2.5">
         <MobileDashboard
           stats={stats}
@@ -2011,7 +2012,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           <div className="relative z-10 w-full max-w-lg px-6">
             <div className="bg-white rounded-xl border border-neutral-200 shadow-premium p-6 animate-scale-in">
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-base font-bold text-neutral-900">Actions rapides</h3>
+                <h2 className="text-base font-bold text-neutral-900">Actions rapides</h2>
                 <button onClick={() => setFabOpen(false)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
@@ -2067,7 +2068,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <TrendingUp className={`w-5 h-5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
-                <h3 className={`text-base font-bold ${heroLight ? 'text-neutral-900' : 'text-white'}`}>Situation {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}</h3>
+                <h2 className={`text-base font-bold ${heroLight ? 'text-neutral-900' : 'text-white'}`}>Situation {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}</h2>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${heroLight ? (dayDelta >= 0 ? 'border-neutral-200 text-neutral-700' : 'border-red-200 text-red-600') : (dayDelta >= 0 ? 'bg-white/10 border-white/15 text-white/80' : 'bg-rose-400/15 border-rose-400/20 text-rose-200')}`}>
@@ -2139,7 +2140,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-neutral-600" />
-                  <h3 className="text-sm font-bold text-neutral-900">Créances clients</h3>
+                  <h2 className="text-sm font-bold text-neutral-900">Créances clients</h2>
                 </div>
                 <button onClick={() => nav('tiers')} className="flex items-center gap-0.5 text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors">
                   Voir <ChevronRight className="w-3 h-3" />
@@ -2153,7 +2154,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-2">
                   <Truck className="w-4 h-4 text-neutral-600" />
-                  <h3 className="text-sm font-bold text-neutral-900">Dettes fournisseurs</h3>
+                  <h2 className="text-sm font-bold text-neutral-900">Dettes fournisseurs</h2>
                 </div>
                 <button onClick={() => nav('supplier_orders')} className="flex items-center gap-0.5 text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors">
                   Voir <ChevronRight className="w-3 h-3" />
@@ -2167,7 +2168,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-2">
                   <Package className="w-4 h-4 text-neutral-600" />
-                  <h3 className="text-sm font-bold text-neutral-900">Stock a surveiller</h3>
+                  <h2 className="text-sm font-bold text-neutral-900">Stock a surveiller</h2>
                 </div>
                 <button onClick={() => nav('stock')} className="text-neutral-400 hover:text-neutral-700 transition-colors">
                   <ChevronRight className="w-4 h-4" />
@@ -2211,7 +2212,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2.5">
                 <Network className="w-4.5 h-4.5 text-neutral-700" />
-                <h3 className="text-sm font-bold text-neutral-900">Vue multi-magasins</h3>
+                <h2 className="text-sm font-bold text-neutral-900">Vue multi-magasins</h2>
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{sites.length} magasins</span>
               </div>
               <div className="flex items-center gap-2">
@@ -2273,7 +2274,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <Award className="w-5 h-5 text-neutral-700" />
-                <h3 className="text-base font-bold text-neutral-900">Top articles</h3>
+                <h2 className="text-base font-bold text-neutral-900">Top articles</h2>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{periodLabel}</span>
                 {topArticles.length > 0 && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-bold border border-neutral-200">{topArticles.length}</span>
@@ -2349,7 +2350,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           <div className="col-span-12 xl:col-span-6 bg-white rounded-xl border border-neutral-200 p-5 flex flex-col max-h-[400px]">
             <div className="flex items-center gap-2 mb-4">
               <Clock className="w-5 h-5 text-neutral-500" />
-              <h3 className="text-base font-bold text-neutral-900">Activités récentes</h3>
+              <h2 className="text-base font-bold text-neutral-900">Activités récentes</h2>
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
               <table className="w-full">
@@ -2427,7 +2428,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-5">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
-              <h3 className="text-base font-bold text-neutral-900">Priorités du jour</h3>
+              <h2 className="text-base font-bold text-neutral-900">Priorités du jour</h2>
             </div>
             <div className="space-y-1">
               {stats.receivables > 0 && (
@@ -2476,7 +2477,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Coins className="w-5 h-5 text-neutral-700" />
-                <h3 className="text-sm font-bold text-neutral-900">Mouvements de caisse</h3>
+                <h2 className="text-sm font-bold text-neutral-900">Mouvements de caisse</h2>
               </div>
               <span className="text-[10px] font-medium text-neutral-400 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">Aujourd'hui</span>
             </div>
