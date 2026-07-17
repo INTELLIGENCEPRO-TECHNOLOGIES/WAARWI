@@ -1455,7 +1455,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       if (amt > 0) {
         rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: amt, credit: 0, kind: 'adjustment' });
       } else if (amt < 0) {
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Ajustement de solde', ref: '', debit: 0, credit: Math.abs(amt), kind: 'adjustment' });
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Règlement solde', ref: '', debit: 0, credit: Math.abs(amt), kind: 'payment' });
       }
     });
     sales.forEach(s => {
@@ -1523,21 +1523,23 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     if (!amt || amt <= 0) { error('Montant invalide'); return; }
     const pm = methods.find(m => m.id === payMethod);
     if (!pm) { error('Mode de règlement requis'); return; }
+    if (!tenant || !currentSite) return;
+    const now = Date.now();
+    const dup = payments.find(p => Number(p.amount) === amt && Math.abs(now - new Date(p.created_at).getTime()) < 60000);
+    if (dup) { toast(`Règlement de ${formatFCFA(amt)} effectué il y a moins d'une minute — vérifiez qu'il ne s'agit pas d'un doublon.`, 'info'); }
     setPaying(true);
-    let sessionId: string | null = null;
-    if (currentSite && tenant) {
-      const { data: sess } = await supabase.from('cash_sessions')
-        .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-        .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-      sessionId = sess?.id || null;
-    }
+    const { data: sess } = await supabase.from('cash_sessions')
+      .select('id')
+      .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
+      .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
+    if (!sess) { setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
 
     let e: any = null;
     if (paySale === '__balance__') {
       const { error: rpcErr } = await supabase.rpc('register_customer_payment', {
         p_customer_id: c.id, p_payment_method_id: pm.id, p_method_name: pm.name,
         p_amount: amt, p_reference: payRef || `Règlement solde · ${c.name}`,
-        p_cash_session_id: sessionId, p_sale_id: null,
+        p_cash_session_id: sess.id, p_sale_id: null,
       });
       e = rpcErr;
     } else {
@@ -1545,14 +1547,14 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       const ref = payRef || (sale ? `Règlement facture ${sale.sale_number} · ${c.name}` : '');
       const { error: rpcErr } = await supabase.rpc('register_sale_payment', {
         p_sale_id: paySale, p_payment_method_id: pm.id, p_method_name: pm.name,
-        p_amount: amt, p_reference: ref, p_cash_session_id: sessionId,
+        p_amount: amt, p_reference: ref, p_cash_session_id: sess.id,
       });
       e = rpcErr;
     }
 
     setPaying(false);
     if (e) { error(e.message); return; }
-    success(sessionId ? 'Règlement enregistré · imputé sur la caisse du jour' : 'Règlement enregistré');
+    success('Règlement enregistré · imputé sur la caisse du jour');
     setPaySale(''); setPayAmount(''); setPayRef('');
     reload();
   };
@@ -2206,7 +2208,15 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     return { total, paid, due: Math.max(0, total - paid) };
   }, [orders]);
 
-  const unpaidOrders = useMemo(() => orders.filter(o => o.status !== 'cancelled' && Number(o.paid || 0) < Number(o.total)), [orders]);
+  const unpaidOrders = useMemo(() => {
+    const result = orders.filter(o => o.status !== 'cancelled' && Number(o.paid || 0) < Number(o.total));
+    const invoiceDue = result.reduce((a, o) => a + (Number(o.total) - Number(o.paid || 0)), 0);
+    const positionedDue = Math.max(0, supplierBalance - invoiceDue);
+    if (positionedDue > 0) {
+      result.unshift({ id: '__balance__', order_number: 'Report de solde', total: positionedDue, paid: 0, status: 'validated', created_at: new Date(0).toISOString() } as any);
+    }
+    return result;
+  }, [orders, supplierBalance]);
 
   const ledger = useMemo(() => {
     type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'order' | 'payment' | 'cancel' | 'adjustment' };
@@ -2216,7 +2226,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       if (amt > 0) {
         rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: 0, credit: amt, kind: 'adjustment' });
       } else if (amt < 0) {
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Ajustement de solde', ref: '', debit: Math.abs(amt), credit: 0, kind: 'adjustment' });
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Règlement solde', ref: '', debit: Math.abs(amt), credit: 0, kind: 'payment' });
       }
     });
     orders.forEach(o => {
@@ -2227,6 +2237,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       rows.push({ id: 'o-' + o.id, ts: o.created_at, label: 'Achats', ref: o.order_number, debit: 0, credit: Number(o.total), kind: 'order' });
     });
     payments.forEach(p => {
+      if (!p.order_id) return;
       const o = orders.find(x => x.id === p.order_id);
       rows.push({ id: 'p-' + p.id, ts: p.paid_at || p.created_at, label: 'Règlement', ref: o?.order_number || '', debit: Number(p.amount), credit: 0, kind: 'payment' });
     });
@@ -2267,25 +2278,28 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     if (!amt || amt <= 0) { error('Montant invalide'); return; }
     const pm = methods.find(m => m.id === payMethod);
     if (!pm) { error('Mode de règlement requis'); return; }
-    if (!tenant) return;
+    if (!tenant || !currentSite) return;
+    const now = Date.now();
+    const dup = payments.find(p => Number(p.amount) === amt && Math.abs(now - new Date(p.created_at || p.paid_at).getTime()) < 60000);
+    if (dup) { toast(`Règlement de ${formatFCFA(amt)} effectué il y a moins d'une minute — vérifiez qu'il ne s'agit pas d'un doublon.`, 'info'); }
     setPaying(true);
-    const { error: e } = await supabase.from('supplier_payments').insert({
-      tenant_id: tenant.id, supplier_id: s.id, order_id: payOrder || null,
-      payment_method_id: pm.id, method_name: pm.name, amount: amt, reference: payRef,
+    const { data: sess } = await supabase.from('cash_sessions')
+      .select('id, opening_amount, theoretical_amount')
+      .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
+      .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
+    if (!sess) { setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
+    const available = Number(sess.opening_amount || 0) + Number(sess.theoretical_amount || 0);
+    if (available < amt) { setPaying(false); error('Solde caisse insuffisant'); return; }
+    const isBalance = payOrder === '__balance__';
+    const { error: e } = await supabase.rpc('register_supplier_payment', {
+      p_supplier_id: s.id, p_payment_method_id: pm.id, p_method_name: pm.name,
+      p_amount: amt, p_reference: payRef || (isBalance ? `Règlement solde · ${s.name}` : ''),
+      p_cash_session_id: sess.id, p_order_id: isBalance ? null : (payOrder || null),
+      p_from_cash: true,
     });
-    if (!e && payOrder) {
-      const order = orders.find(o => o.id === payOrder);
-      if (order) {
-        const newPaid = Number(order.paid || 0) + amt;
-        await supabase.from('supplier_orders').update({ paid: newPaid }).eq('id', payOrder);
-      }
-    }
-    if (!e) {
-      await supabase.rpc('recompute_supplier_balance', { p_supplier_id: s.id });
-    }
     setPaying(false);
     if (e) { error(e.message); return; }
-    success('Règlement fournisseur enregistré');
+    success('Règlement enregistré · imputé sur la caisse du jour');
     setPayOrder(''); setPayAmount(''); setPayRef('');
     reload();
   };
@@ -2363,7 +2377,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
               payMethod={payMethod} setPayMethod={setPayMethod}
               payRef={payRef} setPayRef={setPayRef}
               paying={paying} onSubmit={submitPayment}
-              onSelectOrder={(id: string) => { const o = orders.find(x => x.id === id); if (o) setPayAmount(String(Math.max(0, Number(o.total) - Number(o.paid || 0)))); }}
+              onSelectOrder={(id: string) => { const o = unpaidOrders.find(x => x.id === id); if (o) setPayAmount(String(Math.max(0, Number(o.total) - Number(o.paid || 0)))); }}
               recentPayments={payments.slice(0, 8).map(p => ({ ...p, order_number: orders.find(x => x.id === p.order_id)?.order_number }))}
             />
           )}
@@ -2586,6 +2600,7 @@ function SupplierPaymentForm({
   payRef, setPayRef, paying, onSubmit, onSelectOrder, recentPayments,
 }: any) {
   const selected = unpaid.find((o: any) => o.id === payOrder);
+  const isBalance = selected?.id === '__balance__';
   const due = selected ? Math.max(0, Number(selected.total) - Number(selected.paid || 0)) : 0;
   const amt = Number(payAmount) || 0;
   const remaining = Math.max(0, due - amt);
@@ -2601,7 +2616,7 @@ function SupplierPaymentForm({
         </div>
         {selected && (
           <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
-            <span className="text-white/60">Dû sur cette commande</span>
+            <span className="text-white/60">{isBalance ? 'Solde positionné' : 'Dû sur cette commande'}</span>
             <span className="font-bold tabular-nums">{formatFCFA(due)}</span>
           </div>
         )}
@@ -2618,7 +2633,7 @@ function SupplierPaymentForm({
         <SearchableSelect
           options={[
             { value: '', label: 'Acompte libre (sans commande)' },
-            ...unpaid.map((o: any) => {
+            ...unpaid.filter((o: any) => o.id !== '__balance__').map((o: any) => {
               const d = Math.max(0, Number(o.total) - Number(o.paid || 0));
               return { value: o.id, label: `${o.order_number} · du ${formatFCFA(d)}` };
             })
@@ -2627,6 +2642,12 @@ function SupplierPaymentForm({
           onChange={v => { setPayOrder(v); onSelectOrder(v); }}
           placeholder="Acompte libre (sans commande)"
         />
+        {unpaid.some((o: any) => o.id === '__balance__') && (
+          <button type="button" onClick={() => { setPayOrder('__balance__'); onSelectOrder('__balance__'); }}
+            className={`mt-2 w-full px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${isBalance ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+            Solde positionné · {formatFCFA(unpaid.find((o: any) => o.id === '__balance__')?.total || 0)}
+          </button>
+        )}
         {unpaid.length === 0 && <div className="text-xs text-emerald-700 mt-1.5 inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" />Toutes les commandes sont soldées.</div>}
       </div>
 
@@ -2645,6 +2666,14 @@ function SupplierPaymentForm({
       <div>
         <label className="label">Référence (optionnel)</label>
         <input value={payRef} onChange={e => setPayRef(e.target.value)} className="input" placeholder="N° chèque, virement…" />
+      </div>
+
+      <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-brand-50 border border-brand-200">
+        <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-brand-600">
+          <span className="inline-block h-4 w-4 transform rounded-full bg-white shadow translate-x-4" />
+        </span>
+        <span className="text-xs font-semibold text-brand-800">Imputé sur la caisse du jour</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-700 ml-auto">Caisse</span>
       </div>
 
       <button onClick={onSubmit} disabled={paying || amt <= 0} className="btn-primary w-full justify-center py-3 text-sm">

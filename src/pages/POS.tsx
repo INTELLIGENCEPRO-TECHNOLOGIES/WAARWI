@@ -157,7 +157,7 @@ function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
       }
       for (const m of movementsArr) {
         if (m.kind !== 'income' && m.kind !== 'customer_prepayment') continue;
-        if (m.kind === 'income' && (m.reason || '').startsWith('Règlement ')) continue;
+        if (m.kind === 'income' && (m.reason || '').startsWith('Règlement ') && !(m.reason || '').startsWith('Règlement solde')) continue;
         const amt = Number(m.amount);
         const method = m.method_name || 'Espèces';
         byMethod[method] = (byMethod[method] || 0) + amt;
@@ -2128,10 +2128,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       method_name: m.method_name || '', reference: m.reference || '',
       customer_name: m.customers?.name || null,
       created_at: m.created_at || '',
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ')));
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
     setSessionMovements(movs);
     const invPayments = (pmtData || [])
-      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== session!.id)
+      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement facture')) || !p.sales || p.sales.cash_session_id !== session!.id)
       .map((p: any) => ({
         sale_number: p.sales?.sale_number || '',
         amount: Number(p.amount),
@@ -2142,7 +2142,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setSessionInvPayments(invPayments);
     const pmtTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const movEncaisseTotal = (mvData || [])
-      .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ')))
+      .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
       .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     setSessionEncaisse(pmtTotal + movEncaisseTotal);
     setTicketsExpanded('tickets');
@@ -2277,16 +2277,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ')));
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movs.forEach(m => {
-      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment' && m.kind !== 'expense') return;
       const method = m.method_name || 'Espèces';
-      byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
+      const signed = m.kind === 'expense' ? -Number(m.amount) : Number(m.amount);
+      byMethod[method] = (byMethod[method] || 0) + signed;
     });
     const invoicePayments = pmtList
-      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== session.id)
+      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement facture')) || !p.sales || p.sales.cash_session_id !== session.id)
       .map((p: any) => ({
         sale_number: p.sales?.sale_number || '',
         amount: Number(p.amount),
@@ -2351,7 +2352,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       theoretical[key].amount += Number(p.amount);
     });
     (mvs || []).forEach((m: any) => {
-      if (m.kind === 'income' && m.reason && m.reason.startsWith('Règlement ')) return;
+      if (m.kind === 'income' && m.reason && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')) return;
       const key = m.method_name || (m.kind === 'expense' ? 'Espèces' : '—');
       if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
       if (m.kind === 'expense') {
@@ -2380,16 +2381,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ')));
+    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movList.forEach(m => {
-      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment' && m.kind !== 'expense') return;
       const method = m.method_name || 'Espèces';
-      byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
+      const signed = m.kind === 'expense' ? -Number(m.amount) : Number(m.amount);
+      byMethod[method] = (byMethod[method] || 0) + signed;
     });
     const invoicePayments = pmtList
-      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== session.id)
+      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement facture')) || !p.sales || p.sales.cash_session_id !== session.id)
       .map((p: any) => ({
         sale_number: p.sales?.sale_number || '',
         amount: Number(p.amount),

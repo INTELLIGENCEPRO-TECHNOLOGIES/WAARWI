@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Loader2, Printer, Eye, BarChart3, Package, Users, Truck,
-  ShoppingCart, Calendar, ChevronDown, Monitor, Store, Check, X, TrendingDown,
+  ShoppingCart, Calendar, ChevronDown, Monitor, Store, Check, X, TrendingDown, Scale,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -737,18 +737,224 @@ function buildExpenseReport(
     ${docFooter(now)}`;
 }
 
+// ── Tiers Balance (clients & fournisseurs) ─────────────────────────────────────
+
+type TiersBalanceRow = {
+  id: string;
+  name: string;
+  outstanding: number;   // ventes/commandes impayées
+  adjustments: number;   // ajustements de balance positionnés
+  finalBalance: number;  // balance actuelle
+};
+
+async function fetchTiersBalanceStats(
+  tenantId: string, _from: string, _to: string, siteId: string | null
+): Promise<{ customers: TiersBalanceRow[]; suppliers: TiersBalanceRow[] }> {
+  // ── Clients ──
+  let custQ = supabase
+    .from('customers')
+    .select('id, name, balance')
+    .eq('tenant_id', tenantId)
+    .order('name');
+  if (siteId) custQ = custQ.eq('site_id', siteId);
+  const { data: customers, error: cErr } = await custQ;
+  if (cErr) throw cErr;
+
+  // Ventes impayées par client
+  let salesQ = supabase
+    .from('sales')
+    .select('id, customer_id, total, status, sale_payments(amount)')
+    .eq('tenant_id', tenantId)
+    .neq('status', 'cancelled');
+  if (siteId) salesQ = salesQ.eq('site_id', siteId);
+  const { data: sales, error: sErr } = await salesQ;
+  if (sErr) throw sErr;
+
+  const custOutstanding = new Map<string, number>();
+  for (const s of (sales || []) as any[]) {
+    const paid = ((s.sale_payments || []) as any[]).reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+    const due = (s.total || 0) - paid;
+    if (due <= 0) continue;
+    custOutstanding.set(s.customer_id, (custOutstanding.get(s.customer_id) || 0) + due);
+  }
+
+  // Ajustements de balance clients
+  const { data: custAdj, error: caErr } = await supabase
+    .from('balance_adjustments')
+    .select('entity_id, amount')
+    .eq('tenant_id', tenantId)
+    .eq('entity_type', 'customer');
+  if (caErr) throw caErr;
+  const custAdjustments = new Map<string, number>();
+  for (const a of (custAdj || []) as any[]) {
+    custAdjustments.set(a.entity_id, (custAdjustments.get(a.entity_id) || 0) + (a.amount || 0));
+  }
+
+  const customerRows: TiersBalanceRow[] = (customers || []).map((c: any) => {
+    const outstanding = custOutstanding.get(c.id) || 0;
+    const adjustments = custAdjustments.get(c.id) || 0;
+    return {
+      id: c.id,
+      name: c.name || 'Client inconnu',
+      outstanding,
+      adjustments,
+      finalBalance: Number(c.balance) || 0,
+    };
+  }).sort((a, b) => b.finalBalance - a.finalBalance);
+
+  // ── Fournisseurs ──
+  let supQ = supabase
+    .from('suppliers')
+    .select('id, name, balance')
+    .eq('tenant_id', tenantId)
+    .order('name');
+  if (siteId) supQ = supQ.eq('site_id', siteId);
+  const { data: suppliers, error: supErr } = await supQ;
+  if (supErr) throw supErr;
+
+  // Commandes impayées par fournisseur
+  let ordQ = supabase
+    .from('supplier_orders')
+    .select('id, supplier_id, total, status, supplier_payments(amount)')
+    .eq('tenant_id', tenantId)
+    .neq('status', 'cancelled')
+    .neq('status', 'draft');
+  if (siteId) ordQ = ordQ.eq('site_id', siteId);
+  const { data: orders, error: oErr } = await ordQ;
+  if (oErr) throw oErr;
+
+  const supOutstanding = new Map<string, number>();
+  for (const o of (orders || []) as any[]) {
+    const paid = ((o.supplier_payments || []) as any[]).reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+    const due = (o.total || 0) - paid;
+    if (due <= 0) continue;
+    supOutstanding.set(o.supplier_id, (supOutstanding.get(o.supplier_id) || 0) + due);
+  }
+
+  // Ajustements de balance fournisseurs
+  const { data: supAdj, error: saErr } = await supabase
+    .from('balance_adjustments')
+    .select('entity_id, amount')
+    .eq('tenant_id', tenantId)
+    .eq('entity_type', 'supplier');
+  if (saErr) throw saErr;
+  const supAdjustments = new Map<string, number>();
+  for (const a of (supAdj || []) as any[]) {
+    supAdjustments.set(a.entity_id, (supAdjustments.get(a.entity_id) || 0) + (a.amount || 0));
+  }
+
+  const supplierRows: TiersBalanceRow[] = (suppliers || []).map((s: any) => {
+    const outstanding = supOutstanding.get(s.id) || 0;
+    const adjustments = supAdjustments.get(s.id) || 0;
+    return {
+      id: s.id,
+      name: s.name || 'Fournisseur inconnu',
+      outstanding,
+      adjustments,
+      finalBalance: Number(s.balance) || 0,
+    };
+  }).sort((a, b) => b.finalBalance - a.finalBalance);
+
+  return { customers: customerRows, suppliers: supplierRows };
+}
+
+function buildTiersBalanceReport(
+  tenant: TenantMeta, range: DateRange,
+  stats: Awaited<ReturnType<typeof fetchTiersBalanceStats>>,
+  siteName: string | undefined,
+  hideZero: boolean,
+): string {
+  const period = labelRange(range);
+  const now = new Date().toLocaleString('fr-FR');
+  const { customers, suppliers } = stats;
+
+  const totalCustBalance = customers.reduce((s, r) => s + r.finalBalance, 0);
+  const totalSupBalance = suppliers.reduce((s, r) => s + r.finalBalance, 0);
+  const netPosition = totalCustBalance - totalSupBalance;
+  const nonZeroCount = customers.filter(r => r.finalBalance !== 0).length + suppliers.filter(r => r.finalBalance !== 0).length;
+
+  const filterFn = (r: TiersBalanceRow) => !hideZero || r.finalBalance !== 0;
+  const shownCustomers = customers.filter(filterFn);
+  const shownSuppliers = suppliers.filter(filterFn);
+
+  const custRows = shownCustomers.map((r, i) => `<tr>
+    <td class="num c">${i + 1}</td>
+    <td class="b">${esc(r.name)}</td>
+    <td class="r num">${r.outstanding > 0 ? fmtMoney(r.outstanding) : '—'}</td>
+    <td class="r num ${r.adjustments > 0 ? 'mc' : r.adjustments < 0 ? 'mr' : ''}">${r.adjustments !== 0 ? (r.adjustments > 0 ? '+ ' : '− ') + fmtMoney(Math.abs(r.adjustments)) : '—'}</td>
+    <td class="r num b ${r.finalBalance > 0 ? 'mc' : r.finalBalance < 0 ? 'mr' : ''}">${r.finalBalance !== 0 ? fmtMoney(r.finalBalance) : '—'}</td>
+  </tr>`).join('');
+
+  const supRows = shownSuppliers.map((r, i) => `<tr>
+    <td class="num c">${i + 1}</td>
+    <td class="b">${esc(r.name)}</td>
+    <td class="r num">${r.outstanding > 0 ? fmtMoney(r.outstanding) : '—'}</td>
+    <td class="r num ${r.adjustments > 0 ? 'mc' : r.adjustments < 0 ? 'mr' : ''}">${r.adjustments !== 0 ? (r.adjustments > 0 ? '+ ' : '− ') + fmtMoney(Math.abs(r.adjustments)) : '—'}</td>
+    <td class="r num b ${r.finalBalance > 0 ? 'mr' : r.finalBalance < 0 ? 'mc' : ''}">${r.finalBalance !== 0 ? fmtMoney(r.finalBalance) : '—'}</td>
+  </tr>`).join('');
+
+  return `
+    ${docHeader(tenant, 'Balance des Tiers', 'État des créances et dettes clients & fournisseurs', period, siteName)}
+    <div class="kpi-row">
+      <div class="kpi-cell success"><div class="kpi-label">Total créances clients</div><div class="kpi-value green">${fmtMoney(totalCustBalance)} FCFA</div></div>
+      <div class="kpi-cell danger"><div class="kpi-label">Total dettes fournisseurs</div><div class="kpi-value red">${fmtMoney(totalSupBalance)} FCFA</div></div>
+      <div class="kpi-cell ${netPosition >= 0 ? 'success' : 'danger'}"><div class="kpi-label">Position nette</div><div class="kpi-value ${netPosition >= 0 ? 'green' : 'red'}">${fmtMoney(netPosition)} FCFA</div></div>
+      <div class="kpi-cell"><div class="kpi-label">Tiers avec solde non nul</div><div class="kpi-value">${fmtNum(nonZeroCount)}</div></div>
+    </div>
+
+    <div class="section-title">Créances clients${hideZero ? ' — soldes non nuls uniquement' : ''}</div>
+    <table>
+      <thead><tr><th class="c">#</th><th>Client</th><th class="r">Ventes impayées</th><th class="r">Ajustements positionnés</th><th class="r">Balance finale</th></tr></thead>
+      <tbody>
+        ${custRows || '<tr><td colspan="5" class="c muted">Aucun client</td></tr>'}
+        ${shownCustomers.length ? `<tr class="total-row">
+          <td></td><td class="b">TOTAL</td>
+          <td class="r num">${fmtMoney(shownCustomers.reduce((s, r) => s + r.outstanding, 0))}</td>
+          <td class="r num">${fmtMoney(shownCustomers.reduce((s, r) => s + r.adjustments, 0))}</td>
+          <td class="r num ${totalCustBalance >= 0 ? 'mc' : 'mr'}">${fmtMoney(totalCustBalance)}</td>
+        </tr>` : ''}
+      </tbody>
+    </table>
+
+    <div class="section-title">Dettes fournisseurs${hideZero ? ' — soldes non nuls uniquement' : ''}</div>
+    <table>
+      <thead><tr><th class="c">#</th><th>Fournisseur</th><th class="r">Commandes impayées</th><th class="r">Ajustements positionnés</th><th class="r">Balance finale</th></tr></thead>
+      <tbody>
+        ${supRows || '<tr><td colspan="5" class="c muted">Aucun fournisseur</td></tr>'}
+        ${shownSuppliers.length ? `<tr class="total-row">
+          <td></td><td class="b">TOTAL</td>
+          <td class="r num">${fmtMoney(shownSuppliers.reduce((s, r) => s + r.outstanding, 0))}</td>
+          <td class="r num">${fmtMoney(shownSuppliers.reduce((s, r) => s + r.adjustments, 0))}</td>
+          <td class="r num ${totalSupBalance >= 0 ? 'mr' : 'mc'}">${fmtMoney(totalSupBalance)}</td>
+        </tr>` : ''}
+      </tbody>
+    </table>
+
+    <div class="section-title">Synthèse</div>
+    <table>
+      <thead><tr><th>Élément</th><th class="r">Montant (FCFA)</th></tr></thead>
+      <tbody>
+        <tr><td class="b">Total créances clients</td><td class="r num mc">${fmtMoney(totalCustBalance)}</td></tr>
+        <tr><td class="b">Total dettes fournisseurs</td><td class="r num mr">${fmtMoney(totalSupBalance)}</td></tr>
+        <tr class="total-row"><td class="b">POSITION NETTE (créances − dettes)</td><td class="r num ${netPosition >= 0 ? 'mc' : 'mr'}">${fmtMoney(netPosition)}</td></tr>
+      </tbody>
+    </table>
+    ${docFooter(now)}`;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
-type ReportType = 'cash' | 'articles' | 'customers' | 'suppliers' | 'expenses';
+type ReportType = 'cash' | 'articles' | 'customers' | 'suppliers' | 'expenses' | 'tiers_balance';
 
 const REPORT_DEFS: {
-  key: ReportType; label: string; sublabel: string; icon: any; hasMargin: boolean;
+  key: ReportType; label: string; sublabel: string; icon: any; hasMargin: boolean; hasZeroToggle: boolean;
 }[] = [
-  { key: 'cash',      label: 'Caisse',       sublabel: "CA journalier, encaissements et modes de paiement", icon: ShoppingCart, hasMargin: true  },
-  { key: 'articles',  label: 'Articles',     sublabel: "Classement des articles vendus par chiffre d'affaires", icon: Package, hasMargin: true  },
-  { key: 'customers', label: 'Clients',      sublabel: "Portefeuille client, CA et encours de crédit",       icon: Users,        hasMargin: true  },
-  { key: 'suppliers', label: 'Fournisseurs', sublabel: "Achats et règlements par fournisseur",               icon: Truck,        hasMargin: false },
-  { key: 'expenses',  label: 'Dépenses',     sublabel: "Dépenses par type et marge nette après dépenses",    icon: TrendingDown, hasMargin: false },
+  { key: 'cash',          label: 'Caisse',           sublabel: "CA journalier, encaissements et modes de paiement", icon: ShoppingCart, hasMargin: true,  hasZeroToggle: false },
+  { key: 'articles',      label: 'Articles',         sublabel: "Classement des articles vendus par chiffre d'affaires", icon: Package, hasMargin: true,  hasZeroToggle: false },
+  { key: 'customers',     label: 'Clients',          sublabel: "Portefeuille client, CA et encours de crédit",       icon: Users,        hasMargin: true,  hasZeroToggle: false },
+  { key: 'suppliers',     label: 'Fournisseurs',     sublabel: "Achats et règlements par fournisseur",               icon: Truck,        hasMargin: false, hasZeroToggle: false },
+  { key: 'expenses',      label: 'Dépenses',        sublabel: "Dépenses par type et marge nette après dépenses",    icon: TrendingDown, hasMargin: false, hasZeroToggle: false },
+  { key: 'tiers_balance', label: 'Balance des Tiers', sublabel: "Créances et dettes complètes — ventes, achats et soldes positionnés", icon: Scale, hasMargin: false, hasZeroToggle: true },
 ];
 
 function isMobile() {
@@ -767,6 +973,7 @@ export function Reports() {
   const [siteDropOpen, setSiteDropOpen] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string | 'all'>('all');
   const [savingMargin, setSavingMargin] = useState(false);
+  const [hideZeroBalances, setHideZeroBalances] = useState(false);
 
   const [showMargin, setShowMargin] = useState<boolean>(() =>
     !!(tenant as any)?.settings?.show_margin_in_reports
@@ -855,6 +1062,9 @@ export function Reports() {
       } else if (reportType === 'expenses') {
         const stats = await fetchExpenseStats(tenant.id, siteIdParam, from, to);
         html = buildExpenseReport(tenantMeta, range, stats, siteName);
+      } else if (reportType === 'tiers_balance') {
+        const stats = await fetchTiersBalanceStats(tenant.id, from, to, selectedSiteId === 'all' ? null : selectedSiteId);
+        html = buildTiersBalanceReport(tenantMeta, range, stats, siteName, hideZeroBalances);
       } else {
         const rows = await fetchSupplierStats(tenant.id, from, to);
         html = buildSupplierReport(tenantMeta, range, rows, siteName);
@@ -1013,6 +1223,21 @@ export function Reports() {
                     <div className={`absolute top-[1px] w-2 h-2 rounded-full bg-white shadow-sm transition-transform ${showMargin ? 'translate-x-2.5' : 'translate-x-0.5'}`} />
                   </div>
                   Marges
+                </button>
+              )}
+              {d.hasZeroToggle && active && (
+                <button
+                  onClick={e => { e.stopPropagation(); setHideZeroBalances(v => !v); setPreviewHtml(null); }}
+                  className={`mt-auto inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all border ${
+                    hideZeroBalances
+                      ? 'bg-brand-50 border-brand-200 text-brand-700'
+                      : 'bg-white border-slate-200 text-slate-500'
+                  }`}
+                >
+                  <div className={`w-5 h-2.5 rounded-full transition-colors relative ${hideZeroBalances ? 'bg-brand-500' : 'bg-slate-300'}`}>
+                    <div className={`absolute top-[1px] w-2 h-2 rounded-full bg-white shadow-sm transition-transform ${hideZeroBalances ? 'translate-x-2.5' : 'translate-x-0.5'}`} />
+                  </div>
+                  Masquer à zéro
                 </button>
               )}
             </button>

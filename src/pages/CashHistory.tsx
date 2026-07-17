@@ -35,7 +35,7 @@ type InvoicePayment = {
 type CashMovementRow = {
   id: string; kind: 'expense' | 'income' | 'customer_prepayment';
   amount: number; reason: string; note: string; reference: string;
-  method_name: string; customer_name: string | null; created_at: string;
+  method_name: string; customer_name: string | null; supplier_name: string | null; created_at: string;
 };
 
 type SessionDetail = {
@@ -104,16 +104,17 @@ export function CashHistory() {
       supabase.from('cash_control_lines').select('method_name, theoretical_amount, counted_amount, difference_amount').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id),
       supabase.from('cash_regularizations').select('reg_type, amount, reason, note, created_at').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id).order('created_at'),
       supabase.from('sale_payments').select('id, method_name, amount, reference, created_at, sale_id, sales(sale_number, created_at, cash_session_id, customers(name))').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id),
-      supabase.from('cash_movements').select('id, kind, amount, reason, note, reference, method_name, created_at, customers(name)').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id).order('created_at'),
+      supabase.from('cash_movements').select('id, kind, amount, reason, note, reference, method_name, created_at, customers(name), suppliers(name)').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id).order('created_at'),
     ]);
     const byMethodMap: Record<string, number> = {};
     (pmtData || []).forEach((p: any) => { byMethodMap[p.method_name] = (byMethodMap[p.method_name] || 0) + Number(p.amount); });
     (mvData || []).forEach((m: any) => {
-      const isReglement = m.kind === 'income' && (m.reason || '').startsWith('Règlement ');
+      const isReglement = m.kind === 'income' && (m.reason || '').startsWith('Règlement ') && !m.reason.startsWith('Règlement solde');
       if (isReglement) return;
-      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment' && m.kind !== 'expense') return;
       const method = m.method_name || 'Espèces';
-      byMethodMap[method] = (byMethodMap[method] || 0) + Number(m.amount);
+      const signed = m.kind === 'expense' ? -Number(m.amount) : Number(m.amount);
+      byMethodMap[method] = (byMethodMap[method] || 0) + signed;
     });
     const invoicePayments: InvoicePayment[] = (pmtData || [])
       .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== s.id)
@@ -130,10 +131,11 @@ export function CashHistory() {
       reason: m.reason || '', note: m.note || '', reference: m.reference || '',
       method_name: m.method_name || '',
       customer_name: m.customers?.name || null,
+      supplier_name: m.suppliers?.name || null,
       created_at: m.created_at,
     }));
     const movements = allMovements.filter(m =>
-      !(m.kind === 'income' && m.reason.startsWith('Règlement '))
+      !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))
     );
     setDetail({
       session: s,

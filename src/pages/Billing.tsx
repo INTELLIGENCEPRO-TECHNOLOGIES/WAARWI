@@ -1351,14 +1351,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (!amt || amt <= 0) { error('Montant invalide'); return; }
     const pm = paymentMethods.find(p => p.id === payMethod);
     if (!pm) { error('Mode de règlement requis'); return; }
+    if (!tenant || !currentSite) return;
     setPaying(true);
-    let sessionId: string | null = null;
-    if (currentSite && tenant) {
-      const { data: sess } = await supabase.from('cash_sessions')
-        .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-        .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-      sessionId = sess?.id || null;
-    }
+    const { data: sess } = await supabase.from('cash_sessions')
+      .select('id')
+      .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
+      .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
+    if (!sess) { setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
     const ref = `Règlement facture ${invoiceDetail.sale_number}${invoiceDetail.customers?.name ? ' · ' + invoiceDetail.customers.name : ''}`;
     const { error: e } = await supabase.rpc('register_sale_payment', {
       p_sale_id: invoiceDetail.id,
@@ -1366,7 +1365,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       p_method_name: pm.name,
       p_amount: amt,
       p_reference: ref,
-      p_cash_session_id: sessionId,
+      p_cash_session_id: sess.id,
     });
     setPaying(false);
     if (e) { error(e.message); return; }
@@ -1377,7 +1376,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       const totalPaidNow = (allPays || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
       await supabase.from('ipm_ventes').update({ part_beneficiaire_payee: Math.min(totalPaidNow, Number(ipmV.part_client)) }).eq('id', ipmV.id);
     }
-    success(sessionId ? 'Paiement enregistré · imputé sur la caisse du jour' : 'Paiement enregistré');
+    success('Paiement enregistré · imputé sur la caisse du jour');
     setPayOpen(false);
     await reloadInvoice(invoiceDetail.id);
   };
