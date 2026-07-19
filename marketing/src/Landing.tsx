@@ -696,16 +696,27 @@ export function Landing() {
         {clientLogos.length > 0 && (
           <section className="py-10 bg-white border-b border-slate-100" aria-label="Ils utilisent Waarwi" aria-labelledby="logos-title">
             <div className="max-w-6xl mx-auto px-5 md:px-8">
-              <h2 id="logos-title" className="text-center text-xs font-bold uppercase tracking-[0.15em] text-slate-400 mb-6">
+              <h2 id="logos-title" className="text-center text-xs font-bold uppercase tracking-[0.15em] text-slate-400 mb-8">
                 Ils utilisent Waarwi
               </h2>
-              <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-6">
+              <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-8">
                 {clientLogos.map((logo, i) => (
-                  <div key={i} className="flex items-center gap-2 text-slate-400">
+                  <div key={i} className="group relative flex items-center justify-center">
                     {logo.logo_url ? (
-                      <img src={logo.logo_url} alt={logo.name} className="h-8 w-auto object-contain grayscale opacity-70" loading="lazy" />
+                      <img
+                        src={logo.logo_url}
+                        alt={logo.name}
+                        title={logo.name}
+                        className="h-12 w-auto object-contain grayscale opacity-60 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100 group-focus-within:grayscale-0 group-focus-within:opacity-100"
+                        loading="lazy"
+                      />
                     ) : (
-                      <span className="text-base font-bold tracking-tight">{logo.name}</span>
+                      <span className="text-lg font-bold tracking-tight">{logo.name}</span>
+                    )}
+                    {logo.logo_url && (
+                      <span className="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                        {logo.name}
+                      </span>
                     )}
                   </div>
                 ))}
