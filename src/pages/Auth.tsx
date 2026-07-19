@@ -273,12 +273,15 @@ export function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [activityTypes, setActivityTypes] = useState<BusinessActivityType[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [pendingPlanCode, setPendingPlanCode] = useState<string | null>(null);
   const [step, setStep] = useState(1);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'register') setMode('register');
+    const planParam = params.get('plan');
+    if (planParam) setPendingPlanCode(planParam);
   }, []);
 
   const TOTAL_STEPS = 5;
@@ -298,7 +301,9 @@ export function Auth() {
       const { data } = await supabase.from('plans').select('*').eq('is_public', true).order('sort_order');
       if (data) {
         setPlans(data as Plan[]);
-        if (data.length > 0 && !selectedPlan) {
+        if (pendingPlanCode && data.some((p: any) => p.code === pendingPlanCode)) {
+          setSelectedPlan(pendingPlanCode);
+        } else if (data.length > 0 && !selectedPlan) {
           const pro = data.find((p: any) => p.code === 'starter');
           setSelectedPlan(pro ? pro.code : data[0].code);
         }
