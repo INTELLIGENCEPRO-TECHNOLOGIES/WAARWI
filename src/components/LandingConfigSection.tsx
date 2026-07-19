@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, Check, Globe, Eye, Loader2, Plus, RotateCcw, Trash2, Shield, Image as ImageIcon, Users, MessageSquare, HelpCircle, Sparkles, ShoppingCart, Package, FileText, Truck, BarChart3, TrendingUp, Zap, Wallet, Layers, Monitor, Receipt, MapPin, Headphones, RefreshCw, Store, Boxes, BookOpen, Shirt, Cpu, HeartPulse, Building2, Gem, Wrench } from 'lucide-react';
+import { ArrowUpRight, Check, Globe, Eye, Loader2, Plus, RotateCcw, Trash2, Shield, Image as ImageIcon, Users, MessageSquare, HelpCircle, Sparkles, ShoppingCart, Package, FileText, Truck, BarChart3, TrendingUp, Zap, Wallet, Layers, Monitor, Receipt, MapPin, Headphones, RefreshCw, Store, Boxes, BookOpen, Shirt, Cpu, HeartPulse, Building2, Gem, Wrench, Upload, Replace } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 
-type LandingFeatureItem = { icon: string; title: string; desc: string };
+type LandingFeatureItem = { icon: string; title: string; desc: string; image_url?: string; image_alt?: string; image_position?: 'left' | 'center' | 'right' };
 type DemoShot = { src: string; alt: string; label: string };
-type WhyItem = { icon: string; title: string; desc: string };
+type WhyItem = { icon: string; title: string; desc: string; image_url?: string; image_alt?: string; image_position?: 'left' | 'center' | 'right' };
+type SectorItem = { id: string; name: string; slug: string; description?: string; is_active: boolean; image_url?: string | null; image_alt?: string | null; image_position?: string | null };
 type FaqItem = { q: string; a: string };
 type Testimonial = { quote: string; author: string; role?: string; company?: string };
 type ClientLogo = { name: string; logo_url?: string };
@@ -15,6 +16,12 @@ const ICON_MAP_ADMIN: Record<string, any> = {
   BarChart3, TrendingUp, Shield, Zap, Wallet, Layers, Monitor, Receipt,
   Sparkles, MapPin, Headphones, RefreshCw, Store, Boxes, BookOpen,
   Shirt, Cpu, HeartPulse, Building2, Gem, Wrench,
+};
+
+const SECTOR_ICONS_ADMIN: Record<string, any> = {
+  auto_parts: Wrench, textile: Shirt, electromenager: Cpu, smartphones: Monitor,
+  cosmetique: Sparkles, pharmacie: HeartPulse, quincaillerie: Boxes, librairie: BookOpen,
+  mercerie: Layers, alimentaire: Store, services: Building2, bijoux: Gem, 'bijoux-accessoires': Gem,
 };
 
 const AVAILABLE_ICONS = [
@@ -93,7 +100,105 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
   return data;
 }
 
-async function uploadLandingMedia(file: File, folder: string): Promise<string> {
+const POSITION_OPTIONS = [
+  { value: 'center', label: 'Centre' },
+  { value: 'left', label: 'Gauche' },
+  { value: 'right', label: 'Droite' },
+] as const;
+
+function CardImageManager({
+  imageUrl, imageAlt, imagePosition, uploading, onUpload, onReplace, onRemove, onAlt, onPosition,
+}: {
+  imageUrl?: string | null;
+  imageAlt?: string | null;
+  imagePosition?: string | null;
+  uploading: boolean;
+  onUpload: (f: File) => void;
+  onReplace: (f: File) => void;
+  onRemove: () => void;
+  onAlt: (v: string) => void;
+  onPosition: (v: 'left' | 'center' | 'right') => void;
+}) {
+  const has = !!imageUrl;
+  const pos = (imagePosition === 'left' || imagePosition === 'right') ? imagePosition : 'center';
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-2.5">
+      <div className="flex items-start gap-3">
+        <div className="shrink-0 w-24 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+          {has ? (
+            <img src={imageUrl!} alt={imageAlt || ''} className="w-full h-full object-cover" style={{ objectPosition: pos }} />
+          ) : (
+            <ImageIcon className="w-5 h-5 text-slate-300" />
+          )}
+        </div>
+        <div className="flex-1 space-y-1.5 min-w-0">
+          <div className="flex flex-wrap gap-1.5">
+            {!has && (
+              <label className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-brand-50 text-brand-700 text-[10px] font-semibold hover:bg-brand-100 cursor-pointer transition-colors">
+                {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                Ajouter une image
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ''; }} disabled={uploading} />
+              </label>
+            )}
+            {has && (
+              <>
+                <label className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-[10px] font-semibold hover:bg-slate-200 cursor-pointer transition-colors">
+                  {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Replace className="w-3 h-3" />}
+                  Remplacer
+                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onReplace(f); e.currentTarget.value = ''; }} disabled={uploading} />
+                </label>
+                <button onClick={onRemove} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-red-600 hover:bg-red-50 text-[10px] font-semibold transition-colors">
+                  <Trash2 className="w-3 h-3" /> Supprimer
+                </button>
+              </>
+            )}
+          </div>
+          {has && (
+            <>
+              <input value={imageAlt || ''} onChange={e => onAlt(e.target.value)} placeholder="Texte alternatif (obligatoire)" className="w-full h-7 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-500 font-semibold">Position</span>
+                {POSITION_OPTIONS.map(o => (
+                  <button key={o.value} onClick={() => onPosition(o.value)} className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors ${pos === o.value ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{o.label}</button>
+                ))}
+              </div>
+            </>
+          )}
+          {!has && <p className="text-[10px] text-slate-400">Aucune image — l'icône actuelle sert de secours. PNG, JPEG ou WebP (max 5 Mo).</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CardPreview({ imageUrl, imageAlt, imagePosition, title, desc, fallback }: {
+  imageUrl?: string | null;
+  imageAlt?: string | null;
+  imagePosition?: string | null;
+  title: string;
+  desc: string;
+  fallback: React.ReactNode;
+}) {
+  const has = !!imageUrl;
+  const pos = (imagePosition === 'left' || imagePosition === 'right') ? imagePosition : 'center';
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white flex h-28">
+      {has ? (
+        <div className="w-[38%] shrink-0 bg-slate-100 overflow-hidden">
+          <img src={imageUrl!} alt={imageAlt || ''} className="w-full h-full object-cover" style={{ objectPosition: pos }} />
+        </div>
+      ) : (
+        <div className="w-[38%] shrink-0 bg-teal-50 flex items-center justify-center">{fallback}</div>
+      )}
+      <div className="flex-1 p-3 flex flex-col justify-center min-w-0">
+        <p className="text-xs font-bold text-slate-900 leading-snug truncate">{title || 'Titre'}</p>
+        <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3 mt-1">{desc || 'Description'}</p>
+      </div>
+    </div>
+  );
+}
+
+async function uploadLandingMedia(file: File, folder: string): Promise<{ url: string; path: string }> {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
     throw new Error('Format non supporté. Utilisez PNG, JPEG ou WebP.');
   }
@@ -107,7 +212,23 @@ async function uploadLandingMedia(file: File, folder: string): Promise<string> {
   });
   if (upErr) throw new Error(upErr.message);
   const { data: { publicUrl } } = supabase.storage.from('landing-media').getPublicUrl(path);
-  return publicUrl;
+  return { url: publicUrl, path };
+}
+
+function pathFromLandingUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const idx = u.pathname.indexOf('/landing-media/');
+    if (idx < 0) return null;
+    return decodeURIComponent(u.pathname.slice(idx + '/landing-media/'.length));
+  } catch { return null; }
+}
+
+async function removeLandingMedia(url: string | null | undefined): Promise<void> {
+  if (!url) return;
+  const p = pathFromLandingUrl(url);
+  if (!p) return;
+  await supabase.storage.from('landing-media').remove([p]);
 }
 
 function move<T>(arr: T[], idx: number, dir: -1 | 1): T[] {
@@ -116,7 +237,7 @@ function move<T>(arr: T[], idx: number, dir: -1 | 1): T[] {
   const a = [...arr]; [a[idx], a[next]] = [a[next], a[idx]]; return a;
 }
 
-type Tab = 'contenu' | 'modules' | 'demo' | 'preuves' | 'whyfaq';
+type Tab = 'contenu' | 'modules' | 'secteurs' | 'demo' | 'preuves' | 'whyfaq';
 
 export function LandingConfigSection() {
   const { success, error } = useToast();
@@ -147,6 +268,9 @@ export function LandingConfigSection() {
   const [clientLogos, setClientLogos] = useState<ClientLogo[]>([]);
   const [sectionTitles, setSectionTitles] = useState<Record<string, string>>({});
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [sectors, setSectors] = useState<SectorItem[]>([]);
+  const [sectorsLoaded, setSectorsLoaded] = useState(false);
+  const [sectorBusy, setSectorBusy] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -180,6 +304,91 @@ export function LandingConfigSection() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'secteurs') loadSectors();
+  }, [activeTab]);
+
+  const loadSectors = async () => {
+    if (sectorsLoaded) return;
+    try {
+      const data = await call('get_sectors_admin');
+      setSectors(Array.isArray(data.sectors) ? data.sectors : []);
+      setSectorsLoaded(true);
+    } catch (e: any) { error(e.message); }
+  };
+
+  const uploadFeatureImage = async (idx: number, file: File, replace: boolean) => {
+    setUploadingKey(`feat-${idx}`);
+    try {
+      const oldUrl = replace ? features[idx]?.image_url : null;
+      const { url } = await uploadLandingMedia(file, 'features');
+      setFeatures(features.map((m, i) => i === idx ? { ...m, image_url: url, image_alt: m.image_alt || '' } : m));
+      if (oldUrl) await removeLandingMedia(oldUrl);
+      success('Image ajoutée');
+    } catch (e: any) { error(e.message); }
+    setUploadingKey(null);
+  };
+
+  const removeFeatureImage = async (idx: number) => {
+    const oldUrl = features[idx]?.image_url;
+    setFeatures(features.map((m, i) => i === idx ? { ...m, image_url: undefined, image_alt: undefined, image_position: 'center' } : m));
+    if (oldUrl) await removeLandingMedia(oldUrl);
+  };
+
+  const uploadWhyImage = async (idx: number, file: File, replace: boolean) => {
+    setUploadingKey(`why-${idx}`);
+    try {
+      const oldUrl = replace ? whyWaarwi[idx]?.image_url : null;
+      const { url } = await uploadLandingMedia(file, 'why');
+      setWhyWaarwi(whyWaarwi.map((m, i) => i === idx ? { ...m, image_url: url, image_alt: m.image_alt || '' } : m));
+      if (oldUrl) await removeLandingMedia(oldUrl);
+      success('Image ajoutée');
+    } catch (e: any) { error(e.message); }
+    setUploadingKey(null);
+  };
+
+  const removeWhyImage = async (idx: number) => {
+    const oldUrl = whyWaarwi[idx]?.image_url;
+    setWhyWaarwi(whyWaarwi.map((m, i) => i === idx ? { ...m, image_url: undefined, image_alt: undefined, image_position: 'center' } : m));
+    if (oldUrl) await removeLandingMedia(oldUrl);
+  };
+
+  const uploadSectorImage = async (sectorId: string, file: File, replace: boolean) => {
+    setSectorBusy(sectorId);
+    try {
+      const sec = sectors.find(s => s.id === sectorId);
+      const oldUrl = replace ? sec?.image_url : null;
+      const { url } = await uploadLandingMedia(file, `sectors/${sectorId.slice(0, 8)}`);
+      const res = await call('update_sector_image', { sector_id: sectorId, image_url: url, image_alt: sec?.image_alt || '', image_position: sec?.image_position || 'center' });
+      if (res.sector) setSectors(sectors.map(s => s.id === sectorId ? { ...s, ...res.sector } : s));
+      if (oldUrl) await removeLandingMedia(oldUrl);
+      success('Image secteur enregistrée');
+    } catch (e: any) { error(e.message); }
+    setSectorBusy(null);
+  };
+
+  const saveSectorMeta = async (sectorId: string, patch: Partial<Pick<SectorItem, 'image_alt' | 'image_position'>>) => {
+    setSectors(sectors.map(s => s.id === sectorId ? { ...s, ...patch } : s));
+    try {
+      const sec = sectors.find(s => s.id === sectorId);
+      const res = await call('update_sector_image', { sector_id: sectorId, image_alt: patch.image_alt !== undefined ? (patch.image_alt || null) : sec?.image_alt, image_position: patch.image_position !== undefined ? patch.image_position : sec?.image_position });
+      if (res.sector) setSectors(sectors.map(s => s.id === sectorId ? { ...s, ...res.sector } : s));
+    } catch (e: any) { error(e.message); }
+  };
+
+  const removeSectorImage = async (sectorId: string) => {
+    const sec = sectors.find(s => s.id === sectorId);
+    const oldUrl = sec?.image_url;
+    setSectorBusy(sectorId);
+    try {
+      await call('delete_sector_image', { sector_id: sectorId });
+      setSectors(sectors.map(s => s.id === sectorId ? { ...s, image_url: null, image_alt: null, image_position: 'center' } : s));
+      if (oldUrl) await removeLandingMedia(oldUrl);
+      success('Image secteur supprimée');
+    } catch (e: any) { error(e.message); }
+    setSectorBusy(null);
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -208,7 +417,7 @@ export function LandingConfigSection() {
   const uploadShot = async (file: File, kind: 'desktop' | 'mobile') => {
     setUploadingKey(kind);
     try {
-      const url = await uploadLandingMedia(file, `demo-${kind}`);
+      const { url } = await uploadLandingMedia(file, `demo-${kind}`);
       const shot: DemoShot = { src: url, alt: '', label: kind === 'desktop' ? 'Capture desktop' : 'Capture mobile' };
       if (kind === 'desktop') setDemoDesktop([...demoDesktop, shot]);
       else setDemoMobile([...demoMobile, shot]);
@@ -220,7 +429,7 @@ export function LandingConfigSection() {
   const uploadLogo = async (file: File) => {
     setUploadingKey('logo');
     try {
-      const url = await uploadLandingMedia(file, 'client-logos');
+      const { url } = await uploadLandingMedia(file, 'client-logos');
       setClientLogos([...clientLogos, { name: '', logo_url: url }]);
       success('Logo ajouté');
     } catch (e: any) { error(e.message); }
@@ -232,6 +441,7 @@ export function LandingConfigSection() {
   const tabs: { k: Tab; label: string; count?: number }[] = [
     { k: 'contenu', label: 'Contenu' },
     { k: 'modules', label: 'Fonctionnalités', count: features.length },
+    { k: 'secteurs', label: 'Secteurs', count: sectors.length },
     { k: 'demo', label: 'Démonstration', count: demoDesktop.length + demoMobile.length },
     { k: 'preuves', label: 'Preuves', count: clientLogos.length + testimonials.length },
     { k: 'whyfaq', label: 'Pourquoi & FAQ', count: whyWaarwi.length + faqItems.length },
@@ -353,7 +563,7 @@ export function LandingConfigSection() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-slate-700">Fonctionnalités affichées ({features.length})</p>
-              <p className="text-[10px] text-slate-400">Grille de 3 colonnes sur la landing</p>
+              <p className="text-[10px] text-slate-400">Grille de 3 colonnes sur la landing · images optionnelles (sinon icône)</p>
             </div>
             <div className="flex gap-2">
               <button onClick={useDefaultFeatures} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200 transition-colors">
@@ -370,28 +580,91 @@ export function LandingConfigSection() {
               <button onClick={useDefaultFeatures} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Utiliser les modules par défaut →</button>
             </div>
           )}
-          <div className="space-y-2 max-h-[420px] overflow-y-auto -mr-1 pr-1">
+          <div className="space-y-3 max-h-[520px] overflow-y-auto -mr-1 pr-1">
             {features.map((f, idx) => {
               const IconComp = ICON_MAP_ADMIN[f.icon] || Shield;
               return (
-                <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 group">
-                  <div className="flex flex-col gap-0.5 shrink-0">
-                    <button onClick={() => setFeatures(move(features, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
-                    <button onClick={() => setFeatures(move(features, idx, 1))} disabled={idx === features.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
+                <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 group space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-0.5 shrink-0">
+                      <button onClick={() => setFeatures(move(features, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
+                      <button onClick={() => setFeatures(move(features, idx, 1))} disabled={idx === features.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                      <IconComp className="w-3.5 h-3.5 text-teal-600" />
+                    </div>
+                    <select value={f.icon} onChange={e => updateFeature(idx, 'icon', e.target.value)} className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0">
+                      {AVAILABLE_ICONS.map(ic => <option key={ic.value} value={ic.value}>{ic.label}</option>)}
+                    </select>
+                    <input value={f.title} onChange={e => updateFeature(idx, 'title', e.target.value)} placeholder="Titre" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
+                    <input value={f.desc} onChange={e => updateFeature(idx, 'desc', e.target.value)} placeholder="Description" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
+                    <button onClick={() => removeFeature(idx)} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
-                  <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
-                    <IconComp className="w-3.5 h-3.5 text-teal-600" />
-                  </div>
-                  <select value={f.icon} onChange={e => updateFeature(idx, 'icon', e.target.value)} className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0">
-                    {AVAILABLE_ICONS.map(ic => <option key={ic.value} value={ic.value}>{ic.label}</option>)}
-                  </select>
-                  <input value={f.title} onChange={e => updateFeature(idx, 'title', e.target.value)} placeholder="Titre" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
-                  <input value={f.desc} onChange={e => updateFeature(idx, 'desc', e.target.value)} placeholder="Description" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
-                  <button onClick={() => removeFeature(idx)} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <CardImageManager
+                    imageUrl={f.image_url} imageAlt={f.image_alt} imagePosition={f.image_position || 'center'}
+                    uploading={uploadingKey === `feat-${idx}`}
+                    onUpload={file => uploadFeatureImage(idx, file, false)}
+                    onReplace={file => uploadFeatureImage(idx, file, true)}
+                    onRemove={() => removeFeatureImage(idx)}
+                    onAlt={v => updateFeature(idx, 'image_alt', v)}
+                    onPosition={v => updateFeature(idx, 'image_position', v)}
+                  />
+                  <CardPreview imageUrl={f.image_url} imageAlt={f.image_alt} imagePosition={f.image_position} title={f.title} desc={f.desc} fallback={<IconComp className="w-5 h-5 text-teal-600" />} />
                 </div>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'secteurs' && (
+        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-slate-700">Secteurs d’activité ({sectors.length})</p>
+              <p className="text-[10px] text-slate-400">Images des cartes « Secteurs » sur la landing. Titres et descriptions non modifiables ici.</p>
+            </div>
+            {!sectorsLoaded && (
+              <button onClick={loadSectors} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors">
+                <Eye className="w-3.5 h-3.5" /> Charger les secteurs
+              </button>
+            )}
+          </div>
+          {!sectorsLoaded ? (
+            <p className="text-xs text-slate-400 py-6 text-center">Cliquez sur « Charger les secteurs » pour gérer les images.</p>
+          ) : sectors.length === 0 ? (
+            <p className="text-xs text-slate-400 py-6 text-center">Aucun secteur configuré.</p>
+          ) : (
+            <div className="space-y-3 max-h-[520px] overflow-y-auto -mr-1 pr-1">
+              {sectors.map((s) => {
+                const SecIcon = SECTOR_ICONS_ADMIN[s.slug] || Store;
+                return (
+                  <div key={s.id} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                        <SecIcon className="w-3.5 h-3.5 text-teal-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-slate-900 truncate">{s.name}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{s.description || s.slug}</p>
+                      </div>
+                      {sectorBusy === s.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-700 shrink-0" />}
+                    </div>
+                    <CardImageManager
+                      imageUrl={s.image_url} imageAlt={s.image_alt} imagePosition={s.image_position || 'center'}
+                      uploading={sectorBusy === s.id}
+                      onUpload={file => uploadSectorImage(s.id, file, false)}
+                      onReplace={file => uploadSectorImage(s.id, file, true)}
+                      onRemove={() => removeSectorImage(s.id)}
+                      onAlt={v => saveSectorMeta(s.id, { image_alt: v })}
+                      onPosition={v => saveSectorMeta(s.id, { image_position: v })}
+                    />
+                    <CardPreview imageUrl={s.image_url} imageAlt={s.image_alt} imagePosition={s.image_position} title={s.name} desc={s.description || ''} fallback={<SecIcon className="w-5 h-5 text-teal-600" />} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -496,26 +769,38 @@ export function LandingConfigSection() {
                 </button>
               </div>
             </div>
-            <div className="space-y-2 max-h-[360px] overflow-y-auto -mr-1 pr-1">
+            <div className="space-y-3 max-h-[520px] overflow-y-auto -mr-1 pr-1">
               {whyWaarwi.map((w, idx) => {
                 const IconComp = ICON_MAP_ADMIN[w.icon] || Shield;
                 return (
-                  <div key={idx} className="flex items-start gap-2 p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 group">
-                    <div className="flex flex-col gap-0.5 shrink-0 pt-1">
-                      <button onClick={() => setWhyWaarwi(move(whyWaarwi, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
-                      <button onClick={() => setWhyWaarwi(move(whyWaarwi, idx, 1))} disabled={idx === whyWaarwi.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
+                  <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 group space-y-2.5">
+                    <div className="flex items-start gap-2">
+                      <div className="flex flex-col gap-0.5 shrink-0 pt-1">
+                        <button onClick={() => setWhyWaarwi(move(whyWaarwi, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
+                        <button onClick={() => setWhyWaarwi(move(whyWaarwi, idx, 1))} disabled={idx === whyWaarwi.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                        <IconComp className="w-3.5 h-3.5 text-teal-600" />
+                      </div>
+                      <div className="flex-1 space-y-1.5 min-w-0">
+                        <select value={w.icon} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, icon: e.target.value } : x))} className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400">
+                          {AVAILABLE_ICONS.map(ic => <option key={ic.value} value={ic.value}>{ic.label}</option>)}
+                        </select>
+                        <input value={w.title} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))} placeholder="Titre" className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                        <input value={w.desc} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, desc: e.target.value } : x))} placeholder="Description" className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                      </div>
+                      <button onClick={() => setWhyWaarwi(whyWaarwi.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 mt-1"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
-                    <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
-                      <IconComp className="w-3.5 h-3.5 text-teal-600" />
-                    </div>
-                    <div className="flex-1 space-y-1.5 min-w-0">
-                      <select value={w.icon} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, icon: e.target.value } : x))} className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400">
-                        {AVAILABLE_ICONS.map(ic => <option key={ic.value} value={ic.value}>{ic.label}</option>)}
-                      </select>
-                      <input value={w.title} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))} placeholder="Titre" className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                      <input value={w.desc} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, desc: e.target.value } : x))} placeholder="Description" className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                    </div>
-                    <button onClick={() => setWhyWaarwi(whyWaarwi.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 mt-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <CardImageManager
+                      imageUrl={w.image_url} imageAlt={w.image_alt} imagePosition={w.image_position || 'center'}
+                      uploading={uploadingKey === `why-${idx}`}
+                      onUpload={file => uploadWhyImage(idx, file, false)}
+                      onReplace={file => uploadWhyImage(idx, file, true)}
+                      onRemove={() => removeWhyImage(idx)}
+                      onAlt={v => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, image_alt: v } : x))}
+                      onPosition={v => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, image_position: v } : x))}
+                    />
+                    <CardPreview imageUrl={w.image_url} imageAlt={w.image_alt} imagePosition={w.image_position} title={w.title} desc={w.desc} fallback={<IconComp className="w-5 h-5 text-teal-600" />} />
                   </div>
                 );
               })}

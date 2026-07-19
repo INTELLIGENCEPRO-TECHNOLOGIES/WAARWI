@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 import { supabase, APP_URL } from './lib/supabase';
 
-type LandingFeature = { icon: string; title: string; desc: string };
+type LandingFeature = { icon: string; title: string; desc: string; image_url?: string; image_alt?: string; image_position?: 'left' | 'center' | 'right' };
 type DemoShot = { src: string; alt: string; label: string };
-type WhyItem = { icon: string; title: string; desc: string };
+type WhyItem = { icon: string; title: string; desc: string; image_url?: string; image_alt?: string; image_position?: 'left' | 'center' | 'right' };
 type FaqItem = { q: string; a: string };
 type LandingConfig = {
   hero_headline: string;
@@ -45,6 +45,9 @@ type BusinessActivityType = {
   name: string;
   slug: string;
   description: string;
+  image_url?: string | null;
+  image_alt?: string | null;
+  image_position?: string | null;
 };
 
 type Plan = {
@@ -244,6 +247,147 @@ function FaqItem({ q, a, id }: { q: string; a: string; id: string }) {
   );
 }
 
+type CardItem = {
+  title: string;
+  desc?: string;
+  image_url?: string | null;
+  image_alt?: string | null;
+  image_position?: string | null;
+  iconFallback: React.ReactNode;
+};
+
+function ImageCard({ title, desc, image_url, image_alt, image_position, iconFallback }: CardItem) {
+  const has = !!image_url;
+  const pos = (image_position === 'left' || image_position === 'right') ? image_position : 'center';
+  return (
+    <div className="flex rounded-xl border border-slate-200/80 overflow-hidden bg-white h-full min-h-[168px]">
+      {has ? (
+        <div className="w-[38%] shrink-0 bg-slate-100 overflow-hidden">
+          <img
+            src={image_url!}
+            alt={image_alt || title || ''}
+            loading="lazy"
+            className="w-full h-full object-cover"
+            style={{ objectPosition: pos }}
+          />
+        </div>
+      ) : (
+        <div className="w-[38%] shrink-0 bg-teal-50 flex items-center justify-center">
+          {iconFallback}
+        </div>
+      )}
+      <div className="flex-1 p-5 md:p-6 flex flex-col justify-center min-w-0">
+        <h3 className="text-base font-semibold text-slate-900 leading-snug">{title}</h3>
+        {desc && <p className="mt-2 text-sm leading-relaxed text-slate-600">{desc}</p>}
+      </div>
+    </div>
+  );
+}
+
+function MobileCardCarousel({ items, idPrefix }: { items: CardItem[]; idPrefix: string }) {
+  const [idx, setIdx] = useState(0);
+  const [auto, setAuto] = useState(true);
+  const [visible, setVisible] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const idxRef = useRef(0);
+  idxRef.current = idx;
+
+  const reduceMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const el = sectionRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => setVisible(entries[0].isIntersecting),
+      { threshold: 0.35 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [items.length]);
+
+  useEffect(() => {
+    if (!auto || !visible || reduceMotion || items.length <= 1) return;
+    const onHidden = () => { if (document.hidden) setAuto(false); };
+    document.addEventListener('visibilitychange', onHidden);
+    const t = setInterval(() => {
+      setIdx(i => (i + 1) % items.length);
+    }, 1000);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onHidden); };
+  }, [auto, visible, reduceMotion, items.length]);
+
+  const go = (n: number) => {
+    setIdx(((n % items.length) + items.length) % items.length);
+    setAuto(false);
+  };
+
+  const onTouchStart = () => setAuto(false);
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(idxRef.current + 1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); go(idxRef.current - 1); }
+  };
+
+  if (items.length === 0) return null;
+
+  return (
+    <div ref={sectionRef} className="md:hidden">
+      <div
+        ref={trackRef}
+        className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 -mx-5 px-5"
+        style={{ scrollbarWidth: 'none', touchAction: 'pan-y' }}
+        onTouchStart={onTouchStart}
+        onKeyDown={onKey}
+        role="group"
+        aria-roledescription="carousel"
+        aria-label={`${idPrefix} — carrousel`}
+        tabIndex={0}
+      >
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className="snap-start shrink-0 w-[88%] pr-3"
+            aria-current={i === idx}
+            aria-hidden={i !== idx}
+            aria-label={`Carte ${i + 1} sur ${items.length}`}
+          >
+            <ImageCard {...item} />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-center gap-2 mt-3">
+        <button
+          onClick={() => go(idx - 1)}
+          aria-label="Carte précédente"
+          className="p-2 rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+          disabled={items.length <= 1}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <div className="flex items-center gap-1.5">
+          {items.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => go(i)}
+              aria-label={`Aller à la carte ${i + 1}`}
+              className={`rounded-full transition-all ${i === idx ? 'w-5 h-1.5 bg-teal-600' : 'w-1.5 h-1.5 bg-slate-300 hover:bg-slate-400'}`}
+            />
+          ))}
+        </div>
+        <button
+          onClick={() => go(idx + 1)}
+          aria-label="Carte suivante"
+          className="p-2 rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+          disabled={items.length <= 1}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Landing() {
   const [config, setConfig] = useState<LandingConfig>(DEFAULT_CONFIG);
   const [stats, setStats] = useState<LandingStats | null>(null);
@@ -262,7 +406,7 @@ export function Landing() {
       const [cfgRes, statsRes, secRes, planRes] = await Promise.all([
         supabase.from('landing_config').select('*').eq('id', 'default').maybeSingle(),
         supabase.rpc('get_landing_stats'),
-        supabase.from('business_activity_types').select('id, name, slug, description').eq('is_active', true).order('name'),
+        supabase.from('business_activity_types').select('id, name, slug, description, image_url, image_alt, image_position').eq('is_active', true).order('name'),
         supabase.from('plans').select('code, name, description, price_monthly, features, is_public, sort_order').eq('is_public', true).order('sort_order'),
       ]);
       if (!active) return;
@@ -519,20 +663,36 @@ export function Landing() {
                 {config.section_titles?.why_title || 'Une solution de confiance, pensée pour le Sénégal.'}
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-clip">
               {whyItems.map((item, i) => {
                 const Icon = ICON_MAP[item.icon] || Shield;
                 return (
-                  <div key={i} className="bg-white rounded-xl border border-slate-200/70 p-6 h-full">
-                    <div className="w-11 h-11 rounded-xl bg-teal-50 flex items-center justify-center mb-4">
-                      <Icon className="w-5 h-5 text-teal-700" />
-                    </div>
-                    <h3 className="text-base font-semibold text-slate-900 mb-2">{item.title}</h3>
-                    <p className="text-sm leading-relaxed text-slate-600">{item.desc}</p>
-                  </div>
+                  <ImageCard
+                    key={i}
+                    title={item.title}
+                    desc={item.desc}
+                    image_url={item.image_url}
+                    image_alt={item.image_alt}
+                    image_position={item.image_position}
+                    iconFallback={<Icon className="w-7 h-7 text-teal-700" />}
+                  />
                 );
               })}
             </div>
+            <MobileCardCarousel
+              idPrefix="pourquoi-waarwi"
+              items={whyItems.map((item) => {
+                const Icon = ICON_MAP[item.icon] || Shield;
+                return {
+                  title: item.title,
+                  desc: item.desc,
+                  image_url: item.image_url,
+                  image_alt: item.image_alt,
+                  image_position: item.image_position,
+                  iconFallback: <Icon className="w-7 h-7 text-teal-700" />,
+                };
+              })}
+            />
           </div>
         </section>
 
@@ -548,20 +708,36 @@ export function Landing() {
                 Ne jonglez plus entre cinq logiciels. Waarwi centralise vos opérations commerciales de la caisse à la comptabilité.
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-slate-100 rounded-2xl overflow-hidden border border-slate-100">
+            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-clip">
               {features.map((f, i) => {
                 const Icon = ICON_MAP[f.icon] || Package;
                 return (
-                  <div key={i} className="bg-white p-7 md:p-8 hover:bg-slate-50/50 transition-colors flex flex-col">
-                    <div className="w-11 h-11 rounded-xl bg-teal-50 flex items-center justify-center mb-5">
-                      <Icon className="w-5 h-5 text-teal-700" />
-                    </div>
-                    <h3 className="text-base font-semibold text-slate-900 mb-2">{f.title}</h3>
-                    <p className="text-sm leading-relaxed text-slate-600">{f.desc}</p>
-                  </div>
+                  <ImageCard
+                    key={i}
+                    title={f.title}
+                    desc={f.desc}
+                    image_url={f.image_url}
+                    image_alt={f.image_alt}
+                    image_position={f.image_position}
+                    iconFallback={<Icon className="w-7 h-7 text-teal-700" />}
+                  />
                 );
               })}
             </div>
+            <MobileCardCarousel
+              idPrefix="fonctionnalites"
+              items={features.map((f) => {
+                const Icon = ICON_MAP[f.icon] || Package;
+                return {
+                  title: f.title,
+                  desc: f.desc,
+                  image_url: f.image_url,
+                  image_alt: f.image_alt,
+                  image_position: f.image_position,
+                  iconFallback: <Icon className="w-7 h-7 text-teal-700" />,
+                };
+              })}
+            />
           </div>
         </section>
 
@@ -577,20 +753,36 @@ export function Landing() {
                 {sectors.length} secteurs d'activité couverts, avec des catalogues et configurations métier pré-remplis.
               </p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-clip">
               {sectors.map((s) => {
                 const Icon = SECTOR_ICONS[s.slug] || Store;
                 return (
-                  <div key={s.id} className="bg-white rounded-xl border border-slate-200/70 p-5 hover:border-teal-200 hover:shadow-sm transition-all group h-full flex flex-col">
-                    <div className="w-9 h-9 rounded-lg bg-slate-50 group-hover:bg-teal-50 flex items-center justify-center mb-3 transition-colors">
-                      <Icon className="text-slate-600 group-hover:text-teal-700 transition-colors" style={{ width: 18, height: 18 }} />
-                    </div>
-                    <h3 className="text-sm font-semibold text-slate-900 leading-snug">{s.name}</h3>
-                    {s.description && <p className="mt-1 text-xs text-slate-500 leading-relaxed line-clamp-2">{s.description}</p>}
-                  </div>
+                  <ImageCard
+                    key={s.id}
+                    title={s.name}
+                    desc={s.description}
+                    image_url={s.image_url}
+                    image_alt={s.image_alt}
+                    image_position={s.image_position}
+                    iconFallback={<Icon className="w-7 h-7 text-teal-700" />}
+                  />
                 );
               })}
             </div>
+            <MobileCardCarousel
+              idPrefix="secteurs-activite"
+              items={sectors.map((s) => {
+                const Icon = SECTOR_ICONS[s.slug] || Store;
+                return {
+                  title: s.name,
+                  desc: s.description,
+                  image_url: s.image_url,
+                  image_alt: s.image_alt,
+                  image_position: s.image_position,
+                  iconFallback: <Icon className="w-7 h-7 text-teal-700" />,
+                };
+              })}
+            />
           </div>
         </section>
 

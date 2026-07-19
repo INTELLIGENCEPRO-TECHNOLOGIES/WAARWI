@@ -621,6 +621,48 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, config: data });
     }
 
+    // ============ SECTOR IMAGES (landing "Secteurs" cards) ============
+    if (action === "get_sectors_admin") {
+      const { data, error } = await admin
+        .from("business_activity_types")
+        .select("id, name, slug, description, is_active, image_url, image_alt, image_position")
+        .order("name");
+      if (error) return json({ error: error.message }, 400);
+      return json({ sectors: data || [] });
+    }
+
+    if (action === "update_sector_image") {
+      const { sector_id, image_url, image_alt, image_position } = body;
+      if (!sector_id) return json({ error: "sector_id requis" }, 400);
+      const patch: Record<string, unknown> = {};
+      if (image_url !== undefined) patch.image_url = image_url || null;
+      if (image_alt !== undefined) patch.image_alt = image_alt || null;
+      if (image_position !== undefined) patch.image_position = (image_position === "left" || image_position === "right") ? image_position : "center";
+      const { data, error } = await admin
+        .from("business_activity_types")
+        .update(patch)
+        .eq("id", sector_id)
+        .select("id, name, slug, description, is_active, image_url, image_alt, image_position")
+        .maybeSingle();
+      if (error) return json({ error: error.message }, 400);
+      await logEvent("sector_image.update", sector_id, patch);
+      return json({ success: true, sector: data });
+    }
+
+    if (action === "delete_sector_image") {
+      const { sector_id } = body;
+      if (!sector_id) return json({ error: "sector_id requis" }, 400);
+      const { data, error } = await admin
+        .from("business_activity_types")
+        .update({ image_url: null, image_alt: null, image_position: "center" })
+        .eq("id", sector_id)
+        .select("id, image_url")
+        .maybeSingle();
+      if (error) return json({ error: error.message }, 400);
+      await logEvent("sector_image.delete", sector_id, null);
+      return json({ success: true, sector: data });
+    }
+
     return json({ error: "Action inconnue" }, 400);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
