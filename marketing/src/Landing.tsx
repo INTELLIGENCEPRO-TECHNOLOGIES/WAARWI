@@ -292,20 +292,35 @@ function MobileCardCarousel({ items, idPrefix }: { items: CardItem[]; idPrefix: 
   const trackRef = useRef<HTMLDivElement>(null);
   const idxRef = useRef(0);
   idxRef.current = idx;
+  const rafRef = useRef<number | null>(null);
+  const programmaticRef = useRef(false);
 
   const reduceMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   useEffect(() => {
     if (items.length <= 1) return;
-    const el = sectionRef.current;
+    const el = trackRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(
       (entries) => setVisible(entries[0].isIntersecting),
-      { threshold: 0.35 },
+      { threshold: 0.2 },
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, [items.length]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || items.length <= 1) return;
+    const child = track.children[idx] as HTMLElement | undefined;
+    if (!child) return;
+    const target = child.offsetLeft - track.offsetLeft;
+    if (Math.abs(track.scrollLeft - target) <= 1) return;
+    programmaticRef.current = true;
+    track.scrollTo({ left: target, behavior: reduceMotion ? 'auto' : 'smooth' });
+    const reset = window.setTimeout(() => { programmaticRef.current = false; }, 350);
+    return () => window.clearTimeout(reset);
+  }, [idx, items.length, reduceMotion]);
 
   useEffect(() => {
     if (!auto || !visible || reduceMotion || items.length <= 1) return;
@@ -318,8 +333,24 @@ function MobileCardCarousel({ items, idPrefix }: { items: CardItem[]; idPrefix: 
   }, [auto, visible, reduceMotion, items.length]);
 
   const go = (n: number) => {
+    if (items.length <= 1) return;
     setIdx(((n % items.length) + items.length) % items.length);
     setAuto(false);
+  };
+
+  const onScroll = () => {
+    if (programmaticRef.current) return;
+    const track = trackRef.current;
+    if (!track || items.length <= 1) return;
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const slide = track.children[0] as HTMLElement | undefined;
+      if (!slide) return;
+      const step = slide.offsetWidth;
+      const nearest = Math.round(track.scrollLeft / step);
+      const clamped = Math.max(0, Math.min(items.length - 1, nearest));
+      if (clamped !== idxRef.current) setIdx(clamped);
+    });
   };
 
   const onTouchStart = () => setAuto(false);
@@ -329,14 +360,17 @@ function MobileCardCarousel({ items, idPrefix }: { items: CardItem[]; idPrefix: 
     if (e.key === 'ArrowLeft') { e.preventDefault(); go(idxRef.current - 1); }
   };
 
+  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); }, []);
+
   if (items.length === 0) return null;
 
   return (
     <div ref={sectionRef} className="md:hidden">
       <div
         ref={trackRef}
-        className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 -mx-5 px-5"
-        style={{ scrollbarWidth: 'none', touchAction: 'pan-y' }}
+        className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-5 px-5"
+        style={{ scrollbarWidth: 'none', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}
+        onScroll={onScroll}
         onTouchStart={onTouchStart}
         onKeyDown={onKey}
         role="group"
@@ -347,7 +381,7 @@ function MobileCardCarousel({ items, idPrefix }: { items: CardItem[]; idPrefix: 
         {items.map((item, i) => (
           <div
             key={i}
-            className="snap-start shrink-0 w-[88%] pr-3"
+            className="snap-start shrink-0 w-[92%] pr-2 first:pl-0 last:pr-0"
             aria-current={i === idx}
             aria-hidden={i !== idx}
             aria-label={`Carte ${i + 1} sur ${items.length}`}
