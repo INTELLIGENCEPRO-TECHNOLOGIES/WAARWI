@@ -14,6 +14,7 @@ import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
+import { LandingConfigSection as LandingConfigSectionNew } from '../components/LandingConfigSection';
 
 type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'landing' | 'releases';
 
@@ -157,7 +158,7 @@ export function PlatformAdmin() {
           {section === 'subscriptions' && <SubscriptionsSection />}
           {section === 'messages' && <MessagesSection />}
           {section === 'login_config' && <LoginConfigSection />}
-          {section === 'landing' && <LandingConfigSection />}
+          {section === 'landing' && <LandingConfigSectionNew />}
           {section === 'master_catalogs' && <MasterCatalogAdmin />}
           {section === 'releases' && <ReleasesSection />}
           {section === 'activity' && <ActivitySection />}
@@ -2607,213 +2608,7 @@ function LoginConfigSection() {
   );
 }
 
-// ─── Landing Config Section ──────────────────────────────────────────────────
-
-const DEFAULT_LANDING_FEATURES = ALL_APP_FEATURES.map(f => ({ icon: f.icon, title: f.label, desc: f.desc }));
-
-type LandingFeatureItem = { icon: string; title: string; desc: string };
-
-function LandingConfigSection() {
-  const { success, error } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'textes' | 'modules'>('textes');
-  const [heroHeadline, setHeroHeadline] = useState('');
-  const [heroAccent, setHeroAccent] = useState('');
-  const [heroSubtitle, setHeroSubtitle] = useState('');
-  const [heroCtaLabel, setHeroCtaLabel] = useState('Démarrer gratuitement');
-  const [heroImageUrl, setHeroImageUrl] = useState('');
-  const [statsTenants, setStatsTenants] = useState('Businesss accompagnés');
-  const [statsSectors, setStatsSectors] = useState('Secteurs couverts');
-  const [statsUptime, setStatsUptime] = useState('Disponibilité');
-  const [pricingVisible, setPricingVisible] = useState(true);
-  const [footerTagline, setFooterTagline] = useState('');
-  const [features, setFeatures] = useState<LandingFeatureItem[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await call('get_landing_config');
-        setHeroHeadline(data.hero_headline || '');
-        setHeroAccent(data.hero_accent || '');
-        setHeroSubtitle(data.hero_subtitle || '');
-        setHeroCtaLabel(data.hero_cta_label || 'Démarrer gratuitement');
-        setHeroImageUrl(data.hero_image_url || '');
-        setStatsTenants(data.stats_label_tenants || 'Businesss accompagnés');
-        setStatsSectors(data.stats_label_sectors || 'Secteurs couverts');
-        setStatsUptime(data.stats_label_uptime || 'Disponibilité');
-        setPricingVisible(data.pricing_visible !== false);
-        setFooterTagline(data.footer_tagline || '');
-        setFeatures(Array.isArray(data.features) ? data.features : []);
-      } catch (e: any) { error(e.message); }
-      setLoading(false);
-    })();
-  }, []);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await call('update_landing_config', {
-        hero_headline: heroHeadline, hero_accent: heroAccent, hero_subtitle: heroSubtitle,
-        hero_cta_label: heroCtaLabel, hero_image_url: heroImageUrl,
-        stats_label_tenants: statsTenants, stats_label_sectors: statsSectors, stats_label_uptime: statsUptime,
-        pricing_visible: pricingVisible, features, footer_tagline: footerTagline,
-      });
-      success('Landing page enregistrée. Visible sur waarwi.com');
-    } catch (e: any) { error(e.message); }
-    setSaving(false);
-  };
-
-  const updateFeature = (idx: number, field: keyof LandingFeatureItem, value: string) =>
-    setFeatures(prev => prev.map((m, i) => i === idx ? { ...m, [field]: value } : m));
-  const removeFeature = (idx: number) => setFeatures(prev => prev.filter((_, i) => i !== idx));
-  const addFeature = () => setFeatures(prev => [...prev, { icon: 'ShoppingCart', title: '', desc: '' }]);
-  const useDefaultFeatures = () => setFeatures(DEFAULT_LANDING_FEATURES.map(f => ({ ...f })));
-  const moveFeature = (idx: number, dir: -1 | 1) => {
-    const next = idx + dir;
-    if (next < 0 || next >= features.length) return;
-    setFeatures(prev => { const a = [...prev]; [a[idx], a[next]] = [a[next], a[idx]]; return a; });
-  };
-
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
-
-  const inputCls = "w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400";
-
-  return (
-    <div className="space-y-5">
-      <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Globe className="w-4 h-4 text-brand-700" />
-              <h3 className="text-sm font-bold text-slate-900">Landing page waarwi.com</h3>
-            </div>
-            <p className="text-xs text-slate-500">Contenu de la page d'accueil publique. Tout est dynamique : textes, modules, libellés stats et footer.</p>
-          </div>
-          <a href="https://waarwi.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
-            <Eye className="w-3.5 h-3.5" /> Voir la landing
-          </a>
-        </div>
-      </div>
-
-      <div className="flex bg-slate-100 rounded-xl p-1 border border-slate-200">
-        <button onClick={() => setActiveTab('textes')} className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'textes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Contenu</button>
-        <button onClick={() => setActiveTab('modules')} className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'modules' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Fonctionnalités ({features.length})</button>
-      </div>
-
-      {activeTab === 'textes' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Titre hero (première ligne)</label>
-            <input value={heroHeadline} onChange={e => setHeroHeadline(e.target.value)} placeholder="La plateforme qui simplifie, connecte et propulse" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Accent (en turquoise)</label>
-            <input value={heroAccent} onChange={e => setHeroAccent(e.target.value)} placeholder="votre business." className={`${inputCls} text-teal-600 font-semibold`} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre hero</label>
-            <textarea value={heroSubtitle} onChange={e => setHeroSubtitle(e.target.value)} rows={2} placeholder="Gestion commerciale tout-en-un..." className={`${inputCls} h-auto py-2.5 resize-none`} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Label bouton CTA</label>
-              <input value={heroCtaLabel} onChange={e => setHeroCtaLabel(e.target.value)} placeholder="Démarrer gratuitement" className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Image hero (URL)</label>
-              <input value={heroImageUrl} onChange={e => setHeroImageUrl(e.target.value)} placeholder="/desktop.png" className={inputCls} />
-            </div>
-          </div>
-          <div className="border-t border-slate-100 pt-4">
-            <p className="text-xs font-bold text-slate-700 mb-3">Libellés des statistiques</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Compteur tenants</label>
-                <input value={statsTenants} onChange={e => setStatsTenants(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Compteur secteurs</label>
-                <input value={statsSectors} onChange={e => setStatsSectors(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Compteur uptime</label>
-                <input value={statsUptime} onChange={e => setStatsUptime(e.target.value)} className={inputCls} />
-              </div>
-            </div>
-          </div>
-          <div className="border-t border-slate-100 pt-4">
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Tagline footer</label>
-            <input value={footerTagline} onChange={e => setFooterTagline(e.target.value)} placeholder="Conçu au Sénégal..." className={inputCls} />
-          </div>
-          <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-slate-700">Section tarifs visible</p>
-              <p className="text-[10px] text-slate-400">Affiche les plans publics sur la landing</p>
-            </div>
-            <button onClick={() => setPricingVisible(!pricingVisible)} className={`relative w-11 h-6 rounded-full transition-colors ${pricingVisible ? 'bg-brand-700' : 'bg-slate-200'}`}>
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${pricingVisible ? 'translate-x-5' : ''}`} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'modules' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-slate-700">Fonctionnalités affichées ({features.length})</p>
-              <p className="text-[10px] text-slate-400">Grille de 3 colonnes sur la landing</p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={useDefaultFeatures} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200 transition-colors">
-                <RotateCcw className="w-3 h-3" /> Tout rétablir
-              </button>
-              <button onClick={addFeature} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors">
-                <Plus className="w-3.5 h-3.5" /> Ajouter
-              </button>
-            </div>
-          </div>
-          {features.length === 0 && (
-            <div className="text-center py-6 space-y-2">
-              <p className="text-xs text-slate-400">Aucune fonctionnalité configurée.</p>
-              <button onClick={useDefaultFeatures} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Utiliser les modules par défaut →</button>
-            </div>
-          )}
-          <div className="space-y-2 max-h-[420px] overflow-y-auto -mr-1 pr-1">
-            {features.map((f, idx) => {
-              const IconComp = ICON_MAP_ADMIN[f.icon] || Shield;
-              return (
-                <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 group">
-                  <div className="flex flex-col gap-0.5 shrink-0">
-                    <button onClick={() => moveFeature(idx, -1)} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
-                    <button onClick={() => moveFeature(idx, 1)} disabled={idx === features.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
-                  </div>
-                  <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
-                    <IconComp className="w-3.5 h-3.5 text-teal-600" />
-                  </div>
-                  <select value={f.icon} onChange={e => updateFeature(idx, 'icon', e.target.value)} className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0">
-                    {AVAILABLE_ICONS.map(ic => <option key={ic.value} value={ic.value}>{ic.label}</option>)}
-                  </select>
-                  <input value={f.title} onChange={e => updateFeature(idx, 'title', e.target.value)} placeholder="Titre" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
-                  <input value={f.desc} onChange={e => updateFeature(idx, 'desc', e.target.value)} placeholder="Description" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
-                  <button onClick={() => removeFeature(idx)} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-end">
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-700 text-white text-sm font-semibold hover:bg-brand-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          Enregistrer
-        </button>
-      </div>
-    </div>
-  );
-}
+// Legacy inline LandingConfigSection removed — now uses src/components/LandingConfigSection.tsx
 
 // ─── Releases Section ────────────────────────────────────────────────────────
 

@@ -586,6 +586,9 @@ Deno.serve(async (req: Request) => {
         hero_headline, hero_accent, hero_subtitle, hero_cta_label, hero_cta_url,
         hero_image_url, stats_label_tenants, stats_label_sectors, stats_label_uptime,
         pricing_visible, features, footer_tagline,
+        demo_desktop, demo_mobile, why_waarwi, faq_items, section_titles,
+        whatsapp_url, phone_display, phone_tel,
+        contact_email, contact_hours, testimonials, client_logos,
       } = body;
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: caller.id };
       if (hero_headline !== undefined) patch.hero_headline = hero_headline;
@@ -600,6 +603,18 @@ Deno.serve(async (req: Request) => {
       if (pricing_visible !== undefined) patch.pricing_visible = pricing_visible;
       if (features !== undefined) patch.features = features;
       if (footer_tagline !== undefined) patch.footer_tagline = footer_tagline;
+      if (demo_desktop !== undefined) patch.demo_desktop = demo_desktop;
+      if (demo_mobile !== undefined) patch.demo_mobile = demo_mobile;
+      if (why_waarwi !== undefined) patch.why_waarwi = why_waarwi;
+      if (faq_items !== undefined) patch.faq_items = faq_items;
+      if (section_titles !== undefined) patch.section_titles = section_titles;
+      if (whatsapp_url !== undefined) patch.whatsapp_url = whatsapp_url;
+      if (phone_display !== undefined) patch.phone_display = phone_display;
+      if (phone_tel !== undefined) patch.phone_tel = phone_tel;
+      if (contact_email !== undefined) patch.contact_email = contact_email;
+      if (contact_hours !== undefined) patch.contact_hours = contact_hours;
+      if (testimonials !== undefined) patch.testimonials = testimonials;
+      if (client_logos !== undefined) patch.client_logos = client_logos;
       const { data, error } = await admin.from("landing_config").update(patch).eq("id", "default").select().maybeSingle();
       if (error) return json({ error: error.message }, 400);
       await logEvent("landing_config.update", null, patch);

@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   ShoppingCart, Package, FileText, Users, Truck, Globe,
   BarChart3, TrendingUp, Shield, Zap, Wallet, Layers, Monitor,
   Receipt, ArrowRight, Check, Phone, Menu, X, Wrench, Shirt,
   Cpu, Boxes, HeartPulse, BookOpen, Store, Gem, Sparkles, Building2,
   MapPin, Headphones, RefreshCw, UsersRound, Clock, MessageCircle,
-  Mail, ChevronDown, LayoutDashboard, ClipboardList,
+  Mail, ChevronDown, LayoutDashboard, ClipboardList, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { supabase, APP_URL } from './lib/supabase';
 
 type LandingFeature = { icon: string; title: string; desc: string };
+type DemoShot = { src: string; alt: string; label: string };
+type WhyItem = { icon: string; title: string; desc: string };
+type FaqItem = { q: string; a: string };
 type LandingConfig = {
   hero_headline: string;
   hero_accent: string;
@@ -26,6 +29,14 @@ type LandingConfig = {
   contact_hours?: string;
   testimonials?: { quote: string; author: string; role?: string; company?: string }[];
   client_logos?: { name: string; logo_url?: string }[];
+  demo_desktop?: DemoShot[];
+  demo_mobile?: DemoShot[];
+  why_waarwi?: WhyItem[];
+  faq_items?: FaqItem[];
+  section_titles?: Record<string, string>;
+  whatsapp_url?: string;
+  phone_display?: string;
+  phone_tel?: string;
 };
 type LandingStats = { active_tenants: number; active_sectors: number; uptime_percent: number };
 
@@ -63,11 +74,21 @@ const DEFAULT_CONFIG: LandingConfig = {
   contact_hours: '',
   testimonials: [],
   client_logos: [],
+  demo_desktop: [],
+  demo_mobile: [],
+  why_waarwi: [],
+  faq_items: [],
+  section_titles: {},
+  whatsapp_url: 'https://wa.me/221775254101',
+  phone_display: '77 525 41 01',
+  phone_tel: '+221775254101',
 };
 
 const ICON_MAP: Record<string, any> = {
   ShoppingCart, Package, FileText, Users, Truck, Globe,
   BarChart3, TrendingUp, Shield, Zap, Wallet, Layers, Monitor, Receipt,
+  Sparkles, MapPin, Headphones, RefreshCw, UsersRound, Store, Boxes,
+  BookOpen, Shirt, Cpu, HeartPulse, Building2, Gem, Wrench,
 };
 
 const SECTOR_ICONS: Record<string, any> = {
@@ -98,16 +119,16 @@ const DEFAULT_FEATURES: LandingFeature[] = [
   { icon: 'Shield', title: 'Sécurité & rôles', desc: "Permissions granulaires par utilisateur, journaux d'activité, sauvegardes." },
 ];
 
-const WHY_WAARWI = [
-  { icon: MapPin, title: 'Conçu au Sénégal', desc: "Une solution pensée pour les réalités du commerce sénégalais, pas adaptée d'un logiciel étranger." },
-  { icon: Headphones, title: 'Accompagnement local', desc: 'Une équipe sur place pour vous aider au démarrage et tout au long de votre utilisation.' },
-  { icon: Shield, title: 'Sauvegardes & sécurité', desc: 'Vos données sont sauvegardées et protégées. Les rôles contrôlent qui voit quoi.' },
-  { icon: UsersRound, title: 'Multi-utilisateurs', desc: 'Donnez accès à vos vendeurs, caissiers et comptables avec des permissions adaptées.' },
-  { icon: RefreshCw, title: 'Synchronisation temps réel', desc: 'Vos ventes, votre stock et vos rapports se mettent à jour instantanément.' },
-  { icon: Layers, title: 'Adapté à votre secteur', desc: 'Catalogues et configurations pré-remplis selon votre activité.' },
+const DEFAULT_WHY_WAARWI: WhyItem[] = [
+  { icon: 'MapPin', title: 'Conçu au Sénégal', desc: "Une solution pensée pour les réalités du commerce sénégalais, pas adaptée d'un logiciel étranger." },
+  { icon: 'Headphones', title: 'Accompagnement local', desc: 'Une équipe sur place pour vous aider au démarrage et tout au long de votre utilisation.' },
+  { icon: 'Shield', title: 'Sauvegardes & sécurité', desc: 'Vos données sont sauvegardées et protégées. Les rôles contrôlent qui voit quoi.' },
+  { icon: 'UsersRound', title: 'Multi-utilisateurs', desc: 'Donnez accès à vos vendeurs, caissiers et comptables avec des permissions adaptées.' },
+  { icon: 'RefreshCw', title: 'Synchronisation temps réel', desc: 'Vos ventes, votre stock et vos rapports se mettent à jour instantanément.' },
+  { icon: 'Layers', title: 'Adapté à votre secteur', desc: 'Catalogues et configurations pré-remplis selon votre activité.' },
 ];
 
-const FAQ_ITEMS = [
+const DEFAULT_FAQ_ITEMS: FaqItem[] = [
   { q: 'Faut-il installer un logiciel ?', a: 'Non. Waarwi fonctionne directement dans votre navigateur, sur ordinateur, tablette ou téléphone. Aucune installation n\'est nécessaire.' },
   { q: "L'application fonctionne-t-elle sur téléphone ?", a: 'Oui. Waarwi est accessible depuis un navigateur web sur smartphone, et l\'interface de caisse est conçue pour un usage quotidien sur mobile.' },
   { q: 'Les données sont-elles sauvegardées ?', a: 'Oui. Vos données sont stockées de manière sécurisée et sauvegardées. Vous pouvez également exporter vos informations.' },
@@ -117,14 +138,17 @@ const FAQ_ITEMS = [
   { q: 'Peut-on être accompagné lors du démarrage ?', a: 'Oui. Notre équipe vous accompagne dans la configuration de votre compte, votre catalogue et votre caisse pour démarrer sereinement.' },
 ];
 
-const APP_SHOTS = [
+const DEFAULT_DESKTOP_SHOTS: DemoShot[] = [
   { src: '/desktop.png', alt: 'Tableau de bord Waarwi — vue d\'ensemble des ventes et du stock', label: 'Tableau de bord' },
+];
+
+const DEFAULT_MOBILE_SHOTS: DemoShot[] = [
   { src: '/mobile.png', alt: 'Interface de caisse Waarwi sur mobile', label: 'Caisse' },
 ];
 
-const WHATSAPP_URL = 'https://wa.me/221775254101';
-const PHONE_DISPLAY = '77 525 41 01';
-const PHONE_TEL = '+221775254101';
+const DEFAULT_WHATSAPP_URL = 'https://wa.me/221775254101';
+const DEFAULT_PHONE_DISPLAY = '77 525 41 01';
+const DEFAULT_PHONE_TEL = '+221775254101';
 
 function useCountUp(target: number, durationMs = 1400, start: boolean) {
   const [val, setVal] = useState(0);
@@ -169,6 +193,24 @@ function TextStatCard({ label, icon: Icon }: { label: string; icon: any }) {
   );
 }
 
+function useScrollSpy(ids: string[]) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  useEffect(() => {
+    const sections = ids.map(id => document.getElementById(id)).filter(Boolean) as HTMLElement[];
+    if (sections.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter(e => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]) setActiveId(visible[0].target.id);
+      },
+      { rootMargin: '-45% 0px -50% 0px', threshold: [0, 0.25, 0.5, 1] },
+    );
+    sections.forEach(s => obs.observe(s));
+    return () => obs.disconnect();
+  }, [ids.join(',')]);
+  return activeId;
+}
+
 function FaqItem({ q, a, id }: { q: string; a: string; id: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -211,6 +253,8 @@ export function Landing() {
   const [statsStart, setStatsStart] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
   const [mobileNav, setMobileNav] = useState(false);
+  const [lightbox, setLightbox] = useState<{ column: 'desktop' | 'mobile'; index: number } | null>(null);
+  const activeSection = useScrollSpy(['fonctionnalites', 'secteurs', ...(config.pricing_visible ? ['tarifs'] : []), 'demonstration', 'faq', 'contact']);
 
   useEffect(() => {
     let active = true;
@@ -259,6 +303,36 @@ export function Landing() {
   const clientLogos = Array.isArray(config.client_logos) ? config.client_logos : [];
   const contactEmail = config.contact_email?.trim() || '';
   const contactHours = config.contact_hours?.trim() || '';
+  const whatsappUrl = config.whatsapp_url?.trim() || DEFAULT_WHATSAPP_URL;
+  const phoneDisplay = config.phone_display?.trim() || DEFAULT_PHONE_DISPLAY;
+  const phoneTel = config.phone_tel?.trim() || DEFAULT_PHONE_TEL;
+  const desktopShots = (Array.isArray(config.demo_desktop) && config.demo_desktop.length > 0) ? config.demo_desktop : DEFAULT_DESKTOP_SHOTS;
+  const mobileShots = (Array.isArray(config.demo_mobile) && config.demo_mobile.length > 0) ? config.demo_mobile : DEFAULT_MOBILE_SHOTS;
+  const whyItems = (Array.isArray(config.why_waarwi) && config.why_waarwi.length > 0) ? config.why_waarwi : DEFAULT_WHY_WAARWI;
+  const faqItems = (Array.isArray(config.faq_items) && config.faq_items.length > 0) ? config.faq_items : DEFAULT_FAQ_ITEMS;
+
+  const openLightbox = useCallback((column: 'desktop' | 'mobile', index: number) => setLightbox({ column, index }), []);
+  const closeLightbox = useCallback(() => setLightbox(null), []);
+  const navLightbox = useCallback((dir: 1 | -1) => {
+    setLightbox(prev => {
+      if (!prev) return prev;
+      const list = prev.column === 'desktop' ? desktopShots : mobileShots;
+      if (list.length === 0) return prev;
+      return { ...prev, index: (prev.index + dir + list.length) % list.length };
+    });
+  }, [desktopShots, mobileShots]);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowRight') navLightbox(1);
+      if (e.key === 'ArrowLeft') navLightbox(-1);
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [lightbox, closeLightbox, navLightbox]);
 
   if (loading) {
     return (
@@ -290,16 +364,19 @@ export function Landing() {
 
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-5 md:px-8 h-16 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2.5" aria-label="Waarwi — accueil">
-            <img src="/newlogo.png" alt="" className="h-8 w-8 object-contain" />
-            <span className="text-lg font-bold tracking-tight text-slate-900">Waarwi</span>
+          <a href="/" className="flex items-center" aria-label="Waarwi — accueil">
+            <img src="/newlogo.png" alt="Waarwi" className="h-10 md:h-12 w-auto object-contain" />
           </a>
           <nav className="hidden md:flex items-center gap-7" aria-label="Navigation principale">
-            {navLinks.map((l) => (
-              <a key={l.href} href={l.href} className="text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
-                {l.label}
-              </a>
-            ))}
+            {navLinks.map((l) => {
+              const isActive = activeSection === l.href.slice(1);
+              return (
+                <a key={l.href} href={l.href} className={`relative text-sm font-medium transition-colors ${isActive ? 'text-slate-900' : 'text-slate-600 hover:text-slate-900'}`}>
+                  {l.label}
+                  {isActive && <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-teal-600 rounded-full" />}
+                </a>
+              );
+            })}
           </nav>
           <div className="hidden md:flex items-center gap-2.5">
             <a href={APP_URL} className="px-4 py-2 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors">Se connecter</a>
@@ -434,17 +511,17 @@ export function Landing() {
         )}
 
         {/* Why Waarwi */}
-        <section className="py-20 md:py-28 bg-slate-50/60 border-b border-slate-100">
+        <section id="pourquoi" className="py-20 md:py-28 bg-slate-50/60 border-b border-slate-100">
           <div className="max-w-6xl mx-auto px-5 md:px-8">
             <div className="max-w-2xl mb-12 md:mb-16">
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">Pourquoi Waarwi ?</p>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
-                Une solution de confiance, pensée pour le Sénégal.
+                {config.section_titles?.why_title || 'Une solution de confiance, pensée pour le Sénégal.'}
               </h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {WHY_WAARWI.map((item, i) => {
-                const Icon = item.icon;
+              {whyItems.map((item, i) => {
+                const Icon = ICON_MAP[item.icon] || Shield;
                 return (
                   <div key={i} className="bg-white rounded-xl border border-slate-200/70 p-6 h-full">
                     <div className="w-11 h-11 rounded-xl bg-teal-50 flex items-center justify-center mb-4">
@@ -517,31 +594,22 @@ export function Landing() {
           </div>
         </section>
 
-        {/* Demonstration — real app captures (or clearly-identified placeholders) */}
+        {/* Demonstration — desktop carousel (horizontal) + mobile stacked cards */}
         <section id="demonstration" className="py-20 md:py-28 bg-white">
           <div className="max-w-6xl mx-auto px-5 md:px-8">
             <div className="max-w-2xl mb-12 md:mb-16">
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">Démonstration</p>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
-                Une interface claire, du tableau de bord à la caisse.
+                {config.section_titles?.demo_title || 'Une interface claire, du tableau de bord à la caisse.'}
               </h2>
               <p className="mt-4 text-lg text-slate-600">
-                Découvrez les écrans clés de Waarwi. D'autres captures seront ajoutées au fur et à mesure.
+                {config.section_titles?.demo_subtitle || 'Découvrez les écrans clés de Waarwi, sur ordinateur comme sur mobile.'}
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {APP_SHOTS.map((shot, i) => (
-                <figure key={i} className="rounded-2xl overflow-hidden border border-slate-200/70 bg-white shadow-sm">
-                  <img src={shot.src} alt={shot.alt} className="w-full h-auto object-cover" width={640} height={400} loading="lazy" />
-                  <figcaption className="px-4 py-3 text-sm font-medium text-slate-700 border-t border-slate-100 bg-slate-50/50">
-                    {shot.label}
-                  </figcaption>
-                </figure>
-              ))}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
+              <DesktopCarousel shots={desktopShots} onOpen={openLightbox} />
+              <MobileStack shots={mobileShots} onOpen={openLightbox} />
             </div>
-            <p className="mt-6 text-xs text-slate-400">
-              Captures d'interface. Les visuels seront remplacés par des captures réelles à jour.
-            </p>
           </div>
         </section>
 
@@ -636,7 +704,7 @@ export function Landing() {
               </h2>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200/70 px-5 md:px-7">
-              {FAQ_ITEMS.map((item, i) => (
+              {faqItems.map((item, i) => (
                 <FaqItem key={i} id={`faq-${i}`} q={item.q} a={item.a} />
               ))}
             </div>
@@ -656,13 +724,13 @@ export function Landing() {
               <a href={registerUrl('trial')} className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition-colors">
                 Démarrer l'essai gratuit <ArrowRight className="w-4 h-4" />
               </a>
-              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white/10 hover:bg-white/15 text-white font-semibold rounded-xl transition-colors border border-white/10">
+              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white/10 hover:bg-white/15 text-white font-semibold rounded-xl transition-colors border border-white/10">
                 <MessageCircle className="w-4 h-4" /> Échanger sur WhatsApp
               </a>
             </div>
             <div className="mt-8 flex flex-col sm:flex-row gap-4 sm:gap-8 justify-center items-center text-sm text-slate-300">
-              <a href={`tel:${PHONE_TEL}`} className="inline-flex items-center gap-2 hover:text-white transition-colors">
-                <Phone className="w-4 h-4" /> {PHONE_DISPLAY}
+              <a href={`tel:${phoneTel}`} className="inline-flex items-center gap-2 hover:text-white transition-colors">
+                <Phone className="w-4 h-4" /> {phoneDisplay}
               </a>
               {contactEmail && (
                 <a href={`mailto:${contactEmail}`} className="inline-flex items-center gap-2 hover:text-white transition-colors">
@@ -684,9 +752,8 @@ export function Landing() {
         <div className="max-w-6xl mx-auto px-5 md:px-8 py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="md:col-span-2">
-              <div className="flex items-center gap-2.5 mb-3">
-                <img src="/newlogo.png" alt="" className="h-7 w-7 object-contain" />
-                <span className="text-base font-bold text-slate-900">Waarwi</span>
+              <div className="flex items-center mb-3">
+                <img src="/newlogo.png" alt="Waarwi" className="h-9 md:h-10 w-auto object-contain" />
               </div>
               <p className="text-sm text-slate-500 max-w-sm leading-relaxed">{config.footer_tagline}</p>
             </div>
@@ -717,6 +784,98 @@ export function Landing() {
           </div>
         </div>
       </footer>
+
+      {lightbox && (
+        <Lightbox
+          column={lightbox.column}
+          index={lightbox.index}
+          shots={lightbox.column === 'desktop' ? desktopShots : mobileShots}
+          onClose={closeLightbox}
+          onNav={navLightbox}
+        />
+      )}
+    </div>
+  );
+}
+
+function DesktopCarousel({ shots, onOpen }: { shots: DemoShot[]; onOpen: (column: 'desktop', index: number) => void }) {
+  const [idx, setIdx] = useState(0);
+  if (shots.length === 0) return null;
+  const prev = () => setIdx(i => (i - 1 + shots.length) % shots.length);
+  const next = () => setIdx(i => (i + 1) % shots.length);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Sur ordinateur</p>
+        {shots.length > 1 && (
+          <div className="flex gap-1.5">
+            <button onClick={prev} aria-label="Précédent" className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+            <button onClick={next} aria-label="Suivant" className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"><ChevronRight className="w-4 h-4" /></button>
+          </div>
+        )}
+      </div>
+      <div className="relative rounded-2xl overflow-hidden border border-slate-200/70 bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.12)] cursor-zoom-in group" onClick={() => onOpen('desktop', idx)}>
+        <img src={shots[idx].src} alt={shots[idx].alt || shots[idx].label} className="w-full h-auto object-cover" loading="lazy" />
+        <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/5 transition-colors" />
+        <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-white/90 backdrop-blur-sm text-[11px] font-semibold text-slate-800">
+          {shots[idx].label}
+        </div>
+      </div>
+      {shots.length > 1 && (
+        <div className="flex justify-center gap-1.5">
+          {shots.map((_, i) => (
+            <button key={i} onClick={() => setIdx(i)} aria-label={`Capture ${i + 1}`} className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-6 bg-teal-600' : 'w-1.5 bg-slate-300 hover:bg-slate-400'}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileStack({ shots, onOpen }: { shots: DemoShot[]; onOpen: (column: 'mobile', index: number) => void }) {
+  if (shots.length === 0) return null;
+  return (
+    <div className="space-y-4">
+      <p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Sur mobile</p>
+      <div className="flex flex-col gap-4 max-h-[560px] overflow-y-auto pr-1 -mr-1 snap-y snap-mandatory scroll-smooth" style={{ scrollbarWidth: 'thin' }}>
+        {shots.map((shot, i) => (
+          <div key={i} className="shrink-0 snap-start relative rounded-2xl overflow-hidden border border-slate-200/70 bg-white shadow-sm cursor-zoom-in group mx-auto w-[200px]" onClick={() => onOpen('mobile', i)}>
+            <img src={shot.src} alt={shot.alt || shot.label} className="w-full h-auto object-cover" loading="lazy" />
+            <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-white/90 backdrop-blur-sm text-[10px] font-semibold text-slate-800">
+              {shot.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Lightbox({ column, index, shots, onClose, onNav }: {
+  column: 'desktop' | 'mobile';
+  index: number;
+  shots: DemoShot[];
+  onClose: () => void;
+  onNav: (dir: 1 | -1) => void;
+}) {
+  if (shots.length === 0) return null;
+  const shot = shots[index] || shots[0];
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 md:p-8" onClick={onClose}>
+      <div className="absolute top-4 right-4 flex items-center gap-3">
+        <span className="text-xs font-medium text-slate-300">{column === 'desktop' ? 'Desktop' : 'Mobile'} — {index + 1}/{shots.length}</span>
+        <button onClick={onClose} aria-label="Fermer" className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"><X className="w-5 h-5" /></button>
+      </div>
+      {shots.length > 1 && (
+        <button onClick={(e) => { e.stopPropagation(); onNav(-1); }} aria-label="Précédent" className="absolute left-2 md:left-4 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"><ChevronLeft className="w-5 h-5" /></button>
+      )}
+      <div className="max-w-4xl max-h-[85vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+        <img src={shot.src} alt={shot.alt || shot.label} className="max-w-full max-h-[78vh] object-contain rounded-lg" />
+        <p className="mt-3 text-sm font-medium text-white">{shot.label}</p>
+      </div>
+      {shots.length > 1 && (
+        <button onClick={(e) => { e.stopPropagation(); onNav(1); }} aria-label="Suivant" className="absolute right-2 md:right-4 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"><ChevronRight className="w-5 h-5" /></button>
+      )}
     </div>
   );
 }
