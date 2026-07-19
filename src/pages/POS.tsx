@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
-import { formatFCFA } from '../lib/format';
+import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -390,20 +390,19 @@ function POSLandingOpen({
                   <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Ouverture</th>
                   <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Fermeture</th>
                   <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Fond</th>
-                  <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Encaissé</th>
+                  <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Solde final</th>
                   <th className="text-center px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 {sessions.map(s => {
-                  const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
                   return (
                     <tr key={s.id} className="hover:bg-neutral-50/50 transition-colors">
                       <td className="px-5 py-3 text-xs font-semibold text-neutral-900">{fmtDateFull(s.opened_at)}</td>
                       <td className="px-5 py-3 text-xs tabular-nums text-neutral-600">{fmtTimeLanding(s.opened_at)}</td>
                       <td className="px-5 py-3 text-xs tabular-nums text-neutral-600">{s.closed_at ? fmtTimeLanding(s.closed_at) : '-'}</td>
                       <td className="px-5 py-3 text-xs font-semibold text-neutral-800 tabular-nums text-right">{formatFCFA(Number(s.opening_amount))}</td>
-                      <td className="px-5 py-3 text-xs font-bold text-neutral-700 tabular-nums text-right">{collected != null ? formatFCFA(collected) : '-'}</td>
+                      <td className="px-5 py-3 text-xs font-bold text-neutral-700 tabular-nums text-right">{s.closing_amount != null ? formatFCFA(Number(s.closing_amount)) : '-'}</td>
                       <td className="px-5 py-3 text-center">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border border-neutral-200 bg-neutral-50 text-neutral-600">
                           <Lock className="w-2 h-2" /> Clôturée
@@ -418,7 +417,6 @@ function POSLandingOpen({
           {/* Mobile list */}
           <div className="lg:hidden space-y-1.5">
             {sessions.slice(0, 3).map(s => {
-              const collected = s.closing_amount != null ? Number(s.closing_amount) - Number(s.opening_amount) : null;
               return (
                 <div key={s.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white border border-neutral-200">
                   <div className="flex items-center gap-2 min-w-0">
@@ -428,7 +426,7 @@ function POSLandingOpen({
                       <span className="text-[10px] text-neutral-400 ml-1.5 tabular-nums">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
                     </div>
                   </div>
-                  <span className="text-[11px] font-bold text-neutral-700 tabular-nums shrink-0">{collected != null ? formatFCFA(collected) : '-'}</span>
+                  <span className="text-[11px] font-bold text-neutral-700 tabular-nums shrink-0">{s.closing_amount != null ? formatFCFA(Number(s.closing_amount)) : '-'}</span>
                 </div>
               );
             })}
@@ -2365,13 +2363,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const lines: ControlLine[] = methods.map(m => {
       const th = theoretical[m.name];
       let base = th ? th.amount : 0;
-      const isCash = m.name.toLowerCase().includes('espèce') || m.name.toLowerCase().includes('liquide') || m.name.toLowerCase().includes('cash') || m.payment_type === 'cash';
+      const normName = m.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const isCash = m.payment_type === 'cash' || normName.includes('espece') || normName.includes('liquide') || normName.includes('cash');
       if (isCash && Number(session.opening_amount) > 0) base += Number(session.opening_amount);
       return { payment_method_id: m.id, method_name: m.name, theoretical_amount: base, counted_amount: base };
     });
     Object.values(theoretical).forEach(t => {
       if (!lines.find(l => l.method_name === t.method_name)) {
-        lines.push({ payment_method_id: t.payment_method_id, method_name: t.method_name, theoretical_amount: t.amount, counted_amount: t.amount });
+        let base = t.amount;
+        const normName = t.method_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const isCash = normName.includes('espece') || normName.includes('liquide') || normName.includes('cash');
+        if (isCash && Number(session.opening_amount) > 0) base += Number(session.opening_amount);
+        lines.push({ payment_method_id: t.payment_method_id, method_name: t.method_name, theoretical_amount: base, counted_amount: base });
       }
     });
 
@@ -2385,10 +2388,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movList.forEach(m => {
-      if (m.kind !== 'income' && m.kind !== 'customer_prepayment' && m.kind !== 'expense') return;
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
       const method = m.method_name || 'Espèces';
-      const signed = m.kind === 'expense' ? -Number(m.amount) : Number(m.amount);
-      byMethod[method] = (byMethod[method] || 0) + signed;
+      byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
     });
     const invoicePayments = pmtList
       .filter((p: any) => (p.reference && p.reference.startsWith('Règlement facture')) || !p.sales || p.sales.cash_session_id !== session.id)
@@ -2458,9 +2460,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }));
     await supabase.from('cash_control_lines').insert(ctrlRows);
     const countedTotal = controlLines.reduce((s, c) => s + c.counted_amount, 0);
+    const theoreticalTotal = controlLines.reduce((s, c) => s + c.theoretical_amount, 0);
     const { error: e } = await supabase.from('cash_sessions').update({
       status: 'closed', closed_at: new Date().toISOString(),
       closing_amount: countedTotal, counted_cash: countedTotal,
+      theoretical_amount: theoreticalTotal,
       variance: totalVariance, closing_note: closingNote, updated_at: new Date().toISOString(),
     }).eq('id', session.id);
     setClosing(false);
@@ -3620,16 +3624,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     {sessionSales.length === 0 ? (
                       <div className="text-center py-3 text-[11px] text-neutral-500">Aucun ticket.</div>
                     ) : sessionSales.map(s => (
-                      <div key={s.id} className={`card p-3 flex items-center gap-3 hover:shadow-elevated transition-all ${s.status === 'return' ? 'border-red-200 bg-red-50/30' : ''}`}>
+                      <div key={s.id} className={`card p-3 flex items-start gap-3 hover:shadow-elevated transition-all ${s.status === 'return' ? 'border-red-200 bg-red-50/30' : ''}`}>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`font-mono text-xs font-bold ${s.status === 'return' ? 'text-red-600' : 'text-brand-700'}`}>{s.sale_number}</span>
-                            <span className="text-[11px] text-neutral-400 num">{new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                            {s.status === 'return' && <span className="text-[10px] font-bold uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Retour</span>}
+                          <div className="text-xs font-semibold text-neutral-900">
+                            {s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}
+                            {s.status === 'return' && <span className="ml-1.5 text-[10px] font-bold uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded align-middle">Retour</span>}
                           </div>
-                          <div className="text-xs text-neutral-600 article-text line-clamp-1 mt-0.5">{s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className={`font-mono text-[10px] font-bold ${s.status === 'return' ? 'text-red-600' : 'text-brand-700'}`}>{s.sale_number}</span>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(s.created_at)}</span>
+                            <span className={`num font-bold text-xs ${s.total < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</span>
+                          </div>
                         </div>
-                        <div className={`num font-bold shrink-0 ${s.total < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</div>
                         {s.status !== 'return' && (
                         <div className="flex items-center gap-1 shrink-0">
                           <button title="Ticket 80mm" onClick={() => {
@@ -3683,36 +3689,36 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   {ticketsExpanded === 'encDirect' && (
                     <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                       {encDirectList.map((m, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-100">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Encaissement direct'}</div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {m.created_at && <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
-                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
+                        <div key={i} className="p-2.5 rounded-lg bg-white border border-neutral-100">
+                          <div className="text-xs font-semibold text-neutral-900">{m.reason || 'Encaissement direct'}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Espèces'}</span>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(m.amount)}</span>
+                              <button
+                                title="Réimprimer le reçu"
+                                onClick={() => {
+                                  try {
+                                    printEncaissementTicket80({
+                                      receiptNumber: `ENC-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                      amount: m.amount,
+                                      method: m.method_name || 'Espèces',
+                                      label: m.reason || undefined,
+                                      reference: m.reference || undefined,
+                                      customerName: m.customer_name,
+                                      createdAt: m.created_at,
+                                      tenant: tenantForPrint as PrintTenant,
+                                      cashier: cashierName,
+                                    });
+                                  } catch {}
+                                }}
+                                className="p-1 rounded hover:bg-neutral-100 text-neutral-800"
+                              >
+                                <Printer className="w-3 h-3" />
+                              </button>
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-neutral-800 num shrink-0">+{formatFCFA(m.amount)}</span>
-                          <button
-                            title="Réimprimer le reçu"
-                            onClick={() => {
-                              try {
-                                printEncaissementTicket80({
-                                  receiptNumber: `ENC-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                  amount: m.amount,
-                                  method: m.method_name || 'Espèces',
-                                  label: m.reason || undefined,
-                                  reference: m.reference || undefined,
-                                  customerName: m.customer_name,
-                                  createdAt: m.created_at,
-                                  tenant: tenantForPrint as PrintTenant,
-                                  cashier: cashierName,
-                                });
-                              } catch {}
-                            }}
-                            className="p-1.5 rounded hover:bg-neutral-100 text-neutral-800 shrink-0"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       ))}
                     </div>
@@ -3741,18 +3747,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   {ticketsExpanded === 'reglements' && (
                     <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                       {sessionInvPayments.map((p, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-100">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-bold text-neutral-900">
-                              <span className="font-mono">{p.sale_number}</span>
-                              {p.customer_name && <span className="text-neutral-600 font-medium ml-1">- {p.customer_name}</span>}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {p.created_at && <span className="num">{new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
-                              {p.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{p.method_name}</span>}
+                        <div key={i} className="p-2.5 rounded-lg bg-white border border-neutral-100">
+                          <div className="text-xs font-bold text-neutral-900">{p.customer_name || 'Client'}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="font-mono text-[10px] font-semibold text-neutral-500 shrink-0">{p.sale_number}</span>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(p.created_at)}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {p.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px]">{p.method_name}</span>}
+                              <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(p.amount)}</span>
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-neutral-800 num shrink-0">+{formatFCFA(p.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -3781,37 +3785,36 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   {ticketsExpanded === 'acomptes' && (
                     <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                       {acomptesList.map((m, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-brand-100">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.customer_name || 'Client'}</div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {m.created_at && <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
-                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
-                              {m.reason && <span className="line-clamp-1">{m.reason}</span>}
+                        <div key={i} className="p-2.5 rounded-lg bg-white border border-brand-100">
+                          <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Acompte'}</span>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-xs font-bold text-brand-700 num">+{formatFCFA(m.amount)}</span>
+                              <button
+                                title="Réimprimer le reçu"
+                                onClick={() => {
+                                  try {
+                                    printEncaissementTicket80({
+                                      receiptNumber: `ACO-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                      amount: m.amount,
+                                      method: m.method_name || 'Espèces',
+                                      label: m.reason ? `Acompte · ${m.reason}` : 'Acompte client',
+                                      reference: m.reference || undefined,
+                                      customerName: m.customer_name,
+                                      createdAt: m.created_at,
+                                      tenant: tenantForPrint as PrintTenant,
+                                      cashier: cashierName,
+                                    });
+                                  } catch {}
+                                }}
+                                className="p-1 rounded hover:bg-brand-100 text-brand-700"
+                              >
+                                <Printer className="w-3 h-3" />
+                              </button>
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-brand-700 num shrink-0">+{formatFCFA(m.amount)}</span>
-                          <button
-                            title="Réimprimer le reçu"
-                            onClick={() => {
-                              try {
-                                printEncaissementTicket80({
-                                  receiptNumber: `ACO-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                  amount: m.amount,
-                                  method: m.method_name || 'Espèces',
-                                  label: m.reason ? `Acompte · ${m.reason}` : 'Acompte client',
-                                  reference: m.reference || undefined,
-                                  customerName: m.customer_name,
-                                  createdAt: m.created_at,
-                                  tenant: tenantForPrint as PrintTenant,
-                                  cashier: cashierName,
-                                });
-                              } catch {}
-                            }}
-                            className="p-1.5 rounded hover:bg-brand-100 text-brand-700 shrink-0"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       ))}
                     </div>
@@ -3840,36 +3843,36 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   {ticketsExpanded === 'depenses' && (
                     <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                       {depensesList.map((m, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Dépense'}</div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {m.created_at && <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
-                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
+                        <div key={i} className="p-2.5 rounded-lg bg-white border border-red-100">
+                          <div className="text-xs font-semibold text-neutral-900">{m.reason || 'Dépense'}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Espèces'}</span>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-xs font-bold text-red-700 num">-{formatFCFA(m.amount)}</span>
+                              <button
+                                title="Réimprimer le bon"
+                                onClick={() => {
+                                  try {
+                                    printDecaissementTicket80({
+                                      receiptNumber: `DEC-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                      amount: m.amount,
+                                      method: m.method_name || 'Espèces',
+                                      label: m.reason || undefined,
+                                      reference: m.reference || undefined,
+                                      beneficiary: m.customer_name,
+                                      createdAt: m.created_at,
+                                      tenant: tenantForPrint as PrintTenant,
+                                      cashier: cashierName,
+                                    });
+                                  } catch {}
+                                }}
+                                className="p-1 rounded hover:bg-red-100 text-red-700"
+                              >
+                                <Printer className="w-3 h-3" />
+                              </button>
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-red-700 num shrink-0">-{formatFCFA(m.amount)}</span>
-                          <button
-                            title="Réimprimer le bon"
-                            onClick={() => {
-                              try {
-                                printDecaissementTicket80({
-                                  receiptNumber: `DEC-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                  amount: m.amount,
-                                  method: m.method_name || 'Espèces',
-                                  label: m.reason || undefined,
-                                  reference: m.reference || undefined,
-                                  beneficiary: m.customer_name,
-                                  createdAt: m.created_at,
-                                  tenant: tenantForPrint as PrintTenant,
-                                  cashier: cashierName,
-                                });
-                              } catch {}
-                            }}
-                            className="p-1.5 rounded hover:bg-red-100 text-red-700 shrink-0"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       ))}
                     </div>

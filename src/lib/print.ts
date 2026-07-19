@@ -661,7 +661,7 @@ export function printXReport80(opts: {
   const mvExpense = movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
   const mvIncome = movements.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
   const mvPrepay = movements.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-  const netTotal = opts.salesTotal - mvExpense;
+  const netTotal = opts.openingAmount + opts.salesTotal - mvExpense;
   const variance = controls.length > 0
     ? controls.reduce((s, c) => s + Number(c.difference_amount ?? (c.counted_amount - c.theoretical_amount)), 0)
     : 0;
@@ -669,6 +669,7 @@ export function printXReport80(opts: {
   const movementsHtml = movements.length > 0 ? `
 <hr class="hr" />
 <div class="section">Mouvements de caisse</div>
+<div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)} FCFA</span></div>
 ${movements.map(m => {
     const label = m.kind === 'expense' ? 'Dépense' : m.kind === 'customer_prepayment' ? 'Acompte' : 'Entrée';
     const sign = m.kind === 'expense' ? '-' : '+';

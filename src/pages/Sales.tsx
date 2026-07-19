@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Scroll, User, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Scroll, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -415,31 +415,28 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[11px] font-bold text-neutral-700 truncate">{s.sale_number}</span>
+                      <div className="text-[12px] font-semibold text-neutral-900 truncate flex items-center gap-1.5">
+                        <span className="truncate">{s.customers?.name || 'Client comptoir'}</span>
+                        <span className="font-mono text-[10px] font-bold text-brand-700 shrink-0">· {s.sale_number}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${st.pill}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
                         </span>
                         {s.accounting_status === 'accounted' && <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200">C</span>}
+                        <span className="text-[10px] text-neutral-400 num ml-auto">{formatDateTime(s.created_at)}</span>
                       </div>
-                      <div className="text-[10px] text-neutral-400 mt-0.5 num">{formatDateTime(s.created_at)}</div>
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Total</div>
                       <div className="text-sm font-bold text-neutral-900 num leading-tight mt-0.5">{formatFCFA(s.total)}</div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-neutral-100">
-                    <div className="min-w-0 flex items-center gap-1.5 text-[11px] text-neutral-600 truncate">
-                      <User className="w-3 h-3 text-neutral-400 shrink-0" />
-                      <span className="truncate">{s.customers?.name || 'Client comptoir'}</span>
+                  {payMethods && (
+                    <div className="flex items-center gap-1 text-[10px] text-neutral-500 pt-1.5 border-t border-neutral-100">
+                      <CreditCard className="w-3 h-3 text-neutral-400" /><span className="truncate">{payMethods}</span>
                     </div>
-                    {payMethods && (
-                      <div className="flex items-center gap-1 text-[10px] text-neutral-500 shrink-0">
-                        <CreditCard className="w-3 h-3 text-neutral-400" /><span className="truncate max-w-[90px]">{payMethods}</span>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </button>
               );
             })}

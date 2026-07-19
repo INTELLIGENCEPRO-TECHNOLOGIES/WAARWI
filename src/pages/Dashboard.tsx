@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
-import { formatFCFA, formatCompactFCFA } from '../lib/format';
+import { formatFCFA, formatCompactFCFA, formatDateTime } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { Modal } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -762,16 +762,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
   );
 }
 
-function getTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "À l'instant";
-  if (min < 60) return `Il y a ${min}min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `Il y a ${h}h`;
-  return `Il y a ${Math.floor(h / 24)}j`;
-}
-
 /* ════════════════════════════════════════════════════════════════════════════
  *  MOBILE DASHBOARD — Ultra-compact Premium Fintech 2026
  * ════════════════════════════════════════════════════════════════════════════ */
@@ -1261,8 +1251,9 @@ function MobileDashboard({
             <div className="flex-1 min-w-0">
               <div className="text-[10px] font-semibold text-neutral-800 truncate">
                 {(stats.recentSales[0] as any).customers?.name || 'Client comptoir'}
+                <span className="font-mono text-[9px] font-bold text-brand-700 ml-1">· {stats.recentSales[0].sale_number}</span>
               </div>
-              <div className="text-[8px] text-neutral-400">{getTimeAgo(stats.recentSales[0].created_at)}</div>
+              <div className="text-[8px] text-neutral-400 num">{formatDateTime(stats.recentSales[0].created_at)}</div>
             </div>
             <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
           </button>
@@ -2378,7 +2369,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                     const Icon = cfg.icon;
                     const refPart = act.title.split(' ').slice(1).join(' ');
                     const clientPart = act.detail.split(' · ')[0];
-                    const timeStr = new Date(act.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                    const timeStr = act.time ? formatDateTime(act.time) : '';
                     return (
                       <tr key={act.id} onClick={() => nav(act.route, act.routeCtx)} className="border-b border-neutral-50 hover:bg-neutral-50/50 cursor-pointer transition-colors">
                         <td className="py-2.5 pr-2">

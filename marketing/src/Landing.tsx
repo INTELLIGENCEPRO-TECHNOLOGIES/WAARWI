@@ -9,6 +9,24 @@ import {
 } from 'lucide-react';
 import { supabase, APP_URL } from './lib/supabase';
 
+function navigateToLegal(path: string) {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  window.scrollTo(0, 0);
+}
+
+function LegalLink({ path, children }: { path: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={path}
+      onClick={(e) => { e.preventDefault(); navigateToLegal(path); }}
+      className="text-slate-600 hover:text-slate-900 transition-colors"
+    >
+      {children}
+    </a>
+  );
+}
+
 type LandingFeature = { icon: string; title: string; desc: string; image_url?: string; image_alt?: string; image_position?: 'left' | 'center' | 'right' };
 type DemoShot = { src: string; alt: string; label: string };
 type WhyItem = { icon: string; title: string; desc: string; image_url?: string; image_alt?: string; image_position?: 'left' | 'center' | 'right' };
@@ -1039,9 +1057,9 @@ export function Landing() {
                 <li><a href={APP_URL} className="text-slate-600 hover:text-slate-900 transition-colors">Se connecter</a></li>
                 <li><a href={registerUrl('trial')} className="text-slate-600 hover:text-slate-900 transition-colors">Créer un compte</a></li>
                 <li><a href="#contact" className="text-slate-600 hover:text-slate-900 transition-colors">Contact</a></li>
-                <li><a href="/mentions-legales" className="text-slate-600 hover:text-slate-900 transition-colors">Mentions légales</a></li>
-                <li><a href="/confidentialite" className="text-slate-600 hover:text-slate-900 transition-colors">Confidentialité</a></li>
-                <li><a href="/cgu" className="text-slate-600 hover:text-slate-900 transition-colors">CGU</a></li>
+                <li><LegalLink path="/mentions-legales">Mentions légales</LegalLink></li>
+                <li><LegalLink path="/confidentialite">Confidentialité</LegalLink></li>
+                <li><LegalLink path="/cgu">CGU</LegalLink></li>
               </ul>
             </div>
           </div>

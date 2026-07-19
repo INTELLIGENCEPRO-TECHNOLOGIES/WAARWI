@@ -109,12 +109,11 @@ export function CashHistory() {
     const byMethodMap: Record<string, number> = {};
     (pmtData || []).forEach((p: any) => { byMethodMap[p.method_name] = (byMethodMap[p.method_name] || 0) + Number(p.amount); });
     (mvData || []).forEach((m: any) => {
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
       const isReglement = m.kind === 'income' && (m.reason || '').startsWith('Règlement ') && !m.reason.startsWith('Règlement solde');
       if (isReglement) return;
-      if (m.kind !== 'income' && m.kind !== 'customer_prepayment' && m.kind !== 'expense') return;
       const method = m.method_name || 'Espèces';
-      const signed = m.kind === 'expense' ? -Number(m.amount) : Number(m.amount);
-      byMethodMap[method] = (byMethodMap[method] || 0) + signed;
+      byMethodMap[method] = (byMethodMap[method] || 0) + Number(m.amount);
     });
     const invoicePayments: InvoicePayment[] = (pmtData || [])
       .filter((p: any) => (p.reference && p.reference.startsWith('Règlement ')) || !p.sales || p.sales.cash_session_id !== s.id)
@@ -297,8 +296,9 @@ export function CashHistory() {
               const mvExp = detail.movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
               const salesTotal = detail.sales.reduce((s, x) => s + x.total, 0);
               const byMethodTotal = detail.byMethod.reduce((s, m) => s + m.amount, 0);
+              const openingAmount = Number(detail.session.opening_amount) || 0;
               const totalEncaisse = byMethodTotal;
-              const net = totalEncaisse - mvExp;
+              const net = openingAmount + totalEncaisse - mvExp;
               return (
                 <div className="flex items-stretch gap-px rounded-xl overflow-hidden border border-neutral-200 bg-neutral-200">
                   <div className="flex-1 bg-white p-2 text-center">
@@ -306,12 +306,16 @@ export function CashHistory() {
                     <div className="text-sm font-bold text-neutral-900 num mt-0.5">{detail.sales.length}</div>
                   </div>
                   <div className="flex-1 bg-white p-2 text-center">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Total encaissé</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Fond initial</div>
+                    <div className="text-sm font-bold text-neutral-900 num mt-0.5">{formatFCFA(openingAmount)}</div>
+                  </div>
+                  <div className="flex-1 bg-white p-2 text-center">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Encaissé</div>
                     <div className="text-sm font-bold text-neutral-900 num mt-0.5">{formatFCFA(totalEncaisse)}</div>
                     <div className="text-[8px] text-neutral-400 num mt-0.5">Facturé {formatFCFA(salesTotal)}</div>
                   </div>
                   <div className="flex-1 bg-white p-2 text-center">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Net</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Caisse théor.</div>
                     <div className="text-sm font-bold text-brand-800 num mt-0.5">{formatFCFA(net)}</div>
                   </div>
                   <div className="flex-1 bg-white p-2 text-center">
@@ -341,7 +345,7 @@ export function CashHistory() {
             </div>
 
             {/* Collapsible accordion sections */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {/* Encaissements par mode */}
               {detail.byMethod.length > 0 && (
                 <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
@@ -361,7 +365,7 @@ export function CashHistory() {
                     </div>
                   </button>
                   {detailExpanded === 'modes' && (
-                    <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="px-2 pb-2 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
                       {detail.byMethod.map(m => {
                         const total = detail.byMethod.reduce((s, x) => s + x.amount, 0);
                         const pct = total > 0 ? (m.amount / total) * 100 : 0;
@@ -400,20 +404,18 @@ export function CashHistory() {
                     </div>
                   </button>
                   {detailExpanded === 'reglements' && (
-                    <div className="px-3 pb-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="px-2 pb-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
                       {detail.invoicePayments.map(p => (
-                        <div key={p.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-200">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-bold text-neutral-900">
-                              <span className="font-mono">{p.sale_number}</span>
-                              {p.customer_name && <span className="text-neutral-600 font-medium ml-1">- {p.customer_name}</span>}
+                        <div key={p.id} className="p-2.5 rounded-lg bg-white border border-neutral-200">
+                          <div className="text-xs font-bold text-neutral-900">{p.customer_name || 'Client'}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="font-mono text-[10px] font-semibold text-neutral-500">{p.sale_number}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px]">{p.method_name}</span>
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              <span>{new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} {new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{p.method_name}</span>
-                            </div>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(p.created_at)}</span>
+                            <span className="text-xs font-bold text-neutral-700 num shrink-0">+{formatFCFA(p.amount)}</span>
                           </div>
-                          <span className="text-xs font-bold text-neutral-700 num shrink-0">+{formatFCFA(p.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -433,7 +435,7 @@ export function CashHistory() {
                   <>
                     {encDirectList.length > 0 && (
                       <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                        <button onClick={() => setDetailExpanded(detailExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-2.5 py-2 text-left">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'encDirect' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
                               <ArrowDownRight className="w-3.5 h-3.5" />
@@ -449,13 +451,13 @@ export function CashHistory() {
                           </div>
                         </button>
                         {detailExpanded === 'encDirect' && (
-                          <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                             {encDirectList.map(m => (
-                              <div key={m.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-100">
+                              <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-neutral-100">
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Encaissement direct'}</div>
                                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                                    <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    <span className="num">{formatDateTime(m.created_at)}</span>
                                     {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
                                   </div>
                                 </div>
@@ -469,7 +471,7 @@ export function CashHistory() {
 
                     {acomptesList.length > 0 && (
                       <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                        <button onClick={() => setDetailExpanded(detailExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-2.5 py-2 text-left">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
                               <Wallet className="w-3.5 h-3.5" />
@@ -485,18 +487,15 @@ export function CashHistory() {
                           </div>
                         </button>
                         {detailExpanded === 'acomptes' && (
-                          <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                             {acomptesList.map(m => (
-                              <div key={m.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-brand-100">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.customer_name || 'Client'}</div>
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                                    <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
-                                    {m.reason && <span className="line-clamp-1">{m.reason}</span>}
-                                  </div>
+                              <div key={m.id} className="p-2.5 rounded-lg bg-white border border-brand-100">
+                                <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
+                                <div className="flex items-center justify-between gap-2 mt-1">
+                                  <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Acompte'}</span>
+                                  <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
+                                  <span className="text-xs font-bold text-brand-700 num shrink-0">+{formatFCFA(m.amount)}</span>
                                 </div>
-                                <span className="text-xs font-bold text-brand-700 num shrink-0">+{formatFCFA(m.amount)}</span>
                               </div>
                             ))}
                           </div>
@@ -506,7 +505,7 @@ export function CashHistory() {
 
                     {depensesList.length > 0 && (
                       <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                        <button onClick={() => setDetailExpanded(detailExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-2.5 py-2 text-left">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
                               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -522,13 +521,13 @@ export function CashHistory() {
                           </div>
                         </button>
                         {detailExpanded === 'depenses' && (
-                          <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                             {depensesList.map(m => (
-                              <div key={m.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100">
+                              <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-red-100">
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Dépense'}</div>
                                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                                    <span className="num">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    <span className="num">{formatDateTime(m.created_at)}</span>
                                     {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
                                   </div>
                                 </div>
@@ -545,7 +544,7 @@ export function CashHistory() {
 
               {/* Ventes */}
               <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'ventes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
-                <button onClick={() => setDetailExpanded(detailExpanded === 'ventes' ? null : 'ventes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                <button onClick={() => setDetailExpanded(detailExpanded === 'ventes' ? null : 'ventes')} className="w-full flex items-center justify-between px-2.5 py-2 text-left">
                   <div className="flex items-center gap-2">
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${detailExpanded === 'ventes' ? 'bg-brand-200 text-brand-800' : 'bg-neutral-100 text-neutral-700'}`}>
                       <Package className="w-3.5 h-3.5" />
@@ -561,22 +560,17 @@ export function CashHistory() {
                   </div>
                 </button>
                 {detailExpanded === 'ventes' && (
-                  <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="px-2 pb-2 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
                     {detail.sales.length === 0 ? (
                       <div className="py-3 text-center text-xs text-neutral-500">Aucune vente.</div>
                     ) : detail.sales.map(s => (
-                      <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-white border border-neutral-100 hover:border-brand-200 transition">
-                        <div className="w-6 h-6 rounded-md bg-brand-50 flex items-center justify-center shrink-0">
-                          <Wallet className="w-3 h-3 text-brand-700" />
+                      <div key={s.id} className="p-2.5 rounded-lg bg-white border border-neutral-100 hover:border-brand-200 transition">
+                        <div className="text-xs font-semibold text-neutral-900">{s.customer_name || 'Comptoir'}</div>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <span className="font-mono text-[10px] font-bold text-brand-700">{s.sale_number}</span>
+                          <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(s.created_at)}</span>
+                          <span className="num font-bold text-xs text-neutral-900">{formatFCFA(s.total)}</span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-[10px] font-bold text-brand-700">{s.sale_number}</span>
-                            <span className="text-[10px] text-neutral-500 truncate">{s.customer_name || 'Comptoir'}</span>
-                          </div>
-                          <div className="text-[9px] text-neutral-400 num leading-none mt-0.5">{formatDateTime(s.created_at)}</div>
-                        </div>
-                        <div className="num font-bold text-xs text-neutral-900 shrink-0">{formatFCFA(s.total)}</div>
                       </div>
                     ))}
                   </div>
@@ -602,6 +596,12 @@ export function CashHistory() {
                   </button>
                   {detailExpanded === 'controle' && (
                     <div className="px-3 pb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {Number(detail.session.opening_amount) > 0 && (
+                        <div className="flex items-center justify-between px-3 py-2 mb-1.5 rounded-lg bg-amber-50/60 border border-amber-100 text-xs">
+                          <span className="font-medium text-neutral-600">Fond d'ouverture</span>
+                          <span className="font-bold text-neutral-800 num">{formatFCFA(Number(detail.session.opening_amount))}</span>
+                        </div>
+                      )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                         {detail.controls.map((c, i) => {
                           const diff = Number(c.difference_amount);

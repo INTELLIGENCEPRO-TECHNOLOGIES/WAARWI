@@ -6,7 +6,7 @@ export type RefData = {
   categories: Category[];
   brands: VehicleBrand[];
   models: { id: string; name: string; brand_id: string; tenant_id: string }[];
-  paymentMethods: { id: string; name: string; is_active: boolean; sort_order: number; tenant_id: string }[];
+  paymentMethods: { id: string; name: string; is_active: boolean; sort_order: number; tenant_id: string; payment_type: string }[];
   loadedAt: number;
 };
 
@@ -202,7 +202,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from('part_categories').select('id, name, parent_id, tenant_id, track_stock').eq('tenant_id', tid).eq('is_active', true).order('name'),
       supabase.from('vehicle_brands').select('id, name, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('name'),
       supabase.from('vehicle_models').select('id, name, brand_id, tenant_id').eq('tenant_id', tid).order('name'),
-      supabase.from('payment_methods').select('id, name, is_active, sort_order, tenant_id').eq('tenant_id', tid).eq('is_active', true).order('sort_order'),
+      supabase.from('payment_methods').select('id, name, is_active, sort_order, tenant_id, payment_type').eq('tenant_id', tid).eq('is_active', true).order('sort_order'),
     ]);
     setRefData({
       categories: (cats || []) as Category[],
