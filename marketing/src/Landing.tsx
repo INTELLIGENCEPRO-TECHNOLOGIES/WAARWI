@@ -214,6 +214,30 @@ function useScrollSpy(ids: string[]) {
   return activeId;
 }
 
+function useReveal(deps: unknown[] = []) {
+  useEffect(() => {
+    const sel = '.reveal:not(.is-visible), .reveal-scale:not(.is-visible), .reveal-left:not(.is-visible), .reveal-right:not(.is-visible)';
+    const els = Array.from(document.querySelectorAll<HTMLElement>(sel));
+    if (els.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            const el = e.target as HTMLElement;
+            const delay = el.dataset.delay ? parseInt(el.dataset.delay, 10) : 0;
+            window.setTimeout(() => el.classList.add('is-visible'), delay);
+            obs.unobserve(el);
+          }
+        });
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.12 },
+    );
+    els.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
 function FaqItem({ q, a, id }: { q: string; a: string; id: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -260,7 +284,7 @@ function ImageCard({ title, desc, image_url, image_alt, image_position, iconFall
   const has = !!image_url;
   const pos = (image_position === 'left' || image_position === 'right') ? image_position : 'center';
   return (
-    <div className="flex rounded-xl border border-slate-200/80 overflow-hidden bg-white h-full min-h-[168px]">
+    <div className="card-lift flex rounded-xl border border-slate-200/80 overflow-hidden bg-white h-full min-h-[168px]">
       {has ? (
         <div className="w-[38%] shrink-0 bg-slate-100 overflow-hidden">
           <img
@@ -488,6 +512,7 @@ export function Landing() {
   const mobileShots = (Array.isArray(config.demo_mobile) && config.demo_mobile.length > 0) ? config.demo_mobile : DEFAULT_MOBILE_SHOTS;
   const whyItems = (Array.isArray(config.why_waarwi) && config.why_waarwi.length > 0) ? config.why_waarwi : DEFAULT_WHY_WAARWI;
   const faqItems = (Array.isArray(config.faq_items) && config.faq_items.length > 0) ? config.faq_items : DEFAULT_FAQ_ITEMS;
+  useReveal([loading, features.length, whyItems.length, sectors.length, plans.length, testimonials.length, clientLogos.length, faqItems.length]);
 
   const openLightbox = useCallback((column: 'desktop' | 'mobile', index: number) => setLightbox({ column, index }), []);
   const closeLightbox = useCallback(() => setLightbox(null), []);
@@ -591,40 +616,41 @@ export function Landing() {
       <main id="contenu">
         {/* Hero */}
         <section className="relative overflow-hidden bg-gradient-to-b from-slate-50/60 to-white">
-          <div className="max-w-6xl mx-auto px-5 md:px-8 pt-16 md:pt-24 pb-20 md:pb-28">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+            <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-teal-200/30 blur-3xl animate-blob" />
+            <div className="absolute top-32 -right-32 w-[28rem] h-[28rem] rounded-full bg-cyan-200/20 blur-3xl animate-blob-slow" />
+            <div className="absolute -bottom-32 left-1/3 w-80 h-80 rounded-full bg-teal-100/40 blur-3xl animate-blob" style={{ animationDelay: '4s' }} />
+          </div>
+          <div className="relative max-w-6xl mx-auto px-5 md:px-8 pt-10 md:pt-20 pb-20 md:pb-28">
             <div className="grid lg:grid-cols-[1.1fr_1fr] gap-12 lg:gap-16 items-center">
               <div className="max-w-xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-50 border border-teal-100 mb-6">
-                  <span className="w-1.5 h-1.5 rounded-full bg-teal-600 animate-pulse" />
-                  <span className="text-xs font-semibold text-teal-700 tracking-wide">Gestion commerciale conçue au Sénégal</span>
-                </div>
-                <h1 className="text-4xl md:text-5xl lg:text-[54px] leading-[1.08] tracking-[-0.02em] font-bold text-slate-900">
+                <h1 className="reveal text-4xl md:text-5xl lg:text-[54px] leading-[1.08] tracking-[-0.02em] font-bold text-slate-900">
                   {config.hero_headline}
                   {config.hero_accent && (
                     <>
-                      {' '}<span className="text-teal-700">{config.hero_accent}</span>
+                      {' '}<span className="bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent animate-shimmer">{config.hero_accent}</span>
                     </>
                   )}
                 </h1>
-                <p className="mt-5 text-lg leading-relaxed text-slate-600">
+                <p className="reveal mt-5 text-lg leading-relaxed text-slate-600" data-delay="100">
                   {config.hero_subtitle}
                 </p>
-                <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                  <a href={registerUrl('trial')} className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-700 hover:bg-teal-800 text-white font-semibold rounded-xl transition-colors active:scale-[0.98]">
+                <div className="reveal mt-8 flex flex-col sm:flex-row gap-3" data-delay="200">
+                  <a href={registerUrl('trial')} className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-700 hover:bg-teal-800 text-white font-semibold rounded-xl transition-all active:scale-[0.98] animate-cta-glow hover:shadow-lg">
                     Démarrer l'essai gratuit <ArrowRight className="w-4 h-4" />
                   </a>
                   <a href="#demonstration" className="inline-flex items-center justify-center px-6 py-3.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-800 font-semibold rounded-xl transition-colors">
                     Voir une démonstration
                   </a>
                 </div>
-                <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500">
+                <div className="reveal mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500" data-delay="300">
                   <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-teal-600" /> 14 jours gratuits</span>
                   <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-teal-600" /> Sans carte bancaire</span>
                   <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-teal-600" /> Accompagnement local</span>
                 </div>
               </div>
 
-              <div className="relative">
+              <div className="reveal-right relative" data-delay="150">
                 <div className="relative rounded-2xl overflow-hidden shadow-[0_24px_60px_-20px_rgba(15,23,42,0.18),0_8px_24px_-8px_rgba(15,23,42,0.08)] border border-slate-200/70 bg-white">
                   <img
                     src={config.hero_image_url || '/desktop.png'}
@@ -636,7 +662,7 @@ export function Landing() {
                     onError={(e) => { (e.target as HTMLImageElement).src = '/desktop.png'; }}
                   />
                 </div>
-                <div className="hidden md:block absolute -bottom-6 -left-6 w-40 rounded-xl overflow-hidden shadow-[0_12px_30px_-12px_rgba(15,23,42,0.2)] border border-slate-200/70 bg-white">
+                <div className="hidden md:block absolute -bottom-6 -left-6 w-40 rounded-xl overflow-hidden shadow-[0_12px_30px_-12px_rgba(15,23,42,0.2)] border border-slate-200/70 bg-white animate-float">
                   <img src="/mobile.png" alt="Waarwi sur mobile" className="w-full h-auto" width={160} height={320} loading="lazy" />
                 </div>
               </div>
@@ -645,9 +671,9 @@ export function Landing() {
         </section>
 
         {/* Brand signature */}
-        <section className="py-10 md:py-12 bg-white border-b border-slate-100">
+        <section className="py-6 md:py-8 bg-white border-b border-slate-100">
           <div className="max-w-4xl mx-auto px-5 md:px-8 text-center">
-            <p className="text-lg md:text-xl font-semibold text-slate-700 italic">
+            <p className="reveal text-lg md:text-xl font-semibold text-slate-700 italic">
               La plateforme qui simplifie, connecte et propulse votre business.
             </p>
           </div>
@@ -658,9 +684,9 @@ export function Landing() {
           <section ref={statsRef} className="border-y border-slate-100 bg-white">
             <div className="max-w-6xl mx-auto px-5 md:px-8 py-12 md:py-14">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-                <StatCard value={stats.active_tenants} label={config.stats_label_tenants} start={statsStart} />
-                <StatCard value={stats.active_sectors} label={config.stats_label_sectors} start={statsStart} />
-                <TextStatCard label={config.stats_label_uptime || 'Accompagnement local au Sénégal'} icon={Headphones} />
+                <div className="reveal"><StatCard value={stats.active_tenants} label={config.stats_label_tenants} start={statsStart} /></div>
+                <div className="reveal" data-delay="100"><StatCard value={stats.active_sectors} label={config.stats_label_sectors} start={statsStart} /></div>
+                <div className="reveal" data-delay="200"><TextStatCard label={config.stats_label_uptime || 'Accompagnement local au Sénégal'} icon={Headphones} /></div>
               </div>
             </div>
           </section>
@@ -691,7 +717,7 @@ export function Landing() {
         {/* Why Waarwi */}
         <section id="pourquoi" className="py-20 md:py-28 bg-slate-50/60 border-b border-slate-100">
           <div className="max-w-6xl mx-auto px-5 md:px-8">
-            <div className="max-w-2xl mb-12 md:mb-16">
+            <div className="reveal max-w-2xl mb-12 md:mb-16">
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">Pourquoi Waarwi ?</p>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
                 {config.section_titles?.why_title || 'Une solution de confiance, pensée pour le Sénégal.'}
@@ -701,8 +727,8 @@ export function Landing() {
               {whyItems.map((item, i) => {
                 const Icon = ICON_MAP[item.icon] || Shield;
                 return (
+                  <div key={i} className="reveal" data-delay={i * 80}>
                   <ImageCard
-                    key={i}
                     title={item.title}
                     desc={item.desc}
                     image_url={item.image_url}
@@ -710,6 +736,7 @@ export function Landing() {
                     image_position={item.image_position}
                     iconFallback={<Icon className="w-7 h-7 text-teal-700" />}
                   />
+                  </div>
                 );
               })}
             </div>
@@ -733,7 +760,7 @@ export function Landing() {
         {/* Features */}
         <section id="fonctionnalites" className="py-20 md:py-28">
           <div className="max-w-6xl mx-auto px-5 md:px-8">
-            <div className="max-w-2xl mb-12 md:mb-16">
+            <div className="reveal max-w-2xl mb-12 md:mb-16">
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">Fonctionnalités</p>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
                 Tout ce dont votre business a besoin, dans une seule plateforme.
@@ -746,15 +773,16 @@ export function Landing() {
               {features.map((f, i) => {
                 const Icon = ICON_MAP[f.icon] || Package;
                 return (
-                  <ImageCard
-                    key={i}
-                    title={f.title}
-                    desc={f.desc}
-                    image_url={f.image_url}
-                    image_alt={f.image_alt}
-                    image_position={f.image_position}
-                    iconFallback={<Icon className="w-7 h-7 text-teal-700" />}
-                  />
+                  <div key={i} className="reveal" data-delay={i * 80}>
+                    <ImageCard
+                      title={f.title}
+                      desc={f.desc}
+                      image_url={f.image_url}
+                      image_alt={f.image_alt}
+                      image_position={f.image_position}
+                      iconFallback={<Icon className="w-7 h-7 text-teal-700" />}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -778,7 +806,7 @@ export function Landing() {
         {/* Sectors */}
         <section id="secteurs" className="py-20 md:py-28 bg-slate-50/60 border-y border-slate-100">
           <div className="max-w-6xl mx-auto px-5 md:px-8">
-            <div className="max-w-2xl mb-12 md:mb-16">
+            <div className="reveal max-w-2xl mb-12 md:mb-16">
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">Secteurs d'activité</p>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
                 Pensé pour les réalités du commerce sénégalais.
@@ -788,18 +816,19 @@ export function Landing() {
               </p>
             </div>
             <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-5 overflow-x-clip">
-              {sectors.map((s) => {
+              {sectors.map((s, i) => {
                 const Icon = SECTOR_ICONS[s.slug] || Store;
                 return (
-                  <ImageCard
-                    key={s.id}
-                    title={s.name}
-                    desc={s.description}
-                    image_url={s.image_url}
-                    image_alt={s.image_alt}
-                    image_position={s.image_position}
-                    iconFallback={<Icon className="w-7 h-7 text-teal-700" />}
-                  />
+                  <div key={s.id} className="reveal" data-delay={i * 80}>
+                    <ImageCard
+                      title={s.name}
+                      desc={s.description}
+                      image_url={s.image_url}
+                      image_alt={s.image_alt}
+                      image_position={s.image_position}
+                      iconFallback={<Icon className="w-7 h-7 text-teal-700" />}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -823,7 +852,7 @@ export function Landing() {
         {/* Demonstration — desktop carousel (horizontal) + mobile stacked cards */}
         <section id="demonstration" className="py-20 md:py-28 bg-white">
           <div className="max-w-6xl mx-auto px-5 md:px-8">
-            <div className="max-w-2xl mb-12 md:mb-16">
+            <div className="reveal max-w-2xl mb-12 md:mb-16">
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">Démonstration</p>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
                 {config.section_titles?.demo_title || 'Une interface claire, du tableau de bord à la caisse.'}
@@ -833,8 +862,8 @@ export function Landing() {
               </p>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
-              <DesktopCarousel shots={desktopShots} onOpen={openLightbox} />
-              <MobileStack shots={mobileShots} onOpen={openLightbox} />
+              <div className="reveal-left"><DesktopCarousel shots={desktopShots} onOpen={openLightbox} /></div>
+              <div className="reveal-right" data-delay="120"><MobileStack shots={mobileShots} onOpen={openLightbox} /></div>
             </div>
           </div>
         </section>
@@ -843,7 +872,7 @@ export function Landing() {
         {testimonials.length > 0 && (
           <section className="py-20 md:py-28 bg-slate-50/60 border-y border-slate-100" aria-labelledby="temoignages-title">
             <div className="max-w-6xl mx-auto px-5 md:px-8">
-              <div className="max-w-2xl mb-12 md:mb-16">
+              <div className="reveal max-w-2xl mb-12 md:mb-16">
                 <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">Témoignages</p>
                 <h2 id="temoignages-title" className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
                   Ce qu'en disent les commerçants.
@@ -851,7 +880,7 @@ export function Landing() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {testimonials.map((t, i) => (
-                  <figure key={i} className="bg-white rounded-xl border border-slate-200/70 p-6 h-full flex flex-col">
+                  <figure key={i} className="reveal card-lift bg-white rounded-xl border border-slate-200/70 p-6 h-full flex flex-col" data-delay={i * 80}>
                     <blockquote className="text-sm leading-relaxed text-slate-700 flex-1">"{t.quote}"</blockquote>
                     <figcaption className="mt-4 pt-4 border-t border-slate-100">
                       <div className="text-sm font-semibold text-slate-900">{t.author}</div>
@@ -870,7 +899,7 @@ export function Landing() {
         {config.pricing_visible && plans.length > 0 && (
           <section id="tarifs" className="py-20 md:py-28">
             <div className="max-w-5xl mx-auto px-5 md:px-8">
-              <div className="text-center max-w-2xl mx-auto mb-12 md:mb-16">
+              <div className="reveal text-center max-w-2xl mx-auto mb-12 md:mb-16">
                 <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">Tarifs</p>
                 <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
                   Des prix pensés pour les commerçants.
@@ -880,12 +909,13 @@ export function Landing() {
                 </p>
               </div>
               <div className="grid md:grid-cols-2 gap-5 max-w-3xl mx-auto">
-                {plans.map((plan) => {
+                {plans.map((plan, pi) => {
+                  const planDelay = pi * 120;
                   const planFeatures: string[] = Array.isArray(plan.features) ? plan.features : [];
                   const isTrial = plan.code === 'trial';
                   const price = plan.price_monthly || 0;
                   return (
-                    <div key={plan.code} className={`relative rounded-2xl border p-7 flex flex-col ${isTrial ? 'border-slate-200 bg-white' : 'border-teal-200 bg-white shadow-[0_8px_30px_-12px_rgba(13,148,136,0.15)]'}`}>
+                    <div key={plan.code} className={`reveal-scale relative rounded-2xl border p-7 flex flex-col ${isTrial ? 'border-slate-200 bg-white' : 'border-teal-200 bg-white shadow-[0_8px_30px_-12px_rgba(13,148,136,0.15)]'}`} data-delay={planDelay}>
                       {!isTrial && (
                         <div className="absolute -top-3 left-7 px-3 py-1 bg-teal-700 text-white text-xs font-semibold rounded-full">Populaire</div>
                       )}
@@ -923,13 +953,13 @@ export function Landing() {
         {/* FAQ */}
         <section id="faq" className="py-20 md:py-28 bg-slate-50/60 border-y border-slate-100">
           <div className="max-w-3xl mx-auto px-5 md:px-8">
-            <div className="mb-10 md:mb-12">
+            <div className="reveal mb-10 md:mb-12">
               <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-700 mb-3">FAQ</p>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
                 Questions fréquentes.
               </h2>
             </div>
-            <div className="bg-white rounded-2xl border border-slate-200/70 px-5 md:px-7">
+            <div className="reveal bg-white rounded-2xl border border-slate-200/70 px-5 md:px-7">
               {faqItems.map((item, i) => (
                 <FaqItem key={i} id={`faq-${i}`} q={item.q} a={item.a} />
               ))}
@@ -940,14 +970,14 @@ export function Landing() {
         {/* Contact / CTA */}
         <section id="contact" className="py-20 md:py-28 bg-slate-900">
           <div className="max-w-4xl mx-auto px-5 md:px-8 text-center">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white leading-tight">
+            <h2 className="reveal text-3xl md:text-4xl font-bold tracking-tight text-white leading-tight">
               Prêt à digitaliser votre business ?
             </h2>
-            <p className="mt-4 text-lg text-slate-300 max-w-xl mx-auto">
+            <p className="reveal mt-4 text-lg text-slate-300 max-w-xl mx-auto" data-delay="100">
               Configurez votre compte en quelques minutes. Notre équipe vous accompagne au démarrage.
             </p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-              <a href={registerUrl('trial')} className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition-colors">
+            <div className="reveal mt-8 flex flex-col sm:flex-row gap-3 justify-center" data-delay="200">
+              <a href={registerUrl('trial')} className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition-all active:scale-[0.98] animate-cta-glow hover:shadow-lg">
                 Démarrer l'essai gratuit <ArrowRight className="w-4 h-4" />
               </a>
               <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white/10 hover:bg-white/15 text-white font-semibold rounded-xl transition-colors border border-white/10">
