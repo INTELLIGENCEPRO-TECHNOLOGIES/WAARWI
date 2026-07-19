@@ -486,7 +486,7 @@ export function LandingConfigSection() {
             <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre hero</label>
             <textarea value={heroSubtitle} onChange={e => setHeroSubtitle(e.target.value)} rows={2} placeholder="Gestion commerciale tout-en-un..." className={`${inputCls} h-auto py-2.5 resize-none`} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Label bouton CTA</label>
               <input value={heroCtaLabel} onChange={e => setHeroCtaLabel(e.target.value)} placeholder="Démarrer gratuitement" className={inputCls} />
@@ -498,7 +498,7 @@ export function LandingConfigSection() {
           </div>
           <div className="border-t border-slate-100 pt-4">
             <p className="text-xs font-bold text-slate-700 mb-3">Libellés des statistiques</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10px] font-semibold text-slate-500 mb-1">Compteur tenants</label>
                 <input value={statsTenants} onChange={e => setStatsTenants(e.target.value)} className={inputCls} />
@@ -520,7 +520,7 @@ export function LandingConfigSection() {
           <div className="border-t border-slate-100 pt-4">
             <p className="text-xs font-bold text-slate-700 mb-3">Coordonnées de contact</p>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-500 mb-1">WhatsApp (URL)</label>
                   <input value={whatsappUrl} onChange={e => setWhatsappUrl(e.target.value)} placeholder="https://wa.me/221..." className={inputCls} />
@@ -530,7 +530,7 @@ export function LandingConfigSection() {
                   <input value={phoneDisplay} onChange={e => setPhoneDisplay(e.target.value)} placeholder="77 525 41 01" className={inputCls} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-500 mb-1">Téléphone (lien tel:)</label>
                   <input value={phoneTel} onChange={e => setPhoneTel(e.target.value)} placeholder="+221775254101" className={inputCls} />
@@ -596,9 +596,11 @@ export function LandingConfigSection() {
                     <select value={f.icon} onChange={e => updateFeature(idx, 'icon', e.target.value)} className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0">
                       {AVAILABLE_ICONS.map(ic => <option key={ic.value} value={ic.value}>{ic.label}</option>)}
                     </select>
+                    <button onClick={() => removeFeature(idx)} className="shrink-0 ml-auto p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input value={f.title} onChange={e => updateFeature(idx, 'title', e.target.value)} placeholder="Titre" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
                     <input value={f.desc} onChange={e => updateFeature(idx, 'desc', e.target.value)} placeholder="Description" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0" />
-                    <button onClick={() => removeFeature(idx)} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                   <CardImageManager
                     imageUrl={f.image_url} imageAlt={f.image_alt} imagePosition={f.image_position || 'center'}
@@ -711,7 +713,7 @@ export function LandingConfigSection() {
                       <button onClick={() => setClientLogos(move(clientLogos, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
                       <button onClick={() => setClientLogos(move(clientLogos, idx, 1))} disabled={idx === clientLogos.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
                     </div>
-                    <button onClick={() => setClientLogos(clientLogos.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setClientLogos(clientLogos.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 ))}
               </div>
@@ -736,13 +738,13 @@ export function LandingConfigSection() {
                 {testimonials.map((t, idx) => (
                   <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 space-y-2 group">
                     <textarea value={t.quote} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, quote: e.target.value } : x))} rows={2} placeholder="Citation..." className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 resize-none" />
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <input value={t.author} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, author: e.target.value } : x))} placeholder="Auteur" className="h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
                       <input value={t.role || ''} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, role: e.target.value } : x))} placeholder="Rôle" className="h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
                       <input value={t.company || ''} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, company: e.target.value } : x))} placeholder="Société" className="h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
                     </div>
                     <div className="flex justify-end">
-                      <button onClick={() => setTestimonials(testimonials.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setTestimonials(testimonials.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                 ))}
@@ -789,7 +791,7 @@ export function LandingConfigSection() {
                         <input value={w.title} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))} placeholder="Titre" className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
                         <input value={w.desc} onChange={e => setWhyWaarwi(whyWaarwi.map((x, i) => i === idx ? { ...x, desc: e.target.value } : x))} placeholder="Description" className="w-full h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
                       </div>
-                      <button onClick={() => setWhyWaarwi(whyWaarwi.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 mt-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setWhyWaarwi(whyWaarwi.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100 mt-1"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                     <CardImageManager
                       imageUrl={w.image_url} imageAlt={w.image_alt} imagePosition={w.image_position || 'center'}
@@ -831,7 +833,7 @@ export function LandingConfigSection() {
                       <button onClick={() => setFaqItems(move(faqItems, idx, 1))} disabled={idx === faqItems.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
                     </div>
                     <input value={f.q} onChange={e => setFaqItems(faqItems.map((x, i) => i === idx ? { ...x, q: e.target.value } : x))} placeholder="Question" className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                    <button onClick={() => setFaqItems(faqItems.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setFaqItems(faqItems.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                   <textarea value={f.a} onChange={e => setFaqItems(faqItems.map((x, i) => i === idx ? { ...x, a: e.target.value } : x))} rows={2} placeholder="Réponse" className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 resize-none" />
                 </div>
@@ -889,7 +891,7 @@ function DemoColumn({ title, kind, items, setItems, onUpload, uploading }: {
                 <button onClick={() => setItems(move(items, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
                 <button onClick={() => setItems(move(items, idx, 1))} disabled={idx === items.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
               </div>
-              <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           ))}
         </div>

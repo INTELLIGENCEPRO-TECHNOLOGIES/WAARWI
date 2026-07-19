@@ -859,6 +859,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         onTouchEnd={onMainTouchEnd}
       >
         {/* Floating mobile hamburger with logo */}
+        {!isPlatformAdmin && (
         <button
           onClick={() => setMobileOpen(true)}
           className="lg:hidden fixed z-40 flex items-center justify-center transition-all active:scale-90"
@@ -883,6 +884,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             <img src="/newlogo.png" alt="" className="h-5 w-auto max-w-[48px] object-contain" />
           )}
         </button>
+        )}
 
         {/* Desktop dashboard menu button */}
         {isDashboard && !dashMenuOpen && (
@@ -982,7 +984,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           {isPOS ? (
             <div className="flex-1 flex flex-col min-h-0 pb-[60px] lg:pb-0">{children}</div>
           ) : isPlatformAdmin ? (
-            <div className="flex-1 min-h-0 pb-[60px] lg:pb-0">{children}</div>
+            <div className="flex-1 min-h-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
             <div className="flex-1 min-h-0 px-2 sm:px-3 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0">{children}</div>
           ) : (
@@ -991,6 +993,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </main>
 
         {/* Bottom nav */}
+        {!isPlatformAdmin && (
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="pointer-events-auto">
             <div className="relative flex items-center justify-around h-[52px] bg-neutral-900 border-t border-neutral-800">
@@ -1054,6 +1057,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             </div>
           </div>
         </nav>
+        )}
 
         {/* FAB overlay */}
         {fabOpen && (
@@ -1100,7 +1104,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         )}
 
         {/* FAB button */}
-        {route === 'pos' ? (
+        {!isPlatformAdmin && (route === 'pos' ? (
           <button
             onClick={() => setPosCart(posCartCount, !posCartOpen)}
             className={`lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-200 active:scale-90${posCartCount > 0 && !posCartOpen ? ' cart-fab-blink' : ''}`}
@@ -1137,7 +1141,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           >
             <Plus className={`w-5 h-5 ${fabOpen ? 'text-white' : 'text-neutral-900'}`} strokeWidth={2} />
           </button>
-        )}
+        ))}
       </div>
       </div>
     </div>

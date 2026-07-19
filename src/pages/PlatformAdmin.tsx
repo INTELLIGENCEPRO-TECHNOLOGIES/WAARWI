@@ -842,7 +842,7 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
       {usage && (
         <div className="rounded-lg border border-[#E5E7EB] p-4 bg-[#F8FAFC]">
           <div className="text-[11px] font-semibold text-[#64748B] mb-3">Usage vs limites du plan ({usage.plan_code || 'aucun'})</div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <UsageBar label="Magasins" current={usage.sites_count} limit={usage.plan_limits?.sites} />
             <UsageBar label="Utilisateurs" current={usage.users_count} limit={usage.plan_limits?.users} />
             <UsageBar label="Articles" current={usage.articles_count} limit={usage.plan_limits?.articles} />
@@ -968,17 +968,16 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
   ];
 
   return (
-    <Modal open onClose={onClose} title="" size="lg" footer={null}>
-      <div className="-m-6 flex flex-col" style={{ height: 'min(85vh, 720px)' }}>
+    <Modal open onClose={onClose} title={tenant.name} size="lg" footer={null} fullMobile>
+      <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="shrink-0 px-5 pt-5 pb-0 bg-white border-b border-[#E5E7EB]">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="shrink-0 px-3 pt-3 pb-0 bg-white border-b border-[#E5E7EB] sm:px-5 sm:pt-5">
+          <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-lg bg-[#F1F5F9] text-[#0F172A] font-bold text-sm flex items-center justify-center shrink-0">
               {tenant.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold text-[#0F172A] truncate">{tenant.name}</span>
                 <PlanBadge plan={plans.find(p => p.code === tenant.plan)} code={tenant.plan} />
                 {tenant.is_active ? (
                   <span className="text-[10px] px-2 py-0.5 rounded bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] font-medium">Actif</span>
@@ -988,9 +987,6 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
               </div>
               <div className="text-xs text-[#64748B] truncate mt-0.5">{tenant.email || '—'}</div>
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-md border border-[#E5E7EB] hover:bg-[#F8FAFC] flex items-center justify-center text-[#64748B] transition-colors">
-              <X className="w-4 h-4" />
-            </button>
           </div>
 
           {/* Tabs */}
@@ -1009,7 +1005,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 bg-[#F8FAFC]">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-[#F8FAFC]">
           {!detail ? (
             <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#64748B]" /></div>
           ) : (
@@ -1141,7 +1137,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                     <div className="mt-4 pt-4 border-t border-[#F1F5F9]">
                       <div className="text-[11px] font-medium text-[#64748B] mb-1">Limites personnalisées (override)</div>
                       <p className="text-[10px] text-[#94A3B8] mb-2">Laisser vide pour utiliser les limites du plan.</p>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {([['articles', 'Articles'], ['sites', 'Magasins'], ['users', 'Utilisateurs']] as [string, string][]).map(([key, label]) => (
                           <div key={key}>
                             <label className="text-[10px] font-medium text-[#94A3B8]">{label}</label>
@@ -1583,7 +1579,7 @@ function PlansSection() {
           {/* Status */}
           <div className="border-t border-[#E5E7EB] pt-4">
             <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-3">Statut</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Ordre d'affichage</label><input type="number" value={form.sort_order || 0} onChange={e => setForm({ ...form, sort_order: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
               <div className="flex items-end pb-1">
                 <label className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[#E5E7EB] hover:bg-[#F7F8FA] transition-colors">
@@ -2018,7 +2014,7 @@ function MessagesSection() {
         <div className="space-y-3">
           <div><label className="label">Titre *</label><input value={form.title || ''} onChange={e => setForm({ ...form, title: e.target.value })} className="input" placeholder="Ex: Maintenance planifiée" /></div>
           <div><label className="label">Contenu</label><textarea value={form.body || ''} onChange={e => setForm({ ...form, body: e.target.value })} className="input resize-none" rows={4} /></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="label">Sévérité</label>
               <select value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })} className="input">
                 <option value="info">Info</option><option value="success">Succès</option><option value="warning">Avertissement</option><option value="critical">Critique</option>
@@ -2046,7 +2042,7 @@ function MessagesSection() {
               </select>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="label">Libellé bouton</label><input value={form.cta_label || ''} onChange={e => setForm({ ...form, cta_label: e.target.value })} className="input" placeholder="En savoir plus" /></div>
             <div><label className="label">URL bouton</label><input value={form.cta_url || ''} onChange={e => setForm({ ...form, cta_url: e.target.value })} className="input" placeholder="https://…" /></div>
           </div>
@@ -2460,48 +2456,52 @@ function LoginConfigSection() {
                 {modules.map((mod, idx) => {
                   const IconComp = ICON_MAP_ADMIN[mod.icon] || Shield;
                   return (
-                    <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 group">
-                      {/* Drag handle / order */}
-                      <div className="flex flex-col gap-0.5 shrink-0">
-                        <button onClick={() => moveModule(idx, -1)} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors">
-                          <ArrowUpRight className="w-3 h-3 rotate-[-90deg]" />
-                        </button>
-                        <button onClick={() => moveModule(idx, 1)} disabled={idx === modules.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors">
-                          <ArrowUpRight className="w-3 h-3 rotate-90" />
+                    <div key={idx} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 group space-y-2">
+                      <div className="flex items-center gap-2">
+                        {/* Drag handle / order */}
+                        <div className="flex flex-col gap-0.5 shrink-0">
+                          <button onClick={() => moveModule(idx, -1)} disabled={idx === 0} className="text-slate-400 hover:text-slate-600 disabled:opacity-20 transition-colors">
+                            <ArrowUpRight className="w-3 h-3 rotate-[-90deg]" />
+                          </button>
+                          <button onClick={() => moveModule(idx, 1)} disabled={idx === modules.length - 1} className="text-slate-400 hover:text-slate-600 disabled:opacity-20 transition-colors">
+                            <ArrowUpRight className="w-3 h-3 rotate-90" />
+                          </button>
+                        </div>
+                        {/* Icon preview */}
+                        <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                          <IconComp className="w-3.5 h-3.5 text-teal-600" />
+                        </div>
+                        {/* Icon select */}
+                        <select
+                          value={mod.icon}
+                          onChange={e => updateModule(idx, 'icon', e.target.value)}
+                          className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0"
+                        >
+                          {AVAILABLE_ICONS.map(ic => (
+                            <option key={ic.value} value={ic.value}>{ic.label}</option>
+                          ))}
+                        </select>
+                        {/* Delete */}
+                        <button onClick={() => removeModule(idx)} className="shrink-0 ml-auto p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      {/* Icon preview */}
-                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
-                        <IconComp className="w-3.5 h-3.5 text-teal-600" />
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        {/* Label */}
+                        <input
+                          value={mod.label}
+                          onChange={e => updateModule(idx, 'label', e.target.value)}
+                          placeholder="Nom du module"
+                          className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
+                        />
+                        {/* Desc */}
+                        <input
+                          value={mod.desc}
+                          onChange={e => updateModule(idx, 'desc', e.target.value)}
+                          placeholder="Description"
+                          className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
+                        />
                       </div>
-                      {/* Icon select */}
-                      <select
-                        value={mod.icon}
-                        onChange={e => updateModule(idx, 'icon', e.target.value)}
-                        className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0"
-                      >
-                        {AVAILABLE_ICONS.map(ic => (
-                          <option key={ic.value} value={ic.value}>{ic.label}</option>
-                        ))}
-                      </select>
-                      {/* Label */}
-                      <input
-                        value={mod.label}
-                        onChange={e => updateModule(idx, 'label', e.target.value)}
-                        placeholder="Nom du module"
-                        className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
-                      />
-                      {/* Desc */}
-                      <input
-                        value={mod.desc}
-                        onChange={e => updateModule(idx, 'desc', e.target.value)}
-                        placeholder="Description"
-                        className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
-                      />
-                      {/* Delete */}
-                      <button onClick={() => removeModule(idx)} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   );
                 })}
@@ -2761,7 +2761,7 @@ function ReleasesSection() {
       {/* Edit/Create Modal */}
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title={editId ? 'Modifier la mise à jour' : 'Nouvelle mise à jour'} size="lg">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Version *</label>
               <input value={form.version} onChange={e => setForm({ ...form, version: e.target.value })} placeholder="ex: 2.5.0" className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none" />
