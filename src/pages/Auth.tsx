@@ -275,6 +275,12 @@ export function Auth() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [step, setStep] = useState(1);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'register') setMode('register');
+  }, []);
+
   const TOTAL_STEPS = 5;
 
   useEffect(() => {

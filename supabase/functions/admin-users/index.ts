@@ -575,6 +575,37 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, config: data });
     }
 
+    // ============ LANDING CONFIG ============
+    if (action === "get_landing_config") {
+      const { data } = await admin.from("landing_config").select("*").eq("id", "default").maybeSingle();
+      return json(data || {});
+    }
+
+    if (action === "update_landing_config") {
+      const {
+        hero_headline, hero_accent, hero_subtitle, hero_cta_label, hero_cta_url,
+        hero_image_url, stats_label_tenants, stats_label_sectors, stats_label_uptime,
+        pricing_visible, features, footer_tagline,
+      } = body;
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: caller.id };
+      if (hero_headline !== undefined) patch.hero_headline = hero_headline;
+      if (hero_accent !== undefined) patch.hero_accent = hero_accent;
+      if (hero_subtitle !== undefined) patch.hero_subtitle = hero_subtitle;
+      if (hero_cta_label !== undefined) patch.hero_cta_label = hero_cta_label;
+      if (hero_cta_url !== undefined) patch.hero_cta_url = hero_cta_url;
+      if (hero_image_url !== undefined) patch.hero_image_url = hero_image_url;
+      if (stats_label_tenants !== undefined) patch.stats_label_tenants = stats_label_tenants;
+      if (stats_label_sectors !== undefined) patch.stats_label_sectors = stats_label_sectors;
+      if (stats_label_uptime !== undefined) patch.stats_label_uptime = stats_label_uptime;
+      if (pricing_visible !== undefined) patch.pricing_visible = pricing_visible;
+      if (features !== undefined) patch.features = features;
+      if (footer_tagline !== undefined) patch.footer_tagline = footer_tagline;
+      const { data, error } = await admin.from("landing_config").update(patch).eq("id", "default").select().maybeSingle();
+      if (error) return json({ error: error.message }, 400);
+      await logEvent("landing_config.update", null, patch);
+      return json({ success: true, config: data });
+    }
+
     return json({ error: "Action inconnue" }, 400);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
