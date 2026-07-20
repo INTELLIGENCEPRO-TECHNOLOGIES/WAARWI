@@ -584,7 +584,8 @@ Deno.serve(async (req: Request) => {
     if (action === "update_landing_config") {
       const {
         hero_headline, hero_accent, hero_subtitle, hero_cta_label, hero_cta_url,
-        hero_image_url, stats_label_tenants, stats_label_sectors, stats_label_uptime,
+        hero_image_url, hero_mobile_image_url, hero_mobile_visible,
+        stats_label_tenants, stats_label_sectors, stats_label_uptime,
         pricing_visible, features, footer_tagline,
         demo_desktop, demo_mobile, why_waarwi, faq_items, section_titles,
         whatsapp_url, phone_display, phone_tel,
@@ -598,6 +599,8 @@ Deno.serve(async (req: Request) => {
       if (hero_cta_label !== undefined) patch.hero_cta_label = hero_cta_label;
       if (hero_cta_url !== undefined) patch.hero_cta_url = hero_cta_url;
       if (hero_image_url !== undefined) patch.hero_image_url = hero_image_url;
+      if (hero_mobile_image_url !== undefined) patch.hero_mobile_image_url = hero_mobile_image_url;
+      if (hero_mobile_visible !== undefined) patch.hero_mobile_visible = !!hero_mobile_visible;
       if (stats_label_tenants !== undefined) patch.stats_label_tenants = stats_label_tenants;
       if (stats_label_sectors !== undefined) patch.stats_label_sectors = stats_label_sectors;
       if (stats_label_uptime !== undefined) patch.stats_label_uptime = stats_label_uptime;

@@ -37,6 +37,8 @@ type LandingConfig = {
   hero_subtitle: string;
   hero_cta_label: string;
   hero_image_url: string;
+  hero_mobile_image_url?: string;
+  hero_mobile_visible?: boolean;
   stats_label_tenants: string;
   stats_label_sectors: string;
   stats_label_uptime: string;
@@ -85,6 +87,8 @@ const DEFAULT_CONFIG: LandingConfig = {
     "Waarwi centralise la facturation, les achats, le stock, les clients, la comptabilité SYSCOHADA et votre boutique en ligne. Une solution simple, accessible et adaptée aux commerçants sénégalais.",
   hero_cta_label: "Démarrer l'essai gratuit",
   hero_image_url: '/desktop.png',
+  hero_mobile_image_url: '/mobile.png',
+  hero_mobile_visible: true,
   stats_label_tenants: 'entreprises accompagnées',
   stats_label_sectors: 'secteurs couverts',
   stats_label_uptime: 'Accompagnement local au Sénégal',
@@ -680,9 +684,11 @@ export function Landing() {
                     onError={(e) => { (e.target as HTMLImageElement).src = '/desktop.png'; }}
                   />
                 </div>
-                <div className="hidden md:block absolute -bottom-6 -left-6 w-40 rounded-xl overflow-hidden shadow-[0_12px_30px_-12px_rgba(15,23,42,0.2)] border border-slate-200/70 bg-white animate-float">
-                  <img src="/mobile.png" alt="Waarwi sur mobile" className="w-full h-auto" width={160} height={320} loading="lazy" />
-                </div>
+                {config.hero_mobile_visible !== false && (
+                  <div className="hidden md:block absolute -bottom-6 -left-6 w-40 rounded-xl overflow-hidden shadow-[0_12px_30px_-12px_rgba(15,23,42,0.2)] border border-slate-200/70 bg-white animate-float">
+                    <img src={config.hero_mobile_image_url || '/mobile.png'} alt="Waarwi sur mobile" className="w-full h-auto" width={160} height={320} loading="lazy" onError={(e) => { (e.target as HTMLImageElement).src = '/mobile.png'; }} />
+                  </div>
+                )}
               </div>
             </div>
           </div>

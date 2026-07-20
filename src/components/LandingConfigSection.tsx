@@ -251,6 +251,8 @@ export function LandingConfigSection() {
   const [heroSubtitle, setHeroSubtitle] = useState('');
   const [heroCtaLabel, setHeroCtaLabel] = useState('Démarrer gratuitement');
   const [heroImageUrl, setHeroImageUrl] = useState('');
+  const [heroMobileImageUrl, setHeroMobileImageUrl] = useState('');
+  const [heroMobileVisible, setHeroMobileVisible] = useState(true);
   const [statsTenants, setStatsTenants] = useState('entreprises accompagnées');
   const [statsSectors, setStatsSectors] = useState('Secteurs couverts');
   const [statsUptime, setStatsUptime] = useState('Accompagnement local au Sénégal');
@@ -286,6 +288,8 @@ export function LandingConfigSection() {
         setHeroSubtitle(data.hero_subtitle || '');
         setHeroCtaLabel(data.hero_cta_label || 'Démarrer gratuitement');
         setHeroImageUrl(data.hero_image_url || '');
+        setHeroMobileImageUrl(data.hero_mobile_image_url || '');
+        setHeroMobileVisible(data.hero_mobile_visible !== false);
         setStatsTenants(data.stats_label_tenants || 'entreprises accompagnées');
         setStatsSectors(data.stats_label_sectors || 'Secteurs couverts');
         setStatsUptime(data.stats_label_uptime || 'Accompagnement local au Sénégal');
@@ -403,6 +407,7 @@ export function LandingConfigSection() {
       await call('update_landing_config', {
         hero_headline: heroHeadline, hero_accent: heroAccent, hero_subtitle: heroSubtitle,
         hero_cta_label: heroCtaLabel, hero_image_url: heroImageUrl,
+        hero_mobile_image_url: heroMobileImageUrl, hero_mobile_visible: heroMobileVisible,
         stats_label_tenants: statsTenants, stats_label_sectors: statsSectors, stats_label_uptime: statsUptime,
         pricing_visible: pricingVisible, features, footer_tagline: footerTagline,
         demo_desktop: demoDesktop, demo_mobile: demoMobile,
@@ -443,6 +448,42 @@ export function LandingConfigSection() {
       success('Logo ajouté');
     } catch (e: any) { error(e.message); }
     setUploadingKey(null);
+  };
+
+  const uploadHeroImage = async (file: File) => {
+    setUploadingKey('hero-desktop');
+    try {
+      const oldUrl = heroImageUrl;
+      const { url } = await uploadLandingMedia(file, 'hero-desktop');
+      setHeroImageUrl(url);
+      if (oldUrl) await removeLandingMedia(oldUrl);
+      success('Image hero mise à jour');
+    } catch (e: any) { error(e.message); }
+    setUploadingKey(null);
+  };
+
+  const removeHeroImage = async () => {
+    const oldUrl = heroImageUrl;
+    setHeroImageUrl('');
+    if (oldUrl) await removeLandingMedia(oldUrl);
+  };
+
+  const uploadHeroMobileImage = async (file: File) => {
+    setUploadingKey('hero-mobile');
+    try {
+      const oldUrl = heroMobileImageUrl;
+      const { url } = await uploadLandingMedia(file, 'hero-mobile');
+      setHeroMobileImageUrl(url);
+      if (oldUrl) await removeLandingMedia(oldUrl);
+      success('Image mobile mise à jour');
+    } catch (e: any) { error(e.message); }
+    setUploadingKey(null);
+  };
+
+  const removeHeroMobileImage = async () => {
+    const oldUrl = heroMobileImageUrl;
+    setHeroMobileImageUrl('');
+    if (oldUrl) await removeLandingMedia(oldUrl);
   };
 
   if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
@@ -501,9 +542,68 @@ export function LandingConfigSection() {
               <label className="block text-xs font-semibold text-slate-700 mb-1">Label bouton CTA</label>
               <input value={heroCtaLabel} onChange={e => setHeroCtaLabel(e.target.value)} placeholder="Démarrer gratuitement" className={inputCls} />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Image hero (URL)</label>
-              <input value={heroImageUrl} onChange={e => setHeroImageUrl(e.target.value)} placeholder="/desktop.png" className={inputCls} />
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-700">Image hero (version bureau)</label>
+              <div className="flex items-start gap-3">
+                <div className="w-32 h-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0 flex items-center justify-center">
+                  {heroImageUrl ? (
+                    <img src={heroImageUrl} alt="Hero desktop" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="w-6 h-6 text-slate-300" />
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => document.getElementById('hero-desktop-upload')?.click()} disabled={uploadingKey === 'hero-desktop'}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-50">
+                    {uploadingKey === 'hero-desktop' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                    {heroImageUrl ? 'Remplacer' : 'Téléverser'}
+                  </button>
+                  <input id="hero-desktop-upload" type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadHeroImage(f); e.currentTarget.value = ''; }} disabled={uploadingKey === 'hero-desktop'} />
+                  {heroImageUrl && (
+                    <button type="button" onClick={removeHeroImage} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">
+                      <Trash2 className="w-3 h-3" /> Retirer
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400">Laisser vide pour utiliser l'image par défaut (<code>/desktop.png</code>).</p>
+            </div>
+
+            <div className="space-y-3 border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-700">Superposition mobile (petite image flottante)</label>
+                <button type="button" onClick={() => setHeroMobileVisible(v => !v)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${heroMobileVisible ? 'bg-teal-600' : 'bg-slate-300'}`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${heroMobileVisible ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              {heroMobileVisible && (
+                <>
+                  <div className="flex items-start gap-3">
+                    <div className="w-16 h-28 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0 flex items-center justify-center">
+                      {heroMobileImageUrl ? (
+                        <img src={heroMobileImageUrl} alt="Hero mobile" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="w-5 h-5 text-slate-300" />
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => document.getElementById('hero-mobile-upload')?.click()} disabled={uploadingKey === 'hero-mobile'}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-50">
+                        {uploadingKey === 'hero-mobile' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                        {heroMobileImageUrl ? 'Remplacer' : 'Téléverser'}
+                      </button>
+                      <input id="hero-mobile-upload" type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadHeroMobileImage(f); e.currentTarget.value = ''; }} disabled={uploadingKey === 'hero-mobile'} />
+                      {heroMobileImageUrl && (
+                        <button type="button" onClick={removeHeroMobileImage} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">
+                          <Trash2 className="w-3 h-3" /> Retirer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Laisser vide pour utiliser l'image par défaut (<code>/mobile.png</code>).</p>
+                </>
+              )}
             </div>
           </div>
           <div className="border-t border-slate-100 pt-4">
