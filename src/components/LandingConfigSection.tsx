@@ -90,13 +90,30 @@ const DEFAULT_FAQ: FaqItem[] = [
 const inputCls = "w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400";
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
-  const { data: sess } = await supabase.auth.getSession();
-  const token = sess.session?.access_token;
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...payload }),
-  });
+  const doFetch = async (accessToken: string) => {
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    return res;
+  };
+
+  let { data: sess } = await supabase.auth.getSession();
+  let token = sess.session?.access_token;
+  if (!token) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    token = refreshed.session?.access_token;
+  }
+  if (!token) throw new Error('Session expirée — veuillez vous reconnecter');
+
+  let res = await doFetch(token);
+  if (res.status === 401) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    const newToken = refreshed.session?.access_token;
+    if (!newToken) throw new Error('Session expirée — veuillez vous reconnecter');
+    res = await doFetch(newToken);
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erreur');
   return data;
