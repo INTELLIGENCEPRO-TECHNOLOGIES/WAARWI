@@ -336,13 +336,11 @@ export function Warranties() {
             <span>Filtres</span>
             {showFilters ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
-          <button onClick={load} className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-neutral-200 bg-white text-neutral-700 text-[12px] font-semibold hover:border-neutral-300 transition-colors">
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Actualiser</span>
+          <button onClick={load} className="btn-icon" title="Actualiser">
+            <RefreshCw className="w-4 h-4" />
           </button>
-          <button onClick={exportCsv} className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-neutral-200 bg-white text-neutral-700 text-[12px] font-semibold hover:border-neutral-300 transition-colors">
-            <Download className="w-3.5 h-3.5" />
-            <span>Exporter</span>
+          <button onClick={exportCsv} className="btn-icon" title="Exporter">
+            <Download className="w-4 h-4" />
           </button>
         </div>
 
@@ -553,8 +551,8 @@ export function Warranties() {
                             <Printer className="w-3 h-3" />
                           </button>
                         )}
-                        <button onClick={() => setDetailEntry(entry)} className="text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors inline-flex items-center gap-0.5">
-                          Détails <Eye className="w-3 h-3" />
+                        <button onClick={() => setDetailEntry(entry)} className="btn-icon" title="Détails">
+                          <Eye className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -631,12 +629,12 @@ export function Warranties() {
                   </button>
                 )}
                 {detailEntry.warranty && !detailEntry.warranty_cancelled && getWarrantyStatus(detailEntry.created_at, detailEntry.warranty) !== 'expired' && (
-                  <button onClick={() => { setCancelModal(detailEntry); setDetailEntry(null); }} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-[11px] font-semibold text-red-700 hover:bg-red-100 transition-colors">
-                    <Ban className="w-3 h-3" /> Annuler garantie
+                  <button onClick={() => { setCancelModal(detailEntry); setDetailEntry(null); }} className="btn-icon-danger-solid" title="Annuler garantie">
+                    <Ban className="w-4 h-4" />
                   </button>
                 )}
-                <button onClick={() => setDetailEntry(null)} className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neutral-900 text-white text-[11px] font-semibold hover:bg-neutral-800 transition-colors">
-                  Fermer
+                <button onClick={() => setDetailEntry(null)} className="ml-auto btn-icon" title="Fermer">
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -683,16 +681,16 @@ export function Warranties() {
               <div className="px-5 py-3 border-t border-neutral-100 flex items-center gap-2">
                 <button
                   onClick={() => { setCancelModal(null); setCancelReason(''); }}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-neutral-200 text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors"
+                  className="btn-icon" title="Retour"
                 >
-                  Retour
+                  <X className="w-4 h-4" />
                 </button>
                 <button
                   onClick={cancelWarranty}
                   disabled={cancelling}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-[12px] font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="btn-icon-danger-solid" title="Confirmer l'annulation"
                 >
-                  {cancelling ? 'Annulation...' : "Confirmer l'annulation"}
+                  {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
                 </button>
               </div>
             </div>

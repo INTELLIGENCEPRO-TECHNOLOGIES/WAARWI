@@ -418,8 +418,8 @@ function IpmOrganismes({ tenantId }: { tenantId: string }) {
             <FormField label="Conditions de paiement" value={form.conditions_paiement} onChange={v => setForm({ ...form, conditions_paiement: v })} />
             <FormField label="Observations" value={form.observations} onChange={v => setForm({ ...form, observations: v })} multiline />
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg border border-neutral-200 text-sm font-medium text-neutral-600 hover:bg-neutral-50">Annuler</button>
-              <button onClick={save} disabled={saving || !form.nom.trim()} className="px-4 py-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+              <button onClick={() => setShowForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={save} disabled={saving || !form.nom.trim()} className="btn-icon-primary" title="Enregistrer">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editing ? 'Enregistrer' : 'Créer')}
               </button>
             </div>
@@ -651,8 +651,8 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
             </fieldset>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg border border-neutral-200 text-sm font-medium text-neutral-600 hover:bg-neutral-50">Annuler</button>
-              <button onClick={save} disabled={saving || !form.nom.trim() || !form.organisme_id} className="px-4 py-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+              <button onClick={() => setShowForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={save} disabled={saving || !form.nom.trim() || !form.organisme_id} className="btn-icon-primary" title="Enregistrer">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}
               </button>
             </div>
@@ -826,8 +826,8 @@ function IpmBeneficiaires({ tenantId }: { tenantId: string }) {
             </div>
             <FormField label="Observations" value={form.observations} onChange={v => setForm({ ...form, observations: v })} multiline />
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg border border-neutral-200 text-sm font-medium text-neutral-600 hover:bg-neutral-50">Annuler</button>
-              <button onClick={save} disabled={saving || !form.customer_id || !form.organisme_id} className="px-4 py-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+              <button onClick={() => setShowForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={save} disabled={saving || !form.customer_id || !form.organisme_id} className="btn-icon-primary" title="Enregistrer">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}
               </button>
             </div>
@@ -1248,10 +1248,10 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
               </div>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-lg text-sm text-neutral-600 hover:bg-neutral-100 font-medium">Annuler</button>
+              <button onClick={() => setShowCreate(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
               <button onClick={createBordereau} disabled={creating || !selectedOrg || pendingVentes.length === 0}
-                className="px-4 py-2 rounded-lg text-sm bg-neutral-900 text-white font-semibold hover:bg-neutral-800 disabled:opacity-40 transition-colors">
-                {creating ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}Générer le bordereau
+                className="btn-icon-primary" title="Générer le bordereau">
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -1689,10 +1689,10 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
               </div>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-lg text-sm text-neutral-600 hover:bg-neutral-100 font-medium">Annuler</button>
+              <button onClick={() => setShowCreate(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
               <button onClick={createFacture} disabled={creating || selectedBordereaux.length === 0}
-                className="px-4 py-2 rounded-lg text-sm bg-neutral-900 text-white font-semibold hover:bg-neutral-800 disabled:opacity-40 transition-colors">
-                {creating ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}Créer la facture IPM
+                className="btn-icon-primary" title="Créer la facture IPM">
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -1977,10 +1977,10 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
             )}
 
             <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
-              <button onClick={() => { setShowCreate(false); setPendingFactures([]); }} className="px-4 py-2 rounded-lg text-sm text-neutral-600 hover:bg-neutral-100 font-medium">Annuler</button>
+              <button onClick={() => { setShowCreate(false); setPendingFactures([]); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
               <button onClick={createReglement} disabled={creating || !form.organisme_id || montantRecu <= 0 || pendingFactures.length === 0}
-                className="px-4 py-2 rounded-lg text-sm bg-neutral-900 text-white font-semibold hover:bg-neutral-800 disabled:opacity-40 transition-colors">
-                {creating ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : <CheckCircle2 className="w-4 h-4 inline mr-1" />}Enregistrer le règlement
+                className="btn-icon-primary" title="Enregistrer le règlement">
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -2398,10 +2398,10 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowRetour(false)} className="px-4 py-2 rounded-lg text-sm text-neutral-600 hover:bg-neutral-100 font-medium">Annuler</button>
+              <button onClick={() => setShowRetour(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
               <button onClick={saveRetour} disabled={saving || (ecartCalc < 0 && !retourForm.motif_rejet)}
-                className="px-4 py-2.5 rounded-lg text-sm bg-neutral-900 text-white font-semibold hover:bg-neutral-800 disabled:opacity-40 transition-colors">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}Enregistrer le retour
+                className="btn-icon-primary" title="Enregistrer le retour">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -2445,7 +2445,7 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
             </div>
 
             <div className="flex justify-end pt-2">
-              <button onClick={() => setShowRegul(false)} className="px-4 py-2 rounded-lg text-sm text-neutral-600 hover:bg-neutral-100 font-medium">Fermer</button>
+              <button onClick={() => setShowRegul(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
             </div>
           </div>
         </Modal>

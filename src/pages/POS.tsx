@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
-  ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, Pause, RotateCcw,
-  FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote,
+  ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
+  FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
   Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -65,7 +65,7 @@ type SessionSale = {
   customer_phone: string | null;
   customer_address: string | null;
   status: string;
-  items: { article_id: string; name: string; quantity: number; unit_price: number; returned?: number }[];
+  items: { article_id: string; name: string; quantity: number; unit_price: number; purchase_cost?: number; returned?: number }[];
   fullyReturned?: boolean;
   doc_header?: Record<string, string | null> | null;
   user_id?: string | null;
@@ -78,7 +78,7 @@ function printXReport(
     count: number; total: number; totalPayments?: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
-    movements?: { kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movements?: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
     movExpense?: number; movIncome?: number; movPrepay?: number; netTotal?: number;
   },
   regularizations: { reg_type: string; amount: number; reason: string }[],
@@ -1010,7 +1010,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // Cash movement (expense / income / customer prepayment)
   const [mvOpen, setMvOpen] = useState(false);
-  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment'>('expense');
+  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal'>('expense');
+  const [mvCustPrepay, setMvCustPrepay] = useState(0);
+  const [mvCustBalance, setMvCustBalance] = useState(0);
   const [mvAmount, setMvAmount] = useState(0);
   const [mvReason, setMvReason] = useState('');
   const [mvExpenseCat, setMvExpenseCat] = useState('');
@@ -1043,15 +1045,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [returnSales, setReturnSales] = useState<SessionSale[]>([]);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnSelected, setReturnSelected] = useState<SessionSale | null>(null);
-  const [returnLines, setReturnLines] = useState<{ article_id: string; name: string; quantity: number; unit_price: number; maxQty: number; selected: boolean }[]>([]);
+  const [returnLines, setReturnLines] = useState<{ article_id: string; name: string; quantity: number; unit_price: number; purchase_cost: number; maxQty: number; selected: boolean }[]>([]);
 
   // Session tickets list
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
   const [sessionProfileNames, setSessionProfileNames] = useState<Record<string, string>>({});
-  const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
+  const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
   const [sessionInvPayments, setSessionInvPayments] = useState<{ sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string }[]>([]);
-  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'reglements' | null>('tickets');
+  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'reglements' | null>('tickets');
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [sessionEncaisse, setSessionEncaisse] = useState(0);
 
@@ -1066,14 +1068,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     count: number; total: number; totalPayments: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
-    movements: { kind: 'expense' | 'income' | 'customer_prepayment'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movements: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
     invoicePayments: { sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string; user_name: string | null }[];
-    movExpense: number; movIncome: number; movPrepay: number;
+    movExpense: number; movIncome: number; movPrepay: number; movWithdrawal: number;
     netTotal: number;
   } | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | 'encDirect' | 'acomptes' | 'depenses' | null>(null);
+  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | null>(null);
 
   // Vehicle picker
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
@@ -1614,9 +1616,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const submitMovement = async () => {
     if (!session || !currentSite) return;
     if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
+    if (mvKind === 'customer_withdrawal' && !can('pos_customer_withdrawal')) { error('Vous n\'avez pas la permission d\'effectuer un retrait sur acompte client'); return; }
     if (mvAmount <= 0) { error('Montant invalide'); return; }
-    if (mvKind !== 'expense' && !mvMethod) { error('Mode de règlement requis'); return; }
+    if (mvKind !== 'expense' && mvKind !== 'customer_withdrawal' && !mvMethod) { error('Mode de règlement requis'); return; }
     if (mvKind === 'customer_prepayment' && !mvCustomer) { error('Client obligatoire'); return; }
+    if (mvKind === 'customer_withdrawal' && !mvCustomer) { error('Client obligatoire'); return; }
+    const mvCustDebt = Math.max(0, mvCustBalance);
+    const mvCustNet = mvCustPrepay - mvCustDebt;
+    if (mvKind === 'customer_withdrawal' && mvCustPrepay <= 0) { error('Ce client n\'a aucun acompte disponible'); return; }
+    if (mvKind === 'customer_withdrawal' && mvCustNet <= 0) { error(`Le client a une dette de ${formatFCFA(mvCustDebt)} qui couvre son acompte de ${formatFCFA(mvCustPrepay)}. Retrait impossible.`); return; }
+    if (mvKind === 'customer_withdrawal' && mvAmount > mvCustNet) { error(`Montant supérieur au retrait maximum (${formatFCFA(mvCustNet)}). Le client a un acompte de ${formatFCFA(mvCustPrepay)} et une dette de ${formatFCFA(mvCustDebt)} à déduire.`); return; }
     if (mvKind === 'expense' && expenseCats.length > 0 && !mvExpenseCat) { error('Sélectionnez un type de dépense'); return; }
     const expenseCatName = mvKind === 'expense' ? (expenseCats.find(c => c.id === mvExpenseCat)?.name || '') : '';
     setMvSubmitting(true);
@@ -1636,10 +1645,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (e) { setMvSubmitting(false); error(e.message); return; }
     const autoApplied = Number((data as any)?.auto_applied || 0);
 
-    const wantsReceipt = mvPrint && (mvKind === 'income' || mvKind === 'customer_prepayment') && !!mvMethod && !!tenant;
+    const wantsReceipt = mvPrint && (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal') && !!mvMethod && !!tenant;
     if (wantsReceipt && tenant && mvMethod) {
-      const prefix = mvKind === 'customer_prepayment' ? 'ACO' : 'ENC';
-      const kindLabel = mvKind === 'customer_prepayment' ? 'acompte_client' : 'entree_caisse';
+      const prefix = mvKind === 'customer_prepayment' ? 'ACO' : mvKind === 'customer_withdrawal' ? 'RET' : 'ENC';
+      const kindLabel = mvKind === 'customer_prepayment' ? 'acompte_client' : mvKind === 'customer_withdrawal' ? 'retrait_client' : 'entree_caisse';
       const { data: numData } = await supabase.rpc('next_doc_number', {
         p_tenant_id: tenant.id, p_kind: kindLabel, p_prefix: prefix,
       });
@@ -1651,7 +1660,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           method: mvMethod.name,
           label: mvKind === 'customer_prepayment'
             ? (mvReason ? `Acompte · ${mvReason}` : 'Acompte client')
-            : (mvReason || undefined),
+            : mvKind === 'customer_withdrawal'
+              ? (mvReason ? `Retrait · ${mvReason}` : 'Retrait client')
+              : (mvReason || undefined),
           reference: mvRef || undefined,
           customerName: mvCustomer?.name || null,
           createdAt: new Date().toISOString(),
@@ -1664,6 +1675,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setMvSubmitting(false);
     if (mvKind === 'customer_prepayment' && autoApplied > 0) {
       success(`Acompte enregistré · ${formatFCFA(autoApplied)} imputé automatiquement`);
+    } else if (mvKind === 'customer_withdrawal') {
+      success('Retrait client enregistré');
     } else if (mvKind === 'expense') {
       success('Dépense enregistrée');
     } else if (mvKind === 'income') {
@@ -1672,7 +1685,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       success('Acompte enregistré · en attente de facture');
     }
 
-    if (mvKind === 'income' || mvKind === 'customer_prepayment') {
+    if (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal') {
       setMvAmount(0);
       setMvReason('');
       setMvNote('');
@@ -1931,7 +1944,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setReturnLoading(true);
     const { data } = await supabase
       .from('sales')
-      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price)')
+      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price, purchase_cost)')
       .eq('tenant_id', tenant!.id)
       .eq('cash_session_id', session!.id)
       .neq('status', 'cancelled')
@@ -2026,6 +2039,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             name: l.name,
             quantity: l.quantity,
             unit_price: l.unit_price,
+            purchase_cost: l.purchase_cost || 0,
             total: l.quantity * l.unit_price,
           }))
         );
@@ -2121,7 +2135,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setSessionSales([...sales, ...returns].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     const movs = (mvData || []).map((m: any) => ({
       id: m.id,
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', reference: m.reference || '',
       customer_name: m.customers?.name || null,
@@ -2140,7 +2154,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setSessionInvPayments(invPayments);
     const pmtTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const movEncaisseTotal = (mvData || [])
-      .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
+      .filter((m: any) => m.kind !== 'expense' && m.kind !== 'customer_withdrawal' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
       .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     setSessionEncaisse(pmtTotal + movEncaisseTotal);
     setTicketsExpanded('tickets');
@@ -2272,7 +2286,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const salesList = sales || [];
     const pmtList = pmtRows || [];
     const movs = (mvRows || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
     })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
@@ -2304,6 +2318,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     });
     const topArticles = Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10);
     const movExpense = movs.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+    const movWithdrawal = movs.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
     const movIncome = movs.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movs.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
     const totalPayments = pmtList.reduce((s: number, p: any) => s + Number(p.amount), 0);
@@ -2315,8 +2330,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       topArticles,
       movements: movs,
       invoicePayments,
-      movExpense, movIncome, movPrepay,
-      netTotal: totalPayments + movIncome + movPrepay - movExpense,
+      movExpense, movIncome, movPrepay, movWithdrawal,
+      netTotal: totalPayments + movIncome + movPrepay - movExpense - movWithdrawal,
     });
     setLoadingStats(false);
   };
@@ -2351,9 +2366,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     });
     (mvs || []).forEach((m: any) => {
       if (m.kind === 'income' && m.reason && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')) return;
-      const key = m.method_name || (m.kind === 'expense' ? 'Espèces' : '—');
+      const key = m.method_name || (m.kind === 'expense' || m.kind === 'customer_withdrawal' ? 'Espèces' : '—');
       if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
-      if (m.kind === 'expense') {
+      if (m.kind === 'expense' || m.kind === 'customer_withdrawal') {
         theoretical[key].amount -= Number(m.amount);
       } else {
         theoretical[key].amount += Number(m.amount);
@@ -2381,7 +2396,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     // Build stats for X report
     const salesList = salesResult.data || [];
     const movList = (mvs || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
     })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
@@ -2411,6 +2426,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       });
     });
     const movExpense = movList.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+    const movWithdrawal = movList.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
     const movIncome = movList.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movList.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
     const totalSales = salesList.reduce((s: number, r: any) => s + Number(r.total), 0);
@@ -2423,8 +2439,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       topArticles: Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10),
       movements: movList,
       invoicePayments,
-      movExpense, movIncome, movPrepay,
-      netTotal: totalPayments + movIncome + movPrepay - movExpense,
+      movExpense, movIncome, movPrepay, movWithdrawal,
+      netTotal: totalPayments + movIncome + movPrepay - movExpense - movWithdrawal,
     });
 
     setControlLines(lines);
@@ -3055,19 +3071,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {mvOpen && (
         <Modal open onClose={() => setMvOpen(false)} title="Mouvement de caisse" size="sm"
           footer={
-            <div className="flex gap-2 w-full">
-              <button onClick={() => setMvOpen(false)} className="btn-secondary flex-1 justify-center">Fermer</button>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setMvOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
               <button onClick={submitMovement} disabled={mvSubmitting || mvAmount <= 0}
-                className="btn-primary flex-1 justify-center">
+                className="btn-icon-primary" title="Enregistrer">
                 {mvSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Enregistrer
               </button>
             </div>
           }>
           <div className="space-y-3">
             <div>
               <label className="label">Type</label>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 <button type="button" onClick={() => setMvKind('expense')}
                   className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${mvKind === 'expense' ? 'border-red-500 bg-red-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
                   <ArrowUpRight className={`w-4 h-4 mx-auto ${mvKind === 'expense' ? 'text-red-600' : 'text-neutral-400'}`} />
@@ -3083,10 +3098,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <Banknote className={`w-4 h-4 mx-auto ${mvKind === 'customer_prepayment' ? 'text-neutral-700' : 'text-neutral-400'}`} />
                   <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_prepayment' ? 'text-neutral-800' : 'text-neutral-600'}`}>Acompte</div>
                 </button>
+                {can('pos_customer_withdrawal') && (
+                <button type="button" onClick={() => { setMvKind('customer_withdrawal'); setMvCustPrepay(0); setMvCustBalance(0); }}
+                  className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${mvKind === 'customer_withdrawal' ? 'border-amber-500 bg-amber-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <ArrowDownToLine className={`w-4 h-4 mx-auto ${mvKind === 'customer_withdrawal' ? 'text-amber-600' : 'text-neutral-400'}`} />
+                  <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_withdrawal' ? 'text-amber-700' : 'text-neutral-600'}`}>Retrait</div>
+                </button>
+                )}
               </div>
             </div>
 
-            {mvKind === 'customer_prepayment' && (
+            {(mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal') && (
               <div>
                 <label className="label">Client</label>
                 {mvCustomer ? (
@@ -3096,7 +3118,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <div className="text-xs font-bold text-neutral-900 truncate">{mvCustomer.name}</div>
                       {mvCustomer.phone && <div className="text-[10px] text-neutral-500 truncate">{mvCustomer.phone}</div>}
                     </div>
-                    <button onClick={() => setMvCustomer(null)} className="text-[10px] font-semibold text-neutral-700 hover:underline shrink-0">Changer</button>
+                    <button onClick={() => { setMvCustomer(null); setMvCustPrepay(0); setMvCustBalance(0); }} className="text-[10px] font-semibold text-neutral-700 hover:underline shrink-0">Changer</button>
                   </div>
                 ) : (
                   <>
@@ -3114,7 +3136,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                         })
                         .slice(0, 15)
                         .map(cu => (
-                          <button key={cu.id} onClick={() => setMvCustomer(cu)}
+                          <button key={cu.id} onClick={async () => {
+                            setMvCustomer(cu);
+                            if (mvKind === 'customer_withdrawal') {
+                              const { data: ppData } = await supabase.from('customer_prepayments')
+                                .select('amount, amount_used').eq('tenant_id', tenant!.id).eq('customer_id', cu.id);
+                              const avail = (ppData || []).reduce((s, p) => s + Math.max(0, Number(p.amount) - Number(p.amount_used)), 0);
+                              setMvCustPrepay(avail);
+                              const custBalance = Math.max(0, Number(cu.balance || 0));
+                              setMvCustBalance(custBalance);
+                            }
+                          }}
                             className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-neutral-50 text-left transition-colors">
                             <User className="w-3 h-3 text-neutral-400 shrink-0" />
                             <span className="text-xs font-semibold text-neutral-800 truncate">{cu.name}</span>
@@ -3124,6 +3156,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </>
                 )}
+                {mvKind === 'customer_withdrawal' && mvCustomer && (() => {
+                  const debt = Math.max(0, mvCustBalance);
+                  const net = mvCustPrepay - debt;
+                  if (mvCustPrepay <= 0) {
+                    return <div className="mt-2 px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-semibold">Aucun acompte disponible pour ce client</div>;
+                  }
+                  return (
+                    <div className={`mt-2 px-3 py-2 rounded-xl border text-xs font-semibold ${net > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                      {debt > 0 ? (
+                        <div className="space-y-1">
+                          <div className="flex justify-between"><span>Acompte disponible :</span><span className="font-bold tabular-nums text-emerald-700">{formatFCFA(mvCustPrepay)}</span></div>
+                          <div className="flex justify-between"><span>Dette en cours :</span><span className="font-bold tabular-nums text-rose-700">-{formatFCFA(debt)}</span></div>
+                          <div className="flex justify-between border-t border-emerald-200 pt-1"><span>Retrait maximum :</span><span className="font-bold tabular-nums">{formatFCFA(net)}</span></div>
+                        </div>
+                      ) : (
+                        <>Acompte disponible : <span className="font-bold tabular-nums">{formatFCFA(mvCustPrepay)}</span> &middot; Retrait max : <span className="font-bold tabular-nums">{formatFCFA(net)}</span></>
+                      )}
+                      {net <= 0 && <div className="mt-1 text-red-600">La dette couvre l'acompte. Retrait impossible.</div>}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -3187,19 +3240,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {custPayOpen && (
         <Modal open onClose={() => setCustPayOpen(false)} title="Encaisser un client" size="md"
           footer={
-            <div className="flex gap-2 w-full">
-              <button onClick={() => setCustPayOpen(false)} className="btn-secondary flex-1 justify-center">Fermer</button>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setCustPayOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
               {custPayMode === 'direct' ? (
                 <button onClick={submitDirectEncaissement} disabled={custPaySubmitting || !custPayMethod || custPayAmount <= 0}
-                  className="btn-primary flex-1 justify-center">
+                  className="btn-icon-primary" title="Encaisser">
                   {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Encaisser {custPayAmount > 0 ? `· ${formatFCFA(custPayAmount)}` : ''}
                 </button>
               ) : (
                 <button onClick={submitCustomerPayment} disabled={custPaySubmitting || !custPayCustomer || !custPayMethod || custPayAmount <= 0}
-                  className="btn-primary flex-1 justify-center">
+                  className="btn-icon-primary" title="Valider">
                   {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Valider {custPayAmount > 0 ? `· ${formatFCFA(custPayAmount)}` : ''}
                 </button>
               )}
             </div>
@@ -3410,19 +3461,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {lastSale && (
         <Modal open={!!lastSale} onClose={() => setLastSale(null)} title="Vente enregistrée" size="sm"
           footer={<div className="w-full grid grid-cols-3 gap-2">
-            <button onClick={() => setLastSale(null)} className="px-2 py-2 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-100 border border-neutral-200 transition inline-flex items-center justify-center">Fermer</button>
+            <button onClick={() => setLastSale(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
             <button onClick={() => {
               printSaleTicket(lastSale);
               setLastSale(null);
-            }} className="px-2 py-2 rounded-xl text-xs font-semibold bg-white border border-neutral-200 text-neutral-700 hover:border-brand-400 transition inline-flex items-center justify-center gap-1.5">
-              <Printer className="w-3.5 h-3.5" /> Ticket
-            </button>
+            }} className="btn-icon" title="Ticket"><Printer className="w-4 h-4" /></button>
             <button onClick={() => {
               printSaleInvoice(lastSale);
               setLastSale(null);
-            }} className="px-2 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition inline-flex items-center justify-center gap-1.5 active:scale-95">
-              <FileText className="w-3.5 h-3.5" /> Facture
-            </button>
+            }} className="btn-icon-primary" title="Facture"><FileText className="w-4 h-4" /></button>
           </div>}
         >
           <div className="text-center py-4">
@@ -3456,8 +3503,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <div className="text-xs text-neutral-400">{new Date(h.savedAt).toLocaleTimeString('fr-FR')}</div>
                 </div>
                 <div className="flex items-center gap-2 ml-3 shrink-0">
-                  <button onClick={() => resumeHeld(h)} className="btn-primary text-xs py-1.5 px-3">
-                    <Play className="w-3.5 h-3.5" /> Reprendre
+                  <button onClick={() => resumeHeld(h)} className="btn-icon-primary" title="Reprendre">
+                    <Play className="w-4 h-4" />
                   </button>
                   <button onClick={() => deleteHeld(h.id)} className="p-1.5 rounded hover:bg-red-50 text-red-500">
                     <Trash2 className="w-4 h-4" />
@@ -3496,7 +3543,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left p-3 border rounded-xl transition-colors ${s.fullyReturned ? 'border-neutral-100 bg-neutral-50 opacity-60 cursor-not-allowed' : 'border-neutral-200 hover:bg-brand-50 hover:border-brand-200'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-semibold text-sm text-brand-700">{s.sale_number}</span>
+                        <span className="doc-number font-semibold text-sm text-brand-700">{s.sale_number}</span>
                         {s.customer_name && <span className="text-xs text-neutral-500">· {s.customer_name}</span>}
                         {s.fullyReturned && <span className="text-[10px] font-bold uppercase text-neutral-500 bg-neutral-200 px-1.5 py-0.5 rounded">Retourne</span>}
                       </div>
@@ -3512,7 +3559,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="space-y-4">
             <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl text-sm">
               <div>
-                <span className="font-mono font-semibold text-brand-700">{returnSelected.sale_number}</span>
+                <span className="doc-number font-semibold text-brand-700">{returnSelected.sale_number}</span>
                 {returnSelected.customer_name && <span className="text-neutral-500 ml-2">· {returnSelected.customer_name}</span>}
               </div>
               <button onClick={() => setReturnSelected(null)} className="text-xs text-neutral-500 hover:text-neutral-700 underline">Changer</button>
@@ -3585,9 +3632,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           const encDirectList = sessionMovements.filter(m => m.kind === 'income');
           const acomptesList = sessionMovements.filter(m => m.kind === 'customer_prepayment');
           const depensesList = sessionMovements.filter(m => m.kind === 'expense');
+          const retraitsList = sessionMovements.filter(m => m.kind === 'customer_withdrawal');
           const encDirectTotal = encDirectList.reduce((s, m) => s + m.amount, 0);
           const acomptesTotal = acomptesList.reduce((s, m) => s + m.amount, 0);
           const depensesTotal = depensesList.reduce((s, m) => s + m.amount, 0);
+          const retraitsTotal = retraitsList.reduce((s, m) => s + m.amount, 0);
           return (
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2">
@@ -3631,7 +3680,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             {s.status === 'return' && <span className="ml-1.5 text-[10px] font-bold uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded align-middle">Retour</span>}
                           </div>
                           <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className={`font-mono text-[10px] font-bold ${s.status === 'return' ? 'text-red-600' : 'text-brand-700'}`}>{s.sale_number}</span>
+                            <span className={`doc-number text-[12px] font-bold ${s.status === 'return' ? 'text-red-600' : 'text-brand-700'}`}>{s.sale_number}</span>
                             <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(s.created_at)}</span>
                             <span className={`num font-bold text-xs ${s.total < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</span>
                           </div>
@@ -3750,7 +3799,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                         <div key={i} className="p-2.5 rounded-lg bg-white border border-neutral-100">
                           <div className="text-xs font-bold text-neutral-900">{p.customer_name || 'Client'}</div>
                           <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className="font-mono text-[10px] font-semibold text-neutral-500 shrink-0">{p.sale_number}</span>
+                            <span className="doc-number text-[12px] font-semibold text-neutral-500 shrink-0">{p.sale_number}</span>
                             <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(p.created_at)}</span>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {p.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px]">{p.method_name}</span>}
@@ -3879,13 +3928,47 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   )}
                 </div>
               )}
+
+              {/* Retraits clients */}
+              {retraitsList.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'retraits' ? 'bg-orange-200 text-orange-800' : 'bg-orange-100 text-orange-700'}`}>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-neutral-800">Retraits clients</div>
+                        <div className="text-[10px] text-neutral-500">{retraitsList.length} retrait{retraitsList.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-orange-700 num">-{formatFCFA(retraitsTotal)}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {ticketsExpanded === 'retraits' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {retraitsList.map((m, i) => (
+                        <div key={i} className="p-2.5 rounded-lg bg-white border border-orange-100">
+                          <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Espèces'}</span>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
+                            <span className="text-xs font-bold text-orange-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           );
         })()}
       </Modal>
 
-      {/* Stats */}
       <Modal open={statsOpen} onClose={() => setStatsOpen(false)} title="Statistiques de la session" size="md"
         footer={<>
           <button onClick={() => setStatsOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
@@ -3915,7 +3998,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div className="w-px bg-neutral-200" />
               <div className="flex-1 text-center px-2 py-1.5">
                 <div className="text-[9px] font-bold uppercase tracking-wider text-brand-600">Total encaissé</div>
-                <div className="text-lg font-bold text-brand-900 num leading-tight">{formatFCFA(statsData.netTotal + (statsData.movExpense || 0))}</div>
+                <div className="text-lg font-bold text-brand-900 num leading-tight">{formatFCFA((statsData.totalPayments || 0) + (statsData.movIncome || 0) + (statsData.movPrepay || 0))}</div>
               </div>
               {statsData.movements.length > 0 && <>
                 <div className="w-px bg-neutral-200" />
@@ -3983,7 +4066,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                         <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-200">
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-bold text-neutral-900">
-                              <span className="font-mono">{p.sale_number}</span>
+                              <span className="doc-number">{p.sale_number}</span>
                               {p.customer_name && <span className="text-neutral-600 font-medium ml-1">- {p.customer_name}</span>}
                             </div>
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
@@ -4110,6 +4193,42 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
+              {/* Retraits clients */}
+              {(statsData.movWithdrawal || 0) > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'retraits' ? 'bg-orange-200 text-orange-800' : 'bg-orange-100 text-orange-700'}`}>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-neutral-800">Retraits clients</div>
+                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'customer_withdrawal').length} retrait{statsData.movements.filter(m => m.kind === 'customer_withdrawal').length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-orange-700 num">-{formatFCFA(statsData.movWithdrawal || 0)}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'retraits' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.movements.filter(m => m.kind === 'customer_withdrawal').map((m, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-orange-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.customer_name || 'Client'}</div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
+                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-orange-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Top articles */}
               {statsData.topArticles.length > 0 && (
                 <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'articles' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
@@ -4150,9 +4269,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* Regularization */}
       <Modal open={regOpen} onClose={() => setRegOpen(false)} title="Régularisation d'écart" size="sm" layer="top"
         footer={<>
-          <button onClick={() => setRegOpen(false)} className="btn-secondary">Annuler</button>
-          <button onClick={saveRegularization} disabled={savingReg} className="btn-primary">
-            {savingReg && <Loader2 className="w-4 h-4 animate-spin" />} Enregistrer
+          <button onClick={() => setRegOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={saveRegularization} disabled={savingReg} className="btn-icon-primary" title="Enregistrer">
+            {savingReg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           </button>
         </>}
       >
@@ -4186,27 +4305,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         footer={
           closeStep === 'control' ? (
             <>
-              <button onClick={() => setCloseOpen(false)} className="px-3 py-2 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-100 transition">Annuler</button>
-              <button onClick={() => setRegOpen(true)} className="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-neutral-200 text-neutral-700 hover:border-brand-300 transition inline-flex items-center gap-1.5">
-                <Plus className="w-3.5 h-3.5" /> Régulariser
-              </button>
-              <button onClick={() => setCloseStep('regularize')} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition inline-flex items-center gap-1.5 active:scale-95">
-                Suivant <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+              <button onClick={() => setCloseOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={() => setRegOpen(true)} className="btn-icon" title="Régulariser"><Plus className="w-4 h-4" /></button>
+              <button onClick={() => setCloseStep('regularize')} className="btn-icon-primary" title="Suivant"><ChevronRight className="w-4 h-4" /></button>
             </>
           ) : closeStep === 'regularize' ? (
             <>
-              <button onClick={() => setCloseStep('control')} className="px-3 py-2 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-100 transition">Retour</button>
-              <button onClick={() => setCloseStep('confirm')} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition inline-flex items-center gap-1.5 active:scale-95">
-                Confirmer <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+              <button onClick={() => setCloseStep('control')} className="btn-icon" title="Retour"><ArrowLeft className="w-4 h-4" /></button>
+              <button onClick={() => setCloseStep('confirm')} className="btn-icon-primary" title="Confirmer"><ChevronRight className="w-4 h-4" /></button>
             </>
           ) : (
             <>
-              <button onClick={() => setCloseStep('regularize')} className="px-3 py-2 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-100 transition">Retour</button>
-              <button onClick={confirmClose} disabled={closing} className="px-4 py-2 rounded-xl text-xs font-bold bg-ink-900 hover:bg-ink-800 text-white shadow-sm transition inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
-                {closing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                Clôturer
+              <button onClick={() => setCloseStep('regularize')} className="btn-icon" title="Retour"><ArrowLeft className="w-4 h-4" /></button>
+              <button onClick={confirmClose} disabled={closing} className="btn-icon-primary" title="Clôturer">
+                {closing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
               </button>
             </>
           )
@@ -4350,9 +4462,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   </button>
                 );
               })}
-              <button onClick={loadWebOrders} className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-brand-700 hover:bg-brand-50">
-                <RotateCcw className="w-3.5 h-3.5" />Actualiser
-              </button>
+              <button onClick={loadWebOrders} className="btn-icon" title="Actualiser"><RotateCcw className="w-4 h-4" /></button>
             </div>
             {webOrdersLoading ? (
               <div className="flex items-center justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-brand-600" /></div>
@@ -4392,9 +4502,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         ) : (
           <div className="space-y-3">
-            <button onClick={() => { setWebOrderDetail(null); setWebOrderItems([]); }} className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-900">
-              <ChevronLeft className="w-4 h-4" />Retour à la liste
-            </button>
+            <button onClick={() => { setWebOrderDetail(null); setWebOrderItems([]); }} className="btn-icon" title="Retour à la liste"><ChevronLeft className="w-4 h-4" /></button>
             <div className="p-4 rounded-xl bg-gradient-to-br from-brand-50 to-white border border-brand-100">
               <div className="flex items-start justify-between gap-3">
                 <div>

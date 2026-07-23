@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, RotateCcw, Check } from 'lucide-react';
 
 export function PremiumDateRangePicker({ open, onClose, from, to, onApply }: {
   open: boolean; onClose: () => void; from: string; to: string;
@@ -153,10 +153,10 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply }: {
         </div>
 
         <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-end gap-2 flex-wrap shrink-0">
-          <button onClick={() => { setLocalFrom(''); setLocalTo(''); }} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Réinitialiser</button>
-          <button onClick={onClose} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">Annuler</button>
-          <button onClick={() => onApply(localFrom, localTo)} disabled={!localFrom} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-lg transition inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
-            Appliquer
+          <button onClick={() => { setLocalFrom(''); setLocalTo(''); }} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
+          <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={() => onApply(localFrom, localTo)} disabled={!localFrom} className="btn-icon-primary" title="Appliquer">
+            <Check className="w-4 h-4" />
           </button>
         </div>
       </div>

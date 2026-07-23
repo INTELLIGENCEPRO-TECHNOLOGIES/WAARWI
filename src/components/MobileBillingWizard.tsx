@@ -146,9 +146,7 @@ export function MobileBillingWizard({
       <div className="flex-shrink-0 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] pb-safe">
         {step === 1 && (
           <div className="flex items-center justify-between px-4 py-2.5">
-            <button onClick={onClose} className="h-11 px-5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-sm active:scale-95 transition-all">
-              Annuler
-            </button>
+            <button onClick={onClose} className="btn-icon !h-11 !w-11" title="Annuler"><X className="w-4 h-4" /></button>
             <button
               onClick={() => setStep(2)}
               className="h-11 px-6 rounded-2xl bg-teal-700 text-white font-bold text-sm flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-teal-700/20"

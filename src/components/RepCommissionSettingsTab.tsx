@@ -170,10 +170,10 @@ export function RepCommissionSettingsTab() {
       <button
         onClick={save}
         disabled={saving}
-        className="w-full h-12 rounded-2xl bg-brand-600 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-brand-600/20 disabled:opacity-50 disabled:shadow-none hover:bg-brand-700"
+        className="w-full btn-icon-primary"
+        title={saving ? 'Enregistrement…' : saved ? 'Enregistré !' : 'Enregistrer les paramètres'}
       >
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-        {saving ? 'Enregistrement…' : saved ? 'Enregistré !' : 'Enregistrer les paramètres'}
       </button>
     </div>
   );

@@ -91,6 +91,11 @@ p { line-height: 1.6; }
            hover:bg-neutral-800
            transition-all duration-150 active:scale-[0.95];
   }
+  .btn-icon-danger-solid {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg bg-red-600 text-white
+           hover:bg-red-700
+           transition-all duration-150 active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
 
   /* ── Surfaces ───────────────────────────────────────────── */
   .card {
@@ -164,6 +169,13 @@ p { line-height: 1.6; }
   }
   .num { font-variant-numeric: tabular-nums; }
 
+  /* ── Document numbers (factures, tickets, commandes, reçus, sessions) ── */
+  .doc-number {
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
   /* ── Overlays ──────────────────────────────────────────── */
   .scrim {
     @apply fixed inset-0 bg-black/40;
@@ -180,7 +192,7 @@ p { line-height: 1.6; }
 
   /* ── Nav ───────────────────────────────────────────────── */
   .nav-item {
-    @apply w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 relative;
+    @apply w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 relative;
   }
   .nav-item-active {
     @apply bg-neutral-900 text-white;
@@ -702,3 +714,15 @@ html {
 .legal-prose em { font-style: italic; }
 .legal-prose a { color: #0f766e; text-decoration: underline; text-underline-offset: 2px; }
 .legal-prose a:hover { color: #115e59; }
+
+/* ── Mobile article modal: swipe slide transitions ─── */
+@keyframes slideTabInRight {
+  0%   { opacity: 0; transform: translateX(28px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideTabInLeft {
+  0%   { opacity: 0; transform: translateX(-28px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.tab-slide-right { animation: slideTabInRight 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
+.tab-slide-left  { animation: slideTabInLeft 0.24s cubic-bezier(0.22, 1, 0.36, 1); }

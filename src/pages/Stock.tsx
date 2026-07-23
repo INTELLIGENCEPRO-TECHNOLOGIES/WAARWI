@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, MapPin, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown } from 'lucide-react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, Monitor, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -72,6 +72,7 @@ export function Stock() {
   const listInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const [listTransferTarget, setListTransferTarget] = useState('');
   const [listSourceSite, setListSourceSite] = useState('');
+  const listSourceInitialized = useRef(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
   const [adjOpen, setAdjOpen] = useState(false);
@@ -639,7 +640,20 @@ export function Stock() {
   const PAGE_SIZE = 50;
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => { setCurrentPage(1); }, [search, filter, stkSortCol, stkSortDir]);
-  useEffect(() => { setListSourceSite(currentSite?.id || ''); }, [currentSite?.id]);
+  // Sync listSourceSite when currentSite changes (e.g. user switches via header)
+  // Only block the sync if user has active edits in the form
+  useEffect(() => {
+    if (!currentSite?.id) return;
+    if (!listSourceInitialized.current) {
+      setListSourceSite(currentSite.id);
+      listSourceInitialized.current = true;
+      return;
+    }
+    const hasEdits = Array.from(listEdits.values()).some(e => e.qty !== '' && Number(e.qty) !== 0);
+    if (!hasEdits) {
+      setListSourceSite(currentSite.id);
+    }
+  }, [currentSite?.id]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visibleItems = useMemo(() => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE), [filtered, currentPage]);
 
@@ -983,7 +997,14 @@ export function Stock() {
             listTransferTarget={listTransferTarget}
             setListTransferTarget={setListTransferTarget}
             listSourceSite={listSourceSite}
-            setListSourceSite={setListSourceSite}
+            setListSourceSite={(v: string) => {
+              const hasEdits = Array.from(listEdits.values()).some(e => e.qty !== '' && Number(e.qty) !== 0);
+              if (hasEdits && v !== listSourceSite) {
+                if (!window.confirm('Changer le magasin source reinitialise le formulaire. Continuer?')) return;
+                setListEdits(new Map());
+              }
+              setListSourceSite(v);
+            }}
             stockByLocation={stockByLocation}
             tenantId={tenant!.id}
             sortCol={stkSortCol}
@@ -1300,7 +1321,7 @@ export function Stock() {
         size="sm"
         footer={adjDone ? (
           <div className="flex items-center gap-2 w-full">
-            <button onClick={() => { setAdjOpen(false); setAdjDone(false); }} className="btn-secondary">Fermer</button>
+            <button onClick={() => { setAdjOpen(false); setAdjDone(false); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
             <div className="flex-1" />
             <button
               onClick={() => {
@@ -1315,9 +1336,9 @@ export function Stock() {
                   observation: adjNote || undefined,
                 });
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95"
+              className="btn-icon" title="Imprimer 80mm"
             >
-              <Scroll className="w-3.5 h-3.5" />80mm
+              <Scroll className="w-4 h-4" />
             </button>
             <button
               onClick={() => {
@@ -1332,13 +1353,13 @@ export function Stock() {
                   observation: adjNote || undefined,
                 });
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-ink-900 to-slate-800 text-white hover:shadow-glow transition-all active:scale-95"
+              className="btn-icon-primary" title="Imprimer A4"
             >
-              <Printer className="w-3.5 h-3.5" />A4
+              <Printer className="w-4 h-4" />
             </button>
           </div>
         ) : (
-          <><button onClick={() => setAdjOpen(false)} className="btn-secondary">Annuler</button><button onClick={saveAdj} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Valider</button></>
+          <><button onClick={() => setAdjOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveAdj} disabled={saving} className="btn-icon-primary" title="Valider">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>
         )}
       >
         {adjDone && adjDoneData ? (
@@ -1457,7 +1478,7 @@ export function Stock() {
         size="sm"
         footer={
           <div className="flex items-center gap-2 w-full">
-            <button onClick={() => setBulkDoneOpen(false)} className="btn-secondary">Fermer</button>
+            <button onClick={() => setBulkDoneOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
             <div className="flex-1" />
             <button
               onClick={() => {
@@ -1471,9 +1492,9 @@ export function Stock() {
                   items: bulkDoneItems,
                 });
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95"
+              className="btn-icon" title="Imprimer 80mm"
             >
-              <Scroll className="w-3.5 h-3.5" />80mm
+              <Scroll className="w-4 h-4" />
             </button>
             <button
               onClick={() => {
@@ -1487,9 +1508,9 @@ export function Stock() {
                   items: bulkDoneItems,
                 });
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-ink-900 to-slate-800 text-white hover:shadow-glow transition-all active:scale-95"
+              className="btn-icon-primary" title="Imprimer A4"
             >
-              <Printer className="w-3.5 h-3.5" />A4
+              <Printer className="w-4 h-4" />
             </button>
           </div>
         }
@@ -1528,13 +1549,13 @@ export function Stock() {
         size="sm"
         footer={
           <>
-            <button onClick={() => setInvBookOpen(false)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
+            <button onClick={() => setInvBookOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
             <button
               onClick={() => { if (invBookScope) { runPrintInventoryBook(invBookScope); setInvBookOpen(false); } }}
               disabled={!invBookScope}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-ink-900 to-slate-800 text-white shadow-glow inline-flex items-center gap-1.5 disabled:opacity-40"
+              className="btn-icon-primary" title="Imprimer"
             >
-              <Printer className="w-3.5 h-3.5" />Imprimer
+              <Printer className="w-4 h-4" />
             </button>
           </>
         }
@@ -1587,13 +1608,13 @@ export function Stock() {
         size="md"
         footer={docDetailDoc ? (
           <>
-            <button onClick={() => { setDocDetailOpen(false); setDocDetailDoc(null); setDocDetailLines([]); }} className="btn-secondary">Fermer</button>
+            <button onClick={() => { setDocDetailOpen(false); setDocDetailDoc(null); setDocDetailLines([]); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
             <div className="flex-1" />
-            <button onClick={() => printStockDoc(docDetailDoc, docDetailLines, '80')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95">
-              <Scroll className="w-3.5 h-3.5" />80mm
+            <button onClick={() => printStockDoc(docDetailDoc, docDetailLines, '80')} className="btn-icon" title="Imprimer 80mm">
+              <Scroll className="w-4 h-4" />
             </button>
-            <button onClick={() => printStockDoc(docDetailDoc, docDetailLines, 'a4')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-ink-900 to-slate-800 text-white shadow-glow active:scale-95">
-              <Printer className="w-3.5 h-3.5" />A4
+            <button onClick={() => printStockDoc(docDetailDoc, docDetailLines, 'a4')} className="btn-icon-primary" title="Imprimer A4">
+              <Printer className="w-4 h-4" />
             </button>
           </>
         ) : null}
@@ -1653,11 +1674,10 @@ export function Stock() {
         size="md"
         footer={docEditDoc ? (
           <>
-            <button onClick={() => setDocEditOpen(false)} disabled={docEditSaving} className="btn-secondary">Annuler</button>
+            <button onClick={() => setDocEditOpen(false)} disabled={docEditSaving} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
             <div className="flex-1" />
-            <button onClick={saveDocEdit} disabled={docEditSaving} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-neutral-900 text-white shadow-glow hover:bg-neutral-800 active:scale-95 disabled:opacity-50">
-              {docEditSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <Save className="w-3.5 h-3.5" />Enregistrer & régénérer
+            <button onClick={saveDocEdit} disabled={docEditSaving} className="btn-icon-primary" title="Enregistrer & régénérer">
+              {docEditSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             </button>
           </>
         ) : null}
@@ -1715,15 +1735,14 @@ export function Stock() {
         size="sm"
         footer={
           <>
-            <button onClick={() => setDocDeleteConfirm(null)} disabled={docDeleting} className="btn-secondary">Non</button>
+            <button onClick={() => setDocDeleteConfirm(null)} disabled={docDeleting} className="btn-icon" title="Non"><X className="w-4 h-4" /></button>
             <div className="flex-1" />
             <button
               onClick={() => docDeleteConfirm && cancelDoc(docDeleteConfirm)}
               disabled={docDeleting}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-br from-red-600 to-red-700 text-white shadow-glow active:scale-95 disabled:opacity-50"
+              className="btn-icon-danger-solid" title="Oui, annuler & régénérer"
             >
-              {docDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Oui, annuler & régénérer
+              {docDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
           </>
         }
@@ -2234,6 +2253,21 @@ function StockListEditView({
                 </select>
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {/* Active site badge - always visible */}
+      {(() => {
+        const sourceSiteId = listSourceSite || currentSite?.id || '';
+        const allSites = [currentSite, ...(sites || []), ...(depots || [])].filter(Boolean);
+        const sourceSiteObj = allSites.find((s: any) => s.id === sourceSiteId);
+        const mismatch = currentSite && sourceSiteId && sourceSiteId !== currentSite.id;
+        return (
+          <div className={`shrink-0 mb-2 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${mismatch ? 'border border-neutral-300 text-neutral-700' : 'border border-neutral-200 text-neutral-600'}`}>
+            <Monitor className="w-3.5 h-3.5 text-neutral-400" />
+            <span className="font-medium">Document cible : <strong className="text-neutral-900">{sourceSiteObj?.name || 'N/A'}</strong></span>
+            {mismatch && <span className="text-[10px] text-neutral-400">(diff. du site actif)</span>}
           </div>
         );
       })()}

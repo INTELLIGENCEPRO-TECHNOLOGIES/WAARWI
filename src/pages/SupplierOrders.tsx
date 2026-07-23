@@ -200,7 +200,7 @@ export function SupplierOrders() {
 
   const save = async () => {
     if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
-    if (!can('manage_supplier_orders')) { error('Vous n\'avez pas la permission de gerer les commandes fournisseurs'); return; }
+    if (!can('manage_supplier_orders')) { error('Vous n\'avez pas la permission de gerer les achats'); return; }
     if (!form.supplier_id) { error('Sélectionnez un fournisseur'); return; }
     if (orderItems.every(i => !i.name.trim())) { error('Ajoutez au moins un article'); return; }
     const validItems = orderItems.filter(i => i.name.trim());
@@ -410,7 +410,7 @@ export function SupplierOrders() {
 
   const saveEdit = async () => {
     if (!selected || !tenant) return;
-    if (!can('edit_supplier_orders')) { error('Vous n\'avez pas la permission de modifier les commandes fournisseurs'); return; }
+    if (!can('edit_supplier_orders')) { error('Vous n\'avez pas la permission de modifier les achats'); return; }
     setSaving(true);
     const kept = editItems.filter(i => (i.name || '').trim());
     const deletedIds = detailItems
@@ -567,7 +567,7 @@ export function SupplierOrders() {
   };
 
   const changeStatus = async (o: SupplierOrder, status: string) => {
-    if (!can('edit_supplier_orders')) { error('Vous n\'avez pas la permission de modifier les commandes fournisseurs'); return; }
+    if (!can('edit_supplier_orders')) { error('Vous n\'avez pas la permission de modifier les achats'); return; }
     await supabase.from('supplier_orders').update({ status }).eq('id', o.id);
     success('Statut mis à jour'); load();
     if (selected?.id === o.id) setSelected({ ...o, status });
@@ -577,7 +577,7 @@ export function SupplierOrders() {
 
   return (
     <div className="space-y-3">
-      <h1 className="sr-only">Commandes fournisseurs</h1>
+      <h1 className="sr-only">Achats</h1>
       {/* Header: title + search integrated */}
       <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
       <div className="flex items-center gap-2 bg-white border border-slate-200/70 rounded-2xl shadow-card px-3 py-2">
@@ -589,7 +589,7 @@ export function SupplierOrders() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Commandes fournisseurs…"
+            placeholder="Achats…"
             className="w-full pl-8 pr-2 py-2 bg-slate-50/70 border border-transparent rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:border-brand-300 focus:bg-white transition"
           />
         </div>
@@ -598,10 +598,10 @@ export function SupplierOrders() {
         </button>
         <button
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1 px-3 py-2 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-white text-xs font-semibold shadow-sm hover:shadow-md transition"
+          className="btn-icon-primary"
+          title="Nouvelle commande"
         >
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nouvelle</span>
         </button>
       </div>
 
@@ -654,7 +654,7 @@ export function SupplierOrders() {
           icon={ShoppingBag}
           title="Aucune commande"
           description="Créez votre première commande fournisseur."
-          action={<button onClick={() => setOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Nouvelle commande</button>}
+          action={<button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouvelle commande"><Plus className="w-4 h-4" /></button>}
         />
       ) : (
         <div className={`space-y-2 ${flashList ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
@@ -670,7 +670,7 @@ export function SupplierOrders() {
               >
                 {/* line 1: number + status + amount */}
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] font-semibold text-slate-700 truncate">{o.order_number}</span>
+                  <span className="doc-number text-[13px] font-semibold text-slate-700 truncate">{o.order_number}</span>
                   <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border ${st.pill}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                     {st.label}
@@ -1367,14 +1367,14 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
             {saving && <span className="text-[10px] text-teal-600 font-medium animate-pulse">Sauvegarde...</span>}
             {editingOrder && (
               <>
-                {editingOrder.status === 'draft' && <button onClick={() => onChangeStatus('sent')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-neutral-200 text-neutral-800 bg-neutral-50 hover:bg-neutral-100 transition-colors" title="Marquer envoyée"><CheckCircle className="w-3.5 h-3.5 inline mr-1" />Envoyée</button>}
+                {editingOrder.status === 'draft' && <button onClick={() => onChangeStatus('sent')} className="btn-icon" title="Marquer envoyée"><CheckCircle className="w-4 h-4" /></button>}
                 <button onClick={onPrint} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title="Imprimer"><Printer className="w-4 h-4" /></button>
               </>
             )}
-            <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">Fermer</button>
-            <button onClick={save} disabled={saving} className="btn-primary text-xs px-4 py-1.5">
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {editingOrderId ? 'Enregistrer' : 'Créer'}
+            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+            <button onClick={save} disabled={saving} className="btn-icon-primary" title={editingOrderId ? 'Enregistrer' : 'Créer'}>
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {!saving && (editingOrderId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />)}
             </button>
           </div>
         </div>
@@ -1396,8 +1396,8 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
             <input value={form.note} onChange={e => setForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note..." className="input text-xs h-8" />
           </div>
           {autoMode && (
-            <button onClick={onVehiclePicker} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:border-teal-300 hover:bg-teal-50/50 transition-all">
-              <Car className="w-3 h-3" />Par véhicule
+            <button onClick={onVehiclePicker} className="btn-icon" title="Par véhicule">
+              <Car className="w-4 h-4" />
             </button>
           )}
         </div>

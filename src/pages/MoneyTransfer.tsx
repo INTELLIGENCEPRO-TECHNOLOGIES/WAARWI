@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, Search, X, Check, AlertTriangle, Loader2, CreditCard as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, ChevronDown, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Smartphone, Activity, Package, Users, Receipt, HandCoins, Phone } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, RefreshCw, BarChart3, Settings2, Plus, Search, X, Check, AlertTriangle, Loader2, CreditCard as Edit2, Trash2, ArrowRightLeft, Banknote, Clock, CheckCircle2, XCircle, ChevronDown, TrendingUp, Wallet, MapPin, User, FileText, Lock, PlayCircle, ShieldCheck, Smartphone, Activity, Package, Users, Receipt, HandCoins, Phone, Save } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -1108,9 +1108,9 @@ function MTInitialisation({ onValidated }: { onValidated: () => void }) {
             </div>
             <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2">Les comptes seront créés et les opérations deviendront accessibles.</p>
             <div className="flex gap-2 justify-end pt-2">
-              <button onClick={() => setShowConfirm(false)} className="px-3 py-2 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-              <button onClick={validate} disabled={validating} className="px-4 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 disabled:opacity-50 flex items-center gap-2">
-                {validating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Confirmer
+              <button onClick={() => setShowConfirm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={validate} disabled={validating} className="btn-icon-primary" title="Confirmer">
+                {validating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -1236,9 +1236,9 @@ function MTServicePoints() {
             </div>
           )}
           <div className="flex gap-2 pt-2">
-            <button onClick={() => { setShowForm(false); setEditId(null); }} className="px-3 py-2 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-            <button onClick={save} disabled={saving || !form.name.trim()} className="px-4 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 disabled:opacity-50 flex items-center gap-2">
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{editId ? 'Modifier' : 'Créer'}
+            <button onClick={() => { setShowForm(false); setEditId(null); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <button onClick={save} disabled={saving || !form.name.trim()} className="btn-icon-primary" title={editId ? 'Modifier' : 'Créer'}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -1443,9 +1443,9 @@ function MTServices() {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button onClick={() => { setShowForm(false); setEditId(null); setLogoFile(null); setLogoPreview(''); }} className="px-3 py-2 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-            <button onClick={save} disabled={saving || uploadingLogo || !form.name.trim()} className="px-4 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 disabled:opacity-50 flex items-center gap-2">
-              {(saving || uploadingLogo) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{editId ? 'Modifier' : 'Créer'}
+            <button onClick={() => { setShowForm(false); setEditId(null); setLogoFile(null); setLogoPreview(''); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <button onClick={save} disabled={saving || uploadingLogo || !form.name.trim()} className="btn-icon-primary" title="Enregistrer">
+              {(saving || uploadingLogo) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -1883,11 +1883,8 @@ function MTOperations() {
               </p>
             </div>
             <button onClick={createOp} disabled={saving || !form.amount}
-              className={`w-full mt-4 py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
-                opModal.type === 'depot' || opModal.type === 'vente_credit' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-500 hover:bg-red-600'
-              }`}>
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Valider
+              className={`btn-icon-primary ${opModal.type === 'depot' || opModal.type === 'vente_credit' ? '!bg-emerald-600 hover:!bg-emerald-700' : '!bg-red-500 hover:!bg-red-600'}`} title="Valider">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -1972,7 +1969,7 @@ function MTOperations() {
                         </td>
                         <td className="px-5 py-2.5 text-right">
                           {op.status === 'validee' && (can('mt_client_operation_cancel_any') || (can('mt_client_operation_cancel_own') && op.operated_by === profile?.id)) && (
-                            <button onClick={() => cancelOp(op)} className="text-[10px] font-medium text-red-500 hover:text-red-700 hover:underline">Annuler</button>
+                            <button onClick={() => cancelOp(op)} className="btn-icon-danger" title="Annuler"><XCircle className="w-4 h-4" /></button>
                           )}
                         </td>
                       </tr>
@@ -2123,9 +2120,9 @@ function MTWholesalers() {
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <button onClick={() => { setShowForm(false); setEditId(null); }} className="px-3 py-2 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-            <button onClick={save} disabled={saving || !form.name.trim()} className="px-4 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 disabled:opacity-50 flex items-center gap-2">
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{editId ? 'Modifier' : 'Créer'}
+            <button onClick={() => { setShowForm(false); setEditId(null); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <button onClick={save} disabled={saving || !form.name.trim()} className="btn-icon-primary" title={editId ? 'Modifier' : 'Créer'}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -2546,11 +2543,10 @@ function MTWholesalerOperations() {
           )}
 
           <div className="flex gap-2 pt-1">
-            <button onClick={() => { setShowForm(false); resetForm(); }} className="px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
+            <button onClick={() => { setShowForm(false); resetForm(); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
             <button onClick={createOp} disabled={!canValidate}
-              className="px-6 py-2.5 text-sm font-semibold text-white rounded-lg flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-neutral-900 hover:bg-neutral-800 transition-colors">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Valider {WH_OP_META[opType].verb}
+              className="btn-icon-primary" title={`Valider ${WH_OP_META[opType].verb}`}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -3422,9 +3418,9 @@ function MTClosures() {
               <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes / observations (optionnel)" className="input text-sm" />
 
               <div className="flex gap-2">
-                <button onClick={() => { setShowForm(false); setTheoretical(null); setSelectedPointId(''); }} className="px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-                <button onClick={closureCreate} disabled={saving} className="px-6 py-2.5 text-sm font-semibold bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 disabled:opacity-50 flex items-center gap-2">
-                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}Confirmer la clôture
+                <button onClick={() => { setShowForm(false); setTheoretical(null); setSelectedPointId(''); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+                <button onClick={closureCreate} disabled={saving} className="btn-icon-primary" title="Confirmer la clôture">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -3499,9 +3495,9 @@ function MTClosures() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { setShowOpeningForm(false); setSelectedPointId(''); }} className="px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-                <button onClick={confirmOpening} disabled={saving} className="px-6 py-2.5 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
-                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}Confirmer l'ouverture
+                <button onClick={() => { setShowOpeningForm(false); setSelectedPointId(''); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+                <button onClick={confirmOpening} disabled={saving} className="btn-icon-primary !bg-emerald-600 hover:!bg-emerald-700" title="Confirmer l'ouverture">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -3954,7 +3950,7 @@ function MTExpenses() {
           </div>
           <div className="flex gap-2">
             <input value={catForm.name} onChange={e => setCatForm({ name: e.target.value })} placeholder="Ex. Carburant, Salaires, Fournitures…" className="input flex-1" />
-            <button onClick={saveCat} disabled={saving || !catForm.name.trim()} className="px-4 py-2 text-sm font-medium bg-neutral-900 text-white rounded-lg disabled:opacity-40">Ajouter</button>
+            <button onClick={saveCat} disabled={saving || !catForm.name.trim()} className="btn-icon-primary" title="Ajouter"><Plus className="w-4 h-4" /></button>
           </div>
         </div>
       )}
@@ -3994,9 +3990,9 @@ function MTExpenses() {
             </div>
           </div>
           <div className="flex gap-2 pt-1">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-            <button onClick={save} disabled={saving || !form.service_point_id || !form.amount} className="px-6 py-2.5 text-sm font-semibold text-white rounded-lg flex items-center gap-2 disabled:opacity-40 bg-neutral-900 hover:bg-neutral-800">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer la dépense
+            <button onClick={() => setShowForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <button onClick={save} disabled={saving || !form.service_point_id || !form.amount} className="btn-icon-primary" title="Enregistrer la dépense">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -4472,8 +4468,8 @@ function MTCustomers() {
               <textarea value={customerForm.notes} onChange={e => setCustomerForm({ ...customerForm, notes: e.target.value })} placeholder="Notes" rows={2} className="input" />
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setShowCustomerForm(false)} className="flex-1 px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-              <button onClick={saveCustomer} disabled={saving || !customerForm.name.trim()} className="flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg disabled:opacity-40 bg-neutral-900 hover:bg-neutral-800">{editingCustomer ? 'Mettre à jour' : 'Créer'}</button>
+              <button onClick={() => setShowCustomerForm(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={saveCustomer} disabled={saving || !customerForm.name.trim()} className="btn-icon-primary" title={editingCustomer ? 'Mettre à jour' : 'Créer'}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
             </div>
           </div>
         </div>
@@ -4513,8 +4509,8 @@ function MTCustomers() {
               <p>Créance actuelle : <span className={`font-semibold ${(selectedAgg?.creance || 0) > 0.01 ? 'text-red-600' : 'text-neutral-900'}`}>{fmt(selectedAgg?.creance || 0)} FCFA</span></p>
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setMovementModal(null)} className="flex-1 px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-              <button onClick={saveMovement} disabled={saving || !movementForm.amount || !movementForm.service_point_id} className="flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg disabled:opacity-40 bg-neutral-900 hover:bg-neutral-800">Enregistrer</button>
+              <button onClick={() => setMovementModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={saveMovement} disabled={saving || !movementForm.amount || !movementForm.service_point_id} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
             </div>
           </div>
         </div>
@@ -4596,10 +4592,9 @@ function MTCustomers() {
             )}
 
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setOperationModal(false)} className="flex-1 px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Annuler</button>
-              <button onClick={saveOperation} disabled={saving || !!opError} className="flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg disabled:opacity-40 flex items-center justify-center gap-2 bg-neutral-900 hover:bg-neutral-800">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                Valider l'opération
+              <button onClick={() => setOperationModal(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={saveOperation} disabled={saving || !!opError} className="btn-icon-primary" title="Valider l'opération">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
             </div>
           </div>

@@ -208,10 +208,10 @@ export function PermissionsTab() {
         <button
           onClick={save}
           disabled={saving}
-          className="w-full sm:w-auto btn-primary"
+          className="w-full sm:w-auto btn-icon-primary"
+          title="Enregistrer les permissions"
         >
-          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-          Enregistrer les permissions
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
         </button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Plus, Pencil, Trash2, Loader2, Search, Download, Upload, FileText,
-  Package, Tag, ChevronRight, Save, Folder, AlertCircle
+  Package, Tag, ChevronRight, Save, Folder, AlertCircle, X, Check
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -149,8 +149,8 @@ function ActivitiesTab({ activities, onChange }: { activities: ActivityType[]; o
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? 'Nouveau type d\'activité' : 'Modifier le type d\'activité'} size="sm"
         footer={<>
-          <button onClick={() => setEditing(null)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
-          <button onClick={save} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5"><Save className="w-3.5 h-3.5" />Enregistrer</button>
+          <button onClick={() => setEditing(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Save className="w-4 h-4" /></button>
         </>}>
         {editing && (
           <div className="space-y-3">
@@ -264,8 +264,8 @@ function CatalogsTab({ catalogs, activities, onChange, selectedId, onSelect }: {
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? 'Nouveau catalogue' : 'Modifier le catalogue'} size="sm"
         footer={<>
-          <button onClick={() => setEditing(null)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
-          <button onClick={save} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5"><Save className="w-3.5 h-3.5" />Enregistrer</button>
+          <button onClick={() => setEditing(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Save className="w-4 h-4" /></button>
         </>}>
         {editing && (
           <div className="space-y-3">
@@ -383,8 +383,8 @@ function CategoriesTab({ catalogs, categories, selectedCatalogId, onSelectCatalo
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? (editing?.parent_id ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie') : 'Modifier la catégorie'} size="sm"
         footer={<>
-          <button onClick={() => setEditing(null)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
-          <button onClick={save} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5"><Save className="w-3.5 h-3.5" />Enregistrer</button>
+          <button onClick={() => setEditing(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Save className="w-4 h-4" /></button>
         </>}>
         {editing && (
           <div className="space-y-3">
@@ -651,8 +651,8 @@ function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, on
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={isNew ? 'Nouvel article' : 'Modifier l\'article'} size="md"
         footer={<>
-          <button onClick={() => setEditing(null)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
-          <button onClick={save} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5"><Save className="w-3.5 h-3.5" />Enregistrer</button>
+          <button onClick={() => setEditing(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Save className="w-4 h-4" /></button>
         </>}>
         {editing && (
           <div className="space-y-3">
@@ -941,8 +941,8 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
             )}
 
             <div className="mt-3 flex items-center justify-between">
-              <button onClick={() => { setRows([]); setFilename(''); setResult(null); }} disabled={importing} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Annuler</button>
-              <button onClick={runImport} disabled={importing || !selectedCatalogId} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow disabled:opacity-50">
+              <button onClick={() => { setRows([]); setFilename(''); setResult(null); }} disabled={importing} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+              <button onClick={runImport} disabled={importing || !selectedCatalogId} className="btn-icon-primary" title="Importer">
                 {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                 {importing
                   ? `Lot ${importProgress?.lotsDone ?? 0} / ${importProgress?.lotsTotal ?? Math.ceil(rows.length / CHUNK_SIZE)}…`

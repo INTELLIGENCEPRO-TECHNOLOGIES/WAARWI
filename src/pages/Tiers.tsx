@@ -3,7 +3,7 @@ import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
   X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
   ShoppingBag, Check, Filter, Printer, Tag, Trash2,
-  Download, Upload, Scale, RotateCcw
+  Download, Upload, Scale, RotateCcw, Save
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -49,6 +49,8 @@ export function Tiers() {
   const [paidMap, setPaidMap] = useState<Record<string, number>>({});
   const [totalMap, setTotalMap] = useState<Record<string, number>>({});
   const [supDueMap, setSupDueMap] = useState<Record<string, { total: number; paid: number; due: number }>>({});
+  const [prepayMap, setPrepayMap] = useState<Record<string, number>>({});
+  const [avoirMap, setAvoirMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
@@ -94,12 +96,14 @@ export function Tiers() {
     if (!sharedSuppliers && currentSite) {
       supQuery = supQuery.eq('site_id', currentSite.id);
     }
-    const [cRes, sRes, salesRes, soRes, supPayRes] = await Promise.all([
+    const [cRes, sRes, salesRes, soRes, supPayRes, prepaysRes, avoirsRes] = await Promise.all([
       custQuery,
       supQuery,
       supabase.from('sales').select('customer_id, total, paid, status').eq('tenant_id', tenant.id).not('customer_id', 'is', null).neq('status', 'cancelled').limit(5000),
       supabase.from('supplier_orders').select('supplier_id, total, paid, status').eq('tenant_id', tenant.id).neq('status', 'cancelled').limit(5000),
       supabase.from('supplier_payments').select('supplier_id, amount').eq('tenant_id', tenant.id).limit(5000),
+      supabase.from('customer_prepayments').select('customer_id, amount, amount_used').eq('tenant_id', tenant.id).limit(5000),
+      supabase.from('sale_returns').select('customer_id, total, credit_used').eq('tenant_id', tenant.id).eq('status', 'approved').eq('refund_method', 'avoir').limit(5000),
     ]);
     setCustomers((cRes.data || []) as any);
     setSuppliers((sRes.data || []) as any);
@@ -116,6 +120,20 @@ export function Tiers() {
       }
     });
     setDueMap(dm); setPaidMap(pm); setTotalMap(tm);
+
+    const ppm: Record<string, number> = {};
+    (prepaysRes.data || []).forEach((p: any) => {
+      const unused = Math.max(0, Number(p.amount) - Number(p.amount_used));
+      if (p.customer_id) ppm[p.customer_id] = (ppm[p.customer_id] || 0) + unused;
+    });
+    setPrepayMap(ppm);
+
+    const avm: Record<string, number> = {};
+    (avoirsRes.data || []).forEach((a: any) => {
+      const unused = Math.max(0, Number(a.total) - Number(a.credit_used));
+      if (a.customer_id) avm[a.customer_id] = (avm[a.customer_id] || 0) + unused;
+    });
+    setAvoirMap(avm);
 
     const sm: Record<string, { total: number; paid: number; due: number }> = {};
     (soRes.data || []).forEach((o: any) => {
@@ -374,7 +392,7 @@ export function Tiers() {
 
   // Balance adjustment
   const [balanceOpen, setBalanceOpen] = useState(false);
-  const [balanceTarget, setBalanceTarget] = useState<{ id: string; name: string; type: 'customer' | 'supplier'; currentBalance: number } | null>(null);
+  const [balanceTarget, setBalanceTarget] = useState<{ id: string; name: string; type: 'customer' | 'supplier'; currentBalance: number; prepay: number; avoir: number } | null>(null);
   const [balanceAmount, setBalanceAmount] = useState('');
   const [balanceNote, setBalanceNote] = useState('');
   const [savingBalance, setSavingBalance] = useState(false);
@@ -563,8 +581,8 @@ export function Tiers() {
     load();
   };
 
-  const openBalanceAdjust = (id: string, name: string, type: 'customer' | 'supplier', currentBalance: number) => {
-    setBalanceTarget({ id, name, type, currentBalance });
+  const openBalanceAdjust = (id: string, name: string, type: 'customer' | 'supplier', currentBalance: number, prepay = 0, avoir = 0) => {
+    setBalanceTarget({ id, name, type, currentBalance, prepay, avoir });
     setBalanceAmount(String(currentBalance));
     setBalanceNote('');
     setBalanceOpen(true);
@@ -672,27 +690,24 @@ export function Tiers() {
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
             <button
               onClick={exportTiers}
-              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-semibold bg-white text-slate-600 border border-slate-200 hover:border-emerald-300 hover:text-emerald-700 transition-all"
+              className="btn-icon"
               title="Exporter en Excel"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Exporter</span>
+              <Download className="w-4 h-4" />
             </button>
             <button
               onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-semibold bg-white text-slate-600 border border-slate-200 hover:border-blue-300 hover:text-blue-700 transition-all"
+              className="btn-icon"
               title="Importer depuis Excel"
             >
-              <Upload className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Importer</span>
+              <Upload className="w-4 h-4" />
             </button>
             <button
               onClick={() => { setBalanceTarget(null); setBalanceOpen(true); }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-semibold bg-white text-slate-600 border border-slate-200 hover:border-amber-300 hover:text-amber-700 transition-all"
+              className="btn-icon"
               title="Positionner un solde"
             >
-              <Scale className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Solde</span>
+              <Scale className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -718,8 +733,8 @@ export function Tiers() {
             <option value="inactive">Inactif</option>
           </select>
           {hasFilters && (
-            <button onClick={clearFilters} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 hover:bg-slate-100">
-              <X className="w-3.5 h-3.5" />Réinitialiser
+            <button onClick={clearFilters} className="btn-icon" title="Réinitialiser">
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -735,6 +750,7 @@ export function Tiers() {
               <CustomerList
                 list={filteredCustomers} total={customers.length}
                 dueMap={dueMap} paidMap={paidMap} totalMap={totalMap}
+                prepayMap={prepayMap} avoirMap={avoirMap}
                 onCreate={openCustCreate}
                 onClickRow={c => setOptCust(c)}
               />
@@ -777,9 +793,9 @@ export function Tiers() {
       <Modal open={custOpen} onClose={() => setCustOpen(false)} title={custEdit ? t('tiers.editCustomer') : t('tiers.addCustomer')}
         size="md"
         footer={<>
-          <button onClick={() => setCustOpen(false)} className="btn-secondary">{t('common.cancel')}</button>
-          <button onClick={saveCust} disabled={saving} className="btn-primary">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}
+          <button onClick={() => setCustOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={saveCust} disabled={saving} className="btn-icon-primary" title="Enregistrer">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           </button>
         </>}>
         <div className="space-y-4">
@@ -867,9 +883,9 @@ export function Tiers() {
       <Modal open={supOpen} onClose={() => setSupOpen(false)} title={supEdit ? t('tiers.editSupplier') : t('tiers.addSupplier')}
         size="md"
         footer={<>
-          <button onClick={() => setSupOpen(false)} className="btn-secondary">{t('common.cancel')}</button>
-          <button onClick={saveSup} disabled={saving} className="btn-primary">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}
+          <button onClick={() => setSupOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={saveSup} disabled={saving} className="btn-icon-primary" title="Enregistrer">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           </button>
         </>}>
         <div className="space-y-4">
@@ -962,7 +978,7 @@ export function Tiers() {
           onReactivate={(optCust as any).is_active === false ? () => { const c = optCust; setOptCust(null); reactivateCust(c); } : undefined}
           actions={[
             { icon: Info, label: 'Interroger le compte', desc: 'Solde, totaux et historique rapide', onClick: () => { setCustView({ c: optCust, key: 'info' }); setOptCust(null); } },
-            { icon: Scale, label: 'Positionner le solde', desc: 'Ajuster manuellement le solde comptable', onClick: () => { const c = optCust; setOptCust(null); openBalanceAdjust(c.id, c.name, 'customer', Number((c as any).balance || 0)); } },
+            { icon: Scale, label: 'Positionner le solde', desc: 'Ajuster manuellement le solde comptable', onClick: () => { const c = optCust; setOptCust(null); openBalanceAdjust(c.id, c.name, 'customer', Number((c as any).balance || 0), prepayMap[c.id] || 0, avoirMap[c.id] || 0); } },
             { icon: Tag, label: 'Tarifs d\'exception', desc: 'Prix spéciaux par article', onClick: () => { setCustView({ c: optCust, key: 'pricing' }); setOptCust(null); } },
             { icon: Wallet, label: 'Saisir un règlement', desc: 'Encaissement + imputation facture', onClick: () => { setCustView({ c: optCust, key: 'payment' }); setOptCust(null); } },
             { icon: FileText, label: 'Documents de ventes', desc: 'Factures filtrées par période', onClick: () => { setCustView({ c: optCust, key: 'docs' }); setOptCust(null); } },
@@ -1023,8 +1039,8 @@ export function Tiers() {
       {/* Import modal */}
       <Modal open={importExportOpen} onClose={() => setImportExportOpen(false)} title={`Importer des ${tab === 'customers' ? 'clients' : 'fournisseurs'}`} size="md"
         footer={importRows.length > 0 && !importResult ? <>
-          <button onClick={() => setImportExportOpen(false)} className="btn-secondary">Annuler</button>
-          <button onClick={runImport} disabled={importing} className="btn-primary">
+          <button onClick={() => setImportExportOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={runImport} disabled={importing} className="btn-icon-primary" title="Importer">
             {importing && <Loader2 className="w-4 h-4 animate-spin" />}
             Importer {importRows.length} ligne{importRows.length > 1 ? 's' : ''}
           </button>
@@ -1034,8 +1050,8 @@ export function Tiers() {
           {!importResult && (
             <>
               <div className="flex items-center gap-2">
-                <button onClick={downloadTemplate} className="btn-secondary text-xs gap-1.5">
-                  <Download className="w-3.5 h-3.5" />Télécharger le modèle
+                <button onClick={downloadTemplate} className="btn-icon" title="Télécharger le modèle">
+                  <Download className="w-4 h-4" />
                 </button>
               </div>
               <div
@@ -1102,7 +1118,7 @@ export function Tiers() {
                   </div>
                 </div>
               )}
-              <button onClick={() => setImportExportOpen(false)} className="btn-primary w-full">Fermer</button>
+              <button onClick={() => setImportExportOpen(false)} className="btn-icon w-full justify-center" title="Fermer"><X className="w-4 h-4" /></button>
             </div>
           )}
         </div>
@@ -1111,9 +1127,9 @@ export function Tiers() {
       {/* Balance adjustment modal */}
       <Modal open={balanceOpen && !!balanceTarget} onClose={() => { setBalanceOpen(false); setBalanceTarget(null); }} title="Positionner le solde" size="sm"
         footer={<>
-          <button onClick={() => setBalanceOpen(false)} className="btn-secondary">Annuler</button>
-          <button onClick={saveBalance} disabled={savingBalance} className="btn-primary">
-            {savingBalance && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer
+          <button onClick={() => setBalanceOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={saveBalance} disabled={savingBalance} className="btn-icon-primary" title="Valider">
+            {savingBalance ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           </button>
         </>}
       >
@@ -1122,7 +1138,20 @@ export function Tiers() {
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
               <div className="text-xs text-slate-500 mb-0.5">{balanceTarget.type === 'customer' ? 'Client' : 'Fournisseur'}</div>
               <div className="text-sm font-bold text-slate-900">{balanceTarget.name}</div>
-              <div className="text-xs text-slate-500 mt-1">Solde actuel: <span className="font-bold num">{formatFCFA(balanceTarget.currentBalance)}</span></div>
+              {(() => {
+                const net = balanceTarget.currentBalance - balanceTarget.prepay - balanceTarget.avoir;
+                if (balanceTarget.prepay > 0 || balanceTarget.avoir > 0) {
+                  return (
+                    <div className="mt-1.5 space-y-0.5">
+                      <div className="text-xs text-slate-500">Dette comptable: <span className="font-bold num text-amber-600">{formatFCFA(balanceTarget.currentBalance)}</span></div>
+                      {balanceTarget.prepay > 0 && <div className="text-xs text-slate-500">Acompte disponible: <span className="font-bold num text-emerald-600">{formatFCFA(balanceTarget.prepay)}</span></div>}
+                      {balanceTarget.avoir > 0 && <div className="text-xs text-slate-500">Avoir disponible: <span className="font-bold num text-teal-600">{formatFCFA(balanceTarget.avoir)}</span></div>}
+                      <div className="text-xs text-slate-700 pt-1 border-t border-slate-200 mt-1">Position nette: <span className={`font-bold num ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-slate-500'}`}>{formatFCFA(net)}</span></div>
+                    </div>
+                  );
+                }
+                return <div className="text-xs text-slate-500 mt-1">Solde actuel: <span className="font-bold num">{formatFCFA(balanceTarget.currentBalance)}</span></div>;
+              })()}
             </div>
             <div>
               <label className="label">Nouveau solde (FCFA)</label>
@@ -1134,7 +1163,7 @@ export function Tiers() {
                 placeholder="0"
                 autoFocus
               />
-              <p className="text-[10px] text-slate-400 mt-1">Un solde positif indique une créance (le tiers doit de l'argent). Négatif = avoir.</p>
+              <p className="text-[10px] text-slate-400 mt-1">Positionnez la dette comptable. Les acomptes et avoirs réduisent automatiquement la position nette. Positif = le tiers doit; Négatif = vous devez au tiers.</p>
             </div>
             <div>
               <label className="label">Note (optionnel)</label>
@@ -1150,8 +1179,10 @@ export function Tiers() {
         onClose={() => setBalanceOpen(false)}
         customers={tab === 'customers' ? filteredCustomers : []}
         suppliers={tab === 'suppliers' ? filteredSuppliers : []}
-        onSelect={(id, name, type, bal) => openBalanceAdjust(id, name, type, bal)}
+        onSelect={(id, name, type, bal, prepay, avoir) => openBalanceAdjust(id, name, type, bal, prepay, avoir)}
         tab={tab}
+        prepayMap={prepayMap}
+        avoirMap={avoirMap}
       />
     </div>
   );
@@ -1171,14 +1202,15 @@ function Badge({ tone, children }: { tone: 'neutral' | 'emerald' | 'amber' | 're
 }
 
 /* ───────────────────────── Customer list ───────────────────────── */
-function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClickRow }: {
+function CustomerList({ list, total, dueMap, paidMap, totalMap, prepayMap, avoirMap, onCreate, onClickRow }: {
   list: Customer[]; total: number;
   dueMap: Record<string, number>; paidMap: Record<string, number>; totalMap: Record<string, number>;
+  prepayMap: Record<string, number>; avoirMap: Record<string, number>;
   onCreate: () => void; onClickRow: (c: Customer) => void;
 }) {
   if (list.length === 0) {
     return total === 0
-      ? <div className="card"><EmptyState icon={Users} title="Aucun client" description="Créez votre premier client pour démarrer." action={<button onClick={onCreate} className="btn-primary"><Plus className="w-4 h-4" />Nouveau client</button>} /></div>
+      ? <div className="card"><EmptyState icon={Users} title="Aucun client" description="Créez votre premier client pour démarrer." action={<button onClick={onCreate} className="btn-icon-primary" title="Nouveau client"><Plus className="w-4 h-4" /></button>} /></div>
       : <div className="card"><EmptyState icon={Users} title="Aucun résultat" description="Aucun client ne correspond à votre recherche." /></div>;
   }
   return (
@@ -1217,11 +1249,46 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, onCreate, onClic
                 {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200">Inactif</span>}
               </div>
             </div>
-            {/* Row 2: solde label + amount */}
-            <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde comptable</span>
-              <span className={`text-[12px] font-black tabular-nums ${balance > 0 ? 'text-amber-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{formatFCFA(balance)}</span>
-            </div>
+            {/* Row 2: net position label + amount */}
+            {(() => {
+              const prepay = prepayMap[c.id] || 0;
+              const avoir = avoirMap[c.id] || 0;
+              const applied = Math.min(prepay, Math.max(0, balance));
+              const avoirApp = Math.min(avoir, Math.max(0, balance - applied));
+              const netDebt = Math.max(0, balance - applied - avoirApp);
+              const excessPrepay = prepay - applied;
+              const excessAvoir = avoir - avoirApp;
+              if (netDebt > 0) {
+                return (
+                  <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-500">Solde à payer</span>
+                    <span className="text-[12px] font-black tabular-nums text-amber-600">{formatFCFA(netDebt)}</span>
+                  </div>
+                );
+              }
+              if (excessPrepay > 0) {
+                return (
+                  <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-500">Acompte disponible</span>
+                    <span className="text-[12px] font-black tabular-nums text-emerald-600">{formatFCFA(excessPrepay)}</span>
+                  </div>
+                );
+              }
+              if (excessAvoir > 0) {
+                return (
+                  <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-teal-500">Avoir disponible</span>
+                    <span className="text-[12px] font-black tabular-nums text-teal-600">{formatFCFA(excessAvoir)}</span>
+                  </div>
+                );
+              }
+              return (
+                <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde</span>
+                  <span className="text-[12px] font-black tabular-nums text-slate-300">0 FCFA</span>
+                </div>
+              );
+            })()}
           </button>
         );
       })}
@@ -1237,7 +1304,7 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
 }) {
   if (list.length === 0) {
     return total === 0
-      ? <div className="card"><EmptyState icon={Truck} title="Aucun fournisseur" description="Créez votre premier fournisseur." action={<button onClick={onCreate} className="btn-primary"><Plus className="w-4 h-4" />Nouveau fournisseur</button>} /></div>
+      ? <div className="card"><EmptyState icon={Truck} title="Aucun fournisseur" description="Créez votre premier fournisseur." action={<button onClick={onCreate} className="btn-icon-primary" title="Nouveau fournisseur"><Plus className="w-4 h-4" /></button>} /></div>
       : <div className="card"><EmptyState icon={Truck} title="Aucun résultat" description="Aucun fournisseur ne correspond à votre recherche." /></div>;
   }
   return (
@@ -1318,9 +1385,9 @@ function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate,
           })}
         </div>
         <div className="px-3 pb-4 pt-1 border-t border-slate-100 flex gap-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
-          {onEdit && <button onClick={onEdit} className="flex-1 btn-secondary justify-center"><Edit2 className="w-4 h-4" />Modifier</button>}
-          {onReactivate && <button onClick={onReactivate} className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors"><RotateCcw className="w-4 h-4" />Réactiver</button>}
-          {onDeactivate && <button onClick={onDeactivate} className="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-colors"><Trash2 className="w-4 h-4" />Supprimer</button>}
+          {onEdit && <button onClick={onEdit} className="flex-1 btn-icon justify-center" title="Modifier"><Edit2 className="w-4 h-4" /></button>}
+          {onReactivate && <button onClick={onReactivate} className="flex-1 btn-icon-success" title="Réactiver"><RotateCcw className="w-4 h-4" /></button>}
+          {onDeactivate && <button onClick={onDeactivate} className="flex-1 btn-icon-danger" title="Supprimer"><Trash2 className="w-4 h-4" /></button>}
         </div>
       </div>
     </div>
@@ -1364,6 +1431,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const [prepayments, setPrepayments] = useState<{ id: string; amount: number; amount_used: number; method_name: string; reference: string; created_at: string }[]>([]);
   const [avoirs, setAvoirs] = useState<{ id: string; return_number: string; total: number; credit_used: number; created_at: string; refunded_at?: string | null }[]>([]);
   const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
+  const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; reason: string; reference: string; created_at: string }[]>([]);
 
   const c = useMemo(() => ({ ...initialC, balance: customerBalance } as any), [initialC, customerBalance]);
 
@@ -1386,14 +1454,16 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     if (!payMethod && realMethods.length) setPayMethod(realMethods[0].id);
 
     const salesIds = ss.map(s => s.id);
-    const [{ data: prepays }, { data: avoirRows }, { data: adjRows }] = await Promise.all([
+    const [{ data: prepays }, { data: avoirRows }, { data: adjRows }, { data: withdrawalRows }] = await Promise.all([
       supabase.from('customer_prepayments').select('id, amount, amount_used, method_name, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }),
       supabase.from('sale_returns').select('id, return_number, total, credit_used, created_at, refunded_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('status', 'approved').eq('refund_method', 'avoir').order('created_at', { ascending: false }),
       supabase.from('balance_adjustments').select('id, amount, note, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'customer').eq('entity_id', c.id).order('created_at', { ascending: false }),
+      supabase.from('cash_movements').select('id, amount, reason, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('kind', 'customer_withdrawal').order('created_at', { ascending: false }),
     ]);
     setPrepayments(prepays || []);
     setAvoirs(avoirRows || []);
     setBalanceAdjs(adjRows || []);
+    setWithdrawals(withdrawalRows || []);
 
     if (salesIds.length) {
       const [{ data: pays }, { data: items }] = await Promise.all([
@@ -1448,7 +1518,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   }, [sales, realPayments, c]);
 
   const ledger = useMemo(() => {
-    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' | 'adjustment' };
+    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' | 'adjustment' | 'withdrawal' };
     const rows: Row[] = [];
     balanceAdjs.forEach(adj => {
       const amt = Number(adj.amount);
@@ -1469,16 +1539,22 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       const s = sales.find(x => x.id === p.sale_id);
       rows.push({ id: 'p-' + p.id, ts: p.created_at, label: `Règlement${p.method_name ? ' · ' + p.method_name : ''}`, ref: s?.sale_number || '', debit: 0, credit: Number(p.amount), kind: 'payment' });
     });
+    const totalWithdrawals = withdrawals.reduce((a, w) => a + Number(w.amount), 0);
+    const oldestPrepayId = prepayments.length > 0 ? prepayments[prepayments.length - 1].id : null;
     prepayments.forEach(pp => {
       const unused = Math.max(0, Number(pp.amount) - Number(pp.amount_used));
-      if (unused > 0) {
-        rows.push({ id: 'pp-' + pp.id, ts: pp.created_at, label: `Acompte · avoir${pp.method_name ? ' · ' + pp.method_name : ''}`, ref: pp.reference || '', debit: 0, credit: unused, kind: 'payment' });
+      const credit = unused + (pp.id === oldestPrepayId ? totalWithdrawals : 0);
+      if (credit > 0) {
+        rows.push({ id: 'pp-' + pp.id, ts: pp.created_at, label: `Acompte · avoir${pp.method_name ? ' · ' + pp.method_name : ''}`, ref: pp.reference || '', debit: 0, credit, kind: 'payment' });
       }
+    });
+    withdrawals.forEach(w => {
+      rows.push({ id: 'wd-' + w.id, ts: w.created_at, label: 'Retrait caisse' + (w.reason ? ' · ' + w.reason : ''), ref: w.reference || '', debit: Number(w.amount), credit: 0, kind: 'withdrawal' });
     });
     rows.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
     let running = 0;
     return rows.map(r => { running += r.debit - r.credit; return { ...r, running }; });
-  }, [sales, realPayments, prepayments, avoirs, balanceAdjs]);
+  }, [sales, realPayments, prepayments, avoirs, balanceAdjs, withdrawals]);
 
   const filteredDocs = useMemo(() => sales.filter(s => {
     if (dateFrom && new Date(s.created_at) < new Date(dateFrom)) return false;
@@ -1589,6 +1665,12 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     });
   };
 
+  const prepayApplied = Math.min(totals.unusedPrepay, Math.max(0, customerBalance));
+  const avoirApplied = Math.min(totals.unusedAvoir, Math.max(0, customerBalance - prepayApplied));
+  const netDebt = Math.max(0, customerBalance - prepayApplied - avoirApplied);
+  const excessPrepay = totals.unusedPrepay - prepayApplied;
+  const excessAvoir = totals.unusedAvoir - avoirApplied;
+
   const modalTitle = key === 'info' ? 'Compte client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
 
   return (
@@ -1612,14 +1694,32 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
           </div>
           {key !== 'pricing' && !loading && (
           <div className="text-right">
-            <div className={`${customerBalance > 0 ? 'text-amber-700' : customerBalance < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
-              <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
-              <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(customerBalance)}</div>
-            </div>
-            {totals.unusedAvoir > 0 && (
+            {netDebt > 0 ? (
+              <div className="text-amber-700">
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
+                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(netDebt)}</div>
+              </div>
+            ) : customerBalance < 0 ? (
+              <div className="text-emerald-700">
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde créditeur</div>
+                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(Math.abs(customerBalance))}</div>
+              </div>
+            ) : (
+              <div className="text-slate-500">
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde</div>
+                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">0 FCFA</div>
+              </div>
+            )}
+            {excessPrepay > 0 && (
+              <div className="text-emerald-700 mt-1">
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Acompte disponible</div>
+                <div className="text-xs font-bold tabular-nums leading-none mt-0.5">{formatFCFA(excessPrepay)}</div>
+              </div>
+            )}
+            {excessAvoir > 0 && (
               <div className="text-teal-700 mt-1">
                 <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Avoir disponible</div>
-                <div className="text-xs font-bold tabular-nums leading-none mt-0.5">-{formatFCFA(totals.unusedAvoir)}</div>
+                <div className="text-xs font-bold tabular-nums leading-none mt-0.5">{formatFCFA(excessAvoir)}</div>
               </div>
             )}
           </div>
@@ -1737,8 +1837,8 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
           )}
         </button>
         {(dateFrom || dateTo) && (
-          <button onClick={onClearDates} className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors">
-            <X className="w-3 h-3" /> Effacer
+          <button onClick={onClearDates} className="inline-flex items-center justify-center w-7 h-7 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Effacer">
+            <X className="w-3.5 h-3.5" />
           </button>
         )}
         <div className="flex items-center gap-1 ml-auto">
@@ -1920,9 +2020,8 @@ function PaymentForm({
         <input value={payRef} onChange={e => setPayRef(e.target.value)} className="input" placeholder="N° bordereau, transaction…" />
       </div>
 
-      <button onClick={onSubmit} disabled={paying || !paySale || amt <= 0} className="btn-primary w-full justify-center py-3 text-sm">
-        {paying && <Loader2 className="w-4 h-4 animate-spin" />}
-        Valider le règlement
+      <button onClick={onSubmit} disabled={paying || !paySale || amt <= 0} className="btn-icon-primary w-full justify-center py-3" title="Valider le règlement">
+        {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
       </button>
 
       {recentPayments.length > 0 && (
@@ -2007,7 +2106,7 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
             <Calendar className="w-3.5 h-3.5" />
             {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
           </button>
-          {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1">Effacer <X className="w-3 h-3" /></button>}
+          {(dateFrom || dateTo) && <button onClick={onClearDates} className="inline-flex items-center justify-center w-6 h-6 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Effacer"><X className="w-3 h-3" /></button>}
           <span className="ml-auto text-[11px] text-slate-500">{docs.length} document{docs.length > 1 ? 's' : ''}</span>
         </div>
         {docs.length === 0 ? <div className="text-sm text-slate-500 py-8 text-center">Aucun document sur cette période.</div> : (
@@ -2487,8 +2586,8 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
           )}
         </button>
         {(dateFrom || dateTo) && (
-          <button onClick={onClearDates} className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors">
-            <X className="w-3 h-3" /> Effacer
+          <button onClick={onClearDates} className="inline-flex items-center justify-center w-7 h-7 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Effacer">
+            <X className="w-3.5 h-3.5" />
           </button>
         )}
         <div className="flex items-center gap-1 ml-auto">
@@ -2676,9 +2775,8 @@ function SupplierPaymentForm({
         <span className="text-[10px] font-bold uppercase tracking-wider text-brand-700 ml-auto">Caisse</span>
       </div>
 
-      <button onClick={onSubmit} disabled={paying || amt <= 0} className="btn-primary w-full justify-center py-3 text-sm">
-        {paying && <Loader2 className="w-4 h-4 animate-spin" />}
-        Valider le règlement
+      <button onClick={onSubmit} disabled={paying || amt <= 0} className="btn-icon-primary w-full justify-center py-3" title="Valider le règlement">
+        {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
       </button>
 
       {recentPayments.length > 0 && (
@@ -2762,7 +2860,7 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
             <Calendar className="w-3.5 h-3.5" />
             {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
           </button>
-          {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1">Effacer <X className="w-3 h-3" /></button>}
+          {(dateFrom || dateTo) && <button onClick={onClearDates} className="inline-flex items-center justify-center w-6 h-6 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Effacer"><X className="w-3 h-3" /></button>}
           <span className="ml-auto text-[11px] text-slate-500">{docs.length} document{docs.length > 1 ? 's' : ''}</span>
         </div>
         {docs.length === 0 ? <div className="text-sm text-slate-500 py-8 text-center">Aucune commande sur cette période.</div> : (
@@ -2827,7 +2925,7 @@ function OrderViewModal({ data, supplierName, onClose, onPrint }: { data: { orde
             <div className="text-base font-bold text-slate-900 font-mono">{order.order_number}</div>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={onPrint} className="btn-secondary text-xs py-1.5 px-3"><FileText className="w-3.5 h-3.5" />Imprimer</button>
+            <button onClick={onPrint} className="btn-icon" title="Imprimer"><FileText className="w-4 h-4" /></button>
             <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500"><X className="w-5 h-5" /></button>
           </div>
         </div>
@@ -2964,9 +3062,8 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
             <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Note</label>
             <input value={newNote} onChange={e => setNewNote(e.target.value)} className="input text-xs" placeholder="Optionnelle" />
           </div>
-          <button onClick={addPrice} disabled={saving || !newArticleId || newPrice === ''} className="btn-primary text-xs h-9 px-3 whitespace-nowrap">
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-            Ajouter
+          <button onClick={addPrice} disabled={saving || !newArticleId || newPrice === ''} className="btn-icon-primary" title="Ajouter">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -3012,11 +3109,13 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
 }
 
 /* ───────────────────────── Balance Quick Select ───────────────────────── */
-function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab }: {
+function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab, prepayMap, avoirMap }: {
   open: boolean; onClose: () => void;
   customers: Customer[]; suppliers: Supplier[];
-  onSelect: (id: string, name: string, type: 'customer' | 'supplier', balance: number) => void;
+  onSelect: (id: string, name: string, type: 'customer' | 'supplier', balance: number, prepay: number, avoir: number) => void;
   tab: 'customers' | 'suppliers';
+  prepayMap: Record<string, number>;
+  avoirMap: Record<string, number>;
 }) {
   const [search, setSearch] = useState('');
   const items = tab === 'customers'
@@ -3039,7 +3138,7 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
           {items.map((item: any) => (
             <button
               key={item.id}
-              onClick={() => { onClose(); onSelect(item.id, item.name, tab === 'customers' ? 'customer' : 'supplier', Number(item.balance || 0)); }}
+              onClick={() => { onClose(); onSelect(item.id, item.name, tab === 'customers' ? 'customer' : 'supplier', Number(item.balance || 0), tab === 'customers' ? (prepayMap[item.id] || 0) : 0, tab === 'customers' ? (avoirMap[item.id] || 0) : 0); }}
               className="w-full flex items-center justify-between gap-2 p-2.5 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all text-left"
             >
               <div className="min-w-0">
@@ -3047,10 +3146,30 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
                 <div className="text-[10px] text-slate-400">{item.phone || item.email || '-'}</div>
               </div>
               <div className="text-right shrink-0">
-                <div className={`text-xs font-bold num ${Number(item.balance || 0) > 0 ? 'text-amber-600' : Number(item.balance || 0) < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  {formatFCFA(Number(item.balance || 0))}
-                </div>
-                <div className="text-[9px] text-slate-400">solde actuel</div>
+                {(() => {
+                  const bal = Number(item.balance || 0);
+                  const prepay = tab === 'customers' ? (prepayMap[item.id] || 0) : 0;
+                  const avoir = tab === 'customers' ? (avoirMap[item.id] || 0) : 0;
+                  const net = bal - prepay - avoir;
+                  if (prepay > 0 || avoir > 0) {
+                    return (
+                      <>
+                        <div className={`text-xs font-bold num ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          {formatFCFA(net)}
+                        </div>
+                        <div className="text-[9px] text-slate-400">position nette</div>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <div className={`text-xs font-bold num ${bal > 0 ? 'text-amber-600' : bal < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {formatFCFA(bal)}
+                      </div>
+                      <div className="text-[9px] text-slate-400">solde actuel</div>
+                    </>
+                  );
+                })()}
               </div>
             </button>
           ))}

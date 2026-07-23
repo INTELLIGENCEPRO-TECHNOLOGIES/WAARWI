@@ -60,7 +60,7 @@ export function generateFeatureText(limits: PlanLimits): string[] {
   features.push(limits.sites === -1 ? 'Magasins illimités' : `${limits.sites} magasin${limits.sites > 1 ? 's' : ''}`);
   features.push(limits.users === -1 ? 'Utilisateurs illimités' : `${limits.users} utilisateur${limits.users > 1 ? 's' : ''}`);
   if (limits.online_shop) features.push('Boutique en ligne');
-  if (limits.supplier_orders) features.push('Commandes fournisseurs');
+  if (limits.supplier_orders) features.push('Achats');
   if (limits.accounting) features.push('Comptabilité SYSCOHADA');
   if (limits.has_advanced_reports) features.push('Rapports avancés');
   if (limits.has_whatsapp) features.push('Notifications WhatsApp');
@@ -81,7 +81,7 @@ export const LIMIT_LABELS: Record<string, string> = {
 export const MODULE_LABELS: Record<string, string> = {
   online_shop: 'Boutique en ligne',
   accounting: 'Comptabilité',
-  supplier_orders: 'Commandes fournisseurs',
+  supplier_orders: 'Achats',
   has_whatsapp: 'Notifications WhatsApp',
   has_multi_store: 'Multi-magasins',
   has_advanced_reports: 'Rapports avancés',

@@ -209,7 +209,7 @@ Deno.serve(async (req: Request) => {
     if (action === "update_tenant") {
       const { tenant_id, patch } = body;
       if (!tenant_id || !patch) return json({ error: "Paramètres manquants" }, 400);
-      const allowed = ["status", "plan", "plan_expires_at", "is_active", "name", "legal_name", "email", "phone", "business_type", "business_activity_type_id", "enabled_modules", "custom_domain", "subdomain", "billing_cycle", "auto_renew", "subscription_status", "subscription_start_date", "trial_start_date", "trial_end_date"];
+      const allowed = ["status", "plan", "plan_expires_at", "is_active", "name", "legal_name", "email", "phone", "whatsapp_phone", "business_type", "business_activity_type_id", "enabled_modules", "custom_domain", "subdomain", "billing_cycle", "auto_renew", "subscription_status", "subscription_start_date", "trial_start_date", "trial_end_date"];
       const clean: Record<string, unknown> = {};
       for (const k of allowed) if (k in patch) clean[k] = patch[k];
       const { error } = await admin.from("tenants").update(clean).eq("id", tenant_id);

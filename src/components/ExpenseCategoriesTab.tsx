@@ -123,10 +123,10 @@ export function ExpenseCategoriesTab() {
             <button
               onClick={add}
               disabled={adding || !newName.trim()}
-              className="h-10 px-4 rounded-xl bg-brand-600 text-white text-[12px] font-bold inline-flex items-center gap-1.5 hover:bg-brand-700 active:scale-[0.98] transition-all disabled:opacity-40"
+              className="btn-icon-primary"
+              title="Ajouter"
             >
-              {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-              Ajouter
+              {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             </button>
           </div>
 
@@ -136,10 +136,10 @@ export function ExpenseCategoriesTab() {
               <button
                 onClick={seedDefaults}
                 disabled={seeding}
-                className="inline-flex items-center gap-1.5 px-4 h-10 rounded-xl border border-slate-200 bg-slate-50 text-[12px] font-bold text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-40"
+                className="btn-icon"
+                title="Créer les types par défaut"
               >
-                {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                Créer les types par défaut
+                {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
               </button>
             </div>
           ) : (

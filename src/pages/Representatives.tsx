@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Plus, Loader2, Pencil, BarChart3, Users, Search, X, Power,
+  Plus, Loader2, Pencil, BarChart3, Users, Search, X, Power, Check,
   BadgePercent, TrendingUp, Receipt, Wallet, UserCheck, Download, Printer, Trash2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -305,8 +305,8 @@ export function Representatives() {
           <p className="text-xs text-neutral-400">Gestion des représentants commerciaux et suivi des ventes</p>
         </div>
         {canManage && tab === 'list' && (
-          <button onClick={openCreate} className="btn-primary flex items-center gap-2 text-sm">
-            <Plus className="w-4 h-4" /> Nouveau représentant
+          <button onClick={openCreate} className="btn-icon-primary" title="Nouveau représentant">
+            <Plus className="w-4 h-4" />
           </button>
         )}
       </div>
@@ -451,8 +451,8 @@ export function Representatives() {
             <div className="flex-1" />
             {can('rep_export') && (
               <div className="flex gap-2">
-                <button onClick={printReport} className="btn-secondary h-9 text-[12px] flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> Imprimer</button>
-                <button onClick={exportExcel} className="btn-secondary h-9 text-[12px] flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> Excel</button>
+                <button onClick={printReport} className="btn-icon h-9" title="Imprimer"><Printer className="w-4 h-4" /></button>
+                <button onClick={exportExcel} className="btn-icon h-9" title="Export Excel"><Download className="w-4 h-4" /></button>
               </div>
             )}
           </div>
@@ -531,9 +531,9 @@ export function Representatives() {
       {/* Create / Edit modal */}
       <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Modifier le représentant' : 'Nouveau représentant'} size="md"
         footer={<>
-          <button onClick={() => setFormOpen(false)} className="btn-secondary">Annuler</button>
-          <button onClick={saveRep} disabled={saving} className="btn-primary flex items-center gap-2">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />} {editingId ? 'Enregistrer' : 'Créer'}
+          <button onClick={() => setFormOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={saveRep} disabled={saving} className="btn-icon-primary" title={editingId ? 'Enregistrer' : 'Créer'}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           </button>
         </>}
       >

@@ -184,6 +184,17 @@ async function fetchCashStats(
   const { data, error } = await q;
   if (error) throw error;
 
+  // Fetch approved returns in the same period
+  let rq = supabase
+    .from('sale_returns')
+    .select('id, total, created_at, customer_id, refund_method, sale_return_items(article_id, quantity, unit_price, purchase_cost)')
+    .eq('tenant_id', tenantId)
+    .eq('status', 'approved')
+    .gte('created_at', `${from}T00:00:00`)
+    .lte('created_at', `${to}T23:59:59`);
+  if (siteId) rq = rq.eq('site_id', siteId);
+  const { data: returns } = await rq;
+
   const byDay = new Map<string, { revenue: number; txCount: number; cost: number; paid: number; credit: number }>();
   const byMethod = new Map<string, number>();
   const byArticle = new Map<string, { name: string; qty: number; revenue: number; cost: number }>();
@@ -220,6 +231,39 @@ async function fetchCashStats(
     }
   }
 
+  // Subtract returns from totals
+  for (const ret of (returns || [])) {
+    const retTotal = Number(ret.total) || 0;
+    const day = ret.created_at.split('T')[0];
+    const retCost = ((ret.sale_return_items || []) as any[])
+      .reduce((s: number, i: any) => s + ((i.purchase_cost || 0) * i.quantity), 0);
+
+    totalRevenue -= retTotal;
+    totalCost -= retCost;
+    totalPaid -= retTotal;
+
+    const prev = byDay.get(day) || { revenue: 0, txCount: 0, cost: 0, paid: 0, credit: 0 };
+    byDay.set(day, {
+      revenue: prev.revenue - retTotal, txCount: prev.txCount,
+      cost: prev.cost - retCost, paid: prev.paid - retTotal, credit: prev.credit,
+    });
+
+    // Subtract from payment method
+    const method = ret.refund_method === 'cash' ? 'Espèces' : ret.refund_method || 'Espèces';
+    byMethod.set(method, (byMethod.get(method) || 0) - retTotal);
+
+    // Subtract from article stats
+    for (const item of ((ret.sale_return_items || []) as any[])) {
+      const artId = item.article_id || '__unknown__';
+      const artRev = item.unit_price * item.quantity;
+      const artCost = (item.purchase_cost || 0) * item.quantity;
+      const ap = byArticle.get(artId);
+      if (ap) {
+        byArticle.set(artId, { name: ap.name, qty: ap.qty - item.quantity, revenue: ap.revenue - artRev, cost: ap.cost - artCost });
+      }
+    }
+  }
+
   return {
     totalRevenue, totalCost, totalPaid, totalCredit,
     txCount: (data || []).length,
@@ -227,9 +271,11 @@ async function fetchCashStats(
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([date, v]) => ({ date, ...v })),
     byMethod: Array.from(byMethod.entries())
+      .filter(([, amount]) => amount !== 0)
       .sort((a, b) => b[1] - a[1])
       .map(([method, amount]) => ({ method, amount })),
     byArticle: Array.from(byArticle.values())
+      .filter(a => a.qty > 0 || a.revenue > 0)
       .sort((a, b) => b.revenue - a.revenue),
   };
 }
@@ -248,6 +294,17 @@ async function fetchArticleStats(
   const { data, error } = await q;
   if (error) throw error;
 
+  // Fetch return items in same period
+  let rq = supabase
+    .from('sale_return_items')
+    .select('article_id, quantity, unit_price, purchase_cost, sale_returns!inner(tenant_id, site_id, created_at, status)')
+    .eq('sale_returns.tenant_id', tenantId)
+    .eq('sale_returns.status', 'approved')
+    .gte('sale_returns.created_at', `${from}T00:00:00`)
+    .lte('sale_returns.created_at', `${to}T23:59:59`);
+  if (siteId) rq = rq.eq('sale_returns.site_id', siteId);
+  const { data: retItems } = await rq;
+
   const map = new Map<string, { name: string; qty: number; revenue: number; cost: number }>();
   for (const row of (data || [])) {
     const key = row.article_id;
@@ -257,7 +314,19 @@ async function fetchArticleStats(
     const prev = map.get(key) || { name, qty: 0, revenue: 0, cost: 0 };
     map.set(key, { name, qty: prev.qty + row.quantity, revenue: prev.revenue + rev, cost: prev.cost + cost });
   }
-  return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+
+  // Subtract returned quantities
+  for (const row of (retItems || [])) {
+    const key = row.article_id;
+    const rev = row.unit_price * row.quantity;
+    const cost = (row.purchase_cost || 0) * row.quantity;
+    const prev = map.get(key);
+    if (prev) {
+      map.set(key, { name: prev.name, qty: prev.qty - row.quantity, revenue: prev.revenue - rev, cost: prev.cost - cost });
+    }
+  }
+
+  return Array.from(map.values()).filter(a => a.qty > 0 || a.revenue > 0).sort((a, b) => b.revenue - a.revenue);
 }
 
 async function fetchCustomerStats(
@@ -274,6 +343,17 @@ async function fetchCustomerStats(
   const { data, error } = await q;
   if (error) throw error;
 
+  // Fetch approved returns
+  let rq = supabase
+    .from('sale_returns')
+    .select('id, total, customer_id, sale_return_items(quantity, purchase_cost)')
+    .eq('tenant_id', tenantId)
+    .eq('status', 'approved')
+    .gte('created_at', `${from}T00:00:00`)
+    .lte('created_at', `${to}T23:59:59`);
+  if (siteId) rq = rq.eq('site_id', siteId);
+  const { data: returns } = await rq;
+
   const map = new Map<string, { name: string; txCount: number; revenue: number; paid: number; credit: number; cost: number }>();
   for (const row of (data || [])) {
     const key = row.customer_id || '__counter__';
@@ -285,6 +365,19 @@ async function fetchCustomerStats(
     const prev = map.get(key) || { name, txCount: 0, revenue: 0, paid: 0, credit: 0, cost: 0 };
     map.set(key, { name, txCount: prev.txCount + 1, revenue: prev.revenue + rev, paid: prev.paid + paid, credit: prev.credit + credit, cost: prev.cost + cost });
   }
+
+  // Subtract returns per customer
+  for (const ret of (returns || [])) {
+    const key = ret.customer_id || '__counter__';
+    const retTotal = Number(ret.total) || 0;
+    const retCost = ((ret.sale_return_items || []) as any[])
+      .reduce((s: number, i: any) => s + ((i.purchase_cost || 0) * i.quantity), 0);
+    const prev = map.get(key);
+    if (prev) {
+      map.set(key, { ...prev, revenue: prev.revenue - retTotal, paid: prev.paid - retTotal, cost: prev.cost - retCost });
+    }
+  }
+
   return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
 }
 

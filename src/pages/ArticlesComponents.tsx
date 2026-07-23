@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, ReactNode } from 'react';
-import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, DollarSign, Boxes, Car, CheckCircle2, Percent, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, Tags, Boxes, Car, CheckCircle2, Percent, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 type TierDefinition = { id: string; tier_name: string; sort_order: number; is_default: boolean };
@@ -212,19 +212,8 @@ export function InfosTab({ form, setForm, editing, categories, suppliers, onGene
         <Field label="Réf. OEM">
           <input value={form.oem_ref || ''} onChange={e => setForm(f => ({ ...f, oem_ref: e.target.value }))} className="premium-input text-sm font-mono" placeholder="Référence fabricant" />
         </Field>
-        <Field label="Réf. fournisseur">
-          <input value={form.supplier_ref || ''} onChange={e => setForm(f => ({ ...f, supplier_ref: e.target.value }))} className="premium-input text-sm font-mono" placeholder="Référence fournisseur" />
-        </Field>
         <Field label="Code-barres">
           <input value={form.barcode || ''} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className="premium-input text-sm font-mono" placeholder="EAN / UPC" />
-        </Field>
-        <Field label="Fournisseur">
-          <PremiumSelect value={form.supplier_id || ''} onChange={v => setForm(f => ({ ...f, supplier_id: v }))} placeholder="Aucun"
-            options={suppliers.map(s => ({ value: s.id, label: s.name }))} />
-        </Field>
-        <Field label="État">
-          <PremiumSelect value={form.condition || 'neuf'} onChange={v => setForm(f => ({ ...f, condition: v }))}
-            options={[{ value: 'neuf', label: 'Neuf' }, { value: 'occasion', label: 'Occasion' }, { value: 'reconditionne', label: 'Reconditionné' }]} />
         </Field>
         <Field label="Unité">
           <PremiumSelect value={form.unit || 'pièce'} onChange={v => setForm(f => ({ ...f, unit: v }))}
@@ -261,12 +250,6 @@ export function PrixTab({ form, setForm, marginValue, marginStr, showPurchasePri
         )}
         <Field label="Prix de vente détail (FCFA)">
           <PriceInput value={form.sale_price} onChange={v => setForm(f => ({ ...f, sale_price: v === '' ? 0 : v }))} placeholder="Prix de vente" />
-        </Field>
-        <Field label="Prix minimum (FCFA)">
-          <PriceInput value={form.min_price} onChange={v => setForm(f => ({ ...f, min_price: v === '' ? 0 : v }))} placeholder="Prix plancher" />
-        </Field>
-        <Field label="Prix grossiste (FCFA)">
-          <PriceInput value={form.wholesale_price} onChange={v => setForm(f => ({ ...f, wholesale_price: v === '' ? 0 : v }))} placeholder="Prix de gros" />
         </Field>
         <Field label="TVA (%)">
           <PriceInput value={form.vat_rate} onChange={v => setForm(f => ({ ...f, vat_rate: v === '' ? 0 : v }))} placeholder="Taux TVA" />
@@ -465,6 +448,179 @@ export function ImageTab({ currentUrl, uploading, onFileSelect, onDelete }: {
   );
 }
 
+// ── MobileArticleEdit (swipe-based, native-feel modal) ─────
+
+export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, saving, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount }: {
+  form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
+  editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
+  save: () => Promise<void>; saving: boolean;
+  compats: Compat[]; setCompats: (c: Compat[] | ((p: Compat[]) => Compat[])) => void;
+  categories: Category[]; suppliers: any[]; brands: VehicleBrand[]; models: any[];
+  autoMode: boolean; generateRef: () => void; addCompat: () => void; removeCompat: (i: number) => void;
+  imagePreview: string | null; imageUploading: boolean;
+  onFileSelect: (f: File) => void; onDeleteImage: () => void;
+  marginValue: number; marginStr: string;
+  showPurchasePrice: boolean; showMargin: boolean;
+  stockMap: Record<string, number>;
+  formTiers: Array<{ tier_name: string; price: number | '' }>;
+  setFormTiers: (t: Array<{ tier_name: string; price: number | '' }>) => void;
+  tierDefinitions: TierDefinition[];
+  isPharmacy: boolean;
+  onClose: () => void;
+  onPrev?: () => void; onNext?: () => void;
+  editingIndex: number; totalCount: number;
+}) {
+  const BLOCKS: { key: TabKey; label: string; icon: any; short: string }[] = [
+    { key: 'infos', label: 'Informations', icon: Info, short: 'Infos' },
+    { key: 'prix', label: 'Prix et tarifs', icon: Tags, short: 'Prix' },
+    { key: 'stock', label: 'Stock', icon: Boxes, short: 'Stock' },
+    ...(autoMode ? [{ key: 'compat' as TabKey, label: 'Compatibilité véhicules', icon: Car, short: 'Véhicules' }] : []),
+    { key: 'image', label: 'Image', icon: Camera, short: 'Image' },
+  ];
+  const tabKeys = BLOCKS.map(b => b.key);
+  const activeIdx = Math.max(0, tabKeys.indexOf(tab));
+  const activeBlock = BLOCKS[activeIdx];
+
+  // Swipe gesture state
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const [slideDir, setSlideDir] = useState<'left' | 'right'>('right');
+  const [dragX, setDragX] = useState(0);
+
+  const goToTab = (next: TabKey, dir: 'left' | 'right') => {
+    setSlideDir(dir);
+    setDragX(0);
+    setTab(next);
+  };
+
+  const goDelta = (delta: number) => {
+    const nextIdx = activeIdx + delta;
+    if (nextIdx < 0 || nextIdx >= tabKeys.length) return;
+    goToTab(tabKeys[nextIdx], delta > 0 ? 'left' : 'right');
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    setDragX(0);
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const dx = e.touches[0].clientX - touchStart.current.x;
+    const dy = e.touches[0].clientY - touchStart.current.y;
+    // Only follow horizontal drag if it's clearly horizontal (not vertical scroll)
+    if (Math.abs(dx) > Math.abs(dy) * 1.4 && Math.abs(dx) > 10) {
+      setDragX(dx);
+    }
+  };
+  const onTouchEnd = () => {
+    if (!touchStart.current) return;
+    const threshold = 60;
+    if (dragX <= -threshold) goDelta(1);
+    else if (dragX >= threshold) goDelta(-1);
+    setDragX(0);
+    touchStart.current = null;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center animate-fade-in">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      {/* Full-screen sheet */}
+      <div className="relative w-full bg-white shadow-premium flex flex-col h-full sm:max-w-none rounded-none animate-fade-in overflow-hidden">
+
+        {/* Header with icon actions — no big footer buttons */}
+        <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-slate-100">
+          <button onClick={onClose} aria-label="Annuler"
+            className="shrink-0 w-9 h-9 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 active:scale-90 transition-all flex items-center justify-center">
+            <X className="w-[18px] h-[18px]" />
+          </button>
+
+          <div className="flex-1 min-w-0 px-1">
+            <div className="text-[9px] font-bold uppercase tracking-wider text-teal-700 leading-none">
+              {editing ? 'Modification' : 'Nouvel article'}
+              {totalCount > 0 && <span className="text-slate-400"> · {editingIndex + 1}/{totalCount}</span>}
+            </div>
+            <h2 className="text-sm font-bold text-slate-900 leading-tight mt-0.5 break-words">
+              {form.name || 'Sans titre'}
+            </h2>
+          </div>
+
+          {/* Prev/next article navigation (edit mode) */}
+          {editing && (onPrev || onNext) && (
+            <div className="shrink-0 flex items-center gap-0.5">
+              <button onClick={onPrev} disabled={!onPrev} aria-label="Article précédent"
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-25 disabled:hover:bg-transparent active:scale-90 transition-all flex items-center justify-center">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <button onClick={onNext} disabled={!onNext} aria-label="Article suivant"
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-25 disabled:hover:bg-transparent active:scale-90 transition-all flex items-center justify-center">
+                <ArrowRightIcon className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Save — compact branded icon button */}
+          <button onClick={save} disabled={saving} aria-label="Enregistrer"
+            className="shrink-0 w-10 h-10 rounded-xl bg-teal-700 text-white shadow-sm hover:bg-teal-800 active:scale-90 transition-all disabled:opacity-50 flex items-center justify-center">
+            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+          </button>
+        </div>
+
+        {/* Section indicator — icon-only segmented control + active label */}
+        <div className="shrink-0 px-3 pt-3 pb-2.5 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-lg bg-teal-50 text-teal-700">
+                {(() => { const I = activeBlock.icon; return <I className="w-3.5 h-3.5" />; })()}
+              </span>
+              <span className="text-xs font-bold text-slate-800 truncate">{activeBlock.label}</span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 tabular-nums shrink-0">
+              {activeIdx + 1} / {tabKeys.length}
+            </span>
+          </div>
+
+          {/* Icon-only segmented progress bar */}
+          <div className="flex items-center gap-1.5">
+            {BLOCKS.map((b, i) => {
+              const I = b.icon;
+              const active = i === activeIdx;
+              const done = i < activeIdx;
+              return (
+                <button key={b.key} onClick={() => goToTab(b.key, i > activeIdx ? 'left' : 'right')}
+                  className={`flex-1 h-8 rounded-lg flex items-center justify-center transition-all active:scale-95 ${active ? 'bg-teal-700 text-white shadow-sm' : done ? 'bg-teal-50 text-teal-600' : 'bg-slate-100 text-slate-400'}`}
+                  aria-label={b.label}>
+                  <I className="w-4 h-4" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Swipeable content area — fixed via flex-1, only inner scrolls */}
+        <div className="flex-1 overflow-hidden touch-pan-y" style={{ touchAction: 'pan-y' }}>
+          <div
+            className="h-full overflow-y-auto px-4 py-4"
+            style={{ transform: dragX ? `translateX(${dragX * 0.35}px)` : undefined, transition: dragX ? 'none' : 'transform 0.24s cubic-bezier(0.22,1,0.36,1)' }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          >
+            <div key={tab} className={slideDir === 'left' ? 'tab-slide-left' : 'tab-slide-right'}>
+              {tab === 'infos' && <InfosTab form={form} setForm={setForm} editing={!!editing} categories={categories} suppliers={suppliers} onGenerateRef={generateRef} autoMode={autoMode} />}
+              {tab === 'prix' && <PrixTab form={form} setForm={setForm} marginValue={marginValue} marginStr={marginStr} showPurchasePrice={showPurchasePrice} showMargin={showMargin} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions} isPharmacy={isPharmacy} />}
+              {tab === 'stock' && <StockTab form={form} setForm={setForm} editing={!!editing} currentArticle={editing} stockMap={stockMap} />}
+              {tab === 'compat' && autoMode && <CompatTab compats={compats} brands={brands} models={models} onAdd={addCompat} onRemove={removeCompat} onUpdate={(i, patch) => setCompats((arr: Compat[]) => arr.map((x, j) => j === i ? { ...x, ...patch } : x))} />}
+              {tab === 'image' && <ImageTab currentUrl={imagePreview} uploading={imageUploading} onFileSelect={onFileSelect} onDelete={onDeleteImage} />}
+            </div>
+          </div>
+        </div>
+
+        {/* Minimal bottom safe area */}
+        <div className="shrink-0 h-[env(safe-area-inset-bottom,0px)] bg-white" />
+      </div>
+    </div>
+  );
+}
+
 // ── DesktopListView (inline-editable table) ────────────────
 
 export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap, suppliers, categories, listEdits, onUpdateEdit, selectionMode, selectedIds, onToggleSelect, onSelectAll, allSelected, onOpenFullScreen, onDelete, showMargin: _showMargin, showStock, showPurchase: _showPurchase, sortCol, sortDir, onSort }: {
@@ -518,7 +674,6 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
               <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('price')}>
                 <span className="inline-flex items-center gap-1 justify-end">Prix détail <SortIcon col="price" /></span>
               </th>
-              <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-slate-50">Prix gros</th>
               <th className="px-2 py-2.5 text-right font-semibold min-w-[60px] bg-slate-50">Stk min</th>
               <th className="px-2 py-2.5 text-left font-semibold min-w-[70px] bg-slate-50">Unité</th>
               <th className="px-2 py-2.5 text-left font-semibold min-w-[100px] bg-slate-50">Fournisseur</th>
@@ -564,10 +719,6 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                   <td className="px-2 py-1.5">
                     <input type="number" value={getVal(a, 'sale_price') || ''} onChange={e => onUpdateEdit(a.id, 'sale_price', e.target.value)}
                       className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-bold text-right text-slate-900 num outline-none transition" min="0" />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <input type="number" value={getVal(a, 'wholesale_price') || ''} onChange={e => onUpdateEdit(a.id, 'wholesale_price', e.target.value)}
-                      className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs text-right text-slate-600 num outline-none transition" min="0" />
                   </td>
                   <td className="px-2 py-1.5">
                     <input type="number" value={getVal(a, 'stock_min') || ''} onChange={e => onUpdateEdit(a.id, 'stock_min', e.target.value)}
@@ -653,7 +804,7 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
 
   const BLOCKS: { key: TabKey; label: string; icon: any }[] = [
     { key: 'infos', label: 'Informations générales', icon: Info },
-    { key: 'prix', label: 'Prix et tarifs', icon: DollarSign },
+    { key: 'prix', label: 'Prix et tarifs', icon: Tags },
     { key: 'stock', label: 'Stock', icon: Boxes },
     ...(autoMode ? [{ key: 'compat' as TabKey, label: 'Compatibilité véhicules', icon: Car }] : []),
     { key: 'image', label: 'Image', icon: Camera },
@@ -670,7 +821,7 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
           <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/80">
             {editing ? 'Modification' : 'Nouvel article'} — {editingIndex + 1}/{totalCount}
           </div>
-          <h2 className="text-base font-bold text-slate-900 truncate">{form.name || 'Sans titre'}</h2>
+          <h2 className="text-base font-bold text-slate-900 break-words leading-tight">{form.name || 'Sans titre'}</h2>
         </div>
 
         {/* Search button */}

@@ -1,5 +1,5 @@
 import { useState, type ReactNode, useEffect, useRef } from 'react';
-import { ChevronDown, AlertCircle, Check, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { ChevronDown, AlertCircle, Check, X, Loader2, Eye, EyeOff, Sparkles } from 'lucide-react';
 
 // ── FormField ───────────────────────────────────────────────────
 
@@ -460,18 +460,20 @@ export function FormActions({
         <button
           type="button"
           onClick={onCancel}
-          className="btn-secondary"
+          className="btn-icon"
           disabled={isSubmitting}
+          title={cancelLabel}
         >
-          {cancelLabel}
+          <X className="w-4 h-4" />
         </button>
         <button
           type="button"
           onClick={onSubmit}
           disabled={!isValid || isSubmitting}
-          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-icon-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          title={submitLabel}
         >
-          {isSubmitting ? '...' : submitLabel}
+          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
         </button>
       </div>
     </div>

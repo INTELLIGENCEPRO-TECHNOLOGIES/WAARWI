@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Loader2, AlertCircle, Sparkles } from 'lucide-react';
+import { Plus, Loader2, AlertCircle, Sparkles, Check, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -130,10 +130,13 @@ export function QuickCreateArticleModal({ open, onClose, onCreated, initialName 
   return (
     <Modal open={open} onClose={onClose} title="Créer un article" size="sm" layer="top"
       footer={
-        <button onClick={handleSave} disabled={saving}
-          className="btn-primary text-sm px-5 py-2.5 disabled:opacity-50">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={handleSave} disabled={saving}
+            className="btn-icon-primary disabled:opacity-50" title="Enregistrer">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          </button>
+        </div>
       }>
       <div className="space-y-3">
         <div>
@@ -243,10 +246,13 @@ export function QuickCreateCustomerModal({ open, onClose, onCreated, initialName
   return (
     <Modal open={open} onClose={onClose} title="Créer un client" size="sm" layer="top"
       footer={
-        <button onClick={handleSave} disabled={saving}
-          className="btn-primary text-sm px-5 py-2.5 disabled:opacity-50">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={handleSave} disabled={saving}
+            className="btn-icon-primary disabled:opacity-50" title="Enregistrer">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          </button>
+        </div>
       }>
       <div className="space-y-3">
         <div>

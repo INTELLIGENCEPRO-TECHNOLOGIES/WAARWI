@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Loader2, PackageOpen, Calendar, Zap, AlertTriangle } from 'lucide-react';
+import { Loader2, PackageOpen, Calendar, Zap, AlertTriangle, Check, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { Modal } from './Modal';
@@ -104,12 +104,10 @@ export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selec
   return (
     <Modal open={open} onClose={onClose} title={title} size="lg"
       footer={<>
-        <button onClick={onClose} className="btn-secondary">Annuler</button>
-        <button onClick={autoFEFO} className="btn-secondary inline-flex items-center gap-1.5">
-          <Zap className="w-3.5 h-3.5" /> Auto (FEFO)
-        </button>
-        <button onClick={() => onConfirm(selections)} disabled={!allValid} className="btn-primary">
-          {confirmLabel}
+        <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+        <button onClick={autoFEFO} className="btn-icon" title="Auto (FEFO)"><Zap className="w-4 h-4" /></button>
+        <button onClick={() => onConfirm(selections)} disabled={!allValid} className="btn-icon-primary" title={confirmLabel}>
+          <Check className="w-4 h-4" />
         </button>
       </>}
     >

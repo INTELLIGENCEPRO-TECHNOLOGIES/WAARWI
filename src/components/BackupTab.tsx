@@ -267,10 +267,10 @@ export function BackupTab() {
           <button
             onClick={createBackup}
             disabled={busy === 'create'}
-            className="btn-primary shrink-0"
+            className="btn-icon-primary shrink-0"
+            title="Créer la sauvegarde"
           >
             {busy === 'create' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-            Créer la sauvegarde
           </button>
         </div>
       </div>
@@ -297,10 +297,10 @@ export function BackupTab() {
             <button
               onClick={onPickFile}
               disabled={busy === 'import'}
-              className="btn-secondary mt-3"
+              className="btn-icon mt-3"
+              title="Choisir un fichier…"
             >
               {busy === 'import' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              Choisir un fichier…
             </button>
           </div>
         </div>
@@ -360,10 +360,10 @@ export function BackupTab() {
           <button
             onClick={runNow}
             disabled={busy === 'runNow'}
-            className="btn-secondary"
+            className="btn-icon"
+            title="Exécuter maintenant"
           >
             {busy === 'runNow' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            Exécuter maintenant
           </button>
         </div>
       )}
@@ -372,9 +372,8 @@ export function BackupTab() {
       <div className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-slate-900">Historique ({backups.length})</h4>
-          <button onClick={load} className="btn-ghost text-xs">
-            <RefreshCw className="w-3.5 h-3.5" />
-            Actualiser
+          <button onClick={load} className="btn-icon text-xs" title="Actualiser">
+            <RefreshCw className="w-4 h-4" />
           </button>
         </div>
 
@@ -403,15 +402,15 @@ export function BackupTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => doDownload(b)} className="btn-ghost text-xs" title="Télécharger">
+                  <button onClick={() => doDownload(b)} className="btn-icon text-xs" title="Télécharger">
                     <Download className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setConfirmRestore(b)}
-                    className="h-9 px-3 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 inline-flex items-center gap-1.5"
+                    className="btn-icon-success text-xs"
+                    title="Restaurer"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Restaurer
+                    <RotateCcw className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setConfirmDelete(b)}
@@ -441,10 +440,10 @@ export function BackupTab() {
             </p>
             <button
               onClick={() => setConfirmReset(true)}
-              className="btn-danger mt-3"
+              className="btn-icon-danger mt-3"
+              title="Réinitialiser les opérations"
             >
               <AlertTriangle className="w-4 h-4" />
-              Réinitialiser les opérations
             </button>
           </div>
         </div>

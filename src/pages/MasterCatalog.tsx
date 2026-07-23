@@ -419,15 +419,13 @@ export function MasterCatalog() {
             {selected.size > MAX_IMPORT && ` (max ${MAX_IMPORT})`}
           </span>
         )}
-        {activeFilterCount > 0 && <button onClick={clearFilters} className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-400 hover:text-slate-600 inline-flex items-center gap-1">Effacer <X className="w-3 h-3" /></button>}
+        {activeFilterCount > 0 && <button onClick={clearFilters} className="btn-icon" title="Effacer"><X className="w-4 h-4" /></button>}
         <button
           onClick={() => refreshImportedIds()}
           disabled={refreshing}
-          className="shrink-0 ml-auto px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-300 inline-flex items-center gap-1 transition-all disabled:opacity-50"
-          title="Actualiser le statut des articles importés"
+          className="shrink-0 ml-auto btn-icon" title="Actualiser le statut des articles importés"
         >
-          <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Actualisation…' : 'Actualiser'}
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
@@ -471,11 +469,10 @@ export function MasterCatalog() {
           <button
             disabled={importing}
             onClick={() => setConfirmOpen({ mode: 'selected', label: 'la sélection', count: selected.size })}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold shadow-glow hover:shadow-lg transition active:scale-95 disabled:opacity-50 ${selected.size > MAX_IMPORT ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white'}`}
+            className={`btn-icon-primary ${selected.size > MAX_IMPORT ? '!bg-red-600 hover:!bg-red-700' : ''}`}
+            title={`Importer la sélection (${selected.size})`}
           >
-            <Download className="w-3.5 h-3.5" />
-            Importer la sélection ({selected.size})
-            {selected.size > MAX_IMPORT && ` — TROP`}
+            <Download className="w-4 h-4" />
           </button>
         )}
         {categoryId && !subcategoryId && (
@@ -486,10 +483,9 @@ export function MasterCatalog() {
               const count = items.filter(i => i.category_id === categoryId && !importedIds.has(i.id)).length;
               setConfirmOpen({ mode: 'category', label: `la catégorie "${cat?.name}"`, count });
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 hover:border-brand-300 text-slate-800 transition active:scale-95 disabled:opacity-50"
+            className="btn-icon" title="Importer la catégorie"
           >
-            <Download className="w-3.5 h-3.5" />
-            Importer la catégorie
+            <Download className="w-4 h-4" />
           </button>
         )}
         {subcategoryId && (
@@ -500,10 +496,9 @@ export function MasterCatalog() {
               const count = items.filter(i => i.subcategory_id === subcategoryId && !importedIds.has(i.id)).length;
               setConfirmOpen({ mode: 'subcategory', label: `la sous-catégorie "${sc?.name}"`, count });
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 hover:border-brand-300 text-slate-800 transition active:scale-95 disabled:opacity-50"
+            className="btn-icon" title="Importer la sous-catégorie"
           >
-            <Download className="w-3.5 h-3.5" />
-            Importer la sous-catégorie
+            <Download className="w-4 h-4" />
           </button>
         )}
         <button
@@ -512,10 +507,9 @@ export function MasterCatalog() {
             const count = items.filter(i => !importedIds.has(i.id)).length;
             setConfirmOpen({ mode: 'all', label: 'tout le catalogue', count });
           }}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-ink-900 text-white hover:bg-slate-800 transition active:scale-95 disabled:opacity-50"
+          className="btn-icon-primary !bg-ink-900 hover:!bg-slate-800" title="Importer tout le catalogue"
         >
-          <Download className="w-3.5 h-3.5" />
-          Importer tout le catalogue
+          <Download className="w-4 h-4" />
         </button>
       </div>
       </div>
@@ -595,8 +589,8 @@ export function MasterCatalog() {
       {/* Filters modal */}
       <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtres" size="sm"
         footer={<>
-          <button onClick={clearFilters} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Effacer</button>
-          <button onClick={() => setFiltersOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow">Appliquer</button>
+          <button onClick={clearFilters} className="btn-icon" title="Effacer"><X className="w-4 h-4" /></button>
+          <button onClick={() => setFiltersOpen(false)} className="btn-icon-primary" title="Appliquer"><Check className="w-4 h-4" /></button>
         </>}
       >
         <div className="space-y-3">
@@ -640,14 +634,13 @@ export function MasterCatalog() {
       {/* Confirm modal */}
       <Modal open={!!confirmOpen} onClose={() => !importing && setConfirmOpen(null)} title="Confirmer l'import" size="sm"
         footer={<>
-          <button onClick={() => setConfirmOpen(null)} disabled={importing} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Annuler</button>
+          <button onClick={() => setConfirmOpen(null)} disabled={importing} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button
             onClick={() => confirmOpen && runImport(confirmOpen.mode)}
             disabled={importing || (confirmOpen?.count ?? 0) > MAX_IMPORT}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-icon-primary" title="Confirmer l'import"
           >
-            {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            {importing ? 'Import en cours…' : 'Confirmer l\'import'}
+            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           </button>
         </>}
       >

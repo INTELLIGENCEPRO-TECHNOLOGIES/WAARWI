@@ -174,13 +174,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const depotList = filtered.filter(x => x.is_warehouse);
         setSites(storeList);
         setDepots(depotList);
-        setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || depotList[0] || null) : (storeList[0] || depotList[0] || null));
+        // Never silently switch site: only update if prev no longer exists in the full list
+        setCurrentSite(prev => {
+          if (!prev) return storeList[0] || depotList[0] || null;
+          const allAvailable = [...storeList, ...depotList];
+          const stillExists = allAvailable.find(x => x.id === prev.id);
+          return stillExists || storeList[0] || depotList[0] || null;
+        });
       } else if (s) {
         const storeList = s.filter(x => !x.is_warehouse);
         const depotList = s.filter(x => x.is_warehouse);
         setSites(storeList);
         setDepots(depotList);
-        setCurrentSite(prev => prev ? (storeList.find(x => x.id === prev.id) || storeList[0] || depotList[0] || null) : (storeList[0] || depotList[0] || null));
+        setCurrentSite(prev => {
+          if (!prev) return storeList[0] || depotList[0] || null;
+          const allAvailable = [...storeList, ...depotList];
+          const stillExists = allAvailable.find(x => x.id === prev.id);
+          return stillExists || storeList[0] || depotList[0] || null;
+        });
       }
       if (prof) setProfile(prof);
     }, 500);
@@ -298,9 +309,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const prevSiteRef = useRef<string | null>(null);
+  useEffect(() => {
+    const newId = currentSite?.id || null;
+    const prevId = prevSiteRef.current;
+    if (prevId && newId && prevId !== newId && profile?.tenant_id && user?.id) {
+      supabase.from('site_change_log').insert({
+        tenant_id: profile.tenant_id,
+        user_id: user.id,
+        previous_site_id: prevId,
+        new_site_id: newId,
+        trigger: 'dataTick_fallback',
+      }).then(() => {});
+    }
+    prevSiteRef.current = newId;
+  }, [currentSite?.id]);
+
   const handleSetCurrentSite = (site: Site) => {
+    const prevId = currentSite?.id || null;
     setCurrentSite(site);
     localStorage.setItem('currentSiteId', site.id);
+    if (prevId && prevId !== site.id && profile?.tenant_id && user?.id) {
+      supabase.from('site_change_log').insert({
+        tenant_id: profile.tenant_id,
+        user_id: user.id,
+        previous_site_id: prevId,
+        new_site_id: site.id,
+        trigger: 'user_explicit',
+      }).then(() => {});
+    }
   };
 
   const handleSetDefaultSite = async (site: Site) => {

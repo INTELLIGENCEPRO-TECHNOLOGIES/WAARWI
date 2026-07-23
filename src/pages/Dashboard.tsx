@@ -2501,7 +2501,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
       {/* ── Quick-action modals ────────────────────────────────────────────── */}
       <Modal open={qaModal === 'customer'} onClose={() => setQAModal(null)} title="Nouveau client" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveCustomer} disabled={qaSaving || !custForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Créer le client</button></>}>
+        footer={<><button onClick={() => setQAModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveCustomer} disabled={qaSaving || !custForm.name?.trim()} className="btn-icon-primary" title="Créer le client">{qaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div>
             <label className="label">Nom *</label>
@@ -2535,7 +2535,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       </Modal>
 
       <Modal open={qaModal === 'supplier'} onClose={() => setQAModal(null)} title="Nouveau fournisseur" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveSupplier} disabled={qaSaving || !supForm.name?.trim()} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Créer le fournisseur</button></>}>
+        footer={<><button onClick={() => setQAModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveSupplier} disabled={qaSaving || !supForm.name?.trim()} className="btn-icon-primary" title="Créer le fournisseur">{qaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div>
             <label className="label">Nom *</label>
@@ -2569,7 +2569,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         onClose={() => setQAModal(null)}
         title={qaModal === 'stock_in' ? 'Entrée de stock' : 'Sortie de stock'}
         size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Valider</button></>}
+        footer={<><button onClick={() => setQAModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0} className="btn-icon-primary" title="Valider">{qaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}</button></>}
       >
         <div className="space-y-3">
           {adjRow && (
@@ -2602,7 +2602,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       </Modal>
 
       <Modal open={qaModal === 'stock_transfer'} onClose={() => setQAModal(null)} title="Transfert de stock" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-secondary">Annuler</button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0 || !adjTargetSite} className="btn-primary">{qaSaving && <Loader2 className="w-4 h-4 animate-spin" />}Transferer</button></>}>
+        footer={<><button onClick={() => setQAModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0 || !adjTargetSite} className="btn-icon-primary" title="Transferer">{qaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div>
             <label className="label">Article</label>
@@ -2635,7 +2635,8 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       </Modal>
 
       <Modal open={!!stockDone} onClose={() => setStockDone(null)} title="Mouvement enregistré" size="sm"
-        footer={<button onClick={() => setStockDone(null)} className="btn-primary">Fermer</button>}>
+        footer={<button onClick={() => setStockDone(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}
+      >
         {stockDone && (
           <div className="text-center space-y-4">
             <div className="w-14 h-14 mx-auto rounded-full bg-neutral-100 flex items-center justify-center">

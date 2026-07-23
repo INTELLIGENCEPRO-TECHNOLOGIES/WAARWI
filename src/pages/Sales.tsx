@@ -396,8 +396,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       ) : filtered.length === 0 ? (
         <div className="card-premium">
           {sales.length === 0
-            ? <EmptyState icon={Calculator} title="Aucune vente" description="Les ventes apparaîtront ici. Commencez par ouvrir la caisse." action={<button onClick={() => onNavigate?.('pos')} className="btn-primary"><ShoppingCart className="w-4 h-4" />Aller à la caisse</button>} />
-            : <EmptyState icon={Calculator} title="Aucun résultat" description="Aucune vente ne correspond aux filtres sélectionnés." action={<button onClick={clearFilters} className="btn-secondary"><X className="w-4 h-4" />Réinitialiser</button>} />
+            ? <EmptyState icon={Calculator} title="Aucune vente" description="Les ventes apparaîtront ici. Commencez par ouvrir la caisse." action={<button onClick={() => onNavigate?.('pos')} className="btn-icon-primary" title="Aller à la caisse"><ShoppingCart className="w-4 h-4" /></button>} />
+            : <EmptyState icon={Calculator} title="Aucun résultat" description="Aucune vente ne correspond aux filtres sélectionnés." action={<button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><X className="w-4 h-4" /></button>} />
           }
         </div>
       ) : (
@@ -417,7 +417,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                     <div className="min-w-0 flex-1">
                       <div className="text-[12px] font-semibold text-neutral-900 truncate flex items-center gap-1.5">
                         <span className="truncate">{s.customers?.name || 'Client comptoir'}</span>
-                        <span className="font-mono text-[10px] font-bold text-brand-700 shrink-0">· {s.sale_number}</span>
+                        <span className="doc-number text-[12px] font-bold text-brand-700 shrink-0">· {s.sale_number}</span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-1">
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${st.pill}`}>
@@ -464,7 +464,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                     const st = statusStyles(s.status, s);
                     return (
                       <tr key={s.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-neutral-700">{s.sale_number}</td>
+                        <td className="px-4 py-3 doc-number text-sm font-semibold text-neutral-700">{s.sale_number}</td>
                         <td className="px-4 py-3 text-xs whitespace-nowrap text-neutral-500 num">{formatDateTime(s.created_at)}</td>
                         <td className="px-4 py-3 text-neutral-700">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
                         <td className="px-4 py-3 hidden lg:table-cell text-neutral-500 text-xs">{s.sites?.name || '—'}</td>
@@ -535,7 +535,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                 {customFrom && new Date(customFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                 {customFrom && customTo && ' — '}
                 {customTo && new Date(customTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                <button onClick={() => setPickerOpen(true)} className="ml-2 underline">Modifier</button>
+                <button onClick={() => setPickerOpen(true)} className="btn-icon" title="Modifier"><Pencil className="w-4 h-4" /></button>
               </div>
             )}
           </div>
@@ -715,10 +715,9 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       {/* Delete confirmation */}
       <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Confirmer la suppression" size="sm"
         footer={<>
-          <button onClick={() => setConfirmDelete(false)} className="btn-secondary text-sm">Annuler</button>
-          <button onClick={deleteSale} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-700 text-sm flex items-center gap-2">
+          <button onClick={() => setConfirmDelete(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={deleteSale} disabled={deleting} className="btn-icon-danger-solid" title="Supprimer">
             {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            Supprimer
           </button>
         </>}
       >

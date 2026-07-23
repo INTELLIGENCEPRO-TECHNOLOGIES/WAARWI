@@ -197,9 +197,8 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
               <div className="flex items-center gap-2">
                 <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }} />
-                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-secondary text-[11px] py-1.5 px-2.5">
-                  {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                  {form.logo_url ? 'Remplacer' : 'Téléverser'}
+                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-icon" title={form.logo_url ? 'Remplacer' : 'Téléverser'}>
+                  {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 </button>
                 {form.logo_url && (
                   <button onClick={removeLogo} className="text-[11px] text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg flex items-center gap-1 transition">
@@ -261,8 +260,8 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
         </div>
 
         <div className="flex justify-end">
-          <button onClick={save} disabled={saving} className="btn-primary text-sm">
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Enregistrer
+          <button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -433,8 +432,8 @@ function BoutiqueTab() {
                     className="flex-1 px-2.5 py-2 text-sm outline-none font-mono" placeholder="mon-entreprise" autoFocus
                     onKeyDown={e => { if (e.key === 'Enter') saveSlug(); if (e.key === 'Escape') setEditingSlug(false); }} />
                 </div>
-                <button onClick={saveSlug} disabled={saving} className="btn-primary py-2 px-3">{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}</button>
-                <button onClick={() => setEditingSlug(false)} className="btn-secondary py-2 px-3"><X className="w-3.5 h-3.5" /></button>
+                <button onClick={saveSlug} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
+                <button onClick={() => setEditingSlug(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
               </div>
             ) : (
               <div className="flex gap-2 items-center">
@@ -442,8 +441,8 @@ function BoutiqueTab() {
                   <span className="px-2.5 py-2 text-[11px] text-slate-400 border-r border-slate-200">/shop/</span>
                   <span className="flex-1 px-2.5 py-2 text-sm font-mono text-slate-800">{slug || '—'}</span>
                 </div>
-                <button onClick={() => { setSlugInput(slug); setEditingSlug(true); }} className="btn-secondary py-2 px-3 text-[11px]">
-                  <Edit2 className="w-3.5 h-3.5" />Modifier
+                <button onClick={() => { setSlugInput(slug); setEditingSlug(true); }} className="btn-icon" title="Modifier">
+                  <Edit2 className="w-4 h-4" />
                 </button>
               </div>
             )}
@@ -484,8 +483,8 @@ function BoutiqueTab() {
             <div className="col-span-2"><label className="label">Pied de page</label><input value={settings.footer_text || ''} onChange={e => setSettings({ ...settings, footer_text: e.target.value })} className="input" /></div>
           </div>
           <div className="flex justify-end pt-1">
-            <button onClick={saveSettings} disabled={saving} className="btn-primary text-sm">
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Enregistrer
+            <button onClick={saveSettings} disabled={saving} className="btn-icon-primary" title="Enregistrer">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -579,7 +578,7 @@ function SitesTab() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Magasins</h3>
-          <button onClick={openCreateStore} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouveau magasin</button>
+          <button onClick={openCreateStore} className="btn-icon-primary" title="Nouveau magasin"><Plus className="w-4 h-4" /></button>
         </div>
         <div className="card overflow-hidden">
           <table className="w-full text-sm">
@@ -606,7 +605,7 @@ function SitesTab() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Dépôts / Entrepôts</h3>
-          <button onClick={openCreateDepot} className="btn-secondary text-sm"><Plus className="w-3.5 h-3.5" />Nouveau dépôt</button>
+          <button onClick={openCreateDepot} className="btn-icon-primary" title="Nouveau dépôt"><Plus className="w-4 h-4" /></button>
         </div>
         <div className="card overflow-hidden">
           <table className="w-full text-sm">
@@ -633,7 +632,7 @@ function SitesTab() {
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? (form.is_warehouse ? 'Modifier le dépôt' : 'Modifier le magasin') : (form.is_warehouse ? 'Nouveau dépôt' : 'Nouveau magasin')} size="md"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div><label className="label">Code court</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="input" placeholder="EX: DEP-01" /></div>
@@ -681,13 +680,12 @@ function SitesTab() {
                       <input ref={siteLogoRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" className="hidden"
                         onChange={e => { const f = e.target.files?.[0]; if (f) uploadSiteLogo(f); e.target.value = ''; }} />
                       <button type="button" onClick={() => siteLogoRef.current?.click()} disabled={uploadingLogo}
-                        className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1">
-                        {uploadingLogo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                        {form.logo_url ? 'Changer' : 'Charger un logo'}
+                        className="btn-icon" title={form.logo_url ? 'Changer' : 'Charger un logo'}>
+                        {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                       </button>
                       {form.logo_url && (
-                        <button type="button" onClick={removeSiteLogo} className="btn-secondary text-[11px] py-1 px-2.5 text-red-600 flex items-center gap-1">
-                          <X className="w-3 h-3" />Retirer
+                        <button type="button" onClick={removeSiteLogo} className="btn-icon-danger" title="Retirer">
+                          <X className="w-4 h-4" />
                         </button>
                       )}
                     </div>
@@ -747,7 +745,7 @@ function PaymentsTab() {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <button onClick={() => { setEditing(null); setForm({ payment_type: 'cash', is_active: true, sort_order: list.length + 1 }); setOpen(true); }} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouveau mode</button>
+        <button onClick={() => { setEditing(null); setForm({ payment_type: 'cash', is_active: true, sort_order: list.length + 1 }); setOpen(true); }} className="btn-icon-primary" title="Nouveau mode"><Plus className="w-4 h-4" /></button>
       </div>
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
@@ -773,7 +771,7 @@ function PaymentsTab() {
         </table>
       </div>
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le mode' : 'Nouveau mode de règlement'} size="sm"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div><label className="label">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="input" placeholder="EX: WAVE" /></div>
@@ -846,7 +844,7 @@ function CategoriesTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end"><button onClick={() => openCreate()} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouvelle catégorie</button></div>
+      <div className="flex justify-end"><button onClick={() => openCreate()} className="btn-icon-primary" title="Nouvelle catégorie"><Plus className="w-4 h-4" /></button></div>
       <div className="card overflow-hidden">
         <div className="max-h-[520px] overflow-y-auto">
           {roots.length === 0 ? <div className="py-8 text-center text-sm text-slate-500">Aucune catégorie</div> : (
@@ -891,7 +889,7 @@ function CategoriesTab() {
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier la catégorie' : (form.parent_id ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie')} size="sm"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div><label className="label">Code</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="input" placeholder="EX: FIL-HUI" /></div>
@@ -1019,7 +1017,7 @@ function BrandsTab() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900">Marques ({brands.length})</h3>
-          <button onClick={() => openBrandModal()} className="btn-primary text-[11px] py-1.5"><Plus className="w-3 h-3" />Ajouter</button>
+          <button onClick={() => openBrandModal()} className="btn-icon-primary" title="Ajouter une marque"><Plus className="w-4 h-4" /></button>
         </div>
         <div className="card overflow-hidden max-h-[480px] overflow-y-auto">
           {brands.length === 0 ? <div className="py-6 text-center text-xs text-slate-500">Aucune marque</div> : (
@@ -1048,7 +1046,7 @@ function BrandsTab() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900">Modèles {brandName ? `— ${brandName}` : ''} ({filteredModels.length})</h3>
-          <button onClick={() => { setEditingModel(null); setModelForm({ brand_id: selectedBrand, fuel: 'essence' }); setOpenModel(true); }} disabled={!selectedBrand} className="btn-primary text-[11px] py-1.5"><Plus className="w-3 h-3" />Ajouter</button>
+          <button onClick={() => { setEditingModel(null); setModelForm({ brand_id: selectedBrand, fuel: 'essence' }); setOpenModel(true); }} disabled={!selectedBrand} className="btn-icon-primary" title="Ajouter un modèle"><Plus className="w-4 h-4" /></button>
         </div>
         <div className="card overflow-hidden max-h-[480px] overflow-y-auto">
           {filteredModels.length === 0 ? <div className="py-6 text-center text-xs text-slate-500">Sélectionnez une marque</div> : (
@@ -1069,7 +1067,7 @@ function BrandsTab() {
 
       {/* Modal marque */}
       <Modal open={openBrand} onClose={() => setOpenBrand(false)} title={editingBrand ? 'Modifier la marque' : 'Nouvelle marque'} size="sm"
-        footer={<><button onClick={() => setOpenBrand(false)} className="btn-secondary">Annuler</button><button onClick={saveBrand} disabled={saving || uploadingLogo} className="btn-primary">{(saving || uploadingLogo) && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
+        footer={<><button onClick={() => setOpenBrand(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveBrand} disabled={saving || uploadingLogo} className="btn-icon-primary" title="Enregistrer">{(saving || uploadingLogo) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div><label className="label">Nom de la marque *</label><input value={brandForm.name || ''} onChange={e => setBrandForm({ ...brandForm, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div>
@@ -1085,9 +1083,9 @@ function BrandsTab() {
               </div>
               <div className="flex-1 space-y-1.5">
                 <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={handleLogoChange} className="hidden" id="brand-logo-upload" />
-                <label htmlFor="brand-logo-upload" className="btn-secondary cursor-pointer w-full flex items-center justify-center gap-1.5 text-[11px] py-1.5"><Upload className="w-3.5 h-3.5" />{logoPreview ? 'Changer' : 'Choisir'}</label>
+                <label htmlFor="brand-logo-upload" className="btn-icon cursor-pointer w-full" title={logoPreview ? 'Changer' : 'Choisir'}><Upload className="w-4 h-4" /></label>
                 <p className="text-[10px] text-slate-400">JPG, PNG, WebP, SVG — max 2 Mo</p>
-                {logoPreview && <button onClick={removeLogo} className="text-[10px] text-red-500 hover:underline flex items-center gap-0.5"><X className="w-2.5 h-2.5" />Supprimer</button>}
+                {logoPreview && <button onClick={removeLogo} className="btn-icon-danger" title="Supprimer"><Trash2 className="w-4 h-4" /></button>}
               </div>
             </div>
           </div>
@@ -1097,7 +1095,7 @@ function BrandsTab() {
 
       {/* Modal modèle */}
       <Modal open={openModel} onClose={() => setOpenModel(false)} title={editingModel ? 'Modifier le modèle' : 'Nouveau modèle'} size="sm"
-        footer={<><button onClick={() => setOpenModel(false)} className="btn-secondary">Annuler</button><button onClick={saveModel} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
+        footer={<><button onClick={() => setOpenModel(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveModel} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div><label className="label">Marque *</label>
             <SearchableSelect options={brands.map(b => ({ value: b.id, label: b.name }))} value={modelForm.brand_id || ''} onChange={v => setModelForm({ ...modelForm, brand_id: v })} placeholder="— Choisir —" />
@@ -1157,7 +1155,7 @@ function AccountingTab() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-500">{list.length} compte{list.length > 1 ? 's' : ''} — SYSCOHADA révisé</p>
-        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouveau compte</button>
+        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-icon-primary" title="Nouveau compte"><Plus className="w-4 h-4" /></button>
       </div>
 
       <div className="space-y-2">
@@ -1184,7 +1182,7 @@ function AccountingTab() {
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le compte' : 'Nouveau compte'} size="sm"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div>
             <label className="label">Code comptable (7 chiffres) *</label>
@@ -1316,7 +1314,7 @@ function UsersTab() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-500">{list.length} utilisateur{list.length > 1 ? 's' : ''}</p>
-        <button onClick={() => { setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier', assigned_site_ids: [] }); setOpen(true); }} className="btn-primary text-sm"><Plus className="w-3.5 h-3.5" />Nouvel utilisateur</button>
+        <button onClick={() => { setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier', assigned_site_ids: [] }); setOpen(true); }} className="btn-icon-primary" title="Nouvel utilisateur"><Plus className="w-4 h-4" /></button>
       </div>
 
       {loading ? (
@@ -1354,7 +1352,7 @@ function UsersTab() {
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'} size="md"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{editing ? 'Enregistrer' : 'Créer'}</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title={editing ? 'Enregistrer' : 'Créer'}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div><label className="label">Email *</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} disabled={!!editing} className="input" placeholder="utilisateur@exemple.com" /></div>
           <div><label className="label">Nom complet</label><input value={form.full_name || ''} onChange={e => setForm({ ...form, full_name: e.target.value })} className="input" /></div>
@@ -1400,7 +1398,7 @@ function UsersTab() {
       </Modal>
 
       <Modal open={!!resetFor} onClose={() => { setResetFor(null); setNewPass(''); }} title="Réinitialiser le mot de passe" size="sm"
-        footer={<><button onClick={() => { setResetFor(null); setNewPass(''); }} className="btn-secondary">Annuler</button><button onClick={doReset} className="btn-primary"><KeyRound className="w-3.5 h-3.5" />Réinitialiser</button></>}>
+        footer={<><button onClick={() => { setResetFor(null); setNewPass(''); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={doReset} className="btn-icon-primary" title="Réinitialiser"><KeyRound className="w-4 h-4" /></button></>}>
         <div className="space-y-3">
           <p className="text-xs text-slate-600">Nouveau mot de passe pour <strong>{resetFor?.full_name || resetFor?.email}</strong>.</p>
           <div><label className="label">Nouveau mot de passe *</label><input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="input" placeholder="Min. 6 caractères" /></div>
@@ -1724,17 +1722,14 @@ function StockResetCard() {
             <button
               onClick={() => setOpen(false)}
               disabled={saving}
-              className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              Annuler
-            </button>
+              className="btn-icon" title="Annuler"
+            ><X className="w-4 h-4" /></button>
             <button
               onClick={handleReset}
               disabled={saving || confirmText !== 'CONFIRMER' || !password}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="btn-icon-danger-solid" title="Remettre à zéro"
             >
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {saving ? 'Remise à zéro...' : 'Remettre à zéro'}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -2044,7 +2039,7 @@ function SubscriptionTab() {
   const modules = [
     { key: 'online_shop', label: 'Boutique en ligne' },
     { key: 'accounting', label: 'Comptabilite SYSCOHADA' },
-    { key: 'supplier_orders', label: 'Commandes fournisseurs' },
+    { key: 'supplier_orders', label: 'Achats' },
     { key: 'has_whatsapp', label: 'Notifications WhatsApp' },
     { key: 'has_multi_store', label: 'Multi-magasins' },
     { key: 'has_advanced_reports', label: 'Rapports avances' },

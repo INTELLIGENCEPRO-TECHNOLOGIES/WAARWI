@@ -399,7 +399,7 @@ function TenantsSection() {
     const now = new Date();
     const in7 = new Date(Date.now() + 7 * 86400000);
     return tenants.filter(t => {
-      if (q && !`${t.name} ${t.email} ${t.phone} ${t.subdomain || ''} ${t.custom_domain || ''}`.toLowerCase().includes(q.toLowerCase())) return false;
+      if (q && !`${t.name} ${t.email} ${t.phone} ${t.whatsapp_phone || ''} ${t.subdomain || ''} ${t.custom_domain || ''}`.toLowerCase().includes(q.toLowerCase())) return false;
       const exp = t.plan_expires_at ? new Date(t.plan_expires_at) : null;
       const approval = t.approval_status || 'approved';
       if (filter === 'pending' && approval !== 'pending') return false;
@@ -546,6 +546,7 @@ function TenantsSection() {
                       {/* Row 2: Details */}
                       <div className="text-xs text-[#64748B] mt-0.5 leading-relaxed">
                         {t.email || '—'}
+                        {t.whatsapp_phone && <><span className="text-[#CBD5E1] mx-1.5">|</span><span className="text-[#16A34A] font-medium">{t.whatsapp_phone}</span></>}
                         <span className="text-[#CBD5E1] mx-1.5">|</span>
                         {(t.profiles || []).length} utilisateur{(t.profiles || []).length !== 1 ? 's' : ''}
                         <span className="text-[#CBD5E1] mx-1.5">|</span>
@@ -553,9 +554,8 @@ function TenantsSection() {
                         {t.last_active_at && <><span className="text-[#CBD5E1] mx-1.5">|</span>Actif {formatDate(t.last_active_at)}</>}
                       </div>
                       {/* Row 3: Pending extra info */}
-                      {isPending && (t.whatsapp_phone || t.city || t.selected_plan_code) && (
+                      {isPending && (t.city || t.selected_plan_code) && (
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                          {t.whatsapp_phone && <span className="text-[10px] text-[#16A34A] font-medium">WhatsApp: {t.whatsapp_phone}</span>}
                           {t.city && <span className="text-[10px] text-[#64748B]">Ville: {t.city}</span>}
                           {t.selected_plan_code && <span className="text-[10px] text-[#2563EB] font-medium">Plan souhaité: {t.selected_plan_code}</span>}
                         </div>
@@ -701,15 +701,14 @@ function TenantsSection() {
               <button
                 onClick={() => { setDeleting(null); setDeleteConfirmName(''); setDeleteReason(''); }}
                 disabled={deleteLoading}
-                className="h-9 px-4 rounded-lg border border-[#E5E7EB] text-sm font-medium text-[#64748B] hover:bg-[#F8FAFC] transition-colors"
-              >Annuler</button>
+                className="btn-icon" title="Annuler"
+              ><X className="w-4 h-4" /></button>
               <button
                 onClick={deleteTenant}
                 disabled={deleteConfirmName !== deleting.name || deleteLoading}
-                className="h-9 px-4 rounded-lg bg-[#DC2626] text-white text-sm font-medium hover:bg-[#B91C1C] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                className="btn-icon-danger-solid" title="Supprimer définitivement"
               >
                 {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                Supprimer définitivement
               </button>
             </div>
           </div>
@@ -756,7 +755,7 @@ const MODULE_DEFS: { key: string; name: string; desc: string; icon: any; color: 
   { key: 'billing', name: 'Facturation', desc: 'Devis, factures, avoirs', icon: FileText_, color: 'emerald' },
   { key: 'online_orders', name: 'Commandes en ligne', desc: 'Boutique en ligne', icon: Globe_, color: 'emerald' },
   { key: 'tiers', name: 'Tiers', desc: 'Clients & fournisseurs', icon: Users, color: 'sky' },
-  { key: 'supplier_orders', name: 'Commandes fournisseurs', desc: 'Approvisionnement', icon: ShoppingBag_, color: 'slate' },
+  { key: 'supplier_orders', name: 'Achats', desc: 'Approvisionnement', icon: ShoppingBag_, color: 'slate' },
   { key: 'accounting', name: 'Comptabilité', desc: 'Plan comptable SYSCOHADA', icon: BookOpen_, color: 'amber' },
   { key: 'reports', name: 'États / Rapports', desc: 'Statistiques et rapports', icon: BarChart3, color: 'sky' },
   { key: 'ipm', name: 'IPM / Tiers payant', desc: 'Gestion mutuelle pharmacie', icon: HeartPulse, color: 'emerald' },
@@ -868,8 +867,8 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
       )}
 
       <div className="flex justify-end pt-2">
-        <button onClick={onSave} disabled={saving} className="h-9 px-4 rounded-lg bg-[#0F172A] text-white text-sm font-medium hover:bg-[#1E293B] flex items-center gap-2 transition-colors disabled:opacity-50">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer
+        <button onClick={onSave} disabled={saving} className="btn-icon-primary" title="Enregistrer">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
         </button>
       </div>
     </div>
@@ -922,7 +921,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
       await call('update_tenant', {
         tenant_id: tenant.id,
         patch: {
-          name: form.name, legal_name: form.legal_name, email: form.email, phone: form.phone,
+          name: form.name, legal_name: form.legal_name, email: form.email, phone: form.phone, whatsapp_phone: form.whatsapp_phone,
           status: form.status, is_active: form.is_active,
           business_type: form.business_type,
           business_activity_type_id: form.business_activity_type_id || null,
@@ -1047,6 +1046,10 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                       <input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
                     </div>
                     <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">WhatsApp</label>
+                      <input value={form.whatsapp_phone || ''} onChange={e => setForm({ ...form, whatsapp_phone: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                    </div>
+                    <div>
                       <label className="block text-[11px] font-medium text-[#64748B] mb-1">Statut</label>
                       <select value={form.status || 'active'} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]">
                         <option value="active">Actif</option><option value="suspended">Suspendu</option><option value="cancelled">Annulé</option>
@@ -1070,8 +1073,8 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                       </label>
                     </div>
                     <div className="sm:col-span-2 flex justify-end pt-2">
-                      <button onClick={saveInfo} disabled={saving} className="h-9 px-4 rounded-lg bg-[#0F172A] text-white text-sm font-medium hover:bg-[#1E293B] flex items-center gap-2 transition-colors disabled:opacity-50">
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer
+                      <button onClick={saveInfo} disabled={saving} className="btn-icon-primary" title="Enregistrer">
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
@@ -1279,8 +1282,9 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                           </div>
                           <button
                             onClick={() => { onClose(); setTimeout(() => onDelete(tenant), 150); }}
-                            className="h-8 px-3 rounded-md bg-[#DC2626] text-white text-xs font-medium hover:bg-[#B91C1C] transition-colors flex items-center gap-1.5"
-                          ><Trash2 className="w-3.5 h-3.5" />Supprimer</button>
+                            className="btn-icon-danger"
+                            title="Supprimer"
+                          ><Trash2 className="w-4 h-4" /></button>
                         </div>
                       )}
                     </div>
@@ -1372,9 +1376,10 @@ function PlansSection() {
         </div>
         <button
           onClick={() => { setForm({ features: '', is_public: true, sort_order: plans.length, limits: { articles: -1, sites: 1, users: 2, max_clients: -1, max_suppliers: -1, max_invoices_month: -1, monthly_sales: -1, online_shop: false, accounting: false, supplier_orders: false, has_whatsapp: false, has_multi_store: false, has_advanced_reports: false, has_accounting_export: false } }); setOpen(true); }}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-[#111111] hover:bg-[#333333] text-white text-sm font-medium transition-colors"
+          className="btn-icon-primary"
+          title="Nouveau plan"
         >
-          <Plus className="w-4 h-4" />Nouveau plan
+          <Plus className="w-4 h-4" />
         </button>
       </div>
 
@@ -1514,9 +1519,10 @@ function PlansSection() {
                 <span className="text-[11px] text-[#94A3B8]">{usage} tenant{usage !== 1 ? 's' : ''}</span>
                 <button
                   onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); }}
-                  className="px-3.5 py-1.5 rounded-md bg-[#111111] hover:bg-[#333333] text-white text-xs font-medium transition-colors"
+                  className="btn-icon-primary"
+                  title="Modifier"
                 >
-                  Modifier
+                  <Edit2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -1535,8 +1541,8 @@ function PlansSection() {
       {/* Modal */}
       <Modal open={open} onClose={() => setOpen(false)} title={form.code && plans.some(p => p.code === form.code) ? 'Modifier le plan' : 'Nouveau plan'} size="lg"
         footer={<>
-          <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-md border border-[#E5E7EB] text-sm font-medium text-[#0F172A] hover:bg-[#F7F8FA] transition-colors">Annuler</button>
-          <button onClick={save} className="px-4 py-2 rounded-md bg-[#111111] hover:bg-[#333333] text-white text-sm font-medium transition-colors">Enregistrer</button>
+          <button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={save} className="btn-icon-primary" title="Enregistrer"><Check className="w-4 h-4" /></button>
         </>}>
         <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
           {/* General info */}
@@ -1577,7 +1583,7 @@ function PlansSection() {
             <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">Modules inclus</p>
             <p className="text-[11px] text-[#94A3B8] mb-3">Les modules liés au type d'activité sont gérés au niveau du tenant.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {([['online_shop', 'Boutique en ligne'], ['accounting', 'Comptabilité'], ['supplier_orders', 'Commandes fournisseurs'], ['has_whatsapp', 'Notifications WhatsApp'], ['has_multi_store', 'Multi-magasins'], ['has_advanced_reports', 'Rapports avancés'], ['has_accounting_export', 'Export comptable']] as [string, string][]).map(([key, label]) => (
+              {([['online_shop', 'Boutique en ligne'], ['accounting', 'Comptabilité'], ['supplier_orders', 'Achats'], ['has_whatsapp', 'Notifications WhatsApp'], ['has_multi_store', 'Multi-magasins'], ['has_advanced_reports', 'Rapports avancés'], ['has_accounting_export', 'Export comptable']] as [string, string][]).map(([key, label]) => (
                 <label key={key} className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[#E5E7EB] hover:bg-[#F7F8FA] transition-colors">
                   <input type="checkbox" checked={!!form.limits?.[key]} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.checked } })} className="rounded border-[#E5E7EB] text-[#0F172A] focus:ring-[#0F172A]" />
                   <span className="text-[#0F172A] text-xs">{label}</span>
@@ -1986,7 +1992,7 @@ function MessagesSection() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">{messages.length} message{messages.length > 1 ? 's' : ''} publié(s)</p>
-        <button onClick={() => setOpen(true)} className="btn-primary"><Send className="w-4 h-4" />Nouveau message</button>
+        <button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouveau message"><Send className="w-4 h-4" /></button>
       </div>
 
       {loading ? (
@@ -2027,7 +2033,7 @@ function MessagesSection() {
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nouveau message" size="md"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} className="btn-primary"><Send className="w-4 h-4" />Publier</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} className="btn-icon-primary" title="Publier"><Send className="w-4 h-4" /></button></>}>
         <div className="space-y-3">
           <div><label className="label">Titre *</label><input value={form.title || ''} onChange={e => setForm({ ...form, title: e.target.value })} className="input" placeholder="Ex: Maintenance planifiée" /></div>
           <div><label className="label">Contenu</label><textarea value={form.body || ''} onChange={e => setForm({ ...form, body: e.target.value })} className="input resize-none" rows={4} /></div>
@@ -2807,10 +2813,9 @@ function ReleasesSection() {
             <p className="text-[10px] text-slate-400 mt-0.5">Une correction par ligne</p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setEditOpen(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">Annuler</button>
-            <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all disabled:opacity-50">
+            <button onClick={() => setEditOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <button onClick={save} disabled={saving} className="btn-icon-primary" title={editId ? 'Enregistrer' : 'Créer'}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {editId ? 'Enregistrer' : 'Créer'}
             </button>
           </div>
         </div>

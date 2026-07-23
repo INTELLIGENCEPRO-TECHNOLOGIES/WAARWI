@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useRef, useCallback, useState } from 'react';
-import { X, GripVertical } from 'lucide-react';
+import { X, GripVertical, Check, Trash2 } from 'lucide-react';
 
 type Props = {
   open: boolean;
@@ -10,9 +10,10 @@ type Props = {
   footer?: ReactNode;
   layer?: 'base' | 'top';
   fullMobile?: boolean;
+  fullscreenMobile?: boolean;
 };
 
-export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false }: Props) {
+export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false }: Props) {
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -22,22 +23,23 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
   }, [open, onClose]);
 
   if (!open) return null;
-  const w = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' }[size];
+  const wBase = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' }[size];
+  const w = fullscreenMobile ? wBase.replace('max-w-', 'sm:max-w-') : wBase;
   const z = layer === 'top' ? 'z-[70]' : 'z-50';
 
   return (
     <div className={`fixed inset-0 ${z} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`}>
       <div className="scrim" onClick={onClose} />
-      <div className={`relative w-full ${w} bg-white ${fullMobile ? 'rounded-none sm:rounded-3xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-3xl sm:rounded-3xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col`}>
-        {!fullMobile && <div className="sm:hidden sheet-handle" />}
-        <div className={`flex items-center justify-between border-b border-slate-100 ${fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4' : 'px-4 py-3 sm:px-5 sm:py-4'}`}>
-          <h3 className={`font-bold text-slate-900 tracking-tight ${fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>
+      <div className={`relative w-full ${w} bg-white ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl' : fullMobile ? 'rounded-none sm:rounded-3xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-3xl sm:rounded-3xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col`}>
+        {!fullMobile && !fullscreenMobile && <div className="sm:hidden sheet-handle" />}
+        <div className={`flex items-center justify-between border-b border-slate-100 ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4' : fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4' : 'px-4 py-3 sm:px-5 sm:py-4'}`}>
+          <h3 className={`font-bold text-slate-900 tracking-tight ${fullscreenMobile ? 'text-base sm:text-lg' : fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>
           <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className={`flex-1 overflow-y-auto ${fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-4' : 'px-3 py-3 sm:px-5 sm:py-4'}`}>{children}</div>
-        {footer && <div className={`border-t border-slate-100 bg-slate-50/70 sm:rounded-b-3xl flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full pb-safe ${fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-3' : 'px-4 sm:px-5 py-3'}`}>{footer}</div>}
+        <div className={`flex-1 overflow-y-auto ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4' : fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-4' : 'px-3 py-3 sm:px-5 sm:py-4'}`}>{children}</div>
+        {footer && <div className={`border-t border-slate-100 bg-slate-50/70 sm:rounded-b-3xl flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full pb-safe ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-3' : fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-3' : 'px-4 sm:px-5 py-3'}`}>{footer}</div>}
       </div>
     </div>
   );
@@ -123,8 +125,10 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm"
       footer={<>
-        <button onClick={onClose} className="btn-secondary">Annuler</button>
-        <button onClick={() => { onConfirm(); onClose(); }} className={danger ? 'btn-danger' : 'btn-primary'}>{confirmLabel}</button>
+        <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+        <button onClick={() => { onConfirm(); onClose(); }} className={danger ? 'btn-icon-danger-solid' : 'btn-icon-primary'} title={confirmLabel}>
+          {danger ? <Trash2 className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+        </button>
       </>}
     >
       <p className="text-slate-600">{message}</p>

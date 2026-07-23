@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Save, Check, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, CornerDownLeft, Printer } from 'lucide-react';
+import { Loader2, Save, Check, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, CornerDownLeft, Printer, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -282,16 +282,16 @@ export function TicketHeaderConfigTab() {
       </div>
 
       <div className="flex items-center gap-2">
-        <button onClick={reset} className="text-xs px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors">
-          Réinitialiser
+        <button onClick={reset} className="btn-icon" title="Réinitialiser">
+          <RotateCcw className="w-4 h-4" />
         </button>
         <button
           onClick={save}
           disabled={saving}
-          className="ml-auto h-11 px-5 rounded-2xl bg-brand-600 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-lg shadow-brand-600/20 disabled:opacity-50 disabled:shadow-none hover:bg-brand-700"
+          className="ml-auto btn-icon-primary"
+          title={saving ? 'Enregistrement…' : saved ? 'Enregistré !' : 'Enregistrer'}
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          {saving ? 'Enregistrement…' : saved ? 'Enregistré !' : 'Enregistrer'}
         </button>
       </div>
     </div>

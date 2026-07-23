@@ -154,7 +154,7 @@ export function DocHeader({ docType, docNumber, date, status, customerLabel = 'C
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-neutral-400">{docType}</div>
-          <div className="text-[18px] font-black text-neutral-900 leading-tight tracking-tight num">{docNumber}</div>
+          <div className="text-[22px] font-bold text-neutral-900 leading-tight doc-number">{docNumber}</div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {status && <DocStatusBadge {...status} />}

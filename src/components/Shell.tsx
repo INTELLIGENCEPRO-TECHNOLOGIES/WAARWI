@@ -5,7 +5,7 @@ import {
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft, UserCheck,
-  X,
+  X, Monitor, Check,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -248,6 +248,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [closing, setClosing] = useState(false);
   const [siteOpen, setSiteOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [siteConfirmPending, setSiteConfirmPending] = useState<typeof sites[0] | null>(null);
 
   const isPOS = route === 'pos';
   const isDashboard = route === 'dashboard';
@@ -467,7 +468,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     title={sidebarCollapsed ? t(item.labelKey) : undefined}
                   >
                     <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
-                    {!sidebarCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
+                    {!sidebarCollapsed && <span className="whitespace-normal break-words">{t(item.labelKey)}</span>}
                     {!sidebarCollapsed && hasChildren && (
                       <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${desktopAcctOpen ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
                     )}
@@ -491,7 +492,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                             className={`nav-item text-[13px] ${childActive2 ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/60 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
                           >
                             <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? 'text-white' : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
-                            <span className="whitespace-nowrap">{t(child.labelKey)}</span>
+                            <span className="whitespace-normal break-words">{t(child.labelKey)}</span>
                           </button>
                         );
                       })}
@@ -512,7 +513,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             title={sidebarCollapsed ? t('nav.settings') : undefined}
           >
             <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
-            {!sidebarCollapsed && <span className="whitespace-nowrap">{t('nav.settings')}</span>}
+            {!sidebarCollapsed && <span className="whitespace-normal break-words">{t('nav.settings')}</span>}
           </button>
         </div>
       )}
@@ -541,6 +542,53 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </div>
         <div className="flex-1 flex items-center gap-3 px-5">
           <div className="flex-1" />
+          {/* Desktop site selector dropdown */}
+          {sites.length > 1 && (
+            <div className="relative">
+              <button
+                onClick={() => setSiteOpen(!siteOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-colors text-sm"
+              >
+                <Monitor className="w-3.5 h-3.5 text-neutral-500" />
+                <span className="font-medium text-neutral-800 max-w-[160px] truncate">{currentSite?.name || 'Site'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${siteOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {siteOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setSiteOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-xl shadow-elevated border border-neutral-200 py-1 z-50 max-h-80 overflow-y-auto">
+                    <div className="px-3 py-1.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Magasins</div>
+                    {sites.map(s => {
+                      const isActive = currentSite?.id === s.id;
+                      const isDefault = profile?.default_site_id === s.id;
+                      return (
+                        <div
+                          key={s.id}
+                          className={`flex items-center gap-2 px-2.5 py-2 mx-1 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-neutral-100' : 'hover:bg-neutral-50'}`}
+                          onClick={() => { if (isActive) { setSiteOpen(false); return; } setSiteConfirmPending(s); setSiteOpen(false); }}
+                        >
+                          <div className={`w-4.5 h-4.5 w-[18px] h-[18px] rounded border-2 flex items-center justify-center shrink-0 ${isActive ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'}`}>
+                            {isActive && <Check className="w-2.5 h-2.5 text-white" />}
+                          </div>
+                          <span className={`flex-1 text-sm truncate ${isActive ? 'font-semibold text-neutral-900' : 'text-neutral-600'}`}>{s.name}</span>
+                          {isDefault && <Star className="w-3.5 h-3.5 text-neutral-900 shrink-0" fill="currentColor" />}
+                          {!isDefault && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDefaultSite(s); }}
+                              className="shrink-0 p-0.5 rounded text-neutral-300 hover:text-neutral-700 transition-colors"
+                              title="Definir comme defaut"
+                            >
+                              <Star className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-2 shrink-0">
             <LanguageSwitcher compact />
             {newOrdersCount > 0 && (
@@ -600,47 +648,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       >
         {navList}
         <div className={`p-3 border-t space-y-2 ${sidebarDark ? 'border-white/10' : 'border-neutral-100'}`}>
-          {sites.length > 0 && !sidebarCollapsed && (
-            <div className="relative">
-              <div className={`text-[10px] font-semibold tracking-widest uppercase px-1 mb-1 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Point de vente</div>
-              <button
-                onClick={() => setSiteOpen(v => !v)}
-                className={`w-full flex items-center gap-2 px-3 h-10 rounded-lg border text-[13px] font-medium transition-all ${sidebarDark ? 'bg-white/6 border-white/10 text-white/80 hover:border-white/20' : 'bg-white border-neutral-200 hover:border-neutral-300 text-neutral-800'}`}
-              >
-                <Store className={`w-4 h-4 shrink-0 ${sidebarDark ? 'text-white/50' : 'text-neutral-500'}`} />
-                <span className="flex-1 text-left truncate">{currentSite?.name || 'Selectionner'}</span>
-                <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${siteOpen ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
-              </button>
-              {siteOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setSiteOpen(false)} />
-                  <div className={`absolute left-0 right-0 bottom-[calc(100%+6px)] border rounded-xl shadow-elevated py-1 animate-slide-down z-20 max-h-64 overflow-auto ${sidebarDark ? 'bg-neutral-900 border-white/10' : 'bg-white border-neutral-200'}`}>
-                    {sites.map(s => {
-                      const isDefault = (profile as any)?.default_site_id === s.id;
-                      return (
-                        <div key={s.id} className={`flex items-center gap-1 px-2 py-0.5 transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'bg-white/8' : 'bg-neutral-50') : (sidebarDark ? 'hover:bg-white/6' : 'hover:bg-neutral-50')}`}>
-                          <button
-                            onClick={() => { setCurrentSite(s); setSiteOpen(false); onRoute('dashboard'); }}
-                            className={`flex-1 text-left flex items-center gap-2 px-1.5 py-1.5 text-sm rounded-lg transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'text-white font-semibold' : 'text-neutral-900 font-semibold') : (sidebarDark ? 'text-white/70' : 'text-neutral-600')}`}
-                          >
-                            <Store className={`w-4 h-4 ${currentSite?.id === s.id ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
-                            <span className="truncate">{s.name}</span>
-                          </button>
-                          <button
-                            title={isDefault ? 'Magasin par défaut' : 'Définir comme défaut'}
-                            onClick={() => { setDefaultSite(s); setSiteOpen(false); onRoute('dashboard'); }}
-                            className={`shrink-0 p-1.5 rounded-lg transition-colors ${isDefault ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/30 hover:text-white/60' : 'text-neutral-300 hover:text-neutral-600')}`}
-                          >
-                            <Star className="w-3.5 h-3.5" fill={isDefault ? 'currentColor' : 'none'} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
           <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarCollapsed ? 'justify-center' : ''} ${sidebarDark ? 'text-white/50 hover:bg-white/8 hover:text-white/80' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}>
             <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarCollapsed && 'Déconnexion'}
           </button>
@@ -824,14 +831,14 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                         return (
                           <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'bg-white/10' : 'bg-neutral-100') : (sidebarDark ? 'hover:bg-white/6' : 'hover:bg-neutral-50')}`}>
                             <button
-                              onClick={() => { setCurrentSite(s); onRoute('dashboard'); closeDrawer(); }}
+                              onClick={() => { if (s.id === currentSite?.id) { closeDrawer(); return; } setSiteConfirmPending(s); closeDrawer(); }}
                               className={`flex-1 flex items-center gap-2 px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'text-white font-semibold' : 'text-neutral-900 font-semibold') : (sidebarDark ? 'text-white/70' : 'text-neutral-600')}`}
                             >
                               <Store className={`w-3.5 h-3.5 ${currentSite?.id === s.id ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
                               <span className="truncate flex-1 text-left">{s.name}</span>
                             </button>
                             <button
-                              onClick={() => { setDefaultSite(s); onRoute('dashboard'); closeDrawer(); }}
+                              onClick={() => { setDefaultSite(s); closeDrawer(); }}
                               title={isDefault ? 'Défaut' : 'Définir défaut'}
                               className={`shrink-0 p-1.5 transition-colors ${isDefault ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/30 hover:text-white/60' : 'text-neutral-300 hover:text-neutral-600')}`}
                             >
@@ -1144,6 +1151,54 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         ))}
       </div>
       </div>
+
+      {/* Site switch confirmation modal */}
+      {siteConfirmPending && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setSiteConfirmPending(null)} />
+          <div className="relative bg-white rounded-2xl shadow-premium border border-neutral-200 w-[90vw] max-w-[340px] overflow-hidden animate-scale-in">
+            <div className="px-5 pt-5 pb-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center">
+                  <Monitor className="w-4.5 h-4.5 text-neutral-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900">Changer de magasin</h3>
+                  <p className="text-[11px] text-neutral-400">Confirmer la bascule</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-50 border border-neutral-100">
+                  <div className="w-2 h-2 rounded-full bg-neutral-300" />
+                  <span className="text-xs text-neutral-500 flex-1">Actuel</span>
+                  <span className="text-xs font-medium text-neutral-700">{currentSite?.name}</span>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800">
+                  <div className="w-2 h-2 rounded-full bg-white" />
+                  <span className="text-xs text-neutral-400 flex-1">Nouveau</span>
+                  <span className="text-xs font-semibold text-white">{siteConfirmPending.name}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex border-t border-neutral-100">
+              <button
+                onClick={() => setSiteConfirmPending(null)}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-3 text-xs font-medium text-neutral-500 hover:bg-neutral-50 transition-colors border-r border-neutral-100"
+              >
+                <X className="w-3.5 h-3.5" />
+                Annuler
+              </button>
+              <button
+                onClick={() => { setCurrentSite(siteConfirmPending); setSiteConfirmPending(null); }}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-3 text-xs font-semibold text-neutral-900 hover:bg-neutral-50 transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

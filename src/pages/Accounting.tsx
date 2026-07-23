@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X } from 'lucide-react';
+import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X, Check, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -92,7 +92,7 @@ function PlanTab() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un compte…" className="input pl-9" />
         </div>
-        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-primary"><Plus className="w-4 h-4" />Nouveau compte</button>
+        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-icon-primary" title="Nouveau compte"><Plus className="w-4 h-4" /></button>
       </div>
 
       <div className="space-y-3">
@@ -124,7 +124,7 @@ function PlanTab() {
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le compte' : 'Nouveau compte'} size="sm"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}Enregistrer</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}</button></>}>
         <div className="space-y-3">
           <div>
             <label className="label">Code (7 chiffres) *</label>
@@ -227,7 +227,7 @@ function JournalsTab() {
           <option value="">Tous les journaux</option>
           {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        <button onClick={() => setOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Nouvelle écriture</button>
+        <button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouvelle écriture"><Plus className="w-4 h-4" /></button>
       </div>
 
       <div className="card overflow-hidden">
@@ -280,7 +280,7 @@ function JournalsTab() {
 
       {/* Create modal */}
       <Modal open={open} onClose={() => setOpen(false)} title="Nouvelle écriture comptable" size="lg"
-        footer={<><button onClick={() => setOpen(false)} className="btn-secondary">Annuler</button><button onClick={save} disabled={saving || !isBalanced} className="btn-primary disabled:opacity-50">{saving && <Loader2 className="w-4 h-4 animate-spin" />}<Save className="w-4 h-4" />Enregistrer</button></>}>
+        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving || !isBalanced} className="btn-icon-primary disabled:opacity-50" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}</button></>}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
@@ -306,7 +306,7 @@ function JournalsTab() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="label mb-0">Lignes d'écriture</label>
-              <button onClick={() => setEntryLines(p => [...p, { account_code: '', account_name: '', debit: 0, credit: 0, label: '' }])} className="text-xs text-brand-700 hover:underline flex items-center gap-1"><Plus className="w-3 h-3" />Ajouter</button>
+              <button onClick={() => setEntryLines(p => [...p, { account_code: '', account_name: '', debit: 0, credit: 0, label: '' }])} className="btn-icon" title="Ajouter une ligne"><Plus className="w-4 h-4" /></button>
             </div>
             <div className="space-y-2">
               {entryLines.map((l, idx) => (

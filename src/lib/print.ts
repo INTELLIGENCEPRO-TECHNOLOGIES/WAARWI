@@ -271,6 +271,8 @@ function printHtml(html: string, delayMs = 300) {
 
 // ── 80mm Thermal Receipt Style ────────────────────────────────────────────────
 // All text is pure black, no grey, no opacity, optimized for low-quality thermal printers
+const printFontLink = '<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">';
+
 const ticketStyle = `
   @page { margin: 0; size: 80mm auto; }
   @media print {
@@ -327,8 +329,11 @@ const ticketStyle = `
   }
   .doc-num {
     text-align: center;
-    font-size: 14px;
+    font-size: 17px;
     font-weight: 800;
+    font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
     color: #000000;
   }
   .doc-date {
@@ -471,7 +476,7 @@ export function printTicket80(
   ].join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket ${esc(sale.sale_number)}</title>
-<style>${ticketStyle}</style></head><body>
+<style>${ticketStyle}</style>${printFontLink}</head><body>
 ${tenantHeader80(tenant)}
 <hr class="hr-solid" />
 <div class="doc-label">TICKET DE CAISSE</div>
@@ -518,7 +523,7 @@ export function printReturnTicket80(
     .join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Retour</title>
-<style>${ticketStyle}</style></head><body>
+<style>${ticketStyle}</style>${printFontLink}</head><body>
 ${tenantHeader80(tenant)}
 <hr class="hr-solid" />
 <div class="doc-label">TICKET DE RETOUR</div>
@@ -552,7 +557,7 @@ export function printEncaissementTicket80(opts: {
   const date = opts.createdAt ? new Date(opts.createdAt) : new Date();
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recu ${esc(opts.receiptNumber)}</title>
-<style>${ticketStyle}</style></head><body>
+<style>${ticketStyle}</style>${printFontLink}</head><body>
 ${tenantHeader80(opts.tenant)}
 <hr class="hr-solid" />
 <div class="doc-label">RECU D'ENCAISSEMENT</div>
@@ -591,7 +596,7 @@ export function printDecaissementTicket80(opts: {
   const date = opts.createdAt ? new Date(opts.createdAt) : new Date();
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recu ${esc(opts.receiptNumber)}</title>
-<style>${ticketStyle}</style></head><body>
+<style>${ticketStyle}</style>${printFontLink}</head><body>
 ${tenantHeader80(opts.tenant)}
 <hr class="hr-solid" />
 <div class="doc-label">BON DE DECAISSEMENT</div>
@@ -625,7 +630,7 @@ export type XReportControl = {
 };
 
 export type XReportMovement = {
-  kind: 'expense' | 'income' | 'customer_prepayment';
+  kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal';
   amount: number;
   reason: string;
   customer_name: string | null;
@@ -659,9 +664,10 @@ export function printXReport80(opts: {
   const topArticles = opts.topArticles || [];
 
   const mvExpense = movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+  const mvWithdrawal = movements.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
   const mvIncome = movements.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
   const mvPrepay = movements.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-  const netTotal = opts.openingAmount + opts.salesTotal - mvExpense;
+  const netTotal = opts.openingAmount + opts.salesTotal - mvExpense - mvWithdrawal;
   const variance = controls.length > 0
     ? controls.reduce((s, c) => s + Number(c.difference_amount ?? (c.counted_amount - c.theoretical_amount)), 0)
     : 0;
@@ -671,13 +677,13 @@ export function printXReport80(opts: {
 <div class="section">Mouvements de caisse</div>
 <div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)} FCFA</span></div>
 ${movements.map(m => {
-    const label = m.kind === 'expense' ? 'Dépense' : m.kind === 'customer_prepayment' ? 'Acompte' : 'Entrée';
-    const sign = m.kind === 'expense' ? '-' : '+';
+    const label = m.kind === 'expense' ? 'Dépense' : m.kind === 'customer_prepayment' ? 'Acompte' : m.kind === 'customer_withdrawal' ? 'Retrait' : 'Entrée';
+    const sign = m.kind === 'expense' || m.kind === 'customer_withdrawal' ? '-' : '+';
     const reason = [m.customer_name, m.reason].filter(Boolean).join(' · ');
     return `<div class="row"><span>${esc(label)}${reason ? ' : ' + esc(reason.slice(0, 22)) : ''}</span><span>${sign}${fmtMoney(m.amount)} FCFA</span></div>`;
   }).join('')}
 <div class="row"><span>Sous-total entrées</span><span>+ ${fmtMoney(mvIncome + mvPrepay)} FCFA</span></div>
-<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense)} FCFA</span></div>
+<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense + mvWithdrawal)} FCFA</span></div>
 <hr class="hr" />
 <div class="row total"><span>Net caisse</span><span>${fmtMoney(netTotal)} FCFA</span></div>
 ` : '';
@@ -712,7 +718,7 @@ ${topArticles.map(a => `<div class="row"><span>${esc(a.name.slice(0, 24))}</span
 ` : '';
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>X de Caisse</title>
-<style>${ticketStyle}</style></head><body>
+<style>${ticketStyle}</style>${printFontLink}</head><body>
 ${tenantHeader80(opts.tenant)}
 <hr class="hr-solid" />
 <div class="doc-label">X DE CAISSE</div>
@@ -814,11 +820,13 @@ const a4Style = `
     text-transform: uppercase;
   }
   .doc-meta h2 {
-    font-size: 21px;
+    font-size: 26px;
     font-weight: 900;
     margin-top: 10px;
     color: #000000;
+    font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
   .doc-meta p {
     font-size: 11px;
@@ -1091,7 +1099,7 @@ export function printDocumentA4(opts: {
   ].map(m => `<p>${esc(m.label)} : ${esc(m.value)}</p>`).join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.docLabel)} ${esc(opts.docNumber)}</title>
-<style>${a4Style}</style></head><body>
+<style>${a4Style}</style>${printFontLink}</head><body>
 <div class="page-content">
 <div class="header">
   <div class="brand">
@@ -1217,7 +1225,7 @@ export function printStockMovementA4(opts: StockMovementPrintOpts) {
   .header .company { font-size: 14pt; font-weight: 800; color: #0f172a; }
   .header .info { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
   .header .right { text-align: right; }
-  .header .ref { font-family: 'Courier New', monospace; font-size: 11pt; font-weight: 800; color: #0f766e; }
+  .header .ref { font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; font-weight: 800; color: #0f766e; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .header .date { font-size: 9pt; color: #475569; margin-top: 1mm; }
   .title { text-align: center; font-size: 14pt; font-weight: 800; letter-spacing: 1px; color: #0f766e; margin: 5mm 0 3mm; text-transform: uppercase; }
   .meta-bar { display: flex; gap: 4mm; flex-wrap: wrap; margin-bottom: 5mm; padding: 3mm 4mm; border: 1px solid #e2e8f0; border-radius: 2mm; background: #f8fafc; }
@@ -1241,7 +1249,7 @@ export function printStockMovementA4(opts: StockMovementPrintOpts) {
   .sig-block .line { height: 15mm; border-bottom: 1px solid #94a3b8; }
   .sig-block .cap { margin-top: 2mm; font-size: 8pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
   .footer-brand { margin-top: 8mm; padding-top: 3mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 8pt; color: #94a3b8; }
-</style></head><body>
+</style>${printFontLink}</head><body>
 <div class="doc">
   <div class="header">
     <div class="left">
@@ -1332,12 +1340,12 @@ export function printStockMovement80(opts: StockMovementPrintOpts) {
   .logo-wrap img { max-width: 48mm; max-height: 22mm; object-fit: contain; }
   .title { text-align: center; font-weight: 900; font-size: 14px; margin: 4mm 0 2mm; letter-spacing: 0.5px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 2mm 0; }
   .info { font-size: 10px; margin: 2mm 0; }
-  .info span { font-weight: 700; }
+  .info span { font-weight: 700; font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-variant-numeric: tabular-nums; }
   table { width: 100%; border-collapse: collapse; margin: 2mm 0; }
   table td { font-size: 11px; border-bottom: 1px dotted #ccc; }
   .total { border-top: 1.5px solid #000; margin-top: 1mm; padding-top: 2mm; font-weight: 900; font-size: 13px; display: flex; justify-content: space-between; }
   .footer { margin-top: 4mm; padding-top: 2mm; border-top: 1px dashed #000; text-align: center; font-size: 9px; color: #000; }
-</style></head><body>
+</style>${printFontLink}</head><body>
   ${tenantHeader80(t)}
 
   <div class="title">${esc(title)}</div>
@@ -1404,7 +1412,7 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
   .header .company { font-size: 13pt; font-weight: 800; color: #0f172a; }
   .header .sub { font-size: 8pt; color: #475569; margin-top: 0.5mm; }
   .header .right { text-align: right; }
-  .header .ref { font-family: 'Courier New', monospace; font-size: 10pt; font-weight: 800; color: #0f766e; }
+  .header .ref { font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-size: 10pt; font-weight: 800; color: #0f766e; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .header .date { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
   .doc-title { text-align: center; font-size: 13pt; font-weight: 800; letter-spacing: 1px; color: #0f766e; margin: 4mm 0 2mm; text-transform: uppercase; }
   .doc-subtitle { text-align: center; font-size: 8.5pt; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4mm; }
@@ -1428,7 +1436,7 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
   .sig-block .line { height: 13mm; border-bottom: 1px solid #94a3b8; }
   .sig-block .cap { margin-top: 1.5mm; font-size: 7.5pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
   .brand-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 7.5pt; color: #94a3b8; }
-</style></head><body>
+</style>${printFontLink}</head><body>
 <div class="doc">
   <div class="header">
     <div>
@@ -1551,6 +1559,7 @@ export function printWarrantyCertificate(opts: WarrantyCertificateOpts) {
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>FICHE DE GARANTIE - ${esc(opts.saleNumber)}</title>
 <style>${a4Style}
+  .doc-number { font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .warranty-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.5px; }
   .warranty-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin: 16px 0; }
   .warranty-info-item { padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; }
@@ -1568,7 +1577,7 @@ export function printWarrantyCertificate(opts: WarrantyCertificateOpts) {
   .sig-block-w { text-align: center; flex: 1; }
   .sig-block-w .line-w { border-bottom: 1px solid #d1d5db; height: 50px; margin-bottom: 6px; }
   .sig-block-w .cap-w { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #6b7280; letter-spacing: 0.3px; }
-</style></head><body>
+</style>${printFontLink}</head><body>
 <div class="page-content">
   <div class="header">
     <div class="brand">
@@ -1649,7 +1658,7 @@ export function printHtmlReport(opts: {
   tbody tr:nth-child(even) { background: #f8fafc; }
   tbody td { padding: 1.8mm 2.5mm; font-size: 8.5pt; vertical-align: top; font-variant-numeric: tabular-nums; }
   .brand-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 7.5pt; color: #94a3b8; }
-</style></head><body>
+</style>${printFontLink}</head><body>
 <div class="doc">
   <div class="doc-title">${esc(opts.title)}</div>
   ${opts.subtitle ? `<div class="doc-subtitle">${esc(opts.subtitle)}</div>` : ''}

@@ -199,7 +199,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [returnDetail, setReturnDetail] = useState<SaleReturn | null>(null);
   const [returnItemsDetail, setReturnItemsDetail] = useState<any[]>([]);
   const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', refund_method: 'cash' as string, restock: true });
-  const [returnLines, setReturnLines] = useState<{ item_id: string; article_id: string; name: string; max_qty: number; quantity: number; unit_price: number; selected: boolean }[]>([]);
+  const [returnLines, setReturnLines] = useState<{ item_id: string; article_id: string; name: string; max_qty: number; quantity: number; unit_price: number; purchase_cost: number; selected: boolean }[]>([]);
   const [returnWorkflowBusy, setReturnWorkflowBusy] = useState(false);
   const [returnCashConfirmOpen, setReturnCashConfirmOpen] = useState(false);
 
@@ -1422,7 +1422,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       .map(i => {
         const alreadyReturned = retMap[i.article_id] || 0;
         const remaining = Math.max(0, Number(i.quantity) - alreadyReturned);
-        return { item_id: i.id, article_id: i.article_id, name: i.name, max_qty: remaining, quantity: Math.min(remaining, 1), unit_price: i.unit_price, selected: false };
+        return { item_id: i.id, article_id: i.article_id, name: i.name, max_qty: remaining, quantity: Math.min(remaining, 1), unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, selected: false };
       })
       .filter(i => i.max_qty > 0);
     setReturnLines(lines);
@@ -1475,7 +1475,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (e || !ret) { error(e?.message || 'Erreur'); setSaving(false); return; }
     await supabase.from('sale_return_items').insert(sel.map(i => ({
       tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, name: i.name,
-      quantity: i.quantity, unit_price: i.unit_price, total: i.quantity * i.unit_price,
+      quantity: i.quantity, unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, total: i.quantity * i.unit_price,
     })));
     if (returnForm.restock) {
       for (const item of sel) {
@@ -1722,7 +1722,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           {customerFilter && <span className="px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 inline-flex items-center gap-1"><User className="w-3 h-3" />{customers.find(c => c.id === customerFilter)?.name}</span>}
           {(dateFrom || dateTo) && <span className="px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 inline-flex items-center gap-1"><Calendar className="w-3 h-3" />{dateFrom || '…'} → {dateTo || '…'}</span>}
           {(minAmount || maxAmount) && <span className="px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200">{minAmount || '0'} – {maxAmount || '∞'}</span>}
-          <button onClick={clearFilters} className="px-2 py-1 rounded-full bg-white text-slate-500 border border-slate-200 hover:bg-slate-100 inline-flex items-center gap-1"><X className="w-3 h-3" />Réinitialiser</button>
+          <button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -1733,7 +1733,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         <>
           {tab === 'quotes' && (
             filteredQuotes.length === 0 ? (
-              <div className="card-premium"><EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => setQuoteOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Nouveau devis</button>} /></div>
+              <div className="card-premium"><EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => setQuoteOpen(true)} className="btn-icon-primary" title="Nouveau devis"><Plus className="w-4 h-4" /></button>} /></div>
             ) : (
               <div className={flashTab === 'quotes' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
                 <div className="md:hidden space-y-2 count-up">
@@ -1744,7 +1744,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                         <button onClick={() => openQuoteDetail(q)} className="text-left flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono text-[11px] font-bold text-slate-700">{q.quote_number}</span>
+                              <span className="doc-number text-[13px] font-bold text-slate-700">{q.quote_number}</span>
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
                               </span>
@@ -1787,7 +1787,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                           const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
                           return (
                             <tr key={q.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openQuoteDetail(q)}>
-                              <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">{q.quote_number}</td>
+                              <td className="px-4 py-3 doc-number text-sm font-semibold text-slate-700">{q.quote_number}</td>
                               <td className="px-4 py-3 text-xs text-slate-500 num whitespace-nowrap">{formatDate(q.created_at)}</td>
                               <td className="px-4 py-3 text-slate-700">{q.customers?.name || <span className="text-slate-400">—</span>}</td>
                               <td className="px-4 py-3 hidden lg:table-cell text-slate-500 text-xs num">{q.valid_until ? formatDate(q.valid_until) : '—'}</td>
@@ -1818,7 +1818,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
           {tab === 'invoices' && (
             filteredInvoices.length === 0 ? (
-              <div className="card-premium"><EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="btn-primary"><Plus className="w-4 h-4" />Nouvelle facture</button>} /></div>
+              <div className="card-premium"><EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="btn-icon-primary" title="Nouvelle facture"><Plus className="w-4 h-4" /></button>} /></div>
             ) : (
               <>
                 <div className="md:hidden space-y-2 count-up">
@@ -1830,7 +1830,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono text-[11px] font-bold text-slate-700">{inv.sale_number}</span>
+                              <span className="doc-number text-[13px] font-bold text-slate-700">{inv.sale_number}</span>
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
                               </span>
@@ -1875,7 +1875,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                           const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
                           return (
                             <tr key={inv.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openInvoiceDetail(inv)}>
-                              <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">{inv.sale_number}</td>
+                              <td className="px-4 py-3 doc-number text-sm font-semibold text-slate-700">{inv.sale_number}</td>
                               <td className="px-4 py-3 text-xs text-slate-500 num whitespace-nowrap">{formatDateTime(inv.created_at)}</td>
                               <td className="px-4 py-3 text-slate-700">{inv.customers?.name || <span className="text-slate-400">Client comptoir</span>}</td>
                               <td className="px-4 py-3 text-right font-bold text-slate-900 num">{formatFCFA(inv.total)}</td>
@@ -1920,7 +1920,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   icon={tab === 'returns' ? RotateCcw : Wallet}
                   title={tab === 'returns' ? 'Aucun retour' : 'Aucun avoir'}
                   description={tab === 'returns' ? 'Les retours clients apparaîtront ici.' : 'Les avoirs clients apparaîtront ici.'}
-                  action={<button onClick={() => setReturnOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />{tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}</button>}
+                  action={<button onClick={() => setReturnOpen(true)} className="btn-icon-primary" title={tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}><Plus className="w-4 h-4" /></button>}
                 />
               </div>
             ) : (
@@ -1936,7 +1936,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono text-[11px] font-bold text-slate-700">{r.return_number}</span>
+                              <span className="doc-number text-[13px] font-bold text-slate-700">{r.return_number}</span>
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
                               </span>
@@ -1982,10 +1982,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                           const used = Number(r.credit_used || 0);
                           return (
                             <tr key={r.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openReturnDetail(r)}>
-                              <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">{r.return_number}</td>
+                              <td className="px-4 py-3 doc-number text-sm font-semibold text-slate-700">{r.return_number}</td>
                               <td className="px-4 py-3 text-xs text-slate-500 num whitespace-nowrap">{formatDateTime(r.created_at)}</td>
                               <td className="px-4 py-3 text-slate-700">{r.customers?.name || <span className="text-slate-400">—</span>}</td>
-                              <td className="px-4 py-3 hidden lg:table-cell font-mono text-xs text-slate-500">{r.sales?.sale_number || '—'}</td>
+                              <td className="px-4 py-3 hidden lg:table-cell doc-number text-sm text-slate-500">{r.sales?.sale_number || '—'}</td>
                               {tab === 'returns' && <td className="px-4 py-3 hidden lg:table-cell text-center">{r.restock ? <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Oui</span> : <span className="text-slate-400 text-xs">Non</span>}</td>}
                               {tab === 'credits' && <td className="px-4 py-3 hidden lg:table-cell text-right num text-slate-600">{formatFCFA(used)}</td>}
                               <td className="px-4 py-3 text-center">
@@ -2296,8 +2296,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Convert quote → sale ─────────────────────────────── */}
       <Modal open={!!convertFrom} onClose={() => !converting && setConvertFrom(null)} title="Convertir en facture" size="sm"
         footer={<>
-          <button onClick={() => setConvertFrom(null)} className="btn-secondary" disabled={converting}>Annuler</button>
-          <button onClick={confirmConvert} disabled={converting || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-primary">{converting && <Loader2 className="w-4 h-4 animate-spin" />}<ArrowRight className="w-4 h-4" />Créer facture</button>
+          <button onClick={() => setConvertFrom(null)} className="btn-icon" title="Annuler" disabled={converting}><X className="w-4 h-4" /></button>
+          <button onClick={confirmConvert} disabled={converting || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-icon-primary" title="Créer facture">{converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}</button>
         </>}>
         {convertFrom && (() => {
           const convertIpmCfg = parseConvention(convertIpmConvention);
@@ -2309,7 +2309,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Devis source</div>
-                  <div className="font-mono text-sm font-bold text-brand-900 mt-0.5">{convertFrom.quote_number}</div>
+                  <div className="doc-number text-sm font-bold text-brand-900 mt-0.5">{convertFrom.quote_number}</div>
                   <div className="text-[11px] text-slate-600 mt-0.5">{convertFrom.customers?.name || 'Client comptoir'}</div>
                 </div>
                 <div className="text-right">
@@ -2605,15 +2605,15 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Register payment modal ───────────────────────────── */}
       <Modal open={payOpen} onClose={() => !paying && setPayOpen(false)} title="Encaisser la facture" size="sm"
         footer={<>
-          <button onClick={() => setPayOpen(false)} className="btn-secondary" disabled={paying}>Annuler</button>
-          <button onClick={registerPayment} disabled={paying} className="btn-primary">{paying && <Loader2 className="w-4 h-4 animate-spin" />}<Coins className="w-4 h-4" />Enregistrer</button>
+          <button onClick={() => setPayOpen(false)} className="btn-icon" title="Annuler" disabled={paying}><X className="w-4 h-4" /></button>
+          <button onClick={registerPayment} disabled={paying} className="btn-icon-primary" title="Enregistrer">{paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}</button>
         </>}>
         {invoiceDetail && (
           <div className="space-y-3">
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between">
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700/70">Solde dû</div>
-                <div className="font-mono text-xs font-bold text-amber-900 mt-0.5">{invoiceDetail.sale_number}</div>
+                <div className="doc-number text-sm font-bold text-amber-900 mt-0.5">{invoiceDetail.sale_number}</div>
               </div>
               <div className="text-xl font-bold text-amber-700 num">{formatFCFA(invoiceDue)}</div>
             </div>
@@ -2638,8 +2638,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Apply credit modal ──────────────────────────────── */}
       <Modal open={creditOpen} onClose={() => !applyingCredit && setCreditOpen(false)} title="Appliquer un avoir" size="sm"
         footer={<>
-          <button onClick={() => setCreditOpen(false)} className="btn-secondary" disabled={applyingCredit}>Annuler</button>
-          <button onClick={applyCredit} disabled={applyingCredit} className="btn-primary">{applyingCredit && <Loader2 className="w-4 h-4 animate-spin" />}<Wallet className="w-4 h-4" />Appliquer</button>
+          <button onClick={() => setCreditOpen(false)} className="btn-icon" title="Annuler" disabled={applyingCredit}><X className="w-4 h-4" /></button>
+          <button onClick={applyCredit} disabled={applyingCredit} className="btn-icon-primary" title="Appliquer">{applyingCredit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}</button>
         </>}>
         {invoiceDetail && (
           <div className="space-y-3">
@@ -2676,11 +2676,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {/* ── Return create modal ─────────────────────────────── */}
       <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title="Nouveau retour client" size="lg" fullMobile
         footer={<>
-          <button onClick={() => setReturnOpen(false)} className="btn-secondary">Annuler</button>
-          <button onClick={() => saveReturn()} disabled={saving || returnLines.filter(i => i.selected && i.quantity > 0).length === 0} className="btn-primary">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            <RotateCcw className="w-4 h-4" />
-            Enregistrer le retour
+          <button onClick={() => setReturnOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={() => saveReturn()} disabled={saving || returnLines.filter(i => i.selected && i.quantity > 0).length === 0} className="btn-icon-primary" title="Enregistrer le retour">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
           </button>
         </>}>
         <div className="space-y-2 sm:space-y-4">
@@ -3233,11 +3231,11 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
               </>
             )}
             {editingQuote && <button onClick={onPrint} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title="Imprimer"><Printer className="w-4 h-4" /></button>}
-            <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">Fermer</button>
+            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
             {!readOnly && (
-              <button onClick={() => saveQuote()} disabled={saving} className="btn-primary text-xs px-4 py-1.5">
-                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                Enregistrer
+              <button onClick={() => saveQuote()} disabled={saving} className="btn-icon-primary" title="Enregistrer">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {!saving && <Check className="w-4 h-4" />}
               </button>
             )}
           </div>
@@ -3259,7 +3257,7 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
                 {quoteForm.warranty && <span className="text-[11px] text-slate-500">Garantie : {quoteForm.warranty}</span>}
                 {quoteForm.representative && <span className="text-[11px] text-slate-500">Représentant : {repLabel(quoteForm.representative) || quoteForm.representative}</span>}
               </div>
-              <button onClick={() => setHeaderValidated(false)} className="shrink-0 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors">Modifier</button>
+              <button onClick={() => setHeaderValidated(false)} className="btn-icon" title="Modifier"><Pencil className="w-4 h-4" /></button>
             </div>
           </div>
         ) : (
@@ -3574,10 +3572,9 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
           </div>
           <div className="flex items-center gap-2">
             {saving && <span className="text-[10px] text-neutral-700 font-medium animate-pulse">Sauvegarde...</span>}
-            <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">Fermer</button>
-            <button onClick={saveInvoice} disabled={saving || (ipmBeneficiaire && !ipmDocValidation.valide)} className="btn-primary text-xs px-4 py-1.5">
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {editingInvoiceId ? 'Mettre à jour' : 'Enregistrer'}
+            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+            <button onClick={saveInvoice} disabled={saving || (ipmBeneficiaire && !ipmDocValidation.valide)} className="btn-icon-primary" title={editingInvoiceId ? 'Mettre à jour' : 'Enregistrer'}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
           </div>
         </div>
