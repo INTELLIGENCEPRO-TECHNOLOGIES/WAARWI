@@ -58,6 +58,40 @@ type OrderConfirmation = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
+function setMetaTag(attr: 'property' | 'name', key: string, content: string) {
+  let el = document.head.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+  if (!el) {
+    el = document.createElement('meta');
+    el.setAttribute(attr, key);
+    document.head.appendChild(el);
+  }
+  el.setAttribute('content', content);
+}
+
+const DEFAULT_TITLE = 'WAARWI — Plateforme Business 2.0 made in Sénégal';
+const DEFAULT_DESC = 'WAARWI — Plateforme Business 2.0 made in Sénégal';
+const DEFAULT_OG_IMAGE = '/waarwi-mark.png';
+
+function applyShopMeta(name: string, tagline: string, logo: string) {
+  document.title = `${name} — WAARWI`;
+  setMetaTag('property', 'og:title', name);
+  setMetaTag('property', 'og:description', tagline);
+  setMetaTag('property', 'og:image', logo || DEFAULT_OG_IMAGE);
+  setMetaTag('name', 'twitter:title', name);
+  setMetaTag('name', 'twitter:description', tagline);
+  setMetaTag('name', 'twitter:image', logo || DEFAULT_OG_IMAGE);
+}
+
+function resetMeta() {
+  document.title = DEFAULT_TITLE;
+  setMetaTag('property', 'og:title', DEFAULT_TITLE);
+  setMetaTag('property', 'og:description', DEFAULT_DESC);
+  setMetaTag('property', 'og:image', DEFAULT_OG_IMAGE);
+  setMetaTag('name', 'twitter:title', DEFAULT_TITLE);
+  setMetaTag('name', 'twitter:description', DEFAULT_DESC);
+  setMetaTag('name', 'twitter:image', DEFAULT_OG_IMAGE);
+}
+
 function stockBadge(qty: number) {
   if (qty === 0) return { label: 'Rupture', cls: 'bg-red-50 text-red-700 border border-red-100', dot: 'bg-red-500' };
   if (qty <= 3) return { label: 'Stock faible', cls: 'bg-amber-50 text-amber-700 border border-amber-100', dot: 'bg-amber-500' };
@@ -341,6 +375,14 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   const shopPhone = shopSettings?.phone || tenant?.phone || '';
   const shopWhatsApp = shopSettings?.whatsapp || '';
   const shopLogo = shopSettings?.logo_url || tenant?.logo_url || '';
+
+  useEffect(() => {
+    if (!loading && !notFound && shopName) {
+      const tagline = shopSettings?.tagline || `${shopName} sur WAARWI`;
+      applyShopMeta(shopName, tagline, shopLogo);
+    }
+    return () => { resetMeta(); };
+  }, [loading, notFound, shopName, shopLogo, shopSettings?.tagline]);
 
   if (loading) return <ShopLoader />;
   if (notFound) return <ShopNotFound slug={slug} />;

@@ -2,13 +2,6 @@
   command = "npm run build"
   publish = "dist"
 
-# Redirect non-www to www (consolidate SEO authority)
-[[redirects]]
-  from = "https://waarwi.com/*"
-  to = "https://www.waarwi.com/:splat"
-  status = 301
-  force = true
-
 # SPA fallback — must be last
 [[redirects]]
   from = "/*"
