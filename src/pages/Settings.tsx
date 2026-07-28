@@ -6,6 +6,8 @@ import { DocumentSettingsTab } from '../components/DocumentSettingsTab';
 import { RepCommissionSettingsTab } from '../components/RepCommissionSettingsTab';
 import { ExpenseCategoriesTab } from '../components/ExpenseCategoriesTab';
 import { TicketHeaderConfigTab } from '../components/TicketHeaderConfigTab';
+import { ShopAppearanceSettings } from '../components/shop/ShopAppearanceSettings';
+import type { ShopSettings } from '../lib/shopTypes';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -488,6 +490,14 @@ function BoutiqueTab() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Apparence — full width below the two-column layout */}
+      <div className="lg:col-span-2">
+        <ShopAppearanceSettings
+          settings={settings as ShopSettings}
+          onSettingsChange={(s) => setSettings(s)}
+        />
       </div>
     </div>
   );

@@ -131,6 +131,11 @@ p { line-height: 1.6; }
            focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400
            transition-all text-sm;
   }
+  .checkout-input {
+    @apply w-full h-11 px-3.5 rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder-neutral-400
+           focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/15 focus:border-brand-400
+           transition-all text-sm font-medium;
+  }
   textarea.premium-input {
     @apply h-auto py-2.5;
   }
@@ -402,7 +407,7 @@ p { line-height: 1.6; }
 .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 .pt-safe { padding-top: max(0.5rem, env(safe-area-inset-top)); }
 .safe-top { padding-top: env(safe-area-inset-top); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-bottom { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
 .safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 .mt-safe { margin-top: env(safe-area-inset-top); }
 
@@ -726,3 +731,187 @@ html {
 }
 .tab-slide-right { animation: slideTabInRight 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
 .tab-slide-left  { animation: slideTabInLeft 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* ── Shop: fluid responsive grids (auto-fit / minmax) ──── */
+.shop-grid-premium {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.625rem;
+}
+@media (min-width: 640px) { .shop-grid-premium { gap: 0.875rem; } }
+
+.shop-grid-marketplace {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.5rem;
+}
+@media (min-width: 640px) { .shop-grid-marketplace { gap: 0.75rem; } }
+
+.shop-grid-immersive {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+@media (min-width: 640px) { .shop-grid-immersive { gap: 1rem; } }
+
+/* Responsive column counts — fluid from 2 to 5+ */
+@media (max-width: 379px) {
+  .shop-grid-premium,
+  .shop-grid-marketplace,
+  .shop-grid-immersive {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 380px) and (max-width: 639px) {
+  .shop-grid-premium,
+  .shop-grid-marketplace,
+  .shop-grid-immersive {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .shop-grid-premium,
+  .shop-grid-immersive { grid-template-columns: repeat(3, 1fr); }
+  .shop-grid-marketplace { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .shop-grid-premium,
+  .shop-grid-immersive { grid-template-columns: repeat(4, 1fr); }
+  .shop-grid-marketplace { grid-template-columns: repeat(5, 1fr); }
+}
+@media (min-width: 1280px) {
+  .shop-grid-premium,
+  .shop-grid-immersive { grid-template-columns: repeat(5, 1fr); }
+  .shop-grid-marketplace { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* ── Shop: immersive hero with cover image ──────────────── */
+.shop-hero-immersive {
+  position: relative;
+  overflow: hidden;
+  min-height: clamp(280px, 40vh, 480px);
+}
+.shop-hero-cover {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: var(--shop-cover-position, center);
+}
+.shop-hero-cover-fallback {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f766e 100%);
+}
+
+/* ── Shop: no text truncation on essential content ──────── */
+.shop-product-name {
+  overflow: visible;
+  display: block;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* ── Shop: skeleton loading ─────────────────────────────── */
+@keyframes shopShimmer {
+  0% { background-position: -468px 0; }
+  100% { background-position: 468px 0; }
+}
+.shop-skeleton {
+  animation: shopShimmer 1.2s infinite linear;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 936px 100%;
+  border-radius: 8px;
+}
+
+/* ── Shop: lazy image fade-in ───────────────────────────── */
+.shop-lazy-img {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.shop-lazy-img.loaded {
+  opacity: 1;
+}
+
+/* ── Shop: responsive search placeholder ────────────────── */
+@media (max-width: 480px) {
+  .shop-search-input::placeholder {
+    font-size: 12px;
+  }
+}
+
+/* ── Shop: overflow guard ───────────────────────────────── */
+.shop-container {
+  overflow-x: clip;
+}
+
+/* ── Shop: fluid container ─────────────────────────────── */
+.shop-fluid {
+  width: 100%;
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  .shop-fluid { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .shop-fluid { padding-left: 2rem; padding-right: 2rem; }
+}
+
+/* ── Shop: featured horizontal scroll ─────────────────── */
+.shop-featured-scroll {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 0.5rem;
+}
+.shop-featured-scroll::-webkit-scrollbar { display: none; }
+.shop-featured-scroll > * { scroll-snap-align: start; }
+
+/* ── Shop: promo banner marquee ────────────────────────── */
+.shop-promo-text {
+  display: inline-block;
+  white-space: nowrap;
+  animation: shopMarquee 20s linear infinite;
+}
+@keyframes shopMarquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ── Shop: cart pulse badge ────────────────────────────── */
+.shop-cart-pulse {
+  animation: shopPulse 0.3s ease-out;
+}
+@keyframes shopPulse {
+  0% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+/* ── Shop: touch target minimum size ────────────────────── */
+.shop-touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* ── Shop: category bar horizontal scroll ───────────────── */
+.shop-cat-bar {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.shop-cat-bar::-webkit-scrollbar { display: none; }
+.shop-cat-chip {
+  white-space: nowrap;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: all 150ms ease;
+}

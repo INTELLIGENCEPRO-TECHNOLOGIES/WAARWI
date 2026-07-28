@@ -1,62 +1,53 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Search, X, Package, Phone, MessageCircle, ChevronDown, SlidersHorizontal,
-  Tag, Car, CheckCircle2, AlertCircle, MapPin, Zap, ArrowLeft, Info,
-  ShoppingCart, Plus, Minus, Trash2, Loader2, ChevronRight, Store,
-  ClipboardCheck, User, Truck, CreditCard, PartyPopper, ClipboardList,
-  Shield, Star, ShoppingBag, Wrench, Shirt, Cookie, Mail, Globe as GlobeIcon,
+  Search,
+  X,
+  Package,
+  Store,
+  MessageCircle,
+  ShoppingCart,
+  Loader2,
+  ChevronRight,
+  ChevronLeft,
+  ClipboardList,
+  ArrowLeft,
+  AlertCircle,
+  CheckCircle2,
+  User,
+  Truck,
+  CreditCard,
+  PartyPopper,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatFCFA } from '../lib/format';
 import { ShopTrackOrder } from '../components/ShopTrackOrder';
+import type {
+  ShopTenant,
+  ShopSettings,
+  ShopArticle,
+  Compat,
+  Category,
+  VehicleBrand,
+  VehicleModel,
+  CartItem,
+  CheckoutForm,
+  OrderConfirmation,
+} from '../lib/shopTypes';
+import { DELIVERY_LABELS, PAYMENT_LABELS } from '../lib/shopTypes';
+import { getTheme } from '../lib/shopThemes';
+import { usePersistentCart } from '../components/shop/usePersistentCart';
+import { ShopLazyImage } from '../components/shop/ShopLazyImage';
+import { ShopProductCard } from '../components/shop/ShopProductCard';
+import { ShopSearchBar } from '../components/shop/ShopSearchBar';
+import { ShopFilters } from '../components/shop/ShopFilters';
+import { ShopCartDrawer } from '../components/shop/ShopCartDrawer';
+import { ShopProductDetail } from '../components/shop/ShopProductDetail';
+import { ShopHero } from '../components/shop/ShopHero';
+import { ShopFooter } from '../components/shop/ShopFooter';
+import { ShopFeaturedRow } from '../components/shop/ShopFeaturedRow';
+import { ShopCategoryScroller } from '../components/shop/ShopCategoryScroller';
 
-// ─── Local types ─────────────────────────────────────────────────────
-
-type ShopTenant = { id: string; name: string; legal_name?: string; logo_url: string; phone: string; email?: string; address?: string; website?: string; currency: string; business_type?: string };
-type ShopSettings = {
-  shop_name: string; tagline: string; logo_url: string; phone: string;
-  whatsapp: string; address: string; welcome_msg: string; footer_text: string;
-  delivery_modes: string[]; payment_modes: string[];
-};
-type ShopArticle = {
-  id: string; name: string; internal_ref: string; oem_ref: string; brand: string;
-  category_id: string | null; sale_price: number; image_url: string | null;
-  description: string; unit: string; condition: string;
-  stock_qty: number; compatibilities: Compat[];
-};
-type Compat = { brand_name: string; model_name: string; year_start: number; year_end: number };
-type Category = { id: string; name: string; parent_id: string | null };
-type VehicleBrand = { id: string; name: string };
-type VehicleModel = { id: string; name: string; brand_id: string };
-
-type CartItem = {
-  article: ShopArticle;
-  qty: number;
-  unit_price: number; // frozen at add time
-};
-
-type CheckoutForm = {
-  customer_name: string;
-  customer_phone: string;
-  customer_whatsapp: string;
-  customer_email: string;
-  customer_address: string;
-  customer_note: string;
-  delivery_mode: 'retrait' | 'livraison';
-  delivery_address: string;
-  payment_mode: string;
-};
-
-type OrderConfirmation = {
-  order_number: string;
-  total: number;
-  items: CartItem[];
-  customer_name: string;
-  delivery_mode: string;
-  payment_mode: string;
-};
-
-// ─── Helpers ─────────────────────────────────────────────────────────
+// ─── Meta helpers ─────────────────────────────────────────────────────
 
 function setMetaTag(attr: 'property' | 'name', key: string, content: string) {
   let el = document.head.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
@@ -92,112 +83,6 @@ function resetMeta() {
   setMetaTag('name', 'twitter:image', DEFAULT_OG_IMAGE);
 }
 
-function stockBadge(qty: number) {
-  if (qty === 0) return { label: 'Rupture', cls: 'bg-red-50 text-red-700 border border-red-100', dot: 'bg-red-500' };
-  if (qty <= 3) return { label: 'Stock faible', cls: 'bg-amber-50 text-amber-700 border border-amber-100', dot: 'bg-amber-500' };
-  return { label: 'Disponible', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-100', dot: 'bg-emerald-500' };
-}
-
-type ActivityTheme = {
-  heroGradient: string;
-  heroOverlay: string;
-  heroAccent: string;
-  label: string;
-  icon: any;
-  tagline: string;
-  perks: { icon: any; label: string; sub: string }[];
-};
-
-function activityTheme(businessType: string): ActivityTheme {
-  switch (businessType) {
-    case 'auto_parts':
-      return {
-        heroGradient: 'linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0d5c5c 75%, #0d9488 100%)',
-        heroOverlay: 'radial-gradient(600px 320px at 85% 10%, rgba(20,184,166,0.35), transparent 65%), radial-gradient(500px 300px at 10% 100%, rgba(15,118,110,0.35), transparent 60%)',
-        heroAccent: '#14b8a6',
-        label: 'Pièces détachées auto',
-        icon: Car,
-        tagline: 'Références OEM · Compatibilités vérifiées · Stock en temps réel',
-        perks: [
-          { icon: Shield, label: 'Pièces garanties', sub: 'Qualité certifiée' },
-          { icon: Car, label: 'Compatibilités', sub: 'Vérifiées par véhicule' },
-          { icon: Truck, label: 'Livraison express', sub: 'Partout au Sénégal' },
-        ],
-      };
-    case 'textile':
-    case 'clothing':
-      return {
-        heroGradient: 'linear-gradient(135deg, #1a1a1a 0%, #2a1a2a 40%, #3d2b2b 75%, #c2410c 100%)',
-        heroOverlay: 'radial-gradient(600px 320px at 85% 10%, rgba(251,146,60,0.3), transparent 65%), radial-gradient(500px 300px at 10% 100%, rgba(217,119,6,0.3), transparent 60%)',
-        heroAccent: '#fb923c',
-        label: 'Mode & Textile',
-        icon: Shirt,
-        tagline: 'Les dernières tendances · Tailles complètes · Style éditorial',
-        perks: [
-          { icon: Star, label: 'Nouveautés', sub: 'Chaque semaine' },
-          { icon: Shirt, label: 'Toutes les tailles', sub: 'XS au XXL' },
-          { icon: Truck, label: 'Livraison soignée', sub: 'Emballage premium' },
-        ],
-      };
-    case 'food':
-    case 'restaurant':
-      return {
-        heroGradient: 'linear-gradient(135deg, #0b2e13 0%, #14532d 40%, #166534 75%, #16a34a 100%)',
-        heroOverlay: 'radial-gradient(600px 320px at 85% 10%, rgba(74,222,128,0.3), transparent 65%), radial-gradient(500px 300px at 10% 100%, rgba(22,163,74,0.3), transparent 60%)',
-        heroAccent: '#4ade80',
-        label: 'Alimentaire & Frais',
-        icon: Cookie,
-        tagline: 'Produits frais · Disponibilité immédiate · Livraison rapide',
-        perks: [
-          { icon: Zap, label: 'Livraison rapide', sub: '30 minutes en ville' },
-          { icon: Cookie, label: 'Produits frais', sub: 'Qualité garantie' },
-          { icon: CheckCircle2, label: 'Paiement sécurisé', sub: 'Mobile money accepté' },
-        ],
-      };
-    case 'hardware':
-    case 'quincaillerie':
-      return {
-        heroGradient: 'linear-gradient(135deg, #1c1917 0%, #292524 40%, #44403c 75%, #ca8a04 100%)',
-        heroOverlay: 'radial-gradient(600px 320px at 85% 10%, rgba(234,179,8,0.3), transparent 65%), radial-gradient(500px 300px at 10% 100%, rgba(161,98,7,0.3), transparent 60%)',
-        heroAccent: '#eab308',
-        label: 'Quincaillerie & Matériaux',
-        icon: Wrench,
-        tagline: 'Outils professionnels · Matériaux robustes · Stock dépôt',
-        perks: [
-          { icon: Wrench, label: 'Pros & chantiers', sub: 'Marques reconnues' },
-          { icon: Shield, label: 'Robuste', sub: 'Qualité industrielle' },
-          { icon: Truck, label: 'Gros volumes', sub: 'Livraison adaptée' },
-        ],
-      };
-    default:
-      return {
-        heroGradient: 'linear-gradient(135deg, #041d2e 0%, #063b44 40%, #0d5c5c 70%, #0d9488 100%)',
-        heroOverlay: 'radial-gradient(600px 320px at 85% 10%, rgba(20,184,166,0.3), transparent 65%), radial-gradient(500px 300px at 10% 100%, rgba(15,118,110,0.3), transparent 60%)',
-        heroAccent: '#14b8a6',
-        label: 'Boutique en ligne',
-        icon: ShoppingBag,
-        tagline: 'Produits sélectionnés · Paiement sécurisé · Livraison rapide',
-        perks: [
-          { icon: Shield, label: 'Achat sécurisé', sub: 'Données protégées' },
-          { icon: Truck, label: 'Livraison rapide', sub: 'Partout au Sénégal' },
-          { icon: CreditCard, label: 'Paiement flexible', sub: 'Mobile money, cash' },
-        ],
-      };
-  }
-}
-
-const DELIVERY_LABELS: Record<string, string> = {
-  retrait: 'Retrait en magasin',
-  livraison: 'Livraison à domicile',
-};
-const PAYMENT_LABELS: Record<string, string> = {
-  livraison: 'Paiement à la livraison',
-  retrait: 'Paiement au retrait',
-  wave: 'Wave',
-  orange_money: 'Orange Money',
-  free_money: 'Free Money',
-};
-
 // ─── Main component ───────────────────────────────────────────────────
 
 export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView?: 'shop' | 'track' }) {
@@ -218,16 +103,19 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   const [filterModel, setFilterModel] = useState('');
   const [filterAvail, setFilterAvail] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [featuredIds, setFeaturedIds] = useState<string[]>([]);
 
   // ── UI state ──
   const [detail, setDetail] = useState<ShopArticle | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
 
-  // ── Cart state ──
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // ── Cart (persisted in localStorage per tenant) ──
+  const { cart, addToCart, setCartQty, removeFromCart, clearCart } = usePersistentCart(tenant?.id || null);
 
-  // ── View: 'shop' | 'checkout' | 'confirmation' ──
+  // ── View ──
   const [view, setView] = useState<'shop' | 'checkout' | 'confirmation' | 'track'>(initialView);
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
   const [confirmation, setConfirmation] = useState<OrderConfirmation | null>(null);
 
   // ── Load ──
@@ -254,7 +142,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
     let { data: settings } = await supabase
       .from('shop_settings')
-      .select('shop_name,tagline,logo_url,phone,whatsapp,address,welcome_msg,footer_text,delivery_modes,payment_modes')
+      .select('*')
       .eq('tenant_id', tenantRow.id).maybeSingle();
     if (!settings) {
       settings = {
@@ -262,15 +150,24 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
         phone: tenantRow.phone || '', whatsapp: '', address: '',
         welcome_msg: '', footer_text: '',
         delivery_modes: ['retrait', 'livraison'], payment_modes: ['livraison', 'retrait'],
+        primary_color: '#0f766e',
+        theme: 'premium_minimal', secondary_color: '#0f172a',
+        cover_image_url: '', cover_image_alt: '',
+        cover_focal_x: 50, cover_focal_y: 50,
+        cover_overlay: 'dark', cover_overlay_intensity: 40,
+        show_references: true, show_stock: true, low_stock_threshold: 3,
+        show_perks: true, card_density: 'comfortable',
+        section_order: ['hero', 'categories', 'products', 'perks', 'footer'],
+        appearance_config: {},
       } as any;
     }
-    setShopSettings(settings);
+    setShopSettings(settings as ShopSettings);
 
     const [
       { data: arts }, { data: cats }, { data: vBrands }, { data: vModels },
       { data: compats },
     ] = await Promise.all([
-      supabase.from('articles').select('id,name,internal_ref,oem_ref,brand,category_id,sale_price,image_url,description,unit,condition').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
+      supabase.from('articles').select('id,name,internal_ref,oem_ref,brand,category_id,sale_price,old_price,image_url,description,unit,condition').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
       supabase.from('part_categories').select('id,name,parent_id').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
       supabase.from('vehicle_brands').select('id,name').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
       supabase.from('vehicle_models').select('id,name,brand_id').eq('tenant_id', tenantRow.id).order('name'),
@@ -306,6 +203,33 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
     });
 
     setArticles((arts || []).map((a: any) => ({ ...a, stock_qty: stockMap[a.id] || 0, compatibilities: compatMap[a.id] || [] })));
+
+    // Fetch most-sold articles for featured row
+    try {
+      const { data: topSold } = await supabase
+        .from('sale_items')
+        .select('article_id, quantity')
+        .eq('tenant_id', tenantRow.id)
+        .order('quantity', { ascending: false })
+        .limit(200);
+
+      const { data: topOnline } = await supabase
+        .from('online_order_items')
+        .select('article_id, quantity')
+        .eq('tenant_id', tenantRow.id)
+        .limit(200);
+
+      const salesCount: Record<string, number> = {};
+      [...(topSold || []), ...(topOnline || [])].forEach((r: any) => {
+        salesCount[r.article_id] = (salesCount[r.article_id] || 0) + Number(r.quantity || 1);
+      });
+
+      const sorted = Object.entries(salesCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id]) => id);
+      setFeaturedIds(sorted);
+    } catch {
+      setFeaturedIds([]);
+    }
+
     setLoading(false);
   };
 
@@ -313,35 +237,9 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.unit_price * i.qty, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((s, i) => s + i.qty, 0), [cart]);
 
-  const addToCart = useCallback((article: ShopArticle) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.article.id === article.id);
-      if (existing) {
-        const newQty = existing.qty + 1;
-        if (newQty > article.stock_qty) return prev; // stock limit
-        return prev.map(i => i.article.id === article.id ? { ...i, qty: newQty } : i);
-      }
-      if (article.stock_qty === 0) return prev;
-      return [...prev, { article, qty: 1, unit_price: article.sale_price }];
-    });
-  }, []);
-
-  const setCartQty = useCallback((articleId: string, qty: number, maxStock: number) => {
-    if (qty < 1) { removeFromCart(articleId); return; }
-    const safe = Math.min(qty, maxStock);
-    setCart(prev => prev.map(i => i.article.id === articleId ? { ...i, qty: safe } : i));
-  }, []);
-
-  const removeFromCart = useCallback((articleId: string) => {
-    setCart(prev => prev.filter(i => i.article.id !== articleId));
-  }, []);
-
-  const clearCart = () => setCart([]);
-
-  // ── Order submit ──
   const handleOrderConfirmed = (conf: OrderConfirmation) => {
     setConfirmation(conf);
-    setCart([]);
+    clearCart();
     setCartOpen(false);
     setView('confirmation');
   };
@@ -370,7 +268,13 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   const modelsForBrand = vehicleModels.filter(m => !filterBrand || m.brand_id === filterBrand);
   const activeFilters = [filterCat, filterBrand, filterModel, filterAvail].filter(Boolean).length;
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paginatedArticles = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  useEffect(() => { setPage(1); }, [search, filterCat, filterBrand, filterModel, filterAvail]);
+
   const autoMode = (tenant?.business_type || 'auto_parts') === 'auto_parts';
+  const theme = getTheme(shopSettings);
   const shopName = shopSettings?.shop_name || tenant?.name || 'Boutique';
   const shopPhone = shopSettings?.phone || tenant?.phone || '';
   const shopWhatsApp = shopSettings?.whatsapp || '';
@@ -384,8 +288,16 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
     return () => { resetMeta(); };
   }, [loading, notFound, shopName, shopLogo, shopSettings?.tagline]);
 
+  // ── Featured articles (most sold) ──
+  const featuredArticles = useMemo(() => {
+    if (featuredIds.length > 0) {
+      return featuredIds.map(id => articles.find(a => a.id === id)).filter(Boolean) as ShopArticle[];
+    }
+    return articles.slice(0, 6);
+  }, [featuredIds, articles]);
+
   if (loading) return <ShopLoader />;
-  if (notFound) return <ShopNotFound slug={slug} />;
+  if (notFound || !tenant) return <ShopNotFound slug={slug} />;
 
   // ── Checkout view ──
   if (view === 'checkout' && tenant) {
@@ -429,294 +341,220 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
     );
   }
 
-  const theme = activityTheme(tenant?.business_type || 'auto_parts');
-  const ActivityIcon = theme.icon;
-  const tenantAddress = shopSettings?.address || tenant?.address || '';
-  const tenantEmail = (tenant as any)?.email || '';
-  const tenantWebsite = (tenant as any)?.website || '';
-
   // ── Shop view ──
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-100">
-      {/* ── Sticky compact header ──────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-xl border-b border-neutral-200/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center gap-3 py-2.5">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              {shopLogo ? (
-                <img src={shopLogo} alt={shopName} className="w-10 h-10 object-contain shrink-0 drop-shadow-[0_2px_6px_rgba(15,23,42,0.12)]" />
-              ) : (
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shrink-0 shadow-sm">
-                  <Store className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 shop-container">
+      {/* Sticky header + promo + search */}
+      <div className="sticky top-0 z-40">
+        <header className={theme.headerBg}>
+          <div className="shop-fluid">
+            <div className="flex items-center gap-3 py-2.5">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                {shopLogo ? (
+                  <img src={shopLogo} alt={shopName} className="w-10 h-10 object-contain shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
+                    <Store className="w-5 h-5 text-white" />
+                  </div>
+                )}
+                <div className="min-w-0 leading-tight">
+                  <div className="text-[15px] font-extrabold text-slate-900 truncate leading-tight">{shopName}</div>
                 </div>
-              )}
-              <div className="min-w-0 leading-tight">
-                <div className="text-[9.5px] font-bold uppercase tracking-[0.15em] text-brand-700/80 leading-none">{theme.label}</div>
-                <div className="text-[15px] font-extrabold text-slate-900 truncate leading-tight mt-0.5">{shopName}</div>
               </div>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {shopWhatsApp && (
-                <a href={`https://wa.me/${shopWhatsApp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 active:scale-95 transition-all shadow-sm">
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">WhatsApp</span>
-                </a>
-              )}
-              <button onClick={() => setView('track')}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-neutral-100 text-neutral-700 text-xs font-bold hover:bg-neutral-200 active:scale-95 transition-all">
-                <ClipboardList className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Suivi</span>
-              </button>
-              {cartCount > 0 && (
-                <button onClick={() => setCartOpen(true)}
-                  className="hidden sm:inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 text-white text-xs font-bold shadow-glow hover:shadow-premium active:scale-95 transition-all">
-                  <ShoppingCart className="w-3.5 h-3.5" />
-                  {cartCount}
-                  <span className="text-brand-200">·</span>
-                  {formatFCFA(cartTotal)}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {shopWhatsApp && (
+                  <a href={`https://wa.me/${shopWhatsApp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 active:scale-95 transition-all shadow-sm">
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">WhatsApp</span>
+                  </a>
+                )}
+                <button onClick={() => setView('track')}
+                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 active:scale-95 transition-all">
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Suivi</span>
                 </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* ── Hero section (activity-aware premium) ──────────────── */}
-      <section className="relative overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{ background: theme.heroGradient }}
-          aria-hidden
-        />
-        <div
-          className="absolute inset-0 opacity-90 pointer-events-none"
-          style={{ background: theme.heroOverlay }}
-          aria-hidden
-        />
-        <div
-          className="absolute inset-0 opacity-[0.08] pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.6) 1px, transparent 1px)',
-            backgroundSize: '26px 26px',
-          }}
-          aria-hidden
-        />
-        <div
-          aria-hidden
-          className="absolute -top-24 -right-20 w-[420px] h-[420px] rounded-full opacity-30 blur-3xl"
-          style={{ background: `radial-gradient(circle, ${theme.heroAccent} 0%, transparent 70%)` }}
-        />
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-          {/* Brand identity */}
-          <div className="flex items-start gap-4 sm:gap-6 flex-wrap">
-            <div className="flex-1 min-w-0">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 border border-white/20 backdrop-blur-sm mb-2">
-                <ActivityIcon className="w-3 h-3 text-white" style={{ color: theme.heroAccent }} />
-                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white">{theme.label}</span>
-              </div>
-              <h1 className="text-2xl sm:text-4xl font-extrabold text-white leading-tight tracking-tight" style={{ textShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
-                {shopName}
-              </h1>
-              {tenant?.legal_name && tenant.legal_name !== shopName && (
-                <div className="text-sm font-semibold text-white/80 mt-1">{tenant.legal_name}</div>
-              )}
-              <p className="text-[13px] sm:text-sm text-white/85 mt-2 max-w-xl leading-relaxed">
-                {shopSettings?.tagline || theme.tagline}
-              </p>
-
-              {/* Tenant contact ribbon */}
-              <div className="flex flex-wrap items-center justify-start gap-x-4 gap-y-1.5 mt-4">
-                {shopPhone && (
-                  <a href={`tel:${shopPhone}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 hover:text-white transition-colors">
-                    <Phone className="w-3.5 h-3.5" style={{ color: theme.heroAccent }} />
-                    {shopPhone}
-                  </a>
-                )}
-                {tenantAddress && (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/80">
-                    <MapPin className="w-3.5 h-3.5" style={{ color: theme.heroAccent }} />
-                    {tenantAddress}
-                  </span>
-                )}
-                {tenantEmail && (
-                  <a href={`mailto:${tenantEmail}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-white/80 hover:text-white transition-colors">
-                    <Mail className="w-3.5 h-3.5" style={{ color: theme.heroAccent }} />
-                    {tenantEmail}
-                  </a>
-                )}
-                {tenantWebsite && (
-                  <a href={tenantWebsite.startsWith('http') ? tenantWebsite : `https://${tenantWebsite}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-white/80 hover:text-white transition-colors">
-                    <GlobeIcon className="w-3.5 h-3.5" style={{ color: theme.heroAccent }} />
-                    {tenantWebsite.replace(/^https?:\/\//, '')}
-                  </a>
+                {cartCount > 0 && (
+                  <button onClick={() => setCartOpen(true)}
+                    className="hidden sm:inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-lg hover:bg-slate-800 active:scale-95 transition-all">
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    <span className="shop-cart-pulse">{cartCount}</span>
+                    <span className="text-white/50">·</span>
+                    <span className="num">{formatFCFA(cartTotal)}</span>
+                  </button>
                 )}
               </div>
-
-              {shopSettings?.welcome_msg && (
-                <div className="mt-4 inline-flex items-start gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm max-w-xl">
-                  <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: theme.heroAccent }} />
-                  <span className="text-[12.5px] font-medium text-white/95 leading-snug">{shopSettings.welcome_msg}</span>
-                </div>
-              )}
             </div>
           </div>
+        </header>
 
-          {/* Perks row */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-6">
-            {theme.perks.map((p, i) => {
-              const PIcon = p.icon;
-              return (
-                <div key={i} className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-white/8 border border-white/15 backdrop-blur-sm">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${theme.heroAccent}25`, border: `1px solid ${theme.heroAccent}40` }}>
-                    <PIcon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: theme.heroAccent }} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] sm:text-xs font-bold text-white leading-tight truncate">{p.label}</div>
-                    <div className="text-[9.5px] sm:text-[10.5px] text-white/70 leading-tight truncate mt-0.5">{p.sub}</div>
-                  </div>
-                </div>
-              );
-            })}
+        {/* Promo banner */}
+        {shopSettings?.promo_banner_active && shopSettings.promo_banner_text && (
+          <div className="overflow-hidden" style={{ background: shopSettings.promo_banner_color || '#dc2626' }}>
+            <div className="py-1.5 flex">
+              <span className="shop-promo-text text-xs font-bold text-white px-4">
+                {shopSettings.promo_banner_text} &nbsp;&nbsp;&bull;&nbsp;&nbsp; {shopSettings.promo_banner_text} &nbsp;&nbsp;&bull;&nbsp;&nbsp; {shopSettings.promo_banner_text} &nbsp;&nbsp;&bull;&nbsp;&nbsp; {shopSettings.promo_banner_text}
+              </span>
+            </div>
           </div>
-        </div>
-      </section>
+        )}
 
-      {/* ── Premium search bar ──────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-6 relative z-10">
-        <div className="flex gap-2">
-          <div className="flex-1 relative group">
-            <div className="absolute inset-0 rounded-2xl bg-white shadow-premium border border-neutral-200/80" />
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-brand-700 pointer-events-none z-10" strokeWidth={2.3} />
-            <input type="search" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder={(tenant?.business_type || 'auto_parts') === 'auto_parts' ? 'Référence, OEM, pièce, véhicule…' : 'Rechercher un produit…'}
-              className="relative w-full h-12 pl-11 pr-4 rounded-2xl bg-transparent text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/25 transition-all" />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-neutral-100 transition-colors z-10">
-                <X className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            )}
-          </div>
-          <button onClick={() => setFiltersOpen(true)}
-            className={`relative shrink-0 h-12 px-4 rounded-2xl text-sm font-bold transition-all active:scale-95 inline-flex items-center gap-1.5 ${activeFilters > 0 ? 'bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow' : 'bg-white text-neutral-700 border border-neutral-200/80 shadow-premium hover:border-neutral-300'}`}>
-            <SlidersHorizontal className="w-4 h-4" />
-            <span className="hidden sm:inline">Filtres</span>
-            {activeFilters > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">{activeFilters}</span>
-            )}
-          </button>
+        {/* Search bar */}
+        <div className="shop-fluid py-2.5 bg-white/95 backdrop-blur-md border-b border-neutral-100">
+          <ShopSearchBar
+            value={search}
+            onChange={setSearch}
+            onOpenFilters={() => setFiltersOpen(true)}
+            activeFilterCount={activeFilters}
+            isAutoParts={autoMode}
+          />
         </div>
       </div>
 
-      {/* ── Active filter chips ─────────────────────────────────── */}
+      {/* Hero */}
+      <ShopHero
+        tenant={tenant}
+        settings={shopSettings}
+        shopName={shopName}
+        theme={theme}
+      />
+
+      {/* Category bar */}
+      {theme.showCategoryBar && (
+        <ShopCategoryScroller
+          categories={categories}
+          filterCat={filterCat}
+          onCat={setFilterCat}
+          theme={theme}
+        />
+      )}
+
+      {/* Featured row */}
+      {theme.showFeaturedRow && featuredArticles.length > 0 && !search && !filterCat && (
+        <ShopFeaturedRow
+          articles={featuredArticles}
+          cart={cart}
+          onDetail={(a) => setDetail(a)}
+          onAddToCart={(a) => addToCart(a)}
+          onSetQty={(id, qty) => setCartQty(id, qty, articles.find(a => a.id === id)?.stock_qty || 99)}
+          theme={theme}
+        />
+      )}
+
+      {/* Active filter chips */}
       {activeFilters > 0 && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3 flex items-center gap-2 flex-wrap">
-          {filterCat && <FilterChip label={categories.find(c => c.id === filterCat)?.name || 'Catégorie'} icon={<Tag className="w-3 h-3" />} onRemove={() => setFilterCat('')} />}
-          {autoMode && filterBrand && <FilterChip label={vehicleBrands.find(b => b.id === filterBrand)?.name || 'Constructeur'} icon={<Car className="w-3 h-3" />} onRemove={() => { setFilterBrand(''); setFilterModel(''); }} />}
-          {autoMode && filterModel && <FilterChip label={vehicleModels.find(m => m.id === filterModel)?.name || 'Modèle'} icon={<Car className="w-3 h-3" />} onRemove={() => setFilterModel('')} />}
-          {filterAvail && <FilterChip label="En stock" icon={<CheckCircle2 className="w-3 h-3" />} onRemove={() => setFilterAvail(false)} />}
+        <div className="shop-fluid pt-3 flex items-center gap-2 flex-wrap">
+          {filterCat && <FilterChip label={categories.find(c => c.id === filterCat)?.name || 'Catégorie'} onRemove={() => setFilterCat('')} />}
+          {autoMode && filterBrand && <FilterChip label={vehicleBrands.find(b => b.id === filterBrand)?.name || 'Constructeur'} onRemove={() => { setFilterBrand(''); setFilterModel(''); }} />}
+          {autoMode && filterModel && <FilterChip label={vehicleModels.find(m => m.id === filterModel)?.name || 'Modèle'} onRemove={() => setFilterModel('')} />}
+          {filterAvail && <FilterChip label="En stock" onRemove={() => setFilterAvail(false)} />}
           <button onClick={() => { setFilterCat(''); setFilterBrand(''); setFilterModel(''); setFilterAvail(false); }} className="text-xs text-slate-500 hover:text-red-600 font-medium transition-colors underline underline-offset-2">Effacer</button>
         </div>
       )}
 
-      {/* ── Results count ───────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-2">
+      {/* Results count */}
+      <div className="shop-fluid pt-4 pb-2">
         <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
           {filtered.length === 0 ? 'Aucun résultat' : `${filtered.length} article${filtered.length > 1 ? 's' : ''}`}
           {search && <span className="normal-case"> pour « {search} »</span>}
         </div>
       </div>
 
-      {/* ── Product grid ────────────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-32 sm:pb-16">
+      {/* Product grid */}
+      <main className="shop-fluid pb-32 sm:pb-16">
         {filtered.length === 0 ? (
           <EmptyResults search={search} hasFilters={activeFilters > 0}
             onClear={() => { setSearch(''); setFilterCat(''); setFilterBrand(''); setFilterModel(''); setFilterAvail(false); }} />
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-            {filtered.map(art => (
-              <ProductCard
+          <>
+          <div className={theme.gridClassName}>
+            {paginatedArticles.map(art => (
+              <ShopProductCard
                 key={art.id}
                 article={art}
                 categories={categories}
                 cartQty={cart.find(i => i.article.id === art.id)?.qty || 0}
                 onDetail={() => setDetail(art)}
                 onAddToCart={() => addToCart(art)}
+                onSetQty={(qty) => setCartQty(art.id, qty, art.stock_qty)}
+                theme={theme}
+                showReferences={shopSettings?.show_references ?? true}
+                showStock={shopSettings?.show_stock ?? true}
+                lowStockThreshold={shopSettings?.low_stock_threshold ?? 3}
               />
             ))}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-1.5 pt-6 pb-2">
+              <button
+                onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                disabled={page === 1}
+                className="h-9 px-3 rounded-lg text-sm font-semibold bg-white border border-neutral-200 text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                .reduce<(number | 'dots')[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('dots');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === 'dots' ? (
+                    <span key={`d${i}`} className="w-8 text-center text-slate-400 text-sm">...</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      className={`w-9 h-9 rounded-lg text-sm font-bold transition-all active:scale-95 ${
+                        p === page
+                          ? 'bg-slate-900 text-white shadow-md'
+                          : 'bg-white border border-neutral-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                disabled={page === totalPages}
+                className="h-9 px-3 rounded-lg text-sm font-semibold bg-white border border-neutral-200 text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Results count */}
+          <div className="text-center text-xs text-slate-400 pt-2 pb-4">
+            {filtered.length} produit{filtered.length > 1 ? 's' : ''}
+            {totalPages > 1 && ` · Page ${page}/${totalPages}`}
+          </div>
+          </>
         )}
       </main>
 
-      {/* ── Footer (full tenant info) ──────────────────────────── */}
-      <footer className="mt-12 border-t border-neutral-200 bg-gradient-to-b from-white to-neutral-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                {shopLogo ? (
-                  <img src={shopLogo} alt={shopName} className="w-11 h-11 object-contain shrink-0" />
-                ) : (
-                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shrink-0">
-                    <ActivityIcon className="w-5 h-5 text-white" />
-                  </div>
-                )}
-                <div className="leading-tight">
-                  <div className="text-base font-extrabold text-slate-900">{shopName}</div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70 mt-0.5">{theme.label}</div>
-                </div>
-              </div>
-              {shopSettings?.footer_text && <div className="text-xs text-slate-500 leading-relaxed">{shopSettings.footer_text}</div>}
-            </div>
+      {/* Footer */}
+      <ShopFooter
+        tenant={tenant}
+        settings={shopSettings}
+        shopName={shopName}
+        shopPhone={shopPhone}
+        shopWhatsApp={shopWhatsApp}
+        shopLogo={shopLogo}
+        theme={theme}
+      />
 
-            <div className="space-y-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Contact</div>
-              {shopPhone && (
-                <a href={`tel:${shopPhone}`} className="flex items-center gap-2 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors">
-                  <Phone className="w-3.5 h-3.5 text-brand-600" /> {shopPhone}
-                </a>
-              )}
-              {shopWhatsApp && (
-                <a href={`https://wa.me/${shopWhatsApp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-emerald-600 transition-colors">
-                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600" /> {shopWhatsApp}
-                </a>
-              )}
-              {tenantEmail && (
-                <a href={`mailto:${tenantEmail}`} className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-brand-700 transition-colors">
-                  <Mail className="w-3.5 h-3.5 text-brand-600" /> {tenantEmail}
-                </a>
-              )}
-              {tenantWebsite && (
-                <a href={tenantWebsite.startsWith('http') ? tenantWebsite : `https://${tenantWebsite}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-brand-700 transition-colors">
-                  <GlobeIcon className="w-3.5 h-3.5 text-brand-600" /> {tenantWebsite.replace(/^https?:\/\//, '')}
-                </a>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Adresse</div>
-              {(shopSettings?.address || tenantAddress) && (
-                <div className="flex items-start gap-2 text-xs font-medium text-slate-600 leading-relaxed">
-                  <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0 mt-0.5" />
-                  <span>{shopSettings?.address || tenantAddress}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="border-t border-neutral-200 mt-6 pt-4 text-center">
-            <div className="text-[10px] text-slate-400">Propulsée par <span className="font-bold text-slate-600">WAARWI</span> — Plateforme Business 2.0 made in Sénégal</div>
-          </div>
-        </div>
-      </footer>
-
-      {/* ── Mobile sticky cart button ────────────────────────────── */}
+      {/* Mobile sticky cart button */}
       {cartCount > 0 && (
         <div className="fixed bottom-6 inset-x-4 z-40 sm:hidden">
           <button
             onClick={() => setCartOpen(true)}
-            className="w-full h-14 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 text-white shadow-premium flex items-center justify-between px-5 active:scale-95 transition-all"
+            className="w-full h-14 rounded-2xl bg-slate-900 text-white shadow-2xl flex items-center justify-between px-5 active:scale-95 transition-all"
           >
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -730,36 +568,44 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
         </div>
       )}
 
-      {/* ── Filter sheet ─────────────────────────────────────────── */}
+      {/* Filters */}
       {filtersOpen && (
-        <FilterSheet
-          categories={categories} vehicleBrands={autoMode ? vehicleBrands : []}
+        <ShopFilters
+          categories={categories}
+          vehicleBrands={autoMode ? vehicleBrands : []}
           vehicleModels={autoMode ? modelsForBrand : []}
-          filterCat={filterCat} filterBrand={filterBrand}
-          filterModel={filterModel} filterAvail={filterAvail}
+          filterCat={filterCat}
+          filterBrand={filterBrand}
+          filterModel={filterModel}
+          filterAvail={filterAvail}
           onCat={setFilterCat}
           onBrand={v => { setFilterBrand(v); setFilterModel(''); }}
-          onModel={setFilterModel} onAvail={setFilterAvail}
+          onModel={setFilterModel}
+          onAvail={setFilterAvail}
           onClose={() => setFiltersOpen(false)}
         />
       )}
 
-      {/* ── Detail sheet ─────────────────────────────────────────── */}
+      {/* Detail */}
       {detail && (
-        <DetailSheet
-          article={detail} categories={categories}
-          shopWhatsApp={shopWhatsApp} shopName={shopName}
+        <ShopProductDetail
+          article={detail}
+          categories={categories}
+          shopWhatsApp={shopWhatsApp}
+          shopName={shopName}
           cartQty={cart.find(i => i.article.id === detail.id)?.qty || 0}
           onAddToCart={() => addToCart(detail)}
           onRemoveOne={() => setCartQty(detail.id, (cart.find(i => i.article.id === detail.id)?.qty || 1) - 1, detail.stock_qty)}
           onClose={() => setDetail(null)}
+          lowStockThreshold={shopSettings?.low_stock_threshold ?? 3}
         />
       )}
 
-      {/* ── Cart drawer/sheet ─────────────────────────────────────── */}
+      {/* Cart */}
       {cartOpen && (
-        <CartDrawer
-          cart={cart} cartTotal={cartTotal}
+        <ShopCartDrawer
+          cart={cart}
+          cartTotal={cartTotal}
           onClose={() => setCartOpen(false)}
           onQtyChange={(id, qty, max) => setCartQty(id, qty, max)}
           onRemove={removeFromCart}
@@ -770,216 +616,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   );
 }
 
-// ─── Product card ─────────────────────────────────────────────────────
-
-function ProductCard({ article, categories, cartQty, onDetail, onAddToCart }: {
-  article: ShopArticle; categories: Category[];
-  cartQty: number; onDetail: () => void; onAddToCart: () => void;
-}) {
-  const badge = stockBadge(article.stock_qty);
-  const cat = categories.find(c => c.id === article.category_id);
-  const [imgErr, setImgErr] = useState(false);
-  const inCart = cartQty > 0;
-  const outOfStock = article.stock_qty === 0;
-
-  return (
-    <div className="product-card group relative flex flex-col">
-      {/* Image */}
-      <button onClick={onDetail} className="relative w-full aspect-square rounded-xl overflow-hidden bg-white border border-neutral-100 mb-2 shrink-0">
-        {article.image_url && !imgErr ? (
-          <img src={article.image_url} alt={article.name} className="w-full h-full object-contain p-1.5" onError={() => setImgErr(true)} />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center opacity-20">
-            <Package className="w-8 h-8 text-slate-400" />
-          </div>
-        )}
-        {/* Stock badge */}
-        <div className="absolute top-1.5 left-1.5">
-          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ${badge.cls}`}>
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${badge.dot}`} />{badge.label}
-          </span>
-        </div>
-        {/* In-cart indicator */}
-        {inCart && (
-          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-700 text-white text-[9px] font-bold flex items-center justify-center shadow-glow">{cartQty}</div>
-        )}
-      </button>
-
-      {/* Info */}
-      <div className="flex-1 flex flex-col min-w-0 px-0.5 pb-1">
-        <button onClick={onDetail} className="flex-1 text-left">
-          {cat && <div className="text-[9px] font-bold uppercase tracking-wider text-brand-600/70 truncate mb-0.5">{cat.name}</div>}
-          <div className="text-[13px] font-semibold text-slate-900 leading-snug line-clamp-2 mb-1">{article.name}</div>
-          {article.internal_ref && <div className="text-[10px] font-mono text-slate-400 truncate">{article.internal_ref}</div>}
-          {article.oem_ref && <div className="text-[10px] font-mono text-slate-400 truncate">OEM: {article.oem_ref}</div>}
-          {article.compatibilities.length > 0 && (
-            <div className="text-[10px] text-slate-500 truncate flex items-center gap-1 mt-0.5">
-              <Car className="w-2.5 h-2.5 shrink-0 text-slate-400" />
-              {article.compatibilities[0].brand_name} {article.compatibilities[0].model_name}
-              {article.compatibilities.length > 1 && <span className="text-slate-400">+{article.compatibilities.length - 1}</span>}
-            </div>
-          )}
-          <div className="text-[15px] font-bold text-slate-900 num mt-1.5 leading-none">{formatFCFA(article.sale_price)}</div>
-        </button>
-
-        {/* Add to cart */}
-        <button
-          onClick={onAddToCart}
-          disabled={outOfStock || cartQty >= article.stock_qty}
-          className={`mt-2 w-full h-8 rounded-xl text-xs font-bold transition-all active:scale-95 inline-flex items-center justify-center gap-1 ${
-            outOfStock || cartQty >= article.stock_qty
-              ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-              : inCart
-                ? 'bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100'
-                : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-sm hover:shadow-glow'
-          }`}
-        >
-          {outOfStock ? 'Rupture' : cartQty >= article.stock_qty ? 'Max stock' : (<><Plus className="w-3 h-3" />{inCart ? 'Ajouter encore' : 'Ajouter'}</>)}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Cart drawer ──────────────────────────────────────────────────────
-
-function CartDrawer({ cart, cartTotal, onClose, onQtyChange, onRemove, onCheckout }: {
-  cart: CartItem[]; cartTotal: number;
-  onClose: () => void;
-  onQtyChange: (id: string, qty: number, max: number) => void;
-  onRemove: (id: string) => void;
-  onCheckout: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end animate-fade-in">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Mobile: bottom sheet | Desktop: side drawer */}
-      <div className="relative w-full sm:w-[420px] bg-white sm:h-full flex flex-col max-h-[92vh] sm:max-h-full rounded-t-3xl sm:rounded-none shadow-premium animate-sheet-up sm:animate-slide-up">
-        {/* Handle mobile */}
-        <div className="pt-3 pb-1 sm:hidden flex justify-center shrink-0">
-          <div className="w-10 h-1.5 rounded-full bg-slate-200" />
-        </div>
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 flex items-center justify-center shadow-glow">
-              <ShoppingCart className="w-4.5 h-4.5 text-white" />
-            </div>
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Panier</div>
-              <div className="text-base font-bold text-slate-900">{cart.length} article{cart.length > 1 ? 's' : ''}</div>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-neutral-100 text-neutral-500 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {cart.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-              <div className="w-16 h-16 rounded-2xl bg-neutral-100 flex items-center justify-center">
-                <ShoppingCart className="w-7 h-7 text-slate-300" />
-              </div>
-              <div className="text-sm font-semibold text-slate-500">Panier vide</div>
-            </div>
-          ) : (
-            cart.map(item => (
-              <CartLine
-                key={item.article.id}
-                item={item}
-                onQtyChange={(qty) => onQtyChange(item.article.id, qty, item.article.stock_qty)}
-                onRemove={() => onRemove(item.article.id)}
-              />
-            ))
-          )}
-        </div>
-
-        {/* Footer */}
-        {cart.length > 0 && (
-          <div className="shrink-0 border-t border-neutral-100 bg-white/95 backdrop-blur-md p-4 space-y-3 safe-bottom">
-            {/* Total */}
-            <div className="flex items-center justify-between px-1">
-              <span className="text-sm font-semibold text-slate-600">Total panier</span>
-              <span className="text-xl font-bold text-slate-900 num">{formatFCFA(cartTotal)}</span>
-            </div>
-            <button
-              onClick={onCheckout}
-              className="w-full h-13 py-3.5 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 text-white font-bold shadow-glow hover:shadow-premium active:scale-95 transition-all inline-flex items-center justify-center gap-2"
-            >
-              <ClipboardCheck className="w-5 h-5" />
-              Commander · {formatFCFA(cartTotal)}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Cart line ────────────────────────────────────────────────────────
-
-function CartLine({ item, onQtyChange, onRemove }: {
-  item: CartItem;
-  onQtyChange: (qty: number) => void;
-  onRemove: () => void;
-}) {
-  const [imgErr, setImgErr] = useState(false);
-  const maxReached = item.qty >= item.article.stock_qty;
-
-  return (
-    <div className="flex items-start gap-3 p-3 rounded-2xl border border-neutral-100 bg-neutral-50/50">
-      {/* Image */}
-      <div className="w-14 h-14 rounded-xl bg-white border border-neutral-100 flex items-center justify-center overflow-hidden shrink-0">
-        {item.article.image_url && !imgErr ? (
-          <img src={item.article.image_url} alt={item.article.name} className="w-full h-full object-contain p-1" onError={() => setImgErr(true)} />
-        ) : (
-          <Package className="w-5 h-5 text-slate-300" />
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-slate-900 line-clamp-2 leading-snug">{item.article.name}</div>
-        {item.article.internal_ref && (
-          <div className="text-[10px] font-mono text-slate-400 truncate mt-0.5">{item.article.internal_ref}</div>
-        )}
-        {item.article.oem_ref && (
-          <div className="text-[10px] font-mono text-slate-400 truncate">OEM: {item.article.oem_ref}</div>
-        )}
-        <div className="flex items-center justify-between mt-2">
-          {/* Qty controls */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onQtyChange(item.qty - 1)}
-              className="w-7 h-7 rounded-lg bg-white border border-neutral-200 flex items-center justify-center hover:bg-neutral-100 active:scale-90 transition-all"
-            ><Minus className="w-3 h-3 text-slate-600" /></button>
-            <span className="w-8 text-center text-sm font-bold text-slate-900 num">{item.qty}</span>
-            <button
-              onClick={() => onQtyChange(item.qty + 1)}
-              disabled={maxReached}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center active:scale-90 transition-all ${maxReached ? 'bg-neutral-50 border-neutral-100 opacity-40 cursor-not-allowed' : 'bg-white border-neutral-200 hover:bg-neutral-100'}`}
-            ><Plus className="w-3 h-3 text-slate-600" /></button>
-          </div>
-          <div className="text-sm font-bold text-slate-900 num">{formatFCFA(item.unit_price * item.qty)}</div>
-        </div>
-        {maxReached && (
-          <div className="text-[10px] text-amber-600 font-semibold mt-1">Stock maximum atteint</div>
-        )}
-      </div>
-
-      {/* Remove */}
-      <button onClick={onRemove} className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors mt-0.5">
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
-    </div>
-  );
-}
-
-// ─── Checkout flow ────────────────────────────────────────────────────
+// ─── Checkout flow ───────────────────────────────────────────────────
 
 type CheckoutStep = 'client' | 'livraison' | 'recap';
 
@@ -1029,7 +666,6 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
     setSubmitting(true);
     setFormError('');
     try {
-      // Generate order number
       const { data: numData } = await supabase.rpc('next_online_order_number', { p_tenant_id: tenant.id });
       const orderNumber = numData || `WEB-${Date.now()}`;
 
@@ -1068,7 +704,7 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
         article_name: i.article.name,
         internal_ref: i.article.internal_ref,
         quantity: i.qty,
-        unit_price: i.unit_price,     // frozen price
+        unit_price: i.unit_price,
         line_total: i.unit_price * i.qty,
       }));
 
@@ -1093,13 +729,12 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
   const steps: { k: CheckoutStep; label: string; icon: any }[] = [
     { k: 'client', label: 'Coordonnées', icon: User },
     { k: 'livraison', label: 'Livraison & Paiement', icon: Truck },
-    { k: 'recap', label: 'Récapitulatif', icon: ClipboardCheck },
+    { k: 'recap', label: 'Récapitulatif', icon: CheckCircle2 },
   ];
   const stepIdx = steps.findIndex(s => s.k === step);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-100">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-3">
           <button onClick={onBack} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0">
@@ -1115,7 +750,6 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
           </div>
         </div>
 
-        {/* Step indicator */}
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-3">
           <div className="flex items-center gap-1">
             {steps.map((s, i) => {
@@ -1137,7 +771,6 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
       </header>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4 pb-24">
-        {/* Error */}
         {formError && (
           <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50 border border-red-100">
             <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
@@ -1145,7 +778,6 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
           </div>
         )}
 
-        {/* Step: client */}
         {step === 'client' && (
           <div className="space-y-3">
             <SectionTitle icon={<User className="w-4 h-4" />} title="Vos coordonnées" />
@@ -1174,7 +806,6 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
           </div>
         )}
 
-        {/* Step: livraison */}
         {step === 'livraison' && (
           <div className="space-y-4">
             <SectionTitle icon={<Truck className="w-4 h-4" />} title="Mode de livraison" />
@@ -1217,21 +848,15 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
           </div>
         )}
 
-        {/* Step: recap */}
         {step === 'recap' && (
           <div className="space-y-4">
-            <SectionTitle icon={<ClipboardCheck className="w-4 h-4" />} title="Récapitulatif" />
+            <SectionTitle icon={<CheckCircle2 className="w-4 h-4" />} title="Récapitulatif" />
 
-            {/* Articles */}
             <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
               {cart.map(item => (
                 <div key={item.article.id} className="flex items-center gap-3 p-3.5">
                   <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
-                    {item.article.image_url ? (
-                      <img src={item.article.image_url} alt={item.article.name} className="w-full h-full object-contain p-0.5" />
-                    ) : (
-                      <Package className="w-4 h-4 text-slate-300" />
-                    )}
+                    <ShopLazyImage src={item.article.image_url} alt={item.article.name} className="w-full h-full object-contain p-0.5" fallbackClassName="w-full h-full" fallbackIconSize={16} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-slate-900 truncate">{item.article.name}</div>
@@ -1246,7 +871,6 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
               </div>
             </div>
 
-            {/* Summary info */}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2.5">
               <InfoRow label="Client" value={form.customer_name} />
               <InfoRow label="Téléphone" value={form.customer_phone} />
@@ -1261,7 +885,6 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
         )}
       </div>
 
-      {/* Sticky footer */}
       <div className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-100 px-4 py-3 safe-bottom">
         <div className="max-w-2xl mx-auto flex gap-2.5">
           {step !== 'client' && (
@@ -1297,7 +920,7 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
   );
 }
 
-// ─── Order confirmation view ──────────────────────────────────────────
+// ─── Order confirmation view ─────────────────────────────────────────
 
 function OrderConfirmationView({ confirmation, shopName, shopWhatsApp, onBackToShop, onTrack }: {
   confirmation: OrderConfirmation;
@@ -1314,14 +937,12 @@ function OrderConfirmationView({ confirmation, shopName, shopWhatsApp, onBackToS
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-brand-50/30 flex flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-md space-y-5 animate-scale-in">
-        {/* Success icon */}
         <div className="flex justify-center">
           <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-premium">
             <PartyPopper className="w-9 h-9 text-white" />
           </div>
         </div>
 
-        {/* Title */}
         <div className="text-center">
           <div className="text-2xl font-bold text-slate-900">Commande confirmée !</div>
           <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
@@ -1329,14 +950,12 @@ function OrderConfirmationView({ confirmation, shopName, shopWhatsApp, onBackToS
           </p>
         </div>
 
-        {/* Order number */}
         <div className="bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl p-5 text-center shadow-premium">
           <div className="text-brand-200 text-xs font-bold uppercase tracking-widest mb-1">Numéro de commande</div>
           <div className="text-3xl font-bold text-white tracking-widest num">{confirmation.order_number}</div>
           <div className="text-brand-200 text-xs mt-1">Conservez ce numéro pour le suivi</div>
         </div>
 
-        {/* Summary card */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Récapitulatif</div>
@@ -1358,18 +977,16 @@ function OrderConfirmationView({ confirmation, shopName, shopWhatsApp, onBackToS
           </div>
         </div>
 
-        {/* Info rows */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-4 space-y-2.5">
           <InfoRow label="Client" value={confirmation.customer_name} />
           <InfoRow label="Livraison" value={DELIVERY_LABELS[confirmation.delivery_mode] || confirmation.delivery_mode} />
           <InfoRow label="Paiement" value={PAYMENT_LABELS[confirmation.payment_mode] || confirmation.payment_mode} />
         </div>
 
-        {/* CTA buttons */}
         <div className="space-y-2.5">
           <button onClick={onTrack}
             className="w-full h-12 rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 text-white font-bold inline-flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.98] transition-all shadow-glow">
-            <ClipboardCheck className="w-4 h-4" />
+            <CheckCircle2 className="w-4 h-4" />
             Suivre ma commande
           </button>
           {waUrl && (
@@ -1390,240 +1007,12 @@ function OrderConfirmationView({ confirmation, shopName, shopWhatsApp, onBackToS
   );
 }
 
-// ─── Detail sheet ─────────────────────────────────────────────────────
-
-function DetailSheet({ article, categories, shopWhatsApp, shopName, cartQty, onAddToCart, onRemoveOne, onClose }: {
-  article: ShopArticle; categories: Category[];
-  shopWhatsApp: string; shopName: string;
-  cartQty: number;
-  onAddToCart: () => void;
-  onRemoveOne: () => void;
-  onClose: () => void;
-}) {
-  const badge = stockBadge(article.stock_qty);
-  const cat = categories.find(c => c.id === article.category_id);
-  const [imgErr, setImgErr] = useState(false);
-  const canAdd = article.stock_qty > 0 && cartQty < article.stock_qty;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg bg-white sm:rounded-2xl shadow-premium flex flex-col max-h-[92vh] animate-sheet-up sm:animate-slide-up">
-        <div className="pt-3 pb-1 sm:hidden flex justify-center">
-          <div className="w-10 h-1.5 rounded-full bg-slate-200" />
-        </div>
-        <button onClick={onClose} className="hidden sm:flex absolute top-3 right-3 z-10 p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors">
-          <X className="w-4 h-4" />
-        </button>
-
-        <div className="flex-1 overflow-y-auto">
-          {/* Image hero */}
-          <div className="relative w-full aspect-video sm:max-h-64 bg-white border-b border-slate-100 flex items-center justify-center overflow-hidden">
-            {article.image_url && !imgErr ? (
-              <img src={article.image_url} alt={article.name} className="w-full h-full object-contain p-4" onError={() => setImgErr(true)} />
-            ) : (
-              <div className="flex items-center justify-center opacity-20"><Package className="w-20 h-20 text-slate-400" /></div>
-            )}
-            <div className="absolute top-3 left-3">
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${badge.cls}`}>
-                <span className={`w-2 h-2 rounded-full ${badge.dot}`} />{badge.label}
-                {article.stock_qty > 0 && <span className="opacity-60">· {article.stock_qty}</span>}
-              </span>
-            </div>
-            <button onClick={onClose} className="sm:hidden absolute top-3 right-3 p-2 rounded-xl bg-white/80 backdrop-blur text-slate-600 shadow-sm">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="p-4 sm:p-5 space-y-4">
-            <div>
-              {cat && <div className="text-[10px] font-bold uppercase tracking-wider text-brand-600/80 mb-1">{cat.name}</div>}
-              <h2 className="text-xl font-bold text-slate-900 leading-snug">{article.name}</h2>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {article.internal_ref && <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{article.internal_ref}</span>}
-                {article.oem_ref && <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">OEM {article.oem_ref}</span>}
-                {article.brand && <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">{article.brand}</span>}
-              </div>
-            </div>
-
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Prix unitaire</div>
-                <div className="text-3xl font-bold text-slate-900 num">{formatFCFA(article.sale_price)}</div>
-                <div className="text-xs text-slate-500 mt-0.5">par {article.unit}</div>
-              </div>
-              <div className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wide ${article.condition === 'neuf' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : article.condition === 'occasion' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-neutral-50 text-neutral-800 border border-neutral-200'}`}>
-                {article.condition}
-              </div>
-            </div>
-
-            {article.description && (
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <div className="flex items-center gap-1.5 mb-1.5"><Info className="w-3.5 h-3.5 text-slate-400" /><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</span></div>
-                <p className="text-sm text-slate-700 leading-relaxed">{article.description}</p>
-              </div>
-            )}
-
-            {article.compatibilities.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2"><Car className="w-4 h-4 text-brand-600" /><span className="text-sm font-bold text-slate-800">Compatibilités</span></div>
-                <div className="space-y-1.5">
-                  {article.compatibilities.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
-                      <div className="font-semibold text-sm text-slate-800">{c.brand_name}{c.model_name && <span className="text-slate-500 font-medium"> · {c.model_name}</span>}</div>
-                      {(c.year_start || c.year_end) && <div className="text-xs text-slate-400 num">{c.year_start || '?'} – {c.year_end || 'auj.'}</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer CTA */}
-        <div className="shrink-0 border-t border-slate-100 bg-white/95 backdrop-blur-md p-4 safe-bottom">
-          {cartQty > 0 ? (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <button onClick={onRemoveOne} className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 active:scale-90 transition-all">
-                  <Minus className="w-4 h-4 text-slate-700" />
-                </button>
-                <span className="w-10 text-center font-bold text-slate-900 num">{cartQty}</span>
-                <button onClick={onAddToCart} disabled={!canAdd}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 ${canAdd ? 'bg-brand-50 border border-brand-200 hover:bg-brand-100' : 'bg-slate-50 border border-slate-100 opacity-40 cursor-not-allowed'}`}>
-                  <Plus className="w-4 h-4 text-brand-700" />
-                </button>
-              </div>
-              <div className="flex-1 h-11 rounded-xl bg-brand-50 border border-brand-200 flex items-center justify-center text-brand-800 text-sm font-bold">
-                {formatFCFA(article.sale_price * cartQty)} dans le panier
-              </div>
-            </div>
-          ) : (
-            <button onClick={onAddToCart} disabled={article.stock_qty === 0}
-              className={`w-full h-12 rounded-xl font-bold text-sm transition-all active:scale-95 inline-flex items-center justify-center gap-2 ${article.stock_qty === 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-glow hover:shadow-premium'}`}>
-              {article.stock_qty === 0 ? 'Rupture de stock' : (<><ShoppingCart className="w-4 h-4" />Ajouter au panier</>)}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Filter sheet ─────────────────────────────────────────────────────
-
-function FilterSheet({ categories, vehicleBrands, vehicleModels, filterCat, filterBrand, filterModel, filterAvail, onCat, onBrand, onModel, onAvail, onClose }: {
-  categories: Category[]; vehicleBrands: VehicleBrand[]; vehicleModels: VehicleModel[];
-  filterCat: string; filterBrand: string; filterModel: string; filterAvail: boolean;
-  onCat: (v: string) => void; onBrand: (v: string) => void; onModel: (v: string) => void;
-  onAvail: (v: boolean) => void; onClose: () => void;
-}) {
-  const roots = categories.filter(c => !c.parent_id);
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md bg-white sm:rounded-2xl shadow-premium flex flex-col max-h-[88vh] animate-sheet-up sm:animate-slide-up">
-        <div className="pt-3 pb-1 sm:hidden"><div className="sheet-handle" /></div>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-          <div><div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Affiner</div><h3 className="text-base font-bold text-slate-900">Filtres</h3></div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-5">
-          {/* Disponibilité */}
-          <section>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Disponibilité</div>
-            <button onClick={() => onAvail(!filterAvail)}
-              className={`w-full flex items-center justify-between px-3 py-3 rounded-xl border text-sm font-semibold transition-all ${filterAvail ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'}`}>
-              <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" />En stock uniquement</span>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${filterAvail ? 'bg-emerald-600 border-emerald-600' : 'border-slate-300'}`}>
-                {filterAvail && <CheckCircle2 className="w-3 h-3 text-white" />}
-              </div>
-            </button>
-          </section>
-
-          {/* Constructeur */}
-          {vehicleBrands.length > 0 && (
-            <section>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Constructeur</div>
-              <div className="relative">
-                <select value={filterBrand} onChange={e => onBrand(e.target.value)}
-                  className="w-full h-11 pl-3 pr-9 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium appearance-none focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 outline-none transition-all">
-                  <option value="">Tous les constructeurs</option>
-                  {vehicleBrands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              </div>
-            </section>
-          )}
-
-          {/* Modèle */}
-          {filterBrand && vehicleModels.length > 0 && (
-            <section>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Modèle</div>
-              <div className="relative">
-                <select value={filterModel} onChange={e => onModel(e.target.value)}
-                  className="w-full h-11 pl-3 pr-9 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium appearance-none focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 outline-none transition-all">
-                  <option value="">Tous les modèles</option>
-                  {vehicleModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              </div>
-            </section>
-          )}
-
-          {/* Catégorie */}
-          {roots.length > 0 && (
-            <section>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Catégorie</div>
-              <div className="space-y-1">
-                <button onClick={() => onCat('')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${!filterCat ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'text-slate-700 hover:bg-slate-50 border border-transparent'}`}>
-                  <span className="flex items-center gap-2"><Tag className="w-4 h-4" />Toutes</span>
-                  {!filterCat && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
-                </button>
-                {roots.map(root => {
-                  const children = categories.filter(c => c.parent_id === root.id);
-                  const sel = filterCat === root.id;
-                  return (
-                    <div key={root.id}>
-                      <button onClick={() => onCat(root.id)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${sel ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'text-slate-800 hover:bg-slate-50 border border-transparent'}`}>
-                        <span className="truncate">{root.name}</span>
-                        {sel && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
-                      </button>
-                      {children.map(child => {
-                        const csel = filterCat === child.id;
-                        return (
-                          <button key={child.id} onClick={() => onCat(child.id)}
-                            className={`w-full flex items-center justify-between pl-8 pr-3 py-2 rounded-xl text-sm transition-all ${csel ? 'bg-brand-50 text-brand-700 border border-brand-200 font-semibold' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}>
-                            <span className="truncate">↳ {child.name}</span>
-                            {csel && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-        </div>
-        <div className="shrink-0 border-t border-slate-100 px-4 py-3 safe-bottom">
-          <button onClick={onClose} className="w-full h-11 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 text-white text-sm font-bold shadow-glow hover:shadow-premium active:scale-95 transition-all">
-            Voir les résultats
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Small helpers ────────────────────────────────────────────────────
 
-function FilterChip({ label, icon, onRemove }: { label: string; icon?: React.ReactNode; onRemove: () => void }) {
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 text-xs font-semibold">
-      {icon}{label}
+      {label}
       <button onClick={onRemove} className="ml-0.5 hover:text-red-500 transition-colors"><X className="w-3 h-3" /></button>
     </span>
   );

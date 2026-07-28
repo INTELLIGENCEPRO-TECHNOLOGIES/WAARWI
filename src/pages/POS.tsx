@@ -493,6 +493,8 @@ function POSLandingResume({
     canReturn: boolean;
     canMovement: boolean;
     canClose: boolean;
+    canWebOrders?: boolean;
+    canViewSummary?: boolean;
     webOrdersBadge?: number;
     sessionOpen: boolean;
   };
@@ -578,6 +580,7 @@ function POSLandingResume({
         {/* Right column */}
         <div className="flex flex-col gap-3">
           {/* Résumé de session */}
+          {actions?.canViewSummary !== false && (
           <div className="bg-white rounded-xl border border-neutral-200 p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-4.5 h-4.5 text-neutral-700" /></div>
@@ -611,6 +614,7 @@ function POSLandingResume({
               <p className="text-sm text-neutral-400 text-center py-3">Aucune donnée</p>
             )}
           </div>
+          )}
 
           {/* Accès rapides */}
           <div className="bg-white rounded-xl border border-neutral-200 p-5 flex-1">
@@ -704,7 +708,7 @@ function POSLandingResume({
         )}
 
         {/* Summary card */}
-        {!loadingSummary && summary && (
+        {actions?.canViewSummary !== false && !loadingSummary && summary && (
           <div className="bg-white rounded-xl border border-neutral-200 p-3">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-6 h-6 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-3 h-3 text-neutral-700" /></div>
@@ -763,6 +767,10 @@ const posCache: {
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange } = useApp();
   const { can } = usePermissions();
+  const enabledModules: string[] = Array.isArray((tenant as any)?.enabled_modules)
+    ? (tenant as any).enabled_modules
+    : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports','ipm'];
+  const hasModule = (m: string) => enabledModules.includes(m);
   const tenantForPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
   const cashierName = profile?.full_name || profile?.email || '';
 
@@ -2683,6 +2691,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               onCustomerPayment: openCustomerPayment,
               onMovement: openMovement,
               onWebOrders: openWebOrders,
+              canWebOrders: hasModule('online_orders'),
+              canViewSummary: can('pos_view_session_summary'),
               onClose: openCloseWorkflow,
               canReturn: can('pos_returns'),
               canMovement: can('pos_cash_movement'),
@@ -2706,10 +2716,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           {can('pos_returns') && <button onClick={openReturn} className="pos-btn" title="Retour"><RotateCcw className="w-4 h-4" /></button>}
           <button onClick={openCustomerPayment} className="pos-btn" title="Encaisser"><Wallet className="w-4 h-4" /></button>
           {can('pos_cash_movement') && <button onClick={openMovement} className="pos-btn" title="Mouvement"><ArrowDownRight className="w-4 h-4" /></button>}
-          <button onClick={openWebOrders} className="pos-btn relative" title="Commandes web">
+          {hasModule('online_orders') && <button onClick={openWebOrders} className="pos-btn relative" title="Commandes web">
             <Globe className="w-4 h-4" />
             {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[8px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}
-          </button>
+          </button>}
           <button onClick={holdCart} className="pos-btn" title="Pause"><Pause className="w-4 h-4" /></button>
           <button onClick={leaveSession} className="pos-btn" title="Quitter"><LogOut className="w-4 h-4" /></button>
           {can('pos_close_session') && <button onClick={openCloseWorkflow} className="pos-btn-dark ml-0.5" title="Clôturer"><Lock className="w-4 h-4" /></button>}
@@ -2730,10 +2740,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           {can('pos_returns') && <button onClick={openReturn} className="chip"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
           <button onClick={openCustomerPayment} className="chip"><Wallet className="w-3.5 h-3.5" /><span className="hidden xl:inline">Encaisser</span></button>
           {can('pos_cash_movement') && <button onClick={openMovement} className="chip"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button>}
-          <button onClick={openWebOrders} className="chip relative">
+          {hasModule('online_orders') && <button onClick={openWebOrders} className="chip relative">
             <Globe className="w-3.5 h-3.5" /><span className="hidden xl:inline">Commandes web</span>
             {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border border-white">{webOrdersCounts.a_transformer}</span>}
-          </button>
+          </button>}
           <button onClick={holdCart} className="chip"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
           <button onClick={leaveSession} className="chip"><LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Quitter</span></button>
           {can('pos_close_session') && <button onClick={openCloseWorkflow} className="chip">
@@ -2869,7 +2879,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                         ) : (
                           <Package className="w-7 h-7 text-neutral-300" />
                         )}
-                        {tracked && (
+                        {tracked && can('view_stock_levels') && (
                           <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
                             {a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
                           </span>
@@ -2901,7 +2911,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-red-200/60 bg-red-50/30' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'}`}
                     >
                       <div className="flex-1 min-w-0 flex items-center gap-2">
-                        {tracked ? (
+                        {can('view_stock_levels') && (tracked ? (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded num shrink-0 ${
                             a.stock_available <= 0
                               ? (allowNeg ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700')
@@ -2913,7 +2923,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           </span>
                         ) : (
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded num shrink-0 bg-blue-100 text-blue-700">Svc</span>
-                        )}
+                        ))}
                         <span className="text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
                       </div>
                       <span className="text-[12px] font-bold text-neutral-900 num shrink-0">{formatFCFA(a.sale_price)}</span>
@@ -3685,7 +3695,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             <span className={`num font-bold text-xs ${s.total < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</span>
                           </div>
                         </div>
-                        {s.status !== 'return' && (
+                        {s.status !== 'return' && can('pos_reprint') && (
                         <div className="flex items-center gap-1 shrink-0">
                           <button title="Ticket 80mm" onClick={() => {
                                   const fakeSale = {
@@ -3745,7 +3755,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
                             <div className="flex items-center gap-1 shrink-0">
                               <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(m.amount)}</span>
-                              <button
+                              {can('pos_reprint') && <button
                                 title="Réimprimer le reçu"
                                 onClick={() => {
                                   try {
@@ -3765,7 +3775,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                 className="p-1 rounded hover:bg-neutral-100 text-neutral-800"
                               >
                                 <Printer className="w-3 h-3" />
-                              </button>
+                              </button>}
                             </div>
                           </div>
                         </div>
@@ -3841,7 +3851,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
                             <div className="flex items-center gap-1 shrink-0">
                               <span className="text-xs font-bold text-brand-700 num">+{formatFCFA(m.amount)}</span>
-                              <button
+                              {can('pos_reprint') && <button
                                 title="Réimprimer le reçu"
                                 onClick={() => {
                                   try {
@@ -3861,7 +3871,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                 className="p-1 rounded hover:bg-brand-100 text-brand-700"
                               >
                                 <Printer className="w-3 h-3" />
-                              </button>
+                              </button>}
                             </div>
                           </div>
                         </div>
@@ -3899,7 +3909,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
                             <div className="flex items-center gap-1 shrink-0">
                               <span className="text-xs font-bold text-red-700 num">-{formatFCFA(m.amount)}</span>
-                              <button
+                              {can('pos_reprint') && <button
                                 title="Réimprimer le bon"
                                 onClick={() => {
                                   try {
@@ -3919,7 +3929,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                 className="p-1 rounded hover:bg-red-100 text-red-700"
                               >
                                 <Printer className="w-3 h-3" />
-                              </button>
+                              </button>}
                             </div>
                           </div>
                         </div>
