@@ -29,6 +29,20 @@ export function LegalPage({ doc, onBack }: { doc: LegalDoc; onBack: () => void }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    document.title = `${meta.title} | Waarwi`;
+    let metaRobots = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+    if (metaRobots) metaRobots.content = 'index, follow';
+    let metaDesc = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (metaDesc) metaDesc.content = `${meta.title} — Waarwi, gestion commerciale pour les commercants senegalais.`;
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (canonical) canonical.href = `https://waarwi.com/${doc}`;
+    return () => {
+      document.title = 'Waarwi \u2502 Gestion commerciale tout-en-un pour les commer\u00e7ants s\u00e9n\u00e9galais';
+      if (canonical) canonical.href = 'https://waarwi.com/';
+    };
+  }, [doc, meta.title]);
+
+  useEffect(() => {
     let active = true;
     (async () => {
       const { data } = await supabase

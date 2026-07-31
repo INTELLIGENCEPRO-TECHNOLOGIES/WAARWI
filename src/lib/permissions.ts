@@ -49,6 +49,7 @@ export const PERMISSION_KEYS = [
   'pos_reprint',
   'pos_cash_movement',
   'pos_customer_withdrawal',
+  'pos_customer_loan',
   'pos_view_x_report',
   'pos_view_z_report',
   'pos_view_session_summary',
@@ -140,6 +141,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   pos_reprint: 'Réimprimer un ticket',
   pos_cash_movement: 'Enregistrer mouvements de caisse (entrée/sortie)',
   pos_customer_withdrawal: 'Effectuer un retrait sur acompte client',
+  pos_customer_loan: 'Accorder un prêt client (créance sans acompte)',
   pos_view_x_report: 'Voir le rapport X (en cours)',
   pos_view_z_report: 'Voir le rapport Z (clôture)',
   pos_view_session_summary: 'Voir le résumé de session (écran de reprise)',
@@ -203,7 +205,7 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
   },
   {
     label: 'Caisse (POS)',
-    keys: ['manage_cash_sessions', 'pos_open_session', 'pos_close_session', 'pos_returns', 'pos_cancel_sale', 'pos_reprint', 'pos_cash_movement', 'pos_customer_withdrawal', 'pos_view_x_report', 'pos_view_z_report', 'pos_view_session_summary'],
+    keys: ['manage_cash_sessions', 'pos_open_session', 'pos_close_session', 'pos_returns', 'pos_cancel_sale', 'pos_reprint', 'pos_cash_movement', 'pos_customer_withdrawal', 'pos_customer_loan', 'pos_view_x_report', 'pos_view_z_report', 'pos_view_session_summary'],
   },
   {
     label: 'Commandes & Tiers',

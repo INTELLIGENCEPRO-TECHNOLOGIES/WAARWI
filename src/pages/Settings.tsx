@@ -1595,6 +1595,29 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
 
         {/* RAZ Stock */}
         <StockResetCard />
+
+        {/* Prêts clients */}
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="w-1 h-4 rounded-full bg-blue-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Prêts clients</span>
+          </div>
+          <SettingsToggle
+            label="Activer les prêts clients"
+            desc="Permet d'accorder un prêt à un client depuis la caisse. Le montant est ajouté à sa créance (remboursable comme une vente à crédit)."
+            active={!!settings.enable_customer_loans}
+            onToggle={async () => {
+              await updateSetting('enable_customer_loans', !settings.enable_customer_loans);
+              success(!settings.enable_customer_loans ? 'Prêts clients activés' : 'Prêts clients désactivés');
+            }}
+          />
+          {!!settings.enable_customer_loans && (
+            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+              <AlertCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-800">Le bouton « Prêt » apparaîtra dans les mouvements de caisse. Le plafond crédit du client est respecté. La créance apparaît dans la fiche client.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -2,6 +2,43 @@
   command = "npm run build"
   publish = "dist"
 
+# Ensure pages are not flagged as redirects — explicit X-Robots-Tag
+[[headers]]
+  for = "/"
+  [headers.values]
+    X-Robots-Tag = "index, follow"
+
+[[headers]]
+  for = "/mentions-legales"
+  [headers.values]
+    X-Robots-Tag = "index, follow"
+
+[[headers]]
+  for = "/confidentialite"
+  [headers.values]
+    X-Robots-Tag = "index, follow"
+
+[[headers]]
+  for = "/cgu"
+  [headers.values]
+    X-Robots-Tag = "index, follow"
+
+# Legal pages — explicitly serve the SPA shell (not a redirect)
+[[redirects]]
+  from = "/mentions-legales"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/confidentialite"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/cgu"
+  to = "/index.html"
+  status = 200
+
 # SPA fallback — must be last
 [[redirects]]
   from = "/*"

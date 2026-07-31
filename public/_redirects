@@ -1,7 +1,7 @@
 # Social crawler previews for /shop/:slug — serve per-tenant OG metadata
 # Detected by user-agent; crawlers get the edge function HTML, browsers get the SPA
 /shop/:slug/track  /index.html  200
-/shop/:slug  /functions/v1/shop-og?slug=:slug  200 (User-Agent=whatsapp|facebookexternalhit|Twitterbot|telegrambot|LinkedInBot|Slackbot|Discordbot|SkypeUriPreview|Yeti|Googlebot|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|facebot|ia_archiver)
+/shop/:slug  /functions/v1/shop-og?slug=:slug  200 (User-Agent=whatsapp|facebookexternalhit|Twitterbot|telegrambot|LinkedInBot|Slackbot|Discordbot|SkypeUriPreview)
 
 # SPA catch-all (must be last)
 /*  /index.html  200
