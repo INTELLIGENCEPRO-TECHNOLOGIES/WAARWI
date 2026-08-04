@@ -16,30 +16,35 @@ function json(data: unknown, status = 200) {
 
 function htmlPage(title: string, message: string, success: boolean) {
   const color = success ? "#059669" : "#dc2626";
-  const icon = success ? "&#10003;" : "&#10007;";
+  const bgColor = success ? "#ecfdf5" : "#fef2f2";
+  const iconChar = success ? "\u2713" : "\u2717";
   const html = `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title} - WAARWI</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-.card{background:#fff;border-radius:20px;padding:48px 40px;max-width:440px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08)}
-.icon{width:72px;height:72px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:32px;color:#fff;margin-bottom:20px;background:${color}}
-h1{font-size:22px;color:#0f172a;margin-bottom:12px;font-weight:700}
-p{font-size:15px;color:#64748b;line-height:1.6}
-.brand{margin-top:32px;font-size:13px;color:#94a3b8;font-weight:600;letter-spacing:2px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:#fff;border-radius:24px;padding:56px 44px;max-width:480px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+.icon-wrap{width:80px;height:80px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:36px;color:#fff;margin-bottom:24px;background:${color};box-shadow:0 8px 24px ${color}40}
+h1{font-size:24px;color:#0f172a;margin-bottom:16px;font-weight:700;letter-spacing:-0.5px}
+p{font-size:16px;color:#64748b;line-height:1.7}
+.btn{display:inline-block;margin-top:32px;padding:14px 36px;background:#0f172a;color:#fff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:600;transition:transform .2s,box-shadow .2s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(15,23,42,.3)}
+.brand{margin-top:36px;font-size:14px;color:#94a3b8;font-weight:700;letter-spacing:3px}
 </style></head><body>
 <div class="card">
-<div class="icon">${icon}</div>
+<div class="icon-wrap">${iconChar}</div>
 <h1>${title}</h1>
 <p>${message}</p>
+<a class="btn" href="https://app.waarwi.com">Aller \u00e0 l'application</a>
 <div class="brand">WAARWI</div>
 </div></body></html>`;
-  return new Response(new TextEncoder().encode(html), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
-  });
+  const h = new Headers();
+  h.set("Content-Type", "text/html; charset=utf-8");
+  h.set("Access-Control-Allow-Origin", "*");
+  return new Response(new TextEncoder().encode(html).buffer, { status: 200, headers: h });
 }
+
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
@@ -60,22 +65,22 @@ Deno.serve(async (req: Request) => {
       if (result.already_used) {
         const currentStatus = result.tenant_active ? "actif" : "suspendu";
         return htmlPage(
-          "Action deja effectuee",
-          `Ce lien a deja ete utilise. Le compte de ${result.tenant_name} est actuellement ${currentStatus}.`,
+          "Action d\u00e9j\u00e0 effectu\u00e9e",
+          `Ce lien a d\u00e9j\u00e0 \u00e9t\u00e9 utilis\u00e9. Le compte de ${result.tenant_name} est actuellement ${currentStatus}.`,
           true
         );
       }
 
       if (result.action === "suspend") {
         const msg = result.already_done
-          ? `Le compte de ${result.tenant_name} etait deja suspendu.`
-          : `Le compte de ${result.tenant_name} a ete suspendu avec succes. L'acces est immediatement bloque.`;
+          ? `Le compte de ${result.tenant_name} \u00e9tait d\u00e9j\u00e0 suspendu.`
+          : `Le compte de ${result.tenant_name} a \u00e9t\u00e9 suspendu avec succ\u00e8s. L'acc\u00e8s est imm\u00e9diatement bloqu\u00e9.`;
         return htmlPage("Client suspendu", msg, true);
       } else {
         const msg = result.already_done
-          ? `Le compte de ${result.tenant_name} etait deja actif.`
-          : `Le compte de ${result.tenant_name} a ete reactive avec succes. L'acces est de nouveau fonctionnel.`;
-        return htmlPage("Client reactive", msg, true);
+          ? `Le compte de ${result.tenant_name} \u00e9tait d\u00e9j\u00e0 actif.`
+          : `Le compte de ${result.tenant_name} a \u00e9t\u00e9 r\u00e9activ\u00e9 avec succ\u00e8s. L'acc\u00e8s est de nouveau fonctionnel.`;
+        return htmlPage("Client r\u00e9activ\u00e9", msg, true);
       }
     }
 

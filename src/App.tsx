@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Loader2, CheckCircle, XCircle, WifiOff, Wifi, LogOut, ShieldX, Phone, Headphones } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, WifiOff, Wifi, LogOut, ShieldX, Phone, Headphones, AlertCircle, Ban, Power } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { usePermissions, type PermissionKey } from './lib/permissions';
 import { ToastProvider } from './context/ToastContext';
@@ -98,6 +98,90 @@ function getPublicInvoiceToken(): string | null {
 function getApproveToken(): string | null {
   const params = new URLSearchParams(window.location.search);
   return params.get('approve_token');
+}
+
+function getActionResult(): { result: string; tenantName: string; status: string; message: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const r = params.get('action_result');
+  if (!r) return null;
+  return {
+    result: r,
+    tenantName: params.get('tenant_name') || '',
+    status: params.get('status') || '',
+    message: params.get('message') || '',
+  };
+}
+
+function ActionResultPage({ data }: { data: { result: string; tenantName: string; status: string; message: string } }) {
+  const config: Record<string, { icon: typeof CheckCircle; color: string; bg: string; title: string; message: string }> = {
+    suspended: {
+      icon: Ban,
+      color: '#dc2626',
+      bg: '#fef2f2',
+      title: 'Client suspendu',
+      message: `Le compte de ${data.tenantName} a été suspendu avec succès. L'accès est immédiatement bloqué.`,
+    },
+    reactivated: {
+      icon: Power,
+      color: '#059669',
+      bg: '#f0fdf4',
+      title: 'Client réactivé',
+      message: `Le compte de ${data.tenantName} a été réactivé avec succès. L'accès est de nouveau fonctionnel.`,
+    },
+    already_suspended: {
+      icon: AlertCircle,
+      color: '#d97706',
+      bg: '#fffbeb',
+      title: 'Déjà suspendu',
+      message: `Le compte de ${data.tenantName} était déjà suspendu.`,
+    },
+    already_active: {
+      icon: AlertCircle,
+      color: '#d97706',
+      bg: '#fffbeb',
+      title: 'Déjà actif',
+      message: `Le compte de ${data.tenantName} était déjà actif.`,
+    },
+    already_used: {
+      icon: AlertCircle,
+      color: '#d97706',
+      bg: '#fffbeb',
+      title: 'Lien déjà utilisé',
+      message: `Ce lien a déjà été utilisé. Le compte de ${data.tenantName} est actuellement ${data.status}.`,
+    },
+    error: {
+      icon: XCircle,
+      color: '#dc2626',
+      bg: '#fef2f2',
+      title: 'Erreur',
+      message: data.message || 'Une erreur est survenue.',
+    },
+  };
+
+  const c = config[data.result] || config.error;
+  const Icon = c.icon;
+
+  return (
+    <div className="min-h-screen bg-[#f1f5f9] flex items-center justify-center p-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e2e8f0] p-10 max-w-md w-full text-center">
+        <div
+          className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+          style={{ backgroundColor: c.bg }}
+        >
+          <Icon className="w-8 h-8" style={{ color: c.color }} />
+        </div>
+        <h1 className="text-xl font-bold text-[#0f172a] mb-3">{c.title}</h1>
+        <p className="text-[15px] text-[#64748b] leading-relaxed mb-8">{c.message}</p>
+        <a
+          href={window.location.origin + window.location.pathname}
+          className="inline-block px-6 py-2.5 rounded-lg bg-[#0f172a] text-white text-sm font-medium hover:bg-[#1e293b] transition-colors"
+        >
+          Ouvrir WAARWI
+        </a>
+        <div className="mt-8 text-xs text-[#94a3b8] font-semibold tracking-widest">WAARWI</div>
+      </div>
+    </div>
+  );
 }
 
 function ApproveTokenPage({ token }: { token: string }) {
@@ -385,6 +469,11 @@ export default function App() {
   const poToken = getPublicOrderToken();
   const invToken = getPublicInvoiceToken();
   const approveToken = getApproveToken();
+  const actionResult = getActionResult();
+
+  if (actionResult) {
+    return <ActionResultPage data={actionResult} />;
+  }
 
   if (approveToken) {
     return <ApproveTokenPage token={approveToken} />;
