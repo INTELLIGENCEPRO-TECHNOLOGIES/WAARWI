@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { AlertTriangle, Info, CheckCircle2, AlertOctagon, X, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -15,33 +15,60 @@ export function TenantMessagePopup() {
   const [queue, setQueue] = useState<any[]>([]);
   const [idx, setIdx] = useState(0);
 
+  const loadMessages = useCallback(async () => {
+    if (!user || profile?.role === 'super_admin') return;
+    const now = new Date().toISOString();
+    const { data: msgs } = await supabase
+      .from('tenant_messages')
+      .select('*')
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .order('created_at', { ascending: false });
+    if (!msgs || msgs.length === 0) { setQueue([]); return; }
+    const eligible = msgs.filter((m: any) => {
+      if (m.target === 'all') return true;
+      if (m.target === 'tenant') return m.tenant_id === tenant?.id;
+      if (m.target === 'plan') return m.plan_code === tenant?.plan;
+      return false;
+    });
+    if (eligible.length === 0) { setQueue([]); return; }
+    const { data: reads } = await supabase
+      .from('tenant_message_reads')
+      .select('message_id')
+      .eq('user_id', user.id);
+    const readIds = new Set((reads || []).map((r: any) => r.message_id));
+    const unread = eligible.filter((m: any) => !readIds.has(m.id));
+    if (unread.length) {
+      setQueue(unread);
+      setIdx(0);
+    }
+  }, [user?.id, tenant?.id, tenant?.plan, profile?.role]);
+
   useEffect(() => {
-    if (!user) return;
-    if (profile?.role === 'super_admin') return;
-    (async () => {
-      const now = new Date().toISOString();
-      const { data: msgs } = await supabase
-        .from('tenant_messages')
-        .select('*')
-        .or(`expires_at.is.null,expires_at.gt.${now}`)
-        .order('created_at', { ascending: false });
-      if (!msgs || msgs.length === 0) return;
-      const eligible = msgs.filter((m: any) => {
-        if (m.target === 'all') return true;
-        if (m.target === 'tenant') return m.tenant_id === tenant?.id;
-        if (m.target === 'plan') return m.plan_code === tenant?.plan;
-        return false;
-      });
-      if (eligible.length === 0) return;
-      const { data: reads } = await supabase
-        .from('tenant_message_reads')
-        .select('message_id')
-        .eq('user_id', user.id);
-      const readIds = new Set((reads || []).map((r: any) => r.message_id));
-      const unread = eligible.filter((m: any) => !readIds.has(m.id));
-      if (unread.length) setQueue(unread);
-    })();
-  }, [user?.id, tenant?.id, profile?.role]);
+    loadMessages();
+  }, [loadMessages]);
+
+  // Listen for new messages in real-time
+  useEffect(() => {
+    if (!user || !tenant?.id || profile?.role === 'super_admin') return;
+    const chan = supabase
+      .channel(`tenant_messages_${tenant.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'tenant_messages',
+      }, (payload) => {
+        const msg = payload.new as any;
+        const isForMe =
+          msg.target === 'all' ||
+          (msg.target === 'tenant' && msg.tenant_id === tenant.id) ||
+          (msg.target === 'plan' && msg.plan_code === tenant.plan);
+        if (isForMe) {
+          loadMessages();
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(chan); };
+  }, [user?.id, tenant?.id, tenant?.plan, profile?.role, loadMessages]);
 
   if (queue.length === 0 || idx >= queue.length) return null;
   const m = queue[idx];

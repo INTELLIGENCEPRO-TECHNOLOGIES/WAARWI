@@ -4,7 +4,7 @@ import {
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
   ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
-  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield
+  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -78,7 +78,7 @@ function printXReport(
     count: number; total: number; totalPayments?: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
-    movements?: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movements?: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
     movExpense?: number; movIncome?: number; movPrepay?: number; netTotal?: number;
   },
   regularizations: { reg_type: string; amount: number; reason: string }[],
@@ -1018,7 +1018,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // Cash movement (expense / income / customer prepayment)
   const [mvOpen, setMvOpen] = useState(false);
-  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal'>('expense');
+  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan'>('expense');
   const [mvCustPrepay, setMvCustPrepay] = useState(0);
   const [mvCustBalance, setMvCustBalance] = useState(0);
   const [mvAmount, setMvAmount] = useState(0);
@@ -1059,9 +1059,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
   const [sessionProfileNames, setSessionProfileNames] = useState<Record<string, string>>({});
-  const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
+  const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
   const [sessionInvPayments, setSessionInvPayments] = useState<{ sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string }[]>([]);
-  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'reglements' | null>('tickets');
+  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | 'reglements' | null>('tickets');
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [sessionEncaisse, setSessionEncaisse] = useState(0);
 
@@ -1076,14 +1076,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     count: number; total: number; totalPayments: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
-    movements: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movements: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
     invoicePayments: { sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string; user_name: string | null }[];
-    movExpense: number; movIncome: number; movPrepay: number; movWithdrawal: number;
+    movExpense: number; movIncome: number; movPrepay: number; movWithdrawal: number; movLoan: number;
     netTotal: number;
   } | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | null>(null);
+  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | null>(null);
 
   // Vehicle picker
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
@@ -1625,10 +1625,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (!session || !currentSite) return;
     if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
     if (mvKind === 'customer_withdrawal' && !can('pos_customer_withdrawal')) { error('Vous n\'avez pas la permission d\'effectuer un retrait sur acompte client'); return; }
+    if (mvKind === 'customer_loan' && !can('pos_customer_loan')) { error('Vous n\'avez pas la permission d\'accorder un prêt client'); return; }
     if (mvAmount <= 0) { error('Montant invalide'); return; }
-    if (mvKind !== 'expense' && mvKind !== 'customer_withdrawal' && !mvMethod) { error('Mode de règlement requis'); return; }
+    if (mvKind !== 'expense' && mvKind !== 'customer_withdrawal' && mvKind !== 'customer_loan' && !mvMethod) { error('Mode de règlement requis'); return; }
     if (mvKind === 'customer_prepayment' && !mvCustomer) { error('Client obligatoire'); return; }
     if (mvKind === 'customer_withdrawal' && !mvCustomer) { error('Client obligatoire'); return; }
+    if (mvKind === 'customer_loan' && !mvCustomer) { error('Client obligatoire'); return; }
     const mvCustDebt = Math.max(0, mvCustBalance);
     const mvCustNet = mvCustPrepay - mvCustDebt;
     if (mvKind === 'customer_withdrawal' && mvCustPrepay <= 0) { error('Ce client n\'a aucun acompte disponible'); return; }
@@ -1653,10 +1655,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (e) { setMvSubmitting(false); error(e.message); return; }
     const autoApplied = Number((data as any)?.auto_applied || 0);
 
-    const wantsReceipt = mvPrint && (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal') && !!mvMethod && !!tenant;
+    const wantsReceipt = mvPrint && (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') && !!tenant;
     if (wantsReceipt && tenant && mvMethod) {
-      const prefix = mvKind === 'customer_prepayment' ? 'ACO' : mvKind === 'customer_withdrawal' ? 'RET' : 'ENC';
-      const kindLabel = mvKind === 'customer_prepayment' ? 'acompte_client' : mvKind === 'customer_withdrawal' ? 'retrait_client' : 'entree_caisse';
+      const prefix = mvKind === 'customer_prepayment' ? 'ACO' : mvKind === 'customer_withdrawal' ? 'RET' : mvKind === 'customer_loan' ? 'PRT' : 'ENC';
+      const kindLabel = mvKind === 'customer_prepayment' ? 'acompte_client' : mvKind === 'customer_withdrawal' ? 'retrait_client' : mvKind === 'customer_loan' ? 'pret_client' : 'entree_caisse';
       const { data: numData } = await supabase.rpc('next_doc_number', {
         p_tenant_id: tenant.id, p_kind: kindLabel, p_prefix: prefix,
       });
@@ -1670,7 +1672,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             ? (mvReason ? `Acompte · ${mvReason}` : 'Acompte client')
             : mvKind === 'customer_withdrawal'
               ? (mvReason ? `Retrait · ${mvReason}` : 'Retrait client')
-              : (mvReason || undefined),
+              : mvKind === 'customer_loan'
+                ? (mvReason ? `Prêt · ${mvReason}` : 'Prêt client')
+                : (mvReason || undefined),
           reference: mvRef || undefined,
           customerName: mvCustomer?.name || null,
           createdAt: new Date().toISOString(),
@@ -1685,6 +1689,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       success(`Acompte enregistré · ${formatFCFA(autoApplied)} imputé automatiquement`);
     } else if (mvKind === 'customer_withdrawal') {
       success('Retrait client enregistré');
+    } else if (mvKind === 'customer_loan') {
+      success('Prêt client enregistré · créance ajoutée');
     } else if (mvKind === 'expense') {
       success('Dépense enregistrée');
     } else if (mvKind === 'income') {
@@ -1693,7 +1699,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       success('Acompte enregistré · en attente de facture');
     }
 
-    if (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal') {
+    if (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') {
       setMvAmount(0);
       setMvReason('');
       setMvNote('');
@@ -2162,7 +2168,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setSessionInvPayments(invPayments);
     const pmtTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const movEncaisseTotal = (mvData || [])
-      .filter((m: any) => m.kind !== 'expense' && m.kind !== 'customer_withdrawal' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
+      .filter((m: any) => m.kind !== 'expense' && m.kind !== 'customer_withdrawal' && m.kind !== 'customer_loan' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
       .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     setSessionEncaisse(pmtTotal + movEncaisseTotal);
     setTicketsExpanded('tickets');
@@ -2327,6 +2333,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const topArticles = Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10);
     const movExpense = movs.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
     const movWithdrawal = movs.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
+    const movLoan = movs.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
     const movIncome = movs.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movs.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
     const totalPayments = pmtList.reduce((s: number, p: any) => s + Number(p.amount), 0);
@@ -2338,8 +2345,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       topArticles,
       movements: movs,
       invoicePayments,
-      movExpense, movIncome, movPrepay, movWithdrawal,
-      netTotal: totalPayments + movIncome + movPrepay - movExpense - movWithdrawal,
+      movExpense, movIncome, movPrepay, movWithdrawal, movLoan,
+      netTotal: totalPayments + movIncome + movPrepay - movExpense - movWithdrawal - movLoan,
     });
     setLoadingStats(false);
   };
@@ -2435,6 +2442,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     });
     const movExpense = movList.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
     const movWithdrawal = movList.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
+    const movLoan = movList.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
     const movIncome = movList.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movList.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
     const totalSales = salesList.reduce((s: number, r: any) => s + Number(r.total), 0);
@@ -2447,8 +2455,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       topArticles: Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10),
       movements: movList,
       invoicePayments,
-      movExpense, movIncome, movPrepay, movWithdrawal,
-      netTotal: totalPayments + movIncome + movPrepay - movExpense - movWithdrawal,
+      movExpense, movIncome, movPrepay, movWithdrawal, movLoan,
+      netTotal: totalPayments + movIncome + movPrepay - movExpense - movWithdrawal - movLoan,
     });
 
     setControlLines(lines);
@@ -3115,10 +3123,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_withdrawal' ? 'text-amber-700' : 'text-neutral-600'}`}>Retrait</div>
                 </button>
                 )}
+                {can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans && (
+                <button type="button" onClick={() => { setMvKind('customer_loan'); setMvCustPrepay(0); setMvCustBalance(0); }}
+                  className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${mvKind === 'customer_loan' ? 'border-blue-500 bg-blue-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <HandCoins className={`w-4 h-4 mx-auto ${mvKind === 'customer_loan' ? 'text-blue-600' : 'text-neutral-400'}`} />
+                  <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_loan' ? 'text-blue-700' : 'text-neutral-600'}`}>Prêt</div>
+                </button>
+                )}
               </div>
             </div>
 
-            {(mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal') && (
+            {(mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') && (
               <div>
                 <label className="label">Client</label>
                 {mvCustomer ? (
@@ -3156,6 +3171,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                               const custBalance = Math.max(0, Number(cu.balance || 0));
                               setMvCustBalance(custBalance);
                             }
+                            if (mvKind === 'customer_loan') {
+                              setMvCustBalance(Math.max(0, Number(cu.balance || 0)));
+                            }
                           }}
                             className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-neutral-50 text-left transition-colors">
                             <User className="w-3 h-3 text-neutral-400 shrink-0" />
@@ -3187,6 +3205,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   );
                 })()}
+                {mvKind === 'customer_loan' && mvCustomer && (
+                  <div className="mt-2 px-3 py-2 rounded-xl border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-800 space-y-1">
+                    <div className="flex justify-between"><span>Créance actuelle :</span><span className="font-bold tabular-nums">{formatFCFA(Math.max(0, mvCustBalance))}</span></div>
+                    <div className="text-[10px] text-blue-600 font-medium mt-1">Le montant du prêt sera ajouté à la créance du client.</div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -3643,10 +3667,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           const acomptesList = sessionMovements.filter(m => m.kind === 'customer_prepayment');
           const depensesList = sessionMovements.filter(m => m.kind === 'expense');
           const retraitsList = sessionMovements.filter(m => m.kind === 'customer_withdrawal');
+          const pretsList = sessionMovements.filter(m => m.kind === 'customer_loan');
           const encDirectTotal = encDirectList.reduce((s, m) => s + m.amount, 0);
           const acomptesTotal = acomptesList.reduce((s, m) => s + m.amount, 0);
           const depensesTotal = depensesList.reduce((s, m) => s + m.amount, 0);
           const retraitsTotal = retraitsList.reduce((s, m) => s + m.amount, 0);
+          const pretsTotal = pretsList.reduce((s, m) => s + m.amount, 0);
           return (
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2">
@@ -3973,6 +3999,39 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   )}
                 </div>
               )}
+              {pretsList.length > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'prets' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'}`}>
+                        <HandCoins className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-neutral-800">Prêts clients</div>
+                        <div className="text-[10px] text-neutral-500">{pretsList.length} prêt{pretsList.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-blue-700 num">-{formatFCFA(pretsTotal)}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'prets' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {ticketsExpanded === 'prets' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {pretsList.map((m, i) => (
+                        <div key={i} className="p-2.5 rounded-lg bg-white border border-blue-100">
+                          <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium text-[9px] shrink-0">Prêt</span>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
+                            <span className="text-xs font-bold text-blue-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           );
@@ -4232,6 +4291,42 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                             </div>
                           </div>
                           <span className="text-xs font-bold text-orange-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Prêts clients */}
+              {(statsData.movLoan || 0) > 0 && (
+                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'prets' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'}`}>
+                        <HandCoins className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-neutral-800">Prêts clients</div>
+                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'customer_loan').length} prêt{statsData.movements.filter(m => m.kind === 'customer_loan').length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-blue-700 num">-{formatFCFA(statsData.movLoan || 0)}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'prets' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'prets' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.movements.filter(m => m.kind === 'customer_loan').map((m, i) => (
+                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-blue-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.customer_name || 'Client'}</div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
+                              {m.reason && <span className="line-clamp-1">{m.reason}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-blue-700 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>

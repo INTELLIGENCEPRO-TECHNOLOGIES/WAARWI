@@ -14,6 +14,33 @@ function json(data: unknown, status = 200) {
   });
 }
 
+function htmlPage(title: string, message: string, success: boolean) {
+  const color = success ? "#059669" : "#dc2626";
+  const icon = success ? "&#10003;" : "&#10007;";
+  const html = `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} - WAARWI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:#fff;border-radius:20px;padding:48px 40px;max-width:440px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.icon{width:72px;height:72px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:32px;color:#fff;margin-bottom:20px;background:${color}}
+h1{font-size:22px;color:#0f172a;margin-bottom:12px;font-weight:700}
+p{font-size:15px;color:#64748b;line-height:1.6}
+.brand{margin-top:32px;font-size:13px;color:#94a3b8;font-weight:600;letter-spacing:2px}
+</style></head><body>
+<div class="card">
+<div class="icon">${icon}</div>
+<h1>${title}</h1>
+<p>${message}</p>
+<div class="brand">WAARWI</div>
+</div></body></html>`;
+  return new Response(new TextEncoder().encode(html), {
+    status: 200,
+    headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
@@ -21,6 +48,36 @@ Deno.serve(async (req: Request) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+    // Handle GET requests with action_token (email button clicks)
+    const url = new URL(req.url);
+    const actionToken = url.searchParams.get("action_token");
+    if (actionToken) {
+      const { data: result, error: rpcErr } = await admin.rpc("execute_subscription_action_token", { p_token: actionToken });
+      if (rpcErr) return htmlPage("Erreur", rpcErr.message, false);
+      if (!result?.success) return htmlPage("Erreur", result?.error || "Action impossible", false);
+
+      if (result.already_used) {
+        const currentStatus = result.tenant_active ? "actif" : "suspendu";
+        return htmlPage(
+          "Action deja effectuee",
+          `Ce lien a deja ete utilise. Le compte de ${result.tenant_name} est actuellement ${currentStatus}.`,
+          true
+        );
+      }
+
+      if (result.action === "suspend") {
+        const msg = result.already_done
+          ? `Le compte de ${result.tenant_name} etait deja suspendu.`
+          : `Le compte de ${result.tenant_name} a ete suspendu avec succes. L'acces est immediatement bloque.`;
+        return htmlPage("Client suspendu", msg, true);
+      } else {
+        const msg = result.already_done
+          ? `Le compte de ${result.tenant_name} etait deja actif.`
+          : `Le compte de ${result.tenant_name} a ete reactive avec succes. L'acces est de nouveau fonctionnel.`;
+        return htmlPage("Client reactive", msg, true);
+      }
+    }
 
     const body = await req.json().catch(() => ({}));
     const action = body.action as string;
@@ -163,14 +220,20 @@ Deno.serve(async (req: Request) => {
         admin.from("tenant_subscriptions").select("id,plan_code,amount,billing_cycle", { count: "exact" }).eq("status", "active"),
         admin.from("tenants").select("id,name,plan_expires_at").lte("plan_expires_at", in7).gte("plan_expires_at", now.toISOString()),
         admin.from("tenants").select("id", { count: "exact", head: true }).eq("is_active", false),
-        admin.from("tenant_subscriptions").select("amount,billing_cycle").eq("status", "active"),
+        admin.from("tenant_subscriptions").select("amount,billing_cycle,tenants(name)").eq("status", "active").neq("billing_cycle", "lifetime"),
         admin.from("platform_events").select("*").order("created_at", { ascending: false }).limit(10),
       ]);
 
       const tenants = tenantsRes.data || [];
       const byPlan: Record<string, number> = {};
       for (const t of tenants) byPlan[t.plan] = (byPlan[t.plan] || 0) + 1;
-      const mrr = (mrrRes.data || []).reduce((s: number, r: any) => s + Number(r.amount || 0) / (r.billing_cycle === "yearly" ? 12 : 1), 0);
+      const EXCLUDED_MRR_TENANTS = ["INTELLIGENCEPRO TECHNOLOGIES", "SAD PIECES AUTO"];
+      const mrr = (mrrRes.data || [])
+        .filter((r: any) => {
+          const name = r.tenants?.name as string | undefined;
+          return !name || !EXCLUDED_MRR_TENANTS.includes(name.toUpperCase());
+        })
+        .reduce((s: number, r: any) => s + Number(r.amount || 0) / (r.billing_cycle === "yearly" ? 12 : 1), 0);
 
       return json({
         tenants_total: tenants.length,
@@ -209,7 +272,7 @@ Deno.serve(async (req: Request) => {
     if (action === "update_tenant") {
       const { tenant_id, patch } = body;
       if (!tenant_id || !patch) return json({ error: "Paramètres manquants" }, 400);
-      const allowed = ["status", "plan", "plan_expires_at", "is_active", "name", "legal_name", "email", "phone", "whatsapp_phone", "business_type", "business_activity_type_id", "enabled_modules", "custom_domain", "subdomain", "billing_cycle", "auto_renew", "subscription_status", "subscription_start_date", "trial_start_date", "trial_end_date"];
+      const allowed = ["status", "plan", "plan_expires_at", "is_active", "name", "legal_name", "email", "phone", "whatsapp_phone", "business_type", "business_activity_type_id", "enabled_modules", "custom_domain", "subdomain", "billing_cycle", "auto_renew", "subscription_status", "subscription_start_date", "trial_start_date", "trial_end_date", "auto_suspend_enabled", "auto_suspend_grace_days"];
       const clean: Record<string, unknown> = {};
       for (const k of allowed) if (k in patch) clean[k] = patch[k];
       const { error } = await admin.from("tenants").update(clean).eq("id", tenant_id);
@@ -442,27 +505,28 @@ Deno.serve(async (req: Request) => {
       const expiresAt = tenantData.plan_expires_at ? new Date(tenantData.plan_expires_at) : null;
       const daysLeft = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86400000) : null;
       const amount = tenantData.billing_cycle === "lifetime" ? (planData?.price_lifetime || 0) : tenantData.billing_cycle === "yearly" ? (planData?.price_yearly || 0) : (planData?.price_monthly || 0);
+      const cycleLabel = tenantData.billing_cycle === "yearly" ? "annuel" : "mensuel";
 
-      // Send reminder notification email
-      fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "payment_reminder",
-          tenant_id,
-          data: {
-            tenant_name: tenantData.name,
-            plan_name: planData?.name || tenantData.plan,
-            amount,
-            billing_cycle: tenantData.billing_cycle,
-            expires_at: tenantData.plan_expires_at,
-            days_left: daysLeft,
-            custom_message: custom_message || "",
-          },
-        }),
-      }).catch(() => {});
+      // Create in-app message directly (no email since most clients have fictitious emails)
+      const messageBody = custom_message
+        ? custom_message
+        : `Votre abonnement ${planData?.name || tenantData.plan} (${cycleLabel}) ${
+            daysLeft !== null && daysLeft > 0
+              ? `expire dans ${daysLeft} jour${daysLeft > 1 ? 's' : ''}`
+              : `est expir\u00e9`
+          }. Montant : ${new Intl.NumberFormat("fr-FR").format(amount)} FCFA. Veuillez contacter l'administrateur pour le renouvellement.`;
 
-      await logEvent("subscription.reminder_sent", tenant_id, { days_left: daysLeft, amount });
+      await admin.from("tenant_messages").insert({
+        title: daysLeft !== null && daysLeft > 0 ? "Rappel : Renouvellement d'abonnement" : "URGENT : Abonnement expir\u00e9",
+        body: messageBody,
+        severity: daysLeft !== null && daysLeft > 0 ? "warning" : "critical",
+        target: "tenant",
+        tenant_id,
+        requires_ack: true,
+        expires_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+      });
+
+      await logEvent("subscription.reminder_sent", tenant_id, { days_left: daysLeft, amount, method: "in_app" });
       return json({ success: true, tenant_name: tenantData.name, days_left: daysLeft });
     }
 
@@ -668,6 +732,67 @@ Deno.serve(async (req: Request) => {
       if (error) return json({ error: error.message }, 400);
       await logEvent("sector_image.delete", sector_id, null);
       return json({ success: true, sector: data });
+    }
+
+    // ============ SUBSCRIPTION LIFECYCLE ============
+    if (action === "run_subscription_lifecycle") {
+      const { data, error } = await admin.rpc("process_subscription_lifecycle");
+      if (error) return json({ error: error.message }, 500);
+
+      // Send admin alerts for newly expired tenants
+      const result = data as { renewed?: number; expired?: number; suspended?: number; reminders_sent?: number };
+      if ((result?.expired || 0) > 0) {
+        const { data: expiredTenants } = await admin.from("tenants")
+          .select("id, name, email, plan, plan_expires_at")
+          .eq("subscription_status", "expired")
+          .eq("is_active", true);
+
+        for (const t of (expiredTenants || [])) {
+          fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "subscription_expired_admin", tenant_id: t.id }),
+          }).catch(() => {});
+        }
+      }
+
+      await logEvent("subscription.lifecycle_run", null, result);
+      return json({ success: true, ...result });
+    }
+
+    if (action === "update_auto_suspend_settings") {
+      const { auto_suspend_enabled, auto_suspend_grace_days } = body;
+      const patch: Record<string, unknown> = {};
+      if (auto_suspend_enabled !== undefined) patch.auto_suspend_enabled = !!auto_suspend_enabled;
+      if (auto_suspend_grace_days !== undefined) patch.auto_suspend_grace_days = Math.max(1, Math.min(90, Number(auto_suspend_grace_days) || 7));
+
+      const { error } = await admin.from("tenants").update(patch).neq("billing_cycle", "lifetime");
+      if (error) return json({ error: error.message }, 400);
+      await logEvent("subscription.auto_suspend_config", null, patch);
+      return json({ success: true, ...patch });
+    }
+
+    if (action === "get_auto_suspend_settings") {
+      const { data } = await admin.from("tenants")
+        .select("auto_suspend_enabled, auto_suspend_grace_days")
+        .limit(1)
+        .maybeSingle();
+      return json({ auto_suspend_enabled: data?.auto_suspend_enabled || false, auto_suspend_grace_days: data?.auto_suspend_grace_days || 7 });
+    }
+
+    if (action === "send_expiration_alert") {
+      const { tenant_id } = body;
+      if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "subscription_expired_admin", tenant_id }),
+      });
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) return json({ error: resData?.error || "Erreur envoi" }, res.status);
+      await logEvent("subscription.expiration_alert_sent", tenant_id, {});
+      return json({ success: true });
     }
 
     return json({ error: "Action inconnue" }, 400);

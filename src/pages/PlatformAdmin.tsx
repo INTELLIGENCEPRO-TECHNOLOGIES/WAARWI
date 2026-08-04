@@ -7,7 +7,7 @@ import {
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
   ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse, Bell, ArrowRightLeft,
-  Rocket, Sparkles, Bug,
+  Rocket, Sparkles, Bug, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -435,6 +435,8 @@ function TenantsSection() {
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const normalizeName = (s: string) => (s || '').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, ' ').replace(/\s+/g, ' ').trim();
+
   const deleteTenant = async () => {
     if (!deleting) return;
     setDeleteLoading(true);
@@ -685,13 +687,13 @@ function TenantsSection() {
 
             <div>
               <label className="block text-xs font-medium text-[#0F172A] mb-1">
-                Tapez <span className="font-mono font-bold bg-[#FEF2F2] text-[#DC2626] px-1.5 py-0.5 rounded">{deleting.name}</span> pour confirmer
+                Tapez <span className="font-mono font-bold bg-[#FEF2F2] text-[#DC2626] px-1.5 py-0.5 rounded">{normalizeName(deleting.name)}</span> pour confirmer
               </label>
               <input
                 value={deleteConfirmName}
                 onChange={e => setDeleteConfirmName(e.target.value)}
                 className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] font-mono placeholder:text-[#94A3B8] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
-                placeholder={deleting.name}
+                placeholder={normalizeName(deleting.name)}
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -705,7 +707,7 @@ function TenantsSection() {
               ><X className="w-4 h-4" /></button>
               <button
                 onClick={deleteTenant}
-                disabled={deleteConfirmName !== deleting.name || deleteLoading}
+                disabled={normalizeName(deleteConfirmName) !== normalizeName(deleting.name) || deleteLoading}
                 className="btn-icon-danger-solid" title="Supprimer définitivement"
               >
                 {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
@@ -1632,13 +1634,24 @@ function SubscriptionsSection() {
   const [expiring, setExpiring] = useState<any[]>([]);
   const [reminderDays, setReminderDays] = useState(7);
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
+  const [sendingEmailAlert, setSendingEmailAlert] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
+  const [autoSuspendEnabled, setAutoSuspendEnabled] = useState(false);
+  const [autoSuspendDays, setAutoSuspendDays] = useState(7);
+  const [runningLifecycle, setRunningLifecycle] = useState(false);
+  const [lastLifecycleResult, setLastLifecycleResult] = useState<any>(null);
   const { success, error } = useToast();
 
   const loadExpiring = async (days: number) => {
     try { const res = await call('list_expiring_tenants', { days }); setExpiring(res.tenants || []); }
     catch (e: any) { error(e.message); }
+  };
+
+  const loadAutoSuspendSettings = async () => {
+    try { const res = await call('get_auto_suspend_settings'); setAutoSuspendEnabled(res.auto_suspend_enabled); setAutoSuspendDays(res.auto_suspend_grace_days); }
+    catch {}
   };
 
   useEffect(() => {
@@ -1648,44 +1661,87 @@ function SubscriptionsSection() {
       setLoading(false);
     })();
     loadExpiring(reminderDays);
+    loadAutoSuspendSettings();
   }, []);
 
   const sendReminder = async (tenantId: string) => {
     setSendingReminder(tenantId);
     try {
       const res = await call('send_payment_reminder', { tenant_id: tenantId });
-      success(`Rappel envoyé à ${res.tenant_name}`);
+      success(`Rappel envoyé sur l'écran de ${res.tenant_name}`);
     } catch (e: any) { error(e.message); }
     setSendingReminder(null);
   };
 
+  const sendEmailAlert = async (tenantId: string) => {
+    setSendingEmailAlert(tenantId);
+    try {
+      await call('send_expiration_alert', { tenant_id: tenantId });
+      success('Email d\'alerte d\'expiration envoyé à l\'administrateur');
+    } catch (e: any) { error(e.message); }
+    setSendingEmailAlert(null);
+  };
+
+  const runLifecycle = async () => {
+    setRunningLifecycle(true);
+    try {
+      const res = await call('run_subscription_lifecycle');
+      setLastLifecycleResult(res);
+      success(`Traitement terminé : ${res.renewed || 0} renouvelé(s), ${res.expired || 0} expiré(s), ${res.suspended || 0} suspendu(s), ${res.reminders_sent || 0} rappel(s)`);
+      // Reload
+      const t = await call('list_tenants');
+      setTenants(t.tenants || []);
+      loadExpiring(reminderDays);
+    } catch (e: any) { error(e.message); }
+    setRunningLifecycle(false);
+  };
+
+  const saveAutoSuspend = async () => {
+    try {
+      await call('update_auto_suspend_settings', { auto_suspend_enabled: autoSuspendEnabled, auto_suspend_grace_days: autoSuspendDays });
+      success('Paramètres de suspension auto sauvegardés');
+    } catch (e: any) { error(e.message); }
+  };
+
+  // Build one row per tenant with only the CURRENT subscription (active or most recent)
   const rows = useMemo(() => {
     const out: any[] = [];
     for (const t of tenants) {
-      for (const s of (t.tenant_subscriptions || [])) {
-        out.push({ ...s, tenant_name: t.name, tenant_id: t.id, tenant_email: t.email, tenant_subdomain: t.subdomain });
+      const subs = (t.tenant_subscriptions || []) as any[];
+      // Get current active/expired sub, or most recent if none active
+      const current = subs.find(s => s.status === 'active')
+        || subs.find(s => s.status === 'expired')
+        || subs.sort((a: any, b: any) => (b.started_at || '').localeCompare(a.started_at || ''))[0];
+      if (current) {
+        out.push({ ...current, tenant_name: t.name, tenant_id: t.id, tenant_email: t.email, tenant_subdomain: t.subdomain, auto_renew: t.auto_renew, subscription_status: t.subscription_status });
       }
+      // Store history for expandable view (only completed, not current)
+      const history = subs.filter(s => s.id !== current?.id && s.status === 'completed');
+      if (current) current._history = history;
     }
-    return out.sort((a, b) => (b.started_at || '').localeCompare(a.started_at || ''));
+    return out.sort((a, b) => {
+      // Expired first, then expiring soon, then active
+      const priority = (s: string) => s === 'expired' ? 0 : s === 'active' ? 1 : 2;
+      return priority(a.status) - priority(b.status) || (b.started_at || '').localeCompare(a.started_at || '');
+    });
   }, [tenants]);
 
-  const totalMRR = rows.filter(r => r.status === 'active' && r.billing_cycle !== 'lifetime').reduce((s, r) => s + Number(r.amount || 0) / (r.billing_cycle === 'yearly' ? 12 : 1), 0);
+  const EXCLUDED_MRR_TENANTS = new Set(['INTELLIGENCEPRO TECHNOLOGIES', 'SAD PIECES AUTO']);
+  const totalMRR = rows.filter(r => r.status === 'active' && r.billing_cycle !== 'lifetime' && !EXCLUDED_MRR_TENANTS.has((r.tenant_name || '').toUpperCase())).reduce((s, r) => s + Number(r.amount || 0) / (r.billing_cycle === 'yearly' ? 12 : 1), 0);
   const activeCount = rows.filter(r => r.status === 'active').length;
-  const pendingCount = rows.filter(r => r.status === 'pending').length;
+  const expiredCount = rows.filter(r => r.status === 'expired').length;
 
   const statusLabel = (s: string) => {
-    const map: Record<string, string> = { active: 'Actif', pending: 'En attente', superseded: 'Remplacé', expired: 'Expiré', cancelled: 'Annulé', trial: 'Essai', suspended: 'Suspendu' };
+    const map: Record<string, string> = { active: 'Actif', expired: 'Expiré', completed: 'Terminé', suspended: 'Suspendu', trial: 'Essai' };
     return map[s] || s;
   };
   const statusStyle = (s: string) => {
     const map: Record<string, string> = {
       active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      pending: 'bg-slate-50 text-slate-600 border-slate-200',
-      superseded: 'bg-gray-50 text-gray-500 border-gray-200',
       expired: 'bg-orange-50 text-orange-700 border-orange-200',
-      cancelled: 'bg-red-50 text-red-600 border-red-200',
-      trial: 'bg-blue-50 text-blue-600 border-blue-200',
+      completed: 'bg-slate-50 text-slate-500 border-slate-200',
       suspended: 'bg-red-50 text-red-700 border-red-200',
+      trial: 'bg-blue-50 text-blue-600 border-blue-200',
     };
     return map[s] || 'bg-slate-50 text-slate-600 border-slate-200';
   };
@@ -1697,10 +1753,7 @@ function SubscriptionsSection() {
   const filters: { key: string; label: string }[] = [
     { key: 'all', label: 'Tous' },
     { key: 'active', label: 'Actifs' },
-    { key: 'pending', label: 'En attente' },
     { key: 'expired', label: 'Expirés' },
-    { key: 'superseded', label: 'Remplacés' },
-    { key: 'cancelled', label: 'Annulés' },
     { key: 'expiring_soon', label: 'Expirent bientôt' },
   ];
 
@@ -1724,14 +1777,32 @@ function SubscriptionsSection() {
 
   const resetFilters = () => { setQ(''); setStatusFilter('all'); };
 
+  const toggleHistory = (tenantId: string) => {
+    setExpandedHistory(prev => {
+      const next = new Set(prev);
+      if (next.has(tenantId)) next.delete(tenantId); else next.add(tenantId);
+      return next;
+    });
+  };
+
   if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#0F172A]" /></div>;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-semibold text-[#0F172A]">Abonnements</h2>
-        <p className="text-sm text-[#64748B] mt-0.5">Suivi des plans, cycles, paiements et expirations des tenants</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-[#0F172A]">Abonnements</h2>
+          <p className="text-sm text-[#64748B] mt-0.5">Vue en temps réel de chaque client</p>
+        </div>
+        <button
+          onClick={runLifecycle}
+          disabled={runningLifecycle}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#111111] hover:bg-[#333333] text-white text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          {runningLifecycle ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Traitement quotidien
+        </button>
       </div>
 
       {/* KPI Cards */}
@@ -1752,16 +1823,16 @@ function SubscriptionsSection() {
             </div>
           </div>
           <div className="text-2xl font-bold text-[#0F172A]">{activeCount}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">Abonnements actifs</div>
+          <div className="text-xs text-[#64748B] mt-0.5">Actifs</div>
         </div>
         <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
-              <Clock className="w-4 h-4 text-[#64748B]" />
+            <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-orange-500" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A]">{pendingCount}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">En attente</div>
+          <div className="text-2xl font-bold text-[#0F172A]">{expiredCount}</div>
+          <div className="text-xs text-[#64748B] mt-0.5">Expirés</div>
         </div>
         <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -1773,6 +1844,49 @@ function SubscriptionsSection() {
           <div className="text-xs text-[#64748B] mt-0.5">Expirations proches</div>
         </div>
       </div>
+
+      {/* Auto-Suspension Settings */}
+      <div className="bg-white rounded-lg border border-[#E5E7EB] p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
+              <Ban className="w-4.5 h-4.5 text-red-500" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-[#0F172A]">Suspension automatique</div>
+              <div className="text-xs text-[#64748B] mt-0.5">Suspendre automatiquement les clients après expiration + délai de grâce</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[#64748B]">Délai :</span>
+              <input
+                type="number" min={1} max={90} value={autoSuspendDays}
+                onChange={e => setAutoSuspendDays(Number(e.target.value) || 7)}
+                className="w-14 text-center text-xs border border-[#E5E7EB] rounded-md px-2 py-1.5 bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]"
+              />
+              <span className="text-xs text-[#64748B]">jours</span>
+            </div>
+            <button
+              onClick={() => { setAutoSuspendEnabled(!autoSuspendEnabled); setTimeout(saveAutoSuspend, 100); }}
+              className={`relative w-11 h-6 rounded-full transition-colors ${autoSuspendEnabled ? 'bg-red-500' : 'bg-slate-200'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoSuspendEnabled ? 'translate-x-5' : ''}`} />
+            </button>
+            <button onClick={saveAutoSuspend} className="text-xs font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] hover:bg-[#F7F8FA] text-[#0F172A]">
+              Sauvegarder
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Last lifecycle result */}
+      {lastLifecycleResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-sm text-emerald-800 flex items-center gap-2">
+          <Check className="w-4 h-4 shrink-0" />
+          <span>Dernier traitement : {lastLifecycleResult.renewed || 0} renouvelé(s), {lastLifecycleResult.expired || 0} expiré(s), {lastLifecycleResult.suspended || 0} suspendu(s), {lastLifecycleResult.reminders_sent || 0} rappel(s)</span>
+        </div>
+      )}
 
       {/* Payment Reminders */}
       <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
@@ -1813,10 +1927,7 @@ function SubscriptionsSection() {
                       <span className={`font-medium ${isUrgent ? 'text-red-600' : 'text-orange-600'}`}>
                         {days <= 0 ? 'Expiré' : `Expire dans ${days}j`}
                       </span>
-                      <span className="text-[#94A3B8]">
-                        ({new Date(t.plan_expires_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })})
-                      </span>
-                      {t.auto_renew && <span className="text-[10px] bg-[#F7F8FA] text-[#64748B] border border-[#E5E7EB] px-1.5 py-0.5 rounded">auto-renew</span>}
+                      {t.auto_renew && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">auto-renew</span>}
                     </div>
                   </div>
                   <button
@@ -1826,6 +1937,14 @@ function SubscriptionsSection() {
                   >
                     {sendingReminder === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bell className="w-3 h-3" />}
                     Rappeler
+                  </button>
+                  <button
+                    onClick={() => sendEmailAlert(t.id)}
+                    disabled={sendingEmailAlert === t.id}
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    {sendingEmailAlert === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                    Alerte email
                   </button>
                 </div>
               );
@@ -1862,7 +1981,7 @@ function SubscriptionsSection() {
         </div>
       </div>
 
-      {/* Table (desktop) / Cards (mobile) */}
+      {/* Table */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-lg border border-[#E5E7EB] py-12 text-center">
           <div className="text-sm text-[#64748B]">Aucun abonnement trouvé</div>
@@ -1874,84 +1993,82 @@ function SubscriptionsSection() {
           )}
         </div>
       ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden md:block bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
-            <div className="grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3 bg-[#F7F8FA] border-b border-[#E5E7EB]">
-              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Tenant</div>
-              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Plan</div>
-              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Cycle</div>
-              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider text-right">Montant</div>
-              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Période</div>
-              <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Statut</div>
-            </div>
-            <div className="divide-y divide-[#E5E7EB]">
-              {filtered.map(r => (
-                <div
-                  key={r.id}
-                  className={`grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3.5 items-center hover:bg-[#F7F8FA] transition-colors ${r.status === 'superseded' ? 'opacity-50' : ''}`}
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-[#0F172A] truncate">{r.tenant_name}</div>
-                    {(r.tenant_email || r.tenant_subdomain) && (
-                      <div className="text-xs text-[#94A3B8] truncate mt-0.5">{r.tenant_subdomain || r.tenant_email}</div>
+        <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
+          <div className="hidden md:grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3 bg-[#F7F8FA] border-b border-[#E5E7EB]">
+            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Client</div>
+            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Plan</div>
+            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Cycle</div>
+            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider text-right">Montant</div>
+            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Échéance</div>
+            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Statut</div>
+          </div>
+          <div className="divide-y divide-[#E5E7EB]">
+            {filtered.map(r => {
+              const hasHistory = r._history && r._history.length > 0;
+              const showHistory = expandedHistory.has(r.tenant_id);
+              return (
+                <div key={r.id}>
+                  {/* Main row (desktop) */}
+                  <div className="hidden md:grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3.5 items-center hover:bg-[#F7F8FA] transition-colors">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-[#0F172A] truncate">{r.tenant_name}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {r.auto_renew && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">auto</span>}
+                        {hasHistory && (
+                          <button onClick={() => toggleHistory(r.tenant_id)} className="text-[10px] text-[#64748B] hover:text-[#0F172A] underline">
+                            {showHistory ? 'Masquer' : `${r._history.length} ancien(s)`}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div><span className="text-xs font-medium text-[#0F172A] bg-[#F7F8FA] border border-[#E5E7EB] px-2 py-0.5 rounded">{r.plan_code}</span></div>
+                    <div className="text-xs text-[#64748B]">{cycleLabel(r.billing_cycle)}</div>
+                    <div className="text-sm font-semibold text-[#0F172A] text-right">{formatFCFA(r.amount)}</div>
+                    <div className="text-xs text-[#64748B]">{r.ends_at ? formatDate(r.ends_at) : '-'}</div>
+                    <div><span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border ${statusStyle(r.status)}`}>{statusLabel(r.status)}</span></div>
+                  </div>
+                  {/* Mobile card */}
+                  <div className="md:hidden p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-[#0F172A] truncate">{r.tenant_name}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {r.auto_renew && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">auto</span>}
+                        </div>
+                      </div>
+                      <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${statusStyle(r.status)}`}>{statusLabel(r.status)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-2 gap-x-4 mt-3">
+                      <div><div className="text-[10px] uppercase text-[#94A3B8] font-medium">Plan</div><div className="text-xs text-[#0F172A] font-medium mt-0.5">{r.plan_code}</div></div>
+                      <div><div className="text-[10px] uppercase text-[#94A3B8] font-medium">Cycle</div><div className="text-xs text-[#64748B] mt-0.5">{cycleLabel(r.billing_cycle)}</div></div>
+                      <div><div className="text-[10px] uppercase text-[#94A3B8] font-medium">Montant</div><div className="text-sm font-semibold text-[#0F172A] mt-0.5">{formatFCFA(r.amount)}</div></div>
+                      <div><div className="text-[10px] uppercase text-[#94A3B8] font-medium">Échéance</div><div className="text-xs text-[#64748B] mt-0.5">{r.ends_at ? formatDate(r.ends_at) : '-'}</div></div>
+                    </div>
+                    {hasHistory && (
+                      <button onClick={() => toggleHistory(r.tenant_id)} className="mt-2 text-[11px] text-[#64748B] hover:text-[#0F172A] underline">
+                        {showHistory ? 'Masquer historique' : `Voir historique (${r._history.length})`}
+                      </button>
                     )}
                   </div>
-                  <div>
-                    <span className="text-xs font-medium text-[#0F172A] bg-[#F7F8FA] border border-[#E5E7EB] px-2 py-0.5 rounded">{r.plan_code}</span>
-                  </div>
-                  <div className="text-xs text-[#64748B]">{cycleLabel(r.billing_cycle)}</div>
-                  <div className="text-sm font-semibold text-[#0F172A] text-right">{formatFCFA(r.amount)}</div>
-                  <div className="text-xs text-[#64748B]">
-                    {formatDate(r.started_at)}{r.ends_at ? ` - ${formatDate(r.ends_at)}` : ''}
-                  </div>
-                  <div>
-                    <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border ${statusStyle(r.status)}`}>
-                      {statusLabel(r.status)}
-                    </span>
-                  </div>
+                  {/* Expanded history */}
+                  {showHistory && r._history && (
+                    <div className="bg-[#FAFBFC] border-t border-[#E5E7EB] px-5 py-2">
+                      <div className="text-[10px] uppercase font-semibold text-[#94A3B8] tracking-wider mb-2">Historique</div>
+                      {r._history.map((h: any) => (
+                        <div key={h.id} className="flex items-center gap-4 py-1.5 text-xs text-[#64748B]">
+                          <span className="font-medium text-[#0F172A]">{h.plan_code}</span>
+                          <span>{cycleLabel(h.billing_cycle)}</span>
+                          <span>{formatDate(h.started_at)} - {h.ends_at ? formatDate(h.ends_at) : '...'}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusStyle(h.status)}`}>{statusLabel(h.status)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-
-          {/* Mobile cards */}
-          <div className="md:hidden space-y-3">
-            {filtered.map(r => (
-              <div key={r.id} className={`bg-white rounded-lg border border-[#E5E7EB] p-4 ${r.status === 'superseded' ? 'opacity-50' : ''}`}>
-                <div className="flex items-start justify-between mb-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-[#0F172A] truncate">{r.tenant_name}</div>
-                    {(r.tenant_email || r.tenant_subdomain) && (
-                      <div className="text-xs text-[#94A3B8] truncate">{r.tenant_subdomain || r.tenant_email}</div>
-                    )}
-                  </div>
-                  <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${statusStyle(r.status)}`}>
-                    {statusLabel(r.status)}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-y-2 gap-x-4 mt-3">
-                  <div>
-                    <div className="text-[10px] uppercase text-[#94A3B8] font-medium tracking-wider">Plan</div>
-                    <div className="text-xs text-[#0F172A] font-medium mt-0.5">{r.plan_code}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase text-[#94A3B8] font-medium tracking-wider">Cycle</div>
-                    <div className="text-xs text-[#64748B] mt-0.5">{cycleLabel(r.billing_cycle)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase text-[#94A3B8] font-medium tracking-wider">Montant</div>
-                    <div className="text-sm font-semibold text-[#0F172A] mt-0.5">{formatFCFA(r.amount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase text-[#94A3B8] font-medium tracking-wider">Période</div>
-                    <div className="text-xs text-[#64748B] mt-0.5">{formatDate(r.started_at)}{r.ends_at ? ` - ${formatDate(r.ends_at)}` : ''}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+        </div>
       )}
     </div>
   );

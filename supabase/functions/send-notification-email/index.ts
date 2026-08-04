@@ -228,6 +228,82 @@ function newSignupAdminEmail(
   return emailLayout(content, year);
 }
 
+function subscriptionExpiredAdminEmail(
+  tenantName: string,
+  tenantEmail: string,
+  planName: string,
+  expiredAt: string,
+  daysOverdue: number,
+  suspendUrl: string,
+  reactivateUrl: string,
+  platformUrl: string,
+  year: number
+) {
+  const content = `
+    <h1 style="margin:0 0 20px;color:#0f172a;font-size:22px;font-weight:800;">
+      Abonnement expir\u00e9
+    </h1>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.7;">
+      Le client ci-dessous a d\u00e9pass\u00e9 son abonnement sans renouvellement automatique.
+    </p>
+
+    <!-- Tenant info box -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border-radius:12px;border:1px solid #fecaca;margin:24px 0;">
+      <tr><td style="padding:20px 24px;">
+        <p style="margin:0 0 10px;color:#991b1b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
+          Client en d\u00e9passement
+        </p>
+        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
+          <strong>Entreprise :</strong> ${tenantName}
+        </p>
+        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
+          <strong>Email :</strong> ${tenantEmail}
+        </p>
+        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
+          <strong>Plan :</strong> ${planName}
+        </p>
+        <p style="margin:0 0 6px;color:#334155;font-size:14px;">
+          <strong>Expir\u00e9 le :</strong> ${expiredAt}
+        </p>
+        <p style="margin:0;color:#dc2626;font-size:14px;font-weight:700;">
+          D\u00e9passement : ${daysOverdue} jour${daysOverdue > 1 ? 's' : ''}
+        </p>
+      </td></tr>
+    </table>
+
+    <!-- Action buttons -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 16px;">
+      <tr>
+        <td align="center" style="padding:0 8px 12px;">
+          <a href="${suspendUrl}" style="display:inline-block;padding:14px 36px;background-color:#dc2626;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:700;letter-spacing:0.3px;">
+            Suspendre ce client
+          </a>
+        </td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 8px;">
+          <a href="${reactivateUrl}" style="display:inline-block;padding:14px 36px;background-color:#059669;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:700;letter-spacing:0.3px;">
+            R\u00e9activer ce client
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:16px 0 20px;color:#94a3b8;font-size:12px;text-align:center;">
+      Ces boutons sont valables 48h. Un seul clic suffit.
+    </p>
+
+    <!-- Secondary: Go to platform -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td align="center">
+        <a href="${platformUrl}" style="display:inline-block;padding:10px 28px;background-color:#f1f5f9;color:#475569;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;border:1px solid #e2e8f0;">
+          Ouvrir la console WAARWI
+        </a>
+      </td></tr>
+    </table>`;
+  return emailLayout(content, year);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -250,9 +326,8 @@ Deno.serve(async (req: Request) => {
       return json({ error: "type et tenant_id requis" }, 400);
     }
 
-    // For new_signup type, we use internal service key auth (called by the system)
-    // For approval/rejection, we validate super_admin
-    if (type !== "new_signup") {
+    // For new_signup and subscription_expired_admin types, use service key auth
+    if (type !== "new_signup" && type !== "subscription_expired_admin") {
       const authHeader = req.headers.get("Authorization") || "";
       const token = authHeader.replace("Bearer ", "");
       if (!token) return json({ error: "Unauthorized" }, 401);
@@ -269,11 +344,9 @@ Deno.serve(async (req: Request) => {
       if (!profile || profile.role !== "super_admin")
         return json({ error: "Forbidden" }, 403);
     } else {
-      // Validate internal call via service role key or apikey header
       const apikey = req.headers.get("Apikey") || req.headers.get("apikey") || "";
       const authHeader = req.headers.get("Authorization") || "";
       if (!apikey && !authHeader.includes(SERVICE_KEY)) {
-        // Allow if called with a valid user token too
         const token = authHeader.replace("Bearer ", "");
         if (token) {
           const { data: userData, error: userErr } = await admin.auth.getUser(token);
@@ -287,12 +360,12 @@ Deno.serve(async (req: Request) => {
 
     const { data: tenant } = await admin
       .from("tenants")
-      .select("name, email, business_type, approval_token")
+      .select("name, email, business_type, approval_token, plan, plan_expires_at, billing_cycle")
       .eq("id", tenant_id)
       .maybeSingle();
 
-    if (!tenant || !tenant.email) {
-      return json({ error: "Tenant ou email introuvable" }, 404);
+    if (!tenant) {
+      return json({ error: "Tenant introuvable" }, 404);
     }
 
     const APP_URL = Deno.env.get("APP_URL") || "https://app.waarwi.com";
@@ -308,7 +381,7 @@ Deno.serve(async (req: Request) => {
 
     if (type === "approval") {
       subject = `${tenant.name}, votre compte WAARWI est actif !`;
-      htmlBody = approvalEmail(tenant.name, tenant.email, APP_URL, year);
+      htmlBody = approvalEmail(tenant.name, tenant.email || "", APP_URL, year);
     } else if (type === "rejection") {
       const reason = body.reason || "";
       subject = "Information concernant votre inscription WAARWI";
@@ -319,15 +392,59 @@ Deno.serve(async (req: Request) => {
       const approveUrl = `${APP_URL}?approve_token=${tenant.approval_token}`;
       htmlBody = newSignupAdminEmail(
         tenant.name,
-        tenant.email,
+        tenant.email || "",
         tenant.business_type || "non specifie",
         approveUrl,
         APP_URL,
         year
       );
+    } else if (type === "subscription_expired_admin") {
+      toEmail = ADMIN_EMAIL;
+      const expiredAt = tenant.plan_expires_at
+        ? new Date(tenant.plan_expires_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+        : "N/A";
+      const daysOverdue = tenant.plan_expires_at
+        ? Math.max(0, Math.ceil((Date.now() - new Date(tenant.plan_expires_at).getTime()) / 86400000))
+        : 0;
+
+      // Get plan name
+      const { data: planData } = await admin.from("plans").select("name").eq("code", tenant.plan).maybeSingle();
+      const planName = planData?.name || tenant.plan;
+
+      // Create action tokens for suspend and reactivate
+      const { data: suspendToken } = await admin
+        .from("subscription_action_tokens")
+        .insert({ tenant_id, action: "suspend" })
+        .select("token")
+        .single();
+
+      const { data: reactivateToken } = await admin
+        .from("subscription_action_tokens")
+        .insert({ tenant_id, action: "reactivate" })
+        .select("token")
+        .single();
+
+      const suspendUrl = `${SUPABASE_URL}/functions/v1/admin-users?action_token=${suspendToken?.token || ""}`;
+      const reactivateUrl = `${SUPABASE_URL}/functions/v1/admin-users?action_token=${reactivateToken?.token || ""}`;
+
+      subject = `[ALERTE] ${tenant.name} - Abonnement expir\u00e9 depuis ${daysOverdue}j`;
+      htmlBody = subscriptionExpiredAdminEmail(
+        tenant.name,
+        tenant.email || "",
+        planName,
+        expiredAt,
+        daysOverdue,
+        suspendUrl,
+        reactivateUrl,
+        APP_URL,
+        year
+      );
+    } else if (type === "payment_reminder") {
+      // Not sent by email (per user request) - just log it
+      return json({ success: true, note: "Rappels affiches en app uniquement" });
     } else {
       return json(
-        { error: "Type de notification inconnu. Utilisez 'approval', 'rejection' ou 'new_signup'." },
+        { error: "Type de notification inconnu." },
         400
       );
     }
