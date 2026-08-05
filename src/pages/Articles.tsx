@@ -279,7 +279,6 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     if (!can('manage_articles')) { if (!silent) error('Vous n\'avez pas la permission de modifier les articles'); return false; }
     if (!form.name?.trim()) { if (!silent) { error('Désignation obligatoire'); setTab('infos'); } return false; }
     if (!form.internal_ref?.trim()) { if (!silent) { error('Référence interne obligatoire'); setTab('infos'); } return false; }
-    if (!editing) return false;
     setSaving(true);
     try {
       // Handle image upload if a new file was selected
