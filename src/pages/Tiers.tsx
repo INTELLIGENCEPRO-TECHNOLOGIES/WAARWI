@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
   X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
-  ShoppingBag, Check, Filter, Printer, Tag, Trash2,
+  ShoppingBag, Check, Printer, Tag, Trash2,
   Download, Upload, Scale, RotateCcw, Save
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -56,7 +57,6 @@ export function Tiers() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | 'active' | 'inactive'>('');
 
   // Create / edit
@@ -74,8 +74,60 @@ export function Tiers() {
   const [toDeactivateCust, setToDeactivateCust] = useState<Customer | null>(null);
   const [toDeactivateSup, setToDeactivateSup] = useState<Supplier | null>(null);
 
-  // FAB
-  const [fabOpen, setFabOpen] = useState(false);
+  // Create menu (top + button dropdown)
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const createBtnRef = useRef<HTMLButtonElement>(null);
+  const [createMenuPos, setCreateMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const createDropdownRef = useRef<HTMLDivElement>(null);
+
+  const updateCreateMenuPos = useCallback(() => {
+    if (!createBtnRef.current) return;
+    const rect = createBtnRef.current.getBoundingClientRect();
+    setCreateMenuPos({ top: rect.bottom + 6, left: rect.right - 220 });
+  }, []);
+
+  useEffect(() => {
+    if (!createMenuOpen) return;
+    updateCreateMenuPos();
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node;
+      if (createBtnRef.current?.contains(target)) return;
+      if (createDropdownRef.current?.contains(target)) return;
+      setCreateMenuOpen(false);
+    }
+    window.addEventListener('scroll', updateCreateMenuPos, true);
+    window.addEventListener('resize', updateCreateMenuPos);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener('scroll', updateCreateMenuPos, true);
+      window.removeEventListener('resize', updateCreateMenuPos);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [createMenuOpen, updateCreateMenuPos]);
+
+  const createMenuDropdown = createMenuOpen ? createPortal(
+    <div
+      ref={createDropdownRef}
+      style={{ position: 'fixed', top: createMenuPos.top, left: createMenuPos.left, width: 220, zIndex: 9999 }}
+      className="bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-200/60 overflow-hidden"
+    >
+      <button
+        onClick={() => { openCustCreate(); setCreateMenuOpen(false); }}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+      >
+        <Users className="w-4 h-4 text-slate-500 shrink-0" />
+        <span className="font-semibold text-slate-900 whitespace-nowrap">Nouveau client</span>
+      </button>
+      <button
+        onClick={() => { openSupCreate(); setCreateMenuOpen(false); }}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors border-t border-slate-100"
+      >
+        <Truck className="w-4 h-4 text-slate-500 shrink-0" />
+        <span className="font-semibold text-slate-900 whitespace-nowrap">Nouveau fournisseur</span>
+      </button>
+    </div>,
+    document.body
+  ) : null;
 
   // Options sheet (click on a tier row/card)
   const [optCust, setOptCust] = useState<Customer | null>(null);
@@ -172,7 +224,6 @@ export function Tiers() {
   // ── Filters ──────────────────────────────────────────────────
   const filteredCustomers = useMemo(() => {
     let r = customers;
-    if (typeFilter) r = r.filter(c => c.customer_type === typeFilter);
     if (statusFilter === 'active') r = r.filter(c => (c as any).is_active !== false);
     if (statusFilter === 'inactive') r = r.filter(c => (c as any).is_active === false);
     const q = search.toLowerCase().trim();
@@ -184,7 +235,7 @@ export function Tiers() {
       (c.email || '').toLowerCase().includes(q) ||
       (c.customer_type || '').toLowerCase().includes(q)
     );
-  }, [customers, search, typeFilter, statusFilter]);
+  }, [customers, search, statusFilter]);
 
   const filteredSuppliers = useMemo(() => {
     let r = suppliers;
@@ -243,7 +294,7 @@ export function Tiers() {
       return next;
     });
   };
-  const openCustCreate = () => { setCustEdit(null); setCustForm({ customer_type: 'particulier', is_active: true }); setCustErrors({}); setCustTouched({}); setCustOpen(true); setFabOpen(false); };
+  const openCustCreate = () => { setCustEdit(null); setCustForm({ customer_type: 'particulier', is_active: true }); setCustErrors({}); setCustTouched({}); setCustOpen(true); setCreateMenuOpen(false); };
   const openCustEdit = (c: Customer) => { setCustEdit(c); setCustForm(c); setCustErrors({}); setCustTouched({}); setCustOpen(true); };
   const saveCust = async () => {
     if (!validateCustAll()) { error(t('tiers.fixErrors')); return; }
@@ -330,7 +381,7 @@ export function Tiers() {
       return next;
     });
   };
-  const openSupCreate = () => { setSupEdit(null); setSupForm({ country: 'Sénégal', is_active: true }); setSupErrors({}); setSupTouched({}); setSupOpen(true); setFabOpen(false); };
+  const openSupCreate = () => { setSupEdit(null); setSupForm({ country: 'Sénégal', is_active: true }); setSupErrors({}); setSupTouched({}); setSupOpen(true); setCreateMenuOpen(false); };
   const openSupEdit = (s: Supplier) => { setSupEdit(s); setSupForm(s); setSupErrors({}); setSupTouched({}); setSupOpen(true); };
   const saveSup = async () => {
     if (!validateSupAll()) { error(t('tiers.fixErrors')); return; }
@@ -379,9 +430,7 @@ export function Tiers() {
   const activeCustCount = customers.filter(c => (c as any).is_active !== false).length;
   const activeSupCount = suppliers.filter(s => s.is_active).length;
 
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const hasFilters = !!(search || typeFilter || statusFilter);
-  const clearFilters = () => { setSearch(''); setSearchInput(''); setTypeFilter(''); setStatusFilter(''); setFiltersOpen(false); };
+
 
   // Import / Export
   const [importExportOpen, setImportExportOpen] = useState(false);
@@ -620,14 +669,12 @@ export function Tiers() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Embedded header: title + search + filter trigger (like Billing) ── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
       <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
             <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
               <div className="leading-tight">
                 <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Gestion des tiers</h1>
-                <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">Clients &amp; fournisseurs</div>
-                <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Tiers</div>
               </div>
             </div>
             <input
@@ -642,29 +689,54 @@ export function Tiers() {
               </button>
             )}
             <button
-              onClick={() => setFiltersOpen(v => !v)}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
-                (typeFilter || statusFilter)
-                  ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                  : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
-              }`}
+              onClick={() => setStatusFilter(prev => prev === 'active' ? '' : 'active')}
+              className="shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-semibold transition-colors text-slate-500 hover:text-slate-700"
+              title="Afficher uniquement les tiers actifs"
             >
-              <Filter className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Filtres</span>
+              <span className="relative inline-flex items-center">
+                <span className={`w-7 h-4 rounded-full transition-colors ${statusFilter === 'active' ? 'bg-brand-600' : 'bg-slate-300'}`} />
+                <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${statusFilter === 'active' ? 'translate-x-3' : ''}`} />
+              </span>
+              <span className="hidden md:inline">Actifs</span>
             </button>
             <button
-              onClick={() => setFabOpen(v => !v)}
-              className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
-              style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
+              onClick={exportTiers}
+              className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+              title="Exporter en Excel"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }}
+              className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+              title="Importer depuis Excel"
+            >
+              <Upload className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => { setBalanceTarget(null); setBalanceOpen(true); }}
+              className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+              title="Positionner un solde"
+            >
+              <Scale className="w-3.5 h-3.5" />
+            </button>
+            <div className="relative">
+              <button
+                ref={createBtnRef}
+                onClick={() => setCreateMenuOpen(v => !v)}
+              className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-700 transition-colors"
               aria-label="Nouveau tiers"
             >
-              <Plus className="w-3.5 h-3.5 text-white" />
+              <Plus className="w-3.5 h-3.5" />
             </button>
+            {createMenuOpen && createMenuDropdown}
+            </div>
         </div>
       </div>
 
-      {/* ── Tabs + action buttons ── */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      {/* ── Tabs as flat filter chips ── */}
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+        <span className="shrink-0 text-slate-500 num">{tab === 'customers' ? filteredCustomers.length : filteredSuppliers.length} / {tab === 'customers' ? customers.length : suppliers.length}</span>
         {[
             { k: 'customers' as TabKey, l: 'Clients', c: activeCustCount, Icon: Users },
             { k: 'suppliers' as TabKey, l: 'Fournisseurs', c: activeSupCount, Icon: Truck },
@@ -675,72 +747,20 @@ export function Tiers() {
               <button
                 key={t.k}
                 onClick={() => setTab(t.k)}
-                className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all active:scale-95 ${
-                  active
-                    ? 'bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow border border-transparent'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:border-brand-300 hover:text-brand-700'
+                className={`shrink-0 inline-flex items-center gap-1 transition-colors ${
+                  active ? 'text-neutral-900 font-bold' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-3 h-3" />
                 {t.l}
-                <span className={`num px-1.5 py-0.5 rounded-md text-[10px] font-bold ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{t.c}</span>
+                <span className="num">{t.c}</span>
               </button>
             );
           })}
-          <div className="ml-auto flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={exportTiers}
-              className="btn-icon"
-              title="Exporter en Excel"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }}
-              className="btn-icon"
-              title="Importer depuis Excel"
-            >
-              <Upload className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => { setBalanceTarget(null); setBalanceOpen(true); }}
-              className="btn-icon"
-              title="Positionner un solde"
-            >
-              <Scale className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      </div>
       </div>
 
-      {/* ── Filter chips panel (expandable) ── */}
-      {filtersOpen && (
-        <div className="card p-2.5 flex flex-col sm:flex-row gap-2 animate-slide-down">
-          {tab === 'customers' && (
-            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="input sm:w-44">
-              <option value="">Tous types</option>
-              <option value="particulier">Particulier</option>
-              <option value="professionnel">Professionnel</option>
-              <option value="garage">Garage</option>
-              <option value="revendeur">Revendeur</option>
-              <option value="societe">Société</option>
-              <option value="administration">Administration</option>
-            </select>
-          )}
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="input sm:w-40">
-            <option value="">Tous statuts</option>
-            <option value="active">Actif</option>
-            <option value="inactive">Inactif</option>
-          </select>
-          {hasFilters && (
-            <button onClick={clearFilters} className="btn-icon" title="Réinitialiser">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Content */}
+{/* Content */}
       {loading ? (
         <div className="card py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : (
@@ -770,24 +790,7 @@ export function Tiers() {
         </div>
       )}
 
-      {/* FAB */}
-      <div className="fixed bottom-20 right-4 z-30">
-        {fabOpen && (
-          <div className="absolute bottom-16 right-0 flex flex-col gap-2 animate-slide-down">
-            <button onClick={openCustCreate} className="flex items-center gap-2 pr-4 pl-2 py-2 rounded-full bg-white border border-slate-200 shadow-premium text-sm font-semibold text-slate-800 whitespace-nowrap">
-              <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"><Users className="w-4 h-4" /></span>
-              Nouveau client
-            </button>
-            <button onClick={openSupCreate} className="flex items-center gap-2 pr-4 pl-2 py-2 rounded-full bg-white border border-slate-200 shadow-premium text-sm font-semibold text-slate-800 whitespace-nowrap">
-              <span className="w-8 h-8 rounded-full bg-neutral-50 text-neutral-700 flex items-center justify-center shrink-0"><Truck className="w-4 h-4" /></span>
-              Nouveau fournisseur
-            </button>
-          </div>
-        )}
-        <button onClick={() => setFabOpen(v => !v)} className={`w-14 h-14 rounded-full bg-brand-700 text-white shadow-glow flex items-center justify-center transition-transform ${fabOpen ? 'rotate-45' : ''}`}>
-          <Plus className="w-6 h-6" />
-        </button>
-      </div>
+
 
       {/* Customer form */}
       <Modal open={custOpen} onClose={() => setCustOpen(false)} title={custEdit ? t('tiers.editCustomer') : t('tiers.addCustomer')}
@@ -812,16 +815,6 @@ export function Tiers() {
               placeholder={t('tiers.name')}
               autoFocus={desktopAutoFocus}
             />
-            <FormField label={t('tiers.type')}>
-              <select value={custForm.customer_type || 'particulier'} onChange={e => setCustField('customer_type', e.target.value)} className="input">
-                <option value="particulier">{t('tiers.customerType.particulier')}</option>
-                <option value="professionnel">{t('tiers.customerType.professionnel')}</option>
-                <option value="garage">{t('tiers.customerType.garage')}</option>
-                <option value="revendeur">{t('tiers.customerType.revendeur')}</option>
-                <option value="societe">{t('tiers.customerType.societe')}</option>
-                <option value="administration">{t('tiers.customerType.administration')}</option>
-              </select>
-            </FormField>
             {custEdit && (
               <FormField label={t('tiers.status')}>
                 <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
@@ -1214,81 +1207,70 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, prepayMap, avoir
       : <div className="card"><EmptyState icon={Users} title="Aucun résultat" description="Aucun client ne correspond à votre recherche." /></div>;
   }
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1 sm:space-y-0">
       {list.map(c => {
-        const due = dueMap[c.id] || 0;
         const inactive = (c as any).is_active === false;
         const limit = Number((c as any).credit_limit || 0);
         const blocked = (c as any).credit_blocked === true;
         const balance = Number((c as any).balance || 0);
         const nearLimit = limit > 0 && balance >= limit * 0.8;
         const overLimit = limit > 0 && balance >= limit;
+        const prepay = prepayMap[c.id] || 0;
+        const avoir = avoirMap[c.id] || 0;
+        const applied = Math.min(prepay, Math.max(0, balance));
+        const avoirApp = Math.min(avoir, Math.max(0, balance - applied));
+        const netDebt = Math.max(0, balance - applied - avoirApp);
+        const excessPrepay = prepay - applied;
+        const excessAvoir = avoir - avoirApp;
+        const netLabel = netDebt > 0 ? 'Solde à payer' : excessPrepay > 0 ? 'Acompte disponible' : excessAvoir > 0 ? 'Avoir disponible' : 'Solde';
+        const netAmount = netDebt > 0 ? netDebt : excessPrepay > 0 ? excessPrepay : excessAvoir > 0 ? excessAvoir : 0;
+        const netColor = netDebt > 0 ? 'text-amber-600' : excessPrepay > 0 ? 'text-emerald-600' : excessAvoir > 0 ? 'text-teal-600' : 'text-slate-300';
         return (
           <button
             key={c.id}
             onClick={() => onClickRow(c)}
-            className={`w-full text-left bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-brand-300 active:scale-[0.99] transition-all px-3.5 py-2.5 ${inactive ? 'opacity-50' : ''}`}
+            className={`w-full text-left transition-colors ${inactive ? 'opacity-50' : ''} sm:hover:bg-slate-50 sm:rounded-none sm:px-2 sm:py-1.5 bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-brand-300 active:scale-[0.99] px-3.5 py-2.5`}
           >
-            {/* Row 1: name + badges */}
-            <div className="flex items-start gap-2 mb-1.5">
-              <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
-                {c.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-slate-900 leading-snug">{c.name}</p>
-                {c.phone && (
-                  <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                    <Phone className="w-2.5 h-2.5 shrink-0" />{c.phone}
-                  </div>
-                )}
-              </div>
+            {/* Desktop: single flat line */}
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="w-5 h-5 shrink-0 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center text-[10px] font-bold">{c.name.charAt(0).toUpperCase()}</div>
+              <p className="text-[12px] font-bold text-slate-900 truncate flex-1 min-w-0">{c.name}</p>
+              {c.phone && <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden md:inline">{c.phone}</span>}
               <div className="flex items-center gap-1 shrink-0">
                 {blocked && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
                 {!blocked && overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
                 {!blocked && nearLimit && !overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
                 {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200">Inactif</span>}
               </div>
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 shrink-0 hidden lg:inline">{netLabel}</span>
+              <span className={`text-[12px] font-black tabular-nums shrink-0 w-28 text-right ${netColor}`}>{formatFCFA(netAmount)}</span>
             </div>
-            {/* Row 2: net position label + amount */}
-            {(() => {
-              const prepay = prepayMap[c.id] || 0;
-              const avoir = avoirMap[c.id] || 0;
-              const applied = Math.min(prepay, Math.max(0, balance));
-              const avoirApp = Math.min(avoir, Math.max(0, balance - applied));
-              const netDebt = Math.max(0, balance - applied - avoirApp);
-              const excessPrepay = prepay - applied;
-              const excessAvoir = avoir - avoirApp;
-              if (netDebt > 0) {
-                return (
-                  <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-                    <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-500">Solde à payer</span>
-                    <span className="text-[12px] font-black tabular-nums text-amber-600">{formatFCFA(netDebt)}</span>
-                  </div>
-                );
-              }
-              if (excessPrepay > 0) {
-                return (
-                  <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-                    <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-500">Acompte disponible</span>
-                    <span className="text-[12px] font-black tabular-nums text-emerald-600">{formatFCFA(excessPrepay)}</span>
-                  </div>
-                );
-              }
-              if (excessAvoir > 0) {
-                return (
-                  <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-                    <span className="text-[9px] font-semibold uppercase tracking-wider text-teal-500">Avoir disponible</span>
-                    <span className="text-[12px] font-black tabular-nums text-teal-600">{formatFCFA(excessAvoir)}</span>
-                  </div>
-                );
-              }
-              return (
-                <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde</span>
-                  <span className="text-[12px] font-black tabular-nums text-slate-300">0 FCFA</span>
+            {/* Mobile: card layout */}
+            <div className="sm:hidden">
+              <div className="flex items-start gap-2 mb-1.5">
+                <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
+                  {c.name.charAt(0).toUpperCase()}
                 </div>
-              );
-            })()}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-bold text-slate-900 leading-snug">{c.name}</p>
+                  {c.phone && (
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                      <Phone className="w-2.5 h-2.5 shrink-0" />{c.phone}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {blocked && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
+                  {!blocked && overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
+                  {!blocked && nearLimit && !overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
+                  {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200">Inactif</span>}
+                </div>
+              </div>
+              <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">{netLabel}</span>
+                <span className={`text-[12px] font-black tabular-nums ${netColor}`}>{formatFCFA(netAmount)}</span>
+              </div>
+            </div>
           </button>
         );
       })}
@@ -1308,35 +1290,45 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
       : <div className="card"><EmptyState icon={Truck} title="Aucun résultat" description="Aucun fournisseur ne correspond à votre recherche." /></div>;
   }
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1 sm:space-y-0">
       {list.map(s => {
-        const d = dueMap[s.id] || { total: 0, paid: 0, due: 0 };
         const balance = Number((s as any).balance || 0);
+        const netColor = balance > 0 ? 'text-red-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300';
         return (
           <button
             key={s.id}
             onClick={() => onClickRow(s)}
-            className={`w-full text-left bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 active:scale-[0.99] transition-all px-3.5 py-2.5 ${!s.is_active ? 'opacity-50' : ''}`}
+            className={`w-full text-left transition-colors ${!s.is_active ? 'opacity-50' : ''} sm:hover:bg-slate-50 sm:rounded-none sm:px-2 sm:py-1.5 bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 active:scale-[0.99] px-3.5 py-2.5`}
           >
-            {/* Row 1: name + inactive badge */}
-            <div className="flex items-start gap-2 mb-1.5">
-              <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-neutral-50 to-neutral-100 text-neutral-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
-                {s.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold text-slate-900 leading-snug">{s.name}</p>
-                {s.phone && (
-                  <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                    <Phone className="w-2.5 h-2.5 shrink-0" />{s.phone}
-                  </div>
-                )}
-              </div>
+            {/* Desktop: single flat line */}
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="w-5 h-5 shrink-0 rounded-md bg-neutral-100 text-neutral-700 flex items-center justify-center text-[10px] font-bold">{s.name.charAt(0).toUpperCase()}</div>
+              <p className="text-[12px] font-bold text-slate-900 truncate flex-1 min-w-0">{s.name}</p>
+              {s.phone && <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden md:inline">{s.phone}</span>}
               {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200 shrink-0">Inactif</span>}
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 shrink-0 hidden lg:inline">Solde comptable</span>
+              <span className={`text-[12px] font-black tabular-nums shrink-0 w-28 text-right ${netColor}`}>{formatFCFA(balance)}</span>
             </div>
-            {/* Row 2: solde label + amount */}
-            <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde comptable</span>
-              <span className={`text-[12px] font-black tabular-nums ${balance > 0 ? 'text-red-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{formatFCFA(balance)}</span>
+            {/* Mobile: card layout */}
+            <div className="sm:hidden">
+              <div className="flex items-start gap-2 mb-1.5">
+                <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-neutral-50 to-neutral-100 text-neutral-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
+                  {s.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-bold text-slate-900 leading-snug">{s.name}</p>
+                  {s.phone && (
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                      <Phone className="w-2.5 h-2.5 shrink-0" />{s.phone}
+                    </div>
+                  )}
+                </div>
+                {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200 shrink-0">Inactif</span>}
+              </div>
+              <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde comptable</span>
+                <span className={`text-[12px] font-black tabular-nums ${netColor}`}>{formatFCFA(balance)}</span>
+              </div>
             </div>
           </button>
         );
@@ -1432,6 +1424,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const [avoirs, setAvoirs] = useState<{ id: string; return_number: string; total: number; credit_used: number; created_at: string; refunded_at?: string | null }[]>([]);
   const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; reason: string; reference: string; created_at: string }[]>([]);
+  const [loans, setLoans] = useState<{ id: string; amount: number; reason: string; reference: string; created_at: string }[]>([]);
 
   const c = useMemo(() => ({ ...initialC, balance: customerBalance } as any), [initialC, customerBalance]);
 
@@ -1454,16 +1447,18 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     if (!payMethod && realMethods.length) setPayMethod(realMethods[0].id);
 
     const salesIds = ss.map(s => s.id);
-    const [{ data: prepays }, { data: avoirRows }, { data: adjRows }, { data: withdrawalRows }] = await Promise.all([
+    const [{ data: prepays }, { data: avoirRows }, { data: adjRows }, { data: withdrawalRows }, { data: loanRows }] = await Promise.all([
       supabase.from('customer_prepayments').select('id, amount, amount_used, method_name, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }),
       supabase.from('sale_returns').select('id, return_number, total, credit_used, created_at, refunded_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('status', 'approved').eq('refund_method', 'avoir').order('created_at', { ascending: false }),
       supabase.from('balance_adjustments').select('id, amount, note, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'customer').eq('entity_id', c.id).order('created_at', { ascending: false }),
       supabase.from('cash_movements').select('id, amount, reason, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('kind', 'customer_withdrawal').order('created_at', { ascending: false }),
+      supabase.from('cash_movements').select('id, amount, reason, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('kind', 'customer_loan').order('created_at', { ascending: false }),
     ]);
     setPrepayments(prepays || []);
     setAvoirs(avoirRows || []);
     setBalanceAdjs(adjRows || []);
     setWithdrawals(withdrawalRows || []);
+    setLoans(loanRows || []);
 
     if (salesIds.length) {
       const [{ data: pays }, { data: items }] = await Promise.all([
@@ -1518,7 +1513,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   }, [sales, realPayments, c]);
 
   const ledger = useMemo(() => {
-    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' | 'adjustment' | 'withdrawal' };
+    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' | 'adjustment' | 'withdrawal' | 'loan' };
     const rows: Row[] = [];
     balanceAdjs.forEach(adj => {
       const amt = Number(adj.amount);
@@ -1551,10 +1546,13 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     withdrawals.forEach(w => {
       rows.push({ id: 'wd-' + w.id, ts: w.created_at, label: 'Retrait caisse' + (w.reason ? ' · ' + w.reason : ''), ref: w.reference || '', debit: Number(w.amount), credit: 0, kind: 'withdrawal' });
     });
+    loans.forEach(l => {
+      rows.push({ id: 'ln-' + l.id, ts: l.created_at, label: 'Prêt client' + (l.reason ? ' · ' + l.reason : ''), ref: l.reference || '', debit: Number(l.amount), credit: 0, kind: 'loan' });
+    });
     rows.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
     let running = 0;
     return rows.map(r => { running += r.debit - r.credit; return { ...r, running }; });
-  }, [sales, realPayments, prepayments, avoirs, balanceAdjs, withdrawals]);
+  }, [sales, realPayments, prepayments, avoirs, balanceAdjs, withdrawals, loans]);
 
   const filteredDocs = useMemo(() => sales.filter(s => {
     if (dateFrom && new Date(s.created_at) < new Date(dateFrom)) return false;
@@ -1779,7 +1777,7 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
   totalDebit: number; totalCredit: number; balance: number; unusedAvoir: number;
   dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void;
 }) {
-  const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment'>('');
+  const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment' | 'loan'>('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const filteredLedger = useMemo(() => {
@@ -1842,7 +1840,7 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
           </button>
         )}
         <div className="flex items-center gap-1 ml-auto">
-          {[{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }].map(o => (
+          {[{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }, { v: 'loan' as const, l: 'Prêts' }].map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${kindFilter === o.v ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'text-slate-500 hover:bg-slate-100'}`}>
               {o.l}
@@ -1883,8 +1881,8 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
                 <div className="divide-y divide-slate-100 border-t border-slate-100">
                   {rows.map(r => (
                     <div key={r.id} className="flex items-center gap-2 px-2.5 py-2">
-                      <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center ${r.kind === 'sale' ? 'bg-neutral-50 text-neutral-700' : r.kind === 'payment' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-                        {r.kind === 'sale' ? <FileText className="w-3.5 h-3.5" /> : r.kind === 'payment' ? <Wallet className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                      <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center ${r.kind === 'sale' ? 'bg-neutral-50 text-neutral-700' : r.kind === 'payment' ? 'bg-emerald-50 text-emerald-700' : r.kind === 'loan' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>
+                        {r.kind === 'sale' ? <FileText className="w-3.5 h-3.5" /> : r.kind === 'payment' ? <Wallet className="w-3.5 h-3.5" /> : r.kind === 'loan' ? <Wallet className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[13px] font-semibold text-slate-900">{r.label}</div>

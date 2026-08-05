@@ -280,18 +280,12 @@ export function OnlineOrders() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header unifié : titre intégré + recherche + filtre + refresh ─── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-neutral-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none flex items-center gap-1">
-                <Globe className="w-3.5 h-3.5 text-brand-700" />
-                <span>Commandes</span>
-              </h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">Boutique en ligne</div>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">En ligne</div>
-            </div>
-          </div>
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm flex items-center gap-2 border-b border-neutral-200/70">
+        <h1 className="text-sm font-bold tracking-tight text-slate-900 shrink-0 flex items-center gap-1.5 pr-3 border-r border-neutral-200/70">
+          <Globe className="w-4 h-4 text-brand-700" />
+          <span>Commandes</span>
+        </h1>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5">
           <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <input
             value={query}
@@ -306,10 +300,10 @@ export function OnlineOrders() {
           )}
           <button
             onClick={() => setShowFilters(v => !v)}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
+            className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-semibold transition-colors ${
               payFilter !== 'all' || dateFilter !== 'all' || showFilters
-                ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                : 'bg-neutral-50 text-neutral-500 border border-neutral-200 hover:bg-neutral-100'
+                ? 'text-brand-700'
+                : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             <Filter className="w-3.5 h-3.5" />
@@ -317,10 +311,10 @@ export function OnlineOrders() {
           </button>
           <button
             onClick={() => load(true)}
-            className="shrink-0 w-8 h-8 rounded-xl bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-all active:scale-95"
+            className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-700 transition-colors active:scale-95"
             aria-label="Actualiser"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-neutral-600 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -383,15 +377,23 @@ export function OnlineOrders() {
 
       {/* ── Liste ───────────────────────────────────────────────────── */}
       {loading ? (
-        <div className="rounded-2xl bg-white border border-neutral-200 p-10 text-center text-sm text-neutral-500">Chargement…</div>
+        <div className="py-10 text-center text-sm text-neutral-500">Chargement…</div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl bg-white border border-neutral-200 p-10 text-center">
+        <div className="py-10 text-center">
           <Globe className="w-8 h-8 text-slate-300 mx-auto mb-2" />
           <div className="text-neutral-800 font-semibold text-sm">Aucune commande</div>
           <p className="text-xs text-neutral-500 mt-1">Les commandes de votre boutique en ligne apparaîtront ici.</p>
         </div>
       ) : (
-        <div className={`space-y-2 ${flashList ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
+        <div className={`divide-y divide-neutral-100 ${flashList ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
+          {/* Thin header row */}
+          <div className="flex items-center gap-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+            <span className="w-20 shrink-0">N°</span>
+            <span className="flex-1 min-w-0">Client</span>
+            <span className="hidden sm:block w-20 shrink-0 text-right">Statut</span>
+            <span className="w-24 shrink-0 text-right">Montant</span>
+            <span className="w-5 shrink-0" />
+          </div>
           {filtered.map(o => {
             const meta = STATUS_META[o.status];
             const pay = PAYMENT_META[o.payment_status];
@@ -399,30 +401,33 @@ export function OnlineOrders() {
               <button
                 key={o.id}
                 onClick={() => openOrder(o)}
-                className="w-full rounded-2xl bg-white border border-neutral-200 hover:border-neutral-300 shadow-card hover:shadow-elevated p-3 text-left transition-all active:scale-[0.99]"
+                className="w-full py-2.5 px-0.5 text-left transition-colors hover:bg-neutral-50/60 active:bg-neutral-100/60"
               >
                 {/* Line 1: number + status + amount */}
                 <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-extrabold text-neutral-900 shrink-0">{o.order_number}</span>
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border ${meta.cls} shrink-0`}>
+                  <span className="text-[13px] font-extrabold text-neutral-900 shrink-0 w-20 truncate">{o.order_number}</span>
+                  <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                    <span className="font-semibold text-neutral-800 text-xs truncate">{o.customer_name || '—'}</span>
+                    {o.customer_phone && (
+                      <span className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-medium text-neutral-400 shrink-0">
+                        <Phone className="w-2.5 h-2.5" />
+                        {o.customer_phone}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border ${meta.cls} shrink-0 w-20 justify-center`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+                    {meta.short}
+                  </span>
+                  <span className="text-[13px] font-extrabold text-neutral-900 num whitespace-nowrap shrink-0 w-24 text-right">{formatFCFA(o.total)}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                </div>
+                {/* Line 2: date + payment + delivery (mobile-only compact) */}
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap sm:hidden">
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border ${meta.cls}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
                     {meta.label}
                   </span>
-                  <span className="ml-auto text-[14px] font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(o.total)}</span>
-                </div>
-                {/* Line 2: customer + date */}
-                <div className="flex items-start justify-between gap-2 mt-1.5 text-xs">
-                  <span className="font-semibold text-neutral-800 break-words min-w-0">{o.customer_name || '—'}</span>
-                  <span className="text-neutral-400 font-medium whitespace-nowrap shrink-0">{formatDate(o.created_at)}</span>
-                </div>
-                {/* Line 3: phone + payment + delivery */}
-                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                  {o.customer_phone && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-neutral-50 border border-neutral-100 text-[10px] font-semibold text-neutral-600">
-                      <Phone className="w-2.5 h-2.5" />
-                      {o.customer_phone}
-                    </span>
-                  )}
                   <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold ${pay.cls}`}>
                     <CreditCard className="w-2.5 h-2.5" />
                     {pay.label}
@@ -431,7 +436,7 @@ export function OnlineOrders() {
                     {o.delivery_mode === 'livraison' ? <Truck className="w-2.5 h-2.5" /> : <ShoppingBag className="w-2.5 h-2.5" />}
                     {o.delivery_mode === 'livraison' ? 'Livraison' : 'Retrait'}
                   </span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-auto shrink-0" />
+                  <span className="text-neutral-400 font-medium text-[10px] whitespace-nowrap shrink-0 ml-auto">{formatDate(o.created_at)}</span>
                 </div>
               </button>
             );
@@ -652,17 +657,15 @@ function StatusChip({ label, value, active, onClick, dot, neutral }: {
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border text-[11px] font-bold transition-all active:scale-95 ${
+      className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-semibold transition-colors ${
         active
-          ? 'bg-brand-700 text-white border-brand-700 shadow-sm'
-          : neutral
-          ? 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
-          : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
+          ? 'text-brand-700'
+          : 'text-slate-500 hover:text-slate-700'
       }`}
     >
       {dot && !active && <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />}
       <span>{label}</span>
-      <span className={`num font-extrabold ${active ? 'text-white' : 'text-neutral-900'}`}>{value}</span>
+      <span className={`num font-extrabold ${active ? 'text-brand-700' : 'text-slate-800'}`}>{value}</span>
     </button>
   );
 }

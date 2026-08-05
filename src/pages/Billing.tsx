@@ -10,6 +10,7 @@ import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
+import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { EmptyState } from '../components/EmptyState';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
@@ -95,11 +96,11 @@ function creditStatus(r: SaleReturn) {
   return { label: 'Disponible', pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' };
 }
 
-const TABS: { key: Tab; label: string; icon: any }[] = [
-  { key: 'invoices', label: 'Factures', icon: Receipt },
-  { key: 'quotes',   label: 'Devis',    icon: FileText },
-  { key: 'returns',  label: 'Retours',  icon: RotateCcw },
-  { key: 'credits',  label: 'Avoirs',   icon: Wallet },
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'invoices', label: 'Factures' },
+  { key: 'quotes',   label: 'Devis'    },
+  { key: 'returns',  label: 'Retours'  },
+  { key: 'credits',  label: 'Avoirs'   },
 ];
 
 export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
@@ -1609,22 +1610,34 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }
   };
   const primaryLabel = tab === 'quotes' ? 'Nouveau devis' : tab === 'invoices' ? 'Nouvelle facture' : 'Nouveau retour';
-  const PIcon = Plus;
+
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!newMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) setNewMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [newMenuOpen]);
+  const newMenuItems = [
+    { key: 'invoice', label: 'Nouvelle facture', icon: Receipt, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; } openInvoiceEditor(); } },
+    { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } setQuoteOpen(true); } },
+    { key: 'return', label: 'Nouveau retour', icon: RotateCcw, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; } setReturnOpen(true); } },
+    { key: 'credit', label: 'Nouvel avoir', icon: Wallet, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } setReturnOpen(true); } },
+  ];
 
   const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header ───────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
       <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Facturation</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">Documents commerciaux</div>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Documents</div>
-            </div>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
+          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
+            <h1 className="text-sm font-bold tracking-tight text-slate-900">Facturation</h1>
           </div>
           <input
             value={search}
@@ -1639,23 +1652,41 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           )}
           <button
             onClick={() => setFiltersOpen(true)}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
+            className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
               (statusFilter || customerFilter || dateFrom || dateTo || minAmount || maxAmount)
-                ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
+                ? 'text-brand-700'
+                : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             <Filter className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Filtres</span>
+            <span>Filtres</span>
           </button>
-          <button
-            onClick={primaryAction}
-            className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
-            aria-label={primaryLabel}
-          >
-            <Plus className="w-3.5 h-3.5 text-white" />
-          </button>
+          <div className="relative shrink-0" ref={newMenuRef}>
+            <button
+              onClick={() => setNewMenuOpen(v => !v)}
+              className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
+              aria-label="Nouveau document"
+            >
+              <Plus className={`w-3.5 h-3.5 text-white transition-transform duration-200 ${newMenuOpen ? 'rotate-45' : ''}`} />
+            </button>
+            {newMenuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl bg-white border border-slate-200 shadow-lg overflow-hidden z-50 origin-top-right">
+                {newMenuItems.map((item, idx) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => { item.action(); setNewMenuOpen(false); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors text-left ${idx !== newMenuItems.length - 1 ? 'border-b border-slate-100' : ''}`}
+                    >
+                      <Icon className="w-4 h-4 text-slate-400" />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1685,34 +1716,25 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       })()}
 
       {/* ── Tabs ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
           {TABS.map(t => {
-            const Icon = t.icon;
             const active = tab === t.key;
             const count = counts[t.key];
             return (
               <button
                 key={t.key}
                 onClick={() => { setTab(t.key); setStatusFilter(''); }}
-                className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all active:scale-95 ${
+                className={`shrink-0 inline-flex items-center gap-1.5 py-1 transition-colors ${
                   active
-                    ? 'bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow border border-transparent'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:border-brand-300 hover:text-brand-700'
+                    ? 'text-neutral-900 font-bold'
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
                 {t.label}
-                <span className={`num px-1.5 py-0.5 rounded-md text-[10px] font-bold ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{count}</span>
+                <span className="num">{count}</span>
               </button>
             );
           })}
-          <button
-            onClick={primaryAction}
-            className="shrink-0 ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow hover:shadow-lg transition-all active:scale-95"
-          >
-            <PIcon className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{primaryLabel}</span>
-          </button>
         </div>
       </div>
 
@@ -1733,7 +1755,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         <>
           {tab === 'quotes' && (
             filteredQuotes.length === 0 ? (
-              <div className="card-premium"><EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => setQuoteOpen(true)} className="btn-icon-primary" title="Nouveau devis"><Plus className="w-4 h-4" /></button>} /></div>
+              <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => setQuoteOpen(true)} className="btn-icon-primary" title="Nouveau devis"><Plus className="w-4 h-4" /></button>} />
             ) : (
               <div className={flashTab === 'quotes' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
                 <div className="md:hidden space-y-2 count-up">
@@ -1768,49 +1790,27 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     );
                   })}
                 </div>
-                <div className="hidden md:block card-premium overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-slate-50/90 backdrop-blur text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                        <tr>
-                          <th className="px-4 py-3 text-left">N° Devis</th>
-                          <th className="px-4 py-3 text-left">Date</th>
-                          <th className="px-4 py-3 text-left">Client</th>
-                          <th className="px-4 py-3 text-left hidden lg:table-cell">Validité</th>
-                          <th className="px-4 py-3 text-center">Statut</th>
-                          <th className="px-4 py-3 text-right">Montant</th>
-                          <th className="px-4 py-3 text-right w-32">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredQuotes.map(q => {
-                          const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
-                          return (
-                            <tr key={q.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openQuoteDetail(q)}>
-                              <td className="px-4 py-3 doc-number text-sm font-semibold text-slate-700">{q.quote_number}</td>
-                              <td className="px-4 py-3 text-xs text-slate-500 num whitespace-nowrap">{formatDate(q.created_at)}</td>
-                              <td className="px-4 py-3 text-slate-700">{q.customers?.name || <span className="text-slate-400">—</span>}</td>
-                              <td className="px-4 py-3 hidden lg:table-cell text-slate-500 text-xs num">{q.valid_until ? formatDate(q.valid_until) : '—'}</td>
-                              <td className="px-4 py-3 text-center">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${st.pill}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right font-bold text-slate-900 num whitespace-nowrap">{formatFCFA(q.total)}</td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="inline-flex gap-1" onClick={e => e.stopPropagation()}>
-                                  <button onClick={() => openQuoteDetail(q)} className="p-1.5 rounded-lg hover:bg-white hover:shadow-sm text-slate-500 hover:text-brand-700 transition-all" title="Voir"><Eye className="w-4 h-4" /></button>
-                                  {q.status === 'accepted' && <button onClick={() => openConvert(q)} className="p-1.5 rounded-lg hover:bg-brand-50 text-brand-700 transition-all" title="Convertir en facture"><ArrowRight className="w-4 h-4" /></button>}
-                                  {q.status === 'draft' && <button onClick={() => changeQuoteStatus(q, 'sent')} className="p-1.5 rounded-lg hover:bg-neutral-50 text-neutral-700 transition-all" title="Marquer envoyé"><CheckCircle className="w-4 h-4" /></button>}
-                                  {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={() => setQuoteToCancel(q)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-all" title="Refuser"><X className="w-4 h-4" /></button>}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="hidden md:block">
+                  {filteredQuotes.map(q => {
+                    const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
+                    return (
+                      <div key={q.id} onClick={() => openQuoteDetail(q)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50">
+                        <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{q.quote_number}</span>
+                        <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-24">{formatDate(q.created_at)}</span>
+                        <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{q.customers?.name || <span className="text-slate-400">—</span>}</span>
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill} shrink-0`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
+                        </span>
+                        <span className="text-[12px] font-bold text-slate-900 tabular-nums shrink-0 w-28 text-right">{formatFCFA(q.total)}</span>
+                        <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => openQuoteDetail(q)} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-brand-700 transition" title="Voir"><Eye className="w-3.5 h-3.5" /></button>
+                          {q.status === 'accepted' && <button onClick={() => openConvert(q)} className="p-1 rounded hover:bg-brand-50 text-brand-700 transition" title="Convertir"><ArrowRight className="w-3.5 h-3.5" /></button>}
+                          {q.status === 'draft' && <button onClick={() => changeQuoteStatus(q, 'sent')} className="p-1 rounded hover:bg-neutral-50 text-neutral-700 transition" title="Envoyé"><CheckCircle className="w-3.5 h-3.5" /></button>}
+                          {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={() => setQuoteToCancel(q)} className="p-1 rounded hover:bg-red-50 text-red-500 transition" title="Refuser"><X className="w-3.5 h-3.5" /></button>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )
@@ -1818,7 +1818,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
           {tab === 'invoices' && (
             filteredInvoices.length === 0 ? (
-              <div className="card-premium"><EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="btn-icon-primary" title="Nouvelle facture"><Plus className="w-4 h-4" /></button>} /></div>
+              <EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="btn-icon-primary" title="Nouvelle facture"><Plus className="w-4 h-4" /></button>} />
             ) : (
               <>
                 <div className="md:hidden space-y-2 count-up">
@@ -1853,61 +1853,30 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     );
                   })}
                 </div>
-                <div className="hidden md:block card-premium overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-slate-50/90 backdrop-blur text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                        <tr>
-                          <th className="px-4 py-3 text-left">N° Facture</th>
-                          <th className="px-4 py-3 text-left">Date</th>
-                          <th className="px-4 py-3 text-left">Client</th>
-                          <th className="px-4 py-3 text-right">Total</th>
-                          <th className="px-4 py-3 text-right hidden lg:table-cell">Payé</th>
-                          <th className="px-4 py-3 text-right hidden lg:table-cell">Solde</th>
-                          <th className="px-4 py-3 text-center">Statut</th>
-                          <th className="px-4 py-3 text-center hidden xl:table-cell">Compta</th>
-                          <th className="px-4 py-3 text-right w-16">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredInvoices.map(inv => {
-                          const st = invoiceStatus(inv);
-                          const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
-                          return (
-                            <tr key={inv.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openInvoiceDetail(inv)}>
-                              <td className="px-4 py-3 doc-number text-sm font-semibold text-slate-700">{inv.sale_number}</td>
-                              <td className="px-4 py-3 text-xs text-slate-500 num whitespace-nowrap">{formatDateTime(inv.created_at)}</td>
-                              <td className="px-4 py-3 text-slate-700">{inv.customers?.name || <span className="text-slate-400">Client comptoir</span>}</td>
-                              <td className="px-4 py-3 text-right font-bold text-slate-900 num">{formatFCFA(inv.total)}</td>
-                              <td className="px-4 py-3 text-right hidden lg:table-cell text-emerald-700 num">{formatFCFA(inv.paid)}</td>
-                              <td className="px-4 py-3 text-right hidden lg:table-cell num">{solde > 0 ? <span className="text-amber-700 font-bold">{formatFCFA(solde)}</span> : <span className="text-slate-400">—</span>}</td>
-                              <td className="px-4 py-3 text-center">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${st.pill}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-center hidden xl:table-cell">
-                                {inv.accounting_status === 'accounted' ? (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200">OK</span>
-                                ) : (
-                                  <span className="text-[10px] text-slate-400">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-0.5">
-                                  {inv.customers && (
-                                    <button onClick={e => { e.stopPropagation(); quickWhatsApp(inv); }} className="p-1.5 rounded-lg hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>
-                                  )}
-                                  <button onClick={e => { e.stopPropagation(); quickCopy(inv); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
-                                  <button onClick={e => { e.stopPropagation(); openInvoiceDetail(inv); }} className="p-1.5 rounded-lg hover:bg-white hover:shadow-sm text-slate-500 hover:text-brand-700 transition-all"><Eye className="w-3.5 h-3.5" /></button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="hidden md:block">
+                  {filteredInvoices.map(inv => {
+                    const st = invoiceStatus(inv);
+                    const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
+                    return (
+                      <div key={inv.id} onClick={() => openInvoiceDetail(inv)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50">
+                        <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{inv.sale_number}</span>
+                        <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-32">{formatDateTime(inv.created_at)}</span>
+                        <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{inv.customers?.name || <span className="text-slate-400">Client comptoir</span>}</span>
+                        <span className="text-[12px] font-bold text-slate-900 tabular-nums shrink-0 w-28 text-right">{formatFCFA(inv.total)}</span>
+                        <span className="text-[11px] text-emerald-700 tabular-nums shrink-0 w-24 text-right hidden lg:inline">{formatFCFA(inv.paid)}</span>
+                        <span className="text-[11px] tabular-nums shrink-0 w-24 text-right hidden lg:inline">{solde > 0 ? <span className="text-amber-700 font-bold">{formatFCFA(solde)}</span> : <span className="text-slate-400">—</span>}</span>
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill} shrink-0`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
+                        </span>
+                        {inv.accounting_status === 'accounted' && <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200 shrink-0 hidden xl:inline">OK</span>}
+                        <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                          {inv.customers && <button onClick={() => quickWhatsApp(inv)} className="p-1 rounded hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>}
+                          <button onClick={() => quickCopy(inv)} className="p-1 rounded hover:bg-slate-100 text-slate-500 transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => openInvoiceDetail(inv)} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-brand-700 transition" title="Voir"><Eye className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )
@@ -1915,14 +1884,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
           {(tab === 'returns' || tab === 'credits') && (
             (tab === 'returns' ? filteredReturns : filteredCredits).length === 0 ? (
-              <div className="card-premium">
-                <EmptyState
-                  icon={tab === 'returns' ? RotateCcw : Wallet}
-                  title={tab === 'returns' ? 'Aucun retour' : 'Aucun avoir'}
-                  description={tab === 'returns' ? 'Les retours clients apparaîtront ici.' : 'Les avoirs clients apparaîtront ici.'}
-                  action={<button onClick={() => setReturnOpen(true)} className="btn-icon-primary" title={tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}><Plus className="w-4 h-4" /></button>}
-                />
-              </div>
+              <EmptyState
+                icon={tab === 'returns' ? RotateCcw : Wallet}
+                title={tab === 'returns' ? 'Aucun retour' : 'Aucun avoir'}
+                description={tab === 'returns' ? 'Les retours clients apparaîtront ici.' : 'Les avoirs clients apparaîtront ici.'}
+                action={<button onClick={() => setReturnOpen(true)} className="btn-icon-primary" title={tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}><Plus className="w-4 h-4" /></button>}
+              />
             ) : (
               <div className={flashTab === 'returns' && tab === 'returns' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
                 <div className="md:hidden space-y-2 count-up">
@@ -1959,50 +1926,26 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     );
                   })}
                 </div>
-                <div className="hidden md:block card-premium overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-slate-50/90 backdrop-blur text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-                        <tr>
-                          <th className="px-4 py-3 text-left">N°</th>
-                          <th className="px-4 py-3 text-left">Date</th>
-                          <th className="px-4 py-3 text-left">Client</th>
-                          <th className="px-4 py-3 text-left hidden lg:table-cell">Vente liée</th>
-                          {tab === 'returns' && <th className="px-4 py-3 text-center hidden lg:table-cell">Stock</th>}
-                          {tab === 'credits' && <th className="px-4 py-3 text-right hidden lg:table-cell">Utilisé</th>}
-                          <th className="px-4 py-3 text-center">Statut</th>
-                          <th className="px-4 py-3 text-right">Montant</th>
-                          <th className="px-4 py-3 text-right w-16">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {(tab === 'returns' ? filteredReturns : filteredCredits).map(r => {
-                          const st = tab === 'credits' ? creditStatus(r) : (RETURN_STATUS[r.status] || RETURN_STATUS.pending);
-                          const isCredit = tab === 'credits';
-                          const used = Number(r.credit_used || 0);
-                          return (
-                            <tr key={r.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openReturnDetail(r)}>
-                              <td className="px-4 py-3 doc-number text-sm font-semibold text-slate-700">{r.return_number}</td>
-                              <td className="px-4 py-3 text-xs text-slate-500 num whitespace-nowrap">{formatDateTime(r.created_at)}</td>
-                              <td className="px-4 py-3 text-slate-700">{r.customers?.name || <span className="text-slate-400">—</span>}</td>
-                              <td className="px-4 py-3 hidden lg:table-cell doc-number text-sm text-slate-500">{r.sales?.sale_number || '—'}</td>
-                              {tab === 'returns' && <td className="px-4 py-3 hidden lg:table-cell text-center">{r.restock ? <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Oui</span> : <span className="text-slate-400 text-xs">Non</span>}</td>}
-                              {tab === 'credits' && <td className="px-4 py-3 hidden lg:table-cell text-right num text-slate-600">{formatFCFA(used)}</td>}
-                              <td className="px-4 py-3 text-center">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${st.pill}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                                </span>
-                              </td>
-                              <td className={`px-4 py-3 text-right font-bold num whitespace-nowrap ${isCredit ? 'text-neutral-800' : 'text-red-700'}`}>{isCredit ? '' : '-'}{formatFCFA(r.total)}</td>
-                              <td className="px-4 py-3 text-right">
-                                <button onClick={e => { e.stopPropagation(); openReturnDetail(r); }} className="p-1.5 rounded-lg hover:bg-white hover:shadow-sm text-slate-500 hover:text-brand-700 transition-all"><Eye className="w-4 h-4" /></button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="hidden md:block">
+                  {(tab === 'returns' ? filteredReturns : filteredCredits).map(r => {
+                    const st = tab === 'credits' ? creditStatus(r) : (RETURN_STATUS[r.status] || RETURN_STATUS.pending);
+                    const isCredit = tab === 'credits';
+                    const used = Number(r.credit_used || 0);
+                    return (
+                      <div key={r.id} onClick={() => openReturnDetail(r)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50">
+                        <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{r.return_number}</span>
+                        <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-32">{formatDateTime(r.created_at)}</span>
+                        <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{r.customers?.name || <span className="text-slate-400">—</span>}</span>
+                        {tab === 'returns' && <span className="hidden lg:inline shrink-0 w-12 text-center">{r.restock ? <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Oui</span> : <span className="text-slate-400 text-[10px]">Non</span>}</span>}
+                        {tab === 'credits' && <span className="hidden lg:inline shrink-0 w-24 text-right text-[11px] text-slate-600 tabular-nums">{formatFCFA(used)}</span>}
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill} shrink-0`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
+                        </span>
+                        <span className={`text-[12px] font-bold tabular-nums shrink-0 w-28 text-right ${isCredit ? 'text-neutral-800' : 'text-red-700'}`}>{isCredit ? '' : '-'}{formatFCFA(r.total)}</span>
+                        <button onClick={e => { e.stopPropagation(); openReturnDetail(r); }} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-brand-700 transition shrink-0" title="Voir"><Eye className="w-3.5 h-3.5" /></button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )
@@ -2010,48 +1953,49 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         </>
       )}
 
-      {/* ── Filters Modal ────────────────────────────────────── */}
-      <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtres avancés" size="md"
-        footer={<>
-          <button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><X className="w-4 h-4" /></button>
-          <button onClick={() => setFiltersOpen(false)} className="btn-icon-primary" title="Appliquer"><Check className="w-4 h-4" /></button>
-        </>}>
-        <div className="space-y-4">
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Filter className="w-3.5 h-3.5" />Statut</div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button onClick={() => setStatusFilter('')} className={`px-3 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${statusFilter === '' ? 'bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-glow' : 'bg-white text-slate-700 border border-slate-200 hover:border-brand-300'}`}>Tous</button>
-              {statusOptions.map(o => (
-                <button key={o.value} onClick={() => setStatusFilter(o.value)} className={`px-3 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${statusFilter === o.value ? 'bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-glow' : 'bg-white text-slate-700 border border-slate-200 hover:border-brand-300'}`}>{o.label}</button>
-              ))}
+      {/* ── Filters Modal (Premium date range picker + extra filters) ────── */}
+      <PremiumDateRangePicker
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        from={dateFrom}
+        to={dateTo}
+        onApply={(f, t) => { setDateFrom(f); setDateTo(t); setFiltersOpen(false); }}
+        onReset={clearFilters}
+        extraFilters={
+          <>
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Filter className="w-3.5 h-3.5" />Statut</div>
+              <SearchableSelect
+                searchable={false}
+                noBorder
+                value={statusFilter}
+                onChange={v => setStatusFilter(v)}
+                placeholder="Tous les statuts"
+                options={statusOptions.map(o => ({ value: o.value, label: o.label }))}
+              />
             </div>
-          </div>
 
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><User className="w-3.5 h-3.5" />Client</div>
-            <select value={customerFilter} onChange={e => setCustomerFilter(e.target.value)} className="input">
-              <option value="">— Tous les clients —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Calendar className="w-3.5 h-3.5" />Période</div>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input" />
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="input" />
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><User className="w-3.5 h-3.5" />Client</div>
+              <SearchableSelect
+                noBorder
+                value={customerFilter}
+                onChange={v => setCustomerFilter(v)}
+                placeholder="Tous les clients"
+                options={customers.map(c => ({ value: c.id, label: c.name }))}
+              />
             </div>
-          </div>
 
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Coins className="w-3.5 h-3.5" />Montant (FCFA)</div>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="number" placeholder="Min" value={minAmount} onChange={e => setMinAmount(e.target.value)} className="input" />
-              <input type="number" placeholder="Max" value={maxAmount} onChange={e => setMaxAmount(e.target.value)} className="input" />
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Coins className="w-3.5 h-3.5" />Montant (FCFA)</div>
+              <div className="space-y-2">
+                <input type="number" placeholder="Minimum" value={minAmount} onChange={e => setMinAmount(e.target.value)} className="input" />
+                <input type="number" placeholder="Maximum" value={maxAmount} onChange={e => setMaxAmount(e.target.value)} className="input" />
+              </div>
             </div>
-          </div>
-        </div>
-      </Modal>
+          </>
+        }
+      />
 
       {/* ── Direct invoice full-screen panel ──────────────────────────────── */}
       {invoiceEditorOpen && isDesktop && (

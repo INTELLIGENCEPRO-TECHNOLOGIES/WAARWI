@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
-  CreditCard as Edit2, Filter, ChevronDown, ChevronUp,
+  Pencil, Filter, ChevronDown, ChevronUp,
   Upload, Camera, CheckSquare, Square,
   Lightbulb, Download,
   List, LayoutGrid, Save,
@@ -233,7 +233,12 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     setDrawerOpen(true);
   };
 
+  // Debounced auto-save refs (declared early so openEdit can flag skip)
+  const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipAutoSaveRef = useRef(true);
+
   const openEdit = async (a: Article) => {
+    skipAutoSaveRef.current = true;
     setEditing(a);
     setTab('infos');
     setImageFile(null);
@@ -268,11 +273,13 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const addCompat = () => setCompats(c => [...c, { brand_id: '', model_id: '', year_start: 0, year_end: 0, notes: '' }]);
   const removeCompat = (i: number) => setCompats(c => c.filter((_, idx) => idx !== i));
 
-  const save = async () => {
-    if (!tenant) return;
-    if (!can('manage_articles')) { error('Vous n\'avez pas la permission de modifier les articles'); return; }
-    if (!form.name?.trim()) { error('Désignation obligatoire'); setTab('infos'); return; }
-    if (!form.internal_ref?.trim()) { error('Référence interne obligatoire'); setTab('infos'); return; }
+  const save = async (opts?: { silent?: boolean }): Promise<boolean> => {
+    const silent = opts?.silent ?? false;
+    if (!tenant) return false;
+    if (!can('manage_articles')) { if (!silent) error('Vous n\'avez pas la permission de modifier les articles'); return false; }
+    if (!form.name?.trim()) { if (!silent) { error('Désignation obligatoire'); setTab('infos'); } return false; }
+    if (!form.internal_ref?.trim()) { if (!silent) { error('Référence interne obligatoire'); setTab('infos'); } return false; }
+    if (!editing) return false;
     setSaving(true);
     try {
       // Handle image upload if a new file was selected
@@ -377,18 +384,22 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         }
       }
 
-      success(editing ? 'Article modifié' : 'Article créé');
-      setDrawerOpen(false);
-      await load();
+      if (!silent) success(editing ? 'Article modifié' : 'Article créé');
+      if (!silent) setDrawerOpen(false);
+      if (!silent) await load();
+      return true;
     } catch (e: any) {
       const msg = e.message || '';
-      if (msg.includes('Limite du plan')) {
-        error(msg.replace('Mettez à niveau votre abonnement.', '').trim());
-      } else if (msg.includes('unique')) {
-        error('Cette référence existe déjà');
-      } else {
-        error(msg || 'Erreur d\'enregistrement');
+      if (!silent) {
+        if (msg.includes('Limite du plan')) {
+          error(msg.replace('Mettez à niveau votre abonnement.', '').trim());
+        } else if (msg.includes('unique')) {
+          error('Cette référence existe déjà');
+        } else {
+          error(msg || 'Erreur d\'enregistrement');
+        }
       }
+      return false;
     } finally {
       setSaving(false);
     }
@@ -488,6 +499,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   };
 
   const openFullScreen = (a: Article) => {
+    skipAutoSaveRef.current = true;
     const idx = filtered.findIndex(x => x.id === a.id);
     setEditingIndex(idx >= 0 ? idx : 0);
     openEdit(a);
@@ -495,7 +507,18 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     setDrawerOpen(false);
   };
 
+  const saveAndClose = async () => {
+    if (editing && form.name?.trim() && form.internal_ref?.trim()) {
+      const ok = await save();
+      if (!ok) return;
+    }
+    setFullScreenOpen(false);
+  };
+
   const navigateArticle = async (dir: -1 | 1) => {
+    if (editing && form.name?.trim() && form.internal_ref?.trim()) {
+      await save();
+    }
     const newIdx = editingIndex + dir;
     if (newIdx < 0 || newIdx >= filtered.length) return;
     setEditingIndex(newIdx);
@@ -503,6 +526,23 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     await openEdit(a);
     setDrawerOpen(false);
   };
+
+  const jumpToArticle = async (a: Article) => {
+    if (editing && form.name?.trim() && form.internal_ref?.trim()) {
+      await save();
+    }
+    const idx = filtered.indexOf(a);
+    if (idx >= 0) { setEditingIndex(idx); await openEdit(a); setDrawerOpen(false); }
+  };
+
+  useEffect(() => {
+    if (!fullScreenOpen || !editing) return;
+    if (skipAutoSaveRef.current) { skipAutoSaveRef.current = false; return; }
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+    autoSaveRef.current = setTimeout(() => { save({ silent: true }); }, 1200);
+    return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, compats, formTiers, fullScreenOpen, editing]);
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
 
@@ -651,18 +691,15 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header premium unifié ────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Articles</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">{businessLabel}</div>
-            </div>
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2 border-b border-neutral-200/70">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
+          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
+            <h1 className="text-sm font-bold tracking-tight text-slate-900">Articles</h1>
           </div>
           <input
             value={searchInput}
             onChange={e => handleSearchInput(e.target.value)}
-            placeholder="Rechercher…"
+            placeholder="Rechercher par N°, référence, désignation…"
             className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
           />
           {search && (
@@ -670,20 +707,20 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-          <button onClick={() => setFilterOpen(true)} className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${categoryFilter ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>
+          <button onClick={() => setFilterOpen(true)} className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-all ${categoryFilter ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}>
             <Filter className="w-3.5 h-3.5" />
             <span className="max-w-[120px] truncate">{categoryFilter ? selectedCategoryName : 'Catégorie'}</span>
           </button>
-          <button onClick={toggleSelectionMode} className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${selectionMode ? 'bg-brand-600 text-white border border-brand-700 shadow-glow' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>
+          <button onClick={toggleSelectionMode} className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${selectionMode ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}>
             <CheckSquare className="w-3.5 h-3.5" />
             <span>{selectionMode ? 'Quitter' : 'Sélect.'}</span>
           </button>
           {/* Desktop view toggle */}
-          <div className="shrink-0 hidden md:inline-flex items-center rounded-xl overflow-hidden border border-slate-200">
-            <button onClick={() => setViewMode('list')} className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`} aria-label="Vue liste"><List className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setViewMode('cards')} className={`p-1.5 transition-colors ${viewMode === 'cards' ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`} aria-label="Vue cartes"><LayoutGrid className="w-3.5 h-3.5" /></button>
+          <div className="shrink-0 hidden md:inline-flex items-center gap-1">
+            <button onClick={() => setViewMode('list')} className={`p-1.5 transition-colors ${viewMode === 'list' ? 'text-brand-700' : 'text-slate-400 hover:text-slate-700'}`} aria-label="Vue liste"><List className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setViewMode('cards')} className={`p-1.5 transition-colors ${viewMode === 'cards' ? 'text-brand-700' : 'text-slate-400 hover:text-slate-700'}`} aria-label="Vue cartes"><LayoutGrid className="w-3.5 h-3.5" /></button>
           </div>
-          <button onClick={() => { if (!sharedArticles && currentSite) setImportTargetSite(currentSite.id); setImportExportOpen(true); }} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100">
+          <button onClick={() => { if (!sharedArticles && currentSite) setImportTargetSite(currentSite.id); setImportExportOpen(true); }} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors">
             <Download className="w-3.5 h-3.5" /><span>Excel</span>
           </button>
           <button onClick={openCreate} className="shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all" aria-label="Nouvel article">
@@ -721,13 +758,13 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       )}
 
       {/* Stats chips */}
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <button onClick={() => setStockFilter('all')} className={`shrink-0 px-2 py-1 rounded-full num transition-all ${stockFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{filtered.length} / {articles.length}</button>
-        {stats.inStock > 0 && <button onClick={() => setStockFilter(f => f === 'in' ? 'all' : 'in')} className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all cursor-pointer ${stockFilter === 'in' ? 'bg-emerald-600 text-white ring-2 ring-emerald-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}><span className={`w-1.5 h-1.5 rounded-full ${stockFilter === 'in' ? 'bg-white' : 'bg-emerald-500'}`} />{stats.inStock} en stock</button>}
-        {stats.low > 0 && <button onClick={() => setStockFilter(f => f === 'low' ? 'all' : 'low')} className={`shrink-0 px-2 py-1 rounded-full transition-all cursor-pointer ${stockFilter === 'low' ? 'bg-amber-600 text-white ring-2 ring-amber-300' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>{stats.low} stock bas</button>}
-        {stats.out > 0 && <button onClick={() => setStockFilter(f => f === 'out' ? 'all' : 'out')} className={`shrink-0 px-2 py-1 rounded-full transition-all cursor-pointer ${stockFilter === 'out' ? 'bg-red-600 text-white ring-2 ring-red-300' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}>{stats.out} rupture{stats.out > 1 ? 's' : ''}</button>}
-        {categoryFilter && <button onClick={() => setCategoryFilter('')} className="shrink-0 px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 inline-flex items-center gap-1">{selectedCategoryName} <X className="w-3 h-3" /></button>}
-        {stockFilter !== 'all' && <button onClick={() => setStockFilter('all')} className="shrink-0 px-2 py-1 rounded-full bg-slate-50 text-slate-500 border border-slate-200 inline-flex items-center gap-1 hover:bg-slate-100 transition-all"><X className="w-3 h-3" /> Effacer filtre</button>}
+      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+        <button onClick={() => setStockFilter('all')} className={`shrink-0 py-1 num transition-all ${stockFilter === 'all' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>{filtered.length} / {articles.length}</button>
+        {stats.inStock > 0 && <button onClick={() => setStockFilter(f => f === 'in' ? 'all' : 'in')} className={`shrink-0 py-1 inline-flex items-center gap-1 transition-all cursor-pointer ${stockFilter === 'in' ? 'text-emerald-700' : 'text-emerald-500/70 hover:text-emerald-700'}`}><span className={`w-1.5 h-1.5 rounded-full ${stockFilter === 'in' ? 'bg-emerald-600' : 'bg-emerald-400'}`} />{stats.inStock} en stock</button>}
+        {stats.low > 0 && <button onClick={() => setStockFilter(f => f === 'low' ? 'all' : 'low')} className={`shrink-0 py-1 transition-all cursor-pointer ${stockFilter === 'low' ? 'text-amber-700' : 'text-amber-500/70 hover:text-amber-700'}`}>{stats.low} stock bas</button>}
+        {stats.out > 0 && <button onClick={() => setStockFilter(f => f === 'out' ? 'all' : 'out')} className={`shrink-0 py-1 transition-all cursor-pointer ${stockFilter === 'out' ? 'text-red-700' : 'text-red-500/70 hover:text-red-700'}`}>{stats.out} rupture{stats.out > 1 ? 's' : ''}</button>}
+        {categoryFilter && <button onClick={() => setCategoryFilter('')} className="shrink-0 py-1 text-brand-700 inline-flex items-center gap-1">{selectedCategoryName} <X className="w-3 h-3" /></button>}
+        {stockFilter !== 'all' && <button onClick={() => setStockFilter('all')} className="shrink-0 py-1 text-slate-400 inline-flex items-center gap-1 hover:text-slate-600 transition-all"><X className="w-3 h-3" /> Effacer filtre</button>}
       </div>
 
       {/* ── Liste ─────────────────────────────── */}
@@ -770,11 +807,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                   <thead className="bg-slate-50/70 text-[10px] uppercase text-slate-500 tracking-wider border-b border-slate-100 sticky top-0 z-10">
                     <tr>
                       {selectionMode && <th className="px-3 py-3 w-10 bg-slate-50"><button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="text-brand-700">{allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}</button></th>}
-                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('name'); setSortDir(d => sortCol === 'name' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50 min-w-[480px]" onClick={() => { setSortCol('name'); setSortDir(d => sortCol === 'name' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
                         <span className="inline-flex items-center gap-1">Article {sortCol === 'name' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
-                      </th>
-                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('ref'); setSortDir(d => sortCol === 'ref' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
-                        <span className="inline-flex items-center gap-1">Référence {sortCol === 'ref' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
                       </th>
                       <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('category'); setSortDir(d => sortCol === 'category' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
                         <span className="inline-flex items-center gap-1">Catégorie {sortCol === 'category' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
@@ -795,18 +829,17 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                       const qty = stockMap[a.id] || 0;
                       const mStatus = stockStatus(qty, Number(a.stock_min || 0));
                       const mg = a.sale_price > 0 ? ((a.sale_price - a.purchase_price) / a.sale_price) * 100 : 0;
-                      const mgTone = mg >= 30 ? 'text-emerald-700 bg-emerald-50' : mg >= 15 ? 'text-amber-700 bg-amber-50' : 'text-red-700 bg-red-50';
+                      const mgTone = mg >= 30 ? 'text-emerald-600' : mg >= 15 ? 'text-amber-600' : 'text-red-600';
                       const isSel = selectedIds.has(a.id);
                       return (
                         <tr key={a.id} className={`group transition-colors ${isSel ? 'bg-brand-50/60' : 'hover:bg-brand-50/30'} ${selectionMode ? 'cursor-pointer' : ''}`} onClick={selectionMode ? () => toggleSelected(a.id) : undefined}>
                           {selectionMode && <td className="px-3 py-3 w-10"><span className="text-brand-700">{isSel ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-400" />}</span></td>}
-                          <td className="px-4 py-3"><div className="flex items-center gap-3"><div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${mStatus.bg}`}><Package className={`w-4 h-4 ${mStatus.icon}`} /></div><div className="min-w-0"><div className="font-semibold text-slate-900 truncate">{a.name}</div>{a.oem_ref && <div className="text-[11px] text-slate-400 font-mono truncate">OEM: {a.oem_ref}</div>}</div></div></td>
-                          <td className="px-4 py-3 font-mono text-xs text-slate-600">{a.internal_ref}</td>
-                          <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[140px]">{cat?.name || '—'}</td>
+                          <td className="px-4 py-3"><div className="min-w-0"><div className="font-semibold text-slate-900 truncate">{a.name}</div>{a.oem_ref && <div className="text-[11px] text-slate-400 font-mono truncate">OEM: {a.oem_ref}</div>}</div></td>
+                          <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[160px]">{cat?.name || '—'}</td>
                           <td className="px-4 py-3 text-right font-bold text-slate-900 num">{formatFCFA(a.sale_price)}</td>
-                          {can('view_margins') && <td className="px-4 py-3 text-right"><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold num ${mgTone}`}>{mg.toFixed(0)}%</span></td>}
-                          {can('view_stock_levels') && <td className="px-4 py-3 text-right"><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold num ${mStatus.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />{qty}</span></td>}
-                          <td className="px-4 py-3 text-right"><div className="inline-flex gap-1 opacity-60 group-hover:opacity-100"><button onClick={(e) => { e.stopPropagation(); openFullScreen(a); }} className="p-1.5 rounded-lg hover:bg-brand-100 text-slate-600 hover:text-brand-700"><Edit2 className="w-4 h-4" /></button><button onClick={(e) => { e.stopPropagation(); setToDelete(a); }} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button></div></td>
+                          {can('view_margins') && <td className="px-4 py-3 text-right"><span className={`text-[10px] font-bold num ${mgTone}`}>{mg.toFixed(0)}%</span></td>}
+                          {can('view_stock_levels') && <td className="px-4 py-3 text-right"><span className={`text-[10px] font-bold num ${mStatus.badge}`}>{qty}</span></td>}
+                          <td className="px-4 py-3 text-right"><div className="inline-flex gap-1 opacity-60 group-hover:opacity-100"><button onClick={(e) => { e.stopPropagation(); openFullScreen(a); }} className="p-1.5 rounded-lg hover:bg-brand-100 text-slate-600 hover:text-brand-700"><Pencil className="w-4 h-4" /></button><button onClick={(e) => { e.stopPropagation(); setToDelete(a); }} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button></div></td>
                         </tr>
                       );
                     })}
@@ -862,11 +895,11 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           marginValue={marginValue} marginStr={marginStr}
           showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')}
           stockMap={stockMap} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions}
-          onClose={() => setFullScreenOpen(false)}
+          onClose={saveAndClose}
           onPrev={editingIndex > 0 ? () => navigateArticle(-1) : undefined}
           onNext={editingIndex < filtered.length - 1 ? () => navigateArticle(1) : undefined}
           editingIndex={editingIndex} totalCount={filtered.length}
-          filtered={filtered} onJumpTo={async (a) => { const idx = filtered.indexOf(a); if (idx >= 0) { setEditingIndex(idx); await openEdit(a); setDrawerOpen(false); } }}
+          filtered={filtered} onJumpTo={jumpToArticle}
         />
       )}
 
@@ -889,7 +922,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           stockMap={stockMap}
           formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions}
           isPharmacy={(tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie' || (tenant?.enabled_modules || []).includes('ipm')}
-          onClose={() => setDrawerOpen(false)}
+          onClose={async () => { if (editing && form.name?.trim() && form.internal_ref?.trim()) { const ok = await save(); if (!ok) return; } setDrawerOpen(false); }}
           onPrev={editing && editingIndex > 0 ? () => navigateArticle(-1) : undefined}
           onNext={editing && editingIndex < filtered.length - 1 ? () => navigateArticle(1) : undefined}
           editingIndex={editingIndex} totalCount={filtered.length}

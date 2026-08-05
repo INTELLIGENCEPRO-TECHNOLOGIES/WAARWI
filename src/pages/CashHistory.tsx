@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, Loader2, Search, X, Eye, Printer, Check, TrendingUp, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package } from 'lucide-react';
+import { Clock, Loader2, X, Eye, Printer, Check, TrendingUp, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package, HandCoins } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
@@ -33,7 +33,7 @@ type InvoicePayment = {
 };
 
 type CashMovementRow = {
-  id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal';
+  id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan';
   amount: number; reason: string; note: string; reference: string;
   method_name: string; customer_name: string | null; supplier_name: string | null; created_at: string;
 };
@@ -59,7 +59,7 @@ export function CashHistory() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'ventes' | 'controle' | null>(null);
+  const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | 'ventes' | 'controle' | null>(null);
 
   const load = async (silent = false) => {
     if (!tenant || !currentSite) return;
@@ -185,95 +185,145 @@ export function CashHistory() {
   return (
     <div className="space-y-3">
       {/* Premium unified search bar with embedded title + date picker */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm flex items-center gap-2 border-b border-neutral-200/70">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-neutral-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5 hidden sm:block">Historique des sessions</div>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5 sm:hidden">Historique</div>
-            </div>
+            <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
           </div>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
           {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-3.5 h-3.5" /></button>}
-          <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${dateFrom || dateTo ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'bg-neutral-50 text-neutral-500 border border-neutral-200 hover:bg-neutral-100'}`}>
+          <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-all ${dateFrom || dateTo ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
             <Calendar className="w-3.5 h-3.5" />
             <span className="hidden md:inline max-w-[120px] truncate">{dateLabel}</span>
           </button>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow shrink-0">
-            <Search className="w-3.5 h-3.5 text-white" />
-          </div>
         </div>
       </div>
 
       {/* Inline stats chips */}
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-100 text-neutral-600 num">{filtered.length} / {sessions.length}</span>
-        {stats.open > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-50 text-neutral-700 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-neutral-500 pulse-glow" />{stats.open} ouverte{stats.open > 1 ? 's' : ''}</span>}
-        {stats.closed > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-50 text-neutral-600 border border-neutral-200">{stats.closed} clôturée{stats.closed > 1 ? 's' : ''}</span>}
-        {stats.variances > 0 && <span className="shrink-0 px-2 py-1 rounded-full bg-amber-50 text-amber-700">{stats.variances} écart{stats.variances > 1 ? 's' : ''}</span>}
-        {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="btn-icon" title="Effacer"><X className="w-4 h-4" /></button>}
+      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+        <span className="shrink-0 text-neutral-500 num">{filtered.length} / {sessions.length}</span>
+        {stats.open > 0 && <span className="shrink-0 text-neutral-700 num">{stats.open} ouverte{stats.open > 1 ? 's' : ''}</span>}
+        {stats.closed > 0 && <span className="shrink-0 text-neutral-600 num">{stats.closed} clôturée{stats.closed > 1 ? 's' : ''}</span>}
+        {stats.variances > 0 && <span className="shrink-0 text-amber-600 num">{stats.variances} écart{stats.variances > 1 ? 's' : ''}</span>}
+        {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="shrink-0 text-neutral-500 hover:text-neutral-700 inline-flex items-center gap-1 transition-all" title="Effacer"><X className="w-3 h-3" />Réinitialiser</button>}
       </div>
 
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
 
-      {/* Cards / Timeline */}
+      {/* MOBILE: cards / DESKTOP: list */}
       {loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : filtered.length === 0 ? (
         <div className="card-premium"><EmptyState icon={Clock} title="Aucune session" description="Les sessions de caisse apparaîtront ici après ouverture." /></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
-          {filtered.map(s => {
-            const variance = s.variance != null ? Number(s.variance) : null;
-            const isOpen = s.status === 'open';
-            const balanced = variance === 0;
-            const opened = new Date(s.opened_at);
-            const closed = s.closed_at ? new Date(s.closed_at) : null;
-            const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
-            return (
-              <button key={s.id} onClick={() => openDetail(s)} className="card-premium text-left p-3 flex flex-col gap-2 hover:border-brand-400 transition-all duration-300 group">
-                <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOpen ? 'bg-gradient-to-br from-neutral-400 to-neutral-600 text-white shadow-glow' : balanced ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white' : 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'}`}>
-                    {isOpen ? <Clock className="w-3.5 h-3.5" /> : balanced ? <Check className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="doc-number text-[12px] font-bold tracking-wider text-brand-700">#{s.id.slice(0, 8).toUpperCase()}</span>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${isOpen ? 'bg-neutral-50 text-neutral-700' : 'bg-neutral-100 text-neutral-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
+        <>
+          {/* MOBILE: cards */}
+          <div className="md:hidden grid grid-cols-1 gap-2.5">
+            {filtered.map(s => {
+              const variance = s.variance != null ? Number(s.variance) : null;
+              const isOpen = s.status === 'open';
+              const balanced = variance === 0;
+              const opened = new Date(s.opened_at);
+              const closed = s.closed_at ? new Date(s.closed_at) : null;
+              const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
+              return (
+                <button key={s.id} onClick={() => openDetail(s)} className="card-premium text-left p-3 flex flex-col gap-2 hover:border-brand-400 transition-all duration-300 group">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOpen ? 'bg-gradient-to-br from-neutral-400 to-neutral-600 text-white shadow-glow' : balanced ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white' : 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'}`}>
+                      {isOpen ? <Clock className="w-3.5 h-3.5" /> : balanced ? <Check className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
                     </div>
-                    <div className="text-[11px] text-neutral-500 num leading-tight mt-0.5 truncate">
-                      {opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                      {closed && <>→{closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</>}
-                      {duration != null && <span className="text-neutral-400"> · {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="doc-number text-[12px] font-bold tracking-wider text-brand-700">#{s.id.slice(0, 8).toUpperCase()}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${isOpen ? 'text-neutral-700' : 'text-neutral-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
+                      </div>
+                      <div className="text-[11px] text-neutral-500 num leading-tight mt-0.5 truncate">
+                        {opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        {closed && <>→{closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</>}
+                        {duration != null && <span className="text-neutral-400"> · {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
+                      </div>
+                    </div>
+                    <Eye className="w-3.5 h-3.5 text-neutral-300 group-hover:text-brand-600 transition-colors shrink-0" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-neutral-100">
+                    <div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Fond</div>
+                      <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{formatFCFA(s.opening_amount)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Compté</div>
+                      <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Écart</div>
+                      <div className="leading-tight mt-0.5">
+                        {variance != null ? (
+                          <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold num ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                            {balanced ? 'OK' : <>{variance > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(variance))}</>}
+                          </span>
+                        ) : <span className="text-[11px] text-neutral-400">—</span>}
+                      </div>
                     </div>
                   </div>
-                  <Eye className="w-3.5 h-3.5 text-neutral-300 group-hover:text-brand-600 transition-colors shrink-0" />
-                </div>
-                <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-neutral-100">
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Fond</div>
-                    <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{formatFCFA(s.opening_amount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Compté</div>
-                    <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Écart</div>
-                    <div className="leading-tight mt-0.5">
-                      {variance != null ? (
-                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold num ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                          {balanced ? 'OK' : <>{variance > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(variance))}</>}
-                        </span>
-                      ) : <span className="text-[11px] text-neutral-400">—</span>}
-                    </div>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* DESKTOP: list */}
+          <div className="hidden md:block">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold border-b border-neutral-200">
+                <tr>
+                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Session</th>
+                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Ouverture</th>
+                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Clôture</th>
+                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Durée</th>
+                  <th className="px-4 py-2.5 text-center whitespace-nowrap">Statut</th>
+                  <th className="px-4 py-2.5 text-right whitespace-nowrap">Fond</th>
+                  <th className="px-4 py-2.5 text-right whitespace-nowrap">Compté</th>
+                  <th className="px-4 py-2.5 text-right whitespace-nowrap">Écart</th>
+                  <th className="px-4 py-2.5 text-right w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(s => {
+                  const variance = s.variance != null ? Number(s.variance) : null;
+                  const isOpen = s.status === 'open';
+                  const balanced = variance === 0;
+                  const opened = new Date(s.opened_at);
+                  const closed = s.closed_at ? new Date(s.closed_at) : null;
+                  const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
+                  return (
+                    <tr key={s.id} className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
+                      <td className="px-4 py-2.5 doc-number text-sm font-semibold text-neutral-700 whitespace-nowrap">#{s.id.slice(0, 8).toUpperCase()}</td>
+                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-neutral-500 num">{opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-neutral-500 num">{closed ? closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-neutral-500 num">{duration != null ? (duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`) : '—'}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${isOpen ? 'text-neutral-700' : 'text-neutral-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-xs font-semibold text-neutral-700 num whitespace-nowrap">{formatFCFA(s.opening_amount)}</td>
+                      <td className="px-4 py-2.5 text-right text-xs font-semibold text-neutral-700 num whitespace-nowrap">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        {variance != null ? (
+                          <span className={`inline-flex items-center gap-0.5 text-xs font-bold num whitespace-nowrap ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                            {balanced ? 'OK' : <>{variance > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(variance))}</>}
+                          </span>
+                        ) : <span className="text-xs text-neutral-400">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button onClick={(e) => { e.stopPropagation(); openDetail(s); }} className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-all" title="Voir détail">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Detail modal — fintech ultra compact */}
@@ -295,11 +345,12 @@ export function CashHistory() {
             {(() => {
               const mvExp = detail.movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
               const mvRetrait = detail.movements.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
+              const mvPret = detail.movements.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
               const salesTotal = detail.sales.reduce((s, x) => s + x.total, 0);
               const byMethodTotal = detail.byMethod.reduce((s, m) => s + m.amount, 0);
               const openingAmount = Number(detail.session.opening_amount) || 0;
               const totalEncaisse = byMethodTotal;
-              const net = openingAmount + totalEncaisse - mvExp - mvRetrait;
+              const net = openingAmount + totalEncaisse - mvExp - mvRetrait - mvPret;
               return (
                 <div className="flex flex-col rounded-xl overflow-hidden border border-neutral-200 bg-neutral-200">
                   <div className="bg-white p-2.5 flex items-center justify-between">
@@ -436,10 +487,12 @@ export function CashHistory() {
                 const acomptesList = detail.movements.filter(m => m.kind === 'customer_prepayment');
                 const depensesList = detail.movements.filter(m => m.kind === 'expense');
                 const retraitsList = detail.movements.filter(m => m.kind === 'customer_withdrawal');
+                const pretsList = detail.movements.filter(m => m.kind === 'customer_loan');
                 const encDirectTotal = encDirectList.reduce((s, m) => s + m.amount, 0);
                 const acomptesTotal = acomptesList.reduce((s, m) => s + m.amount, 0);
                 const depensesTotal = depensesList.reduce((s, m) => s + m.amount, 0);
                 const retraitsTotal = retraitsList.reduce((s, m) => s + m.amount, 0);
+                const pretsTotal = pretsList.reduce((s, m) => s + m.amount, 0);
                 return (
                   <>
                     {encDirectList.length > 0 && (
@@ -582,6 +635,42 @@ export function CashHistory() {
                                   <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Caisse'}</span>
                                   <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
                                   <span className="text-xs font-bold text-amber-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {pretsList.length > 0 && (
+                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
+                        <button onClick={() => setDetailExpanded(detailExpanded === 'prets' ? null : 'prets')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'prets' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'}`}>
+                                <HandCoins className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Prêts client</div>
+                                <div className="text-[10px] text-neutral-500">{pretsList.length} prêt{pretsList.length > 1 ? 's' : ''}</div>
+                              </div>
+                            </div>
+                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'prets' ? 'rotate-90' : ''}`} />
+                          </div>
+                          <div className="text-right pl-9">
+                            <span className="text-sm font-bold text-blue-700 num whitespace-nowrap">-{formatFCFA(pretsTotal)}</span>
+                          </div>
+                        </button>
+                        {detailExpanded === 'prets' && (
+                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                            {pretsList.map(m => (
+                              <div key={m.id} className="p-2.5 rounded-lg bg-white border border-blue-100">
+                                <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
+                                <div className="flex items-center justify-between gap-2 mt-1">
+                                  <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Caisse'}</span>
+                                  <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
+                                  <span className="text-xs font-bold text-blue-700 num shrink-0">-{formatFCFA(m.amount)}</span>
                                 </div>
                               </div>
                             ))}

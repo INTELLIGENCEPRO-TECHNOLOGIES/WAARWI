@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { X, ChevronLeft, ChevronRight, RotateCcw, Check } from 'lucide-react';
 
-export function PremiumDateRangePicker({ open, onClose, from, to, onApply }: {
+export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extraFilters, onReset }: {
   open: boolean; onClose: () => void; from: string; to: string;
   onApply: (from: string, to: string) => void;
+  extraFilters?: ReactNode;
+  onReset?: () => void;
 }) {
   const [leftMonth, setLeftMonth] = useState(() => {
     const d = from ? new Date(from) : new Date();
@@ -104,7 +106,7 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply }: {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 animate-fade-in">
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-md" onClick={onClose} />
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-premium animate-scale-in flex flex-col max-h-[92vh] overflow-hidden">
+      <div className={`relative w-full ${extraFilters ? 'max-w-4xl' : 'max-w-2xl'} bg-white rounded-3xl shadow-premium animate-scale-in flex flex-col max-h-[92vh] overflow-hidden`}>
         <div className="relative p-4 bg-gradient-to-br from-ink-900 via-slate-800 to-ink-900 text-white overflow-hidden shrink-0">
           <div className="absolute inset-0 shimmer-bg opacity-20" />
           <div className="relative flex items-center justify-between gap-3">
@@ -131,7 +133,7 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply }: {
           </div>
 
           <div className="flex-1 p-3 bg-gradient-to-br from-slate-50 to-white">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${extraFilters ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]' : 'grid-cols-1 sm:grid-cols-2'}`}>
               <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-elevated hover:shadow-premium transition-shadow">
                 <div className="flex items-center justify-between mb-2">
                   <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-xl hover:bg-brand-50 hover:text-brand-700 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
@@ -148,12 +150,17 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply }: {
                 </div>
                 {renderMonth(rightMonth)}
               </div>
+              {extraFilters && (
+                <div className="sm:col-span-2 lg:col-span-1 rounded-2xl bg-white border border-slate-200 p-3 shadow-elevated space-y-3 lg:w-56 shrink-0">
+                  {extraFilters}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-end gap-2 flex-wrap shrink-0">
-          <button onClick={() => { setLocalFrom(''); setLocalTo(''); }} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
+          <button onClick={() => { setLocalFrom(''); setLocalTo(''); if (onReset) onReset(); }} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
           <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button onClick={() => onApply(localFrom, localTo)} disabled={!localFrom} className="btn-icon-primary" title="Appliquer">
             <Check className="w-4 h-4" />

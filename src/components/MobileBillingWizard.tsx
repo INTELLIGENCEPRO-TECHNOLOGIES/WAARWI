@@ -111,7 +111,7 @@ export function MobileBillingWizard({
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-50 animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-slate-200 shadow-sm flex-shrink-0">
-        <button onClick={onClose} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 active:scale-95 transition-all">
+        <button onClick={onClose} className="p-2 -ml-2 rounded-md hover:bg-slate-100 text-slate-600 active:scale-95 transition-all">
           <X className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
@@ -149,7 +149,7 @@ export function MobileBillingWizard({
             <button onClick={onClose} className="btn-icon !h-11 !w-11" title="Annuler"><X className="w-4 h-4" /></button>
             <button
               onClick={() => setStep(2)}
-              className="h-11 px-6 rounded-2xl bg-teal-700 text-white font-bold text-sm flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-teal-700/20"
+              className="h-11 px-6 rounded-lg bg-teal-700 text-white font-bold text-sm flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-teal-700/20"
             >
               Articles <ChevronRight className="w-4 h-4" />
             </button>
@@ -158,7 +158,7 @@ export function MobileBillingWizard({
         {step === 2 && (
           <div className="px-4 py-2.5 space-y-2">
             <div className="flex items-center justify-between">
-              <button onClick={() => setStep(1)} className="h-9 px-3 rounded-xl text-slate-600 font-semibold text-sm flex items-center gap-1 active:scale-95 transition-all">
+              <button onClick={() => setStep(1)} className="h-9 px-3 rounded-md text-slate-600 font-semibold text-sm flex items-center gap-1 active:scale-95 transition-all">
                 <ChevronLeft className="w-4 h-4" /> Infos
               </button>
               <div className="text-right">
@@ -169,14 +169,14 @@ export function MobileBillingWizard({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => { setSearchQuery(''); setSearchOpen(true); }}
-                className="h-12 w-12 rounded-2xl border-2 border-teal-600 text-teal-700 flex items-center justify-center active:scale-90 transition-all flex-shrink-0"
+                className="h-12 w-12 rounded-lg border-2 border-teal-600 text-teal-700 flex items-center justify-center active:scale-90 transition-all flex-shrink-0"
               >
                 <Plus className="w-5 h-5" />
               </button>
               <button
                 onClick={onSave}
                 disabled={saving || itemCount === 0}
-                className="flex-1 h-12 rounded-2xl bg-teal-700 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-teal-700/20 disabled:opacity-50 disabled:shadow-none"
+                className="flex-1 h-12 rounded-lg bg-teal-700 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-teal-700/20 disabled:opacity-50 disabled:shadow-none"
               >
                 {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
                 {saveLabel}
@@ -190,7 +190,7 @@ export function MobileBillingWizard({
       {searchOpen && (
         <div className="fixed inset-0 z-[70] flex flex-col bg-white animate-sheet-up">
           <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 flex-shrink-0">
-            <button onClick={() => setSearchOpen(false)} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 active:scale-95 transition-all">
+            <button onClick={() => setSearchOpen(false)} className="p-2 -ml-2 rounded-md hover:bg-slate-100 text-slate-600 active:scale-95 transition-all">
               <X className="w-5 h-5" />
             </button>
             <div className="flex-1 relative">
@@ -201,7 +201,7 @@ export function MobileBillingWizard({
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Rechercher un article..."
-                className="w-full h-11 pl-10 pr-4 rounded-2xl bg-slate-100 border-0 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                className="w-full h-11 pl-10 pr-4 rounded-lg bg-slate-100 border-0 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
               />
             </div>
           </div>
@@ -216,7 +216,7 @@ export function MobileBillingWizard({
                 <button
                   key={a.id}
                   onClick={() => { onAddItem(a.id); setSearchOpen(false); }}
-                  className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-teal-300 hover:bg-teal-50/40 hover:shadow-sm transition-all text-left active:scale-[0.98]"
+                  className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border border-slate-200 bg-white hover:border-teal-300 hover:bg-teal-50/40 hover:shadow-sm transition-all text-left active:scale-[0.98]"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-[12px] font-semibold text-slate-900 leading-snug">{a.name}</div>
@@ -285,7 +285,7 @@ function Step1Header({ fields, values, onChange, onCreateCustomer }: {
                 value={values[f.key] || ''}
                 onChange={v => onChange(f.key, v)}
                 placeholder={f.placeholder || '— Choisir —'}
-                className="!h-11 !rounded-xl !text-sm"
+                className="!h-11 !rounded-md !text-sm"
               />
               {f.key === 'customer_id' && onCreateCustomer && (
                 <div className="mt-1">
@@ -298,7 +298,7 @@ function Step1Header({ fields, values, onChange, onCreateCustomer }: {
               type="date"
               value={values[f.key] || ''}
               onChange={e => onChange(f.key, e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all"
+              className="w-full h-11 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all"
             />
           ) : (
             <input
@@ -306,7 +306,7 @@ function Step1Header({ fields, values, onChange, onCreateCustomer }: {
               value={values[f.key] || ''}
               onChange={e => onChange(f.key, e.target.value)}
               placeholder={f.placeholder}
-              className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all"
+              className="w-full h-11 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all"
             />
           )}
         </div>
@@ -343,7 +343,7 @@ function Step2Articles({ items, allItems, onEdit }: {
           <button
             key={realIdx}
             onClick={() => onEdit(realIdx)}
-            className="w-full text-left bg-white rounded-xl px-3 py-2.5 border border-slate-200/80 active:scale-[0.98] transition-all flex flex-col gap-1"
+            className="w-full text-left bg-white rounded-md px-3 py-2.5 border border-slate-200/80 active:scale-[0.98] transition-all flex flex-col gap-1"
           >
             <p className="text-[13px] font-semibold text-slate-900 leading-snug w-full">{item.name}</p>
             <div className="flex items-center justify-between">

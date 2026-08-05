@@ -104,6 +104,8 @@ export type Profile = {
   full_name: string;
   email: string;
   role: string;
+  auto_print_ticket?: boolean;
+  auto_print_invoice?: boolean;
 };
 
 export type Site = {

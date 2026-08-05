@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
   BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
-  Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library,
+  Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library, Truck,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft, UserCheck,
   X, Monitor, Check,
@@ -62,7 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'warranties', labelKey: 'nav.warranties', icon: ShieldCheck },
     { key: 'representatives', labelKey: 'nav.representatives', icon: UserCheck },
     { key: 'tiers', labelKey: 'nav.tiers', icon: Users },
-    { key: 'supplier_orders', labelKey: 'nav.supplierOrders', icon: ShoppingBag },
+    { key: 'supplier_orders', labelKey: 'nav.supplierOrders', icon: Truck },
   ]},
   { titleKey: 'nav.accounting', items: [
     { key: 'acc_plan', labelKey: 'nav.accounting', icon: BookOpen, children: [
@@ -269,6 +269,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [navSearch, setNavSearch] = useState('');
   const navSearchRef = useRef<HTMLInputElement | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
 
   // Build a flat searchable list of all nav items (including children)
   const allNavItems = useMemo(() => {
@@ -402,21 +403,38 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       ) : (
       <>
       {!sidebarCollapsed && (
-        <div className="relative px-1 mb-1">
-          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
-          <input
-            ref={navSearchRef}
-            type="text"
-            value={navSearch}
-            onChange={e => setNavSearch(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-            placeholder={t('nav.search')}
-            className={`w-full pl-8 pr-7 py-1.5 rounded-lg text-[13px] border outline-none transition-colors ${sidebarDark ? 'bg-white/10 border-white/10 text-white placeholder:text-white/50' : 'bg-neutral-100 border-neutral-200 text-neutral-700 placeholder-neutral-400 focus:bg-white focus:border-neutral-300'}`}
-          />
-          {navSearch && (
-            <button onClick={() => setNavSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
-              <X className="w-3.5 h-3.5" />
+        <div className="px-1 mb-1">
+          {searchExpanded ? (
+            <div className="relative flex items-center">
+              <Search className={`absolute left-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+              <input
+                ref={navSearchRef}
+                autoFocus
+                type="text"
+                value={navSearch}
+                onChange={e => setNavSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => { setTimeout(() => setSearchFocused(false), 150); if (!navSearch) setSearchExpanded(false); }}
+                placeholder={t('nav.search')}
+                className={`w-full pl-7 pr-6 py-1.5 text-[13px] outline-none bg-transparent border-0 transition-colors ${sidebarDark ? 'text-white placeholder:text-white/50' : 'text-neutral-700 placeholder-neutral-400'}`}
+              />
+              {navSearch ? (
+                <button onClick={() => { setNavSearch(''); navSearchRef.current?.focus(); }} className={`absolute right-1 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button onClick={() => setSearchExpanded(false)} className={`absolute right-1 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => { setSearchExpanded(true); setTimeout(() => navSearchRef.current?.focus(), 10); }}
+              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${sidebarDark ? 'text-white/50 hover:bg-white/8 hover:text-white/80' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700'}`}
+              title={t('nav.search')}
+            >
+              <Search className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -590,7 +608,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             </div>
           )}
           <div className="flex items-center gap-2 shrink-0">
-            <LanguageSwitcher compact />
             {newOrdersCount > 0 && (
               <button
                 onClick={() => onRoute('online_orders')}
@@ -611,7 +628,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   {(profile?.full_name || profile?.email || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="text-left leading-tight">
-                  <div className="text-[12px] font-semibold text-neutral-900 max-w-[120px] truncate">{profile?.full_name || profile?.email}</div>
+                  <div className="text-[12px] font-semibold text-neutral-900 whitespace-nowrap">{profile?.full_name || profile?.email}</div>
                   <div className="text-[9px] text-neutral-400 uppercase tracking-wider font-medium">{profile?.role}</div>
                 </div>
               </button>
@@ -726,18 +743,37 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   </div>
                 )}
                 {!isSuperAdmin && (
-                  <div className="relative px-1 mb-1">
-                    <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
-                    <input
-                      type="text"
-                      value={navSearch}
-                      onChange={e => setNavSearch(e.target.value)}
-                      placeholder={t('nav.search')}
-                      className={`w-full pl-8 pr-7 py-2 rounded-lg text-[13px] border outline-none ${sidebarDark ? 'bg-white/10 border-white/10 text-white placeholder:text-white/50' : 'bg-neutral-100 border-neutral-200 text-neutral-700 placeholder-neutral-400'}`}
-                    />
-                    {navSearch && (
-                      <button onClick={() => setNavSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
-                        <X className="w-3.5 h-3.5" />
+                  <div className="px-1 mb-1">
+                    {searchExpanded ? (
+                      <div className="relative flex items-center">
+                        <Search className={`absolute left-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+                        <input
+                          ref={navSearchRef}
+                          autoFocus
+                          type="text"
+                          value={navSearch}
+                          onChange={e => setNavSearch(e.target.value)}
+                          onBlur={() => { if (!navSearch) setSearchExpanded(false); }}
+                          placeholder={t('nav.search')}
+                          className={`w-full pl-7 pr-6 py-2 text-[13px] outline-none bg-transparent border-0 ${sidebarDark ? 'text-white placeholder:text-white/50' : 'text-neutral-700 placeholder-neutral-400'}`}
+                        />
+                        {navSearch ? (
+                          <button onClick={() => { setNavSearch(''); navSearchRef.current?.focus(); }} className={`absolute right-1 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button onClick={() => setSearchExpanded(false)} className={`absolute right-1 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setSearchExpanded(true); setTimeout(() => navSearchRef.current?.focus(), 10); }}
+                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${sidebarDark ? 'text-white/50 hover:bg-white/8 hover:text-white/80' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700'}`}
+                        title={t('nav.search')}
+                      >
+                        <Search className="w-4 h-4" />
                       </button>
                     )}
                   </div>

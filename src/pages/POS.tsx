@@ -4,7 +4,8 @@ import {
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
   ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
-  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins
+  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin,
+  TrendingUp, UserPlus
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -226,7 +227,7 @@ function POSLandingOpen({
     <div className="pb-2">
       {/* ── Header ── */}
       <div className="px-0 lg:px-6 pt-2 sm:pt-5 pb-2 sm:pb-4">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-white border border-neutral-200 shadow-sm">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-neutral-200 shadow-sm">
           <div className="leading-tight">
             <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
             {currentSite && (
@@ -244,7 +245,7 @@ function POSLandingOpen({
       {/* ── Desktop grid (mirrors resume) ── */}
       <div className="hidden lg:grid lg:grid-cols-[1fr_340px] gap-3 px-6">
         {/* Left: Ouvrir la caisse */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-6 flex flex-col">
+        <div className="bg-white rounded-md border border-neutral-200 p-6 flex flex-col">
           <div className="space-y-4 flex-1">
             <div>
               <label className="text-[11px] text-neutral-400 leading-none mb-1.5 block">Fond de caisse initial (FCFA)</label>
@@ -252,7 +253,7 @@ function POSLandingOpen({
                 type="number"
                 value={openingAmount || ''}
                 onChange={e => setOpeningAmount(Number(e.target.value))}
-                className="w-full h-11 px-3.5 rounded-xl border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold text-neutral-900 tabular-nums transition-all"
+                className="w-full h-11 px-3.5 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold text-neutral-900 tabular-nums transition-all"
                 placeholder="0"
                 min="0"
                 autoFocus
@@ -265,13 +266,13 @@ function POSLandingOpen({
               <input
                 value={openingNote}
                 onChange={e => setOpeningNote(e.target.value)}
-                className="w-full h-11 px-3.5 rounded-xl border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm text-neutral-900 transition-all"
+                className="w-full h-11 px-3.5 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm text-neutral-900 transition-all"
                 placeholder="Ex: monnaie disponible..."
               />
             </div>
 
             {cashierName && (
-              <div className="flex items-center gap-3 py-3 px-3.5 rounded-xl border border-neutral-100 bg-neutral-50/60">
+              <div className="flex items-center gap-3 py-3 px-3.5 rounded-md border border-neutral-100 bg-neutral-50/60">
                 <div className="w-7 h-7 rounded-full border border-neutral-200 bg-white flex items-center justify-center shrink-0">
                   <User className="w-3.5 h-3.5 text-neutral-400" />
                 </div>
@@ -288,7 +289,7 @@ function POSLandingOpen({
             <button
               onClick={openSessionSubmit}
               disabled={openingSubmitting}
-              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all active:scale-[0.98]"
             >
               {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
               Ouverture de caisse
@@ -299,7 +300,7 @@ function POSLandingOpen({
         {/* Right column */}
         <div className="flex flex-col gap-3">
           {/* Rappel */}
-          <div className="bg-white rounded-xl border border-neutral-200 p-5">
+          <div className="bg-white rounded-md border border-neutral-200 p-5">
             <div className="flex items-center gap-2.5 mb-3">
               <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-neutral-700" /></div>
               <h3 className="text-sm font-bold text-neutral-900">Rappel</h3>
@@ -313,7 +314,7 @@ function POSLandingOpen({
 
           {/* Point de vente */}
           {currentSite && (
-            <div className="bg-white rounded-xl border border-neutral-200 p-5 flex-1">
+            <div className="bg-white rounded-md border border-neutral-200 p-5 flex-1">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><Monitor className="w-4 h-4 text-neutral-500" /></div>
                 <h3 className="text-sm font-bold text-neutral-900">Point de vente</h3>
@@ -327,7 +328,7 @@ function POSLandingOpen({
 
       {/* ── Mobile layout ── */}
       <div className="lg:hidden px-0 space-y-2">
-        <div className="bg-white rounded-xl border border-neutral-200 p-3">
+        <div className="bg-white rounded-md border border-neutral-200 p-3">
           <div className="space-y-2">
             <div>
               <label className="text-[10px] text-neutral-400 mb-1 block">Fond de caisse (FCFA)</label>
@@ -363,7 +364,7 @@ function POSLandingOpen({
         <button
           onClick={openSessionSubmit}
           disabled={openingSubmitting}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm"
         >
           {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
           Ouverture de caisse
@@ -382,7 +383,7 @@ function POSLandingOpen({
             )}
           </div>
           {/* Desktop table */}
-          <div className="hidden lg:block bg-white rounded-2xl border border-neutral-200 overflow-hidden">
+          <div className="hidden lg:block bg-white rounded-lg border border-neutral-200 overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-neutral-100">
@@ -418,7 +419,7 @@ function POSLandingOpen({
           <div className="lg:hidden space-y-1.5">
             {sessions.slice(0, 3).map(s => {
               return (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white border border-neutral-200">
+                <div key={s.id} className="flex items-center justify-between px-3 py-2.5 rounded-md bg-white border border-neutral-200">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-6 h-6 rounded-md bg-neutral-100 flex items-center justify-center shrink-0"><Lock className="w-2.5 h-2.5 text-neutral-500" /></div>
                     <div className="min-w-0">
@@ -450,7 +451,7 @@ function LandingActionBtn({ icon: Icon, label, onClick, disabled, variant, badge
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`relative flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl border text-center transition-all active:scale-[0.97] ${base} ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
+      className={`relative flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-md border text-center transition-all active:scale-[0.97] ${base} ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
     >
       <Icon className="w-4 h-4" />
       <span className="text-[10px] font-semibold leading-tight">{label}</span>
@@ -468,7 +469,7 @@ function ActionIconBtn({ icon: Icon, label, onClick, disabled }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex flex-col items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-all active:scale-[0.97] ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
+      className={`flex flex-col items-center justify-center gap-1.5 px-3 py-2.5 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-all active:scale-[0.97] ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
     >
       <Icon className="w-4.5 h-4.5" />
       <span className="text-[10px] font-medium leading-tight text-neutral-600 whitespace-nowrap">{label}</span>
@@ -512,237 +513,246 @@ function POSLandingResume({
   return (
     <div className="h-full overflow-hidden lg:overflow-auto pb-0 lg:pb-6">
       {/* ── Desktop grid ── */}
-      <div className="hidden lg:grid lg:grid-cols-[1fr_340px] gap-3 px-6 pt-4">
-        {/* Left: Session info + actions */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-6">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-0">
-            <div className="flex items-center gap-4 py-5 border-b border-neutral-100">
-              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Monitor className="w-4.5 h-4.5 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Point de vente</p><p className="text-[15px] font-bold text-neutral-900">{currentSite?.name || '-'}</p></div>
-            </div>
-            <div className="flex items-center gap-4 py-5 border-b border-neutral-100">
-              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-4.5 h-4.5 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Ouverte le</p><p className="text-[15px] font-bold text-neutral-900">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {fmtTimeLanding(session.opened_at)}</p></div>
-            </div>
-            <div className="flex items-center gap-4 py-5 border-b border-neutral-100">
-              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-4.5 h-4.5 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Durée</p><p className="text-[15px] font-bold text-neutral-900">{sessionDuration(session.opened_at)}</p></div>
-            </div>
-            <div className="flex items-center gap-4 py-5 border-b border-neutral-100">
-              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Banknote className="w-4.5 h-4.5 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Fond initial</p><p className="text-[15px] font-bold text-neutral-900">{formatFCFA(Number(session.opening_amount))}</p></div>
-            </div>
-            <div className="flex items-center gap-4 py-5">
-              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-4.5 h-4.5 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Vendeur</p><p className="text-[15px] font-bold text-neutral-900 uppercase">{cashierName || '-'}</p></div>
-            </div>
-            <div className="flex items-center gap-4 py-5">
-              <div className="w-10 h-10 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><CheckCircle2 className="w-4.5 h-4.5 text-neutral-400" /></div>
-              <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Statut</p><span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wide border border-neutral-200 bg-neutral-100 text-neutral-800">OUVERTE</span></div>
-            </div>
-          </div>
-
-          {/* Action buttons + shortcuts aligned in 2-column grid */}
-          <div className="grid grid-cols-2 gap-3 mt-6 pt-5 border-t border-neutral-100">
-            <button onClick={onResume} className="flex items-center justify-center gap-2.5 py-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-semibold transition-all active:scale-[0.98]">
-              <Play className="w-4 h-4 fill-current" /> Reprendre la session
-            </button>
-            {actions?.canClose && (
-              <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2.5 py-4 rounded-xl border-2 border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-800 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-40">
-                <Lock className="w-4 h-4" /> Clôturer
-              </button>
-            )}
-          </div>
-
-          {/* Shortcut buttons row aligned under the two main buttons */}
-          {shortcutBtns.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="grid grid-cols-2 gap-2">
-                {shortcutBtns.slice(0, 2).map(btn => (
-                  <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
-                    <btn.icon className="w-5 h-5 text-neutral-600" />
-                    <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {shortcutBtns.slice(2, 4).map(btn => (
-                  <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
-                    <btn.icon className="w-5 h-5 text-neutral-600" />
-                    <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right column */}
-        <div className="flex flex-col gap-3">
-          {/* Résumé de session */}
-          {actions?.canViewSummary !== false && (
-          <div className="bg-white rounded-xl border border-neutral-200 p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-4.5 h-4.5 text-neutral-700" /></div>
-              <h3 className="text-base font-bold text-neutral-900">Résumé de session</h3>
-            </div>
-            {loadingSummary ? (
-              <div className="space-y-3 animate-pulse"><div className="h-12 bg-neutral-100 rounded-lg" /><div className="h-12 bg-neutral-100 rounded-lg" /></div>
-            ) : summary ? (
-              <div>
-                <div className="flex items-center justify-between py-3 border-b border-neutral-100">
-                  <span className="text-sm text-neutral-600 font-medium">Total encaissé</span>
-                  <span className="text-base font-bold text-neutral-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+      <div className="hidden lg:block px-6 pt-4">
+        <div className="p-6">
+          <div className="grid lg:grid-cols-[1fr_320px]">
+            {/* Left: Session info + actions */}
+            <div className="pr-6">
+              <div className="grid grid-cols-2 gap-x-8 gap-y-0">
+                <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
+                  <Monitor className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Point de vente</p><p className="text-[15px] font-bold text-neutral-900">{currentSite?.name || '-'}</p></div>
                 </div>
-                <div className="flex items-center justify-between py-3 border-b border-neutral-100">
-                  <span className="text-sm text-neutral-600 font-medium">Nombre de ventes</span>
-                  <span className="text-base font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
+                <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
+                  <ClockIcon className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Ouverte le</p><p className="text-[15px] font-bold text-neutral-900">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {fmtTimeLanding(session.opened_at)}</p></div>
                 </div>
-                {summary.byMethod.length > 0 && (
-                  <div className="pt-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Par mode de paiement</p>
-                    {summary.byMethod.map(m => (
-                      <div key={m.method_name} className="flex items-center justify-between py-2">
-                        <span className="text-sm text-neutral-500">{m.method_name}</span>
-                        <span className="text-sm font-bold text-neutral-800 tabular-nums">{formatFCFA(m.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
+                  <ClockIcon className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Durée</p><p className="text-[15px] font-bold text-neutral-900">{sessionDuration(session.opened_at)}</p></div>
+                </div>
+                <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
+                  <Banknote className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Fond initial</p><p className="text-[15px] font-bold text-neutral-900">{formatFCFA(Number(session.opening_amount))}</p></div>
+                </div>
+                <div className="flex items-center gap-3 py-5">
+                  <User className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Vendeur</p><p className="text-[15px] font-bold text-neutral-900 uppercase">{cashierName || '-'}</p></div>
+                </div>
+                <div className="flex items-center gap-3 py-5">
+                  <CheckCircle2 className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Statut</p><span className="text-[11px] font-bold uppercase tracking-wide text-neutral-800">OUVERTE</span></div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-3 mt-6 pt-5 border-t border-neutral-100">
+                <button onClick={onResume} className="flex items-center justify-center gap-2.5 py-4 rounded-md text-neutral-900 text-sm font-semibold transition-all active:scale-[0.98]">
+                  <Play className="w-4 h-4 fill-current text-neutral-900" /> Reprendre la session
+                </button>
+                {actions?.canClose && (
+                  <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2.5 py-4 rounded-md text-neutral-800 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-40">
+                    <Lock className="w-4 h-4" /> Clôturer
+                  </button>
                 )}
               </div>
-            ) : (
-              <p className="text-sm text-neutral-400 text-center py-3">Aucune donnée</p>
-            )}
-          </div>
-          )}
 
-          {/* Accès rapides */}
-          <div className="bg-white rounded-xl border border-neutral-200 p-5 flex-1">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center"><ClockIcon className="w-4.5 h-4.5 text-neutral-500" /></div>
-              <h3 className="text-base font-bold text-neutral-900">Accès rapides</h3>
-            </div>
-            <div className="space-y-2">
-              {onSeeAll && (
-                <button onClick={onSeeAll} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-neutral-50 border border-neutral-100 text-left transition-colors group">
-                  <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0"><ClockIcon className="w-4 h-4 text-neutral-700" /></div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-neutral-800">Historique des sessions</p>
-                    <p className="text-xs text-neutral-400">Consulter les sessions précédentes</p>
+              {/* Shortcut buttons */}
+              {shortcutBtns.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    {shortcutBtns.slice(0, 2).map(btn => (
+                      <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-md hover:bg-neutral-50 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                        <btn.icon className="w-5 h-5 text-neutral-600" />
+                        <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
+                      </button>
+                    ))}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
-                </button>
-              )}
-              <button onClick={onResume} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-neutral-50 border border-neutral-100 text-left transition-colors group">
-                <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0"><ShoppingCart className="w-4 h-4 text-neutral-700" /></div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-neutral-800">Point de vente</p>
-                  <p className="text-xs text-neutral-400">Accéder à la caisse</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {shortcutBtns.slice(2, 4).map(btn => (
+                      <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-md hover:bg-neutral-50 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                        <btn.icon className="w-5 h-5 text-neutral-600" />
+                        <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
-              </button>
+              )}
+            </div>
+
+            {/* Vertical divider + Right column */}
+            <div className="lg:border-l border-neutral-100 pl-6 flex flex-col">
+              {/* Résumé de session */}
+              {actions?.canViewSummary !== false && (
+                <div>
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <BarChart2 className="w-4.5 h-4.5 text-neutral-700" />
+                    <h3 className="text-base font-bold text-neutral-900">Résumé de session</h3>
+                  </div>
+                  {loadingSummary ? (
+                    <div className="space-y-3 animate-pulse"><div className="h-12 bg-neutral-100 rounded-lg" /><div className="h-12 bg-neutral-100 rounded-lg" /></div>
+                  ) : summary ? (
+                    <div>
+                      <div className="flex items-center justify-between py-3 border-b border-neutral-100">
+                        <span className="text-sm text-neutral-600 font-medium">Total encaissé</span>
+                        <span className="text-base font-bold text-neutral-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-3 border-b border-neutral-100">
+                        <span className="text-sm text-neutral-600 font-medium">Nombre de ventes</span>
+                        <span className="text-base font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
+                      </div>
+                      {summary.byMethod.length > 0 && (
+                        <div className="pt-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Par mode de paiement</p>
+                          {summary.byMethod.map(m => (
+                            <div key={m.method_name} className="flex items-center justify-between py-2">
+                              <span className="text-sm text-neutral-500">{m.method_name}</span>
+                              <span className="text-sm font-bold text-neutral-800 tabular-nums">{formatFCFA(m.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-neutral-400 text-center py-3">Aucune donnée</p>
+                  )}
+                </div>
+              )}
+
+              {/* Horizontal divider */}
+              <div className="h-px bg-neutral-100 my-5" />
+
+              {/* Accès rapides */}
+              <div className="flex-1">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <ClockIcon className="w-4.5 h-4.5 text-neutral-500" />
+                  <h3 className="text-base font-bold text-neutral-900">Accès rapides</h3>
+                </div>
+                <div className="space-y-1">
+                  {onSeeAll && (
+                    <button onClick={onSeeAll} className="w-full flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-neutral-50 text-left transition-colors group">
+                      <ClockIcon className="w-4 h-4 text-neutral-700 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-neutral-800">Historique des sessions</p>
+                        <p className="text-xs text-neutral-400">Consulter les sessions précédentes</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+                    </button>
+                  )}
+                  <button onClick={onResume} className="w-full flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-neutral-50 text-left transition-colors group">
+                    <ShoppingCart className="w-4 h-4 text-neutral-700 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-neutral-800">Point de vente</p>
+                      <p className="text-xs text-neutral-400">Accéder à la caisse</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ── Mobile layout ── */}
-      <div className="lg:hidden px-0 pt-2 space-y-2">
-        {/* Header card matching Sales page style */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-white border border-neutral-200 shadow-sm">
-          <div className="leading-tight">
-            <h2 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h2>
-            {currentSite && (
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
+      <div className="lg:hidden px-0 pt-2">
+        <div>
+          {/* Header */}
+          <div className="flex items-center gap-2 px-3 py-2">
+            <div className="leading-tight">
+              <h2 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h2>
+              {currentSite && (
+                <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
+              )}
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-[11px] font-medium text-emerald-600">Ouverte</span>
+            </div>
+          </div>
+
+          {/* Session info */}
+          <div className="px-3 py-3 border-t border-neutral-100">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2">
+                <ClockIcon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                <div className="min-w-0"><p className="text-[10px] text-neutral-400">Durée</p><p className="text-xs font-semibold text-neutral-800 truncate">{sessionDuration(session.opened_at)}</p></div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Banknote className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                <div className="min-w-0"><p className="text-[10px] text-neutral-400">Fond initial</p><p className="text-xs font-semibold text-neutral-700 truncate">{formatFCFA(Number(session.opening_amount))}</p></div>
+              </div>
+            </div>
+            {cashierName && (
+              <div className="flex items-center gap-2 mt-2">
+                <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                <div className="min-w-0"><p className="text-[10px] text-neutral-400">Vendeur</p><p className="text-xs font-semibold text-neutral-800 uppercase truncate">{cashierName}</p></div>
+              </div>
             )}
           </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <span className="text-[11px] font-medium text-emerald-600">Ouverte</span>
-          </div>
-        </div>
 
-        {/* Session info card */}
-        <div className="bg-white rounded-xl border border-neutral-200 p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><ClockIcon className="w-3 h-3 text-neutral-400" /></div>
-              <div className="min-w-0"><p className="text-[10px] text-neutral-400">Durée</p><p className="text-xs font-semibold text-neutral-800 truncate">{sessionDuration(session.opened_at)}</p></div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><Banknote className="w-3 h-3 text-neutral-400" /></div>
-              <div className="min-w-0"><p className="text-[10px] text-neutral-400">Fond initial</p><p className="text-xs font-semibold text-neutral-700 truncate">{formatFCFA(Number(session.opening_amount))}</p></div>
-            </div>
-          </div>
-          {cashierName && (
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-100">
-              <div className="w-7 h-7 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-3 h-3 text-neutral-400" /></div>
-              <div className="min-w-0"><p className="text-[10px] text-neutral-400">Vendeur</p><p className="text-xs font-semibold text-neutral-800 uppercase truncate">{cashierName}</p></div>
-            </div>
-          )}
-        </div>
-
-        {/* Two action buttons */}
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={onResume} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-semibold transition-colors active:scale-[0.98]">
-            <Play className="w-4 h-4 fill-current" /> Reprendre
-          </button>
-          {actions?.canClose && (
-            <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-neutral-200 bg-white text-neutral-800 text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-40">
-              <Lock className="w-4 h-4" /> Clôturer
+          {/* Action buttons */}
+          <div className="grid grid-cols-2 gap-2 px-3 py-3 border-t border-neutral-100">
+            <button onClick={onResume} className="flex items-center justify-center gap-2 py-3 rounded-md text-neutral-900 text-sm font-semibold transition-colors active:scale-[0.98]">
+              <Play className="w-4 h-4 fill-current text-neutral-900" /> Reprendre
             </button>
-          )}
-        </div>
-
-        {/* Shortcut cards */}
-        {shortcutBtns.length > 0 && (
-          <div className="grid grid-cols-4 gap-1.5">
-            {shortcutBtns.map(btn => (
-              <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl border border-neutral-200 bg-white active:bg-neutral-50 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
-                <btn.icon className="w-4.5 h-4.5 text-neutral-700" />
-                <span className="text-[9px] font-medium text-neutral-600">{btn.label}</span>
+            {actions?.canClose && (
+              <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2 py-3 rounded-md text-neutral-800 text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-40">
+                <Lock className="w-4 h-4" /> Clôturer
               </button>
-            ))}
+            )}
           </div>
-        )}
 
-        {/* Summary card */}
-        {actions?.canViewSummary !== false && !loadingSummary && summary && (
-          <div className="bg-white rounded-xl border border-neutral-200 p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-lg bg-neutral-100 flex items-center justify-center"><BarChart2 className="w-3 h-3 text-neutral-700" /></div>
-              <h3 className="text-xs font-bold text-neutral-900">Résumé</h3>
+          {/* Shortcut buttons */}
+          {shortcutBtns.length > 0 && (
+            <div className="grid grid-cols-4 gap-1.5 px-3 py-3 border-t border-neutral-100">
+              {shortcutBtns.map(btn => (
+                <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1 py-3 rounded-md active:bg-neutral-50 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
+                  <btn.icon className="w-4.5 h-4.5 text-neutral-700" />
+                  <span className="text-[9px] font-medium text-neutral-600">{btn.label}</span>
+                </button>
+              ))}
             </div>
-            <div className="flex items-center justify-between py-1.5">
-              <span className="text-xs text-neutral-500">Total encaissé</span>
-              <span className="text-sm font-bold text-neutral-700 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
-            </div>
-            <div className="flex items-center justify-between py-1.5 border-t border-neutral-100">
-              <span className="text-xs text-neutral-500">Ventes</span>
-              <span className="text-sm font-bold text-neutral-800 tabular-nums">{summary.salesCount}</span>
-            </div>
-            {summary.byMethod.length > 0 && summary.byMethod.map(m => (
-              <div key={m.method_name} className="flex items-center justify-between py-1 border-t border-neutral-50">
-                <span className="text-[11px] text-neutral-400">{m.method_name}</span>
-                <span className="text-[11px] font-bold text-neutral-600 tabular-nums">{formatFCFA(m.amount)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Quick links */}
-        <div className="flex gap-1.5">
-          {onSeeAll && (
-            <button onClick={onSeeAll} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
-              <ClockIcon className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
-              <span className="text-xs font-medium text-neutral-700">Historique</span>
-            </button>
           )}
-          <button onClick={onResume} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-neutral-200 bg-white text-left active:bg-neutral-50 transition-colors">
-            <ShoppingCart className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
-            <span className="text-xs font-medium text-neutral-700">Point de vente</span>
-          </button>
+
+          {/* Summary */}
+          {actions?.canViewSummary !== false && !loadingSummary && summary && (
+            <div className="px-3 py-3 border-t border-neutral-100">
+              <div className="flex items-center gap-2 mb-2">
+                <BarChart2 className="w-3.5 h-3.5 text-neutral-700" />
+                <h3 className="text-xs font-bold text-neutral-900">Résumé</h3>
+              </div>
+              <div className="flex items-center justify-between py-1.5">
+                <span className="text-xs text-neutral-500">Total encaissé</span>
+                <span className="text-sm font-bold text-neutral-700 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-t border-neutral-100">
+                <span className="text-xs text-neutral-500">Ventes</span>
+                <span className="text-sm font-bold text-neutral-800 tabular-nums">{summary.salesCount}</span>
+              </div>
+              {summary.byMethod.length > 0 && summary.byMethod.map(m => (
+                <div key={m.method_name} className="flex items-center justify-between py-1 border-t border-neutral-50">
+                  <span className="text-[11px] text-neutral-400">{m.method_name}</span>
+                  <span className="text-[11px] font-bold text-neutral-600 tabular-nums">{formatFCFA(m.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Quick links */}
+          <div className="flex gap-1.5 px-3 py-3 border-t border-neutral-100">
+            {onSeeAll && (
+              <button onClick={onSeeAll} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-md text-left active:bg-neutral-50 transition-colors">
+                <ClockIcon className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
+                <span className="text-xs font-medium text-neutral-700">Historique</span>
+              </button>
+            )}
+            <button onClick={onResume} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-md text-left active:bg-neutral-50 transition-colors">
+              <ShoppingCart className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
+              <span className="text-xs font-medium text-neutral-700">Point de vente</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -966,6 +976,27 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     items: CartItem[]; payments: SalePayment[]; customer: Customer | null;
   } | null>(null);
   const [printInvoice, setPrintInvoice] = useState(false);
+  const [autoPrintTicket, setAutoPrintTicket] = useState(false);
+  const [autoPrintInvoice, setAutoPrintInvoice] = useState(false);
+
+  // Load auto-print preferences from profile
+  useEffect(() => {
+    if (profile?.id) {
+      setAutoPrintTicket(!!(profile as any).auto_print_ticket);
+      setAutoPrintInvoice(!!(profile as any).auto_print_invoice);
+    }
+  }, [profile?.id]);
+
+  const updateAutoPrintPref = async (key: 'auto_print_ticket' | 'auto_print_invoice', value: boolean) => {
+    if (!profile?.id) return;
+    if (key === 'auto_print_ticket') setAutoPrintTicket(value);
+    else setAutoPrintInvoice(value);
+    try {
+      await supabase.from('profiles').update({ [key]: value } as any).eq('id', profile.id);
+      // Update local profile state so it persists across reloads
+      (profile as any)[key] = value;
+    } catch {}
+  };
 
   // Document settings fields for POS payment modal
   type PosDocSettings = { show_delivery_date: boolean; show_reference: boolean; show_warranty: boolean; show_imei: boolean; show_representative: boolean; default_representative: string };
@@ -1121,7 +1152,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [lotPickerOpen, setLotPickerOpen] = useState(false);
 
   const load = useCallback(async () => {
-    if (!tenant || !currentSite) return;
+    if (!tenant || !currentSite) { setLoadingData(false); return; }
     const stockSiteId = saleSourceSiteId || currentSite.id;
     const thisCacheKey = `${tenant.id}:${currentSite.id}`;
     if (posCache.key !== thisCacheKey || posCache.articles.length === 0) {
@@ -1482,7 +1513,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const openPayment = () => {
     if (cart.length === 0) { error('Panier vide'); return; }
     if (!session) { error('Ouvrez d\'abord la caisse'); return; }
-    setPayments([]);
+    // Pre-select Espèces (cash) as the default payment method
+    const cashMethod = methods.find(m => /esp[èe]ces|cash|espèces/i.test(m.name) || m.code?.toLowerCase() === 'cash') || methods[0] || null;
+    setPayments(cashMethod ? [{ payment_method_id: cashMethod.id, method_name: cashMethod.name, amount: Math.max(0, total), reference: '' }] : []);
     setPayOpen(true);
   };
 
@@ -1900,11 +1933,19 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       }
     }
 
-    setLastSale({
+    const completedSale = {
       sale_number: saleNum, created_at: new Date().toISOString(),
       total, discount, items: [...cart], payments: [...payments], customer,
-    });
+    };
+    setLastSale(completedSale);
     setPrintInvoice(false);
+    // Auto-print if enabled
+    if (autoPrintTicket) {
+      try { printSaleTicket(completedSale); } catch {}
+    }
+    if (autoPrintInvoice) {
+      try { printSaleInvoice(completedSale); } catch {}
+    }
     // Link to web order if this sale originated from one
     const pendingWeb = (window as any).__pendingWebOrderId as string | undefined;
     if (pendingWeb && tenant && saleId) {
@@ -2149,7 +2190,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setSessionSales([...sales, ...returns].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     const movs = (mvData || []).map((m: any) => ({
       id: m.id,
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', reference: m.reference || '',
       customer_name: m.customers?.name || null,
@@ -2300,7 +2341,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const salesList = sales || [];
     const pmtList = pmtRows || [];
     const movs = (mvRows || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
     })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
@@ -2381,9 +2422,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     });
     (mvs || []).forEach((m: any) => {
       if (m.kind === 'income' && m.reason && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')) return;
-      const key = m.method_name || (m.kind === 'expense' || m.kind === 'customer_withdrawal' ? 'Espèces' : '—');
+      const key = m.method_name || (m.kind === 'expense' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' ? 'Espèces' : '—');
       if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
-      if (m.kind === 'expense' || m.kind === 'customer_withdrawal') {
+      if (m.kind === 'expense' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan') {
         theoretical[key].amount -= Number(m.amount);
       } else {
         theoretical[key].amount += Number(m.amount);
@@ -2411,7 +2452,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     // Build stats for X report
     const salesList = salesResult.data || [];
     const movList = (mvs || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
     })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
@@ -2522,6 +2563,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
   }
 
+  if (!currentSite) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <div className="w-12 h-12 rounded-md bg-neutral-100 flex items-center justify-center mx-auto mb-3">
+            <MapPin className="w-6 h-6 text-neutral-400" />
+          </div>
+          <h2 className="text-sm font-bold text-neutral-900 mb-1">Aucun point de vente</h2>
+          <p className="text-xs text-neutral-500">Aucun point de vente n'est configuré pour votre compte. Contactez un administrateur pour qu'il vous en assigne un.</p>
+        </div>
+      </div>
+    );
+  }
+
   // Screen: open form (no active session)
   if (screen === 'open-form') {
     return (
@@ -2574,13 +2629,19 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* Customer selector — compact */}
       <div className="px-3 py-1.5 border-b border-neutral-200/70 bg-white">
-        <SearchableSelect
-          options={[{ value: '', label: 'Client comptoir' }, ...customers.map(c => ({ value: c.id, label: c.name }))]}
-          value={customer?.id || ''}
-          onChange={v => setCustomer(customers.find(c => c.id === v) || null)}
-          placeholder="Client comptoir"
-        />
-        <QuickCreateButton label="Créer un client" onClick={() => { setQuickCustomerName(''); setQuickCustomerOpen(true); }} />
+        <div className="flex items-stretch gap-1.5">
+          <div className="flex-1 min-w-0 [&>div>button]:rounded-lg [&>div>button]:py-2.5 [&>div>button]:px-3 [&>div>button]:text-sm">
+            <SearchableSelect
+              options={[{ value: '', label: 'Client comptoir' }, ...customers.map(c => ({ value: c.id, label: c.name }))]}
+              value={customer?.id || ''}
+              onChange={v => setCustomer(customers.find(c => c.id === v) || null)}
+              placeholder="Client comptoir"
+            />
+          </div>
+          <button onClick={() => { setQuickCustomerName(''); setQuickCustomerOpen(true); }} className="shrink-0 inline-flex items-center justify-center px-3 py-2.5 rounded-lg bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800 transition-all active:scale-95" title="Créer un client">
+            <UserPlus className="w-4 h-4" />
+          </button>
+        </div>
         {customer && (() => {
           const limit = Number((customer as any).credit_limit || 0);
           const balance = Number((customer as any).balance || 0);
@@ -2627,7 +2688,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <span className="text-[10px] text-neutral-400">x</span>
                   <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-right num focus:outline-none focus:border-neutral-900 shrink-0" title="Prix unitaire" />
                   <span className="text-[10px] text-neutral-400">=</span>
-                  <div className="text-[11px] font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
+                  <div className="text-[11px] font-bold text-neutral-900 num whitespace-nowrap ml-auto">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
                 </div>
               </div>
             ))}
@@ -2672,8 +2733,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="text-2xl font-bold text-neutral-900 num leading-none">{formatFCFA(total)}</div>
         </div>
         <button onClick={openPayment} disabled={cart.length === 0}
-          className="btn-icon-primary w-full h-10 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none mt-1">
+          className="btn-icon-primary w-full h-10 rounded-md disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none mt-1 gap-2">
           <CreditCard className="w-5 h-5" />
+          {cart.length > 0 && <span className="text-sm font-bold tracking-wide">PAIEMENT</span>}
         </button>
       </div>
     </div>
@@ -2716,21 +2778,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     <POSGuide tenantId={tenant?.id} hasSession={!!session} businessType={(tenant as any)?.business_type} />
     <div className="flex-1 flex flex-col overflow-hidden w-full min-h-0" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-top))' }}>
       {/* Action bar */}
-      <div className="px-2 py-1.5 border-b border-neutral-200/70 glass shrink-0">
+      <div className="px-2 py-1.5 border-b border-neutral-200/70 glass shrink-0 relative z-20">
         {/* Mobile: single compact row */}
         <div className="flex items-center gap-1 lg:hidden">
-          <button onClick={openStats} className="pos-btn hidden sm:flex" title="Stats"><BarChart2 className="w-4 h-4" /></button>
-          <button onClick={openTickets} className="pos-btn" title="Tickets"><List className="w-4 h-4" /></button>
-          {can('pos_returns') && <button onClick={openReturn} className="pos-btn" title="Retour"><RotateCcw className="w-4 h-4" /></button>}
-          <button onClick={openCustomerPayment} className="pos-btn" title="Encaisser"><Wallet className="w-4 h-4" /></button>
-          {can('pos_cash_movement') && <button onClick={openMovement} className="pos-btn" title="Mouvement"><ArrowDownRight className="w-4 h-4" /></button>}
-          {hasModule('online_orders') && <button onClick={openWebOrders} className="pos-btn relative" title="Commandes web">
+          <button onClick={openStats} className="pos-btn hidden sm:flex" title="Statistiques" data-label="Statistiques"><BarChart2 className="w-4 h-4" /></button>
+          <button onClick={openTickets} className="pos-btn" title="Tickets" data-label="Tickets de la session"><List className="w-4 h-4" /></button>
+          {can('pos_returns') && <button onClick={openReturn} className="pos-btn" title="Retour" data-label="Retour client"><RotateCcw className="w-4 h-4" /></button>}
+          <button onClick={openCustomerPayment} className="pos-btn" title="Encaisser" data-label="Encaisser"><Wallet className="w-4 h-4" /></button>
+          {can('pos_cash_movement') && <button onClick={openMovement} className="pos-btn" title="Mouvement" data-label="Mouvement de caisse"><ArrowDownRight className="w-4 h-4" /></button>}
+          {hasModule('online_orders') && <button onClick={openWebOrders} className="pos-btn relative" title="Commandes web" data-label="Commandes web">
             <Globe className="w-4 h-4" />
             {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[8px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}
           </button>}
-          <button onClick={holdCart} className="pos-btn" title="Pause"><Pause className="w-4 h-4" /></button>
-          <button onClick={leaveSession} className="pos-btn" title="Quitter"><LogOut className="w-4 h-4" /></button>
-          {can('pos_close_session') && <button onClick={openCloseWorkflow} className="pos-btn-dark ml-0.5" title="Clôturer"><Lock className="w-4 h-4" /></button>}
+          <button onClick={holdCart} className="pos-btn" title="Pause" data-label="Mettre en pause"><Pause className="w-4 h-4" /></button>
+          <button onClick={leaveSession} className="pos-btn" title="Quitter" data-label="Quitter la session"><LogOut className="w-4 h-4" /></button>
+          {can('pos_close_session') && <button onClick={openCloseWorkflow} className="pos-btn-dark ml-0.5" title="Clôturer" data-label="Clôturer la session"><Lock className="w-4 h-4" /></button>}
         </div>
         {/* Desktop: EN SERVICE indicator + labeled chips */}
         <div className="hidden lg:flex items-center gap-1.5">
@@ -2743,18 +2805,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             <span className="text-[10px] text-neutral-400 ml-1">· Fond&nbsp;<span className="font-bold text-neutral-600 num">{formatFCFA(Number(session!.opening_amount))}</span></span>
           </div>
           <div className="flex-1" />
-          <button onClick={openStats} className="chip"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button>
-          <button onClick={openTickets} className="chip"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
-          {can('pos_returns') && <button onClick={openReturn} className="chip"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
-          <button onClick={openCustomerPayment} className="chip"><Wallet className="w-3.5 h-3.5" /><span className="hidden xl:inline">Encaisser</span></button>
-          {can('pos_cash_movement') && <button onClick={openMovement} className="chip"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button>}
-          {hasModule('online_orders') && <button onClick={openWebOrders} className="chip relative">
+          <button onClick={openStats} className="chip" data-label="Statistiques"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button>
+          <button onClick={openTickets} className="chip" data-label="Tickets de la session"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
+          {can('pos_returns') && <button onClick={openReturn} className="chip" data-label="Retour client"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
+          <button onClick={openCustomerPayment} className="chip" data-label="Encaisser un paiement"><Wallet className="w-3.5 h-3.5" /><span className="hidden xl:inline">Encaisser</span></button>
+          {can('pos_cash_movement') && <button onClick={openMovement} className="chip" data-label="Mouvement de caisse"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button>}
+          {hasModule('online_orders') && <button onClick={openWebOrders} className="chip relative" data-label="Commandes web">
             <Globe className="w-3.5 h-3.5" /><span className="hidden xl:inline">Commandes web</span>
             {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border border-white">{webOrdersCounts.a_transformer}</span>}
           </button>}
-          <button onClick={holdCart} className="chip"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
-          <button onClick={leaveSession} className="chip"><LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Quitter</span></button>
-          {can('pos_close_session') && <button onClick={openCloseWorkflow} className="chip">
+          <button onClick={holdCart} className="chip" data-label="Mettre le panier en pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
+          <button onClick={leaveSession} className="chip" data-label="Quitter la session"><LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Quitter</span></button>
+          {can('pos_close_session') && <button onClick={openCloseWorkflow} className="chip" data-label="Clôturer la session">
             <Lock className="w-3.5 h-3.5" /><span>Clôturer</span>
           </button>}
         </div>
@@ -2765,12 +2827,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="px-3 sm:px-4 pt-4 pb-3 glass border-b border-neutral-200/60 sticky top-0 z-10">
             <div className="flex gap-2">
-              <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+              <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-lg bg-white transition-all">
                 <Search className="w-4 h-4 text-neutral-400 shrink-0" />
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  placeholder="Rechercher…"
+                  placeholder="Rechercher un produit"
                   className="flex-1 min-w-0 w-0 bg-transparent text-sm focus:outline-none placeholder:text-neutral-400"
                   autoFocus={desktopAutoFocus}
                 />
@@ -2782,10 +2844,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <POSGuideInlineTrigger />
                 <button
                   onClick={() => setCategoryPickerOpen(true)}
-                  className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
+                  className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold transition-all ${
                     categoryId
                       ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                      : 'bg-neutral-50 text-neutral-500 border border-neutral-200 hover:bg-neutral-100'
+                      : 'bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800'
                   }`}
                   title="Filtrer par catégorie"
                 >
@@ -2796,22 +2858,22 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </button>
                 <button
                   onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')}
-                  className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-neutral-50 text-neutral-600 border border-neutral-200 hover:bg-neutral-100 transition-all"
+                  className="shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800 transition-all"
                   title={sortMode === 'top' ? 'Tri : meilleures ventes' : 'Tri : A → Z'}
                 >
-                  {sortMode === 'top' ? <Flame className="w-3.5 h-3.5 text-amber-500" /> : <ArrowDownAZ className="w-3.5 h-3.5 text-brand-700" />}
+                  {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
                   <span className="hidden md:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
                 </button>
                 <button
                   onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')}
-                  className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all border ${articleView === 'list' ? 'bg-brand-600 border-brand-700 text-white shadow-sm' : 'bg-neutral-50 border-neutral-200 text-neutral-500 hover:bg-neutral-100'}`}
+                  className="shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-all border bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800"
                   title={articleView === 'grid' ? 'Vue liste' : 'Vue grille'}
                 >
                   {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
                 </button>
               </div>
               {autoMode && (
-                <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-white hover:bg-brand-50 hover:border-brand-400 text-neutral-800 transition-all text-sm font-semibold active:scale-95 shadow-sm" title="Recherche par véhicule">
+                <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-md border border-neutral-200 bg-white hover:bg-brand-50 hover:border-brand-400 text-neutral-800 transition-all text-sm font-semibold active:scale-95 shadow-sm" title="Recherche par véhicule">
                   <Car className="w-4 h-4 text-brand-700" />
                   <span className="hidden sm:inline">Par véhicule</span>
                 </button>
@@ -2821,7 +2883,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div className="mt-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
                 {sortMode === 'top' ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
-                    <Flame className="w-3 h-3" />Meilleures ventes
+                    <TrendingUp className="w-3 h-3" />Meilleures ventes
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700">
@@ -2910,31 +2972,24 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
                   const tracked = tracksStock(a);
                   const out = !allowNeg && tracked && a.stock_available <= 0;
-                  const low = tracked && a.stock_available > 0 && a.stock_available <= 3;
                   return (
                     <button
                       key={a.id}
                       onClick={() => addToCart(a)}
                       disabled={out}
-                      className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-red-200/60 bg-red-50/30' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'}`}
+                      className={`w-full flex items-center px-3 py-1.5 rounded-lg border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-neutral-200 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'}`}
                     >
-                      <div className="flex-1 min-w-0 flex items-center gap-2">
-                        {can('view_stock_levels') && (tracked ? (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded num shrink-0 ${
-                            a.stock_available <= 0
-                              ? (allowNeg ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700')
-                              : low
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-neutral-100 text-neutral-700'
-                          }`}>
-                            {a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup.') : `x${a.stock_available}`}
+                      <div className="w-16 shrink-0 flex items-center justify-center border-r border-neutral-200 mr-3 h-7">
+                        {tracked ? (
+                          <span className={`text-[10px] font-bold num leading-none ${a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                            {a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup.') : `×${a.stock_available}`}
                           </span>
                         ) : (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded num shrink-0 bg-blue-100 text-blue-700">Svc</span>
-                        ))}
-                        <span className="text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
+                          <span className="text-[10px] font-bold text-neutral-400 leading-none uppercase tracking-wide">Svc</span>
+                        )}
                       </div>
-                      <span className="text-[12px] font-bold text-neutral-900 num shrink-0">{formatFCFA(a.sale_price)}</span>
+                      <span className="flex-1 min-w-0 text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
+                      <span className="text-[12px] font-bold text-neutral-900 num shrink-0 ml-2">{formatFCFA(a.sale_price)}</span>
                     </button>
                   );
                 })}
@@ -2965,20 +3020,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {categoryPickerOpen && (
         <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
           <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={() => setCategoryPickerOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-white sm:rounded-2xl shadow-premium flex flex-col max-h-[85vh] animate-slide-up">
+          <div className="relative w-full sm:max-w-md bg-white sm:rounded-lg shadow-premium flex flex-col max-h-[85vh] animate-slide-up">
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-neutral-100 shrink-0">
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/80">Filtrer</div>
                 <h3 className="text-base font-bold text-neutral-900">Catégorie</h3>
               </div>
-              <button onClick={() => setCategoryPickerOpen(false)} className="p-2 rounded-xl hover:bg-neutral-100 text-neutral-500">
+              <button onClick={() => setCategoryPickerOpen(false)} className="p-2 rounded-md hover:bg-neutral-100 text-neutral-500">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-3 space-y-1">
               <button
                 onClick={() => { setCategoryId(''); setCategoryPickerOpen(false); }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-semibold transition-all ${
                   !categoryId ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'hover:bg-neutral-50 text-neutral-700 border border-transparent'
                 }`}
               >
@@ -2993,7 +3048,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <div key={c.id}>
                     <button
                       onClick={() => { setCategoryId(c.id); setCategoryPickerOpen(false); }}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-semibold transition-all ${
                         sel ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'hover:bg-neutral-50 text-neutral-800 border border-transparent'
                       }`}
                     >
@@ -3010,7 +3065,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                         <button
                           key={s.id}
                           onClick={() => { setCategoryId(s.id); setCategoryPickerOpen(false); }}
-                          className={`w-full flex items-center justify-between pl-8 pr-3 py-2 rounded-xl text-sm transition-all ${
+                          className={`w-full flex items-center justify-between pl-8 pr-3 py-2 rounded-md text-sm transition-all ${
                             sSel ? 'bg-brand-50 text-brand-700 border border-brand-200 font-semibold' : 'hover:bg-neutral-50 text-neutral-600 border border-transparent'
                           }`}
                         >
@@ -3062,14 +3117,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <Modal open={tierPickerOpen} onClose={() => { setTierPickerOpen(false); setTierPickerArticle(null); }} title="Choisir le tarif" size="sm">
             <div className="space-y-2">
               <p className="text-xs text-neutral-500 mb-3">Sélectionnez le tarif à appliquer pour <span className="font-semibold text-neutral-700">{tierPickerArticle.name}</span></p>
-              <button onClick={() => addToCartWithTier(tierPickerArticle, '', defaultPrice)} className="w-full text-left px-4 py-3 rounded-xl border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all group">
+              <button onClick={() => addToCartWithTier(tierPickerArticle, '', defaultPrice)} className="w-full text-left px-4 py-3 rounded-md border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all group">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-neutral-900">Prix standard</span>
                   <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(defaultPrice)}</span>
                 </div>
               </button>
               {tiers.map(t => (
-                <button key={t.tier_name} onClick={() => addToCartWithTier(tierPickerArticle, t.tier_name, t.price)} className="w-full text-left px-4 py-3 rounded-xl border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all group">
+                <button key={t.tier_name} onClick={() => addToCartWithTier(tierPickerArticle, t.tier_name, t.price)} className="w-full text-left px-4 py-3 rounded-md border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all group">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-neutral-900">{t.tier_name}</span>
                     <span className="text-sm font-bold text-brand-700 num">{formatFCFA(t.price)}</span>
@@ -3102,30 +3157,30 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <label className="label">Type</label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 <button type="button" onClick={() => setMvKind('expense')}
-                  className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${mvKind === 'expense' ? 'border-red-500 bg-red-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'expense' ? 'border-red-500 bg-red-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
                   <ArrowUpRight className={`w-4 h-4 mx-auto ${mvKind === 'expense' ? 'text-red-600' : 'text-neutral-400'}`} />
                   <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'expense' ? 'text-red-700' : 'text-neutral-600'}`}>Dépense</div>
                 </button>
                 <button type="button" onClick={() => setMvKind('income')}
-                  className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${mvKind === 'income' ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'income' ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
                   <ArrowDownRight className={`w-4 h-4 mx-auto ${mvKind === 'income' ? 'text-neutral-700' : 'text-neutral-400'}`} />
                   <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'income' ? 'text-neutral-800' : 'text-neutral-600'}`}>Entrée</div>
                 </button>
                 <button type="button" onClick={() => setMvKind('customer_prepayment')}
-                  className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${mvKind === 'customer_prepayment' ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'customer_prepayment' ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
                   <Banknote className={`w-4 h-4 mx-auto ${mvKind === 'customer_prepayment' ? 'text-neutral-700' : 'text-neutral-400'}`} />
                   <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_prepayment' ? 'text-neutral-800' : 'text-neutral-600'}`}>Acompte</div>
                 </button>
-                {can('pos_customer_withdrawal') && (
+                {can('pos_customer_withdrawal') && !!(tenant as any)?.settings?.enable_customer_withdrawals && (
                 <button type="button" onClick={() => { setMvKind('customer_withdrawal'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${mvKind === 'customer_withdrawal' ? 'border-amber-500 bg-amber-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'customer_withdrawal' ? 'border-amber-500 bg-amber-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
                   <ArrowDownToLine className={`w-4 h-4 mx-auto ${mvKind === 'customer_withdrawal' ? 'text-amber-600' : 'text-neutral-400'}`} />
                   <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_withdrawal' ? 'text-amber-700' : 'text-neutral-600'}`}>Retrait</div>
                 </button>
                 )}
                 {can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans && (
                 <button type="button" onClick={() => { setMvKind('customer_loan'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${mvKind === 'customer_loan' ? 'border-blue-500 bg-blue-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'customer_loan' ? 'border-blue-500 bg-blue-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
                   <HandCoins className={`w-4 h-4 mx-auto ${mvKind === 'customer_loan' ? 'text-blue-600' : 'text-neutral-400'}`} />
                   <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_loan' ? 'text-blue-700' : 'text-neutral-600'}`}>Prêt</div>
                 </button>
@@ -3137,7 +3192,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div>
                 <label className="label">Client</label>
                 {mvCustomer ? (
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-neutral-50 border border-neutral-200">
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-neutral-50 border border-neutral-200">
                     <div className="w-7 h-7 rounded-lg bg-neutral-900 text-white flex items-center justify-center shrink-0"><User className="w-3.5 h-3.5" /></div>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-neutral-900 truncate">{mvCustomer.name}</div>
@@ -3152,7 +3207,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <input autoFocus value={mvCustSearch} onChange={e => setMvCustSearch(e.target.value)}
                         className="input pl-9 h-9 text-xs" placeholder="Rechercher un client…" />
                     </div>
-                    <div className="mt-1.5 max-h-32 overflow-y-auto rounded-xl border border-neutral-200 divide-y divide-neutral-100">
+                    <div className="mt-1.5 max-h-32 overflow-y-auto rounded-md border border-neutral-200 divide-y divide-neutral-100">
                       {customers
                         .filter(cu => {
                           const q = mvCustSearch.toLowerCase().trim();
@@ -3188,10 +3243,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   const debt = Math.max(0, mvCustBalance);
                   const net = mvCustPrepay - debt;
                   if (mvCustPrepay <= 0) {
-                    return <div className="mt-2 px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-semibold">Aucun acompte disponible pour ce client</div>;
+                    return <div className="mt-2 px-3 py-2 rounded-md border border-red-200 bg-red-50 text-red-700 text-xs font-semibold">Aucun acompte disponible pour ce client</div>;
                   }
                   return (
-                    <div className={`mt-2 px-3 py-2 rounded-xl border text-xs font-semibold ${net > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                    <div className={`mt-2 px-3 py-2 rounded-md border text-xs font-semibold ${net > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
                       {debt > 0 ? (
                         <div className="space-y-1">
                           <div className="flex justify-between"><span>Acompte disponible :</span><span className="font-bold tabular-nums text-emerald-700">{formatFCFA(mvCustPrepay)}</span></div>
@@ -3206,7 +3261,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   );
                 })()}
                 {mvKind === 'customer_loan' && mvCustomer && (
-                  <div className="mt-2 px-3 py-2 rounded-xl border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-800 space-y-1">
+                  <div className="mt-2 px-3 py-2 rounded-md border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-800 space-y-1">
                     <div className="flex justify-between"><span>Créance actuelle :</span><span className="font-bold tabular-nums">{formatFCFA(Math.max(0, mvCustBalance))}</span></div>
                     <div className="text-[10px] text-blue-600 font-medium mt-1">Le montant du prêt sera ajouté à la créance du client.</div>
                   </div>
@@ -3241,7 +3296,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="grid grid-cols-3 gap-1.5">
                   {methods.map(m => (
                     <button key={m.id} type="button" onClick={() => setMvMethod(m)}
-                      className={`px-2 py-2 rounded-xl text-[11px] font-semibold border-2 transition-all ${mvMethod?.id === m.id ? 'border-neutral-900 bg-neutral-100 text-neutral-900' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
+                      className={`px-2 py-2 rounded-md text-[11px] font-semibold border-2 transition-all ${mvMethod?.id === m.id ? 'border-neutral-900 bg-neutral-100 text-neutral-900' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
                       {m.name}
                     </button>
                   ))}
@@ -3260,7 +3315,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </div>
             </div>
 
-            <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-neutral-200 bg-neutral-50 cursor-pointer select-none">
+            <label className="flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-200 bg-neutral-50 cursor-pointer select-none">
               <input type="checkbox" checked={mvPrint} onChange={e => setMvPrint(e.target.checked)}
                 className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900" />
               <Printer className="w-3.5 h-3.5 text-neutral-500" />
@@ -3290,7 +3345,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             </div>
           }>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-neutral-100 rounded-xl">
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-neutral-100 rounded-md">
               <button type="button"
                 onClick={() => {
                   setCustPayMode('invoice');
@@ -3316,7 +3371,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
             {custPayMode === 'direct' ? (
               <>
-                <div className="rounded-2xl bg-gradient-to-br from-neutral-50 to-white border border-neutral-200/70 p-3">
+                <div className="rounded-lg bg-gradient-to-br from-neutral-50 to-white border border-neutral-200/70 p-3">
                   <div className="text-[11px] font-semibold text-neutral-900 uppercase tracking-wide">Encaissement direct</div>
                   <div className="text-[11px] text-neutral-800 mt-0.5">Pour un client divers, sans facture rattachée. Un reçu numéroté sera imprimé.</div>
                 </div>
@@ -3338,7 +3393,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {methods.map(m => (
                       <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
-                        className={`px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${custPayMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
+                        className={`px-3 py-2.5 rounded-md text-xs font-semibold border-2 transition-all ${custPayMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
                         {m.name}
                       </button>
                     ))}
@@ -3358,7 +3413,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <input autoFocus value={custPaySearch} onChange={e => setCustPaySearch(e.target.value)}
                     className="input pl-9" placeholder="Nom, téléphone…" />
                 </div>
-                <div className="mt-2 max-h-72 overflow-y-auto rounded-2xl border border-neutral-200 divide-y divide-neutral-100">
+                <div className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-neutral-200 divide-y divide-neutral-100">
                   {customers
                     .filter(c => {
                       const q = custPaySearch.toLowerCase().trim();
@@ -3369,7 +3424,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     .map(c => (
                       <button key={c.id} onClick={() => loadCustomerUnpaid(c)}
                         className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-50 active:bg-neutral-100 text-left transition-colors">
-                        <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"><User className="w-4 h-4" /></div>
+                        <div className="w-8 h-8 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"><User className="w-4 h-4" /></div>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-neutral-900 truncate">{c.name}</div>
                           {c.phone && <div className="text-[11px] text-neutral-500 truncate">{c.phone}</div>}
@@ -3381,8 +3436,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-br from-brand-50 to-white border border-brand-200/70">
-                  <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center shrink-0"><User className="w-5 h-5" /></div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-br from-brand-50 to-white border border-brand-200/70">
+                  <div className="w-10 h-10 rounded-md bg-brand-600 text-white flex items-center justify-center shrink-0"><User className="w-5 h-5" /></div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-bold text-neutral-900 truncate">{custPayCustomer.name}</div>
                     <div className="text-[11px] text-neutral-500">
@@ -3393,7 +3448,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
 
                 {custPayUnpaid.length === 0 && Number((custPayCustomer as any).balance || 0) <= 0 ? (
-                  <div className="rounded-2xl bg-neutral-100 border border-neutral-200 p-4 text-center">
+                  <div className="rounded-lg bg-neutral-100 border border-neutral-200 p-4 text-center">
                     <CheckCircle2 className="w-6 h-6 text-neutral-700 mx-auto mb-1" />
                     <div className="text-sm font-semibold text-neutral-900">Aucune facture en attente</div>
                     <div className="text-xs text-neutral-800 mt-0.5">Ce client est à jour.</div>
@@ -3436,7 +3491,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {methods.map(m => (
                           <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
-                            className={`px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${custPayMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
+                            className={`px-3 py-2.5 rounded-md text-xs font-semibold border-2 transition-all ${custPayMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
                             {m.name}
                           </button>
                         ))}
@@ -3453,7 +3508,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             )}
 
             {(custPayMode === 'direct' || (custPayMode === 'invoice' && custPayCustomer && custPayUnpaid.length > 0)) && (
-              <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 cursor-pointer select-none">
+              <label className="flex items-center gap-2 px-3 py-2.5 rounded-md border border-neutral-200 bg-neutral-50 cursor-pointer select-none">
                 <input type="checkbox" checked={custPayPrint} onChange={e => setCustPayPrint(e.target.checked)}
                   className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500" />
                 <Printer className="w-4 h-4 text-neutral-500" />
@@ -3488,6 +3543,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           } : null}
           ipmDocuments={ipmDocuments}
           setIpmDocuments={setIpmDocuments}
+          autoPrintTicket={autoPrintTicket}
+          setAutoPrintTicket={(v) => updateAutoPrintPref('auto_print_ticket', v)}
+          autoPrintInvoice={autoPrintInvoice}
+          setAutoPrintInvoice={(v) => updateAutoPrintPref('auto_print_invoice', v)}
         />
       )}
 
@@ -3530,7 +3589,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : (
           <div className="space-y-2">
             {heldCarts.map(h => (
-              <div key={h.id} className="flex items-center justify-between p-3 border border-neutral-200 rounded-xl hover:bg-neutral-50">
+              <div key={h.id} className="flex items-center justify-between p-3 border border-neutral-200 rounded-md hover:bg-neutral-50">
                 <div className="min-w-0">
                   <div className="font-semibold text-sm">{h.label}</div>
                   <div className="text-xs text-neutral-500">{h.cart.length} article{h.cart.length > 1 ? 's' : ''} · {formatFCFA(h.cart.reduce((s, i) => s + i.quantity * i.unit_price - i.discount, 0) - h.discount)}</div>
@@ -3574,7 +3633,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto">
                 {filteredReturnSales.map(s => (
-                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left p-3 border rounded-xl transition-colors ${s.fullyReturned ? 'border-neutral-100 bg-neutral-50 opacity-60 cursor-not-allowed' : 'border-neutral-200 hover:bg-brand-50 hover:border-brand-200'}`}>
+                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left p-3 border rounded-md transition-colors ${s.fullyReturned ? 'border-neutral-100 bg-neutral-50 opacity-60 cursor-not-allowed' : 'border-neutral-200 hover:bg-brand-50 hover:border-brand-200'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="doc-number font-semibold text-sm text-brand-700">{s.sale_number}</span>
@@ -3591,7 +3650,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl text-sm">
+            <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-md text-sm">
               <div>
                 <span className="doc-number font-semibold text-brand-700">{returnSelected.sale_number}</span>
                 {returnSelected.customer_name && <span className="text-neutral-500 ml-2">· {returnSelected.customer_name}</span>}
@@ -3604,7 +3663,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 const toggle = (v: boolean) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, selected: v } : x));
                 const setQ = (q: number) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, quantity: Math.min(l.maxQty, Math.max(1, q)) } : x));
                 return (
-                  <div key={i} className={`rounded-2xl border p-3 transition-all ${l.selected ? 'border-red-200 bg-red-50/40 shadow-sm' : 'border-neutral-200 bg-white'}`}>
+                  <div key={i} className={`rounded-lg border p-3 transition-all ${l.selected ? 'border-red-200 bg-red-50/40 shadow-sm' : 'border-neutral-200 bg-white'}`}>
                     <div className="flex items-start gap-3">
                       <button type="button" onClick={() => toggle(!l.selected)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-neutral-300'}`}>
                         {l.selected && <Check className="w-4 h-4 text-white" />}
@@ -3620,7 +3679,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     {l.selected && (
                       <div className="mt-3 flex items-center gap-2">
                         <span className="text-xs font-semibold text-neutral-500">Qté à retourner</span>
-                        <div className="ml-auto flex items-center gap-1.5 bg-white border border-neutral-200 rounded-xl p-1">
+                        <div className="ml-auto flex items-center gap-1.5 bg-white border border-neutral-200 rounded-md p-1">
                           <button type="button" onClick={() => setQ(l.quantity - 1)} className="w-8 h-8 rounded-lg hover:bg-neutral-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
                           <input type="number" value={l.quantity} min="1" max={l.maxQty} onChange={e => setQ(Number(e.target.value))} className="w-12 text-center text-sm font-bold num bg-transparent outline-none" />
                           <button type="button" onClick={() => setQ(l.quantity + 1)} className="w-8 h-8 rounded-lg hover:bg-neutral-100 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
@@ -3630,7 +3689,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   </div>
                 );
               })}
-              <div className="rounded-2xl bg-gradient-to-br from-red-50 to-amber-50 border border-red-200 p-4 flex items-center justify-between mt-1">
+              <div className="rounded-lg bg-gradient-to-br from-red-50 to-amber-50 border border-red-200 p-4 flex items-center justify-between mt-1">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-red-700">Avoir total</div>
                   <div className="text-xs text-neutral-600 mt-0.5">{returnLines.filter(l => l.selected).length} article{returnLines.filter(l => l.selected).length > 1 ? 's' : ''}</div>
@@ -3688,7 +3747,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
             <div className="space-y-1.5">
               {/* Tickets */}
-              <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'tickets' ? 'border-brand-300 bg-brand-50/30' : 'border-neutral-200 bg-white'}`}>
+              <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'tickets' ? 'border-brand-300 bg-brand-50/30' : 'border-neutral-200 bg-white'}`}>
                 <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                   <div className="flex items-center gap-2">
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'tickets' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
@@ -3755,7 +3814,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Encaissements directs */}
               {encDirectList.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-100/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-100/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setTicketsExpanded(ticketsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'encDirect' ? 'bg-neutral-200 text-neutral-900' : 'bg-neutral-100 text-neutral-800'}`}>
@@ -3813,7 +3872,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Reglements factures */}
               {sessionInvPayments.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setTicketsExpanded(ticketsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'reglements' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
@@ -3851,7 +3910,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Acomptes */}
               {acomptesList.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setTicketsExpanded(ticketsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
@@ -3909,7 +3968,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Décaissements */}
               {depensesList.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setTicketsExpanded(ticketsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
@@ -3967,7 +4026,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Retraits clients */}
               {retraitsList.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setTicketsExpanded(ticketsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'retraits' ? 'bg-orange-200 text-orange-800' : 'bg-orange-100 text-orange-700'}`}>
@@ -4000,7 +4059,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
               {pretsList.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${ticketsExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setTicketsExpanded(ticketsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'prets' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'}`}>
@@ -4059,7 +4118,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : statsData ? (
           <div className="space-y-3">
             {/* KPI strip */}
-            <div className="flex items-stretch gap-2 p-2 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-neutral-200">
+            <div className="flex items-stretch gap-2 p-2 rounded-lg bg-gradient-to-br from-slate-50 to-white border border-neutral-200">
               <div className="flex-1 text-center px-2 py-1.5">
                 <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Ventes</div>
                 <div className="text-lg font-bold text-neutral-900 num leading-tight">{statsData.count}</div>
@@ -4082,7 +4141,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             <div className="space-y-1.5">
               {/* Encaissements par mode */}
               {statsData.byMethod.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'modes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
@@ -4113,7 +4172,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Reglements */}
               {statsData.invoicePayments.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40 order-first' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40 order-first' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setStatsExpanded(statsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'reglements' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
@@ -4154,7 +4213,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Encaissements directs */}
               {statsData.movIncome > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-100/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-100/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setStatsExpanded(statsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'encDirect' ? 'bg-neutral-200 text-neutral-900' : 'bg-neutral-100 text-neutral-800'}`}>
@@ -4191,7 +4250,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Acomptes */}
               {statsData.movPrepay > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setStatsExpanded(statsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
@@ -4228,7 +4287,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Décaissements */}
               {statsData.movExpense > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setStatsExpanded(statsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
@@ -4264,7 +4323,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Retraits clients */}
               {(statsData.movWithdrawal || 0) > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setStatsExpanded(statsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'retraits' ? 'bg-orange-200 text-orange-800' : 'bg-orange-100 text-orange-700'}`}>
@@ -4300,7 +4359,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Prêts clients */}
               {(statsData.movLoan || 0) > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setStatsExpanded(statsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'prets' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'}`}>
@@ -4336,7 +4395,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Top articles */}
               {statsData.topArticles.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${statsExpanded === 'articles' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
+                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'articles' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
                   <button onClick={() => setStatsExpanded(statsExpanded === 'articles' ? null : 'articles')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'articles' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
@@ -4456,7 +4515,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 const diff = c.counted_amount - c.theoretical_amount;
                 const balanced = diff === 0 && c.counted_amount > 0;
                 return (
-                  <div key={c.method_name} className={`rounded-xl border p-2.5 transition-all duration-300 ${balanced ? 'border-neutral-200 bg-neutral-100/40' : diff < 0 ? 'border-red-200 bg-red-50/40' : diff > 0 ? 'border-amber-200 bg-amber-50/40' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <div key={c.method_name} className={`rounded-md border p-2.5 transition-all duration-300 ${balanced ? 'border-neutral-200 bg-neutral-100/40' : diff < 0 ? 'border-red-200 bg-red-50/40' : diff > 0 ? 'border-amber-200 bg-amber-50/40' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
                     <div className="flex items-center gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-bold text-neutral-900 truncate">{c.method_name}</div>
@@ -4471,7 +4530,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 );
               })}
             </div>
-            <div className={`rounded-xl p-2.5 flex items-center justify-between transition-all duration-300 ${totalVariance === 0 ? 'bg-gradient-to-br from-neutral-50 to-brand-50 border border-neutral-200' : 'bg-neutral-50 border border-neutral-200'}`}>
+            <div className={`rounded-md p-2.5 flex items-center justify-between transition-all duration-300 ${totalVariance === 0 ? 'bg-gradient-to-br from-neutral-50 to-brand-50 border border-neutral-200' : 'bg-neutral-50 border border-neutral-200'}`}>
               <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Écart total</div>
               <div className={`num font-bold text-sm ${totalVariance > 0 ? 'text-amber-600' : totalVariance < 0 ? 'text-red-600' : 'text-neutral-800'}`}>
                 {totalVariance === 0 ? <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Équilibré</span> : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
@@ -4487,17 +4546,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : closeStep === 'regularize' ? (
           <div className="space-y-3 count-up">
             <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl p-2.5 bg-white border border-neutral-200 text-center">
+              <div className="rounded-md p-2.5 bg-white border border-neutral-200 text-center">
                 <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Écart</div>
                 <div className={`text-xs font-bold mt-0.5 num ${totalVariance === 0 ? 'text-neutral-800' : 'text-red-600'}`}>
                   {totalVariance === 0 ? 'OK' : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
                 </div>
               </div>
-              <div className="rounded-xl p-2.5 bg-white border border-neutral-200 text-center">
+              <div className="rounded-md p-2.5 bg-white border border-neutral-200 text-center">
                 <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Régul.</div>
                 <div className="text-xs font-bold mt-0.5 num">{sessionRegs.length}</div>
               </div>
-              <div className="rounded-xl p-2.5 bg-white border border-neutral-200 text-center">
+              <div className="rounded-md p-2.5 bg-white border border-neutral-200 text-center">
                 <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Montant</div>
                 <div className="text-xs font-bold mt-0.5 num">{formatFCFA(sessionRegs.reduce((s, r) => s + r.amount, 0))}</div>
               </div>
@@ -4505,7 +4564,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {sessionRegs.length > 0 ? (
               <div className="space-y-1.5">
                 {sessionRegs.map((r, i) => (
-                  <div key={i} className={`rounded-xl p-2.5 flex items-center gap-2 border ${r.reg_type === 'manquant' ? 'bg-red-50/40 border-red-200' : r.reg_type === 'excedent' ? 'bg-amber-50/40 border-amber-200' : 'bg-white border-neutral-200'}`}>
+                  <div key={i} className={`rounded-md p-2.5 flex items-center gap-2 border ${r.reg_type === 'manquant' ? 'bg-red-50/40 border-red-200' : r.reg_type === 'excedent' ? 'bg-amber-50/40 border-amber-200' : 'bg-white border-neutral-200'}`}>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-semibold capitalize text-neutral-800">{r.reg_type}</div>
                       {r.reason && <div className="text-[10px] text-neutral-500 article-text line-clamp-1 mt-0.5">{r.reason}</div>}
@@ -4517,13 +4576,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             ) : (
               <div className="text-center py-4 text-[11px] text-neutral-500">Aucune régularisation.</div>
             )}
-            <button onClick={() => setRegOpen(true)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-dashed border-neutral-300 text-neutral-700 hover:border-brand-400 hover:bg-brand-50/40 transition">
+            <button onClick={() => setRegOpen(true)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold bg-white border border-dashed border-neutral-300 text-neutral-700 hover:border-brand-400 hover:bg-brand-50/40 transition">
               <Plus className="w-3.5 h-3.5" /> Ajouter une régularisation
             </button>
           </div>
         ) : (
           <div className="space-y-3 count-up">
-            <div className="p-3 bg-gradient-to-br from-ink-900 to-slate-800 text-white rounded-2xl space-y-2 shadow-premium">
+            <div className="p-3 bg-gradient-to-br from-ink-900 to-slate-800 text-white rounded-lg space-y-2 shadow-premium">
               <div className="flex items-center gap-1.5"><Lock className="w-4 h-4 text-neutral-300" /><span className="text-xs font-bold tracking-wide">RÉCAPITULATIF</span></div>
               <div className="grid grid-cols-2 gap-1.5 text-[11px]">
                 <span className="text-neutral-400">Fond ouverture</span>
@@ -4579,9 +4638,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   const transformed = !!o.sale_id;
                   return (
                     <button key={o.id} onClick={() => openWebOrderDetail(o)}
-                      className="w-full text-left p-3 rounded-xl bg-white border border-neutral-200 hover:border-brand-400 hover:shadow-sm transition-all">
+                      className="w-full text-left p-3 rounded-md bg-white border border-neutral-200 hover:border-brand-400 hover:shadow-sm transition-all">
                       <div className="flex items-start gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${o.status === 'annulee' ? 'bg-rose-100 text-rose-700' : transformed ? 'bg-neutral-100 text-neutral-800' : 'bg-brand-100 text-brand-700'}`}>
+                        <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 ${o.status === 'annulee' ? 'bg-rose-100 text-rose-700' : transformed ? 'bg-neutral-100 text-neutral-800' : 'bg-brand-100 text-brand-700'}`}>
                           {o.delivery_mode === 'livraison' ? <Truck className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -4608,7 +4667,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : (
           <div className="space-y-3">
             <button onClick={() => { setWebOrderDetail(null); setWebOrderItems([]); }} className="btn-icon" title="Retour à la liste"><ChevronLeft className="w-4 h-4" /></button>
-            <div className="p-4 rounded-xl bg-gradient-to-br from-brand-50 to-white border border-brand-100">
+            <div className="p-4 rounded-md bg-gradient-to-br from-brand-50 to-white border border-brand-100">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700">Commande</div>
@@ -4622,13 +4681,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200">
+              <div className="p-3 rounded-md bg-neutral-50 border border-neutral-200">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1 flex items-center gap-1"><User className="w-3 h-3" />Client</div>
                 <div className="font-bold text-neutral-900">{webOrderDetail.customer_name}</div>
                 <div className="text-neutral-600 flex items-center gap-1 mt-0.5"><Phone className="w-3 h-3" />{webOrderDetail.customer_phone}</div>
                 {webOrderDetail.customer_whatsapp && <div className="text-neutral-800 mt-0.5">WhatsApp: {webOrderDetail.customer_whatsapp}</div>}
               </div>
-              <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200">
+              <div className="p-3 rounded-md bg-neutral-50 border border-neutral-200">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1 flex items-center gap-1">
                   {webOrderDetail.delivery_mode === 'livraison' ? <Truck className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
                   {webOrderDetail.delivery_mode === 'livraison' ? 'Livraison' : 'Retrait'}
@@ -4637,14 +4696,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 {webOrderDetail.delivery_fee > 0 && <div className="text-neutral-500 mt-0.5">Frais: {formatFCFA(webOrderDetail.delivery_fee)}</div>}
               </div>
             </div>
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2">
+            <div className="p-3 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
               <div className="text-xs text-amber-900">
                 <div className="font-bold">Paiement: <span className="capitalize">{(webOrderDetail.payment_mode || '').replace(/_/g, ' ')}</span></div>
                 <div className="mt-0.5">Le stock sera décrémenté uniquement lors de la validation de la vente en caisse.</div>
               </div>
             </div>
-            <div className="rounded-xl border border-neutral-200 overflow-hidden">
+            <div className="rounded-md border border-neutral-200 overflow-hidden">
               <div className="px-3 py-2 bg-neutral-50 border-b border-neutral-200 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Articles ({webOrderItems.length})</div>
               <div className="divide-y divide-neutral-100 max-h-60 overflow-y-auto">
                 {webOrderItems.map(it => (
@@ -4659,29 +4718,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </div>
             </div>
             {webOrderDetail.customer_note && (
-              <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200 text-xs text-neutral-700">
+              <div className="p-3 rounded-md bg-neutral-50 border border-neutral-200 text-xs text-neutral-700">
                 <span className="font-bold">Note client:</span> {webOrderDetail.customer_note}
               </div>
             )}
             <div className="flex flex-col sm:flex-row gap-2">
               {!webOrderDetail.sale_id && webOrderDetail.status !== 'annulee' && (
                 <button onClick={loadToCartFromWebOrder} disabled={!session || transforming}
-                  className="flex-1 h-11 rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 text-white font-bold inline-flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.98] transition-all shadow-glow disabled:opacity-60">
+                  className="flex-1 h-11 rounded-md bg-gradient-to-r from-brand-600 to-brand-800 text-white font-bold inline-flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.98] transition-all shadow-glow disabled:opacity-60">
                   <ArrowRight className="w-4 h-4" />Transformer en vente
                 </button>
               )}
               {webOrderDetail.sale_id && webOrderDetail.status !== 'livree' && (
-                <button onClick={() => markWebOrderDelivered(webOrderDetail)} className="flex-1 h-11 rounded-xl bg-neutral-900 text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all">
+                <button onClick={() => markWebOrderDelivered(webOrderDetail)} className="flex-1 h-11 rounded-md bg-neutral-900 text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all">
                   <CheckCircle2 className="w-4 h-4" />Marquer livrée
                 </button>
               )}
               {webOrderDetail.customer_phone && (
-                <a href={`tel:${webOrderDetail.customer_phone}`} className="h-11 px-4 rounded-xl bg-neutral-100 text-neutral-700 font-semibold inline-flex items-center justify-center gap-2 hover:bg-neutral-200 transition-all">
+                <a href={`tel:${webOrderDetail.customer_phone}`} className="h-11 px-4 rounded-md bg-neutral-100 text-neutral-700 font-semibold inline-flex items-center justify-center gap-2 hover:bg-neutral-200 transition-all">
                   <Phone className="w-4 h-4" />Appeler
                 </a>
               )}
               {webOrderDetail.status !== 'annulee' && !webOrderDetail.sale_id && (
-                <button onClick={() => cancelWebOrder(webOrderDetail)} className="h-11 px-4 rounded-xl bg-rose-50 text-rose-700 font-semibold inline-flex items-center justify-center gap-2 hover:bg-rose-100 transition-all border border-rose-200">
+                <button onClick={() => cancelWebOrder(webOrderDetail)} className="h-11 px-4 rounded-md bg-rose-50 text-rose-700 font-semibold inline-flex items-center justify-center gap-2 hover:bg-rose-100 transition-all border border-rose-200">
                   <X className="w-4 h-4" />Annuler
                 </button>
               )}
@@ -4715,6 +4774,8 @@ function PaymentScreen({
   onClose, onValidate, onValidateCredit,
   docSettings, docFields, setDocFields, ipmInfo,
   ipmDocRequired, ipmDocuments, setIpmDocuments, reps,
+  autoPrintTicket, setAutoPrintTicket,
+  autoPrintInvoice, setAutoPrintInvoice,
 }: {
   total: number;
   customer: Customer | null;
@@ -4733,6 +4794,10 @@ function PaymentScreen({
   ipmDocRequired?: { ordonnance: boolean; medecin: boolean; bon: boolean } | null;
   ipmDocuments?: { numero_ordonnance: string; medecin: string; numero_bon: string };
   setIpmDocuments?: (updater: (d: { numero_ordonnance: string; medecin: string; numero_bon: string }) => { numero_ordonnance: string; medecin: string; numero_bon: string }) => void;
+  autoPrintTicket: boolean;
+  setAutoPrintTicket: (v: boolean) => void;
+  autoPrintInvoice: boolean;
+  setAutoPrintInvoice: (v: boolean) => void;
 }) {
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = total - totalPaid;
@@ -4773,7 +4838,7 @@ function PaymentScreen({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center animate-fade-in">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={paying ? undefined : onClose} />
-      <div className="relative w-full max-w-md mx-4 bg-white rounded-2xl shadow-2xl border border-neutral-200 flex flex-col">
+      <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-2xl border border-neutral-200 flex flex-col">
 
         {/* En-tête */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
@@ -4781,7 +4846,7 @@ function PaymentScreen({
             <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Encaissement</div>
             <div className="text-2xl font-bold text-neutral-900 num leading-none mt-1">{formatFCFA(total)}</div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl bg-neutral-900 text-white flex items-center justify-center hover:bg-neutral-800 transition-colors" disabled={paying}>
+          <button onClick={onClose} className="w-9 h-9 rounded-md bg-neutral-900 text-white flex items-center justify-center hover:bg-neutral-800 transition-colors" disabled={paying}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -4802,7 +4867,7 @@ function PaymentScreen({
 
         {/* Solde comptable client */}
         {customer && Number((customer as any).balance || 0) !== 0 && (
-          <div className="flex items-center gap-2 mx-5 mt-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px]">
+          <div className="flex items-center gap-2 mx-5 mt-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-[11px]">
             <Wallet className="w-4 h-4 text-amber-600 shrink-0" />
             <span className="text-amber-700">Solde dû</span>
             <span className="ml-auto text-amber-900 font-bold num">{formatFCFA(Number((customer as any).balance || 0))}</span>
@@ -4811,7 +4876,7 @@ function PaymentScreen({
 
         {/* Bannière IPM */}
         {ipmInfo && (
-          <div className="flex items-center gap-2 mx-5 mt-3 px-3 py-2 rounded-xl bg-neutral-50 border border-neutral-200 text-[11px]">
+          <div className="flex items-center gap-2 mx-5 mt-3 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-[11px]">
             <Shield className="w-4 h-4 text-neutral-500 shrink-0" />
             <span className="text-neutral-600">IPM <span className="font-bold text-neutral-900">{ipmInfo.organisme}</span> ({ipmInfo.taux}%)</span>
             <span className="ml-auto text-neutral-900 font-bold num">{formatFCFA(ipmInfo.partIpm)} pris en charge</span>
@@ -4824,7 +4889,7 @@ function PaymentScreen({
           {payments.length > 0 && (
             <div className="space-y-2">
               {payments.map((p, idx) => (
-                <div key={idx} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-neutral-50 border border-neutral-200">
+                <div key={idx} className="flex items-center gap-2.5 p-2.5 rounded-md bg-neutral-50 border border-neutral-200">
                   <div className="flex-1 min-w-0">
                     <div className="text-[10px] text-neutral-500 leading-tight mb-0.5">{p.method_name}</div>
                     <input
@@ -4855,7 +4920,7 @@ function PaymentScreen({
             <div className="grid grid-cols-3 gap-2">
               {methods.filter(m => !payments.some(p => p.payment_method_id === m.id)).map(m => (
                 <button key={m.id} onClick={() => selectMethod(m)}
-                  className="h-12 flex items-center justify-center rounded-xl bg-white border border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50 active:scale-95 transition-all text-[12px] font-semibold text-neutral-800 text-center px-2">
+                  className="h-12 flex items-center justify-center rounded-md bg-white border border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50 active:scale-95 transition-all text-[12px] font-semibold text-neutral-800 text-center px-2">
                   {m.name}
                 </button>
               ))}
@@ -4866,7 +4931,7 @@ function PaymentScreen({
           {customer && totalPaid === 0 && (
             <div className="pt-3 border-t border-neutral-100">
               <button onClick={onValidateCredit} disabled={paying || !ipmDocsValid}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-all text-sm font-bold disabled:opacity-50">
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-all text-sm font-bold disabled:opacity-50">
                 {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                 Tout à crédit · {customer.name}
               </button>
@@ -4881,31 +4946,31 @@ function PaymentScreen({
               {docSettings.show_reference && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Référence client</label>
-                  <input value={docFields.reference} onChange={e => setDocFields.setReference(e.target.value)} placeholder="Réf. commande / dossier" className="w-full h-9 rounded-xl bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                  <input value={docFields.reference} onChange={e => setDocFields.setReference(e.target.value)} placeholder="Réf. commande / dossier" className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
                 </div>
               )}
               {docSettings.show_delivery_date && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Date de livraison</label>
-                  <input type="date" value={docFields.deliveryDate} onChange={e => setDocFields.setDeliveryDate(e.target.value)} className="w-full h-9 rounded-xl bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                  <input type="date" value={docFields.deliveryDate} onChange={e => setDocFields.setDeliveryDate(e.target.value)} className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
                 </div>
               )}
               {docSettings.show_warranty && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Garantie</label>
-                  <input value={docFields.warranty} onChange={e => setDocFields.setWarranty(e.target.value)} placeholder="Ex : 6 mois, 1 an" className="w-full h-9 rounded-xl bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                  <input value={docFields.warranty} onChange={e => setDocFields.setWarranty(e.target.value)} placeholder="Ex : 6 mois, 1 an" className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
                 </div>
               )}
               {docSettings.show_imei && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">IMEI / Téléphone</label>
-                  <input value={docFields.imei} onChange={e => setDocFields.setImei(e.target.value)} placeholder="Numéro IMEI ou série" className="w-full h-9 rounded-xl bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                  <input value={docFields.imei} onChange={e => setDocFields.setImei(e.target.value)} placeholder="Numéro IMEI ou série" className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
                 </div>
               )}
               {docSettings.show_representative && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Représentant</label>
-                  <select value={docFields.representative} onChange={e => setDocFields.setRepresentative(e.target.value)} className="w-full h-9 rounded-xl bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors">
+                  <select value={docFields.representative} onChange={e => setDocFields.setRepresentative(e.target.value)} className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors">
                     <option value="">Aucun représentant</option>
                     {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
                   </select>
@@ -4921,19 +4986,19 @@ function PaymentScreen({
               {ipmDocRequired?.ordonnance && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">N° Ordonnance *</label>
-                  <input value={ipmDocuments?.numero_ordonnance || ''} onChange={e => setIpmDocuments(d => ({ ...d, numero_ordonnance: e.target.value }))} placeholder="Saisir le numéro d'ordonnance" className={`w-full h-9 rounded-xl bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.numero_ordonnance?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
+                  <input value={ipmDocuments?.numero_ordonnance || ''} onChange={e => setIpmDocuments(d => ({ ...d, numero_ordonnance: e.target.value }))} placeholder="Saisir le numéro d'ordonnance" className={`w-full h-9 rounded-md bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.numero_ordonnance?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
                 </div>
               )}
               {ipmDocRequired?.medecin && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Médecin prescripteur *</label>
-                  <input value={ipmDocuments?.medecin || ''} onChange={e => setIpmDocuments(d => ({ ...d, medecin: e.target.value }))} placeholder="Nom du médecin prescripteur" className={`w-full h-9 rounded-xl bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.medecin?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
+                  <input value={ipmDocuments?.medecin || ''} onChange={e => setIpmDocuments(d => ({ ...d, medecin: e.target.value }))} placeholder="Nom du médecin prescripteur" className={`w-full h-9 rounded-md bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.medecin?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
                 </div>
               )}
               {ipmDocRequired?.bon && (
                 <div>
                   <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Numéro bon de prise en charge *</label>
-                  <input value={ipmDocuments?.numero_bon || ''} onChange={e => setIpmDocuments(d => ({ ...d, numero_bon: e.target.value }))} placeholder="Saisir le numéro du bon IPM" className={`w-full h-9 rounded-xl bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.numero_bon?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
+                  <input value={ipmDocuments?.numero_bon || ''} onChange={e => setIpmDocuments(d => ({ ...d, numero_bon: e.target.value }))} placeholder="Saisir le numéro du bon IPM" className={`w-full h-9 rounded-md bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.numero_bon?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
                 </div>
               )}
               {!ipmDocsValid && (
@@ -4943,26 +5008,54 @@ function PaymentScreen({
           )}
         </div>
 
+        {/* Préférences d'impression automatique */}
+        <div className="border-t border-neutral-100 px-5 py-3 flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoPrintTicket}
+              onClick={() => { const next = !autoPrintTicket; setAutoPrintTicket(next); if (next) setAutoPrintInvoice(false); }}
+              className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${autoPrintTicket ? 'bg-neutral-900' : 'bg-neutral-200'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${autoPrintTicket ? 'translate-x-4' : ''}`} />
+            </button>
+            <span className="text-[11px] font-semibold text-neutral-700 flex items-center gap-1"><Printer className="w-3 h-3" /> Ticket auto</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoPrintInvoice}
+              onClick={() => { const next = !autoPrintInvoice; setAutoPrintInvoice(next); if (next) setAutoPrintTicket(false); }}
+              className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${autoPrintInvoice ? 'bg-neutral-900' : 'bg-neutral-200'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${autoPrintInvoice ? 'translate-x-4' : ''}`} />
+            </button>
+            <span className="text-[11px] font-semibold text-neutral-700 flex items-center gap-1"><FileText className="w-3 h-3" /> Facture auto</span>
+          </label>
+        </div>
+
         {/* Pied — actions */}
         <div className="border-t border-neutral-100 px-5 py-4 flex items-center gap-3">
-          <button onClick={onClose} className="h-10 px-4 rounded-xl bg-neutral-900 text-white font-semibold text-sm hover:bg-neutral-800 transition-colors" disabled={paying}>
+          <button onClick={onClose} className="h-10 px-4 rounded-md bg-neutral-900 text-white font-semibold text-sm hover:bg-neutral-800 transition-colors" disabled={paying}>
             Annuler
           </button>
           <div className="flex-1" />
           {enough ? (
             <button onClick={onValidate} disabled={paying || !ipmDocsValid}
-              className="h-10 px-5 rounded-xl font-bold text-sm flex items-center gap-2 bg-neutral-900 text-white hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50">
+              className="h-10 px-5 rounded-md font-bold text-sm flex items-center gap-2 bg-neutral-900 text-white hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50">
               {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               {paying ? 'Traitement...' : `Valider · ${formatFCFA(total)}`}
             </button>
           ) : canPartial ? (
             <button onClick={onValidate} disabled={paying || !ipmDocsValid}
-              className="h-10 px-5 rounded-xl font-bold text-sm flex items-center gap-2 bg-neutral-900 text-white hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50">
+              className="h-10 px-5 rounded-md font-bold text-sm flex items-center gap-2 bg-neutral-900 text-white hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50">
               {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
               {paying ? 'Traitement...' : `Partiel · ${formatFCFA(remaining)} crédit`}
             </button>
           ) : (
-            <div className="h-10 px-5 rounded-xl bg-neutral-100 text-neutral-400 font-semibold text-sm flex items-center">
+            <div className="h-10 px-5 rounded-md bg-neutral-100 text-neutral-400 font-semibold text-sm flex items-center">
               {totalPaid === 0 ? 'Choisir un mode' : `Reste ${formatFCFA(remaining)}`}
             </div>
           )}

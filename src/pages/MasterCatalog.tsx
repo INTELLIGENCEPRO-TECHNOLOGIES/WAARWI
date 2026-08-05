@@ -58,6 +58,7 @@ export function MasterCatalog() {
   const [refreshing, setRefreshing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState<null | { mode: 'selected' | 'category' | 'subcategory' | 'all'; label: string; count: number }>(null);
   const [lastResult, setLastResult] = useState<{ imported: number; skipped: number; errors: any[] } | null>(null);
+  const [lotOpen, setLotOpen] = useState(false);
 
   const MAX_IMPORT = 500;
 
@@ -375,16 +376,11 @@ export function MasterCatalog() {
   return (
     <div className="space-y-3 pb-6">
       {/* Header */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
       <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Catalogue maître</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 truncate max-w-[140px]">
-                {activity?.name}
-              </div>
-            </div>
+            <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Catalogue maître</h1>
           </div>
           <input
             value={searchInput}
@@ -397,82 +393,103 @@ export function MasterCatalog() {
           )}
           <button
             onClick={() => setFiltersOpen(true)}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${activeFilterCount > 0 ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}
+            className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1.5 text-[11px] font-semibold transition-colors ${activeFilterCount > 0 ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <Filter className="w-3.5 h-3.5" />
             {activeFilterCount > 0 && <span className="num">{activeFilterCount}</span>}
           </button>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow shrink-0">
-            <Search className="w-3.5 h-3.5 text-white" />
-          </div>
+          <button
+            onClick={() => refreshImportedIds()}
+            disabled={refreshing}
+            className="shrink-0 inline-flex items-center px-1.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50"
+            title="Actualiser le statut des articles importés"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+          {selected.size > 0 ? (
+            <button
+              disabled={importing}
+              onClick={() => setConfirmOpen({ mode: 'selected', label: 'la sélection', count: selected.size })}
+              className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-50 ${selected.size > MAX_IMPORT ? 'text-red-600 hover:text-red-700' : 'text-brand-700 hover:text-brand-800'}`}
+              title={`Importer la sélection (${selected.size})`}
+            >
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span className="num">{selected.size}</span>
+            </button>
+          ) : (
+            <button
+              disabled={importing}
+              onClick={() => {
+                const count = items.filter(i => !importedIds.has(i.id)).length;
+                setConfirmOpen({ mode: 'all', label: 'tout le catalogue', count });
+              }}
+              className="shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1.5 text-[11px] font-bold text-slate-700 hover:text-slate-900 transition-colors disabled:opacity-50"
+              title="Importer tout le catalogue"
+            >
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Selection stats */}
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filtered.length} / {items.length}</span>
-        <span className="shrink-0 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{importedIds.size} importé{importedIds.size > 1 ? 's' : ''}</span>
+      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+        <span className="shrink-0 text-slate-500 num">{filtered.length} / {items.length}</span>
+        <span className="shrink-0 text-emerald-600 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{importedIds.size} importé{importedIds.size > 1 ? 's' : ''}</span>
         {selected.size > 0 && (
-          <span className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 font-bold ${selected.size > MAX_IMPORT ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-brand-50 text-brand-700'}`}>
+          <span className={`shrink-0 inline-flex items-center gap-1 font-bold ${selected.size > MAX_IMPORT ? 'text-red-600' : 'text-brand-700'}`}>
             {selected.size > MAX_IMPORT && <AlertCircle className="w-3 h-3" />}
             {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
             {selected.size > MAX_IMPORT && ` (max ${MAX_IMPORT})`}
           </span>
         )}
         {activeFilterCount > 0 && <button onClick={clearFilters} className="btn-icon" title="Effacer"><X className="w-4 h-4" /></button>}
-        <button
-          onClick={() => refreshImportedIds()}
-          disabled={refreshing}
-          className="shrink-0 ml-auto btn-icon" title="Actualiser le statut des articles importés"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-        </button>
       </div>
 
-      {/* Batch selection tools */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm text-[11px]">
-          <span className="px-2.5 py-1.5 text-slate-500 font-semibold border-r border-slate-100 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5" />Sélectionner par lot
-          </span>
-          {[100, 200, 300, 400, 500].map(n => (
-            <button key={n} onClick={() => selectBatch(n)}
-              className="px-2.5 py-1.5 font-bold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition border-r border-slate-100 last:border-r-0">
-              {n}
-            </button>
-          ))}
+      {/* Selection tools — one line */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 shrink-0">Sélection</span>
+        <div className="relative">
+          <button
+            onClick={() => setLotOpen(v => !v)}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors"
+          >
+            <Layers className="w-3.5 h-3.5" />Lot
+            <ChevronDown className={`w-3 h-3 transition-transform ${lotOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {lotOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setLotOpen(false)} />
+              <div className="absolute top-full left-0 mt-1 z-50 bg-white rounded-xl shadow-premium border border-slate-100 py-1 min-w-[150px] animate-scale-in origin-top-left">
+                {[100, 200, 300, 400, 500].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => { selectBatch(n); setLotOpen(false); }}
+                    className="w-full text-left px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-brand-700 hover:bg-brand-50/50 transition-colors"
+                  >
+                    {n} articles
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
         {paginated.some(i => !importedIds.has(i.id)) && (
           <button onClick={selectPage}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-600 hover:border-brand-300 hover:text-brand-700 transition shadow-sm">
-            <Check className="w-3.5 h-3.5" />
-            Sélectionner la page
-          </button>
-        )}
-        {selected.size > 0 && (
-          <button onClick={() => setSelected(new Set())}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-slate-500 hover:bg-slate-100 transition">
-            <X className="w-3 h-3" />Désélectionner tout
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors">
+            <Check className="w-3.5 h-3.5" />Page
           </button>
         )}
         {selectableFiltered.length > 0 && (
           <button onClick={toggleAllFiltered}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-slate-600 hover:bg-slate-100 transition">
-            {allFilteredSelected ? 'Désélectionner filtrés' : `Tout sélectionner (${selectableFiltered.length})`}
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors">
+            {allFilteredSelected ? 'Désélectionner filtrés' : `Tout (${selectableFiltered.length})`}
           </button>
         )}
-      </div>
-
-      {/* Import action buttons */}
-      <div className="flex flex-wrap items-center gap-1.5">
         {selected.size > 0 && (
-          <button
-            disabled={importing}
-            onClick={() => setConfirmOpen({ mode: 'selected', label: 'la sélection', count: selected.size })}
-            className={`btn-icon-primary ${selected.size > MAX_IMPORT ? '!bg-red-600 hover:!bg-red-700' : ''}`}
-            title={`Importer la sélection (${selected.size})`}
-          >
-            <Download className="w-4 h-4" />
+          <button onClick={() => setSelected(new Set())}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors">
+            <X className="w-3 h-3" />Effacer
           </button>
         )}
         {categoryId && !subcategoryId && (
@@ -483,9 +500,10 @@ export function MasterCatalog() {
               const count = items.filter(i => i.category_id === categoryId && !importedIds.has(i.id)).length;
               setConfirmOpen({ mode: 'category', label: `la catégorie "${cat?.name}"`, count });
             }}
-            className="btn-icon" title="Importer la catégorie"
+            className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors disabled:opacity-50"
+            title="Importer la catégorie"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />Catégorie
           </button>
         )}
         {subcategoryId && (
@@ -496,21 +514,12 @@ export function MasterCatalog() {
               const count = items.filter(i => i.subcategory_id === subcategoryId && !importedIds.has(i.id)).length;
               setConfirmOpen({ mode: 'subcategory', label: `la sous-catégorie "${sc?.name}"`, count });
             }}
-            className="btn-icon" title="Importer la sous-catégorie"
+            className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-brand-700 transition-colors disabled:opacity-50"
+            title="Importer la sous-catégorie"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />Sous-cat.
           </button>
         )}
-        <button
-          disabled={importing}
-          onClick={() => {
-            const count = items.filter(i => !importedIds.has(i.id)).length;
-            setConfirmOpen({ mode: 'all', label: 'tout le catalogue', count });
-          }}
-          className="btn-icon-primary !bg-ink-900 hover:!bg-slate-800" title="Importer tout le catalogue"
-        >
-          <Download className="w-4 h-4" />
-        </button>
       </div>
       </div>
 
@@ -519,7 +528,55 @@ export function MasterCatalog() {
         <div className="card-premium"><EmptyState icon={Package} title="Aucun article" description="Ajustez vos filtres ou votre recherche." /></div>
       ) : (
         <>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+        {/* Desktop: thin list with header */}
+        <div className="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
+          <div className="grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+            <div></div>
+            <div>Désignation</div>
+            <div>Marque</div>
+            <div>Réf. fabricant</div>
+            <div className="text-right">Achat</div>
+            <div className="text-right">Vente</div>
+            <div className="text-center">Unité</div>
+          </div>
+          {paginated.map(i => {
+            const isImported = importedIds.has(i.id);
+            const isSelected = selected.has(i.id);
+            return (
+              <div
+                key={i.id}
+                className={`grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-1.5 items-center text-[12px] border-b border-slate-100 transition-colors ${isSelected ? 'bg-brand-50/60' : isImported ? 'bg-emerald-50/20' : 'hover:bg-slate-50/60'}`}
+              >
+                <div className="flex items-center justify-center">
+                  {!isImported ? (
+                    <button
+                      onClick={() => toggleSelect(i.id)}
+                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-black border-black' : 'border-slate-400 hover:border-black'}`}
+                      aria-label="Sélectionner"
+                    >
+                      {isSelected && <Check className="w-2 h-2 text-white" strokeWidth={3} />}
+                    </button>
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded bg-emerald-500 border border-emerald-500 flex items-center justify-center" title="Déjà importé">
+                      <Check className="w-2 h-2 text-white" strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-900 truncate leading-tight">{i.designation}</div>
+                  {isImported && <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700">Importé</span>}
+                </div>
+                <div className="truncate">{i.brand && <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}</div>
+                <div className="font-mono text-slate-500 text-[11px] truncate">{i.manufacturer_ref || '—'}</div>
+                <div className="text-right font-bold text-slate-800 num">{formatFCFA(i.purchase_price)}</div>
+                <div className="text-right font-bold text-brand-700 num">{formatFCFA(i.sale_price)}</div>
+                <div className="text-center text-slate-600 font-medium truncate">{i.unit}</div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Mobile: card grid */}
+        <div className="grid grid-cols-1 md:hidden gap-2.5">
           {paginated.map(i => {
             const isImported = importedIds.has(i.id);
             const isSelected = selected.has(i.id);
@@ -532,14 +589,14 @@ export function MasterCatalog() {
                   {!isImported ? (
                     <button
                       onClick={() => toggleSelect(i.id)}
-                      className={`shrink-0 w-5 h-5 mt-0.5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-brand-600 border-brand-600' : 'border-slate-300 hover:border-brand-400'}`}
+                      className={`shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-black border-black' : 'border-slate-400 hover:border-black'}`}
                       aria-label="Sélectionner"
                     >
-                      {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                      {isSelected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
                     </button>
                   ) : (
-                    <div className="shrink-0 w-5 h-5 mt-0.5 rounded-md bg-emerald-500 border-2 border-emerald-500 flex items-center justify-center" title="Déjà importé">
-                      <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                    <div className="shrink-0 w-4 h-4 mt-0.5 rounded bg-emerald-500 border border-emerald-500 flex items-center justify-center" title="Déjà importé">
+                      <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
                     </div>
                   )}
                   <div className="min-w-0 flex-1">

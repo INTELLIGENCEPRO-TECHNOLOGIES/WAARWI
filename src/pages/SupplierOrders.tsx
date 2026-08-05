@@ -577,73 +577,47 @@ export function SupplierOrders() {
 
   return (
     <div className="space-y-3">
-      <h1 className="sr-only">Achats</h1>
-      {/* Header: title + search integrated */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
-      <div className="flex items-center gap-2 bg-white border border-slate-200/70 rounded-2xl shadow-card px-3 py-2">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-sm shrink-0">
-          <Truck className="w-4.5 h-4.5 text-white" strokeWidth={2.2} />
+      {/* Header */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-2 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
+        <div className="flex items-center gap-2 border-b border-neutral-200/70 pb-2">
+          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
+            <h1 className="text-sm font-bold tracking-tight text-slate-900">Achats</h1>
+          </div>
+          <div className="relative flex-1 min-w-0 flex items-center">
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une commande…"
+              className="flex-1 min-w-0 w-0 pl-2 bg-transparent text-xs focus:outline-none placeholder:text-slate-400" />
+            {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>}
+          </div>
+          <button onClick={() => load(true)} className="shrink-0 p-1.5 text-slate-400 hover:text-slate-600 transition" title="Rafraîchir">
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+          <button onClick={() => setOpen(true)} className="shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all" title="Nouvelle commande">
+            <Plus className="w-3.5 h-3.5 text-white" />
+          </button>
         </div>
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Achats…"
-            className="w-full pl-8 pr-2 py-2 bg-slate-50/70 border border-transparent rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:border-brand-300 focus:bg-white transition"
-          />
-        </div>
-        <button onClick={() => load(true)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition" title="Rafraîchir">
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-        </button>
-        <button
-          onClick={() => setOpen(true)}
-          className="btn-icon-primary"
-          title="Nouvelle commande"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
 
-      {/* KPI chips */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white border border-slate-200/70 rounded-2xl p-2.5 shadow-card">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Total</div>
-          <div className="text-lg font-extrabold text-slate-900 mt-0.5 num">{list.length}</div>
+        {/* KPI + status as flat text bullets */}
+        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+          <span className="shrink-0 text-slate-900 num">{list.length} commandes</span>
+          {(counts.sent || 0) + (counts.confirmed || 0) + (counts.partial || 0) > 0 && (
+            <span className="shrink-0 text-amber-600 num">{(counts.sent || 0) + (counts.confirmed || 0) + (counts.partial || 0)} en attente</span>
+          )}
+          {totalPending > 0 && (
+            <span className="shrink-0 text-brand-700 num">{formatFCFA(totalPending)} à recevoir</span>
+          )}
+          {FILTERS.map(f => {
+            const active = statusFilter === f.key;
+            const count = counts[f.key] || 0;
+            if (count === 0 && !active && f.key) return null;
+            return (
+              <button key={f.key} onClick={() => setStatusFilter(f.key)} className={`shrink-0 py-1 transition-all ${active ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
+                {f.label}{count > 0 && <span className="num"> {count}</span>}
+              </button>
+            );
+          })}
+          {statusFilter && <button onClick={() => setStatusFilter('')} className="shrink-0 py-1 text-slate-400 inline-flex items-center gap-1 hover:text-slate-600 transition-all"><X className="w-3 h-3" />Effacer</button>}
         </div>
-        <div className="bg-white border border-slate-200/70 rounded-2xl p-2.5 shadow-card">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">En attente</div>
-          <div className="text-lg font-extrabold text-amber-600 mt-0.5 num">{(counts.sent || 0) + (counts.confirmed || 0) + (counts.partial || 0)}</div>
-        </div>
-        <div className="bg-white border border-slate-200/70 rounded-2xl p-2.5 shadow-card">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">À recevoir</div>
-          <div className="text-sm font-extrabold text-brand-700 mt-0.5 num truncate" title={formatFCFA(totalPending)}>{formatFCFA(totalPending)}</div>
-        </div>
-      </div>
-
-      {/* Status chips */}
-      <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-        {FILTERS.map(f => {
-          const active = statusFilter === f.key;
-          const count = counts[f.key] || 0;
-          return (
-            <button
-              key={f.key}
-              onClick={() => setStatusFilter(f.key)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-full text-xs font-semibold border transition ${
-                active
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              {f.label}
-              {count > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] num ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{count}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
       </div>
 
       {/* List */}

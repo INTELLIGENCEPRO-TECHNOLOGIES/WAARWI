@@ -51,48 +51,48 @@ p { line-height: 1.6; }
 @layer components {
   /* ── Buttons ────────────────────────────────────────────── */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-neutral-900 text-white font-semibold
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-neutral-900 text-white font-semibold
            hover:bg-neutral-800 active:bg-black
            transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98];
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white border border-neutral-200 text-neutral-800 font-semibold
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white border border-neutral-200 text-neutral-800 font-semibold
            hover:bg-neutral-50 hover:border-neutral-300 transition-all duration-150 active:scale-[0.98];
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-neutral-600 font-medium
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md text-neutral-600 font-medium
            hover:bg-neutral-100 hover:text-neutral-900 transition-colors;
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-red-600 text-white font-semibold
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-red-600 text-white font-semibold
            hover:bg-red-700 active:bg-red-800 transition-all duration-150 active:scale-[0.98];
   }
   .btn-dark {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-neutral-900 text-white font-semibold
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-neutral-900 text-white font-semibold
            hover:bg-neutral-800 transition-all duration-150 active:scale-[0.98];
   }
   .btn-icon {
-    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-neutral-200 text-neutral-600
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-md bg-white border border-neutral-200 text-neutral-600
            hover:bg-neutral-50 hover:border-neutral-300 hover:text-neutral-900
            transition-all duration-150 active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-icon-primary {
-    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg bg-neutral-900 text-white
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-md bg-neutral-900 text-white
            hover:bg-neutral-800
            transition-all duration-150 active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-icon-danger {
-    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-red-200 text-red-500
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-md bg-white border border-red-200 text-red-500
            hover:bg-red-50 hover:border-red-300
            transition-all duration-150 active:scale-[0.95];
   }
   .btn-icon-success {
-    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg bg-neutral-900 text-white
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-md bg-neutral-900 text-white
            hover:bg-neutral-800
            transition-all duration-150 active:scale-[0.95];
   }
   .btn-icon-danger-solid {
-    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg bg-red-600 text-white
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-md bg-red-600 text-white
            hover:bg-red-700
            transition-all duration-150 active:scale-[0.95] disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -146,22 +146,67 @@ p { line-height: 1.6; }
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border;
   }
   .chip {
-    @apply inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold
+    @apply relative inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold
            bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800
            transition-all duration-150 active:scale-95;
+  }
+  .chip::after {
+    content: attr(data-label);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    @apply px-2 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap
+           bg-neutral-900 text-white shadow-lg pointer-events-none
+           opacity-0 transition-all duration-150;
+    z-index: 9999;
+  }
+  .chip:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
   .chip-active {
     @apply bg-neutral-900 text-white border-transparent;
   }
   .pos-btn {
-    @apply relative inline-flex items-center justify-center w-9 h-9 rounded-lg
+    @apply relative inline-flex items-center justify-center w-9 h-9 rounded-md
            bg-neutral-900 text-white border border-neutral-800
            hover:bg-neutral-800 transition-all duration-150 active:scale-[0.95] shrink-0;
   }
+  .pos-btn::after {
+    content: attr(data-label);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    @apply px-2 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap
+           bg-neutral-900 text-white shadow-lg pointer-events-none
+           opacity-0 transition-all duration-150;
+    z-index: 9999;
+  }
+  .pos-btn:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
   .pos-btn-dark {
-    @apply relative inline-flex items-center justify-center w-9 h-9 rounded-lg
+    @apply relative inline-flex items-center justify-center w-9 h-9 rounded-md
            bg-neutral-900 text-white border border-neutral-800
            hover:bg-neutral-800 transition-all duration-150 active:scale-[0.95] shrink-0;
+  }
+  .pos-btn-dark::after {
+    content: attr(data-label);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    @apply px-2 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap
+           bg-neutral-900 text-white shadow-lg pointer-events-none
+           opacity-0 transition-all duration-150;
+    z-index: 9999;
+  }
+  .pos-btn-dark:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
 
   /* ── Stats / KPI ───────────────────────────────────────── */

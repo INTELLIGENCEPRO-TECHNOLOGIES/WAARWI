@@ -1,14 +1,16 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
-  Search, Filter, RefreshCw, Printer, Download, ChevronDown, ChevronUp,
+  Filter, RefreshCw, Printer, Download,
   X, Eye, FileText, Copy, Clock, ShieldCheck, Smartphone, Store, User, Calendar,
-  CheckCircle, AlertTriangle, XCircle, Minus, Ban,
+  CheckCircle, AlertTriangle, XCircle, Minus, Ban, Loader2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA } from '../lib/format';
 import { printWarrantyCertificate, buildPrintTenantForSite, computeWarrantyExpiry } from '../lib/print';
+import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
+import { SearchableSelect } from '../components/SearchableSelect';
 
 type WarrantyEntry = {
   id: string;
@@ -86,12 +88,12 @@ const STATUS_CONFIG: Record<WarrantyStatus, { label: string; cls: string; icon: 
 };
 
 export function Warranties() {
-  const { tenant, currentSite, sites, profile } = useApp();
+  const { tenant, currentSite } = useApp();
   const { success, error } = useToast();
   const [entries, setEntries] = useState<WarrantyEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalSearch, setGlobalSearch] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<WarrantyStatus | ''>('');
   const [filterSite, setFilterSite] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
@@ -302,47 +304,45 @@ export function Warranties() {
   }, [entries]);
 
   return (
-    <div className="w-full bg-white min-h-screen">
-      <div className="px-4 sm:px-6 pt-5 pb-24 max-w-6xl mx-auto">
-        {/* Search bar with title inside - like Articles page */}
-        <div className="flex items-center gap-1.5 px-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all mb-4">
-          <div className="flex items-center gap-2 pr-2.5 border-r border-neutral-200 shrink-0">
-            <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-4 h-4 text-white" />
-            </div>
-            <div className="leading-tight hidden sm:block">
-              <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Garanties & IMEI</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">Registre</div>
-            </div>
+    <div className="space-y-3 pb-6">
+      {/* ── Header premium unifié ────────── */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2 border-b border-neutral-200/70">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
+          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
+            <h1 className="text-sm font-bold tracking-tight text-slate-900">Garanties & IMEI</h1>
           </div>
-          <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0 ml-1" />
           <input
             value={globalSearch}
             onChange={e => setGlobalSearch(e.target.value)}
-            placeholder="Rechercher IMEI, facture, client, téléphone..."
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400"
+            placeholder="Rechercher IMEI, facture, client, téléphone…"
+            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
           />
           {globalSearch && (
-            <button onClick={() => setGlobalSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600">
+            <button onClick={() => setGlobalSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-        </div>
-
-        {/* Action buttons row - fully responsive */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <button onClick={() => setShowFilters(!showFilters)} className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border text-[12px] font-semibold transition-colors ${showFilters ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-300'}`}>
+          <button onClick={() => setPickerOpen(true)} className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-all ${filterStatus || filterSite || filterDateFrom || filterDateTo ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}>
             <Filter className="w-3.5 h-3.5" />
             <span>Filtres</span>
-            {showFilters ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
-          <button onClick={load} className="btn-icon" title="Actualiser">
-            <RefreshCw className="w-4 h-4" />
+          <button onClick={load} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors" title="Actualiser">
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
-          <button onClick={exportCsv} className="btn-icon" title="Exporter">
-            <Download className="w-4 h-4" />
+          <button onClick={exportCsv} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors" title="Exporter">
+            <Download className="w-3.5 h-3.5" /><span>Excel</span>
           </button>
         </div>
+      </div>
+
+      {/* Mobile action buttons */}
+      <div className="flex md:hidden items-center gap-2">
+        <button onClick={() => setPickerOpen(true)} className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border text-[12px] font-semibold transition-colors ${filterStatus || filterSite || filterDateFrom || filterDateTo ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>
+          <Filter className="w-3.5 h-3.5" /><span>Filtres</span>
+        </button>
+        <button onClick={load} className="btn-icon" title="Actualiser"><RefreshCw className="w-4 h-4" /></button>
+        <button onClick={exportCsv} className="btn-icon" title="Exporter"><Download className="w-4 h-4" /></button>
+      </div>
 
         {/* Single stats card - IPM "Créances" style */}
         {!loading && entries.length > 0 && (
@@ -369,42 +369,58 @@ export function Warranties() {
           </div>
         )}
 
-        {/* Filters panel */}
-        {showFilters && (
-          <div className="mb-4 p-3 rounded-xl border border-neutral-200 bg-neutral-50/50 space-y-2.5">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        {/* Premium date range picker + filters modal */}
+        <PremiumDateRangePicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          from={filterDateFrom}
+          to={filterDateTo}
+          onApply={(f, t) => { setFilterDateFrom(f); setFilterDateTo(t); setPickerOpen(false); }}
+          onReset={() => { setFilterStatus(''); setFilterSite(''); }}
+          extraFilters={
+            <>
               <div>
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Statut garantie</label>
-                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="w-full h-8 rounded-lg border border-neutral-200 bg-white text-[12px] text-neutral-800 px-2 outline-none">
-                  <option value="">Tous</option>
-                  <option value="active">Active</option>
-                  <option value="expiring">Expire bientôt</option>
-                  <option value="expired">Expirée</option>
-                  <option value="cancelled">Annulée</option>
-                  <option value="none">Sans garantie</option>
-                </select>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-black mb-1.5 block">Statut garantie</label>
+                <SearchableSelect
+                  noBorder
+                  searchable={false}
+                  placeholder="Tous"
+                  value={filterStatus}
+                  onChange={v => setFilterStatus(v as any)}
+                  options={[
+                    { value: 'active', label: 'Active' },
+                    { value: 'expiring', label: 'Expire bientôt' },
+                    { value: 'expired', label: 'Expirée' },
+                    { value: 'cancelled', label: 'Annulée' },
+                    { value: 'none', label: 'Sans garantie' },
+                  ]}
+                />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Magasin</label>
-                <select value={filterSite} onChange={e => setFilterSite(e.target.value)} className="w-full h-8 rounded-lg border border-neutral-200 bg-white text-[12px] text-neutral-800 px-2 outline-none">
-                  <option value="">Tous</option>
-                  {siteNames.map(s => <option key={s} value={s!}>{s}</option>)}
-                </select>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-black mb-1.5 block">Magasin</label>
+                <SearchableSelect
+                  noBorder
+                  searchable={false}
+                  placeholder="Tous"
+                  value={filterSite}
+                  onChange={setFilterSite}
+                  options={siteNames.map(s => ({ value: s!, label: s! }))}
+                />
               </div>
-              <div>
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Date du</label>
-                <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full h-8 rounded-lg border border-neutral-200 bg-white text-[12px] text-neutral-800 px-2 outline-none" />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Date au</label>
-                <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full h-8 rounded-lg border border-neutral-200 bg-white text-[12px] text-neutral-800 px-2 outline-none" />
-              </div>
-            </div>
-            {(filterStatus || filterSite || filterDateFrom || filterDateTo) && (
-              <button onClick={() => { setFilterStatus(''); setFilterSite(''); setFilterDateFrom(''); setFilterDateTo(''); }} className="text-[11px] font-semibold text-neutral-500 hover:text-neutral-800 transition-colors">
-                Effacer les filtres
-              </button>
-            )}
+            </>
+          }
+        />
+
+        {/* Active filter chips */}
+        {(filterStatus || filterSite || filterDateFrom || filterDateTo) && (
+          <div className="flex items-center gap-2 flex-wrap text-[10px] font-bold uppercase tracking-wider">
+            {filterDateFrom && <span className="shrink-0 text-slate-600 num">Du {new Date(filterDateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>}
+            {filterDateTo && <span className="shrink-0 text-slate-600 num">Au {new Date(filterDateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>}
+            {filterStatus && <span className="shrink-0 text-brand-700">{STATUS_CONFIG[filterStatus as WarrantyStatus]?.label || filterStatus}</span>}
+            {filterSite && <span className="shrink-0 text-brand-700">{filterSite}</span>}
+            <button onClick={() => { setFilterStatus(''); setFilterSite(''); setFilterDateFrom(''); setFilterDateTo(''); }} className="shrink-0 text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 transition-all">
+              <X className="w-3 h-3" />Réinitialiser
+            </button>
           </div>
         )}
 
@@ -696,7 +712,6 @@ export function Warranties() {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

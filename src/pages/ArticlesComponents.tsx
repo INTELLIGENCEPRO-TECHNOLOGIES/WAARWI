@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, ReactNode } from 'react';
-import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, CheckSquare, Square, CreditCard as Edit2, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, Tags, Boxes, Car, CheckCircle2, Percent, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Package, Trash2, X, Plus, Search, ChevronDown, ChevronUp, CheckSquare, Square, Pencil, Lightbulb, MousePointerClick, ArrowRight, Library, Camera, Loader2, ArrowLeft, ArrowRight as ArrowRightIcon, Info, Tags, Boxes, Car, CheckCircle2, Percent, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { formatFCFA } from '../lib/format';
 import type { Article, Category, VehicleBrand } from '../lib/types';
 type TierDefinition = { id: string; tier_name: string; sort_order: number; is_default: boolean };
@@ -10,9 +10,9 @@ type TabKey = 'infos' | 'prix' | 'stock' | 'compat' | 'image';
 // ── Utilities ──────────────────────────────────────────────
 
 export function stockStatus(qty: number, min: number) {
-  if (qty === 0) return { bg: 'bg-red-50', icon: 'text-red-500', badge: 'bg-red-50 text-red-700', dot: 'bg-red-500', label: 'Rupture' };
-  if (qty <= min) return { bg: 'bg-amber-50', icon: 'text-amber-500', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500', label: 'Stock bas' };
-  return { bg: 'bg-emerald-50', icon: 'text-emerald-500', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500', label: 'En stock' };
+  if (qty === 0) return { bg: 'bg-red-50', icon: 'text-red-500', badge: 'text-red-600', dot: 'bg-red-500', label: 'Rupture' };
+  if (qty <= min) return { bg: 'bg-amber-50', icon: 'text-amber-500', badge: 'text-amber-600', dot: 'bg-amber-500', label: 'Stock bas' };
+  return { bg: 'bg-emerald-50', icon: 'text-emerald-500', badge: 'text-emerald-600', dot: 'bg-emerald-500', label: 'En stock' };
 }
 
 // ── Field & Form Primitives ────────────────────────────────
@@ -80,11 +80,11 @@ export function ArticleCard({ article, category, qty, onEdit, onDelete, selectio
       </div>
       <div className="px-3 pb-2.5 flex items-center justify-between gap-2">
         {tracksStock ? (
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums ${out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-800' : 'bg-neutral-100 text-neutral-800'}`}>
+          <span className={`text-[10px] font-bold tabular-nums ${out ? 'text-red-600' : low ? 'text-amber-600' : 'text-slate-700'}`}>
             {qty}
           </span>
         ) : (
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">Service</span>
+          <span className="text-[9px] font-bold text-purple-600">Service</span>
         )}
         <span className="text-[12px] font-bold text-slate-900 tabular-nums">{formatFCFA(article.sale_price)}</span>
       </div>
@@ -453,7 +453,7 @@ export function ImageTab({ currentUrl, uploading, onFileSelect, onDelete }: {
 export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, saving, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
-  save: () => Promise<void>; saving: boolean;
+  save: () => Promise<boolean>; saving: boolean;
   compats: Compat[]; setCompats: (c: Compat[] | ((p: Compat[]) => Compat[])) => void;
   categories: Category[]; suppliers: any[]; brands: VehicleBrand[]; models: any[];
   autoMode: boolean; generateRef: () => void; addCompat: () => void; removeCompat: (i: number) => void;
@@ -662,11 +662,8 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                   <button onClick={onSelectAll} className="text-brand-700">{allSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}</button>
                 </th>
               )}
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[280px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('name')}>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[560px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('name')}>
                 <span className="inline-flex items-center gap-1">Désignation <SortIcon col="name" /></span>
-              </th>
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[160px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('ref')}>
-                <span className="inline-flex items-center gap-1">Référence <SortIcon col="ref" /></span>
               </th>
               <th className="px-2 py-2.5 text-left font-semibold min-w-[120px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('category')}>
                 <span className="inline-flex items-center gap-1">Catégorie <SortIcon col="category" /></span>
@@ -674,9 +671,6 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
               <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('price')}>
                 <span className="inline-flex items-center gap-1 justify-end">Prix détail <SortIcon col="price" /></span>
               </th>
-              <th className="px-2 py-2.5 text-right font-semibold min-w-[60px] bg-slate-50">Stk min</th>
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[70px] bg-slate-50">Unité</th>
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[100px] bg-slate-50">Fournisseur</th>
               {showStock && <th className="px-2 py-2.5 text-right font-semibold min-w-[50px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('stock')}>
                 <span className="inline-flex items-center gap-1 justify-end">Stock <SortIcon col="stock" /></span>
               </th>}
@@ -688,7 +682,7 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
               const edited = listEdits.has(a.id);
               const qty = stockMap[a.id] || 0;
               const tracksStock = (a as any).track_stock !== false;
-              const mStatus = tracksStock ? stockStatus(qty, Number(a.stock_min || 0)) : { badge: 'bg-slate-100 text-slate-400', dot: 'bg-slate-300', label: 'Service' };
+              const mStatus = tracksStock ? stockStatus(qty, Number(a.stock_min || 0)) : { badge: 'text-slate-400', dot: 'bg-slate-300', label: 'Service' };
               return (
                 <tr key={a.id} className={`group transition-colors ${edited ? 'bg-brand-50/40' : 'hover:bg-slate-50/60'} ${selectedIds.has(a.id) ? 'bg-brand-50/60' : ''}`}>
                   {selectionMode && (
@@ -701,13 +695,8 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                       <input value={getVal(a, 'name') || ''} onChange={e => onUpdateEdit(a.id, 'name', e.target.value)}
                         title={getVal(a, 'name') || ''}
                         className="flex-1 min-w-0 bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-semibold text-slate-900 outline-none transition" />
-                      {!tracksStock && <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 whitespace-nowrap">Service</span>}
+                      {!tracksStock && <span className="shrink-0 text-[8px] font-bold text-purple-600 whitespace-nowrap">Service</span>}
                     </div>
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <input value={getVal(a, 'internal_ref') || ''} onChange={e => onUpdateEdit(a.id, 'internal_ref', e.target.value)}
-                      title={getVal(a, 'internal_ref') || ''}
-                      className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-mono text-slate-600 outline-none transition" />
                   </td>
                   <td className="px-2 py-1.5">
                     <select value={getVal(a, 'category_id') || ''} onChange={e => onUpdateEdit(a.id, 'category_id', e.target.value)}
@@ -720,33 +709,11 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                     <input type="number" value={getVal(a, 'sale_price') || ''} onChange={e => onUpdateEdit(a.id, 'sale_price', e.target.value)}
                       className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-bold text-right text-slate-900 num outline-none transition" min="0" />
                   </td>
-                  <td className="px-2 py-1.5">
-                    <input type="number" value={getVal(a, 'stock_min') || ''} onChange={e => onUpdateEdit(a.id, 'stock_min', e.target.value)}
-                      className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs text-right text-slate-600 num outline-none transition" min="0" />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <select value={getVal(a, 'unit') || 'pièce'} onChange={e => onUpdateEdit(a.id, 'unit', e.target.value)}
-                      className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-0.5 py-0.5 rounded text-xs text-slate-600 outline-none transition appearance-none">
-                      <option value="unité">Unité</option>
-                      <option value="pièce">Pièce</option>
-                      <option value="paire">Paire</option>
-                      <option value="lot">Lot</option>
-                      <option value="kg">Kg</option>
-                      <option value="litre">Litre</option>
-                    </select>
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <select value={getVal(a, 'supplier_id') || ''} onChange={e => onUpdateEdit(a.id, 'supplier_id', e.target.value)}
-                      className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-0.5 py-0.5 rounded text-xs text-slate-600 outline-none transition appearance-none">
-                      <option value="">—</option>
-                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                  </td>
                   {showStock && (
                     <td className="px-2 py-1.5 text-right">
                       {tracksStock ? (
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold num ${mStatus.badge}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${mStatus.dot}`} />{qty}
+                        <span className={`text-[10px] font-bold num ${mStatus.badge}`}>
+                          {qty}
                         </span>
                       ) : (
                         <span className="text-[9px] font-semibold text-purple-500">—</span>
@@ -755,7 +722,7 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                   )}
                   <td className="px-2 py-1.5 text-center">
                     <div className="inline-flex gap-0.5 opacity-60 group-hover:opacity-100">
-                      <button onClick={() => onOpenFullScreen(a)} className="p-1 rounded-lg hover:bg-brand-100 text-slate-600 hover:text-brand-700" title="Modifier"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => onOpenFullScreen(a)} className="p-1 rounded-lg hover:bg-brand-100 text-slate-600 hover:text-brand-700" title="Modifier"><Pencil className="w-3.5 h-3.5" /></button>
                       <button onClick={() => onDelete(a)} className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </td>
@@ -775,7 +742,7 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
   TABS: { k: TabKey; l: string; icon: any }[];
-  save: () => Promise<void>; saving: boolean;
+  save: () => Promise<boolean>; saving: boolean;
   compats: Compat[]; setCompats: (c: Compat[] | ((p: Compat[]) => Compat[])) => void;
   categories: Category[]; suppliers: any[]; brands: VehicleBrand[]; models: any[];
   autoMode: boolean; generateRef: () => void; addCompat: () => void; removeCompat: (i: number) => void;

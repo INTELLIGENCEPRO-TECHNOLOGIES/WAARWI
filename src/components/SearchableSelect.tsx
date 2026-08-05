@@ -17,6 +17,7 @@ type Props = {
   disabled?: boolean;
   className?: string;
   searchable?: boolean;
+  noBorder?: boolean;
 };
 
 export function SearchableSelect({
@@ -28,6 +29,7 @@ export function SearchableSelect({
   disabled = false,
   className = '',
   searchable = true,
+  noBorder = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -192,7 +194,7 @@ export function SearchableSelect({
         onClick={() => { if (!disabled) setOpen(!open); }}
         onKeyDown={handleKeyDown}
         className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left text-sm transition-all
-          ${open ? 'border-teal-400 ring-2 ring-teal-100 bg-white' : 'border-slate-200 bg-white hover:border-slate-300'}
+          ${noBorder ? 'border-transparent bg-transparent hover:bg-slate-50' : open ? 'border-teal-400 ring-2 ring-teal-100 bg-white' : 'border-slate-200 bg-white hover:border-slate-300'}
           ${disabled ? 'opacity-60 cursor-not-allowed bg-slate-50' : 'cursor-pointer'}
         `}
       >

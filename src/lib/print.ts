@@ -630,7 +630,7 @@ export type XReportControl = {
 };
 
 export type XReportMovement = {
-  kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal';
+  kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan';
   amount: number;
   reason: string;
   customer_name: string | null;
@@ -665,9 +665,10 @@ export function printXReport80(opts: {
 
   const mvExpense = movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
   const mvWithdrawal = movements.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
+  const mvLoan = movements.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
   const mvIncome = movements.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
   const mvPrepay = movements.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-  const netTotal = opts.openingAmount + opts.salesTotal - mvExpense - mvWithdrawal;
+  const netTotal = opts.openingAmount + opts.salesTotal - mvExpense - mvWithdrawal - mvLoan;
   const variance = controls.length > 0
     ? controls.reduce((s, c) => s + Number(c.difference_amount ?? (c.counted_amount - c.theoretical_amount)), 0)
     : 0;
@@ -677,13 +678,13 @@ export function printXReport80(opts: {
 <div class="section">Mouvements de caisse</div>
 <div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)} FCFA</span></div>
 ${movements.map(m => {
-    const label = m.kind === 'expense' ? 'Dépense' : m.kind === 'customer_prepayment' ? 'Acompte' : m.kind === 'customer_withdrawal' ? 'Retrait' : 'Entrée';
-    const sign = m.kind === 'expense' || m.kind === 'customer_withdrawal' ? '-' : '+';
+    const label = m.kind === 'expense' ? 'Dépense' : m.kind === 'customer_prepayment' ? 'Acompte' : m.kind === 'customer_withdrawal' ? 'Retrait' : m.kind === 'customer_loan' ? 'Prêt' : 'Entrée';
+    const sign = m.kind === 'expense' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' ? '-' : '+';
     const reason = [m.customer_name, m.reason].filter(Boolean).join(' · ');
     return `<div class="row"><span>${esc(label)}${reason ? ' : ' + esc(reason.slice(0, 22)) : ''}</span><span>${sign}${fmtMoney(m.amount)} FCFA</span></div>`;
   }).join('')}
 <div class="row"><span>Sous-total entrées</span><span>+ ${fmtMoney(mvIncome + mvPrepay)} FCFA</span></div>
-<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense + mvWithdrawal)} FCFA</span></div>
+<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense + mvWithdrawal + mvLoan)} FCFA</span></div>
 <hr class="hr" />
 <div class="row total"><span>Net caisse</span><span>${fmtMoney(netTotal)} FCFA</span></div>
 ` : '';

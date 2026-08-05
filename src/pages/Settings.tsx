@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { PermissionsTab } from '../components/PermissionsTab';
 import { DocumentSettingsTab } from '../components/DocumentSettingsTab';
 import { RepCommissionSettingsTab } from '../components/RepCommissionSettingsTab';
@@ -64,10 +65,8 @@ export function Settings() {
   if (tab === 'home') {
     return (
       <div className="space-y-5">
-        <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200/80 flex items-center justify-center shadow-sm">
-            <SettingsIcon className="w-4.5 h-4.5 text-slate-600" />
-          </div>
+        <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2.5">
+          <SettingsIcon className="w-5 h-5 text-slate-600" />
           <div>
             <h1 className="text-lg font-bold text-slate-900 tracking-tight">Paramètres</h1>
             <p className="text-[11px] text-slate-500">Configuration de votre entreprise et référentiels</p>
@@ -87,11 +86,9 @@ export function Settings() {
                   <button
                     key={t.k}
                     onClick={() => setTab(t.k)}
-                    className="group flex flex-col items-center gap-1.5 p-3 rounded-xl border border-slate-100 bg-white hover:border-slate-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                    className="group flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-slate-100/60 hover:-translate-y-0.5 transition-all duration-200"
                   >
-                    <div className={`w-10 h-10 rounded-lg border flex items-center justify-center ${t.bg} group-hover:scale-105 transition-transform`}>
-                      <Icon className={`w-[18px] h-[18px] ${t.color}`} />
-                    </div>
+                    <Icon className={`w-5 h-5 ${t.color} group-hover:scale-110 transition-transform`} />
                     <span className="text-[10px] sm:text-[11px] font-semibold text-slate-600 text-center leading-tight">{t.label}</span>
                   </button>
                 );
@@ -245,7 +242,14 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
         <div className="card p-4 space-y-3">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
             <div className="w-1 h-4 rounded-full bg-slate-400" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Préférences des rapports</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Langue & préférences</span>
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+            <div className="flex-1 min-w-0 mr-3">
+              <div className="text-xs font-semibold text-slate-700">Langue de l'interface</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Choisissez la langue d'affichage de l'application</div>
+            </div>
+            <LanguageSwitcher />
           </div>
           <SettingsToggle
             label="Afficher les marges dans les rapports"
@@ -1595,29 +1599,6 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
 
         {/* RAZ Stock */}
         <StockResetCard />
-
-        {/* Prêts clients */}
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-blue-500" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Prêts clients</span>
-          </div>
-          <SettingsToggle
-            label="Activer les prêts clients"
-            desc="Permet d'accorder un prêt à un client depuis la caisse. Le montant est ajouté à sa créance (remboursable comme une vente à crédit)."
-            active={!!settings.enable_customer_loans}
-            onToggle={async () => {
-              await updateSetting('enable_customer_loans', !settings.enable_customer_loans);
-              success(!settings.enable_customer_loans ? 'Prêts clients activés' : 'Prêts clients désactivés');
-            }}
-          />
-          {!!settings.enable_customer_loans && (
-            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200">
-              <AlertCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-blue-800">Le bouton « Prêt » apparaîtra dans les mouvements de caisse. Le plafond crédit du client est respecté. La créance apparaît dans la fiche client.</p>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -1804,14 +1785,58 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
     </button>
   );
 
+  const loanWithdrawalCard = (
+    <div className="card p-4 space-y-3">
+      <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+        <div className="w-1 h-4 rounded-full bg-blue-500" />
+        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Prêts & retraits clients</span>
+      </div>
+      <SettingsToggle
+        label="Activer les prêts clients"
+        desc="Permet d'accorder un prêt à un client depuis la caisse. Le montant est ajouté à sa créance (remboursable comme une vente à crédit)."
+        active={!!settings.enable_customer_loans}
+        onToggle={async () => {
+          await updateSetting('enable_customer_loans', !settings.enable_customer_loans);
+          success(!settings.enable_customer_loans ? 'Prêts clients activés' : 'Prêts clients désactivés');
+        }}
+      />
+      {!!settings.enable_customer_loans && (
+        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+          <AlertCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-blue-800">Le bouton « Prêt » apparaîtra dans les mouvements de caisse. Le plafond crédit du client est respecté. La créance apparaît dans la fiche client.</p>
+        </div>
+      )}
+      <div className="pt-2 border-t border-slate-100">
+        <SettingsToggle
+          label="Activer les retraits clients"
+          desc="Permet à un client de retirer de l'argent depuis son acompte disponible à la caisse. Le retrait est enregistré comme une sortie de caisse."
+          active={!!settings.enable_customer_withdrawals}
+          onToggle={async () => {
+            await updateSetting('enable_customer_withdrawals', !settings.enable_customer_withdrawals);
+            success(!settings.enable_customer_withdrawals ? 'Retraits clients activés' : 'Retraits clients désactivés');
+          }}
+        />
+        {!!settings.enable_customer_withdrawals && (
+          <div className="flex items-start gap-2 p-2.5 mt-3 rounded-lg bg-amber-50 border border-amber-200">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-amber-800">Le bouton « Retrait » apparaîtra dans les mouvements de caisse. Le montant est limité à l'acompte disponible du client, déduction faite de sa dette éventuelle.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   if (!isMultiSite) {
     return (
-      <div className="card p-5 flex items-start gap-3 max-w-xl">
-        <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-semibold text-slate-600">Options multi-magasins</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Ces paramètres deviennent disponibles dès que vous ajoutez un deuxième magasin dans <strong>Paramètres → Magasins</strong>.</p>
+      <div className="space-y-4 max-w-2xl">
+        <div className="card p-5 flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold text-slate-600">Options multi-magasins</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Ces paramètres deviennent disponibles dès que vous ajoutez un deuxième magasin dans <strong>Paramètres → Magasins</strong>.</p>
+          </div>
         </div>
+        {loanWithdrawalCard}
       </div>
     );
   }
@@ -1881,6 +1906,7 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
           </p>
         </div>
       </div>
+      {loanWithdrawalCard}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Calculator, Loader2, Eye, Printer, ShoppingCart, X, Calendar, Filter, Check, Scroll, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Calculator, Loader2, Eye, Printer, Plus, X, Calendar, Filter, Check, Scroll, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -44,12 +44,12 @@ const STATUS_OPTIONS = [
 
 function statusStyles(status: string, sale?: Sale) {
   const hasIpm = sale?.ipm_ventes && sale.ipm_ventes.length > 0;
-  if (status === 'paid' && hasIpm) return { pill: 'bg-neutral-100 text-neutral-700 border-neutral-300', dot: 'bg-neutral-900', label: 'Réglée (IPM à recouvrer)' };
-  if (status === 'paid') return { pill: 'bg-neutral-100 text-neutral-700 border-neutral-200', dot: 'bg-neutral-900', label: 'Payée' };
-  if (status === 'cancelled') return { pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500', label: 'Annulée' };
-  if (status === 'validated') return { pill: 'bg-slate-50 text-slate-700 border-slate-200', dot: 'bg-slate-500', label: 'Crédit' };
-  if (hasIpm) return { pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500', label: 'Partielle (IPM)' };
-  return { pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500', label: 'Partielle' };
+  if (status === 'paid' && hasIpm) return { textColor: 'text-neutral-700', label: 'Réglée (IPM à recouvrer)' };
+  if (status === 'paid') return { textColor: 'text-neutral-700', label: 'Payée' };
+  if (status === 'cancelled') return { textColor: 'text-red-600', label: 'Annulée' };
+  if (status === 'validated') return { textColor: 'text-slate-600', label: 'Crédit' };
+  if (hasIpm) return { textColor: 'text-amber-600', label: 'Partielle (IPM)' };
+  return { textColor: 'text-amber-600', label: 'Partielle' };
 }
 
 export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) {
@@ -322,19 +322,16 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Unified premium header ───────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm space-y-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
       <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-neutral-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Journal des ventes</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">Tickets encaissés</div>
-            </div>
+            <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Journal des ventes</h1>
           </div>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="N°, client, magasin, paiement…"
+            placeholder="Rechercher par N°, client, magasin, paiement…"
             className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400"
           />
           {search && (
@@ -344,10 +341,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           )}
           <button
             onClick={() => setFiltersOpen(true)}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
-              activeFilterCount > 0
-                ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                : 'bg-neutral-50 text-neutral-500 border border-neutral-200 hover:bg-neutral-100'
+            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-all ${
+              activeFilterCount > 0 ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
             }`}
             title="Filtres"
           >
@@ -355,38 +350,22 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             <span className="hidden md:inline">Filtres</span>
             {activeFilterCount > 0 && <span className="num">· {activeFilterCount}</span>}
           </button>
-          <button
-            onClick={() => onNavigate?.('pos')}
-            className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg, #262626 0%, #0a0a0a 100%)' }}
-            aria-label="Nouvelle vente"
-          >
-            <ShoppingCart className="w-3.5 h-3.5 text-white" />
-          </button>
         </div>
       </div>
 
       {/* ── Inline stats chips ───────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-100 text-neutral-600 num">{filtered.length} / {sales.length}</span>
-        <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-100 text-neutral-700 inline-flex items-center gap-1 num">
-          <span className="w-1.5 h-1.5 rounded-full bg-neutral-900" />Aujourd'hui · {todayCount}
-        </span>
-        <span className="shrink-0 px-2 py-1 rounded-full bg-neutral-50 text-neutral-700 border border-neutral-200 num">Total jour · {formatFCFA(todayTotal)}</span>
+      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+        <span className="shrink-0 text-neutral-500 num">{filtered.length} / {sales.length}</span>
+        <span className="shrink-0 text-neutral-700 num">Aujourd'hui · {todayCount}</span>
+        <span className="shrink-0 text-neutral-700 num">Total jour · {formatFCFA(todayTotal)}</span>
         {hasFilters && (
           <button
             onClick={clearFilters}
-            className="shrink-0 px-2 py-1 rounded-full bg-white text-neutral-500 border border-neutral-200 hover:bg-neutral-100 inline-flex items-center gap-1 transition-all"
+            className="shrink-0 text-neutral-500 hover:text-neutral-700 inline-flex items-center gap-1 transition-all"
           >
             <X className="w-3 h-3" />Réinitialiser
           </button>
         )}
-        <button
-          onClick={() => onNavigate?.('pos')}
-          className="shrink-0 ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow hover:shadow-lg transition-all active:scale-95"
-        >
-          <ShoppingCart className="w-3.5 h-3.5" />Nouvelle vente
-        </button>
       </div>
       </div>
 
@@ -396,14 +375,14 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       ) : filtered.length === 0 ? (
         <div className="card-premium">
           {sales.length === 0
-            ? <EmptyState icon={Calculator} title="Aucune vente" description="Les ventes apparaîtront ici. Commencez par ouvrir la caisse." action={<button onClick={() => onNavigate?.('pos')} className="btn-icon-primary" title="Aller à la caisse"><ShoppingCart className="w-4 h-4" /></button>} />
+            ? <EmptyState icon={Calculator} title="Aucune vente" description="Les ventes apparaîtront ici. Commencez par ouvrir la caisse." action={<button onClick={() => onNavigate?.('pos')} className="btn-icon-primary" title="Aller à la caisse"><Plus className="w-4 h-4" /></button>} />
             : <EmptyState icon={Calculator} title="Aucun résultat" description="Aucune vente ne correspond aux filtres sélectionnés." action={<button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><X className="w-4 h-4" /></button>} />
           }
         </div>
       ) : (
         <>
-          {/* ── MOBILE: card list ──────────────────────────────── */}
-          <div className="md:hidden space-y-2 count-up">
+          {/* ── MOBILE: list ──────────────────────────────── */}
+          <div className="md:hidden count-up">
             {filtered.map(s => {
               const st = statusStyles(s.status, s);
               const payMethods = (s.sale_payments || []).map(p => p.method_name).join(', ');
@@ -411,94 +390,82 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                 <button
                   key={s.id}
                   onClick={() => openDetail(s)}
-                  className="w-full text-left card-premium p-3 flex flex-col gap-2 hover:border-brand-400 transition-all duration-300 group active:scale-[0.99]"
+                  className="w-full text-left py-3 flex items-center gap-2 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors group active:scale-[0.995]"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-semibold text-neutral-900 truncate flex items-center gap-1.5">
-                        <span className="truncate">{s.customers?.name || 'Client comptoir'}</span>
-                        <span className="doc-number text-[12px] font-bold text-brand-700 shrink-0">· {s.sale_number}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${st.pill}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                        </span>
-                        {s.accounting_status === 'accounted' && <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200">C</span>}
-                        <span className="text-[10px] text-neutral-400 num ml-auto">{formatDateTime(s.created_at)}</span>
-                      </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-[12px] font-semibold text-neutral-900">
+                      <span className="doc-number font-bold text-neutral-700 shrink-0">{s.sale_number}</span>
+                      <span className="text-neutral-300">·</span>
+                      <span className="truncate">{s.customers?.name || 'Client comptoir'}</span>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Total</div>
-                      <div className="text-sm font-bold text-neutral-900 num leading-tight mt-0.5">{formatFCFA(s.total)}</div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${st.textColor}`}>{st.label}</span>
+                      {s.accounting_status === 'accounted' && <span className="text-[9px] font-bold text-neutral-500">C</span>}
+                      <span className="text-[10px] text-neutral-400 num">{formatDateTime(s.created_at)}</span>
                     </div>
                   </div>
-                  {payMethods && (
-                    <div className="flex items-center gap-1 text-[10px] text-neutral-500 pt-1.5 border-t border-neutral-100">
-                      <CreditCard className="w-3 h-3 text-neutral-400" /><span className="truncate">{payMethods}</span>
-                    </div>
-                  )}
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-bold text-neutral-900 num leading-tight">{formatFCFA(s.total)}</div>
+                    {payMethods && <div className="text-[10px] text-neutral-400 truncate max-w-[100px]">{payMethods}</div>}
+                  </div>
                 </button>
               );
             })}
           </div>
 
           {/* ── DESKTOP: table ─────────────────────────────────── */}
-          <div className="hidden md:block card-premium overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-neutral-50/90 backdrop-blur text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
-                  <tr>
-                    <th className="px-4 py-3 text-left">N° Vente</th>
-                    <th className="px-4 py-3 text-left">Date</th>
-                    <th className="px-4 py-3 text-left">Client</th>
-                    <th className="px-4 py-3 text-left hidden lg:table-cell">Magasin</th>
-                    <th className="px-4 py-3 text-left hidden xl:table-cell">Paiement</th>
-                    <th className="px-4 py-3 text-center">Statut</th>
-                    <th className="px-4 py-3 text-center hidden lg:table-cell">Compta</th>
-                    <th className="px-4 py-3 text-right">Total</th>
-                    <th className="px-4 py-3 text-right w-16">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {filtered.map(s => {
-                    const st = statusStyles(s.status, s);
-                    return (
-                      <tr key={s.id} className="hover:bg-brand-50/40 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
-                        <td className="px-4 py-3 doc-number text-sm font-semibold text-neutral-700">{s.sale_number}</td>
-                        <td className="px-4 py-3 text-xs whitespace-nowrap text-neutral-500 num">{formatDateTime(s.created_at)}</td>
-                        <td className="px-4 py-3 text-neutral-700">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
-                        <td className="px-4 py-3 hidden lg:table-cell text-neutral-500 text-xs">{s.sites?.name || '—'}</td>
-                        <td className="px-4 py-3 hidden xl:table-cell text-neutral-500 text-xs">
-                          {(s.sale_payments || []).map(p => p.method_name).join(', ') || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${st.pill}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center hidden lg:table-cell">
-                          {s.accounting_status === 'accounted' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200"><BookOpen className="w-3 h-3" />OK</span>
-                          ) : (
-                            <span className="text-[10px] text-neutral-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(s.total)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openDetail(s); }}
-                            className="p-1.5 rounded-lg hover:bg-white hover:shadow-sm text-neutral-500 hover:text-brand-700 transition-all"
-                            title="Voir détail"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          <div className="hidden md:block">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold border-b border-neutral-200">
+                <tr>
+                  <th className="px-4 py-2.5 text-left whitespace-nowrap">N° Vente</th>
+                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Date</th>
+                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Client</th>
+                  <th className="px-4 py-2.5 text-left hidden lg:table-cell whitespace-nowrap">Magasin</th>
+                  <th className="px-4 py-2.5 text-left hidden xl:table-cell whitespace-nowrap">Paiement</th>
+                  <th className="px-4 py-2.5 text-center whitespace-nowrap">Statut</th>
+                  <th className="px-4 py-2.5 text-center hidden lg:table-cell whitespace-nowrap">Compta</th>
+                  <th className="px-4 py-2.5 text-right whitespace-nowrap">Total</th>
+                  <th className="px-4 py-2.5 text-right w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(s => {
+                  const st = statusStyles(s.status, s);
+                  return (
+                    <tr key={s.id} className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
+                      <td className="px-4 py-2.5 doc-number text-sm font-semibold text-neutral-700 whitespace-nowrap">{s.sale_number}</td>
+                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-neutral-500 num">{formatDateTime(s.created_at)}</td>
+                      <td className="px-4 py-2.5 text-neutral-700 whitespace-nowrap">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
+                      <td className="px-4 py-2.5 hidden lg:table-cell text-neutral-500 text-xs whitespace-nowrap">{s.sites?.name || '—'}</td>
+                      <td className="px-4 py-2.5 hidden xl:table-cell text-neutral-500 text-xs whitespace-nowrap">
+                        {(s.sale_payments || []).map(p => p.method_name).join(', ') || '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${st.textColor}`}>{st.label}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center hidden lg:table-cell">
+                        {s.accounting_status === 'accounted' ? (
+                          <span className="text-[10px] font-bold text-neutral-600">OK</span>
+                        ) : (
+                          <span className="text-[10px] text-neutral-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(s.total)}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openDetail(s); }}
+                          className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-all"
+                          title="Voir détail"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </>
       )}

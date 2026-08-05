@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Loader2, Pencil, BarChart3, Users, Search, X, Power, Check,
-  BadgePercent, TrendingUp, Receipt, Wallet, UserCheck, Download, Printer, Trash2,
+  BadgePercent, TrendingUp, Receipt, Wallet, UserCheck, Download, Printer, Trash2, Filter,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -10,6 +10,8 @@ import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { formatFCFA, formatDateTime } from '../lib/format';
+import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
+import { SearchableSelect } from '../components/SearchableSelect';
 import {
   type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS,
   COMMISSION_TYPE_LABELS, COMMISSION_BASE_LABELS, repDisplayName, nextRepCode, effectiveRule,
@@ -56,6 +58,7 @@ export function Representatives() {
   const [statFrom, setStatFrom] = useState('');
   const [statTo, setStatTo] = useState('');
   const [statStatus, setStatStatus] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const canManage = can('rep_manage');
   const canSeeCommission = can('rep_commission_view');
@@ -243,6 +246,12 @@ export function Representatives() {
   };
   const siteName = (id: string | null) => sites.find(s => s.id === id)?.name || '—';
 
+  const clearStatFilters = () => {
+    setStatRep(''); setStatSite(''); setStatFrom(''); setStatTo(''); setStatStatus('');
+  };
+
+  const activeFilterCount = [statRep, statSite, statFrom, statTo, statStatus].filter(Boolean).length;
+
   const exportExcel = async () => {
     if (!can('rep_export')) { error('Vous n\'avez pas la permission d\'exporter'); return; }
     const XLSX = await import('xlsx');
@@ -294,35 +303,57 @@ export function Representatives() {
     return <div className="py-16 text-center text-sm text-slate-500">Vous n'avez pas accès à cette page.</div>;
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-[200px]">
-          <h1 className="text-lg font-black text-neutral-900 flex items-center gap-2">
-            <Users className="w-5 h-5 text-neutral-700" /> Représentants
-          </h1>
-          <p className="text-xs text-neutral-400">Gestion des représentants commerciaux et suivi des ventes</p>
-        </div>
-        {canManage && tab === 'list' && (
-          <button onClick={openCreate} className="btn-icon-primary" title="Nouveau représentant">
-            <Plus className="w-4 h-4" />
-          </button>
-        )}
-      </div>
+  const kpis = [
+    { label: 'Ventes', value: String(kpi.count) },
+    { label: 'CA total', value: formatFCFA(kpi.ca) },
+    { label: 'Remises', value: formatFCFA(kpi.remises) },
+    { label: 'Panier moyen', value: formatFCFA(Math.round(kpi.panier)) },
+    { label: 'Clients', value: String(kpi.clients) },
+    ...(canSeeCommission ? [{ label: 'Commission', value: formatFCFA(kpi.commission) }] : []),
+  ];
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        <button onClick={() => setTab('list')}
-          className={`px-4 h-9 rounded-xl text-[13px] font-semibold border transition-colors ${tab === 'list' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}>
-          Liste
-        </button>
-        {can('rep_stats_view') && (
-          <button onClick={() => setTab('stats')}
-            className={`px-4 h-9 rounded-xl text-[13px] font-semibold border transition-colors flex items-center gap-1.5 ${tab === 'stats' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}>
-            <BarChart3 className="w-3.5 h-3.5" /> Statistiques
-          </button>
-        )}
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-2 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
+        <div className="flex items-center gap-2 border-b border-neutral-200/70 pb-2">
+          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
+            <h1 className="text-sm font-bold tracking-tight text-slate-900">Représentants</h1>
+          </div>
+          <div className="relative flex-1 min-w-0 flex items-center">
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par code, prénom, nom…"
+              className="flex-1 min-w-0 w-0 pl-2 bg-transparent text-xs focus:outline-none placeholder:text-slate-400" />
+            {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>}
+          </div>
+          {tab === 'stats' && can('rep_export') && (
+            <>
+              <button onClick={printReport} className="shrink-0 p-1.5 text-slate-400 hover:text-slate-600 transition" title="Imprimer">
+                <Printer className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={exportExcel} className="shrink-0 p-1.5 text-slate-400 hover:text-slate-600 transition" title="Export Excel">
+                <Download className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+          {tab === 'stats' && (
+            <button onClick={() => setFiltersOpen(true)} className={`shrink-0 p-1.5 transition ${activeFilterCount > 0 ? 'text-brand-700' : 'text-slate-400 hover:text-slate-600'}`} title="Filtres">
+              <Filter className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canManage && (
+            <button onClick={openCreate} className="shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all" title="Nouveau représentant">
+              <Plus className="w-3.5 h-3.5 text-white" />
+            </button>
+          )}
+        </div>
+        {/* Tabs */}
+        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider">
+          <button onClick={() => setTab('list')} className={`shrink-0 py-1 transition-all ${tab === 'list' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>Liste</button>
+          {can('rep_stats_view') && (
+            <button onClick={() => setTab('stats')} className={`shrink-0 py-1 transition-all ${tab === 'stats' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>Statistiques</button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -334,13 +365,6 @@ export function Representatives() {
               Les commissions sont désactivées. Activez-les dans <strong>Paramètres → Représentants & commissions</strong>.
             </div>
           )}
-          <div className="relative max-w-sm">
-            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par code, prénom, nom…"
-              className="input pl-9 h-10 w-full text-sm" />
-            {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="w-4 h-4 text-neutral-400" /></button>}
-          </div>
-
           {filteredReps.length === 0 ? (
             <EmptyState icon={Users} title="Aucun représentant" description="Créez votre premier représentant commercial." />
           ) : (
@@ -373,15 +397,15 @@ export function Representatives() {
                           <td className="px-4 py-3 text-right num font-semibold">{formatFCFA(a.ca)}</td>
                           {canSeeCommission && <td className="px-4 py-3 text-right num font-semibold text-emerald-700">{formatFCFA(a.commission)}</td>}
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${r.commission_override ? 'bg-teal-50 text-teal-700 border-teal-200' : 'bg-neutral-50 text-neutral-500 border-neutral-200'}`}>
-                              <BadgePercent className="w-3 h-3" />
+                            <span className="inline-flex items-center gap-1 text-[11px] text-neutral-600">
+                              <BadgePercent className="w-3 h-3 text-neutral-400" />
                               {r.commission_override
                                 ? (rule.commission_type === 'fixe' ? `${formatFCFA(rule.fixed_amount)} / vente` : `${rule.rate}% ${rule.commission_type === 'pct_marge' ? 'marge' : COMMISSION_BASE_LABELS[rule.commission_base]}`)
                                 : 'Règle globale'}
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${r.status === 'actif' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-neutral-100 text-neutral-500 border-neutral-200'}`}>
+                            <span className={`text-[11px] font-semibold ${r.status === 'actif' ? 'text-emerald-700' : 'text-neutral-400'}`}>
                               {r.status === 'actif' ? 'Actif' : 'Inactif'}
                             </span>
                           </td>
@@ -416,65 +440,17 @@ export function Representatives() {
         </>
       ) : (
         <>
-          {/* Filters */}
-          <div className="bg-white border border-neutral-200 rounded-2xl p-3 flex flex-wrap items-end gap-3">
-            <div>
-              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Représentant</label>
-              <select value={statRep} onChange={e => setStatRep(e.target.value)} className="input h-9 text-sm min-w-[180px]">
-                <option value="">Tous</option>
-                {reps.map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Magasin</label>
-              <select value={statSite} onChange={e => setStatSite(e.target.value)} className="input h-9 text-sm min-w-[150px]">
-                <option value="">Tous</option>
-                {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Du</label>
-              <input type="date" value={statFrom} onChange={e => setStatFrom(e.target.value)} className="input h-9 text-sm" />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Au</label>
-              <input type="date" value={statTo} onChange={e => setStatTo(e.target.value)} className="input h-9 text-sm" />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Statut</label>
-              <select value={statStatus} onChange={e => setStatStatus(e.target.value)} className="input h-9 text-sm">
-                <option value="">Tous</option>
-                <option value="active">Actives</option>
-                <option value="cancelled">Annulées</option>
-              </select>
-            </div>
-            <div className="flex-1" />
-            {can('rep_export') && (
-              <div className="flex gap-2">
-                <button onClick={printReport} className="btn-icon h-9" title="Imprimer"><Printer className="w-4 h-4" /></button>
-                <button onClick={exportExcel} className="btn-icon h-9" title="Export Excel"><Download className="w-4 h-4" /></button>
-              </div>
-            )}
-          </div>
-
-          {/* KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {[
-              { label: 'Nombre de ventes', value: String(kpi.count), icon: Receipt, color: 'text-neutral-700' },
-              { label: 'CA total', value: formatFCFA(kpi.ca), icon: TrendingUp, color: 'text-emerald-700' },
-              { label: 'Remises', value: formatFCFA(kpi.remises), icon: BadgePercent, color: 'text-amber-700' },
-              { label: 'Panier moyen', value: formatFCFA(Math.round(kpi.panier)), icon: Wallet, color: 'text-neutral-700' },
-              { label: 'Clients', value: String(kpi.clients), icon: UserCheck, color: 'text-neutral-700' },
-              ...(canSeeCommission ? [{ label: 'Commission totale', value: formatFCFA(kpi.commission), icon: BadgePercent, color: 'text-teal-700' }] : []),
-            ].map((k, i) => (
-              <div key={i} className="bg-white border border-neutral-200 rounded-2xl p-3.5">
-                <div className="flex items-center gap-1.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  <k.icon className="w-3.5 h-3.5" /> {k.label}
-                </div>
-                <div className={`text-[15px] font-black num ${k.color} break-all`}>{k.value}</div>
+          {/* KPIs – flat, no borders, label | value separated by a line */}
+          <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap pb-1">
+            {kpis.map((k, i) => (
+              <div key={i} className="shrink-0 flex items-center gap-2">
+                <span className="text-slate-400">{k.label}</span>
+                <span className="w-px h-3 bg-slate-200" />
+                <span className="text-slate-900 num">{k.value}</span>
               </div>
             ))}
           </div>
+
           {kpi.cancelled > 0 && (
             <div className="text-[12px] bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2">
               {kpi.cancelled} vente(s) annulée(s) sur la période pour un total de {formatFCFA(kpi.cancelledTotal)} — exclues des indicateurs ci-dessus.
@@ -511,7 +487,7 @@ export function Representatives() {
                         <td className="px-4 py-2.5 text-right num font-semibold">{formatFCFA(Number(s.total || 0))}</td>
                         {canSeeCommission && <td className="px-4 py-2.5 text-right num text-teal-700 font-semibold">{formatFCFA(Number(s.rep_commission?.amount || 0))}</td>}
                         <td className="px-4 py-2.5">
-                          <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${s.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                          <span className={`text-[11px] font-semibold ${s.status === 'cancelled' ? 'text-red-600' : 'text-emerald-700'}`}>
                             {s.status === 'cancelled' ? 'Annulée' : 'Active'}
                           </span>
                         </td>
@@ -528,7 +504,51 @@ export function Representatives() {
         </>
       )}
 
-      {/* Create / Edit modal */}
+      {/* Stats filters – same premium date range picker as Billing */}
+      <PremiumDateRangePicker
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        from={statFrom}
+        to={statTo}
+        onApply={(f, t) => { setStatFrom(f); setStatTo(t); setFiltersOpen(false); }}
+        onReset={clearStatFilters}
+        extraFilters={
+          <>
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-2"><Filter className="w-3.5 h-3.5" />Représentant</div>
+              <SearchableSelect
+                searchable
+                value={statRep}
+                onChange={setStatRep}
+                placeholder="Tous"
+                options={[{ value: '', label: 'Tous' }, ...reps.map(r => ({ value: r.id, label: repDisplayName(r) }))]}
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-2"><Filter className="w-3.5 h-3.5" />Magasin</div>
+              <SearchableSelect
+                searchable
+                value={statSite}
+                onChange={setStatSite}
+                placeholder="Tous"
+                options={[{ value: '', label: 'Tous' }, ...sites.map(s => ({ value: s.id, label: s.name }))]}
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-2"><Filter className="w-3.5 h-3.5" />Statut</div>
+              <SearchableSelect
+                searchable={false}
+                value={statStatus}
+                onChange={setStatStatus}
+                placeholder="Tous"
+                options={[{ value: '', label: 'Tous' }, { value: 'active', label: 'Actives' }, { value: 'cancelled', label: 'Annulées' }]}
+              />
+            </div>
+          </>
+        }
+      />
+
+      {/* Create / Edit modal – compact, borderless */}
       <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Modifier le représentant' : 'Nouveau représentant'} size="md"
         footer={<>
           <button onClick={() => setFormOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
@@ -537,75 +557,84 @@ export function Representatives() {
           </button>
         </>}
       >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-[11px] font-semibold text-neutral-500 block mb-1">Code *</label>
-              <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="REP-001" className="input h-10 w-full text-sm num" />
+              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Code *</label>
+              <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="REP-001" className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5" />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-neutral-500 block mb-1">Prénom *</label>
-              <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} placeholder="Awa" className="input h-10 w-full text-sm" />
+              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Prénom *</label>
+              <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} placeholder="Awa" className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5" />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-neutral-500 block mb-1">Nom *</label>
-              <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} placeholder="Ndiaye" className="input h-10 w-full text-sm" />
-            </div>
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-neutral-500 block mb-1">Statut</label>
-            <div className="flex gap-2">
-              {(['actif', 'inactif'] as const).map(s => (
-                <button key={s} onClick={() => setForm(f => ({ ...f, status: s }))}
-                  className={`px-4 h-9 rounded-xl text-[12px] font-semibold border transition-colors ${form.status === s ? (s === 'actif' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-neutral-700 text-white border-neutral-700') : 'bg-white text-neutral-500 border-neutral-200'}`}>
-                  {s === 'actif' ? 'Actif' : 'Inactif'}
-                </button>
-              ))}
+              <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Nom *</label>
+              <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} placeholder="Ndiaye" className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5" />
             </div>
           </div>
 
           {can('rep_settings_edit') && (
-            <div className="border border-neutral-200 rounded-2xl p-3.5 space-y-3">
-              <label className="flex items-center justify-between cursor-pointer select-none">
-                <div>
-                  <div className="text-[13px] font-semibold text-neutral-800">Règle de commission spécifique</div>
-                  <div className="text-[11px] text-neutral-400">Prioritaire sur la règle globale du tenant</div>
-                </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input type="checkbox" checked={form.commission_override}
                   onChange={e => setForm(f => ({ ...f, commission_override: e.target.checked }))}
-                  className="w-4 h-4 accent-neutral-900" />
+                  className="w-3.5 h-3.5 accent-neutral-900" />
+                <span className="text-[12px] font-semibold text-neutral-700">Règle de commission spécifique</span>
               </label>
               {form.commission_override && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold text-neutral-500 block mb-1">Type</label>
-                    <select value={form.commission_type} onChange={e => setForm(f => ({ ...f, commission_type: e.target.value as any }))} className="input h-10 w-full text-sm">
-                      {Object.entries(COMMISSION_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                    </select>
-                  </div>
-                  {form.commission_type !== 'fixe' && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[11px] font-semibold text-neutral-500 block mb-1">Base de calcul</label>
-                      <select value={form.commission_base} onChange={e => setForm(f => ({ ...f, commission_base: e.target.value as any }))} className="input h-10 w-full text-sm">
-                        {Object.entries(COMMISSION_BASE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                      </select>
+                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Type</label>
+                      <SearchableSelect
+                        searchable={false}
+                        noBorder
+                        value={form.commission_type}
+                        onChange={v => setForm(f => ({ ...f, commission_type: v as any }))}
+                        options={Object.entries(COMMISSION_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))}
+                      />
                     </div>
-                  )}
+                    {form.commission_type !== 'fixe' && (
+                      <div>
+                        <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Base</label>
+                        <SearchableSelect
+                          searchable={false}
+                          noBorder
+                          value={form.commission_base}
+                          onChange={v => setForm(f => ({ ...f, commission_base: v as any }))}
+                          options={Object.entries(COMMISSION_BASE_LABELS).map(([v, l]) => ({ value: v, label: l }))}
+                        />
+                      </div>
+                    )}
+                  </div>
                   {form.commission_type === 'fixe' ? (
                     <div>
-                      <label className="text-[11px] font-semibold text-neutral-500 block mb-1">Montant fixe (FCFA)</label>
-                      <input type="number" min="0" value={form.commission_fixed} onChange={e => setForm(f => ({ ...f, commission_fixed: e.target.value }))} className="input h-10 w-full text-sm num" />
+                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Montant (FCFA)</label>
+                      <input type="number" min="0" value={form.commission_fixed} onChange={e => setForm(f => ({ ...f, commission_fixed: e.target.value }))} className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5 num border-b border-neutral-100" />
                     </div>
                   ) : (
                     <div>
-                      <label className="text-[11px] font-semibold text-neutral-500 block mb-1">Taux (%)</label>
-                      <input type="number" min="0" step="0.01" value={form.commission_rate} onChange={e => setForm(f => ({ ...f, commission_rate: e.target.value }))} className="input h-10 w-full text-sm num" />
+                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">Taux (%)</label>
+                      <input type="number" min="0" step="0.01" value={form.commission_rate} onChange={e => setForm(f => ({ ...f, commission_rate: e.target.value }))} className="w-full bg-transparent text-sm font-semibold text-neutral-900 focus:outline-none py-1.5 num border-b border-neutral-100" />
                     </div>
                   )}
                 </div>
               )}
             </div>
           )}
+
+          {/* Status switch – bottom left, black/white */}
+          <div className="flex items-center justify-start pt-2">
+            <button
+              onClick={() => setForm(f => ({ ...f, status: f.status === 'actif' ? 'inactif' : 'actif' }))}
+              className="flex items-center gap-2 group"
+            >
+              <span className={`relative w-10 h-5 rounded-full transition-colors ${form.status === 'actif' ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${form.status === 'actif' ? 'left-5' : 'left-0.5'}`} />
+              </span>
+              <span className="text-[11px] font-semibold text-neutral-500">{form.status === 'actif' ? 'Actif' : 'Inactif'}</span>
+            </button>
+          </div>
         </div>
       </Modal>
 

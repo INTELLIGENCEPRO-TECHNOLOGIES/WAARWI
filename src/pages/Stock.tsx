@@ -441,10 +441,10 @@ export function Stock() {
 
   // ── Stock document helpers ───────────────────────────────────────────────────
   const docTypeMeta: Record<string, { label: string; color: string; mvType: string }> = {
-    entry: { label: 'Entrée', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', mvType: 'adjustment_in' },
-    exit: { label: 'Sortie', color: 'bg-red-50 text-red-700 border-red-200', mvType: 'adjustment_out' },
-    transfer: { label: 'Transfert', color: 'bg-neutral-50 text-neutral-800 border-neutral-200', mvType: 'transfer_out' },
-    inventory: { label: 'Inventaire', color: 'bg-amber-50 text-amber-700 border-amber-200', mvType: 'inventory' },
+    entry: { label: 'Entrée', color: 'text-emerald-700', mvType: 'adjustment_in' },
+    exit: { label: 'Sortie', color: 'text-red-700', mvType: 'adjustment_out' },
+    transfer: { label: 'Transfert', color: 'text-neutral-800', mvType: 'transfer_out' },
+    inventory: { label: 'Inventaire', color: 'text-amber-700', mvType: 'inventory' },
   };
 
   const findSiteName = (id: string | null | undefined) => {
@@ -792,22 +792,22 @@ export function Stock() {
   };
 
   const mvTypeColor: Record<string, string> = {
-    stock_initial: 'bg-slate-100 text-slate-700', initial: 'bg-slate-100 text-slate-700',
-    sale: 'bg-red-50 text-red-700', adjustment_out: 'bg-red-50 text-red-700', transfer_out: 'bg-amber-50 text-amber-700',
-    adjustment_in: 'bg-emerald-50 text-emerald-700', transfer_in: 'bg-emerald-50 text-emerald-700',
-    inventory: 'bg-neutral-50 text-neutral-800', purchase: 'bg-emerald-50 text-emerald-700', return: 'bg-slate-100 text-slate-700',
+    stock_initial: 'text-slate-600', initial: 'text-slate-600',
+    sale: 'text-red-600', adjustment_out: 'text-red-600', transfer_out: 'text-amber-600',
+    adjustment_in: 'text-emerald-600', transfer_in: 'text-emerald-600',
+    inventory: 'text-neutral-700', purchase: 'text-emerald-600', return: 'text-slate-600',
   };
 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Unified premium header (title + search + filter) ────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
       <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
           <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
             <div className="leading-tight">
               <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Stock</h1>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">{currentSite?.name || 'Inventaire'}</div>
+              <div className="text-[8px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">{currentSite?.name || 'Inventaire'}</div>
               <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Inventaire</div>
             </div>
           </div>
@@ -833,10 +833,8 @@ export function Stock() {
           {tab === 'movements' && (
             <button
               onClick={() => setMvPickerOpen(true)}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
-                (mvDateFrom || mvDateTo)
-                  ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                  : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
+              className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-semibold transition-colors ${
+                (mvDateFrom || mvDateTo) ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'
               }`}
               title="Filtrer par période"
             >
@@ -855,46 +853,55 @@ export function Stock() {
           {stockMethod === 'lot' && (
             <button
               onClick={() => setTab(t => t === 'lots' ? 'stocks' : 'lots')}
-              className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${tab === 'lots' ? 'bg-orange-600 shadow-glow' : 'bg-white border border-slate-200 hover:border-orange-300'}`}
+              className={`shrink-0 w-7 h-7 flex items-center justify-center transition-colors ${tab === 'lots' ? 'text-orange-600' : 'text-slate-400 hover:text-orange-600'}`}
               aria-label="Voir les lots"
             >
-              <PackageOpen className={`w-3.5 h-3.5 ${tab === 'lots' ? 'text-white' : 'text-orange-600'}`} />
+              <PackageOpen className="w-3.5 h-3.5" />
             </button>
           )}
           {tab === 'stocks' && (
             <button
               onClick={() => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); }}
-              className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${viewMode === 'list' ? 'bg-neutral-900 shadow-glow' : 'bg-white border border-slate-200 hover:border-neutral-300'}`}
+              className={`shrink-0 w-7 h-7 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'text-neutral-900' : 'text-slate-400 hover:text-neutral-700'}`}
               aria-label={viewMode === 'cards' ? 'Vue liste éditable' : 'Vue cartes'}
             >
-              {viewMode === 'cards' ? <List className="w-3.5 h-3.5 text-neutral-700" /> : <LayoutGrid className="w-3.5 h-3.5 text-white" />}
+              {viewMode === 'cards' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
             </button>
           )}
           <button
             onClick={() => setTab(t => t === 'stocks' ? 'movements' : 'stocks')}
-            className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-all ${tab === 'movements' ? 'shadow-glow' : 'shadow-glow hover:shadow-premium'}`}
-            style={{ background: tab === 'movements' ? 'linear-gradient(135deg, #064e3b 0%, #0f766e 100%)' : 'linear-gradient(135deg, #0f766e 0%, #064e3b 100%)' }}
+            className={`shrink-0 w-7 h-7 flex items-center justify-center transition-colors ${tab === 'movements' ? 'text-teal-700' : 'text-slate-400 hover:text-teal-700'}`}
             aria-label={tab === 'stocks' ? 'Voir les mouvements' : 'Voir l\'inventaire'}
           >
-            <History className="w-3.5 h-3.5 text-white" />
+            <History className="w-3.5 h-3.5" />
           </button>
+          {can('manage_stock') && tab === 'stocks' && (
+            <button onClick={() => setHelpOpen(true)} className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Guide">
+              <Info className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {can('manage_stock') && tab === 'stocks' && (
+            <button onClick={printInventoryBook} className="shrink-0 inline-flex items-center gap-1 px-1.5 py-1 text-[11px] font-semibold text-slate-500 hover:text-neutral-900 transition-colors" title="Livre d'inventaire">
+              <BookOpen className="w-3.5 h-3.5" /><span className="hidden lg:inline">Livre</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Inline stats chips */}
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{filtered.length} / {rows.length}</span>
+        <span className="shrink-0 text-slate-500 num">{filtered.length} / {rows.length}</span>
         <button
           onClick={() => setFilter('all')}
-          className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all ${
-            filter === 'all' ? 'bg-ink-900 text-white' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+          className={`shrink-0 inline-flex items-center gap-1 transition-colors ${
+            filter === 'all' ? 'text-neutral-900 font-bold' : 'text-slate-500 hover:text-slate-700'
           }`}
         >Tous</button>
         {inStockCount > 0 && (
           <button
             onClick={() => setFilter(f => f === 'instock' ? 'all' : 'instock')}
-            className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all ${
-              filter === 'instock' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            className={`shrink-0 inline-flex items-center gap-1 transition-colors ${
+              filter === 'instock' ? 'text-emerald-700 font-bold' : 'text-slate-500 hover:text-emerald-700'
             }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{inStockCount} En stock
@@ -903,8 +910,8 @@ export function Stock() {
         <button
           onClick={() => setFilter(f => f === 'low' ? 'all' : 'low')}
           disabled={lowCount === 0}
-          className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-            filter === 'low' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+          className={`shrink-0 inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            filter === 'low' ? 'text-amber-700 font-bold' : 'text-slate-500 hover:text-amber-700'
           }`}
         >
           <TrendingDown className="w-3 h-3" />{lowCount} seuil bas
@@ -912,48 +919,41 @@ export function Stock() {
         <button
           onClick={() => setFilter(f => f === 'out' ? 'all' : 'out')}
           disabled={outCount === 0}
-          className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-            filter === 'out' ? 'bg-red-500 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100'
+          className={`shrink-0 inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            filter === 'out' ? 'text-red-600 font-bold' : 'text-slate-500 hover:text-red-600'
           }`}
         >
           <AlertTriangle className="w-3 h-3" />{outCount} rupture{outCount > 1 ? 's' : ''}
         </button>
       </div>
 
-      {/* Quick actions row */}
-      {can('manage_stock') && (
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
-          <button onClick={() => openAdjNew('in')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-all active:scale-95">
-            <ArrowDownCircle className="w-3.5 h-3.5 text-emerald-600" />Entrée
+      {/* Quick actions row — cards view only */}
+      {can('manage_stock') && tab === 'stocks' && viewMode === 'cards' && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+          <button onClick={() => openAdjNew('in')} className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-emerald-700 transition-colors">
+            <ArrowDownCircle className="w-3.5 h-3.5" />Entrée
           </button>
-          <button onClick={() => openAdjNew('out')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 transition-all active:scale-95">
-            <ArrowUpCircle className="w-3.5 h-3.5 text-red-500" />Sortie
+          <button onClick={() => openAdjNew('out')} className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-red-700 transition-colors">
+            <ArrowUpCircle className="w-3.5 h-3.5" />Sortie
           </button>
           {canTransfer && (
-            <button onClick={() => openAdjNew('transfer')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-all active:scale-95">
-              <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />Transfert
+            <button onClick={() => openAdjNew('transfer')} className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-amber-700 transition-colors">
+              <ArrowRightLeft className="w-3.5 h-3.5" />Transfert
             </button>
           )}
-          <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-800 transition-all active:scale-95">
-            <ClipboardList className="w-3.5 h-3.5 text-neutral-700" />Inventaire
-          </button>
-          <button onClick={() => setHelpOpen(true)} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95">
-            <Info className="w-3.5 h-3.5" />Guide
-          </button>
-          <button onClick={printInventoryBook} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-gradient-to-br from-ink-900 to-slate-800 text-white hover:shadow-glow transition-all active:scale-95 ml-auto">
-            <BookOpen className="w-3.5 h-3.5" />Livre d'inventaire
+          <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-neutral-800 transition-colors">
+            <ClipboardList className="w-3.5 h-3.5" />Inventaire
           </button>
         </div>
       )}
-      </div>
 
-      {/* Sort controls for stocks tab */}
-      {tab === 'stocks' && (
-        <div className="flex items-center gap-1 text-[10px] font-bold">
-          <span className="text-slate-400 mr-1">Trier:</span>
+      {/* Sort controls — cards view only */}
+      {tab === 'stocks' && viewMode === 'cards' && (
+        <div className="flex items-center gap-2 text-[10px] font-bold">
+          <span className="text-slate-400">Trier:</span>
           {([['name', 'Nom'], ['stock', 'Qté'], ['min', 'Min'], ['price', 'P.Achat']] as const).map(([col, label]) => (
             <button key={col} onClick={() => { setStkSortCol(col); setStkSortDir(d => stkSortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}
-              className={`px-2 py-1 rounded-lg inline-flex items-center gap-0.5 transition-all ${stkSortCol === col ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+              className={`inline-flex items-center gap-0.5 transition-colors ${stkSortCol === col ? 'text-neutral-900' : 'text-slate-500 hover:text-slate-700'}`}
             >
               {label}
               {stkSortCol === col && (stkSortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
@@ -961,6 +961,8 @@ export function Stock() {
           ))}
         </div>
       )}
+
+      </div>
 
       {tab === 'stocks' ? (
         (!initialLoaded && loading) ? (
@@ -1030,8 +1032,8 @@ export function Stock() {
                         </div>
                       )}
                     </div>
-                    <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full num ${
-                      out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-800' : 'bg-neutral-100 text-neutral-800'
+                    <span className={`shrink-0 text-[10px] font-bold num ${
+                      out ? 'text-red-600' : low ? 'text-amber-700' : 'text-neutral-800'
                     }`}>
                       {r.quantity}
                     </span>
@@ -1067,19 +1069,19 @@ export function Stock() {
                   </div>
 
                   {can('manage_stock') && (
-                  <div className="flex items-center gap-1 pt-1">
-                    <button onClick={() => openAdj(r, 'in')} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-neutral-100 text-neutral-800 hover:bg-neutral-200 transition-all active:scale-95" title="Entrée">
+                  <div className="flex items-center gap-2 pt-1">
+                    <button onClick={() => openAdj(r, 'in')} className="flex-1 inline-flex items-center justify-center gap-1 py-1 text-[10px] font-bold text-slate-500 hover:text-emerald-700 transition-colors" title="Entrée">
                       <Plus className="w-3 h-3" />Entrée
                     </button>
-                    <button onClick={() => openAdj(r, 'out')} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold bg-neutral-100 text-neutral-800 hover:bg-neutral-200 transition-all active:scale-95" title="Sortie">
+                    <button onClick={() => openAdj(r, 'out')} className="flex-1 inline-flex items-center justify-center gap-1 py-1 text-[10px] font-bold text-slate-500 hover:text-red-700 transition-colors" title="Sortie">
                       <Minus className="w-3 h-3" />Sortie
                     </button>
                     {canTransfer && (
-                      <button onClick={() => openAdj(r, 'transfer')} className="shrink-0 w-8 h-[26px] inline-flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-800 hover:bg-neutral-200 transition-all active:scale-95" title="Transfert">
+                      <button onClick={() => openAdj(r, 'transfer')} className="shrink-0 w-7 h-[22px] inline-flex items-center justify-center text-slate-400 hover:text-amber-700 transition-colors" title="Transfert">
                         <ArrowRightLeft className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={() => openAdj(r, 'inventory')} className="shrink-0 w-8 h-[26px] inline-flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-800 hover:bg-neutral-200 transition-all active:scale-95" title="Inventaire">
+                    <button onClick={() => openAdj(r, 'inventory')} className="shrink-0 w-7 h-[22px] inline-flex items-center justify-center text-slate-400 hover:text-neutral-800 transition-colors" title="Inventaire">
                       <ClipboardList className="w-3 h-3" />
                     </button>
                   </div>
@@ -1108,16 +1110,16 @@ export function Stock() {
       ) : tab === 'movements' ? (
         <>
           {/* Sub-tabs: Mouvements / Documents */}
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <div className="inline-flex items-center gap-3">
             <button
               onClick={() => setMvSubTab('movements')}
-              className={`px-3 py-1.5 text-[11px] font-bold inline-flex items-center gap-1.5 transition-all ${mvSubTab === 'movements' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
+              className={`text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors ${mvSubTab === 'movements' ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <History className="w-3.5 h-3.5" />Mouvements
             </button>
             <button
               onClick={() => setMvSubTab('documents')}
-              className={`px-3 py-1.5 text-[11px] font-bold inline-flex items-center gap-1.5 transition-all ${mvSubTab === 'documents' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
+              className={`text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors ${mvSubTab === 'documents' ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <ClipboardList className="w-3.5 h-3.5" />Documents
             </button>
@@ -1126,14 +1128,14 @@ export function Stock() {
           {mvSubTab === 'movements' ? (
           <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-            <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">{mvTotalCount} mouvement{mvTotalCount > 1 ? 's' : ''}</span>
+            <span className="shrink-0 text-slate-500 num">{mvTotalCount} mouvement{mvTotalCount > 1 ? 's' : ''}</span>
             {search && tab === 'movements' && (
-              <span className="shrink-0 px-2 py-1 rounded-full bg-blue-50 text-blue-700 inline-flex items-center gap-1 normal-case tracking-normal text-[10px]">
+              <span className="shrink-0 text-blue-600 inline-flex items-center gap-1 normal-case tracking-normal text-[10px]">
                 Filtre: "{search}"
               </span>
             )}
             {(mvDateFrom || mvDateTo) && (
-              <span className="shrink-0 px-2 py-1 rounded-full bg-brand-50 text-brand-700 inline-flex items-center gap-1 normal-case tracking-normal num text-[10px]">
+              <span className="shrink-0 text-brand-700 inline-flex items-center gap-1 normal-case tracking-normal num text-[10px]">
                 <Calendar className="w-3 h-3" />
                 {mvDateFrom ? new Date(mvDateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '…'}
                 {' → '}
@@ -1155,15 +1157,15 @@ export function Stock() {
               const positive = qty >= 0;
               return (
                 <div key={m.id} className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50/60 transition-colors">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                    positive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                  <div className={`shrink-0 ${
+                    positive ? 'text-emerald-600' : 'text-red-600'
                   }`}>
                     {positive ? <ArrowDownCircle className="w-4 h-4" /> : <ArrowUpCircle className="w-4 h-4" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-1.5 flex-wrap">
                       <span className="text-[12px] font-semibold text-slate-900 break-words min-w-0">{(m.articles as any)?.name}</span>
-                      <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${mvTypeColor[m.movement_type] || 'bg-slate-100 text-slate-700'}`}>
+                      <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${mvTypeColor[m.movement_type] || 'text-slate-600'}`}>
                         {mvTypeLabel[m.movement_type] || m.movement_type}
                       </span>
                     </div>
@@ -1182,10 +1184,10 @@ export function Stock() {
                       <div className="text-[9px] text-slate-400 num mt-0.5">{m.previous_qty} → {m.new_qty}</div>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <button onClick={() => printMovement(m, 'a4')} className="w-6 h-6 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all active:scale-90" title="Imprimer A4">
+                      <button onClick={() => printMovement(m, 'a4')} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Imprimer A4">
                         <Printer className="w-3 h-3" />
                       </button>
-                      <button onClick={() => printMovement(m, '80')} className="w-6 h-6 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all active:scale-90" title="Imprimer 80mm">
+                      <button onClick={() => printMovement(m, '80')} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Imprimer 80mm">
                         <Scroll className="w-3 h-3" />
                       </button>
                     </div>
@@ -1216,7 +1218,7 @@ export function Stock() {
           /* ─────────── Documents sub-section ─────────── */
           <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-            <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 num">
+            <span className="shrink-0 text-slate-500 num">
               {(() => { const sq = search.toLowerCase().trim(); return stockDocs.filter(d => { if (docsTypeFilter !== 'all' && d.doc_type !== docsTypeFilter) return false; if (sq) return d.doc_number.toLowerCase().includes(sq) || (d.note || '').toLowerCase().includes(sq); return true; }).length; })() } / {stockDocs.length}
             </span>
             {(['all', 'entry', 'exit', 'transfer', 'inventory'] as const).map(k => {
@@ -1225,7 +1227,7 @@ export function Stock() {
               return (
                 <button key={k}
                   onClick={() => setDocsTypeFilter(k)}
-                  className={`shrink-0 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-all ${active ? 'bg-ink-900 text-white' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
+                  className={`shrink-0 inline-flex items-center gap-1 transition-colors ${active ? 'text-neutral-900 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
                 >{labels[k]}</button>
               );
             })}
@@ -1244,21 +1246,21 @@ export function Stock() {
             return (
               <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100 count-up">
                 {filtered.map(d => {
-                  const meta = docTypeMeta[d.doc_type] || { label: d.doc_type, color: 'bg-slate-100 text-slate-700 border-slate-200', mvType: '' };
+                  const meta = docTypeMeta[d.doc_type] || { label: d.doc_type, color: 'text-slate-600', mvType: '' };
                   const cancelled = d.status === 'cancelled';
                   return (
                     <div key={d.id} className={`flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50/60 transition-colors ${cancelled ? 'opacity-60' : ''}`}>
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${meta.color}`}>
+                      <div className={`shrink-0 ${meta.color}`}>
                         <ClipboardList className="w-4 h-4" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start gap-1.5 flex-wrap">
                           <span className="text-[12px] font-semibold text-slate-900 break-words min-w-0 num">{d.doc_number}</span>
-                          <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${meta.color}`}>
+                          <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${meta.color}`}>
                             {meta.label}
                           </span>
                           {cancelled && (
-                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">Annulé</span>
+                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-red-600">Annulé</span>
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 flex-wrap">
@@ -1272,22 +1274,22 @@ export function Stock() {
                         {d.note && <div className="text-[10px] text-slate-400 break-words mt-0.5">{d.note}</div>}
                       </div>
                       <div className="shrink-0 flex items-center gap-1">
-                        <button onClick={() => openDocDetail(d)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 transition-all active:scale-90" title="Détails">
+                        <button onClick={() => openDocDetail(d)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors" title="Détails">
                           <Info className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => reprintDocFromList(d, 'a4')} className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 transition-all active:scale-90" title="Imprimer A4">
+                        <button onClick={() => reprintDocFromList(d, 'a4')} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors" title="Imprimer A4">
                           <Printer className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => reprintDocFromList(d, '80')} className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 transition-all active:scale-90" title="Imprimer 80mm">
+                        <button onClick={() => reprintDocFromList(d, '80')} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors" title="Imprimer 80mm">
                           <Scroll className="w-3.5 h-3.5" />
                         </button>
                         {!cancelled && can('manage_stock') && d.doc_type !== 'transfer' && (
-                          <button onClick={() => openDocEdit(d)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-neutral-50 hover:bg-neutral-100 text-neutral-700 hover:text-neutral-800 transition-all active:scale-90" title="Éditer (régénère le stock)">
+                          <button onClick={() => openDocEdit(d)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-neutral-800 transition-colors" title="Éditer (régénère le stock)">
                             <Save className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {!cancelled && can('manage_stock') && (
-                          <button onClick={() => setDocDeleteConfirm(d)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-800 transition-all active:scale-90" title="Annuler (régénère le stock)">
+                          <button onClick={() => setDocDeleteConfirm(d)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 transition-colors" title="Annuler (régénère le stock)">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -2174,32 +2176,32 @@ function StockListEditView({
     <div className="flex flex-col" style={{ height: 'calc(100vh - 220px)', minHeight: '400px' }}>
       {/* Mode selector - sticky top */}
       <div className="shrink-0 flex items-center justify-between gap-2 flex-wrap pb-2">
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+        <div className="inline-flex items-center gap-3">
           <button
             onClick={() => { setListEditMode('in'); setListEdits(new Map()); }}
-            className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'in' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
+            className={`inline-flex items-center gap-1 text-[11px] font-bold transition-colors ${listEditMode === 'in' ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <ArrowDownCircle className="w-3.5 h-3.5 inline mr-1" />Entrée
+            <ArrowDownCircle className="w-3.5 h-3.5" />Entrée
           </button>
           <button
             onClick={() => { setListEditMode('out'); setListEdits(new Map()); }}
-            className={`px-3 py-1.5 text-[11px] font-bold border-x border-slate-200 transition-all ${listEditMode === 'out' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-red-50'}`}
+            className={`inline-flex items-center gap-1 text-[11px] font-bold transition-colors ${listEditMode === 'out' ? 'text-red-600' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <ArrowUpCircle className="w-3.5 h-3.5 inline mr-1" />Sortie
+            <ArrowUpCircle className="w-3.5 h-3.5" />Sortie
           </button>
           {sites.length > 0 && (
             <button
               onClick={() => { setListEditMode('transfer'); setListEdits(new Map()); }}
-              className={`px-3 py-1.5 text-[11px] font-bold border-r border-slate-200 transition-all ${listEditMode === 'transfer' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-amber-50'}`}
+              className={`inline-flex items-center gap-1 text-[11px] font-bold transition-colors ${listEditMode === 'transfer' ? 'text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              <ArrowRightLeft className="w-3.5 h-3.5 inline mr-1" />Transfert
+              <ArrowRightLeft className="w-3.5 h-3.5" />Transfert
             </button>
           )}
           <button
             onClick={() => { setListEditMode('inventory'); setListEdits(new Map()); }}
-            className={`px-3 py-1.5 text-[11px] font-bold transition-all ${listEditMode === 'inventory' ? 'bg-neutral-900 text-white' : 'text-slate-600 hover:bg-neutral-50'}`}
+            className={`inline-flex items-center gap-1 text-[11px] font-bold transition-colors ${listEditMode === 'inventory' ? 'text-neutral-900' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <ClipboardList className="w-3.5 h-3.5 inline mr-1" />Inventaire
+            <ClipboardList className="w-3.5 h-3.5" />Inventaire
           </button>
         </div>
       </div>
@@ -2264,10 +2266,10 @@ function StockListEditView({
         const sourceSiteObj = allSites.find((s: any) => s.id === sourceSiteId);
         const mismatch = currentSite && sourceSiteId && sourceSiteId !== currentSite.id;
         return (
-          <div className={`shrink-0 mb-2 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${mismatch ? 'border border-neutral-300 text-neutral-700' : 'border border-neutral-200 text-neutral-600'}`}>
-            <Monitor className="w-3.5 h-3.5 text-neutral-400" />
-            <span className="font-medium">Document cible : <strong className="text-neutral-900">{sourceSiteObj?.name || 'N/A'}</strong></span>
-            {mismatch && <span className="text-[10px] text-neutral-400">(diff. du site actif)</span>}
+          <div className={`shrink-0 mb-2 text-xs flex items-center gap-2 text-neutral-600`}>
+            <Monitor className="w-3 h-3 text-neutral-400" />
+            <span className="font-medium text-[10px]">Document cible : <strong className="text-neutral-900 text-[11px]">{sourceSiteObj?.name || 'N/A'}</strong></span>
+            {mismatch && <span className="text-[9px] text-neutral-400">(diff. du site actif)</span>}
           </div>
         );
       })()}
@@ -2317,7 +2319,7 @@ function StockListEditView({
                       <div className="text-[11px] font-semibold text-neutral-900 leading-tight">{r.name}</div>
                     </td>
                     <td className="px-2 py-1.5 text-center w-[80px]">
-                      <span className={`inline-block text-xs font-bold num px-1.5 py-0.5 rounded ${out ? 'bg-red-100 text-red-700' : low ? 'bg-amber-100 text-amber-700' : 'text-slate-800'}`}>
+                      <span className={`inline-block text-xs font-bold num ${out ? 'text-red-600' : low ? 'text-amber-700' : 'text-slate-800'}`}>
                         {displayQty}
                       </span>
                     </td>
