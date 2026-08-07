@@ -2979,15 +2979,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       disabled={out}
                       className={`w-full flex items-center px-3 py-1.5 rounded-lg border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-neutral-200 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'}`}
                     >
-                      <div className="w-16 shrink-0 flex items-center justify-center border-r border-neutral-200 mr-3 h-7">
-                        {tracked ? (
+                      {tracked && can('view_stock_levels') ? (
+                        <div className="w-16 shrink-0 flex items-center justify-center border-r border-neutral-200 mr-3 h-7">
                           <span className={`text-[10px] font-bold num leading-none ${a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-600'}`}>
                             {a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup.') : `×${a.stock_available}`}
                           </span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-neutral-400 leading-none uppercase tracking-wide">Svc</span>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="w-16 shrink-0 mr-3 h-7" />
+                      )}
                       <span className="flex-1 min-w-0 text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
                       <span className="text-[12px] font-bold text-neutral-900 num shrink-0 ml-2">{formatFCFA(a.sale_price)}</span>
                     </button>
