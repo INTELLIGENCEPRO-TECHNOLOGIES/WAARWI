@@ -1289,10 +1289,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           ]);
           if (stk && newArts) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
+            const prevMap = new Map(posCache.articles.map(a => [a.id, a.stock_available]));
             const updatedArticles = (newArts as any[]).map((a: any) => ({
               id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
               sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
-              stock_available: qmap.get(a.id) || 0,
+              stock_available: qmap.has(a.id) ? Number(qmap.get(a.id)) : (prevMap.get(a.id) ?? 0),
               category_id: a.category_id || null,
               image_url: a.image_url || null,
               ipm_eligible: a.ipm_eligible !== false,
@@ -1300,9 +1301,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             }));
             setArticles(updatedArticles);
             posCache.articles = updatedArticles;
-          } else if (stk.length > 0) {
+          } else if (stk && stk.length > 0) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
-            setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.get(a.id) || 0 })));
+            setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.has(a.id) ? Number(qmap.get(a.id)) : a.stock_available })));
           }
           if (cust) {
             setCustomers(cust as any);
@@ -2802,7 +2803,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div className="relative w-2 h-2 rounded-full bg-neutral-1000" />
             </div>
             <span className="text-[10px] font-bold text-neutral-800 tracking-wide">En service</span>
-            <span className="text-[10px] text-neutral-400 ml-1">· Fond&nbsp;<span className="font-bold text-neutral-600 num">{formatFCFA(Number(session!.opening_amount))}</span></span>
+            {session && <span className="text-[10px] text-neutral-400 ml-1">· Fond&nbsp;<span className="font-bold text-neutral-600 num">{formatFCFA(Number(session.opening_amount))}</span></span>}
           </div>
           <div className="flex-1" />
           <button onClick={openStats} className="chip" data-label="Statistiques"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button>
@@ -4586,7 +4587,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <div className="flex items-center gap-1.5"><Lock className="w-4 h-4 text-neutral-300" /><span className="text-xs font-bold tracking-wide">RÉCAPITULATIF</span></div>
               <div className="grid grid-cols-2 gap-1.5 text-[11px]">
                 <span className="text-neutral-400">Fond ouverture</span>
-                <span className="text-right font-semibold num">{formatFCFA(session!.opening_amount)}</span>
+                <span className="text-right font-semibold num">{formatFCFA(session?.opening_amount ?? 0)}</span>
                 <span className="text-neutral-400">Total compté</span>
                 <span className="text-right font-semibold num">{formatFCFA(controlLines.reduce((s, c) => s + c.counted_amount, 0))}</span>
                 <span className="text-neutral-400 border-t border-neutral-700 pt-1.5">Écart final</span>
