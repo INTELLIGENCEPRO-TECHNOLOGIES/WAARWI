@@ -57,6 +57,7 @@ export const PERMISSION_KEYS = [
   'manage_online_orders',
   'manage_supplier_orders',
   'manage_customers',
+  'delete_customers',
   // Administration
   'export_data',
   'manage_settings',
@@ -148,6 +149,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   manage_online_orders: 'Gérer les commandes en ligne',
   manage_supplier_orders: 'Gérer les achats',
   manage_customers: 'Gérer les clients et fournisseurs',
+  delete_customers: 'Supprimer ou désactiver les clients et fournisseurs',
   export_data: 'Exporter les données',
   manage_settings: 'Accéder aux paramètres',
   manage_users: 'Gérer les utilisateurs et permissions',
@@ -209,7 +211,7 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
   },
   {
     label: 'Commandes & Tiers',
-    keys: ['manage_online_orders', 'manage_supplier_orders', 'manage_customers'],
+    keys: ['manage_online_orders', 'manage_supplier_orders', 'manage_customers', 'delete_customers'],
   },
   {
     label: 'Transfert d\'argent - Opérations clients',

@@ -267,6 +267,35 @@ p { line-height: 1.6; }
   }
 
   /* ── Animations ───────────────────────────────────────── */
+  @keyframes marquee-scroll {
+    0%   { transform: translateX(0); }
+    40%  { transform: translateX(0); }
+    80%  { transform: translateX(var(--marquee-shift, 0)); }
+    100% { transform: translateX(0); }
+  }
+  .marquee-container {
+    overflow: hidden;
+    white-space: nowrap;
+    display: block;
+  }
+  .marquee-inner {
+    display: inline-block;
+    padding-right: 1.5em;
+    will-change: transform;
+  }
+  .marquee-static {
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  @media (max-width: 1023px) {
+    .marquee-inner[data-overflowing='true'] {
+      animation: marquee-scroll 9s ease-in-out infinite;
+    }
+  }
+
   @keyframes count-up {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
@@ -362,16 +391,30 @@ p { line-height: 1.6; }
 
 /* ── Highlight flash ─────────────────────────────────── */
 @keyframes waarwi-flash {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); background-color: transparent; }
-  20%      { box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.08); background-color: rgba(0, 0, 0, 0.02); }
-  60%      { box-shadow: 0 0 0 8px rgba(0, 0, 0, 0.04); background-color: rgba(0, 0, 0, 0.03); }
-  80%      { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06); background-color: rgba(0, 0, 0, 0.01); }
+  0%, 100% { background-color: transparent; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  15%      { background-color: rgba(245, 158, 11, 0.25); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.4); }
+  50%      { background-color: rgba(245, 158, 11, 0.15); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.25); }
+  85%      { background-color: rgba(245, 158, 11, 0.08); box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15); }
 }
 .waarwi-flash {
   animation: waarwi-flash 2.2s ease-in-out 3;
   border-radius: 12px;
+  scroll-margin-top: 80px;
 }
 .waarwi-flash-scroll { scroll-margin-top: 80px; }
+
+/* ── Dashboard loading animation ──────────────────────── */
+@keyframes dashSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes dashPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(1.08); }
+}
+@keyframes dashBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%           { transform: scale(1.2); opacity: 1; }
+}
 
 /* ── Global Print Styles ──────────────────────────────── */
 @media print {
@@ -604,28 +647,6 @@ p { line-height: 1.6; }
 .float-logout-btn:hover {
   background: rgba(239, 68, 68, 0.06);
 }
-
-/* ── Auth page background ────────────────────────────── */
-.auth-mesh-gradient {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  background: #ffffff;
-}
-
-.auth-mesh-gradient::before,
-.auth-mesh-gradient::after { display: none; }
-.auth-mesh-gradient .auth-orb-1,
-.auth-mesh-gradient .auth-orb-2,
-.auth-mesh-gradient .auth-orb-3 { display: none; }
-
-@media (max-width: 1023px) {
-  .auth-mesh-gradient::before,
-  .auth-mesh-gradient::after { display: none; }
-}
-
-.shimmer-bg { display: none; }
-.pulse-glow { animation: none; }
 
 /* ── Hide number input spinners ──────────────────────── */
 input[type="number"]::-webkit-inner-spin-button,

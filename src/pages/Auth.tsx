@@ -2,13 +2,24 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Loader2, Mail, Lock, Building2, User, Eye, EyeOff,
   CheckCircle2, ChevronDown, Briefcase, Package,
-  Users, Phone, MapPin, Check, Star, MessageCircle, ArrowLeft, ArrowRight, Search,
+  Users, Phone, MapPin, Check, Star, ArrowLeft, ArrowRight, Search, Shield,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { useTenantBranding } from '../lib/tenantBranding';
+import { useLoginConfig, LOGIN_ICON_MAP } from '../lib/loginConfig';
 import { supabase } from '../lib/supabase';
 import { Stepper } from '../components/FormPrimitives';
+
+/* ---- Simple light loading screen ---- */
+function AuthLoadingOverlay({ logoSrc, brandName }: { logoSrc: string; brandName: string }) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#F8FAFC]">
+      <img src={logoSrc} alt={brandName} className="w-[140px] h-auto object-contain mb-6" />
+      <Loader2 className="w-5 h-5 animate-spin text-[#0f766e]" />
+    </div>
+  );
+}
 
 type BusinessActivityType = {
   id: string;
@@ -250,9 +261,29 @@ export function Auth() {
   const { signIn, signUp } = useApp();
   const { error: showError } = useToast();
   const { branding } = useTenantBranding();
+  const { config: loginConfig } = useLoginConfig();
   useEffect(() => { if (branding) setMode('login'); }, [branding]);
   const isTenantBranded = !!branding;
   const brandName = branding?.name || 'WAARWI';
+
+  // Carousel state for login modules
+  const [carouselSlide, setCarouselSlide] = useState(0);
+  const [carouselAnim, setCarouselAnim] = useState<'in' | 'out'>('in');
+  const carouselModules = loginConfig.modules;
+  const carouselTotalSlides = Math.ceil(carouselModules.length / 3);
+  const carouselSlideModules = carouselModules.slice(carouselSlide * 3, carouselSlide * 3 + 3);
+
+  useEffect(() => {
+    if (carouselTotalSlides <= 1) return;
+    const timer = setInterval(() => {
+      setCarouselAnim('out');
+      setTimeout(() => {
+        setCarouselSlide(prev => (prev + 1) % carouselTotalSlides);
+        setCarouselAnim('in');
+      }, 300);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [carouselTotalSlides]);
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
@@ -364,7 +395,6 @@ export function Auth() {
       await signIn(email, password);
     } catch (err: any) {
       showError(err.message || 'Une erreur est survenue');
-    } finally {
       setLoading(false);
     }
   };
@@ -598,113 +628,217 @@ export function Auth() {
     );
   }
 
-  /* ---- Render: Login page (Meta-inspired) ---- */
+  /* ---- Render: Login page ---- */
+  if (loading && mode === 'login') {
+    return <AuthLoadingOverlay logoSrc={logoSrc} brandName={brandName} />;
+  }
+
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* Top logo bar - fixed top left on desktop, centered on mobile */}
-      <div className="px-6 md:px-10 pt-6 md:pt-8 flex justify-center md:justify-start">
-        <img src={logoSrc} alt={brandName} className="w-[160px] md:w-[200px] h-auto object-contain" />
-      </div>
+    <div className="min-h-[100dvh] flex flex-col bg-[#F8FAFC]">
+      {/* Logo header (desktop only) */}
+      <header className="hidden lg:block px-6 pt-8">
+        <img src={logoSrc} alt={brandName} className="w-[160px] h-auto object-contain" />
+      </header>
 
-      {/* Centered content */}
-      <div className="flex-1 flex items-center justify-center px-5 md:px-10">
-        <div className="w-full" style={{ maxWidth: '1120px' }}>
-          <div className="flex flex-col items-center md:items-stretch md:grid md:grid-cols-[1fr_380px] gap-6 md:gap-[80px]">
-
-            {/* Left: Brand text (hidden on mobile) */}
-            <div className="hidden md:flex md:flex-col md:justify-center max-w-[480px]">
-              <h1 className="text-[clamp(28px,3vw,36px)] leading-[1.15] tracking-[-0.02em] font-semibold text-[#0f172a] mb-4">
-                La plateforme qui simplifie, connecte et propulse votre business.
-              </h1>
-              <p className="text-[17px] leading-[1.5] text-[#64748b]">
-                Simple. Sécurisé. Évolutif.
+      {/* Main content */}
+      <main className="flex-1 flex items-center justify-center px-3 py-8 lg:px-10">
+        <div className="w-full max-w-[1060px]">
+          <div className="grid items-center gap-10 lg:grid-cols-[1fr_450px] lg:gap-20">
+            {/* Left: promotional (hidden on mobile) */}
+            <div className="hidden lg:block max-w-[480px]">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-4">
+                LA PLATEFORME QUI AVANCE AVEC VOUS
               </p>
+              <h1 className="text-[clamp(32px,3.8vw,48px)] leading-[1.08] tracking-[-0.035em] font-bold text-[#0f172a]">
+                {loginConfig.headline}{' '}
+                {loginConfig.headline_accent && (
+                  <span className="text-[#0f766e]">{loginConfig.headline_accent}</span>
+                )}
+              </h1>
+              <p className="mt-5 max-w-[400px] text-[15px] leading-[1.7] text-slate-500">
+                {loginConfig.subtitle}
+              </p>
+
+              {/* Module carousel */}
+              {carouselModules.length > 0 && (
+                <div className="mt-8">
+                  <div
+                    className="grid grid-cols-3 gap-3"
+                    style={{
+                      opacity: carouselAnim === 'in' ? 1 : 0,
+                      transform: carouselAnim === 'in' ? 'translateY(0)' : 'translateY(6px)',
+                      transition: 'opacity 0.3s ease, transform 0.3s ease',
+                    }}
+                  >
+                    {carouselSlideModules.map((m, i) => {
+                      const IconC = LOGIN_ICON_MAP[m.icon] || Shield;
+                      return (
+                        <div key={`${carouselSlide}-${i}`} className="rounded-xl border border-slate-200/80 bg-white/60 p-3.5 hover:shadow-sm transition-shadow">
+                          <div className="w-9 h-9 rounded-lg bg-[#0f766e]/8 flex items-center justify-center mb-2.5">
+                            <IconC className="w-4.5 h-4.5 text-[#0f766e]" />
+                          </div>
+                          <p className="text-[13px] font-bold text-slate-800 leading-tight">{m.label}</p>
+                          <p className="text-[11px] text-slate-400 leading-snug mt-0.5">{m.desc}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {carouselTotalSlides > 1 && (
+                    <div className="flex items-center justify-center gap-1.5 mt-4">
+                      {Array.from({ length: carouselTotalSlides }).map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setCarouselAnim('out');
+                            setTimeout(() => { setCarouselSlide(i); setCarouselAnim('in'); }, 300);
+                          }}
+                          className={`rounded-full transition-all ${i === carouselSlide ? 'w-5 h-1.5 bg-[#0f766e]' : 'w-1.5 h-1.5 bg-slate-300 hover:bg-slate-400'}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Right: Login form (no card, directly on white) */}
-            <div className="w-full max-w-[380px]">
-              <div className="text-center mb-4">
-                <p className="text-[28px] leading-tight tracking-wide" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                  <em style={{ fontStyle: 'italic', fontWeight: 400 }}>Bienvenue sur </em><span style={{ fontStyle: 'normal', fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>Waarwi</span>
-                </p>
+            {/* Right: login form card */}
+            <div className="w-full max-w-[450px] mx-auto">
+              {/* Mobile logo */}
+              <div className="lg:hidden flex justify-center mb-10">
+                <img src={logoSrc} alt={brandName} className="w-[150px] h-auto object-contain" />
               </div>
-              <p className="text-[15px] font-medium text-[#0f172a] mb-5 text-center">
-                Connectez-vous à votre compte
-              </p>
-              <form onSubmit={loginSubmit} className="space-y-3">
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="Adresse email"
-                  className="w-full h-[48px] md:h-[50px] rounded-[10px] border border-[#dbe3ef] px-4 text-[15px] text-slate-900 placeholder-slate-400
-                    focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
-                    hover:border-slate-300 transition-all"
-                />
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Mot de passe"
-                    className="w-full h-[48px] md:h-[50px] rounded-[10px] border border-[#dbe3ef] px-4 pr-11 text-[15px] text-slate-900 placeholder-slate-400
-                      focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900
-                      hover:border-slate-300 transition-all"
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+
+              <div className="bg-white rounded-[16px] border border-[#E2E8F0] shadow-[0_2px_8px_rgba(15,23,42,0.04)] p-6 sm:p-8">
+                <div className="mb-6">
+                  <h2 className="text-[22px] sm:text-[24px] font-bold text-[#0f172a] tracking-[-0.02em]">
+                    Accédez à votre espace
+                  </h2>
+                  <p className="mt-1.5 text-[14px] text-slate-500">
+                    Connectez-vous pour gérer votre activité.
+                  </p>
                 </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full h-[50px] rounded-[10px] bg-[#0f172a] text-white font-semibold text-[15px]
-                    hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed
-                    flex items-center justify-center mt-1"
-                >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Se connecter'}
-                </button>
-              </form>
 
-              <label className="flex items-center gap-2 mt-4 cursor-pointer select-none group">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={e => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/20 cursor-pointer"
-                />
-                <span className="text-[13px] text-[#475569] group-hover:text-slate-700 transition-colors">Se souvenir de moi</span>
-              </label>
+                <form onSubmit={loginSubmit} className="space-y-4">
+                  {/* Email field */}
+                  <div>
+                    <label className="block text-[13px] font-medium text-[#0f172a] mb-1.5">
+                      Adresse email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="vous@entreprise.com"
+                      className="w-full h-[52px] px-4 rounded-[11px] bg-white border border-[#E2E8F0] text-[#0f172a] text-[15px]
+                        placeholder:text-slate-400
+                        focus:outline-none focus:ring-2 focus:ring-[#0f766e]/20 focus:border-[#0f766e]
+                        hover:border-slate-300 transition-all"
+                    />
+                  </div>
 
-              <div className="h-px bg-[#e5e7eb] my-4" />
+                  {/* Password field */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[13px] font-medium text-[#0f172a]">
+                        Mot de passe
+                      </label>
+                      <button type="button" className="text-[12px] font-medium text-[#0f766e] hover:text-[#0d5f59] transition-colors">
+                        Mot de passe oublié ?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="Votre mot de passe"
+                        className="w-full h-[52px] px-4 pr-11 rounded-[11px] bg-white border border-[#E2E8F0] text-[#0f172a] text-[15px]
+                          placeholder:text-slate-400
+                          focus:outline-none focus:ring-2 focus:ring-[#0f766e]/20 focus:border-[#0f766e]
+                          hover:border-slate-300 transition-all"
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                        {showPassword ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+                      </button>
+                    </div>
+                  </div>
 
-              {!isTenantBranded && (
-                <button
-                  type="button"
-                  onClick={() => { setMode('register'); setStep(1); }}
-                  className="w-full h-[48px] rounded-[10px] bg-white border border-[#dbe3ef] text-[#0f172a] font-semibold text-[15px]
-                    hover:bg-slate-50 hover:border-slate-300 transition-all"
-                >
-                  Créer un compte Waarwi
-                </button>
-              )}
+                  {/* Remember me */}
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none group pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={e => setRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-[#0f766e] focus:ring-[#0f766e]/20 cursor-pointer"
+                    />
+                    <span className="text-[13px] text-slate-500 group-hover:text-slate-700 transition-colors">Se souvenir de moi</span>
+                  </label>
+
+                  {/* Submit button */}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full h-[52px] rounded-none bg-transparent border-l-2 border-r-2 border-[#0f172a] text-[#0f172a] font-semibold text-[15px]
+                      hover:bg-[#0f172a]/[0.03] active:scale-[0.99] transition-all
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                      flex items-center justify-center gap-2"
+                  >
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Se connecter'}
+                  </button>
+                </form>
+
+                {/* Register link & help */}
+                {!isTenantBranded && (
+                  <div className="mt-5 pt-5 border-t border-[#E2E8F0] space-y-2.5 text-center">
+                    <p className="text-[13px] text-slate-500">
+                      Nouveau sur Waarwi ?{' '}
+                      <button
+                        type="button"
+                        onClick={() => { setMode('register'); setStep(1); }}
+                        className="font-semibold text-[#0f766e] hover:text-[#0d5f59] transition-colors"
+                      >
+                        Créer un compte
+                      </button>
+                    </p>
+                    <p className="text-[12px] text-slate-400">
+                      Besoin d'aide ?{' '}
+                      <a
+                        href="https://wa.me/221781234567"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-slate-500 hover:text-[#0f172a] transition-colors"
+                      >
+                        Contacter l'assistance
+                      </a>
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
 
-      {/* Footer */}
-      <div className="py-4 md:py-6 text-center">
-        <div className="md:hidden mb-1 flex flex-col items-center gap-2">
-          <p className="text-[11px] text-[#94a3b8]">&copy; 2026 WAARWI</p>
-          <div className="w-24 h-px bg-[#e2e8f0]" />
-          <p className="text-[11px] text-[#94a3b8]">Propulsée par INTELLIGENCEPRO TECHNOLOGIES</p>
+      {/* Mini-footer */}
+      <footer className="py-4 px-6 text-center lg:text-left">
+        <div className="max-w-[1060px] mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1">
+          <p className="text-[11px] text-slate-400">
+            &copy; {new Date().getFullYear()} Waarwi &middot; Un produit IntelligencePro Technologies
+          </p>
+          <p className="text-[11px] text-slate-400">
+            <a href="https://wa.me/221781234567" className="hover:text-slate-600 transition-colors">Assistance</a>
+            {' · '}
+            <a href="https://waarwi.com/confidentialite" className="hover:text-slate-600 transition-colors">Confidentialité</a>
+            {' · '}
+            <a href="https://waarwi.com/cgu" className="hover:text-slate-600 transition-colors">CGU</a>
+            {' · '}
+            <span>Conçu au Sénégal</span>
+          </p>
         </div>
-        <p className="hidden md:block text-[12px] text-[#94a3b8]">&copy; 2026 WAARWI - Propulsée par INTELLIGENCEPRO TECHNOLOGIES</p>
-      </div>
+      </footer>
     </div>
   );
 }

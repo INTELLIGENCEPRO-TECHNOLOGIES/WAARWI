@@ -126,20 +126,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
       'online_orders','online_order_items','shop_settings','tenants','sites','profiles','tenant_messages',
       'journal_entries',
     ];
+    const dispatch = (table: string) => {
+      setDataTick(t => t + 1);
+      if (REF_TABLES.includes(table)) refDirtyRef.current = true;
+      listenersRef.current.forEach(l => {
+        if (l.tables.has(table) || l.tables.has('*')) {
+          try { l.cb(); } catch (_e) { /* ignore */ }
+        }
+      });
+    };
     const channel = supabase.channel(`tenant:${tid}`);
     tables.forEach(table => {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
-        setDataTick(t => t + 1);
-        if (REF_TABLES.includes(table)) refDirtyRef.current = true;
-        listenersRef.current.forEach(l => {
-          if (l.tables.has(table) || l.tables.has('*')) {
-            try { l.cb(); } catch (_e) { /* ignore */ }
-          }
-        });
-      });
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => dispatch(table));
     });
-    channel.subscribe();
+    channel.subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        setTimeout(() => { setDataTick(t => t + 1); }, 2000);
+      }
+    });
     return () => { supabase.removeChannel(channel); };
+  }, [profile?.tenant_id]);
+
+  // ── Visibility change: refresh data when app returns to foreground ────────
+  useEffect(() => {
+    const tid = profile?.tenant_id;
+    if (!tid) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setDataTick(t => t + 1);
+        listenersRef.current.forEach(l => { try { l.cb(); } catch (_e) { /* ignore */ } });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [profile?.tenant_id]);
 
   // Refresh tenant/profile/sites on dataTick (debounced)

@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
   ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
-  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin,
+  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin, Network,
   TrendingUp, UserPlus
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -17,6 +17,7 @@ import { EmptyState } from '../components/EmptyState';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
+import { MarqueeText } from '../components/MarqueeText';
 import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
 import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, printDecaissementTicket80, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
@@ -32,6 +33,7 @@ type ArticleLite = {
   sale_price: number; purchase_price: number; stock_available: number;
   category_id: string | null; image_url: string | null; ipm_eligible: boolean;
   track_stock: boolean;
+  _stockLoaded?: boolean;
 };
 
 type ArticleTier = { article_id: string; tier_name: string; price: number };
@@ -66,7 +68,7 @@ type SessionSale = {
   customer_phone: string | null;
   customer_address: string | null;
   status: string;
-  items: { article_id: string; name: string; quantity: number; unit_price: number; purchase_cost?: number; returned?: number }[];
+  items: { sale_item_id: string; article_id: string; name: string; quantity: number; unit_price: number; purchase_cost?: number; returned?: number }[];
   fullyReturned?: boolean;
   doc_header?: Record<string, string | null> | null;
   user_id?: string | null;
@@ -79,7 +81,7 @@ function printXReport(
     count: number; total: number; totalPayments?: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
-    movements?: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movements?: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
     movExpense?: number; movIncome?: number; movPrepay?: number; netTotal?: number;
   },
   regularizations: { reg_type: string; amount: number; reason: string }[],
@@ -225,11 +227,11 @@ function POSLandingOpen({
 
   return (
     <div className="pb-2">
-      {/* ── Header ── */}
-      <div className="px-0 lg:px-6 pt-2 sm:pt-5 pb-2 sm:pb-4">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-neutral-200 shadow-sm">
+      {/* ── Header (desktop only — mobile has its own) ── */}
+      <div className="hidden lg:block px-6 pt-5 pb-4">
+        <div className="flex items-center gap-2 px-3 py-2">
           <div className="leading-tight">
-            <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
+            <h1 className="text-xs font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
             {currentSite && (
               <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
             )}
@@ -237,138 +239,171 @@ function POSLandingOpen({
           <div className="flex-1" />
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
-            <span className="text-[11px] font-medium text-neutral-500">Fermée</span>
+            <span className="text-[10px] font-medium text-neutral-500">Fermée</span>
           </div>
         </div>
       </div>
 
-      {/* ── Desktop grid (mirrors resume) ── */}
-      <div className="hidden lg:grid lg:grid-cols-[1fr_340px] gap-3 px-6">
-        {/* Left: Ouvrir la caisse */}
-        <div className="bg-white rounded-md border border-neutral-200 p-6 flex flex-col">
-          <div className="space-y-4 flex-1">
-            <div>
-              <label className="text-[11px] text-neutral-400 leading-none mb-1.5 block">Fond de caisse initial (FCFA)</label>
-              <input
-                type="number"
-                value={openingAmount || ''}
-                onChange={e => setOpeningAmount(Number(e.target.value))}
-                className="w-full h-11 px-3.5 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold text-neutral-900 tabular-nums transition-all"
-                placeholder="0"
-                min="0"
-                autoFocus
-                inputMode="numeric"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] text-neutral-400 leading-none mb-1.5 block">Note (optionnel)</label>
-              <input
-                value={openingNote}
-                onChange={e => setOpeningNote(e.target.value)}
-                className="w-full h-11 px-3.5 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm text-neutral-900 transition-all"
-                placeholder="Ex: monnaie disponible..."
-              />
-            </div>
-
-            {cashierName && (
-              <div className="flex items-center gap-3 py-3 px-3.5 rounded-md border border-neutral-100 bg-neutral-50/60">
-                <div className="w-7 h-7 rounded-full border border-neutral-200 bg-white flex items-center justify-center shrink-0">
-                  <User className="w-3.5 h-3.5 text-neutral-400" />
+      {/* ── Desktop grid (mirrors resume — no cards, border separators) ── */}
+      <div className="hidden lg:block px-6 pt-4">
+        <div className="p-6">
+          <div className="grid lg:grid-cols-[1fr_320px]">
+            {/* Left: Ouvrir la caisse */}
+            <div className="pr-6">
+              <div className="space-y-0">
+                {/* Fond de caisse */}
+                <div className="py-5 border-b border-neutral-100">
+                  <label className="text-[10px] text-neutral-400 leading-none mb-2 block">Fond de caisse initial (FCFA)</label>
+                  <input
+                    type="number"
+                    value={openingAmount || ''}
+                    onChange={e => setOpeningAmount(Number(e.target.value))}
+                    className="w-full h-10 px-3 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold text-neutral-900 tabular-nums transition-all"
+                    placeholder="0"
+                    min="0"
+                    autoFocus
+                    inputMode="numeric"
+                  />
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-neutral-500">Vendeur :</span>
-                  <span className="font-semibold text-neutral-900 uppercase">{cashierName}</span>
+
+                {/* Note */}
+                <div className="py-5 border-b border-neutral-100">
+                  <label className="text-[10px] text-neutral-400 leading-none mb-2 block">Note (optionnel)</label>
+                  <input
+                    value={openingNote}
+                    onChange={e => setOpeningNote(e.target.value)}
+                    className="w-full h-10 px-3 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm text-neutral-900 transition-all"
+                    placeholder="Ex: monnaie disponible..."
+                  />
                 </div>
+
+                {/* Vendeur */}
+                {cashierName && (
+                  <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
+                    <User className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[10px] text-neutral-400">Vendeur :</span>
+                      <span className="text-[13px] font-bold text-neutral-900 uppercase">{cashierName}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Point de vente */}
+                {currentSite && (
+                  <div className="flex items-center gap-3 py-5">
+                    <Network className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Point de vente</p>
+                      <p className="text-[13px] font-bold text-neutral-900">{currentSite.name}</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Submit button */}
+              <div className="mt-6 pt-5 border-t border-neutral-100">
+                <button
+                  onClick={openSessionSubmit}
+                  disabled={openingSubmitting}
+                  className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-[0.98]"
+                >
+                  {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
+                  Ouverture de caisse
+                </button>
+              </div>
+            </div>
+
+            {/* Vertical divider + Right column */}
+            <div className="lg:border-l border-neutral-100 pl-6 flex flex-col">
+              {/* Rappel */}
+              <div>
+                <div className="flex items-center gap-2.5 mb-4">
+                  <AlertCircle className="w-4.5 h-4.5 text-neutral-700" />
+                  <h3 className="text-sm font-bold text-neutral-900">Rappel</h3>
+                </div>
+                <ul className="space-y-2.5 text-xs text-neutral-600 leading-relaxed">
+                  <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Comptez les espèces dans votre tiroir-caisse avant d'ouvrir.</li>
+                  <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Le fond de caisse initial sera vérifié à la clôture.</li>
+                  <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Vous pouvez quitter la caisse et y revenir sans la fermer.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Mobile layout (mirrors resume — no cards, border separators) ── */}
+      <div className="lg:hidden px-0 pt-2">
+        <div>
+          {/* Header */}
+          <div className="flex items-center gap-2 px-3 py-2">
+            <div className="leading-tight">
+              <h2 className="text-xs font-bold tracking-tight text-neutral-900 leading-none">Caisse</h2>
+              {currentSite && (
+                <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
+              )}
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" />
+              <span className="text-[10px] font-medium text-neutral-500">Fermée</span>
+            </div>
           </div>
 
-          {/* Submit button */}
-          <div className="mt-6 pt-5 border-t border-neutral-100">
+          {/* Fond de caisse */}
+          <div className="px-3 py-3 border-t border-neutral-100">
+            <label className="text-[10px] text-neutral-400 mb-1.5 block">Fond de caisse (FCFA)</label>
+            <input
+              type="number"
+              value={openingAmount || ''}
+              onChange={e => setOpeningAmount(Number(e.target.value))}
+              className="w-full h-10 px-3 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold tabular-nums"
+              placeholder="0"
+              min="0"
+              autoFocus={desktopAutoFocus}
+              inputMode="numeric"
+            />
+          </div>
+
+          {/* Note */}
+          <div className="px-3 py-3 border-t border-neutral-100">
+            <label className="text-[10px] text-neutral-400 mb-1.5 block">Note (optionnel)</label>
+            <input
+              value={openingNote}
+              onChange={e => setOpeningNote(e.target.value)}
+              className="w-full h-9 px-3 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-xs"
+              placeholder="Ex: monnaie disponible..."
+            />
+          </div>
+
+          {/* Vendeur */}
+          {cashierName && (
+            <div className="flex items-center gap-2 px-3 py-3 border-t border-neutral-100">
+              <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <div><p className="text-[10px] text-neutral-400">Vendeur</p><p className="text-[11px] font-bold text-neutral-900 uppercase">{cashierName}</p></div>
+            </div>
+          )}
+
+          {/* Point de vente */}
+          {currentSite && (
+            <div className="flex items-center gap-2 px-3 py-3 border-t border-neutral-100">
+              <Network className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <div><p className="text-[10px] text-neutral-400">Point de vente</p><p className="text-[11px] font-bold text-neutral-900">{currentSite.name}</p></div>
+            </div>
+          )}
+
+          {/* Submit */}
+          <div className="px-3 py-3 border-t border-neutral-100">
             <button
               onClick={openSessionSubmit}
               disabled={openingSubmitting}
-              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 text-white text-xs font-semibold transition-colors active:scale-[0.98]"
             >
               {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
               Ouverture de caisse
             </button>
           </div>
         </div>
-
-        {/* Right column */}
-        <div className="flex flex-col gap-3">
-          {/* Rappel */}
-          <div className="bg-white rounded-md border border-neutral-200 p-5">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-neutral-700" /></div>
-              <h3 className="text-sm font-bold text-neutral-900">Rappel</h3>
-            </div>
-            <ul className="space-y-2 text-xs text-neutral-600 leading-relaxed">
-              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Comptez les espèces dans votre tiroir-caisse avant d'ouvrir.</li>
-              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Le fond de caisse initial sera vérifié à la clôture.</li>
-              <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Vous pouvez quitter la caisse et y revenir sans la fermer.</li>
-            </ul>
-          </div>
-
-          {/* Point de vente */}
-          {currentSite && (
-            <div className="bg-white rounded-md border border-neutral-200 p-5 flex-1">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center"><Monitor className="w-4 h-4 text-neutral-500" /></div>
-                <h3 className="text-sm font-bold text-neutral-900">Point de vente</h3>
-              </div>
-              <p className="text-sm font-semibold text-neutral-900">{currentSite.name}</p>
-              <p className="text-[11px] text-neutral-400 mt-1">La session sera liée à ce point de vente.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Mobile layout ── */}
-      <div className="lg:hidden px-0 space-y-2">
-        <div className="bg-white rounded-md border border-neutral-200 p-3">
-          <div className="space-y-2">
-            <div>
-              <label className="text-[10px] text-neutral-400 mb-1 block">Fond de caisse (FCFA)</label>
-              <input
-                type="number"
-                value={openingAmount || ''}
-                onChange={e => setOpeningAmount(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-lg border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold tabular-nums"
-                placeholder="0"
-                min="0"
-                autoFocus={desktopAutoFocus}
-                inputMode="numeric"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-neutral-400 mb-1 block">Note (optionnel)</label>
-              <input
-                value={openingNote}
-                onChange={e => setOpeningNote(e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-xs"
-                placeholder="Ex: monnaie disponible..."
-              />
-            </div>
-            {cashierName && (
-              <div className="flex items-center gap-2 pt-2 border-t border-neutral-100">
-                <div className="w-6 h-6 rounded-full border border-neutral-200 flex items-center justify-center shrink-0"><User className="w-3 h-3 text-neutral-400" /></div>
-                <div><p className="text-[9px] text-neutral-400">Vendeur</p><p className="text-[11px] font-semibold text-neutral-800 uppercase">{cashierName}</p></div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={openSessionSubmit}
-          disabled={openingSubmitting}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 text-white text-sm font-semibold transition-colors active:scale-[0.98] shadow-sm"
-        >
-          {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-          Ouverture de caisse
-        </button>
       </div>
 
       {/* ── Recent sessions (cleaner, aligned with the rest) ── */}
@@ -520,7 +555,7 @@ function POSLandingResume({
             <div className="pr-6">
               <div className="grid grid-cols-2 gap-x-8 gap-y-0">
                 <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
-                  <Monitor className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
+                  <Network className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
                   <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Point de vente</p><p className="text-[15px] font-bold text-neutral-900">{currentSite?.name || '-'}</p></div>
                 </div>
                 <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
@@ -840,6 +875,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [methods, setMethods] = useState<PaymentMethod[]>(hasPosCache ? posCache.methods : []);
   const [session, setSession] = useState<CashSession | null>(hasPosCache ? posCache.session : null);
   const [loadingData, setLoadingData] = useState(!hasPosCache);
+  const initialLoadDone = useRef(hasPosCache);
 
   // Session open form
   const [openingAmount, setOpeningAmount] = useState(0);
@@ -872,7 +908,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [quickCustomerName, setQuickCustomerName] = useState('');
 
   // Source site/depot selector for stock deduction
-  const [saleSourceSiteId, setSaleSourceSiteId] = useState<string>('');
+  const [saleSourceSiteId, setSaleSourceSiteId] = useState<string>(currentSite?.id || '');
 
   // IPM detection (pharmacy only)
   const isPharmacy = (tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie';
@@ -935,10 +971,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     return () => { setPosCart(0, false); };
   }, [setPosCart]);
 
-  // Init saleSourceSiteId from currentSite
+  // Sync saleSourceSiteId when currentSite changes (e.g. site switch)
   useEffect(() => {
     if (currentSite && !saleSourceSiteId) setSaleSourceSiteId(currentSite.id);
-  }, [currentSite?.id]);
+  }, [currentSite?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Held carts (mise en attente) — persisted in DB
   const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
@@ -1049,7 +1085,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // Cash movement (expense / income / customer prepayment)
   const [mvOpen, setMvOpen] = useState(false);
-  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan'>('expense');
+  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'>('expense');
   const [mvCustPrepay, setMvCustPrepay] = useState(0);
   const [mvCustBalance, setMvCustBalance] = useState(0);
   const [mvAmount, setMvAmount] = useState(0);
@@ -1084,15 +1120,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [returnSales, setReturnSales] = useState<SessionSale[]>([]);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnSelected, setReturnSelected] = useState<SessionSale | null>(null);
-  const [returnLines, setReturnLines] = useState<{ article_id: string; name: string; quantity: number; unit_price: number; purchase_cost: number; maxQty: number; selected: boolean }[]>([]);
+  const [returnLines, setReturnLines] = useState<{ sale_item_id: string; article_id: string; name: string; quantity: number; unit_price: number; purchase_cost: number; maxQty: number; selected: boolean }[]>([]);
 
   // Session tickets list
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
   const [sessionProfileNames, setSessionProfileNames] = useState<Record<string, string>>({});
-  const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
+  const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
   const [sessionInvPayments, setSessionInvPayments] = useState<{ sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string }[]>([]);
-  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | 'reglements' | null>('tickets');
+  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'remboursements' | 'retraits' | 'prets' | 'reglements' | null>('tickets');
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [sessionEncaisse, setSessionEncaisse] = useState(0);
 
@@ -1107,9 +1143,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     count: number; total: number; totalPayments: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
-    movements: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movements: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
     invoicePayments: { sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string; user_name: string | null }[];
-    movExpense: number; movIncome: number; movPrepay: number; movWithdrawal: number; movLoan: number;
+    movExpense: number; movIncome: number; movPrepay: number; movWithdrawal: number; movLoan: number; movRefund: number;
     netTotal: number;
   } | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
@@ -1151,8 +1187,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Lot picker for sale
   const [lotPickerOpen, setLotPickerOpen] = useState(false);
 
+  const loadIdRef = useRef(0);
+
   const load = useCallback(async () => {
     if (!tenant || !currentSite) { setLoadingData(false); return; }
+    const thisLoadId = ++loadIdRef.current;
     const stockSiteId = saleSourceSiteId || currentSite.id;
     const thisCacheKey = `${tenant.id}:${currentSite.id}`;
     if (posCache.key !== thisCacheKey || posCache.articles.length === 0) {
@@ -1162,50 +1201,70 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const isShared = (tenant as any)?.settings?.shared_articles !== false;
     const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
 
-    // Fetch all articles in batches (Supabase default limit is 1000)
-    let allArts: any[] = [];
-    let from = 0;
-    const batchSize = 1000;
-    while (true) {
-      let query = supabase
-        .from('articles')
-        .select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible, track_stock')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .range(from, from + batchSize - 1);
-      if (!isShared && currentSite) {
-        query = query.eq('site_id', currentSite.id);
+    try {
+    // Fetch articles, stock and other data ALL in parallel
+    const fetchArticlesBatched = async () => {
+      let all: any[] = [];
+      let from = 0;
+      while (true) {
+        let q = supabase.from('articles')
+          .select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible, track_stock')
+          .eq('tenant_id', tenant.id).eq('is_active', true)
+          .range(from, from + 999);
+        if (!isShared && currentSite) q = q.eq('site_id', currentSite.id);
+        const { data, error: e } = await q;
+        if (e || !data) break;
+        all = all.concat(data);
+        if (data.length < 1000) break;
+        from += 1000;
       }
-      const { data, error: e } = await query;
-      if (e || !data) break;
-      allArts = allArts.concat(data);
-      if (data.length < batchSize) break;
-      from += batchSize;
-    }
+      return all;
+    };
+    const fetchStockBatched = async () => {
+      let all: any[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error: e } = await supabase.from('stock_levels')
+          .select('article_id, quantity')
+          .eq('tenant_id', tenant.id).eq('site_id', stockSiteId)
+          .range(from, from + 999);
+        if (e) { console.error('[POS] stock fetch error', e, { from, siteId: stockSiteId }); break; }
+        if (!data) break;
+        all = all.concat(data);
+        if (data.length < 1000) break;
+        from += 1000;
+      }
+      return all;
+    };
 
-    const [{ data: stk }, { data: cs }, { data: cust }, { data: topRows }, { data: tiers }] = await Promise.all([
-      (async () => {
-        let all: any[] = [];
-        let f = 0;
-        while (true) {
-          const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', stockSiteId).range(f, f + 999);
-          if (e || !data) break;
-          all = all.concat(data);
-          if (data.length < 1000) break;
-          f += 1000;
-        }
-        return { data: all };
-      })(),
+    const [allArts, allStk, csResult, custResult, topResult, tiersResult] = await Promise.all([
+      fetchArticlesBatched(),
+      fetchStockBatched(),
       supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, status, user_id, site_id, tenant_id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
       (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, balance, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
       supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
     ]);
+
+    // Abort if a newer load was started
+    if (thisLoadId !== loadIdRef.current) return;
+
+    const stk = allStk;
+    const cs = csResult.data;
+    const cust = custResult.data;
+    const topRows = topResult.data;
+    const tiers = tiersResult.data;
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[POS] load complete', { articles: allArts.length, stock: stk.length, siteId: stockSiteId, loadId: thisLoadId });
+    }
+
     const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
     const newArticles = (allArts).map((a: any) => ({
       id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
       sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
-      stock_available: qmap.get(a.id) || 0,
+      stock_available: qmap.get(a.id) ?? 0,
+      _stockLoaded: true,
       category_id: a.category_id || null,
       image_url: a.image_url || null,
       ipm_eligible: a.ipm_eligible !== false,
@@ -1242,8 +1301,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       posCache.screen = newScreen;
       return newScreen;
     });
-    setLoadingData(false);
-
     // Persist to module-level cache
     posCache.key = thisCacheKey;
     posCache.articles = newArticles;
@@ -1253,6 +1310,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     posCache.categories = newCategories;
     posCache.topScores = scores;
     posCache.articleTiers = newTiers;
+    } catch (err) {
+      console.error('[POS] load error', err);
+    } finally {
+      if (thisLoadId === loadIdRef.current) {
+        setLoadingData(false);
+        initialLoadDone.current = true;
+      }
+    }
   }, [tenant?.id, currentSite?.id, saleSourceSiteId]);
 
   useEffect(() => { load(); }, [load]);
@@ -1268,6 +1333,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const unsub = onDataChange(
       ['articles', 'stock_levels', 'customers', 'sales', 'sale_payments', 'cash_movements'],
       () => {
+        if (!initialLoadDone.current) return;
         if (timer) clearTimeout(timer);
         timer = setTimeout(async () => {
           const fetchStk = async () => {
@@ -1282,18 +1348,33 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             }
             return all;
           };
-          const [stk, { data: cust }, { data: newArts }] = await Promise.all([
+          const fetchArts = async () => {
+            let all: any[] = [];
+            let from = 0;
+            while (true) {
+              let q = supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible, track_stock').eq('tenant_id', tenant.id).eq('is_active', true).range(from, from + 999);
+              if (!isShared) q = q.eq('site_id', currentSite.id);
+              const { data, error: e } = await q;
+              if (e || !data) break;
+              all = all.concat(data);
+              if (data.length < 1000) break;
+              from += 1000;
+            }
+            return all;
+          };
+          const [stk, { data: cust }, newArts] = await Promise.all([
             fetchStk(),
             (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, balance, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
-            (() => { let q = supabase.from('articles').select('id, internal_ref, name, oem_ref, sale_price, purchase_price, category_id, image_url, ipm_eligible, track_stock').eq('tenant_id', tenant.id).eq('is_active', true); if (!isShared) q = q.eq('site_id', currentSite.id); return q; })(),
+            fetchArts(),
           ]);
-          if (stk && newArts) {
+          if (stk && newArts && newArts.length > 0) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
             const prevMap = new Map(posCache.articles.map(a => [a.id, a.stock_available]));
-            const updatedArticles = (newArts as any[]).map((a: any) => ({
+            const updatedArticles = newArts.map((a: any) => ({
               id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
               sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
               stock_available: qmap.has(a.id) ? Number(qmap.get(a.id)) : (prevMap.get(a.id) ?? 0),
+              _stockLoaded: true,
               category_id: a.category_id || null,
               image_url: a.image_url || null,
               ipm_eligible: a.ipm_eligible !== false,
@@ -1303,13 +1384,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             posCache.articles = updatedArticles;
           } else if (stk && stk.length > 0) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
-            setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.has(a.id) ? Number(qmap.get(a.id)) : a.stock_available })));
+            setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.has(a.id) ? Number(qmap.get(a.id)) : a.stock_available, _stockLoaded: true })));
           }
           if (cust) {
             setCustomers(cust as any);
             posCache.customers = cust as any;
           }
-        }, 300);
+        }, 600);
       }
     );
     return () => { unsub(); if (timer) clearTimeout(timer); };
@@ -1360,11 +1441,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     // If already in cart, just increment qty
     const existing = cart.find(i => i.article_id === a.id);
     if (existing) {
-      if (!allowNeg && tracksStock(a) && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return; }
+      if (!allowNeg && tracksStock(a) && a._stockLoaded && existing.quantity + 1 > a.stock_available) { error(`Stock insuffisant (${a.stock_available})`); return; }
       setCart(c => c.map(i => i.article_id === a.id ? { ...i, quantity: i.quantity + 1 } : i));
       return;
     }
-    if (!allowNeg && tracksStock(a) && a.stock_available <= 0) { error('Article en rupture'); return; }
+    if (!allowNeg && tracksStock(a) && a._stockLoaded && a.stock_available <= 0) { error('Article en rupture'); return; }
 
     // Check pricing tiers for this article (exception price always takes priority)
     const hasException = exceptionPrices.has(a.id);
@@ -1495,6 +1576,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (!tenant || !currentSite || !profile) return;
     if (!can('pos_open_session')) { error('Vous n\'avez pas la permission d\'ouvrir une session'); return; }
     setOpeningSubmitting(true);
+    const { data: existing } = await supabase.from('cash_sessions').select('id, opening_amount, opened_at').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1);
+    if (existing && existing.length > 0) {
+      setSession(existing[0]); setScreen('pos'); success('Session existante récupérée');
+      setOpeningSubmitting(false);
+      return;
+    }
     const { data, error: e } = await supabase.from('cash_sessions').insert({
       tenant_id: tenant.id, site_id: currentSite.id, user_id: profile.id,
       opening_amount: openingAmount, opening_note: openingNote, status: 'open',
@@ -2000,33 +2087,34 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setReturnLoading(true);
     const { data } = await supabase
       .from('sales')
-      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price, purchase_cost)')
+      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(id, article_id, name, quantity, unit_price, purchase_cost)')
       .eq('tenant_id', tenant!.id)
       .eq('cash_session_id', session!.id)
       .neq('status', 'cancelled')
       .order('created_at', { ascending: false });
 
-    // Fetch already-returned quantities for these sales
+    // Fetch already-returned quantities for these sales (by sale_item_id)
     const saleIds = (data || []).map((s: any) => s.id);
-    let returnedMap: Record<string, Record<string, number>> = {};
+    let returnedMap: Record<string, number> = {};
     if (saleIds.length > 0) {
       const { data: retData } = await supabase
         .from('sale_returns')
-        .select('sale_id, sale_return_items(article_id, quantity)')
+        .select('sale_id, sale_return_items(sale_item_id, quantity)')
         .eq('tenant_id', tenant!.id)
         .in('sale_id', saleIds);
       for (const ret of retData || []) {
-        if (!returnedMap[ret.sale_id]) returnedMap[ret.sale_id] = {};
         for (const ri of (ret as any).sale_return_items || []) {
-          returnedMap[ret.sale_id][ri.article_id] = (returnedMap[ret.sale_id][ri.article_id] || 0) + Number(ri.quantity);
+          if (ri.sale_item_id) {
+            returnedMap[ri.sale_item_id] = (returnedMap[ri.sale_item_id] || 0) + Number(ri.quantity);
+          }
         }
       }
     }
 
     setReturnSales((data || []).map((s: any) => {
       const items = (s.sale_items || []).map((i: any) => {
-        const alreadyReturned = returnedMap[s.id]?.[i.article_id] || 0;
-        return { article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), returned: alreadyReturned };
+        const alreadyReturned = returnedMap[i.id] || 0;
+        return { sale_item_id: i.id, article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), returned: alreadyReturned };
       });
       const fullyReturned = items.every((i: any) => i.returned >= i.quantity);
       return {
@@ -2043,7 +2131,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setReturnSearch('');
     setReturnLines(s.items.map(i => {
       const remaining = i.quantity - (i.returned || 0);
-      return { ...i, quantity: remaining, maxQty: remaining, selected: remaining > 0 };
+      return { ...i, purchase_cost: i.purchase_cost || 0, quantity: remaining, maxQty: remaining, selected: remaining > 0 };
     }));
   };
 
@@ -2058,73 +2146,25 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
     setReturnProcessing(true);
     try {
-      // 1. Adjust stock (increase for each returned item)
-      for (const item of lines) {
-        if (!item.article_id) continue;
-        await supabase.rpc('adjust_stock', {
-          p_article_id: item.article_id,
-          p_site_id: currentSite.id,
-          p_quantity: item.quantity,
-          p_movement_type: 'return_customer',
-          p_note: `Retour POS - ${returnSelected.sale_number}`,
-        });
-      }
-
-      // 2. Create a sale_returns record for traceability
-      const retNum = `RET-${returnSelected.sale_number}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
-      const { data: retInserted } = await supabase.from('sale_returns').insert({
-        tenant_id: tenant.id,
-        site_id: currentSite.id,
-        sale_id: returnSelected.id,
-        cash_session_id: session.id,
-        return_number: retNum,
-        total: returnTotal,
-        refund_method: 'cash',
-        reason: 'Retour au POS',
-        restock: true,
-        status: 'approved',
-      }).select('id').single();
-
-      // 3. Insert sale_return_items for each returned line
-      if (retInserted?.id) {
-        await supabase.from('sale_return_items').insert(
-          lines.map(l => ({
-            tenant_id: tenant.id,
-            return_id: retInserted.id,
-            article_id: l.article_id || null,
-            name: l.name,
-            quantity: l.quantity,
-            unit_price: l.unit_price,
-            purchase_cost: l.purchase_cost || 0,
-            total: l.quantity * l.unit_price,
-          }))
-        );
-      }
-
-      // 4. Record cash movement (expense) with article names in label
-      const articleNames = lines.map(l => `${l.name}${l.quantity > 1 ? ' x' + l.quantity : ''}`).join(', ');
-      await supabase.from('cash_movements').insert({
-        tenant_id: tenant.id,
-        site_id: currentSite.id,
-        cash_session_id: session.id,
-        user_id: profile?.id || null,
-        kind: 'expense',
-        amount: returnTotal,
-        reason: `Retour ${retNum}: ${articleNames}`,
-        note: `Réf. vente: ${returnSelected.sale_number}`,
-        reference: retNum,
+      const requestId = crypto.randomUUID();
+      const { data: result, error: rpcErr } = await supabase.rpc('process_sale_return', {
+        p_sale_id: returnSelected.id,
+        p_site_id: currentSite.id,
+        p_cash_session_id: session.id,
+        p_items: lines.map(l => ({ sale_item_id: l.sale_item_id, quantity: l.quantity })),
+        p_reason: 'Retour au POS',
+        p_refund_now: true,
+        p_restock: true,
+        p_request_id: requestId,
       });
 
-      // 5. Decrease cash session theoretical_amount
-      await supabase.from('cash_sessions').update({
-        theoretical_amount: Math.max(0, (session as any).theoretical_amount - returnTotal),
-      }).eq('id', session.id);
+      if (rpcErr) throw new Error(rpcErr.message);
 
-      // 6. Print the return ticket
+      const retNum = result?.return_number || 'RET-?';
       printReturnTicket80Shared(returnSelected.sale_number, lines, returnTotal, tenantForPrint, cashierName, retNum);
 
       setReturnOpen(false);
-      success(`Retour effectue: -${formatFCFA(returnTotal)} rembourse`);
+      success(`Retour effectué: -${formatFCFA(returnTotal)} remboursé`);
       load();
     } catch (e: any) {
       error(e.message || 'Erreur lors du retour');
@@ -2191,7 +2231,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setSessionSales([...sales, ...returns].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     const movs = (mvData || []).map((m: any) => ({
       id: m.id,
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', reference: m.reference || '',
       customer_name: m.customers?.name || null,
@@ -2210,7 +2250,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setSessionInvPayments(invPayments);
     const pmtTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const movEncaisseTotal = (mvData || [])
-      .filter((m: any) => m.kind !== 'expense' && m.kind !== 'customer_withdrawal' && m.kind !== 'customer_loan' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
+      .filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'customer_withdrawal' && m.kind !== 'customer_loan' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
       .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     setSessionEncaisse(pmtTotal + movEncaisseTotal);
     setTicketsExpanded('tickets');
@@ -2342,16 +2382,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const salesList = sales || [];
     const pmtList = pmtRows || [];
     const movs = (mvRows || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
     })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movs.forEach(m => {
-      if (m.kind !== 'income' && m.kind !== 'customer_prepayment' && m.kind !== 'expense') return;
+      if (m.kind !== 'income' && m.kind !== 'customer_prepayment' && m.kind !== 'expense' && m.kind !== 'refund') return;
       const method = m.method_name || 'Espèces';
-      const signed = m.kind === 'expense' ? -Number(m.amount) : Number(m.amount);
+      const signed = (m.kind === 'expense' || m.kind === 'refund') ? -Number(m.amount) : Number(m.amount);
       byMethod[method] = (byMethod[method] || 0) + signed;
     });
     const invoicePayments = pmtList
@@ -2374,6 +2414,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     });
     const topArticles = Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10);
     const movExpense = movs.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+    const movRefund = movs.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
     const movWithdrawal = movs.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
     const movLoan = movs.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
     const movIncome = movs.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
@@ -2387,8 +2428,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       topArticles,
       movements: movs,
       invoicePayments,
-      movExpense, movIncome, movPrepay, movWithdrawal, movLoan,
-      netTotal: totalPayments + movIncome + movPrepay - movExpense - movWithdrawal - movLoan,
+      movExpense, movIncome, movPrepay, movWithdrawal, movLoan, movRefund,
+      netTotal: totalPayments + movIncome + movPrepay - movExpense - movRefund - movWithdrawal - movLoan,
     });
     setLoadingStats(false);
   };
@@ -2423,9 +2464,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     });
     (mvs || []).forEach((m: any) => {
       if (m.kind === 'income' && m.reason && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')) return;
-      const key = m.method_name || (m.kind === 'expense' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' ? 'Espèces' : '—');
+      const key = m.method_name || (m.kind === 'expense' || m.kind === 'refund' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' ? 'Espèces' : '—');
       if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
-      if (m.kind === 'expense' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan') {
+      if (m.kind === 'expense' || m.kind === 'refund' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan') {
         theoretical[key].amount -= Number(m.amount);
       } else {
         theoretical[key].amount += Number(m.amount);
@@ -2453,7 +2494,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     // Build stats for X report
     const salesList = salesResult.data || [];
     const movList = (mvs || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan',
+      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund',
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
     })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
@@ -2483,6 +2524,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       });
     });
     const movExpense = movList.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+    const movRefund = movList.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
     const movWithdrawal = movList.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
     const movLoan = movList.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
     const movIncome = movList.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
@@ -2497,8 +2539,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       topArticles: Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10),
       movements: movList,
       invoicePayments,
-      movExpense, movIncome, movPrepay, movWithdrawal, movLoan,
-      netTotal: totalPayments + movIncome + movPrepay - movExpense - movWithdrawal - movLoan,
+      movExpense, movIncome, movPrepay, movWithdrawal, movLoan, movRefund,
+      netTotal: totalPayments + movIncome + movPrepay - movExpense - movRefund - movWithdrawal - movLoan,
     });
 
     setControlLines(lines);
@@ -2833,8 +2875,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  placeholder="Rechercher un produit"
-                  className="flex-1 min-w-0 w-0 bg-transparent text-sm focus:outline-none placeholder:text-neutral-400"
+                  placeholder="Rechercher…"
+                  className="flex-1 min-w-0 w-0 bg-transparent text-sm focus:outline-none placeholder:text-neutral-400 placeholder:animate-pulse"
                   autoFocus={desktopAutoFocus}
                 />
                 {search && (
@@ -2938,8 +2980,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 {filtered.map(a => {
                   const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
                   const tracked = tracksStock(a);
-                  const out = !allowNeg && tracked && a.stock_available <= 0;
-                  const low = tracked && a.stock_available > 0 && a.stock_available <= 3;
+                  const out = !allowNeg && tracked && a._stockLoaded && a.stock_available <= 0;
+                  const low = tracked && a._stockLoaded && a.stock_available > 0 && a.stock_available <= 3;
                   return (
                     <button key={a.id} onClick={() => addToCart(a)} disabled={out}
                       className="product-card disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2951,8 +2993,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           <Package className="w-7 h-7 text-neutral-300" />
                         )}
                         {tracked && can('view_stock_levels') && (
-                          <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
-                            {a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
+                          <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${!a._stockLoaded ? 'bg-neutral-300 text-white' : a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
+                            {!a._stockLoaded ? '...' : a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}
                           </span>
                         )}
                       </div>
@@ -2972,25 +3014,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 {filtered.map(a => {
                   const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
                   const tracked = tracksStock(a);
-                  const out = !allowNeg && tracked && a.stock_available <= 0;
+                  const out = !allowNeg && tracked && a._stockLoaded && a.stock_available <= 0;
                   return (
                     <button
                       key={a.id}
                       onClick={() => addToCart(a)}
                       disabled={out}
-                      className={`w-full flex items-center px-3 py-1.5 rounded-lg border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-neutral-200 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'}`}
+                      className={`w-full px-3 py-1.5 rounded-lg border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-neutral-200 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'}`}
                     >
-                      {tracked && can('view_stock_levels') ? (
-                        <div className="w-16 shrink-0 flex items-center justify-center border-r border-neutral-200 mr-3 h-7">
-                          <span className={`text-[10px] font-bold num leading-none ${a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                            {a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup.') : `×${a.stock_available}`}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="w-16 shrink-0 mr-3 h-7" />
-                      )}
-                      <span className="flex-1 min-w-0 text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
-                      <span className="text-[12px] font-bold text-neutral-900 num shrink-0 ml-2">{formatFCFA(a.sale_price)}</span>
+                      <MarqueeText className="text-[12px] font-semibold text-neutral-900">{a.name}</MarqueeText>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <span className={`text-[10px] font-bold num leading-none ${!a._stockLoaded ? 'text-neutral-400' : a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                          {tracked && can('view_stock_levels') ? (!a._stockLoaded ? '...' : a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rup.') : `×${a.stock_available}`) : ''}
+                        </span>
+                        <span className="text-[12px] font-bold text-neutral-900 num shrink-0">{formatFCFA(a.sale_price)}</span>
+                      </div>
                     </button>
                   );
                 })}
@@ -3726,11 +3764,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           const encDirectList = sessionMovements.filter(m => m.kind === 'income');
           const acomptesList = sessionMovements.filter(m => m.kind === 'customer_prepayment');
           const depensesList = sessionMovements.filter(m => m.kind === 'expense');
+          const remboursementsList = sessionMovements.filter(m => m.kind === 'refund');
           const retraitsList = sessionMovements.filter(m => m.kind === 'customer_withdrawal');
           const pretsList = sessionMovements.filter(m => m.kind === 'customer_loan');
           const encDirectTotal = encDirectList.reduce((s, m) => s + m.amount, 0);
           const acomptesTotal = acomptesList.reduce((s, m) => s + m.amount, 0);
           const depensesTotal = depensesList.reduce((s, m) => s + m.amount, 0);
+          const remboursementsTotal = remboursementsList.reduce((s, m) => s + m.amount, 0);
           const retraitsTotal = retraitsList.reduce((s, m) => s + m.amount, 0);
           const pretsTotal = pretsList.reduce((s, m) => s + m.amount, 0);
           return (
@@ -4025,6 +4065,41 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
+              {/* Remboursements */}
+              {remboursementsList.length > 0 && (
+                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'remboursements' ? 'border-amber-300 bg-amber-50/40' : 'border-neutral-200 bg-white'}`}>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'remboursements' ? null : 'remboursements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'remboursements' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-neutral-800">Remboursements</div>
+                        <div className="text-[10px] text-neutral-500">{remboursementsList.length} remboursement{remboursementsList.length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-amber-700 num">-{formatFCFA(remboursementsTotal)}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'remboursements' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {ticketsExpanded === 'remboursements' && (
+                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {remboursementsList.map((m, i) => (
+                        <div key={i} className="p-2.5 rounded-lg bg-white border border-amber-100">
+                          <div className="text-xs font-semibold text-neutral-900">{m.reason || 'Remboursement'}</div>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Espèces'}</span>
+                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
+                            <span className="text-xs font-bold text-amber-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Retraits clients */}
               {retraitsList.length > 0 && (
                 <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
@@ -4296,16 +4371,25 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       </div>
                       <div>
                         <div className="text-xs font-bold text-neutral-800">Décaissements</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'expense').length} dépense{statsData.movements.filter(m => m.kind === 'expense').length > 1 ? 's' : ''}</div>
+                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'expense').length} dépense{statsData.movements.filter(m => m.kind === 'expense').length > 1 ? 's' : ''}{statsData.movements.filter(m => m.kind === 'refund').length > 0 ? `, ${statsData.movements.filter(m => m.kind === 'refund').length} remb.` : ''}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-red-700 num">-{formatFCFA(statsData.movExpense)}</span>
+                      <span className="text-sm font-bold text-red-700 num">-{formatFCFA(statsData.movExpense + statsData.movRefund)}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {statsExpanded === 'depenses' && (
                     <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.movements.filter(m => m.kind === 'refund').map((m, i) => (
+                        <div key={`ref-${i}`} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-amber-100">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Remboursement'}</div>
+                            <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium text-[9px]">Remboursement</span>
+                          </div>
+                          <span className="text-xs font-bold text-amber-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
                       {statsData.movements.filter(m => m.kind === 'expense').map((m, i) => (
                         <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100">
                           <div className="min-w-0 flex-1">

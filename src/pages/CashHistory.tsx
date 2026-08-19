@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Clock, Loader2, X, Eye, Printer, Check, TrendingUp, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package, HandCoins } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Clock, Loader2, X, Eye, Printer, Check, TrendingUp, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package, HandCoins, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
@@ -7,6 +7,7 @@ import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printXReport80, buildPrintTenantForSite } from '../lib/print';
+import { consumeNavContext } from '../lib/navHighlight';
 
 type SessionRow = {
   id: string;
@@ -33,7 +34,7 @@ type InvoicePayment = {
 };
 
 type CashMovementRow = {
-  id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan';
+  id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund';
   amount: number; reason: string; note: string; reference: string;
   method_name: string; customer_name: string | null; supplier_name: string | null; created_at: string;
 };
@@ -41,6 +42,7 @@ type CashMovementRow = {
 type SessionDetail = {
   session: SessionRow;
   sales: { id: string; sale_number: string; total: number; created_at: string; customer_name: string | null }[];
+  cancelledSales: { id: string; sale_number: string; total: number; created_at: string; customer_name: string | null }[];
   controls: { method_name: string; theoretical_amount: number; counted_amount: number; difference_amount: number }[];
   regularizations: { reg_type: string; amount: number; reason: string; note: string; created_at: string }[];
   byMethod: { method_name: string; amount: number }[];
@@ -60,6 +62,41 @@ export function CashHistory() {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | 'ventes' | 'controle' | null>(null);
+  const [highlightSessionId, setHighlightSessionId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const ctx = consumeNavContext();
+    if (!ctx?.highlightId) return;
+    (async () => {
+      const { data } = await supabase.from('cash_movements').select('cash_session_id').eq('id', ctx.highlightId).maybeSingle();
+      if (data?.cash_session_id) {
+        setHighlightSessionId(data.cash_session_id);
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => setHighlightSessionId(null), 6800);
+      }
+    })();
+    return () => { if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current); };
+  }, []);
+
+  useEffect(() => {
+    if (!highlightSessionId || loading) return;
+    let raf: number;
+    let tries = 0;
+    const tryScroll = () => {
+      const el = document.querySelector(`[data-row-id="${highlightSessionId}"]`);
+      if (el) {
+        el.classList.remove('waarwi-flash');
+        void el.offsetWidth;
+        el.classList.add('waarwi-flash');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      if (++tries < 20) raf = requestAnimationFrame(tryScroll);
+    };
+    raf = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(raf);
+  }, [highlightSessionId, sessions, loading]);
 
   const load = async (silent = false) => {
     if (!tenant || !currentSite) return;
@@ -99,8 +136,9 @@ export function CashHistory() {
 
   const openDetail = async (s: SessionRow) => {
     setDetail(null); setDetailOpen(true); setLoadingDetail(true); setDetailExpanded(null);
-    const [{ data: salesData }, { data: ctrlData }, { data: regData }, { data: pmtData }, { data: mvData }] = await Promise.all([
-      supabase.from('sales').select('id, sale_number, total, created_at, customers(name)').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id).order('created_at'),
+    const [{ data: salesData }, { data: cancelledData }, { data: ctrlData }, { data: regData }, { data: pmtData }, { data: mvData }] = await Promise.all([
+      supabase.from('sales').select('id, sale_number, total, created_at, customers(name)').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id).in('status', ['paid', 'partial', 'validated']).order('created_at'),
+      supabase.from('sales').select('id, sale_number, total, created_at, customers(name)').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id).eq('status', 'cancelled').order('created_at'),
       supabase.from('cash_control_lines').select('method_name, theoretical_amount, counted_amount, difference_amount').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id),
       supabase.from('cash_regularizations').select('reg_type, amount, reason, note, created_at').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id).order('created_at'),
       supabase.from('sale_payments').select('id, method_name, amount, reference, created_at, sale_id, sales(sale_number, created_at, cash_session_id, customers(name))').eq('tenant_id', tenant!.id).eq('cash_session_id', s.id),
@@ -139,6 +177,7 @@ export function CashHistory() {
     setDetail({
       session: s,
       sales: (salesData || []).map((x: any) => ({ id: x.id, sale_number: x.sale_number, total: Number(x.total), created_at: x.created_at, customer_name: x.customers?.name || null })),
+      cancelledSales: (cancelledData || []).map((x: any) => ({ id: x.id, sale_number: x.sale_number, total: Number(x.total), created_at: x.created_at, customer_name: x.customers?.name || null })),
       controls: ctrlData || [],
       regularizations: regData || [],
       byMethod: Object.entries(byMethodMap).map(([method_name, amount]) => ({ method_name, amount })),
@@ -227,7 +266,7 @@ export function CashHistory() {
               const closed = s.closed_at ? new Date(s.closed_at) : null;
               const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
               return (
-                <button key={s.id} onClick={() => openDetail(s)} className="card-premium text-left p-3 flex flex-col gap-2 hover:border-brand-400 transition-all duration-300 group">
+                <button key={s.id} data-row-id={s.id} onClick={() => openDetail(s)} className="card-premium text-left p-3 flex flex-col gap-2 hover:border-brand-400 transition-all duration-300 group">
                   <div className="flex items-center gap-2">
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOpen ? 'bg-gradient-to-br from-neutral-400 to-neutral-600 text-white shadow-glow' : balanced ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white' : 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'}`}>
                       {isOpen ? <Clock className="w-3.5 h-3.5" /> : balanced ? <Check className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
@@ -244,6 +283,7 @@ export function CashHistory() {
                       </div>
                     </div>
                     <Eye className="w-3.5 h-3.5 text-neutral-300 group-hover:text-brand-600 transition-colors shrink-0" />
+                    <span className="text-[10px] font-semibold text-neutral-400 group-hover:text-brand-600 transition-colors shrink-0">Voir</span>
                   </div>
                   <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-neutral-100">
                     <div>
@@ -273,17 +313,17 @@ export function CashHistory() {
           {/* DESKTOP: list */}
           <div className="hidden md:block">
             <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold border-b border-neutral-200">
+              <thead className="text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Session</th>
-                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Ouverture</th>
-                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Clôture</th>
-                  <th className="px-4 py-2.5 text-left whitespace-nowrap">Durée</th>
-                  <th className="px-4 py-2.5 text-center whitespace-nowrap">Statut</th>
-                  <th className="px-4 py-2.5 text-right whitespace-nowrap">Fond</th>
-                  <th className="px-4 py-2.5 text-right whitespace-nowrap">Compté</th>
-                  <th className="px-4 py-2.5 text-right whitespace-nowrap">Écart</th>
-                  <th className="px-4 py-2.5 text-right w-16"></th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Session</th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Ouverture</th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Clôture</th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Durée</th>
+                  <th className="px-2 py-1.5 text-center whitespace-nowrap">Statut</th>
+                  <th className="px-2 py-1.5 text-right whitespace-nowrap">Fond</th>
+                  <th className="px-2 py-1.5 text-right whitespace-nowrap">Compté</th>
+                  <th className="px-2 py-1.5 text-right whitespace-nowrap">Écart</th>
+                  <th className="px-2 py-1.5 text-right w-16"></th>
                 </tr>
               </thead>
               <tbody>
@@ -295,26 +335,26 @@ export function CashHistory() {
                   const closed = s.closed_at ? new Date(s.closed_at) : null;
                   const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
                   return (
-                    <tr key={s.id} className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
-                      <td className="px-4 py-2.5 doc-number text-sm font-semibold text-neutral-700 whitespace-nowrap">#{s.id.slice(0, 8).toUpperCase()}</td>
-                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-neutral-500 num">{opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
-                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-neutral-500 num">{closed ? closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-neutral-500 num">{duration != null ? (duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`) : '—'}</td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${isOpen ? 'text-neutral-700' : 'text-neutral-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
+                    <tr key={s.id} data-row-id={s.id} className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
+                      <td className="px-2 py-1.5 doc-number text-[12px] font-bold text-neutral-700 whitespace-nowrap">#{s.id.slice(0, 8).toUpperCase()}</td>
+                      <td className="px-2 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="px-2 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{closed ? closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                      <td className="px-2 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{duration != null ? (duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`) : '—'}</td>
+                      <td className="px-2 py-1.5 text-center">
+                        <span className={`text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${isOpen ? 'text-neutral-700' : 'text-neutral-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-right text-xs font-semibold text-neutral-700 num whitespace-nowrap">{formatFCFA(s.opening_amount)}</td>
-                      <td className="px-4 py-2.5 text-right text-xs font-semibold text-neutral-700 num whitespace-nowrap">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-neutral-700 num whitespace-nowrap">{formatFCFA(s.opening_amount)}</td>
+                      <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-neutral-700 num whitespace-nowrap">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</td>
+                      <td className="px-2 py-1.5 text-right">
                         {variance != null ? (
-                          <span className={`inline-flex items-center gap-0.5 text-xs font-bold num whitespace-nowrap ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                          <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold num whitespace-nowrap ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                             {balanced ? 'OK' : <>{variance > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(variance))}</>}
                           </span>
-                        ) : <span className="text-xs text-neutral-400">—</span>}
+                        ) : <span className="text-[11px] text-neutral-400">—</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <button onClick={(e) => { e.stopPropagation(); openDetail(s); }} className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-all" title="Voir détail">
-                          <Eye className="w-4 h-4" />
+                      <td className="px-2 py-1.5 text-right">
+                        <button onClick={(e) => { e.stopPropagation(); openDetail(s); }} className="text-[10px] font-semibold text-neutral-500 hover:text-brand-700 transition-colors">
+                          Voir
                         </button>
                       </td>
                     </tr>
@@ -344,18 +384,30 @@ export function CashHistory() {
             {/* Compact KPI strip */}
             {(() => {
               const mvExp = detail.movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+              const mvRefund = detail.movements.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
               const mvRetrait = detail.movements.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
               const mvPret = detail.movements.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
               const salesTotal = detail.sales.reduce((s, x) => s + x.total, 0);
               const byMethodTotal = detail.byMethod.reduce((s, m) => s + m.amount, 0);
               const openingAmount = Number(detail.session.opening_amount) || 0;
               const totalEncaisse = byMethodTotal;
-              const net = openingAmount + totalEncaisse - mvExp - mvRetrait - mvPret;
+              const totalSorties = mvExp + mvRefund + mvRetrait + mvPret;
+              const net = openingAmount + totalEncaisse - totalSorties;
+              const cancelledTotal = detail.cancelledSales.reduce((s, x) => s + x.total, 0);
               return (
                 <div className="flex flex-col rounded-xl overflow-hidden border border-neutral-200 bg-neutral-200">
                   <div className="bg-white p-2.5 flex items-center justify-between">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Ventes</div>
-                    <div className="text-sm font-bold text-neutral-900 num">{detail.sales.length}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Ventes validées</div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-neutral-900 num">{detail.sales.length}</div>
+                      {detail.cancelledSales.length > 0 && (
+                        <div className="text-[8px] text-red-500 num mt-0.5">{detail.cancelledSales.length} annulée{detail.cancelledSales.length > 1 ? 's' : ''} ({formatFCFA(cancelledTotal)})</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-white p-2.5 flex items-center justify-between">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Facturé</div>
+                    <div className="text-sm font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(salesTotal)}</div>
                   </div>
                   <div className="bg-white p-2.5 flex items-center justify-between">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Fond initial</div>
@@ -363,11 +415,22 @@ export function CashHistory() {
                   </div>
                   <div className="bg-white p-2.5 flex items-center justify-between">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Encaissé</div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(totalEncaisse)}</div>
-                      <div className="text-[8px] text-neutral-400 num mt-0.5">Facturé {formatFCFA(salesTotal)}</div>
-                    </div>
+                    <div className="text-sm font-bold text-emerald-700 num whitespace-nowrap">+{formatFCFA(totalEncaisse)}</div>
                   </div>
+                  {totalSorties > 0 && (
+                    <div className="bg-white p-2.5 flex items-center justify-between">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Sorties</div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-red-600 num whitespace-nowrap">-{formatFCFA(totalSorties)}</div>
+                        <div className="flex flex-wrap justify-end gap-x-2 text-[8px] text-neutral-400 num mt-0.5">
+                          {mvExp > 0 && <span>Dép. {formatFCFA(mvExp)}</span>}
+                          {mvRefund > 0 && <span>Remb. {formatFCFA(mvRefund)}</span>}
+                          {mvRetrait > 0 && <span>Ret. {formatFCFA(mvRetrait)}</span>}
+                          {mvPret > 0 && <span>Prêts {formatFCFA(mvPret)}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="bg-white p-2.5 flex items-center justify-between">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Caisse théorique</div>
                     <div className="text-sm font-bold text-brand-800 num whitespace-nowrap">{formatFCFA(net)}</div>
@@ -486,11 +549,13 @@ export function CashHistory() {
                 const encDirectList = detail.movements.filter(m => m.kind === 'income');
                 const acomptesList = detail.movements.filter(m => m.kind === 'customer_prepayment');
                 const depensesList = detail.movements.filter(m => m.kind === 'expense');
+                const remboursementsList = detail.movements.filter(m => m.kind === 'refund');
                 const retraitsList = detail.movements.filter(m => m.kind === 'customer_withdrawal');
                 const pretsList = detail.movements.filter(m => m.kind === 'customer_loan');
                 const encDirectTotal = encDirectList.reduce((s, m) => s + m.amount, 0);
                 const acomptesTotal = acomptesList.reduce((s, m) => s + m.amount, 0);
                 const depensesTotal = depensesList.reduce((s, m) => s + m.amount, 0);
+                const remboursementsTotal = remboursementsList.reduce((s, m) => s + m.amount, 0);
                 const retraitsTotal = retraitsList.reduce((s, m) => s + m.amount, 0);
                 const pretsTotal = pretsList.reduce((s, m) => s + m.amount, 0);
                 return (
@@ -600,6 +665,38 @@ export function CashHistory() {
                                   </div>
                                 </div>
                                 <span className="text-xs font-bold text-red-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {remboursementsList.length > 0 && (
+                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'remboursements' ? 'border-amber-300 bg-amber-50/40' : 'border-neutral-200 bg-white'}`}>
+                        <button onClick={() => setDetailExpanded(detailExpanded === 'remboursements' ? null : 'remboursements')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'remboursements' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Remboursements</div>
+                                <div className="text-[10px] text-neutral-500">{remboursementsList.length} remboursement{remboursementsList.length > 1 ? 's' : ''}</div>
+                              </div>
+                            </div>
+                            <span className="text-sm font-bold text-amber-700 num shrink-0">-{formatFCFA(remboursementsTotal)}</span>
+                          </div>
+                        </button>
+                        {detailExpanded === 'remboursements' && (
+                          <div className="px-2.5 pb-2.5 space-y-1 max-h-60 overflow-y-auto">
+                            {remboursementsList.map(m => (
+                              <div key={m.id} className="p-2 rounded-lg bg-white border border-amber-100 text-xs">
+                                <div className="font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Remboursement'}</div>
+                                <div className="flex items-center justify-between mt-0.5">
+                                  <span className="text-[10px] text-neutral-400">{formatDateTime(m.created_at)}</span>
+                                  <span className="font-bold text-amber-700 num">-{formatFCFA(m.amount)}</span>
+                                </div>
                               </div>
                             ))}
                           </div>

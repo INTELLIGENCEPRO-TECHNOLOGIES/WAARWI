@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Filter, Globe, Phone, MessageCircle, Printer, X, Clock, CheckCircle2,
   Package, Truck, Ban, RefreshCw, ChevronRight, MapPin, CreditCard,
@@ -80,19 +80,46 @@ export function OnlineOrders() {
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
 
   const [flashList, setFlashList] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    // dynamic import to keep tree small
     import('../lib/navHighlight').then(({ consumeNavContext }) => {
       const ctx = consumeNavContext();
-      if (!ctx?.target) return;
+      if (!ctx) return;
+      if (ctx.highlightId) {
+        setHighlightId(ctx.highlightId);
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => setHighlightId(null), 6800);
+      }
       if (ctx.target === 'webNew') setStatusFilter('nouvelle');
       else if (ctx.target === 'webPrep') setStatusFilter('en_preparation');
       else if (ctx.target === 'webReady') setStatusFilter('prete');
-      else return;
-      setFlashList(true);
-      setTimeout(() => setFlashList(false), 6800);
+      else if (!ctx.highlightId) return;
+      if (ctx.target) {
+        setFlashList(true);
+        setTimeout(() => setFlashList(false), 6800);
+      }
     });
   }, []);
+
+  useEffect(() => {
+    if (!highlightId || loading) return;
+    let raf: number;
+    let tries = 0;
+    const tryScroll = () => {
+      const el = document.querySelector(`[data-row-id="${highlightId}"]`);
+      if (el) {
+        el.classList.remove('waarwi-flash');
+        void el.offsetWidth;
+        el.classList.add('waarwi-flash');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      if (++tries < 20) raf = requestAnimationFrame(tryScroll);
+    };
+    raf = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(raf);
+  }, [highlightId, orders, loading]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -400,6 +427,7 @@ export function OnlineOrders() {
             return (
               <button
                 key={o.id}
+                data-row-id={o.id}
                 onClick={() => openOrder(o)}
                 className="w-full py-2.5 px-0.5 text-left transition-colors hover:bg-neutral-50/60 active:bg-neutral-100/60"
               >

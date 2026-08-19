@@ -630,7 +630,7 @@ export type XReportControl = {
 };
 
 export type XReportMovement = {
-  kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan';
+  kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund';
   amount: number;
   reason: string;
   customer_name: string | null;
@@ -664,11 +664,12 @@ export function printXReport80(opts: {
   const topArticles = opts.topArticles || [];
 
   const mvExpense = movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
+  const mvRefund = movements.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
   const mvWithdrawal = movements.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
   const mvLoan = movements.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
   const mvIncome = movements.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
   const mvPrepay = movements.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-  const netTotal = opts.openingAmount + opts.salesTotal - mvExpense - mvWithdrawal - mvLoan;
+  const netTotal = opts.openingAmount + opts.salesTotal - mvExpense - mvRefund - mvWithdrawal - mvLoan;
   const variance = controls.length > 0
     ? controls.reduce((s, c) => s + Number(c.difference_amount ?? (c.counted_amount - c.theoretical_amount)), 0)
     : 0;
@@ -678,13 +679,13 @@ export function printXReport80(opts: {
 <div class="section">Mouvements de caisse</div>
 <div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)} FCFA</span></div>
 ${movements.map(m => {
-    const label = m.kind === 'expense' ? 'Dépense' : m.kind === 'customer_prepayment' ? 'Acompte' : m.kind === 'customer_withdrawal' ? 'Retrait' : m.kind === 'customer_loan' ? 'Prêt' : 'Entrée';
-    const sign = m.kind === 'expense' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' ? '-' : '+';
+    const label = m.kind === 'expense' ? 'Dépense' : m.kind === 'refund' ? 'Remboursement' : m.kind === 'customer_prepayment' ? 'Acompte' : m.kind === 'customer_withdrawal' ? 'Retrait' : m.kind === 'customer_loan' ? 'Prêt' : 'Entrée';
+    const sign = m.kind === 'expense' || m.kind === 'refund' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' ? '-' : '+';
     const reason = [m.customer_name, m.reason].filter(Boolean).join(' · ');
     return `<div class="row"><span>${esc(label)}${reason ? ' : ' + esc(reason.slice(0, 22)) : ''}</span><span>${sign}${fmtMoney(m.amount)} FCFA</span></div>`;
   }).join('')}
 <div class="row"><span>Sous-total entrées</span><span>+ ${fmtMoney(mvIncome + mvPrepay)} FCFA</span></div>
-<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense + mvWithdrawal + mvLoan)} FCFA</span></div>
+<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense + mvRefund + mvWithdrawal + mvLoan)} FCFA</span></div>
 <hr class="hr" />
 <div class="row total"><span>Net caisse</span><span>${fmtMoney(netTotal)} FCFA</span></div>
 ` : '';
@@ -754,264 +755,116 @@ ${waarwiFooter80()}
 // ── A4 Document Style ─────────────────────────────────────────────────────────
 // Pure black text, no grey, no opacity, professional corporate layout
 const a4Style = `
-  @page { margin: 14mm 14mm 18mm 14mm; size: A4; }
+  @page {
+    margin: 10mm 10mm 14mm 10mm;
+    size: A4;
+    @bottom-right {
+      content: "Page " counter(page) " / " counter(pages);
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-size: 8.5px;
+      font-weight: 600;
+      color: #000;
+    }
+  }
   @media print {
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     html, body { margin: 0 !important; }
-    .no-break { page-break-inside: avoid; }
+    .no-break { page-break-inside: avoid; break-inside: avoid; }
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 11.5px;
+    font-size: 11px;
     color: #000000;
+    background: #ffffff;
+    line-height: 1.4;
+  }
+  .invoice-page {
     display: flex;
     flex-direction: column;
-    background: #ffffff;
-    line-height: 1.45;
+    min-height: 268mm;
+    page-break-after: always;
+    break-after: page;
   }
-  .page-content { flex: 1 1 auto; }
-  .page-bottom { margin-top: 14px; page-break-inside: avoid; break-inside: avoid; }
+  .invoice-page:last-child { page-break-after: auto; break-after: auto; }
+  .page-bottom-block { margin-top: auto; page-break-inside: avoid; break-inside: avoid; }
 
-  /* Header */
+  /* Full header — first page only */
   .header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 24px;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
+    gap: 20px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
     border-bottom: 2.5px solid #000000;
   }
-  .brand { display: flex; gap: 14px; align-items: flex-start; }
-  .brand img { max-width: 76px; max-height: 76px; object-fit: contain; }
-  .brand-text h1 {
-    font-size: 21px;
-    font-weight: 900;
-    color: #000000;
-    line-height: 1.1;
-  }
-  .brand-text .activity {
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: #000000;
-    margin-top: 4px;
-    font-weight: 700;
-  }
-  .brand-text p {
-    font-size: 11px;
-    color: #000000;
-    margin-top: 2px;
-    font-weight: 500;
-  }
+  .compact-header { margin-bottom: 10px; padding-bottom: 6px; }
+  .brand { display: flex; gap: 12px; align-items: flex-start; }
+  .brand img { max-width: 72px; max-height: 72px; object-fit: contain; }
+  .brand-text h1 { font-size: 20px; font-weight: 900; color: #000; line-height: 1.1; }
+  .brand-text .activity { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #000; margin-top: 3px; font-weight: 700; }
+  .brand-text p { font-size: 10.5px; color: #000; margin-top: 2px; font-weight: 500; }
 
-  /* Document meta (right side of header) */
-  .doc-meta { text-align: right; min-width: 180px; }
-  .doc-meta .tag {
-    display: inline-block;
-    padding: 5px 12px;
-    background: #e8e8e8;
-    color: #000000;
-    border-radius: 3px;
-    font-size: 10px;
-    letter-spacing: 2px;
-    font-weight: 800;
-    text-transform: uppercase;
-  }
-  .doc-meta h2 {
-    font-size: 26px;
-    font-weight: 900;
-    margin-top: 10px;
-    color: #000000;
-    font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
-  }
-  .doc-meta p {
-    font-size: 11px;
-    color: #000000;
-    margin-top: 3px;
-    font-weight: 600;
-  }
-  .status-badge {
-    display: inline-block;
-    padding: 5px 14px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-top: 10px;
-    border: 2px solid #000000;
-    color: #000000;
-    background: #ffffff;
-  }
-  .status-paid { border-color: #000000; }
-  .status-partial { border-color: #000000; }
-  .status-unpaid { border-color: #000000; }
+  .doc-meta { text-align: right; min-width: 175px; }
+  .doc-meta .tag { display: inline-block; padding: 4px 10px; background: #e8e8e8; color: #000; border-radius: 3px; font-size: 9.5px; letter-spacing: 1.7px; font-weight: 800; text-transform: uppercase; }
+  .doc-meta h2 { font-size: 24px; font-weight: 900; margin-top: 7px; color: #000; font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .doc-meta p { font-size: 10px; color: #000; margin-top: 2px; font-weight: 600; }
+  .status-badge { display: inline-block; padding: 4px 10px; border-radius: 3px; font-size: 9.5px; font-weight: 900; letter-spacing: 0.7px; text-transform: uppercase; margin-top: 6px; border: 2px solid #000; color: #000; background: #fff; }
 
-  /* Parties (emitter / recipient) */
-  .parties {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 22px;
-  }
-  .party {
-    border: 1.5px solid #000000;
-    border-radius: 4px;
-    padding: 12px 14px;
-  }
-  .party h3 {
-    font-size: 9.5px;
-    font-weight: 800;
-    text-transform: uppercase;
-    color: #000000;
-    margin-bottom: 7px;
-    letter-spacing: 1.5px;
-    border-bottom: 1px solid #000000;
-    padding-bottom: 5px;
-  }
-  .party p {
-    font-size: 11.5px;
-    margin-bottom: 2px;
-    color: #000000;
-    font-weight: 500;
-  }
+  /* Parties */
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .party { border: 1.5px solid #000; border-radius: 4px; padding: 9px 12px; }
+  .party h3 { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #000; margin-bottom: 5px; letter-spacing: 1.2px; border-bottom: 1px solid #000; padding-bottom: 3px; }
+  .party p { font-size: 10.5px; margin-bottom: 2px; color: #000; font-weight: 500; }
   .party p strong { font-weight: 800; }
 
   /* Items table */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 18px;
-    table-layout: fixed;
-  }
-  thead tr { background: #e8e8e8; color: #000000; }
-  th {
-    padding: 9px 10px;
-    text-align: left;
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: #000000;
-  }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; table-layout: fixed; }
+  thead { display: table-header-group; }
+  thead tr { background: #e8e8e8; color: #000; }
+  th { padding: 6px 8px; text-align: left; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #000; }
   th.right { text-align: right; }
   th.center { text-align: center; }
   th:nth-child(1) { width: 55%; }
   th:nth-child(2) { width: 8%; }
   th:nth-child(3) { width: 18%; }
   th:nth-child(4) { width: 19%; }
-  td {
-    padding: 9px 10px;
-    font-size: 11px;
-    border-bottom: 1px solid #000000;
-    vertical-align: top;
-    color: #000000;
-    font-weight: 500;
-  }
+  td { padding: 5px 8px; font-size: 10px; border-bottom: 0.75px solid #000; vertical-align: top; color: #000; font-weight: 500; line-height: 1.35; }
+  tbody tr { page-break-inside: avoid; }
   tbody tr:nth-child(even) td { background: #f5f5f5; }
   td.right { text-align: right; }
   td.center { text-align: center; font-weight: 700; }
-  td.bold { font-weight: 800; color: #000000; }
-  .item-ref {
-    font-size: 10px;
-    font-weight: 600;
-    font-family: 'Courier New', monospace;
-    margin-top: 2px;
-    color: #000000;
-  }
+  td.bold { font-weight: 800; color: #000; }
+  .item-ref { font-size: 7.5px; font-weight: 600; font-family: 'Courier New', monospace; margin-top: 1px; color: #000; }
 
-  /* Financial summary */
-  .financial-summary { display: flex; justify-content: flex-end; margin-top: 12px; }
-  .financial-box {
-    width: 340px;
-    border: 2px solid #000000;
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  .fin-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 9px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    border-bottom: 1px solid #000000;
-    gap: 8px;
-    flex-wrap: wrap;
-    color: #000000;
-  }
+  /* Subtotal row inside the financial box */
+
+  /* Financial summary — at the very end */
+  .financial-summary { display: flex; justify-content: flex-end; margin-top: 0; }
+  .financial-box { width: 320px; border: 1.5px solid #000; border-radius: 3px; overflow: hidden; }
+  .fin-row { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 12px; font-size: 11px; font-weight: 600; border-bottom: 1px solid #000; gap: 8px; flex-wrap: wrap; color: #000; }
   .fin-row:last-child { border-bottom: none; }
   .fin-row span { white-space: nowrap; }
-  .fin-row.subtotal { background: #f5f5f5; }
   .fin-row.discount { background: #f5f5f5; font-weight: 700; }
-  .fin-row.grand {
-    background: #e8e8e8;
-    color: #000000;
-    font-size: 15px;
-    font-weight: 900;
-    padding: 12px 16px;
-  }
-  .fin-row.grand span { color: #000000 !important; }
+  .fin-row.subtotal-fin { background: #f5f5f5; font-weight: 700; }
+  .fin-row.grand { background: #e8e8e8; color: #000; font-size: 15px; font-weight: 900; padding: 9px 14px; }
+  .fin-row.grand span { color: #000 !important; }
   .fin-row.paid-row { background: #f5f5f5; font-weight: 700; }
-  .fin-row.due-row { background: #e8e8e8; font-weight: 900; font-size: 13px; }
+  .fin-row.due-row { background: #e8e8e8; font-weight: 900; font-size: 11px; }
 
   /* Payment details */
-  .payments-section { margin-top: 16px; }
-  .payments-section h3 {
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-    color: #000000;
-    margin-bottom: 7px;
-    letter-spacing: 1px;
-    border-bottom: 1px solid #000000;
-    padding-bottom: 5px;
-  }
-  .p-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11.5px;
-    font-weight: 600;
-    padding: 4px 0;
-    color: #000000;
-    border-bottom: 1px dashed #000000;
-  }
+  .payments-section { margin-top: 12px; page-break-inside: avoid; break-inside: avoid; }
+  .payments-section h3 { font-size: 9px; font-weight: 800; text-transform: uppercase; color: #000; margin-bottom: 5px; letter-spacing: 0.8px; border-bottom: 1px solid #000; padding-bottom: 3px; }
+  .p-row { display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; padding: 3px 0; color: #000; border-bottom: 0.5px dashed #000; }
   .p-row:last-child { border-bottom: none; }
   .p-row strong { font-weight: 800; }
 
   /* Footer */
-  .footer {
-    padding-top: 12px;
-    border-top: 1.5px solid #000000;
-    display: flex;
-    justify-content: space-between;
-    font-size: 10px;
-    font-weight: 600;
-    color: #000000;
-    margin-top: 20px;
-  }
-  .footer-note {
-    margin-top: 10px;
-    font-size: 11px;
-    color: #000000;
-    font-style: italic;
-    font-weight: 600;
-  }
-  .waarwi-brand-footer {
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px dashed #000000;
-    text-align: center;
-    font-size: 9.5px;
-    color: #000000;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-  }
+  .footer { padding-top: 8px; border-top: 1.5px solid #000; display: flex; justify-content: space-between; font-size: 9px; font-weight: 600; color: #000; margin-top: 14px; }
+  .footer-note { margin-top: 8px; font-size: 10px; color: #000; font-style: italic; font-weight: 600; }
+  .waarwi-brand-footer { margin-top: 8px; padding-top: 5px; border-top: 0.75px dashed #000; text-align: center; font-size: 8.5px; color: #000; font-weight: 600; letter-spacing: 0.2px; }
 `;
 
 export function printDocumentA4(opts: {
@@ -1038,22 +891,6 @@ export function printDocumentA4(opts: {
   const logoImg = tenantLogoA4(t);
   const headerLines = tenantHeaderA4Lines(t);
 
-  const itemsHtml = opts.items
-    .map(i => {
-      const lineTotal = i.quantity * i.unit_price - (i.discount || 0);
-      return `<tr>
-        <td>
-          <div class="bold">${esc(i.name)}</div>
-          ${i.supplier_ref ? `<div class="item-ref">Réf : ${esc(i.supplier_ref)}</div>` : ''}
-          ${i.oem_ref ? `<div class="item-ref">OEM : ${esc(i.oem_ref)}</div>` : ''}
-        </td>
-        <td class="center">${i.quantity}</td>
-        <td class="right">${fmtMoney(i.unit_price)} FCFA</td>
-        <td class="right bold">${fmtMoney(lineTotal)} FCFA</td>
-      </tr>`;
-    })
-    .join('');
-
   // Payment status
   const paidAmount = typeof opts.paid === 'number' ? opts.paid : (opts.payments || []).reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(0, opts.total - paidAmount);
@@ -1067,18 +904,6 @@ export function printDocumentA4(opts: {
     } else {
       statusBadge = '<span class="status-badge status-unpaid">NON PAYÉE</span>';
     }
-  }
-
-  // Financial summary rows
-  let financialRows = `
-    ${opts.discount && opts.discount > 0 ? `<div class="fin-row discount"><span>Remise</span><span>- ${fmtMoney(opts.discount)} FCFA</span></div>` : ''}
-    <div class="fin-row grand"><span>TOTAL TTC</span><span>${fmtMoney(opts.total)} FCFA</span></div>
-  `;
-  if (isInvoiceType) {
-    financialRows += `
-      <div class="fin-row paid-row"><span>Règlement</span><span>${fmtMoney(paidAmount)} FCFA</span></div>
-      <div class="fin-row due-row"><span>Reste à payer</span><span>${fmtMoney(remaining)} FCFA</span></div>
-    `;
   }
 
   // Payments detail
@@ -1099,67 +924,118 @@ export function printDocumentA4(opts: {
     ...(opts.docHeader?.representative ? [{ label: 'Représentant', value: opts.docHeader.representative }] : []),
   ].map(m => `<p>${esc(m.label)} : ${esc(m.value)}</p>`).join('');
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.docLabel)} ${esc(opts.docNumber)}</title>
-<style>${a4Style}</style>${printFontLink}</head><body>
-<div class="page-content">
-<div class="header">
-  <div class="brand">
-    ${logoImg}
-    <div class="brand-text">
-      ${headerLines}
-    </div>
-  </div>
-  <div class="doc-meta">
-    <span class="tag">${esc(opts.docLabel)}</span>
-    <h2>N° ${esc(opts.docNumber)}</h2>
-    <p>Date : ${esc(opts.docDate)}</p>
-    ${opts.cashier ? `<p>Émis par : ${esc(opts.cashier)}</p>` : ''}
-    ${extraMeta}
-    ${statusBadge}
-  </div>
-</div>
+  // Split items into pages of max 25 lines, computing per-page subtotal
+  const MAX_ITEMS_PER_PAGE = 25;
+  const itemData = opts.items.map(i => {
+    const lineTotal = i.quantity * i.unit_price - (i.discount || 0);
+    return { item: i, lineTotal };
+  });
+  const pages: { items: typeof itemData; pageSubtotal: number }[] = [];
+  for (let i = 0; i < itemData.length; i += MAX_ITEMS_PER_PAGE) {
+    const chunk = itemData.slice(i, i + MAX_ITEMS_PER_PAGE);
+    pages.push({ items: chunk, pageSubtotal: chunk.reduce((s, d) => s + d.lineTotal, 0) });
+  }
+  if (pages.length === 0) pages.push({ items: [], pageSubtotal: 0 });
 
-<div class="parties">
-  <div class="party">
-    <h3>Facturé par</h3>
-    <p><strong>${esc(opts.issuedBy || t.legal_name || t.name)}</strong></p>
-  </div>
-  <div class="party">
-    <h3>Destinataire</h3>
-    ${opts.customer
-      ? `<p><strong>${esc(opts.customer.name)}</strong></p>${opts.customer.phone ? `<p>${esc(opts.customer.phone)}</p>` : ''}${opts.customer.address ? `<p>${esc(opts.customer.address)}</p>` : ''}`
-      : '<p><em>Client comptoir</em></p>'}
-  </div>
-</div>
-
-<table>
-  <thead><tr>
+  const tableHead = `<thead><tr>
     <th>Désignation</th>
     <th class="center">Qté</th>
     <th class="right">Prix unitaire</th>
     <th class="right">Montant</th>
-  </tr></thead>
-  <tbody>${itemsHtml}</tbody>
-</table>
-</div>
+  </tr></thead>`;
 
-<div class="page-bottom">
-<div class="financial-summary">
-  <div class="financial-box">
-    ${financialRows}
+  // Shared header HTML — identical on every page
+  const headerHtml = `<div class="header">
+    <div class="brand">
+      ${logoImg}
+      <div class="brand-text">
+        ${headerLines}
+      </div>
+    </div>
+    <div class="doc-meta">
+      <span class="tag">${esc(opts.docLabel)}</span>
+      <h2>N° ${esc(opts.docNumber)}</h2>
+      <p>Date : ${esc(opts.docDate)}</p>
+      ${opts.cashier ? `<p>Émis par : ${esc(opts.cashier)}</p>` : ''}
+      ${extraMeta}
+      ${statusBadge}
+    </div>
+  </div>`;
+
+  // Shared parties HTML — identical on every page
+  const partiesHtml = `<div class="parties">
+    <div class="party">
+      <h3>Facturé par</h3>
+      <p><strong>${esc(opts.issuedBy || t.legal_name || t.name)}</strong></p>
+    </div>
+    <div class="party">
+      <h3>Destinataire</h3>
+      ${opts.customer
+        ? `<p><strong>${esc(opts.customer.name)}</strong></p>${opts.customer.phone ? `<p>${esc(opts.customer.phone)}</p>` : ''}${opts.customer.address ? `<p>${esc(opts.customer.address)}</p>` : ''}`
+        : '<p><em>Client comptoir</em></p>'}
+    </div>
+  </div>`;
+
+  const footerHtml = `${opts.footerNote ? `<div class="footer-note">${esc(opts.footerNote)}</div>` : ''}
+  <div class="footer">
+    <span>${esc(t.name)}${t.ninea ? ` — NINEA : ${esc(t.ninea)}` : ''}</span>
+    <span>Imprimé le ${new Date().toLocaleString('fr-FR')}</span>
   </div>
-</div>
+  ${waarwiFooterA4()}`;
 
-${paymentsHtml}
+  // Build unified financial block — real values on last page, XXXXXX on others
+  let pagesHtml = '';
+  pages.forEach((page, idx) => {
+    const isLast = idx === pages.length - 1;
+    const masked = !isLast;
 
-${opts.footerNote ? `<div class="footer-note">${esc(opts.footerNote)}</div>` : ''}
+    const subtotalVal = `${fmtMoney(page.pageSubtotal)} FCFA`;
+    const totalVal = masked ? 'XXXXXX' : `${fmtMoney(opts.total)} FCFA`;
+    const discountVal = masked ? 'XXXXXX' : (opts.discount && opts.discount > 0 ? `- ${fmtMoney(opts.discount)} FCFA` : '');
+    const paidVal = masked ? 'XXXXXX' : `${fmtMoney(paidAmount)} FCFA`;
+    const dueVal = masked ? 'XXXXXX' : `${fmtMoney(remaining)} FCFA`;
 
-<div class="footer">
-  <span>${esc(t.name)}${t.ninea ? ` — NINEA : ${esc(t.ninea)}` : ''}</span>
-  <span>Imprimé le ${new Date().toLocaleString('fr-FR')}</span>
-</div>
-${waarwiFooterA4()}
-</div>
+    const itemsBody = page.items.map(d => `<tr>
+      <td>
+        <div class="bold">${esc(d.item.name)}</div>
+        ${d.item.supplier_ref ? `<div class="item-ref">Réf : ${esc(d.item.supplier_ref)}</div>` : ''}
+        ${d.item.oem_ref ? `<div class="item-ref">OEM : ${esc(d.item.oem_ref)}</div>` : ''}
+      </td>
+      <td class="center">${d.item.quantity}</td>
+      <td class="right">${fmtMoney(d.item.unit_price)} FCFA</td>
+      <td class="right bold">${fmtMoney(d.lineTotal)} FCFA</td>
+    </tr>`).join('');
+
+    const financialBoxHtml = `<div class="financial-summary">
+      <div class="financial-box">
+        <div class="fin-row subtotal-fin"><span>Sous-total</span><span>${subtotalVal}</span></div>
+        ${opts.discount && opts.discount > 0 ? `<div class="fin-row discount"><span>Remise</span><span>${discountVal}</span></div>` : ''}
+        <div class="fin-row grand"><span>TOTAL TTC</span><span>${totalVal}</span></div>
+        ${isInvoiceType ? `
+          <div class="fin-row paid-row"><span>Règlement</span><span>${paidVal}</span></div>
+          <div class="fin-row due-row"><span>Reste à payer</span><span>${dueVal}</span></div>
+        ` : ''}
+      </div>
+    </div>`;
+
+    pagesHtml += `<div class="invoice-page">
+      ${headerHtml}
+      ${partiesHtml}
+      <table>
+        ${tableHead}
+        <tbody>${itemsBody}</tbody>
+      </table>
+      <div class="page-bottom-block">
+        ${financialBoxHtml}
+        ${isLast ? paymentsHtml : ''}
+        ${isLast ? footerHtml : ''}
+      </div>
+    </div>`;
+  });
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.docLabel)} ${esc(opts.docNumber)}</title>
+<style>${a4Style}</style>${printFontLink}</head><body>
+${pagesHtml}
 </body></html>`;
   printHtml(html, 400);
 }

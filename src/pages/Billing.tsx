@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
-  Plus, FileText, Loader2, Eye, Printer, CheckCircle, X, Trash2, Car,
+  Plus, FileText, Loader2, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, CalendarDays, User,
   CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen,
   Tag, ShieldCheck, Smartphone, Pencil,
@@ -66,34 +66,34 @@ type SaleReturn = {
 };
 
 const QUOTE_STATUS: Record<string, { label: string; pill: string; dot: string }> = {
-  draft:     { label: 'Brouillon', pill: 'bg-slate-100 text-slate-700 border-slate-200', dot: 'bg-slate-400' },
-  sent:      { label: 'Envoyé',    pill: 'bg-neutral-50 text-neutral-800 border-neutral-200',     dot: 'bg-neutral-500' },
-  accepted:  { label: 'Accepté',   pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
-  rejected:  { label: 'Refusé',    pill: 'bg-red-50 text-red-700 border-red-200',        dot: 'bg-red-500' },
-  converted: { label: 'Converti',  pill: 'bg-brand-50 text-brand-700 border-brand-200',  dot: 'bg-brand-500' },
-  expired:   { label: 'Expiré',    pill: 'bg-amber-50 text-amber-700 border-amber-200',  dot: 'bg-amber-500' },
+  draft:     { label: 'Brouillon', pill: 'text-slate-500', dot: '' },
+  sent:      { label: 'Envoyé',    pill: 'text-neutral-700', dot: '' },
+  accepted:  { label: 'Accepté',   pill: 'text-emerald-600', dot: '' },
+  rejected:  { label: 'Refusé',    pill: 'text-red-600', dot: '' },
+  converted: { label: 'Converti',  pill: 'text-brand-600', dot: '' },
+  expired:   { label: 'Expiré',    pill: 'text-amber-600', dot: '' },
 };
 
 function invoiceStatus(s: Invoice) {
-  if (s.status === 'cancelled') return { label: 'Annulée', pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' };
-  if (s.paid >= s.total)        return { label: 'Payée', pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' };
-  if (Number(s.paid) > 0)       return { label: 'Partiellement payée', pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' };
-  if (s.status === 'validated' && Number(s.paid) === 0) return { label: 'À crédit', pill: 'bg-slate-100 text-slate-700 border-slate-300', dot: 'bg-slate-500' };
-  return { label: 'Validée', pill: 'bg-neutral-50 text-neutral-800 border-neutral-200', dot: 'bg-neutral-500' };
+  if (s.status === 'cancelled') return { label: 'Annulée', pill: 'text-red-600', dot: '' };
+  if (s.paid >= s.total)        return { label: 'Payée', pill: 'text-emerald-600', dot: '' };
+  if (Number(s.paid) > 0)       return { label: 'Partiellement payée', pill: 'text-amber-600', dot: '' };
+  if (s.status === 'validated' && Number(s.paid) === 0) return { label: 'À crédit', pill: 'text-slate-600', dot: '' };
+  return { label: 'Validée', pill: 'text-neutral-700', dot: '' };
 }
 
 const RETURN_STATUS: Record<string, { label: string; pill: string; dot: string }> = {
-  pending:  { label: 'Brouillon', pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
-  approved: { label: 'Approuvé',  pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
-  rejected: { label: 'Rejeté',    pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' },
+  pending:  { label: 'Brouillon', pill: 'text-amber-600', dot: '' },
+  approved: { label: 'Approuvé',  pill: 'text-emerald-600', dot: '' },
+  rejected: { label: 'Rejeté',    pill: 'text-red-600', dot: '' },
 };
 
 function creditStatus(r: SaleReturn) {
   if (r.status !== 'approved') return RETURN_STATUS[r.status] || RETURN_STATUS.pending;
   const used = Number(r.credit_used || 0);
-  if (used >= Number(r.total)) return { label: 'Utilisé', pill: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' };
-  if (used > 0) return { label: 'Partiel', pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' };
-  return { label: 'Disponible', pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' };
+  if (used >= Number(r.total)) return { label: 'Utilisé', pill: 'text-slate-500', dot: '' };
+  if (used > 0) return { label: 'Partiel', pill: 'text-amber-600', dot: '' };
+  return { label: 'Disponible', pill: 'text-emerald-600', dot: '' };
 }
 
 const TABS: { key: Tab; label: string }[] = [
@@ -1475,7 +1475,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }).select().single();
     if (e || !ret) { error(e?.message || 'Erreur'); setSaving(false); return; }
     await supabase.from('sale_return_items').insert(sel.map(i => ({
-      tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, name: i.name,
+      tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, sale_item_id: i.item_id, name: i.name,
       quantity: i.quantity, unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, total: i.quantity * i.unit_price,
     })));
     if (returnForm.restock) {
@@ -1767,9 +1767,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="doc-number text-[13px] font-bold text-slate-700">{q.quote_number}</span>
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                              </span>
+                              <span className={`text-[9px] font-bold uppercase ${st.pill}`}>{st.label}</span>
                             </div>
                             <div className="text-[10px] text-slate-400 mt-0.5 num">{formatDate(q.created_at)}{q.valid_until ? ` · Valide ${formatDate(q.valid_until)}` : ''}</div>
                           </div>
@@ -1791,6 +1789,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   })}
                 </div>
                 <div className="hidden md:block">
+                  <div className="flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    <span className="shrink-0 w-28">N° Devis</span>
+                    <span className="shrink-0 hidden lg:inline w-24">Date</span>
+                    <span className="flex-1 min-w-0">Client</span>
+                    <span className="shrink-0 w-20 text-right">Statut</span>
+                    <span className="shrink-0 w-28 text-right">Montant</span>
+                    <span className="shrink-0 w-16 text-center">Actions</span>
+                  </div>
                   {filteredQuotes.map(q => {
                     const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
                     return (
@@ -1798,12 +1804,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                         <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{q.quote_number}</span>
                         <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-24">{formatDate(q.created_at)}</span>
                         <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{q.customers?.name || <span className="text-slate-400">—</span>}</span>
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill} shrink-0`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                        </span>
+                        <span className={`text-[9px] font-bold uppercase ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
                         <span className="text-[12px] font-bold text-slate-900 tabular-nums shrink-0 w-28 text-right">{formatFCFA(q.total)}</span>
-                        <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => openQuoteDetail(q)} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-brand-700 transition" title="Voir"><Eye className="w-3.5 h-3.5" /></button>
+                        <div className="flex items-center gap-0.5 shrink-0 w-16 justify-center" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => openQuoteDetail(q)} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
                           {q.status === 'accepted' && <button onClick={() => openConvert(q)} className="p-1 rounded hover:bg-brand-50 text-brand-700 transition" title="Convertir"><ArrowRight className="w-3.5 h-3.5" /></button>}
                           {q.status === 'draft' && <button onClick={() => changeQuoteStatus(q, 'sent')} className="p-1 rounded hover:bg-neutral-50 text-neutral-700 transition" title="Envoyé"><CheckCircle className="w-3.5 h-3.5" /></button>}
                           {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={() => setQuoteToCancel(q)} className="p-1 rounded hover:bg-red-50 text-red-500 transition" title="Refuser"><X className="w-3.5 h-3.5" /></button>}
@@ -1831,9 +1835,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="doc-number text-[13px] font-bold text-slate-700">{inv.sale_number}</span>
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                              </span>
+                              <span className={`text-[9px] font-bold uppercase ${st.pill}`}>{st.label}</span>
                             </div>
                             <div className="text-[10px] text-slate-400 mt-0.5 num">{formatDateTime(inv.created_at)}</div>
                           </div>
@@ -1854,6 +1856,16 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   })}
                 </div>
                 <div className="hidden md:block">
+                  <div className="flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    <span className="shrink-0 w-28">N° Facture</span>
+                    <span className="shrink-0 hidden lg:inline w-32">Date</span>
+                    <span className="flex-1 min-w-0">Client</span>
+                    <span className="shrink-0 w-28 text-right">Total</span>
+                    <span className="shrink-0 w-24 text-right hidden lg:inline">Payé</span>
+                    <span className="shrink-0 w-24 text-right hidden lg:inline">Solde</span>
+                    <span className="shrink-0 w-20 text-right">Statut</span>
+                    <span className="shrink-0 w-16 text-center">Actions</span>
+                  </div>
                   {filteredInvoices.map(inv => {
                     const st = invoiceStatus(inv);
                     const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
@@ -1865,14 +1877,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                         <span className="text-[12px] font-bold text-slate-900 tabular-nums shrink-0 w-28 text-right">{formatFCFA(inv.total)}</span>
                         <span className="text-[11px] text-emerald-700 tabular-nums shrink-0 w-24 text-right hidden lg:inline">{formatFCFA(inv.paid)}</span>
                         <span className="text-[11px] tabular-nums shrink-0 w-24 text-right hidden lg:inline">{solde > 0 ? <span className="text-amber-700 font-bold">{formatFCFA(solde)}</span> : <span className="text-slate-400">—</span>}</span>
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill} shrink-0`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                        </span>
+                        <span className={`text-[9px] font-bold uppercase ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
                         {inv.accounting_status === 'accounted' && <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200 shrink-0 hidden xl:inline">OK</span>}
-                        <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-0.5 shrink-0 w-16 justify-center" onClick={e => e.stopPropagation()}>
                           {inv.customers && <button onClick={() => quickWhatsApp(inv)} className="p-1 rounded hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>}
                           <button onClick={() => quickCopy(inv)} className="p-1 rounded hover:bg-slate-100 text-slate-500 transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => openInvoiceDetail(inv)} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-brand-700 transition" title="Voir"><Eye className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => openInvoiceDetail(inv)} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
                         </div>
                       </div>
                     );
@@ -1904,9 +1914,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="doc-number text-[13px] font-bold text-slate-700">{r.return_number}</span>
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                              </span>
+                              <span className={`text-[9px] font-bold uppercase ${st.pill}`}>{st.label}</span>
                               {r.restock && <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Stock</span>}
                             </div>
                             <div className="text-[10px] text-slate-400 mt-0.5 num">{formatDateTime(r.created_at)}{r.sales?.sale_number && <> · Vente {r.sales.sale_number}</>}</div>
@@ -1927,6 +1935,16 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   })}
                 </div>
                 <div className="hidden md:block">
+                  <div className="flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    <span className="shrink-0 w-28">N° Document</span>
+                    <span className="shrink-0 hidden lg:inline w-32">Date</span>
+                    <span className="flex-1 min-w-0">Client</span>
+                    {tab === 'returns' && <span className="hidden lg:inline shrink-0 w-12 text-center">Stock</span>}
+                    {tab === 'credits' && <span className="hidden lg:inline shrink-0 w-24 text-right">Utilisé</span>}
+                    <span className="shrink-0 w-20 text-right">Statut</span>
+                    <span className="shrink-0 w-28 text-right">Montant</span>
+                    <span className="shrink-0 w-12 text-center">Action</span>
+                  </div>
                   {(tab === 'returns' ? filteredReturns : filteredCredits).map(r => {
                     const st = tab === 'credits' ? creditStatus(r) : (RETURN_STATUS[r.status] || RETURN_STATUS.pending);
                     const isCredit = tab === 'credits';
@@ -1938,11 +1956,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                         <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{r.customers?.name || <span className="text-slate-400">—</span>}</span>
                         {tab === 'returns' && <span className="hidden lg:inline shrink-0 w-12 text-center">{r.restock ? <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Oui</span> : <span className="text-slate-400 text-[10px]">Non</span>}</span>}
                         {tab === 'credits' && <span className="hidden lg:inline shrink-0 w-24 text-right text-[11px] text-slate-600 tabular-nums">{formatFCFA(used)}</span>}
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase border ${st.pill} shrink-0`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}
-                        </span>
+                        <span className={`text-[9px] font-bold uppercase ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
                         <span className={`text-[12px] font-bold tabular-nums shrink-0 w-28 text-right ${isCredit ? 'text-neutral-800' : 'text-red-700'}`}>{isCredit ? '' : '-'}{formatFCFA(r.total)}</span>
-                        <button onClick={e => { e.stopPropagation(); openReturnDetail(r); }} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-brand-700 transition shrink-0" title="Voir"><Eye className="w-3.5 h-3.5" /></button>
+                        <div className="flex items-center shrink-0 w-12 justify-center">
+                          <button onClick={e => { e.stopPropagation(); openReturnDetail(r); }} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
+                        </div>
                       </div>
                     );
                   })}

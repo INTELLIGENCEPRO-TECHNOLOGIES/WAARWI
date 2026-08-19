@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Calculator, Loader2, Eye, Printer, Plus, X, Calendar, Filter, Check, Scroll, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Calculator, Loader2, Printer, Plus, X, Calendar, Filter, Check, Scroll, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -9,6 +9,7 @@ import { Modal, DocPanel } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printTicket80, printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
+import { consumeNavContext } from '../lib/navHighlight';
 import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
 import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
 
@@ -71,6 +72,36 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [docSettings, setDocSettings] = useState<{ allow_edit: boolean; allow_delete: boolean; loaded: boolean }>({ allow_edit: false, allow_delete: false, loaded: false });
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const ctx = consumeNavContext();
+    if (!ctx?.highlightId) return;
+    setHighlightId(ctx.highlightId);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => setHighlightId(null), 6800);
+    return () => { if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current); };
+  }, []);
+
+  useEffect(() => {
+    if (!highlightId || loading) return;
+    let raf: number;
+    let tries = 0;
+    const tryScroll = () => {
+      const el = document.querySelector(`[data-row-id="${highlightId}"]`);
+      if (el) {
+        el.classList.remove('waarwi-flash');
+        void el.offsetWidth;
+        el.classList.add('waarwi-flash');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      if (++tries < 20) raf = requestAnimationFrame(tryScroll);
+    };
+    raf = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(raf);
+  }, [highlightId, sales, loading]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -389,6 +420,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
               return (
                 <button
                   key={s.id}
+                  data-row-id={s.id}
                   onClick={() => openDetail(s)}
                   className="w-full text-left py-3 flex items-center gap-2 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors group active:scale-[0.995]"
                 >
@@ -416,7 +448,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           {/* ── DESKTOP: table ─────────────────────────────────── */}
           <div className="hidden md:block">
             <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold border-b border-neutral-200">
+              <thead className="text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-2.5 text-left whitespace-nowrap">N° Vente</th>
                   <th className="px-4 py-2.5 text-left whitespace-nowrap">Date</th>
@@ -433,32 +465,32 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                 {filtered.map(s => {
                   const st = statusStyles(s.status, s);
                   return (
-                    <tr key={s.id} className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
-                      <td className="px-4 py-2.5 doc-number text-sm font-semibold text-neutral-700 whitespace-nowrap">{s.sale_number}</td>
-                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-neutral-500 num">{formatDateTime(s.created_at)}</td>
-                      <td className="px-4 py-2.5 text-neutral-700 whitespace-nowrap">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
-                      <td className="px-4 py-2.5 hidden lg:table-cell text-neutral-500 text-xs whitespace-nowrap">{s.sites?.name || '—'}</td>
-                      <td className="px-4 py-2.5 hidden xl:table-cell text-neutral-500 text-xs whitespace-nowrap">
+                    <tr key={s.id} data-row-id={s.id} className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors cursor-pointer" onClick={() => openDetail(s)}>
+                      <td className="px-4 py-1.5 doc-number text-[12px] font-bold text-neutral-700 whitespace-nowrap">{s.sale_number}</td>
+                      <td className="px-4 py-1.5 text-[11px] whitespace-nowrap text-neutral-500 num">{formatDateTime(s.created_at)}</td>
+                      <td className="px-4 py-1.5 text-[12px] text-neutral-700 whitespace-nowrap">{s.customers?.name || <span className="text-neutral-400">Client comptoir</span>}</td>
+                      <td className="px-4 py-1.5 hidden lg:table-cell text-neutral-500 text-[11px] whitespace-nowrap">{s.sites?.name || '—'}</td>
+                      <td className="px-4 py-1.5 hidden xl:table-cell text-neutral-500 text-[11px] whitespace-nowrap">
                         {(s.sale_payments || []).map(p => p.method_name).join(', ') || '—'}
                       </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${st.textColor}`}>{st.label}</span>
+                      <td className="px-4 py-1.5 text-center">
+                        <span className={`text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${st.textColor}`}>{st.label}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-center hidden lg:table-cell">
+                      <td className="px-4 py-1.5 text-center hidden lg:table-cell">
                         {s.accounting_status === 'accounted' ? (
-                          <span className="text-[10px] font-bold text-neutral-600">OK</span>
+                          <span className="text-[9px] font-bold text-neutral-600">OK</span>
                         ) : (
-                          <span className="text-[10px] text-neutral-300">—</span>
+                          <span className="text-[9px] text-neutral-300">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(s.total)}</td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="px-4 py-1.5 text-right text-[12px] font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(s.total)}</td>
+                      <td className="px-4 py-1.5 text-right">
                         <button
                           onClick={(e) => { e.stopPropagation(); openDetail(s); }}
-                          className="p-1.5 text-neutral-400 hover:text-neutral-700 transition-all"
+                          className="text-[10px] font-semibold text-neutral-500 hover:text-brand-700 transition-colors"
                           title="Voir détail"
                         >
-                          <Eye className="w-4 h-4" />
+                          Voir
                         </button>
                       </td>
                     </tr>

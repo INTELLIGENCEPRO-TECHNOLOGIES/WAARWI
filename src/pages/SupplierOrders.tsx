@@ -78,6 +78,8 @@ export function SupplierOrders() {
   const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
   const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
   const [flashList, setFlashList] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<SupplierOrder | null>(null);
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
@@ -119,7 +121,12 @@ export function SupplierOrders() {
 
   useEffect(() => {
     const ctx = consumeNavContext();
-    if (!ctx?.target) return;
+    if (!ctx) return;
+    if (ctx.highlightId) {
+      setHighlightId(ctx.highlightId);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => setHighlightId(null), 6800);
+    }
     if (ctx.target === 'payables') {
       setStatusFilter('');
       setFlashList(true);
@@ -129,6 +136,25 @@ export function SupplierOrders() {
       setOpen(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!highlightId || loading) return;
+    let raf: number;
+    let tries = 0;
+    const tryScroll = () => {
+      const el = document.querySelector(`[data-row-id="${highlightId}"]`);
+      if (el) {
+        el.classList.remove('waarwi-flash');
+        void el.offsetWidth;
+        el.classList.add('waarwi-flash');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      if (++tries < 20) raf = requestAnimationFrame(tryScroll);
+    };
+    raf = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(raf);
+  }, [highlightId, list, loading]);
   useEffect(() => {
     if (!tenant) return;
     const isShared = (tenant as any)?.settings?.shared_articles !== false;
@@ -639,6 +665,7 @@ export function SupplierOrders() {
             return (
               <div
                 key={o.id}
+                data-row-id={o.id}
                 onClick={() => openDetail(o)}
                 className="group bg-white border border-slate-200/70 rounded-2xl shadow-card p-3 hover:shadow-md hover:border-slate-300 transition cursor-pointer"
               >

@@ -15,6 +15,7 @@ import { Modal, ConfirmDialog } from '../components/Modal';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
 import { LandingConfigSection as LandingConfigSectionNew } from '../components/LandingConfigSection';
+import { LOGIN_ICON_MAP, DEFAULT_LOGIN_MODULES, type LoginModule } from '../lib/loginConfig';
 
 type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'landing' | 'releases';
 
@@ -2359,23 +2360,9 @@ function ActivitySection() {
 
 /* ============== LOGIN CONFIG ============== */
 
-const ICON_MAP_ADMIN: Record<string, any> = {
-  ShoppingCart, Package: Package_, FileText: FileText_, Users, Truck,
-  Globe: Globe_, BarChart3, TrendingUp, Shield, Zap, Receipt,
-  Monitor, Wallet, Layers, Settings: Settings_,
-};
+const ICON_MAP_ADMIN = LOGIN_ICON_MAP;
 
-const ALL_APP_FEATURES: { icon: string; label: string; desc: string; color: string }[] = [
-  { icon: 'ShoppingCart', label: 'Point de vente', desc: 'Caisse rapide et intuitive', color: 'text-teal-600 bg-teal-50' },
-  { icon: 'Package', label: 'Stock', desc: 'Maîtrisez vos stocks', color: 'text-neutral-700 bg-neutral-50' },
-  { icon: 'FileText', label: 'Facturation', desc: 'Devis et factures pro', color: 'text-amber-600 bg-amber-50' },
-  { icon: 'Users', label: 'Clients & Tiers', desc: 'CRM et créances', color: 'text-emerald-600 bg-emerald-50' },
-  { icon: 'Truck', label: 'Fournisseurs', desc: 'Commandes et dettes', color: 'text-orange-600 bg-orange-50' },
-  { icon: 'Globe', label: 'Boutique en ligne', desc: 'Vitrine et commandes web', color: 'text-cyan-600 bg-cyan-50' },
-  { icon: 'BarChart3', label: 'Comptabilité', desc: 'Suivi financier complet', color: 'text-rose-600 bg-rose-50' },
-  { icon: 'TrendingUp', label: 'Rapports', desc: 'Analyses et tableaux de bord', color: 'text-neutral-700 bg-neutral-50' },
-  { icon: 'Shield', label: 'Sécurité', desc: 'Rôles et permissions', color: 'text-slate-600 bg-slate-100' },
-];
+const ALL_APP_FEATURES = DEFAULT_LOGIN_MODULES.map(m => ({ ...m, color: 'text-teal-600 bg-teal-50' }));
 
 const AVAILABLE_ICONS = [
   { value: 'ShoppingCart', label: 'Panier (POS)' },
@@ -2393,8 +2380,6 @@ const AVAILABLE_ICONS = [
   { value: 'Monitor', label: 'Écran' },
   { value: 'Receipt', label: 'Reçu' },
 ];
-
-type LoginModule = { icon: string; label: string; desc: string };
 
 function LoginConfigSection() {
   const { success, error } = useToast();

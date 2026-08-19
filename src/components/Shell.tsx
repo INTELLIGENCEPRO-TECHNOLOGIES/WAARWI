@@ -5,7 +5,7 @@ import {
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library, Truck,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft, UserCheck,
-  X, Monitor, Check,
+  X, Monitor, Check, Network,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
@@ -248,6 +248,31 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [closing, setClosing] = useState(false);
   const [siteOpen, setSiteOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [shellSubInfo, setShellSubInfo] = useState<{ planName: string; status: string; expiresAt: string | null; billingCycle: string } | null>(null);
+
+  useEffect(() => {
+    if (!tenant) return;
+    const planCode = (tenant as any)?.plan || (tenant as any)?.selected_plan_code;
+    const approvalStatus = (tenant as any)?.approval_status;
+    const trialEnd = (tenant as any)?.trial_end_date || null;
+    const planExpires = (tenant as any)?.plan_expires_at || null;
+    const billingCycle = (tenant as any)?.billing_cycle || 'monthly';
+    const now = Date.now();
+    let status: string;
+    let expiresAt: string | null;
+    if (approvalStatus !== 'approved') { status = 'pending_review'; expiresAt = null; }
+    else if (billingCycle === 'lifetime') { status = 'active'; expiresAt = null; }
+    else if (trialEnd && new Date(trialEnd).getTime() > now) { status = 'trial_active'; expiresAt = trialEnd; }
+    else if (planExpires && new Date(planExpires).getTime() < now) { status = 'expired'; expiresAt = planExpires; }
+    else { status = 'active'; expiresAt = planExpires; }
+    if (planCode) {
+      supabase.from('plans').select('name').eq('code', planCode).maybeSingle().then(({ data }) => {
+        setShellSubInfo({ planName: data?.name || planCode, status, expiresAt, billingCycle });
+      });
+    } else {
+      setShellSubInfo({ planName: 'Standard', status, expiresAt, billingCycle });
+    }
+  }, [tenant]);
   const [siteConfirmPending, setSiteConfirmPending] = useState<typeof sites[0] | null>(null);
 
   const isPOS = route === 'pos';
@@ -493,7 +518,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     {!sidebarCollapsed && !hasChildren && badge > 0 && (
                       <span className={`ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-neutral-900' : 'bg-red-500 text-white'}`}>{badge > 99 ? '99+' : badge}</span>
                     )}
-                    {!sidebarCollapsed && !hasChildren && badge === 0 && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />}
                     {sidebarCollapsed && !hasChildren && badge > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">{badge > 9 ? '9+' : badge}</span>
                     )}
@@ -559,16 +583,38 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           )}
         </div>
         <div className="flex-1 flex items-center gap-3 px-5">
+          {/* Subscription badge — centered in the empty space */}
+          {shellSubInfo && (
+            <button onClick={() => onRoute('settings')} className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity">
+              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                shellSubInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600'
+                  : shellSubInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
+                  : shellSubInfo.status === 'expired' ? 'bg-red-50 text-red-600'
+                  : 'bg-amber-50 text-amber-600'
+              }`}>
+                {shellSubInfo.status === 'trial_active' ? 'Essai' : shellSubInfo.status === 'active' ? 'Actif' : shellSubInfo.status === 'expired' ? 'Expiré' : 'En attente'}
+              </span>
+              <span className="font-semibold text-neutral-700 max-w-[100px] truncate">{shellSubInfo.planName}</span>
+              {shellSubInfo.expiresAt && (
+                <span className={`text-[10px] font-medium ${shellSubInfo.status === 'expired' ? 'text-red-500' : 'text-neutral-400'}`}>
+                  {shellSubInfo.status === 'expired' ? 'Expiré le' : "jusqu'au"} {new Date(shellSubInfo.expiresAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+              {shellSubInfo.billingCycle === 'lifetime' && !shellSubInfo.expiresAt && (
+                <span className="text-[10px] font-medium text-emerald-500">à vie</span>
+              )}
+            </button>
+          )}
           <div className="flex-1" />
-          {/* Desktop site selector dropdown */}
-          {sites.length > 1 && (
+          {/* Desktop site selector dropdown — hidden on dashboard (has its own) */}
+          {sites.length > 1 && !isDashboard && (
             <div className="relative">
               <button
                 onClick={() => setSiteOpen(!siteOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-colors text-sm"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-neutral-50 transition-colors"
               >
-                <Monitor className="w-3.5 h-3.5 text-neutral-500" />
-                <span className="font-medium text-neutral-800 max-w-[160px] truncate">{currentSite?.name || 'Site'}</span>
+                <Network className="w-3.5 h-3.5 text-neutral-500" />
+                <span className="text-[12px] font-semibold text-neutral-900 max-w-[160px] truncate">{currentSite?.name || 'Site'}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${siteOpen ? 'rotate-180' : ''}`} />
               </button>
               {siteOpen && (
@@ -607,7 +653,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               )}
             </div>
           )}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className={`flex items-center gap-2 shrink-0 ${isDashboard ? 'hidden' : ''}`}>
             {newOrdersCount > 0 && (
               <button
                 onClick={() => onRoute('online_orders')}
@@ -829,7 +875,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                               {!hasChildren && badge > 0 && (
                                 <span className="ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold bg-red-500 text-white">{badge > 99 ? '99+' : badge}</span>
                               )}
-                              {!hasChildren && badge === 0 && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white" />}
                             </button>
                             {hasChildren && mobileAcctOpen === item.key && (
                               <div className="ml-5 mt-0.5 space-y-0.5 animate-[fadeIn_0.15s_ease]">
@@ -933,17 +978,11 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         {isDashboard && !dashMenuOpen && (
           <button
             onClick={() => setDashMenuOpen(true)}
-            className="hidden lg:flex fixed z-40 items-center gap-2 px-3 py-2 rounded-lg transition-all active:scale-95"
-            style={{
-              top: '12px',
-              left: '16px',
-              background: '#ffffff',
-              border: '1px solid #e5e5e5',
-              boxShadow: '0 2px 8px -2px rgba(0,0,0,0.06)',
-            }}
+            className="hidden lg:flex fixed z-40 items-center justify-center w-9 h-9 rounded-lg hover:bg-neutral-100 transition-all active:scale-95"
+            style={{ top: '18px', left: '16px' }}
+            aria-label="Menu"
           >
-            <Menu className="w-4 h-4 text-neutral-700" strokeWidth={2} />
-            <span className="text-xs font-medium text-neutral-600">Menu</span>
+            <Menu className="w-5 h-5 text-neutral-700" strokeWidth={2} />
           </button>
         )}
 
@@ -1015,7 +1054,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </header>
 
         {/* Desktop breadcrumb bar */}
-        {!isPOS && !isPlatformAdmin && !isSuperAdmin && BREADCRUMB_MAP[route] && (
+        {!isDashboard && !isPOS && !isPlatformAdmin && !isSuperAdmin && BREADCRUMB_MAP[route] && (
           <div className="hidden lg:flex items-center gap-1.5 px-8 pt-3 pb-0 text-[12px] text-neutral-500">
             <span>{t(BREADCRUMB_MAP[route].group)}</span>
             <ChevronRight className="w-3 h-3 text-neutral-300" />

@@ -18,14 +18,15 @@ import {
   Share2, Copy, Check as CheckIcon, MessageCircle, RefreshCw,
   ClipboardList, Coins, RotateCcw,
   ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, BarChart3, Store,
-  Network, Palette, Award,
+  Network, Award, Menu, ChevronDown, Monitor, LogOut,
+  LayoutDashboard,
 } from 'lucide-react';
 
 type ShopInfo = { slug: string | null; isActive: boolean };
 
 type ActivityItem = {
   id: string;
-  type: 'sale' | 'quote' | 'supplier_order' | 'payment_received' | 'online_order' | 'stock_movement' | 'return';
+  type: 'sale' | 'quote' | 'supplier_order' | 'payment_received' | 'online_order' | 'stock_movement' | 'return' | 'expense';
   title: string;
   detail: string;
   amount: number | null;
@@ -33,6 +34,9 @@ type ActivityItem = {
   time: string;
   route: string;
   routeCtx?: NavContext;
+  siteName?: string;
+  userName?: string;
+  highlightId?: string;
 };
 
 type AlertItem = {
@@ -68,6 +72,7 @@ type Stats = {
   yesterdaySales: number;
   monthSales: number;
   monthMargin: number;
+  monthTauxMarge: number;
   cashBalance: number;
   sessionExpenses: number;
   sessionCashIn: number;
@@ -87,6 +92,37 @@ type Stats = {
   stockOutToday: number;
   stockValue: number;
   todayMargin: number;
+  periodTauxMarge: number;
+  periodCaNet: number;
+  periodMargeBrute: number;
+  periodNbVentes: number;
+  periodNbRetours: number;
+  periodRetours: number;
+  periodCharges: number;
+  periodResultat: number;
+  periodExpenses: number;
+  periodRefunds: number;
+  periodWithdrawals: number;
+  periodCustomerLoans: number;
+  periodCashBalance: number;
+  // Session financial data (from RPC)
+  sessionCaNet: number;
+  sessionMargeBrute: number;
+  sessionTauxMarge: number;
+  sessionNbVentes: number;
+  sessionNbRetours: number;
+  sessionRetours: number;
+  sessionDepenses: number;
+  sessionRemboursements: number;
+  sessionRetraits: number;
+  sessionPretsClients: number;
+  sessionEntreesDirectes: number;
+  sessionEncaissements: number;
+  sessionCreditTotal: number;
+  sessionCreditOutstanding: number;
+  sessionCreditCount: number;
+  sessionResultat: number;
+  sessionOpenedBy: string;
   articlesInStockCount: number;
   recentSales: Array<{
     id: string; sale_number: string; total: number; created_at: string;
@@ -127,7 +163,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       ['sales', 'sale_payments', 'cash_movements', 'cash_sessions', 'customers', 'suppliers', 'articles', 'stock_levels', 'quotes', 'sale_returns', 'online_orders', 'supplier_orders'],
       () => {
         if (refreshTimer.current) clearTimeout(refreshTimer.current);
-        refreshTimer.current = setTimeout(() => setRefreshTick(t => t + 1), 400);
+        refreshTimer.current = setTimeout(() => setRefreshTick(t => t + 1), 150);
       }
     );
     return () => { unsub(); if (refreshTimer.current) clearTimeout(refreshTimer.current); };
@@ -164,6 +200,14 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
     { value: 'last_month', label: 'Mois dernier' },
   ];
   const periodLabel = periodOptions.find(o => o.value === period)?.label || 'Aujourd\'hui';
+
+  const [viewMode, setViewMode] = useState<'period' | 'session'>(() => {
+    try { return (localStorage.getItem('dashboard_view_mode') as 'period' | 'session') || 'period'; } catch { return 'period'; }
+  });
+  const toggleViewMode = (mode: 'period' | 'session') => {
+    setViewMode(mode);
+    try { localStorage.setItem('dashboard_view_mode', mode); } catch {}
+  };
 
   useEffect(() => {
     if (!tenant || !currentSite) return;
@@ -204,18 +248,23 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const siteId = currentSite.id;
 
-      const periodQuery = supabase.from('sales').select('total, paid, status, created_at, sale_items(unit_price, quantity, discount, purchase_cost)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString()).neq('status', 'cancelled');
+      const periodQuery = supabase.from('sales').select('total, paid, status, created_at').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', periodStart.toISOString()).neq('status', 'cancelled');
       if (periodEnd) periodQuery.lt('created_at', periodEnd.toISOString());
 
+      const periodFromDate = periodStart.toISOString().slice(0, 10);
+      const periodToDate = periodEnd ? new Date(periodEnd.getTime() - 1).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const yestDate = yest.toISOString().slice(0, 10);
+
       const [
-        todayData, yestData, monthData, articlesCount, recent,
+        todayData, _yestRpc, _monthRpc, _periodRpc, articlesCount, recent,
         custData, suppData, quotesData, returnsData, shopData,
         webNewData, webPrepData, webReadyData, webTodayData, webWaitData, lastWebOrderData,
         openSessions, stockInTodayData,
       ] = await Promise.all([
         periodQuery,
-        supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', yest.toISOString()).lt('created_at', today.toISOString()).neq('status', 'cancelled'),
-        supabase.from('sales').select('total, sale_items(total, purchase_cost, quantity)').eq('tenant_id', tenant.id).eq('site_id', siteId).gte('created_at', firstOfMonth.toISOString()).neq('status', 'cancelled'),
+        supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: yestDate, p_to: yestDate }),
+        supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: firstOfMonth.toISOString().slice(0, 10), p_to: new Date().toISOString().slice(0, 10) }),
+        supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: periodFromDate, p_to: periodToDate }),
         supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true).eq('track_stock', true),
         supabase.from('sales').select('id, sale_number, total, created_at, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
         supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
@@ -231,7 +280,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('online_orders').select('total').eq('tenant_id', tenant.id).gte('created_at', periodStart.toISOString()).neq('status', 'annulee'),
         supabase.from('online_orders').select('created_at').eq('tenant_id', tenant.id).eq('status', 'nouvelle').order('created_at', { ascending: true }).limit(1),
         supabase.from('online_orders').select('order_number, customer_name, total, created_at').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'open'),
+        supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, user_id').eq('tenant_id', tenant.id).eq('site_id', siteId).eq('status', 'open'),
         supabase.from('stock_movements').select('quantity').eq('tenant_id', tenant.id).eq('site_id', siteId).in('movement_type', ['purchase', 'adjustment_in']).gte('created_at', periodStart.toISOString()),
       ]);
 
@@ -260,9 +309,13 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         newShopInfo = { slug: null, isActive: false };
       }
 
-      const todaySales = (todayData.data || []).reduce((s, r) => s + Number(r.total), 0);
+      const yestRpc = (_yestRpc.data || {}) as any;
+      const monthRpc = (_monthRpc.data || {}) as any;
+      const periodRpc = (_periodRpc.data || {}) as any;
+
+      const todaySales = Number(periodRpc.ca_net || 0);
       const todayPaid = (todayData.data || []).reduce((s: number, r: any) => s + Math.min(Number(r.total || 0), Number(r.paid || 0)), 0);
-      const todayReceivable = Math.max(0, todaySales - todayPaid);
+      const todayReceivable = Math.max(0, (todayData.data || []).reduce((s: number, r: any) => s + Number(r.total || 0), 0) - todayPaid);
 
       const periodEndIso = periodEnd ? periodEnd.toISOString() : null;
       const periodPaymentsQuery = supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).gte('created_at', periodStart.toISOString());
@@ -272,36 +325,18 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const [{ data: periodPayments }, { data: periodMovs }] = await Promise.all([periodPaymentsQuery, periodMovsQuery]);
       const todayPaymentsTotal = (periodPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
       const todayMovIncome = (periodMovs || [])
-        .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
+        .filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
         .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
       const todayCollected = todayPaymentsTotal + todayMovIncome;
-      let todayMargin = 0;
-      for (const sale of (todayData.data || []) as any[]) {
-        for (const item of (sale.sale_items || [])) {
-          const rev = (Number(item.unit_price) * Number(item.quantity)) - Number(item.discount || 0);
-          todayMargin += rev - (Number(item.purchase_cost || 0) * Number(item.quantity));
-        }
-      }
-      const yesterdaySales = (yestData.data || []).reduce((s, r) => s + Number(r.total), 0);
-      const monthInvoicedSales = (monthData.data || []).reduce((s, r) => s + Number(r.total), 0);
-
-      const { data: monthDirectMovs } = await supabase
-        .from('cash_movements')
-        .select('kind, amount, reason')
-        .eq('tenant_id', tenant.id)
-        .eq('site_id', siteId)
-        .gte('created_at', firstOfMonth.toISOString());
-      const monthDirectIncome = (monthDirectMovs || [])
-        .filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
-        .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
-      const monthSales = monthInvoicedSales + monthDirectIncome;
-
-      let monthMargin = 0;
-      for (const sale of (monthData.data || []) as any[]) {
-        for (const item of (sale.sale_items || [])) {
-          monthMargin += Number(item.total) - (Number(item.purchase_cost) * Number(item.quantity));
-        }
-      }
+      const periodExpenses = (periodMovs || []).filter((m: any) => m.kind === 'expense').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+      const periodRefunds = (periodMovs || []).filter((m: any) => m.kind === 'refund').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+      const periodWithdrawals = (periodMovs || []).filter((m: any) => m.kind === 'withdrawal').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+      const periodCustomerLoans = (periodMovs || []).filter((m: any) => m.kind === 'customer_loan').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+      const periodCashBalance = todayCollected - periodExpenses - periodRefunds - periodWithdrawals - periodCustomerLoans;
+      const todayMargin = Number(periodRpc.marge_brute || 0);
+      const yesterdaySales = Number(yestRpc.ca_net || 0);
+      const monthSales = Number(monthRpc.ca_net || 0);
+      const monthMargin = Number(monthRpc.marge_brute || 0);
 
       const stockRows = allStockRows;
       const siteArticlesTotal = articlesCount.count || 0;
@@ -381,10 +416,29 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           .eq('cash_session_id', currentSession.id);
         for (const m of (sessionMovs || []) as any[]) {
           if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
-          else if (!(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))) sessionMovIncome += Number(m.amount || 0);
+          else if (m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))) sessionMovIncome += Number(m.amount || 0);
         }
+      }
 
-        cashBalance = Number(currentSession.opening_amount || 0) + sessionPaymentsTotal + sessionMovIncome - sessionMovExpense;
+      // Session financial summary via dedicated RPC
+      let sessionFinancials: any = {};
+      if (currentSession) {
+        const { data: sfData } = await supabase.rpc('get_session_financial_summary', {
+          p_cash_session_id: currentSession.id
+        });
+        sessionFinancials = sfData || {};
+        
+        // Fetch the user who opened the session
+        const { data: sessionProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', currentSession.user_id || '')
+          .maybeSingle();
+        sessionFinancials._openedBy = sessionProfile?.full_name || '';
+      }
+
+      if (currentSession) {
+        cashBalance = Number(currentSession.opening_amount || 0) + Number(sessionFinancials.encaissements || 0) + Number(sessionFinancials.entrees_directes || 0) - Number(sessionFinancials.depenses_session || 0) - Number(sessionFinancials.remboursements || 0) - Number(sessionFinancials.retraits || 0) - Number(sessionFinancials.prets_clients || 0);
       }
 
       const stockIn = (stockInTodayData.data || []).reduce((s: number, r: any) => s + Number(r.quantity || 0), 0);
@@ -415,7 +469,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         .eq('tenant_id', tenant.id)
         .eq('site_id', siteId)
         .gte('created_at', weekStart.toISOString())
-        .neq('status', 'cancelled');
+        .in('status', ['paid', 'partial', 'validated']);
       const dayNames = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
       const weeklySales: { day: string; total: number }[] = [];
       let weekTotal = 0;
@@ -434,16 +488,35 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const avgWaitMin = firstWaitRow ? Math.max(0, Math.floor((Date.now() - new Date(firstWaitRow.created_at).getTime()) / 60000)) : 0;
 
       // Fetch recent activities from multiple sources for intelligent feed
-      const [actSales, actQuotes, actSupOrders, actOnline, actReturns, actPayments] = await Promise.all([
-        supabase.from('sales').select('id, sale_number, total, created_at, status, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(8),
-        supabase.from('quotes').select('id, quote_number, total, created_at, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
+      const [actSales, actQuotes, actSupOrders, actOnline, actReturns, actPayments, actMovements] = await Promise.all([
+        supabase.from('sales').select('id, sale_number, total, created_at, status, site_id, user_id, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(8),
+        supabase.from('quotes').select('id, quote_number, total, created_at, status, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
         sharedSuppliers
-          ? supabase.from('supplier_orders').select('id, order_number, total, created_at, status, suppliers(name)').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5)
-          : supabase.from('supplier_orders').select('id, order_number, total, created_at, status, suppliers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
+          ? supabase.from('supplier_orders').select('id, order_number, total, created_at, status, site_id, user_id, suppliers(name)').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5)
+          : supabase.from('supplier_orders').select('id, order_number, total, created_at, status, site_id, user_id, suppliers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(5),
         supabase.from('online_orders').select('id, order_number, total, created_at, status, customer_name').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
-        supabase.from('sale_returns').select('id, return_number, total, created_at, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(3),
-        supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, site_id, customers(name))').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).order('created_at', { ascending: false }).limit(5),
+        supabase.from('sale_returns').select('id, return_number, total, created_at, status, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(3),
+        supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, site_id, user_id, customers(name))').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).order('created_at', { ascending: false }).limit(5),
+        supabase.from('cash_movements').select('id, kind, amount, note, created_at, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('kind', ['expense', 'refund', 'customer_loan', 'withdrawal', 'deposit']).order('created_at', { ascending: false }).limit(8),
       ]);
+
+      // Batch-fetch profile names for all user_ids referenced in activities
+      const activityUserIds = new Set<string>();
+      for (const s of (actSales.data || []) as any[]) if (s.user_id) activityUserIds.add(s.user_id);
+      for (const q of (actQuotes.data || []) as any[]) if (q.user_id) activityUserIds.add(q.user_id);
+      for (const o of (actSupOrders.data || []) as any[]) if (o.user_id) activityUserIds.add(o.user_id);
+      for (const r of (actReturns.data || []) as any[]) if (r.user_id) activityUserIds.add(r.user_id);
+      for (const p of (actPayments.data || []) as any[]) if (p.sales?.user_id) activityUserIds.add(p.sales.user_id);
+      for (const m of (actMovements.data || []) as any[]) if (m.user_id) activityUserIds.add(m.user_id);
+      let activityProfileMap: Record<string, string> = {};
+      if (activityUserIds.size > 0) {
+        const { data: actProfiles } = await supabase.from('profiles').select('id, full_name').in('id', Array.from(activityUserIds));
+        for (const p of (actProfiles || []) as any[]) activityProfileMap[p.id] = p.full_name || '';
+      }
+      const siteNameMap: Record<string, string> = {};
+      for (const s of (tenant as any)?.sites || []) siteNameMap[s.id] = s.name;
+      if (currentSite) siteNameMap[currentSite.id] = currentSite.name;
+      const hasMultiSitesAct = ((tenant as any)?.sites?.length || 0) > 1;
 
       const activities: ActivityItem[] = [];
 
@@ -460,6 +533,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           amountType: s.status === 'cancelled' ? 'negative' : 'positive',
           time: s.created_at,
           route: 'sales',
+          siteName: hasMultiSitesAct ? (siteNameMap[s.site_id] || '') : '',
+          userName: s.user_id ? (activityProfileMap[s.user_id] || '') : '',
+          highlightId: s.id,
         });
       }
 
@@ -475,6 +551,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           amountType: 'neutral',
           time: q.created_at,
           route: 'sales',
+          siteName: hasMultiSitesAct ? (siteNameMap[q.site_id] || '') : '',
+          userName: q.user_id ? (activityProfileMap[q.user_id] || '') : '',
+          highlightId: q.id,
         });
       }
 
@@ -490,6 +569,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           amountType: 'negative',
           time: o.created_at,
           route: 'supplier_orders',
+          siteName: hasMultiSitesAct ? (siteNameMap[o.site_id] || '') : '',
+          userName: o.user_id ? (activityProfileMap[o.user_id] || '') : '',
+          highlightId: o.id,
         });
       }
 
@@ -505,6 +587,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           amountType: 'positive',
           time: o.created_at,
           route: 'online_orders',
+          highlightId: o.id,
         });
       }
 
@@ -519,6 +602,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           amountType: 'negative',
           time: r.created_at,
           route: 'sales',
+          siteName: hasMultiSitesAct ? (siteNameMap[r.site_id] || '') : '',
+          userName: r.user_id ? (activityProfileMap[r.user_id] || '') : '',
+          highlightId: r.id,
         });
       }
 
@@ -534,6 +620,28 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           amountType: 'positive',
           time: p.created_at,
           route: 'sales',
+          siteName: hasMultiSitesAct ? (siteNameMap[p.sales?.site_id] || '') : '',
+          userName: p.sales?.user_id ? (activityProfileMap[p.sales.user_id] || '') : '',
+          highlightId: p.sales?.id || p.id,
+        });
+      }
+
+      for (const m of (actMovements.data || []) as any[]) {
+        const kindLabels: Record<string, string> = { expense: 'Dépense', refund: 'Remboursement', customer_loan: 'Prêt client', withdrawal: 'Retrait', deposit: 'Entrée caisse' };
+        const label = kindLabels[m.kind] || m.kind;
+        const client = m.customers?.name;
+        activities.push({
+          id: `movement-${m.id}`,
+          type: m.kind === 'expense' ? 'expense' : m.kind === 'refund' ? 'return' : 'payment_received',
+          title: label,
+          detail: `${client ? client + ' · ' : ''}${m.note || ''}`.replace(/ · $/, '') || label,
+          amount: Number(m.amount),
+          amountType: m.kind === 'deposit' ? 'positive' : 'negative',
+          time: m.created_at,
+          route: 'cash_history',
+          siteName: hasMultiSitesAct ? (siteNameMap[m.site_id] || '') : '',
+          userName: m.user_id ? (activityProfileMap[m.user_id] || '') : '',
+          highlightId: m.id,
         });
       }
 
@@ -649,8 +757,34 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         todayPaid, todayReceivable,
         yesterdaySales,
         monthSales, monthMargin,
+        monthTauxMarge: Number(monthRpc.taux_marge || 0),
         todayMargin,
-        cashBalance, sessionExpenses: sessionMovExpense, sessionCashIn: sessionMovIncome,
+        periodTauxMarge: Number(periodRpc.taux_marge || 0),
+        periodCaNet: Number(periodRpc.ca_net || 0),
+        periodMargeBrute: Number(periodRpc.marge_brute || 0),
+        periodNbVentes: Number(periodRpc.nb_ventes || 0),
+        periodNbRetours: Number(periodRpc.nb_retours || 0),
+        periodRetours: Number(periodRpc.retours || 0),
+      periodCharges: Number(periodRpc.charges_exploitation || 0),
+      periodResultat: Number(periodRpc.resultat_exploitation || 0),
+        cashBalance, sessionExpenses: sessionMovExpense, sessionCashIn: sessionMovIncome, periodExpenses, periodRefunds, periodWithdrawals, periodCustomerLoans, periodCashBalance,
+        sessionCaNet: Number(sessionFinancials.ca_net || 0),
+        sessionMargeBrute: Number(sessionFinancials.marge_brute || 0),
+        sessionTauxMarge: Number(sessionFinancials.taux_marge || 0),
+        sessionNbVentes: Number(sessionFinancials.nb_ventes || 0),
+        sessionNbRetours: Number(sessionFinancials.nb_retours || 0),
+        sessionRetours: Number(sessionFinancials.retours || 0),
+        sessionDepenses: Number(sessionFinancials.depenses_session || 0),
+        sessionRemboursements: Number(sessionFinancials.remboursements || 0),
+        sessionRetraits: Number(sessionFinancials.retraits || 0),
+        sessionPretsClients: Number(sessionFinancials.prets_clients || 0),
+        sessionEntreesDirectes: Number(sessionFinancials.entrees_directes || 0),
+        sessionEncaissements: Number(sessionFinancials.encaissements || 0),
+        sessionCreditTotal: Number(sessionFinancials.credit_sales_total || 0),
+        sessionCreditOutstanding: Number(sessionFinancials.credit_sales_outstanding || 0),
+        sessionCreditCount: Number(sessionFinancials.credit_sales_count || 0),
+        sessionResultat: Number(sessionFinancials.resultat_exploitation || 0),
+        sessionOpenedBy: sessionFinancials._openedBy || '',
         sessionInfo,
         receivables, payables,
         articlesCount: articlesCount.count || 0,
@@ -700,20 +834,43 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
   if (loading || !stats) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3">
-        <div className="relative">
-          <div className="absolute inset-0 rounded-full bg-neutral-200 blur-xl animate-pulse" />
-          <Loader2 className="relative w-6 h-6 animate-spin text-neutral-600" />
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#0B0F19] z-[9999] overflow-hidden">
+        {/* Ambient glow orbs */}
+        <div className="absolute top-1/4 left-1/4 w-[50vw] h-[50vw] rounded-full bg-teal-500/8 blur-[120px] animate-[dashPulse_3s_ease-in-out_infinite]" />
+        <div className="absolute bottom-1/4 right-1/4 w-[40vw] h-[40vw] rounded-full bg-cyan-500/6 blur-[100px] animate-[dashPulse_3s_ease-in-out_infinite_1.5s]" />
+
+        {/* Dashboard icon with orbiting rings */}
+        <div className="relative flex items-center justify-center mb-8">
+          <div className="absolute w-24 h-24 rounded-full border border-white/5" />
+          <div className="absolute w-16 h-16 rounded-full border border-white/10 animate-[dashSpin_2s_linear_infinite]" style={{ borderTopColor: 'rgba(20,184,166,0.6)' }} />
+          <div className="absolute w-20 h-20 rounded-full border border-white/5 animate-[dashSpin_3s_linear_infinite_reverse]" style={{ borderBottomColor: 'rgba(6,182,212,0.4)' }} />
+          <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center shadow-[0_0_30px_rgba(20,184,166,0.4)]">
+            <LayoutDashboard className="w-6 h-6 text-white" />
+          </div>
         </div>
-        <span className="text-[11px] text-neutral-400 font-semibold uppercase tracking-[0.2em]">Chargement</span>
+
+        {/* Progress dots */}
+        <div className="flex items-center gap-1.5 mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-[dashBounce_1.4s_ease-in-out_infinite]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-[dashBounce_1.4s_ease-in-out_infinite_0.2s]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-[dashBounce_1.4s_ease-in-out_infinite_0.4s]" />
+        </div>
+
+        {/* Status text */}
+        <p className="text-[13px] font-medium text-slate-300 tracking-wide">
+          Préparation de votre tableau de bord
+        </p>
+        <p className="text-[10px] text-slate-600 mt-1 tracking-[0.15em] uppercase">
+          Chargement des données
+        </p>
       </div>
     );
   }
 
   const now = new Date();
   const hourGreet = now.getHours() < 12 ? 'Bonjour' : now.getHours() < 18 ? 'Bon après-midi' : 'Bonsoir';
-  const marginPct = can('view_margins') && stats.monthSales > 0 ? Math.round(stats.monthMargin / stats.monthSales * 100) : 0;
-  const dayMarginPct = can('view_margins') && stats.todaySales > 0 ? Math.round(stats.todayMargin / stats.todaySales * 100) : 0;
+  const marginPct = can('view_margins') ? Math.round(stats.monthTauxMarge) : 0;
+  const dayMarginPct = can('view_margins') ? Math.round(stats.periodTauxMarge) : 0;
   const dayDelta = stats.yesterdaySales > 0
     ? Math.round(((stats.todaySales - stats.yesterdaySales) / stats.yesterdaySales) * 100)
     : (stats.todaySales > 0 ? 100 : 0);
@@ -735,12 +892,21 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           toggleBalanceHidden={toggleBalanceHidden}
           heroLight={heroLight}
           toggleHeroTheme={toggleHeroTheme}
+          canViewMargin={can('view_margins')}
+          viewMode={viewMode}
+          toggleViewMode={toggleViewMode}
+          period={period}
+          setPeriod={setPeriod}
+          periodLabel={periodLabel}
+          periodOptions={periodOptions}
+          showPeriodMenu={showPeriodMenu}
+          setShowPeriodMenu={setShowPeriodMenu}
         />
       </div>
 
       <div className="hidden lg:block">
         <DesktopDashboard
-          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, todayCollected: 0, todayDirectCash: 0, todayPaid: 0, todayReceivable: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0 }}
+          stats={can('view_dashboard_stats') ? stats : { ...stats, todaySales: 0, todayCollected: 0, todayDirectCash: 0, todayPaid: 0, todayReceivable: 0, yesterdaySales: 0, monthSales: 0, monthMargin: 0, monthTauxMarge: 0, cashBalance: 0, sessionCashIn: 0, sessionExpenses: 0, receivables: 0, payables: 0, periodTauxMarge: 0, periodCaNet: 0, periodMargeBrute: 0, periodNbVentes: 0, periodNbRetours: 0, periodRetours: 0, periodCharges: 0, periodResultat: 0, periodExpenses: 0, periodRefunds: 0, periodWithdrawals: 0, periodCustomerLoans: 0, periodCashBalance: 0, sessionCaNet: 0, sessionMargeBrute: 0, sessionTauxMarge: 0, sessionNbVentes: 0, sessionNbRetours: 0, sessionRetours: 0, sessionDepenses: 0, sessionRemboursements: 0, sessionRetraits: 0, sessionPretsClients: 0, sessionEntreesDirectes: 0, sessionEncaissements: 0, sessionCreditTotal: 0, sessionCreditOutstanding: 0, sessionCreditCount: 0, sessionResultat: 0, sessionOpenedBy: '' }}
           shopInfo={shopInfo}
           greet={hourGreet}
           firstName={firstName}
@@ -756,6 +922,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           periodLabel={periodLabel}
           heroLight={heroLight}
           toggleHeroTheme={toggleHeroTheme}
+          canViewMargin={can('view_margins')}
+          viewMode={viewMode}
+          toggleViewMode={toggleViewMode}
         />
       </div>
     </>
@@ -767,7 +936,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
   stats, shopInfo, dayDelta, marginPct, dayMarginPct, nav,
-  balanceHidden, toggleBalanceHidden, heroLight, toggleHeroTheme,
+  balanceHidden, toggleBalanceHidden, heroLight, toggleHeroTheme, canViewMargin,
+  viewMode, toggleViewMode, period, setPeriod, periodLabel, periodOptions, showPeriodMenu, setShowPeriodMenu,
 }: any) {
   const { tenant, currentSite, sites, setCurrentSite } = useApp();
 
@@ -830,36 +1000,66 @@ function MobileDashboard({
     let cancelled = false;
     (async () => {
       const today = new Date(); today.setHours(0, 0, 0, 0);
+      let pStart = today; let pEnd: Date | null = null;
+      if (period === 'yesterday') { pStart = new Date(today); pStart.setDate(pStart.getDate() - 1); pEnd = today; }
+      else if (period === 'this_week') { pStart = new Date(today); const d = pStart.getDay(); pStart.setDate(pStart.getDate() - (d === 0 ? 6 : d - 1)); }
+      else if (period === 'last_week') { pStart = new Date(today); const d = pStart.getDay(); pStart.setDate(pStart.getDate() - (d === 0 ? 6 : d - 1) - 7); pEnd = new Date(pStart); pEnd.setDate(pEnd.getDate() + 7); }
+      else if (period === 'this_month') { pStart = new Date(today.getFullYear(), today.getMonth(), 1); }
+      else if (period === 'last_month') { pStart = new Date(today.getFullYear(), today.getMonth() - 1, 1); pEnd = new Date(today.getFullYear(), today.getMonth(), 1); }
       const results: SiteStat[] = [];
       for (const site of sites) {
-        const { data: sessData } = await supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1);
+        const { data: sessData } = await supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1);
         const session = (sessData || [])[0];
-        const sessionIds = session ? [session.id] : [];
-        const [{ data: salesData }, { data: pmtData }, { data: collectedPmts }, { data: collectedMovs }, { data: sessionMovs }] = await Promise.all([
-          supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
-          supabase.from('sale_payments').select('amount').eq('tenant_id', tenant.id).in('cash_session_id', sessionIds),
-          supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', today.toISOString()),
-          supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()),
-          session ? supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('cash_session_id', session.id) : Promise.resolve({ data: [] }),
+        const salesQ = supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', pStart.toISOString()).in('status', ['paid', 'partial', 'validated']);
+        if (pEnd) salesQ.lt('created_at', pEnd.toISOString());
+        const pmtQ = supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', pStart.toISOString());
+        if (pEnd) pmtQ.lt('created_at', pEnd.toISOString());
+        const movQ = supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', pStart.toISOString());
+        if (pEnd) movQ.lt('created_at', pEnd.toISOString());
+        const [{ data: salesData }, { data: collectedPmts }, { data: collectedMovs }, { data: sfData }] = await Promise.all([
+          salesQ,
+          pmtQ,
+          movQ,
+          session ? supabase.rpc('get_session_financial_summary', { p_cash_session_id: session.id }) : Promise.resolve({ data: null }),
         ]);
+        const sf: any = sfData || {};
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
-        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + todayDirectCash;
+        const periodExpenses = (collectedMovs || []).filter((m: any) => m.kind === 'expense').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const periodRefunds = (collectedMovs || []).filter((m: any) => m.kind === 'refund').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const periodWithdrawals = (collectedMovs || []).filter((m: any) => m.kind === 'withdrawal').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const periodLoans = (collectedMovs || []).filter((m: any) => m.kind === 'customer_loan').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const periodCashBalance = todayCollected - periodExpenses - periodRefunds - periodWithdrawals - periodLoans;
         const openingAmount = session ? Number(session.opening_amount || 0) : 0;
-        const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-        let sessionMovIncome = 0, sessionMovExpense = 0;
-        for (const m of (sessionMovs || []) as any[]) {
-          if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
-          else if (!(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))) sessionMovIncome += Number(m.amount || 0);
-        }
-        const cashBalance = session ? openingAmount + sessionPayTotal + sessionMovIncome - sessionMovExpense : 0;
-        results.push({ id: site.id, name: site.name, todaySales, todayCollected, todayDirectCash, salesCount, cashBalance, openingAmount, sessionOpen: !!session, expenses: sessionMovExpense });
+        const sessionEncaissements = Number(sf.encaissements || 0);
+        const sessionEntrees = Number(sf.entrees_directes || 0);
+        const sessionDepenses = Number(sf.depenses_session || 0);
+        const sessionRemboursements = Number(sf.remboursements || 0);
+        const sessionRetraits = Number(sf.retraits || 0);
+        const sessionPrets = Number(sf.prets_clients || 0);
+        const sessionTotalOutflows = sessionDepenses + sessionRemboursements + sessionRetraits + sessionPrets;
+        const sessionCashBalance = session ? openingAmount + sessionEncaissements + sessionEntrees - sessionTotalOutflows : 0;
+        const sessionSales = Number(sf.ventes_validees || 0);
+        const sessionCollected = sessionEncaissements + sessionEntrees;
+        const sessionSalesCount = Number(sf.nb_ventes || 0);
+        results.push({
+          id: site.id, name: site.name,
+          todaySales: viewMode === 'session' ? sessionSales : todaySales,
+          todayCollected: viewMode === 'session' ? sessionCollected : todayCollected,
+          todayDirectCash: viewMode === 'session' ? sessionEntrees : todayDirectCash,
+          salesCount: viewMode === 'session' ? sessionSalesCount : salesCount,
+          cashBalance: viewMode === 'session' ? sessionCashBalance : periodCashBalance,
+          openingAmount,
+          sessionOpen: !!session,
+          expenses: viewMode === 'session' ? sessionTotalOutflows : periodExpenses,
+        });
       }
       if (!cancelled) setMultiSiteStats(results);
     })();
     return () => { cancelled = true; };
-  }, [hasMultiSites, tenant?.id, sites.length, stats.todaySales]);
+  }, [hasMultiSites, tenant?.id, sites.length, stats.todaySales, viewMode, period]);
 
   // ── Web order notification (blink + sound) ──────────────────────────────
   const prevWebNew = useRef(stats.webNew);
@@ -911,7 +1111,73 @@ function MobileDashboard({
   return (
     <div className="space-y-2.5 animate-fade-in pb-16">
 
-      {/* ── HERO CARD ── */}
+      {/* ── VIEW MODE TABS ── */}
+      <div className="flex items-center gap-0 bg-neutral-100 rounded-xl p-0.5 mx-0">
+        <button
+          onClick={() => toggleViewMode('period')}
+          className={`flex-1 py-2 rounded-[10px] text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+            viewMode === 'period'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-400 hover:text-neutral-600'
+          }`}
+        >
+          Période
+        </button>
+        <button
+          onClick={() => toggleViewMode('session')}
+          className={`flex-1 py-2 rounded-[10px] text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+            viewMode === 'session'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-400 hover:text-neutral-600'
+          }`}
+        >
+          Session
+        </button>
+      </div>
+
+      {/* ── PERIOD SELECTOR (only in period mode) ── */}
+      {viewMode === 'period' && (
+        <div className="relative">
+          <button
+            onClick={() => setShowPeriodMenu(!showPeriodMenu)}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white border border-neutral-200 active:bg-neutral-50"
+          >
+            <div className="flex items-center gap-2">
+              <Calendar className="w-3.5 h-3.5 text-neutral-500" />
+              <span className="text-[11px] font-bold text-neutral-700">{periodLabel}</span>
+            </div>
+            <ChevronRight className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${showPeriodMenu ? 'rotate-90' : ''}`} />
+          </button>
+          {showPeriodMenu && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-neutral-200 shadow-lg z-50 py-1 animate-fade-in">
+              {periodOptions.map((opt: any) => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setPeriod(opt.value); setShowPeriodMenu(false); }}
+                  className={`w-full text-left px-3.5 py-2 text-[11px] font-semibold transition-colors ${
+                    period === opt.value ? 'text-neutral-900 bg-neutral-50' : 'text-neutral-500 hover:bg-neutral-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {viewMode === 'session' && !stats.sessionInfo ? (
+        <div className="rounded-[18px] bg-white p-6 text-center" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08)' }}>
+          <div className="w-14 h-14 mx-auto rounded-full bg-neutral-100 flex items-center justify-center mb-3">
+            <Wallet className="w-6 h-6 text-neutral-400" />
+          </div>
+          <p className="text-sm font-bold text-neutral-700">Aucune session de caisse ouverte</p>
+          <p className="text-xs text-neutral-400 mt-1">Ouvrez une session au POS pour voir les données de session.</p>
+          <button onClick={() => nav('pos')} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neutral-900 text-white text-xs font-bold">
+            <Store className="w-3.5 h-3.5" /> Ouvrir le POS
+          </button>
+        </div>
+      ) : (
       <button
         onClick={() => nav('sales')}
         className={`w-full text-left relative overflow-hidden rounded-[18px] p-3.5 active:scale-[0.985] transition-transform duration-200 ${heroLight ? '' : ''}`}
@@ -932,7 +1198,7 @@ function MobileDashboard({
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${heroLight ? 'bg-neutral-900' : 'bg-white'}`} />
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-neutral-400' : 'text-white/60'}`}>Encaissements du jour</span>
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-neutral-400' : 'text-white/60'}`}>{viewMode === 'session' ? 'Session de caisse' : `Période : ${periodLabel}`}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${heroLight ? 'bg-neutral-100 text-neutral-600 border border-neutral-200' : 'bg-white/10 text-white/80'}`}>
@@ -957,10 +1223,10 @@ function MobileDashboard({
               </button>
               <button
                 onClick={toggleHeroTheme}
-                className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-neutral-100 border border-neutral-200' : 'bg-white/8 border border-white/10'}`}
+                className={`text-[10px] font-semibold active:scale-95 transition-transform ${heroLight ? 'text-neutral-400 hover:text-neutral-700' : 'text-white/40 hover:text-white/80'}`}
                 aria-label="Changer le thème"
               >
-                <Palette className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-500' : 'text-white/60'}`} />
+                {heroLight ? 'Clair' : 'Sombre'}
               </button>
             </div>
           </div>
@@ -968,7 +1234,7 @@ function MobileDashboard({
           {/* Main amount + delta */}
           <div className="flex items-end gap-3 mb-2.5">
             <div className={`num font-black leading-none tracking-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`} style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
-              {balanceHidden ? '••••••' : formatFCFA(stats.todayCollected)}
+              {balanceHidden ? '••••••' : formatFCFA(viewMode === 'session' ? stats.sessionCaNet : stats.todayCollected)}
             </div>
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${
@@ -981,7 +1247,7 @@ function MobileDashboard({
               </span>
               <span className={`text-[8px] ${heroLight ? 'text-neutral-400' : 'text-white/35'}`}>vs hier</span>
               <span className={`text-[8px] ${heroLight ? 'text-neutral-300' : 'text-white/35'}`}>·</span>
-              <span className={`text-[8px] num ${heroLight ? 'text-neutral-500' : 'text-white/45'}`}>{stats.todayCount} ticket{stats.todayCount > 1 ? 's' : ''}</span>
+              <span className={`text-[8px] num ${heroLight ? 'text-neutral-500' : 'text-white/45'}`}>{viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount} ticket{(viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount) > 1 ? 's' : ''}</span>
             </div>
           </div>
 
@@ -996,33 +1262,54 @@ function MobileDashboard({
               </div>
             )}
 
-            {/* VENTES FACTURÉES row */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
-                  <Receipt className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Ventes facturées</span>
-              </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/85'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.todaySales)}
-              </span>
-            </div>
-
-            {/* ENCAISSEMENTS DIRECTS row */}
+            {viewMode === 'session' ? (<>
+            {/* SESSION: Encaissements */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.08)' : 'rgba(255,255,255,0.12)' }}>
                   <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Encaissements directs</span>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Encaissements</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.todayDirectCash)}
+                {balanceHidden ? '•••' : formatFCFA(stats.sessionEncaissements)}
               </span>
             </div>
-
-            {/* DEPENSES row */}
+            {/* SESSION: Marge brute */}
+            {canViewMargin && (
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
+                  <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Marge brute</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/85'}`}>
+                  {balanceHidden ? '•••' : formatFCFA(stats.sessionMargeBrute)}
+                </span>
+                {stats.sessionTauxMarge > 0 && <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{Math.round(stats.sessionTauxMarge)}%</span>}
+              </div>
+            </div>
+            )}
+            {/* SESSION: Ventes à crédit */}
+            {stats.sessionCreditCount > 0 && (
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.15)' }}>
+                  <Users className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Ventes à crédit</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`num text-[13px] font-black ${heroLight ? 'text-amber-700' : 'text-amber-200'}`}>
+                  {balanceHidden ? '•••' : formatFCFA(stats.sessionCreditTotal)}
+                </span>
+                <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{stats.sessionCreditCount}</span>
+              </div>
+            </div>
+            )}
+            {/* SESSION: Dépenses */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.15)' }}>
@@ -1031,11 +1318,59 @@ function MobileDashboard({
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.sessionExpenses)}
+                {balanceHidden ? '•••' : formatFCFA(stats.sessionDepenses)}
               </span>
             </div>
-
-            {/* SOLDE CAISSE row */}
+            {/* SESSION: Caisse théorique */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.07)' }}>
+                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Caisse théorique</span>
+              </div>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
+                {balanceHidden ? '•••' : formatFCFA((stats.sessionInfo?.openingAmount || 0) + stats.sessionEncaissements + stats.sessionEntreesDirectes - stats.sessionDepenses - stats.sessionRemboursements - stats.sessionRetraits - stats.sessionPretsClients)}
+              </span>
+            </div>
+            </>) : (<>
+            {/* PÉRIODE: CA net */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
+                  <Receipt className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>CA net</span>
+              </div>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/85'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.todaySales)}
+              </span>
+            </div>
+            {/* PÉRIODE: Encaissements directs */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.08)' : 'rgba(255,255,255,0.12)' }}>
+                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Encaiss. directs</span>
+              </div>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.todayDirectCash)}
+              </span>
+            </div>
+            {/* PÉRIODE: Dépenses */}
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.15)' }}>
+                  <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
+              </div>
+              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
+                {balanceHidden ? '•••' : formatFCFA(stats.periodExpenses)}
+              </span>
+            </div>
+            {/* PÉRIODE: Solde caisse */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.07)' }}>
@@ -1044,12 +1379,31 @@ function MobileDashboard({
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Solde caisse</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
-                {balanceHidden ? '•••' : formatFCFA(stats.cashBalance)}
+                {balanceHidden ? '•••' : formatFCFA(stats.periodCashBalance)}
               </span>
             </div>
+            </>)}
 
-            {/* MARGE DU JOUR row */}
-            {!balanceHidden && dayMarginPct > 0 && (
+            {/* CRÉANCES CLIENTS row - period only */}
+            {viewMode !== 'session' && stats.receivables > 0 && (
+              <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.15)' }}>
+                    <Users className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
+                  </div>
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Créances</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`num text-[13px] font-black ${heroLight ? 'text-amber-700' : 'text-amber-200'}`}>
+                    {balanceHidden ? '•••' : formatFCFA(stats.receivables)}
+                  </span>
+                  <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''}</span>
+                </div>
+              </div>
+            )}
+
+            {/* MARGE DU JOUR row - period only */}
+            {viewMode !== 'session' && !balanceHidden && dayMarginPct > 0 && (
               <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
@@ -1084,47 +1438,39 @@ function MobileDashboard({
           </div>
         </div>
       </button>
+      )}
 
-      {/* ── MULTI-SITE STRIP (mobile) ── */}
+      {/* ── MULTI-SITE STRIP (mobile) — compact list ── */}
       {sites.length > 1 && multiSiteStats.length > 0 && (
-        <div className="rounded-[18px] bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
-          <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-neutral-100/50 bg-neutral-50/80">
+        <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
+          <div className="flex items-center justify-between px-3.5 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
             <div className="flex items-center gap-1.5">
               <Network className="w-3.5 h-3.5 text-neutral-700" />
               <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Magasins</span>
             </div>
-            <span className="text-[9px] font-bold text-neutral-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + x.todayCollected, 0))}</span>
+            <span className="text-[9px] font-bold text-neutral-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + (viewMode === 'session' && !x.sessionOpen ? 0 : x.todayCollected), 0))}</span>
           </div>
-          <div className="flex overflow-x-auto gap-2 p-3 snap-x snap-mandatory no-scrollbar">
+          <div className="divide-y divide-neutral-50">
             {multiSiteStats.map(site => {
               const isCurrent = site.id === currentSite?.id;
               return (
                 <button
                   key={site.id}
                   onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
-                  className={`snap-start shrink-0 w-[calc(50%-4px)] p-2.5 rounded-xl border text-left transition-all ${isCurrent ? 'border-neutral-400 bg-neutral-50' : 'border-neutral-200 bg-white active:bg-neutral-50'}`}
+                  className={`w-full px-3.5 py-2.5 text-left active:bg-neutral-50 transition-colors ${isCurrent ? 'bg-neutral-50/40' : ''}`}
                 >
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
-                    <span className="text-[10px] font-bold text-neutral-800 truncate">{site.name}</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
+                      <span className={`text-[11px] truncate ${isCurrent ? 'font-bold text-neutral-900' : 'font-semibold text-neutral-700'}`}>{site.name}</span>
+                      {isCurrent && <span className="text-[8px] font-bold text-neutral-900 bg-neutral-200 px-1 py-0.5 rounded shrink-0">Actif</span>}
+                    </div>
+                    <span className={`text-[10px] font-bold ${site.sessionOpen ? 'text-neutral-700' : 'text-neutral-400'}`}>{site.sessionOpen ? 'Ouverte' : 'Fermée'}</span>
                   </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Facturées</span>
-                      <span className="text-[9px] font-bold text-neutral-700 num">{formatCompactFCFA(site.todaySales)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Encaissé direct</span>
-                      <span className="text-[9px] font-bold text-neutral-900 num">{formatCompactFCFA(site.todayDirectCash)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] text-neutral-400 font-semibold">Dépenses</span>
-                      <span className="text-[9px] font-bold text-red-600 num">{site.expenses > 0 ? `-${formatCompactFCFA(site.expenses)}` : '0'}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-0.5 border-t border-neutral-100">
-                      <span className="text-[8px] text-neutral-500 font-bold">Solde caisse</span>
-                      <span className={`text-[10px] font-black num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
-                    </div>
+                  <div className="flex items-center gap-3 ml-3">
+                    <span className="text-[9px] text-neutral-400">Facturé <span className="font-bold text-neutral-700 num">{viewMode === 'session' && !site.sessionOpen ? '--' : formatCompactFCFA(site.todaySales)}</span></span>
+                    <span className="text-[9px] text-neutral-400">Encaissé <span className="font-bold text-neutral-900 num">{viewMode === 'session' && !site.sessionOpen ? '--' : formatCompactFCFA(site.todayCollected)}</span></span>
+                    <span className="text-[9px] text-neutral-400">Dép. <span className="font-bold text-red-600 num">{viewMode === 'session' && !site.sessionOpen ? '--' : (site.expenses > 0 ? `-${formatCompactFCFA(site.expenses)}` : '0')}</span></span>
                   </div>
                 </button>
               );
@@ -1144,6 +1490,7 @@ function MobileDashboard({
             Voir tout <ChevronRight className="w-2.5 h-2.5" />
           </button>
         </div>
+        <span className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider px-3 pt-1.5 block">Situation actuelle</span>
         <div className="grid grid-cols-2 divide-x divide-neutral-100">
           <button onClick={() => nav('tiers', { target: 'receivables' })} className="px-3 py-2 text-left active:bg-neutral-50 transition-colors">
             <div className="text-[8px] text-neutral-400 font-semibold mb-0.5">Créances</div>
@@ -1233,7 +1580,7 @@ function MobileDashboard({
           <div className="px-3 py-2">
             <div className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Ticket moyen</div>
             <div className="num text-[13px] font-black text-neutral-900 leading-tight">
-              {balanceHidden ? '•••' : formatFCFA(stats.todayCount > 0 ? Math.round(stats.todaySales / stats.todayCount) : 0)}
+              {balanceHidden ? '•••' : formatFCFA((viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount) > 0 ? Math.round((viewMode === 'session' ? stats.sessionCaNet : stats.todaySales) / (viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount)) : 0)}
             </div>
           </div>
           <div className="px-3 py-2">
@@ -1435,6 +1782,31 @@ function MobileDashboard({
 
 
 /* ════════════════════════════════════════════════════════════════════════════
+ *  KPI helpers — divider-separated inline KPIs (no mini-cards)
+ * ════════════════════════════════════════════════════════════════════════════ */
+function KpiItem({ light, label, value, sub, negative, accent }: {
+  light: boolean; label: string; value: string; sub?: string; negative?: boolean; accent?: 'amber';
+}) {
+  const valColor = negative
+    ? (light ? 'text-red-600' : 'text-rose-300')
+    : accent === 'amber'
+      ? (light ? 'text-amber-700' : 'text-amber-200')
+      : (light ? 'text-neutral-900' : 'text-white');
+  return (
+    <div className="flex flex-col">
+      <p className={`text-[10px] font-medium uppercase tracking-wide mb-0.5 ${light ? 'text-neutral-500' : 'text-white/50'}`}>{label}</p>
+      <p className={`text-lg font-bold num leading-tight ${valColor}`}>{value}</p>
+      {sub && <p className={`text-[9px] mt-0.5 ${light ? 'text-neutral-400' : 'text-white/40'}`}>{sub}</p>}
+    </div>
+  );
+}
+
+function KpiDivider({ light }: { light: boolean }) {
+  return <div className={`self-stretch w-px ${light ? 'bg-neutral-200' : 'bg-white/10'}`} style={{ minHeight: 36 }} />;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
  *  DESKTOP DASHBOARD — Exact match to capture specification
  * ════════════════════════════════════════════════════════════════════════════ */
 
@@ -1609,8 +1981,8 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
   );
 }
 
-function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, heroLight, toggleHeroTheme }: any) {
-  const { tenant, currentSite, sites, setCurrentSite, profile } = useApp();
+function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, heroLight, toggleHeroTheme, canViewMargin, viewMode, toggleViewMode }: any) {
+  const { tenant, currentSite, sites, setCurrentSite, profile, signOut } = useApp();
   const { can } = usePermissions();
 
   // ── Subscription info ─────────────────────────────────────────────────
@@ -1673,36 +2045,66 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
     let cancelled = false;
     (async () => {
       const today = new Date(); today.setHours(0, 0, 0, 0);
+      let pStart = today; let pEnd: Date | null = null;
+      if (period === 'yesterday') { pStart = new Date(today); pStart.setDate(pStart.getDate() - 1); pEnd = today; }
+      else if (period === 'this_week') { pStart = new Date(today); const d = pStart.getDay(); pStart.setDate(pStart.getDate() - (d === 0 ? 6 : d - 1)); }
+      else if (period === 'last_week') { pStart = new Date(today); const d = pStart.getDay(); pStart.setDate(pStart.getDate() - (d === 0 ? 6 : d - 1) - 7); pEnd = new Date(pStart); pEnd.setDate(pEnd.getDate() + 7); }
+      else if (period === 'this_month') { pStart = new Date(today.getFullYear(), today.getMonth(), 1); }
+      else if (period === 'last_month') { pStart = new Date(today.getFullYear(), today.getMonth() - 1, 1); pEnd = new Date(today.getFullYear(), today.getMonth(), 1); }
       const results: SiteStat[] = [];
       for (const site of sites) {
-        const { data: sessData } = await supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').limit(1);
+        const { data: sessData } = await supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1);
         const session = (sessData || [])[0];
-        const sessionIds = session ? [session.id] : [];
-        const [{ data: salesData }, { data: pmtData }, { data: collectedPmts }, { data: collectedMovs }, { data: sessionMovs }] = await Promise.all([
-          supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()).neq('status', 'cancelled'),
-          supabase.from('sale_payments').select('amount').eq('tenant_id', tenant.id).in('cash_session_id', sessionIds),
-          supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', today.toISOString()),
-          supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', today.toISOString()),
-          session ? supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('cash_session_id', session.id) : Promise.resolve({ data: [] }),
+        const salesQ = supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', pStart.toISOString()).in('status', ['paid', 'partial', 'validated']);
+        if (pEnd) salesQ.lt('created_at', pEnd.toISOString());
+        const pmtQ = supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', pStart.toISOString());
+        if (pEnd) pmtQ.lt('created_at', pEnd.toISOString());
+        const movQ = supabase.from('cash_movements').select('kind, amount, reason').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', pStart.toISOString());
+        if (pEnd) movQ.lt('created_at', pEnd.toISOString());
+        const [{ data: salesData }, { data: collectedPmts }, { data: collectedMovs }, { data: sfData }] = await Promise.all([
+          salesQ,
+          pmtQ,
+          movQ,
+          session ? supabase.rpc('get_session_financial_summary', { p_cash_session_id: session.id }) : Promise.resolve({ data: null }),
         ]);
+        const sf: any = sfData || {};
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
-        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + todayDirectCash;
+        const periodExpenses = (collectedMovs || []).filter((m: any) => m.kind === 'expense').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const periodRefunds = (collectedMovs || []).filter((m: any) => m.kind === 'refund').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const periodWithdrawals = (collectedMovs || []).filter((m: any) => m.kind === 'withdrawal').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const periodLoans = (collectedMovs || []).filter((m: any) => m.kind === 'customer_loan').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const periodCashBalance = todayCollected - periodExpenses - periodRefunds - periodWithdrawals - periodLoans;
         const openingAmount = session ? Number(session.opening_amount || 0) : 0;
-        const sessionPayTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-        let sessionMovIncome = 0, sessionMovExpense = 0;
-        for (const m of (sessionMovs || []) as any[]) {
-          if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
-          else if (!(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))) sessionMovIncome += Number(m.amount || 0);
-        }
-        const cashBalance = session ? openingAmount + sessionPayTotal + sessionMovIncome - sessionMovExpense : 0;
-        results.push({ id: site.id, name: site.name, todaySales, todayCollected, todayDirectCash, salesCount, cashBalance, openingAmount, sessionOpen: !!session, expenses: sessionMovExpense });
+        const sessionEncaissements = Number(sf.encaissements || 0);
+        const sessionEntrees = Number(sf.entrees_directes || 0);
+        const sessionDepenses = Number(sf.depenses_session || 0);
+        const sessionRemboursements = Number(sf.remboursements || 0);
+        const sessionRetraits = Number(sf.retraits || 0);
+        const sessionPrets = Number(sf.prets_clients || 0);
+        const sessionTotalOutflows = sessionDepenses + sessionRemboursements + sessionRetraits + sessionPrets;
+        const sessionCashBalance = session ? openingAmount + sessionEncaissements + sessionEntrees - sessionTotalOutflows : 0;
+        const sessionSales = Number(sf.ventes_validees || 0);
+        const sessionCollected = sessionEncaissements + sessionEntrees;
+        const sessionSalesCount = Number(sf.nb_ventes || 0);
+        results.push({
+          id: site.id, name: site.name,
+          todaySales: viewMode === 'session' ? sessionSales : todaySales,
+          todayCollected: viewMode === 'session' ? sessionCollected : todayCollected,
+          todayDirectCash: viewMode === 'session' ? sessionEntrees : todayDirectCash,
+          salesCount: viewMode === 'session' ? sessionSalesCount : salesCount,
+          cashBalance: viewMode === 'session' ? sessionCashBalance : periodCashBalance,
+          openingAmount,
+          sessionOpen: !!session,
+          expenses: viewMode === 'session' ? sessionTotalOutflows : periodExpenses,
+        });
       }
       if (!cancelled) setMultiSiteStats(results);
     })();
     return () => { cancelled = true; };
-  }, [hasMultiSites, tenant?.id, sites.length, stats.todaySales]);
+  }, [hasMultiSites, tenant?.id, sites.length, stats.todaySales, viewMode, period]);
 
   // ── Top articles du jour (single-site fallback) ─────────────────────────
   type TopArticle = { article_id: string; name: string; quantity: number; total: number };
@@ -1747,7 +2149,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         .eq('tenant_id', tenant.id)
         .eq('site_id', currentSite.id)
         .gte('created_at', periodStart.toISOString())
-        .neq('status', 'cancelled');
+        .in('status', ['paid', 'partial', 'validated']);
       if (periodEnd) salesQ.lt('created_at', periodEnd.toISOString());
       const { data: salesRows } = await salesQ;
       const saleIds = (salesRows || []).map((r: any) => r.id);
@@ -1917,27 +2319,58 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
 
   // ── Quick-action FAB overlay ──────────────────────────────────────────
   const [fabOpen, setFabOpen] = useState(false);
+  const [siteOpen, setSiteOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
 
   return (
     <div className="min-h-full bg-white animate-fade-in">
-      {/* ── STICKY: TOP BAR + HERO ── */}
+      {/* ── STICKY: TOP BAR ONLY ── */}
       <div className="sticky top-0 z-20 bg-white border-b border-neutral-100">
-      {/* ── TOP BAR ── */}
-      <div className="border-b border-neutral-200">
-        <div className="pl-[120px] pr-5 xl:pr-8 py-3 flex items-center gap-4">
-          <div className="flex items-center gap-3 shrink-0">
+      {/* ── TOP BAR — single clean row ── */}
+      <div className="pl-14 pr-5 xl:pr-8 h-[72px] flex items-center gap-6">
+        {/* LEFT: title */}
+        <h1 className="text-[15px] font-bold text-neutral-900 tracking-tight whitespace-nowrap shrink-0">Tableau de bord</h1>
+
+        {/* CENTER group */}
+        <div className="flex items-center gap-5 ml-2">
+          {/* Période / Session — underline tabs, no card */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => toggleViewMode('period')}
+              className={`relative pb-1 text-xs font-semibold transition-colors ${
+                viewMode === 'period' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'
+              }`}
+            >
+              Période
+              {viewMode === 'period' && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-neutral-900 rounded-full" />}
+            </button>
+            <button
+              onClick={() => toggleViewMode('session')}
+              className={`relative pb-1 text-xs font-semibold transition-colors ${
+                viewMode === 'session' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'
+              }`}
+            >
+              Session
+              {viewMode === 'session' && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-neutral-900 rounded-full" />}
+            </button>
+          </div>
+
+          {/* Subtle vertical separator */}
+          <div className="w-px h-5 bg-neutral-200" />
+
+          {/* Date selector — no card, inline */}
+          {viewMode !== 'session' && (
             <div className="relative">
               <button
                 onClick={() => setShowPeriodMenu(!showPeriodMenu)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 hover:border-neutral-300 transition-all"
+                className="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors"
               >
-                <Calendar className="w-4 h-4 text-neutral-400" />
-                <span className="text-xs font-medium text-neutral-500 hidden sm:inline">Période :</span>
-                <span className="text-xs font-semibold text-neutral-900">{periodLabel}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-neutral-400 rotate-90" />
+                <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                <span className="font-medium">{periodLabel}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${showPeriodMenu ? 'rotate-180' : ''}`} />
               </button>
               {showPeriodMenu && (
-                <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl border border-neutral-200 shadow-elevated z-50 py-1">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-neutral-200 shadow-elevated z-50 py-1">
                   {periodOptions.map((opt: any) => (
                     <button
                       key={opt.value}
@@ -1950,47 +2383,114 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 </div>
               )}
             </div>
-            <button
-              onClick={() => setFabOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-neutral-200 text-neutral-700 text-xs font-medium transition-all active:scale-95 hover:border-neutral-300"
-            >
-              <Activity className="w-3.5 h-3.5 text-neutral-500" /> Actions rapides
-            </button>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            {subInfo && (
-              <button
-                onClick={() => nav('settings', { target: 'subscription' })}
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-neutral-200 hover:border-neutral-300 transition-all group"
-              >
-                <CreditCard className="w-3.5 h-3.5 text-neutral-400 group-hover:text-neutral-600" />
-                <span className="text-xs font-semibold text-neutral-700">Plan {subInfo.planName}</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  subInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600'
-                    : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
-                    : subInfo.status === 'expired' ? 'bg-red-50 text-red-600'
-                    : 'bg-amber-50 text-amber-600'
-                }`}>
-                  {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
+          )}
+
+          {/* Actions rapides — inline, no card */}
+          <button
+            onClick={() => setFabOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 transition-colors active:scale-95"
+          >
+            <Activity className="w-3.5 h-3.5 text-neutral-400" />
+            <span className="font-medium">Actions rapides</span>
+          </button>
+        </div>
+
+        {/* RIGHT group */}
+        <div className="ml-auto flex items-center gap-4">
+          {/* Subscription badge — compact with expiry */}
+          {subInfo && (
+            <button onClick={() => nav('settings', { target: 'subscription' })} className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity">
+              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                subInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600'
+                  : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
+                  : subInfo.status === 'expired' ? 'bg-red-50 text-red-600'
+                  : 'bg-amber-50 text-amber-600'
+              }`}>
+                {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
+              </span>
+              <span className="font-semibold text-neutral-700 max-w-[100px] truncate">{subInfo.planName}</span>
+              {subInfo.expiresAt && (
+                <span className={`text-[10px] font-medium ${subInfo.status === 'expired' ? 'text-red-500' : 'text-neutral-400'}`}>
+                  {subInfo.status === 'expired' ? 'Expiré le' : "jusqu'au"} {new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </span>
-                {subInfo.billingCycle === 'lifetime' && !subInfo.expiresAt && (
-                  <span className="text-[10px] font-bold text-emerald-600">À vie</span>
-                )}
-                {subInfo.expiresAt && (() => {
-                  const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
-                  const dateStr = new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-                  if (days <= 0) return <span className="text-[10px] font-bold text-red-500">Expiré le {dateStr}</span>;
-                  if (days <= 7) return <span className="text-[10px] font-medium text-amber-600">Expire le {dateStr} ({days}j)</span>;
-                  return <span className="text-[10px] font-medium text-neutral-400">Jusqu'au {dateStr}</span>;
-                })()}
-                <ChevronRight className="w-3 h-3 text-neutral-300 group-hover:text-neutral-500" />
+              )}
+              {subInfo.billingCycle === 'lifetime' && !subInfo.expiresAt && (
+                <span className="text-[10px] font-medium text-emerald-500">à vie</span>
+              )}
+            </button>
+          )}
+
+          {/* Subtle vertical separator */}
+          <div className="w-px h-5 bg-neutral-200" />
+
+          {/* Site selector — inline, no card */}
+          {hasMultiSites && (
+            <div className="relative">
+              <button
+                onClick={() => setSiteOpen(!siteOpen)}
+                className="flex items-center gap-1.5 text-xs text-neutral-700 hover:text-neutral-900 transition-colors"
+              >
+                <Network className="w-3.5 h-3.5 text-neutral-400" />
+                <span className="font-semibold">{currentSite?.name}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${siteOpen ? 'rotate-180' : ''}`} />
               </button>
-            )}
-            {hasMultiSites && (
-              <div className="flex items-center gap-2">
-                <Store className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="text-xs font-semibold text-neutral-700">{currentSite?.name}</span>
+              {siteOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setSiteOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl border border-neutral-200 shadow-elevated py-1 z-50 max-h-80 overflow-y-auto">
+                    <div className="px-3 py-1.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Magasins</div>
+                    {sites.map((s: any) => {
+                      const isActive = currentSite?.id === s.id;
+                      return (
+                        <div
+                          key={s.id}
+                          className={`flex items-center gap-2 px-2.5 py-2 mx-1 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-neutral-100' : 'hover:bg-neutral-50'}`}
+                          onClick={() => { if (isActive) { setSiteOpen(false); return; } setCurrentSite(s); setSiteOpen(false); }}
+                        >
+                          <div className={`w-[18px] h-[18px] rounded border-2 flex items-center justify-center shrink-0 ${isActive ? 'border-neutral-900 bg-neutral-900' : 'border-neutral-300'}`}>
+                            {isActive && <CheckIcon className="w-2.5 h-2.5 text-white" />}
+                          </div>
+                          <span className={`flex-1 text-sm truncate ${isActive ? 'font-semibold text-neutral-900' : 'text-neutral-600'}`}>{s.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* User — compact, no card */}
+          <div className="relative">
+            <button
+              onClick={() => setUserOpen(v => !v)}
+              className="flex items-center gap-2 pl-0.5 pr-1 h-9 rounded-lg hover:bg-neutral-50 transition-colors"
+            >
+              <div className="w-7 h-7 rounded-lg bg-neutral-900 flex items-center justify-center text-white text-[11px] font-bold">
+                {(profile?.full_name || profile?.email || '?').charAt(0).toUpperCase()}
               </div>
+              <div className="text-left leading-tight">
+                <div className="text-[12px] font-semibold text-neutral-900 whitespace-nowrap max-w-[120px] truncate">{profile?.full_name || profile?.email}</div>
+                <div className="text-[9px] text-neutral-400 uppercase tracking-wider font-medium">{profile?.role}</div>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+            </button>
+            {userOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setUserOpen(false)} />
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-neutral-200 rounded-xl shadow-elevated py-1 animate-slide-down z-20">
+                  <div className="px-3 py-2.5 border-b border-neutral-100">
+                    <div className="text-sm font-semibold text-neutral-900 truncate">{profile?.full_name}</div>
+                    <div className="text-xs text-neutral-500 truncate">{profile?.email}</div>
+                  </div>
+                  <button onClick={() => { setUserOpen(false); nav('settings'); }} className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 transition-colors">
+                    <Monitor className="w-4 h-4 text-neutral-400" /> Paramètres
+                  </button>
+                  <button onClick={() => { setUserOpen(false); signOut(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
+                    <LogOut className="w-4 h-4" /> Déconnexion
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -2036,14 +2536,16 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           </div>
         </div>
       )}
+      </div>{/* closes sticky top bar wrapper */}
 
-      <div className="px-5 xl:px-8 pt-4 pb-3">
-
-        {/* ── ROW 1: Situation du jour (left) + Right column (Créances, Dettes, Stock) ── */}
-        <div className="grid grid-cols-[minmax(0,2fr)_380px] gap-4" style={{ height: 320 }}>
+      {/* ── Hero + Rentabilité (left column) + Situation actuelle (right column) ── */}
+      <div className="px-5 xl:px-8 pt-2 pb-1">
+        <div className="flex gap-2 items-stretch">
+          {/* Left column: Hero + Rentabilité stacked */}
+          <div className="flex-1 flex flex-col gap-2 min-w-0">
           {/* Situation du jour */}
           <div
-            className="relative h-[320px] overflow-hidden rounded-xl p-5 flex flex-col transition-all duration-300"
+            className="relative overflow-hidden rounded-xl p-5 flex flex-col transition-all duration-300"
             style={heroLight
               ? { background: '#ffffff', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 0 0 1px rgba(226,232,240,0.6)' }
               : { background: 'linear-gradient(160deg, #0a0a0a 0%, #171717 35%, #262626 65%, #404040 100%)', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
@@ -2056,58 +2558,59 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               </div>
             )}
             <div className="relative flex flex-col h-full">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <TrendingUp className={`w-5 h-5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
-                <h2 className={`text-base font-bold ${heroLight ? 'text-neutral-900' : 'text-white'}`}>Situation {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}</h2>
+                <h2 className={`text-base font-bold ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{viewMode === 'session' ? 'Session de caisse' : `Situation ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}`}</h2>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${heroLight ? (dayDelta >= 0 ? 'border-neutral-200 text-neutral-700' : 'border-red-200 text-red-600') : (dayDelta >= 0 ? 'bg-white/10 border-white/15 text-white/80' : 'bg-rose-400/15 border-rose-400/20 text-rose-200')}`}>
-                  {dayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {dayDelta >= 0 ? '+' : ''}{dayDelta}% vs hier
-                </span>
-                <button
-                  onClick={toggleHeroTheme}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-90 ${heroLight ? 'bg-neutral-100 border border-neutral-200' : 'bg-white/10 border border-white/15'}`}
-                  aria-label="Changer le thème"
-                >
-                  <Palette className={`w-3 h-3 ${heroLight ? 'text-neutral-500' : 'text-white/60'}`} />
-                </button>
-              </div>
+              <button
+                onClick={toggleHeroTheme}
+                className={`text-xs font-semibold active:scale-95 transition-transform ${heroLight ? 'text-neutral-400 hover:text-neutral-700' : 'text-white/40 hover:text-white/80'}`}
+                aria-label="Changer le thème"
+              >
+                {heroLight ? 'Clair' : 'Sombre'}
+              </button>
             </div>
 
-            {/* Main amount */}
-            <div className="mb-4">
-              <p className={`text-[11px] font-medium mb-1 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>Encaissements {period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}</p>
-              <p className={`text-3xl font-bold num tracking-tight leading-none ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatFCFA(stats.todayCollected)}</p>
-            </div>
+            <div className="grid grid-cols-[minmax(185px,1.35fr)_minmax(0,4fr)] items-center gap-5 flex-1 min-h-0">
+              {/* Main amount */}
+              <div>
+                <p className={`text-[11px] font-medium mb-1 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{viewMode === 'session' ? 'CA net session' : `Encaissements ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}`}</p>
+                <p className={`text-3xl font-bold num tracking-tight leading-none ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatFCFA(viewMode === 'session' ? stats.sessionCaNet : stats.todayCollected)}</p>
+              </div>
 
-            {/* KPI Grid */}
-            <div className="grid grid-cols-3 gap-3 flex-1">
-              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
-                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Ventes facturées</p>
-                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatCompactFCFA(stats.todaySales)}</p>
-              </div>
-              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
-                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Encaissements directs</p>
-                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatCompactFCFA(stats.todayDirectCash)}</p>
-              </div>
-              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
-                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Ventes</p>
-                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{stats.todayCount}</p>
-              </div>
-              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
-                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Solde caisse</p>
-                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatCompactFCFA(stats.cashBalance)}</p>
-              </div>
-              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
-                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Dépenses</p>
-                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-red-600' : 'text-rose-300'}`}>{formatCompactFCFA(stats.sessionExpenses)}</p>
-              </div>
-              <div className={`rounded-lg px-3.5 py-3 flex flex-col justify-center border ${heroLight ? 'bg-neutral-50 border-neutral-100' : 'bg-white/6 border-white/8'}`}>
-                <p className={`text-[10px] font-medium uppercase tracking-wide mb-1 ${heroLight ? 'text-neutral-500' : 'text-white/50'}`}>Ticket moyen</p>
-                <p className={`text-lg font-bold num leading-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{stats.todayCount > 0 ? formatCompactFCFA(Math.round(stats.todaySales / stats.todayCount)) : '--'}</p>
-              </div>
+              {/* KPI Line — divider-separated, no mini-cards */}
+              {viewMode === 'session' ? (
+                <div className="flex items-center gap-3 min-w-0">
+                  <KpiItem light={heroLight} label="Nb ventes" value={String(stats.sessionNbVentes)} />
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Encaissements" value={formatCompactFCFA(stats.sessionEncaissements)} />
+                  {canViewMargin && <>
+                    <KpiDivider light={heroLight} />
+                    <KpiItem light={heroLight} label="Marge brute" value={formatCompactFCFA(stats.sessionMargeBrute)} sub={stats.sessionTauxMarge > 0 ? `${Math.round(stats.sessionTauxMarge)}%` : undefined} />
+                  </>}
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Ventes à crédit" value={String(stats.sessionCreditCount)} sub={formatCompactFCFA(stats.sessionCreditTotal)} />
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Dépenses" value={formatCompactFCFA(stats.sessionDepenses)} negative />
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Caisse théorique" value={formatCompactFCFA((stats.sessionInfo?.openingAmount || 0) + stats.sessionEncaissements + stats.sessionEntreesDirectes - stats.sessionDepenses - stats.sessionRemboursements - stats.sessionRetraits - stats.sessionPretsClients)} />
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 min-w-0">
+                  <KpiItem light={heroLight} label="CA net" value={formatCompactFCFA(stats.todaySales)} />
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Encaiss. directs" value={formatCompactFCFA(stats.todayDirectCash)} />
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Ventes" value={String(stats.todayCount)} />
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Solde caisse" value={formatCompactFCFA(stats.periodCashBalance)} />
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Dépenses" value={formatCompactFCFA(stats.periodExpenses)} negative />
+                  <KpiDivider light={heroLight} />
+                  <KpiItem light={heroLight} label="Créances" value={formatCompactFCFA(stats.receivables)} sub={`${stats.customersToChase} client${stats.customersToChase > 1 ? 's' : ''}`} accent={stats.receivables > 0 ? 'amber' : undefined} />
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -2122,80 +2625,112 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 Voir le détail <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
-            </div>
+          </div>
           </div>
 
-          {/* Right column */}
-          <div className="h-[320px] flex flex-col gap-3">
-            <div className="h-[92px] shrink-0 bg-white rounded-xl border border-neutral-200 px-4 py-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-neutral-600" />
-                  <h2 className="text-sm font-bold text-neutral-900">Créances clients</h2>
-                </div>
-                <button onClick={() => nav('tiers')} className="flex items-center gap-0.5 text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors">
-                  Voir <ChevronRight className="w-3 h-3" />
-                </button>
+          {/* ── RENTABILITÉ — single analytical band (permission-gated) ── */}
+          {canViewMargin && (
+            <div className="bg-white rounded-xl border border-neutral-200 px-5 py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="w-4 h-4 text-neutral-700" />
+                <h2 className="text-sm font-bold text-neutral-900">{viewMode === 'session' ? 'Rentabilité · Session' : 'Rentabilité'}</h2>
+                <span className="text-[10px] text-neutral-400 font-medium ml-1">{viewMode === 'session' ? 'Session en cours' : periodLabel}</span>
               </div>
-              <p className="text-xl font-bold text-neutral-900 num tracking-tight">{formatFCFA(stats.receivables)}</p>
-              <p className="text-[11px] text-neutral-400 mt-0.5">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''} a relancer</p>
+              <div className="grid grid-cols-4 items-stretch gap-x-6">
+                <div className="flex flex-col">
+                  <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-0.5">Marge brute</p>
+                  <p className="text-lg font-bold text-neutral-900 num leading-tight">{formatCompactFCFA(viewMode === 'session' ? stats.sessionMargeBrute : stats.periodMargeBrute)}</p>
+                  {(viewMode === 'session' ? stats.sessionTauxMarge : stats.periodTauxMarge) > 0 && <p className="text-[10px] text-neutral-400 mt-0.5 num">{Math.round(viewMode === 'session' ? stats.sessionTauxMarge : stats.periodTauxMarge)}% de marge</p>}
+                </div>
+                <div className="flex flex-col border-l border-neutral-200 pl-6">
+                  <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-0.5">{viewMode === 'session' ? 'Dépenses session' : 'Charges exploit.'}</p>
+                  <p className={`text-lg font-bold num leading-tight ${(viewMode === 'session' ? stats.sessionDepenses : stats.periodCharges) > 0 ? 'text-red-600' : 'text-neutral-900'}`}>{formatCompactFCFA(viewMode === 'session' ? stats.sessionDepenses : stats.periodCharges)}</p>
+                </div>
+                <div className="flex flex-col border-l border-neutral-200 pl-6">
+                  <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-0.5">{viewMode === 'session' ? 'Résultat session' : 'Résultat exploit.'}</p>
+                  <p className={`text-lg font-bold num leading-tight ${(viewMode === 'session' ? stats.sessionResultat : stats.periodResultat) < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{(viewMode === 'session' ? stats.sessionResultat : stats.periodResultat) < 0 ? '-' : ''}{formatCompactFCFA(Math.abs(viewMode === 'session' ? stats.sessionResultat : stats.periodResultat))}</p>
+                </div>
+                <div className="flex flex-col border-l border-neutral-200 pl-6">
+                  <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-0.5">Ticket moyen</p>
+                  <p className="text-lg font-bold text-neutral-900 num leading-tight">{(viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount) > 0 ? formatCompactFCFA(Math.round((viewMode === 'session' ? stats.sessionCaNet : stats.todaySales) / (viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount))) : '--'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          </div>
+
+          {/* Right column — single "Situation actuelle" block */}
+          <div className="w-[300px] shrink-0 flex flex-col bg-white rounded-xl border border-neutral-200 px-5 py-4">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-neutral-900">Situation actuelle</h2>
+              </div>
+              <span className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider">État de l'entreprise</span>
             </div>
 
-            <div className="h-[92px] shrink-0 bg-white rounded-xl border border-neutral-200 px-4 py-3.5">
-              <div className="flex items-center justify-between mb-1.5">
+            {/* Créances clients */}
+            <button onClick={() => nav('tiers')} className="flex items-center justify-between py-3 border-b border-neutral-100 text-left group">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-neutral-600" />
-                  <h2 className="text-sm font-bold text-neutral-900">Dettes fournisseurs</h2>
+                  <Users className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span className="text-xs font-semibold text-neutral-600">Créances clients</span>
                 </div>
-                <button onClick={() => nav('supplier_orders')} className="flex items-center gap-0.5 text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors">
-                  Voir <ChevronRight className="w-3 h-3" />
-                </button>
+                <p className="text-[11px] text-neutral-400 mt-0.5 ml-5.5">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''} a relancer</p>
               </div>
-              <p className="text-xl font-bold text-neutral-900 num tracking-tight">{formatFCFA(stats.payables)}</p>
-              <p className="text-[11px] text-neutral-400 mt-0.5">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} a payer</p>
-            </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-lg font-bold text-neutral-900 num tracking-tight">{formatFCFA(stats.receivables)}</span>
+                <ChevronRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
+              </div>
+            </button>
 
-            <div className="flex-1 min-h-0 bg-white rounded-xl border border-neutral-200 px-4 py-3.5">
-              <div className="flex items-center justify-between mb-2.5">
+            {/* Dettes fournisseurs */}
+            <button onClick={() => nav('supplier_orders')} className="flex items-center justify-between py-3 border-b border-neutral-100 text-left group">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Package className="w-4 h-4 text-neutral-600" />
-                  <h2 className="text-sm font-bold text-neutral-900">Stock a surveiller</h2>
+                  <Truck className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span className="text-xs font-semibold text-neutral-600">Dettes fournisseurs</span>
                 </div>
-                <button onClick={() => nav('stock')} className="text-neutral-400 hover:text-neutral-700 transition-colors">
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <p className="text-[11px] text-neutral-400 mt-0.5 ml-5.5">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} a payer</p>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <p className="text-[11px] font-medium text-neutral-400 mb-0.5">Rupture</p>
-                  <p className="flex items-baseline gap-1">
-                    <span className="text-lg font-bold text-red-600 num">{stats.outOfStockCount}</span>
-                    <span className="text-[10px] text-neutral-400">articles</span>
-                  </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-lg font-bold text-neutral-900 num tracking-tight">{formatFCFA(stats.payables)}</span>
+                <ChevronRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
+              </div>
+            </button>
+
+            {/* Stock à surveiller */}
+            <button onClick={() => nav('stock')} className="flex-1 flex flex-col justify-center py-3 text-left group min-h-0">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Package className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span className="text-xs font-semibold text-neutral-600">Stock a surveiller</span>
                 </div>
-                <div>
-                  <p className="text-[11px] font-medium text-neutral-400 mb-0.5">Stock bas</p>
-                  <p className="flex items-baseline gap-1">
-                    <span className="text-lg font-bold text-neutral-700 num">{stats.lowStockCount}</span>
-                    <span className="text-[10px] text-neutral-400">articles</span>
-                  </p>
+                <ChevronRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
+              </div>
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 ml-5.5">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-red-600 num">{stats.outOfStockCount}</span>
+                  <span className="text-[9px] text-neutral-400">Ruptures</span>
                 </div>
-                <div>
-                  <p className="text-[11px] font-medium text-neutral-400 mb-0.5">A commander</p>
-                  <p className="flex items-baseline gap-1">
-                    <span className="text-lg font-bold text-neutral-900 num">{stats.outOfStockCount + stats.lowStockCount}</span>
-                    <span className="text-[10px] text-neutral-400">articles</span>
-                  </p>
+                <div className="w-px h-3 bg-neutral-200" />
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-neutral-700 num">{stats.lowStockCount}</span>
+                  <span className="text-[9px] text-neutral-400">Stock bas</span>
+                </div>
+                <div className="w-px h-3 bg-neutral-200" />
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-neutral-900 num">{stats.outOfStockCount + stats.lowStockCount}</span>
+                  <span className="text-[9px] text-neutral-400">A commander</span>
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         </div>
-      </div>
-      </div>{/* closes sticky wrapper */}
 
-      {/* ── Cards area (scrolls behind sticky hero) ── */}
-      <div className="relative z-0 px-5 xl:px-8 pt-4 pb-6 space-y-4">
+      </div>{/* closes normal-scroll section: hero + rentabilité */}
+
+      {/* ── Cards area (scrolls below hero) ── */}
+      <div className="relative z-0 px-5 xl:px-8 pt-2 pb-2 space-y-2">
 
         {/* ── ROW 2: Vue multi-magasins (2+ sites) ou Top articles du jour (1 site) ── */}
         {hasMultiSites ? (multiSiteStats.length > 0 && (
@@ -2204,61 +2739,54 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               <div className="flex items-center gap-2.5">
                 <Network className="w-4.5 h-4.5 text-neutral-700" />
                 <h2 className="text-sm font-bold text-neutral-900">Vue multi-magasins</h2>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{sites.length} magasins</span>
+                <span className="text-[10px] text-neutral-500 font-semibold">{sites.length} magasins</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-neutral-400">Total encaissé :</span>
-                <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + x.todayCollected, 0))}</span>
+                <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(multiSiteStats.reduce((s: number, x: any) => s + (viewMode === 'session' && !x.sessionOpen ? 0 : x.todayCollected), 0))}</span>
               </div>
             </div>
-            <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(multiSiteStats.length, 5)}, minmax(0, 1fr))` }}>
-              {multiSiteStats.slice(0, 5).map((site: any) => {
-                const isCurrent = site.id === currentSite?.id;
-                const avgTicket = site.salesCount > 0 ? Math.round(site.todaySales / site.salesCount) : 0;
-                return (
-                  <button
-                    key={site.id}
-                    onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
-                    className={`p-3 rounded-lg border text-left transition-all duration-200 ${isCurrent ? 'border-neutral-400 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
-                        <span className="text-[11px] font-bold text-neutral-900 truncate">{site.name}</span>
-                      </div>
-                      {isCurrent && <span className="text-[8px] font-bold text-neutral-900 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0 ml-1">Actif</span>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-neutral-400 font-semibold">Facturé</span>
-                        <span className="text-[11px] font-bold text-neutral-800 num">{formatCompactFCFA(site.todaySales)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-neutral-400 font-semibold">Encaissé direct</span>
-                        <span className="text-[11px] font-bold text-neutral-900 num">{formatCompactFCFA(site.todayDirectCash)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-red-400 font-semibold">Dépenses</span>
-                        <span className="text-[11px] font-bold text-red-600 num">{site.expenses > 0 ? `-${formatCompactFCFA(site.expenses)}` : '0'}</span>
-                      </div>
-                      <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100">
-                        <span className="text-[9px] text-neutral-600 font-bold">Solde caisse</span>
-                        <span className={`text-[11px] font-black num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : 'Fermée'}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-neutral-50">
-                      <span className="text-[8px] text-neutral-400">{site.salesCount} ticket{site.salesCount > 1 ? 's' : ''}</span>
-                      <span className="text-[8px] text-neutral-400">Moy. {avgTicket > 0 ? formatCompactFCFA(avgTicket) : '--'}</span>
-                    </div>
-                  </button>
-                );
-              })}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100">
+                    <th className="text-left py-2.5 pl-2 pr-4">Magasin</th>
+                    <th className="text-right py-2.5 px-3">Facturé</th>
+                    <th className="text-right py-2.5 px-3">Encaissé</th>
+                    <th className="text-right py-2.5 px-3">Dépenses</th>
+                    <th className="text-right py-2.5 px-3">Solde caisse</th>
+                    <th className="text-right py-2.5 pl-3 pr-2">État</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-50">
+                  {multiSiteStats.map((site: any) => {
+                    const isCurrent = site.id === currentSite?.id;
+                    return (
+                      <tr
+                        key={site.id}
+                        onClick={() => { const s = sites.find((x: any) => x.id === site.id); if (s) setCurrentSite(s); }}
+                        className={`cursor-pointer transition-colors ${isCurrent ? 'bg-neutral-50/60' : 'hover:bg-neutral-50/40'}`}
+                      >
+                        <td className="py-3 pl-2 pr-4">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${site.sessionOpen ? 'bg-neutral-900' : 'bg-neutral-300'}`} />
+                            <span className={`text-sm truncate ${isCurrent ? 'font-bold text-neutral-900' : 'font-semibold text-neutral-700'}`}>{site.name}</span>
+                            {isCurrent && <span className="text-[8px] font-bold text-neutral-500 shrink-0 uppercase tracking-wider">Actif</span>}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-right text-sm font-bold text-neutral-800 num">{viewMode === 'session' && !site.sessionOpen ? '—' : formatCompactFCFA(site.todaySales)}</td>
+                        <td className="py-3 px-3 text-right text-sm font-bold text-neutral-900 num">{viewMode === 'session' && !site.sessionOpen ? '—' : formatCompactFCFA(site.todayCollected)}</td>
+                        <td className="py-3 px-3 text-right text-sm font-bold text-red-600 num">{viewMode === 'session' && !site.sessionOpen ? '—' : (site.expenses > 0 ? `-${formatCompactFCFA(site.expenses)}` : '0')}</td>
+                        <td className={`py-3 px-3 text-right text-sm font-black num ${site.sessionOpen ? 'text-neutral-900' : 'text-neutral-400'}`}>{site.sessionOpen ? formatCompactFCFA(site.cashBalance) : '—'}</td>
+                        <td className="py-3 pl-3 pr-2 text-right">
+                          <span className={`text-[10px] font-bold ${site.sessionOpen ? 'text-neutral-700' : 'text-neutral-400'}`}>{site.sessionOpen ? 'Ouverte' : 'Fermée'}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            {multiSiteStats.length > 5 && (
-              <div className="flex justify-end mt-2">
-                <span className="text-[10px] text-neutral-400 font-medium">+{multiSiteStats.length - 5} autre{multiSiteStats.length - 5 > 1 ? 's' : ''} magasin{multiSiteStats.length - 5 > 1 ? 's' : ''}</span>
-              </div>
-            )}
           </div>
         )) : (
           <div className="bg-white rounded-xl border border-neutral-200 p-5">
@@ -2266,9 +2794,9 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               <div className="flex items-center gap-3">
                 <Award className="w-5 h-5 text-neutral-700" />
                 <h2 className="text-base font-bold text-neutral-900">Top articles</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">{periodLabel}</span>
+                <span className="text-xs text-neutral-500 font-semibold">{periodLabel}</span>
                 {topArticles.length > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-bold border border-neutral-200">{topArticles.length}</span>
+                  <span className="text-xs text-neutral-500 font-semibold">{topArticles.length}</span>
                 )}
               </div>
               <button
@@ -2336,20 +2864,22 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         )}
 
         {/* ── ROW 3: Activité récente + Priorités du jour + Mouvements de caisse ── */}
-        <div className="grid grid-cols-12 gap-4">
+        <div className="grid grid-cols-12 gap-2">
           {/* Activité récente */}
-          <div className="col-span-12 xl:col-span-6 bg-white rounded-xl border border-neutral-200 p-5 flex flex-col max-h-[400px]">
-            <div className="flex items-center gap-2 mb-4">
-              <Clock className="w-5 h-5 text-neutral-500" />
-              <h2 className="text-base font-bold text-neutral-900">Activités récentes</h2>
+          <div className="col-span-12 xl:col-span-6 bg-white rounded-xl border border-neutral-200 p-3 flex flex-col max-h-[260px]">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-4 h-4 text-neutral-500" />
+              <h2 className="text-sm font-bold text-neutral-900">Activités récentes</h2>
             </div>
-            <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 pr-1.5 -mr-1.5" style={{ scrollbarGutter: 'stable' } as React.CSSProperties}>
               <table className="w-full">
                 <thead>
                   <tr className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100">
                     <th className="text-left py-2 pr-2">Type</th>
                     <th className="text-left py-2 pr-2">Référence</th>
                     <th className="text-left py-2 pr-2">Client / Fournisseur</th>
+                    <th className="text-left py-2 pr-2">Magasin</th>
+                    <th className="text-left py-2 pr-2">Par</th>
                     <th className="text-right py-2 pr-2">Heure</th>
                     <th className="text-right py-2">Montant</th>
                   </tr>
@@ -2363,7 +2893,8 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                       payment_received: { icon: Coins, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Règlement client' },
                       online_order: { icon: Globe, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Commande web' },
                       stock_movement: { icon: RefreshCw, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Entrée stock' },
-                      return: { icon: RotateCcw, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Retour fournisseur' },
+                      return: { icon: RotateCcw, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Retour' },
+                      expense: { icon: ArrowUpLeft, bg: 'bg-rose-50', fg: 'text-rose-600', label: 'Mouvement' },
                     };
                     const cfg = iconMap[act.type];
                     const Icon = cfg.icon;
@@ -2371,7 +2902,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                     const clientPart = act.detail.split(' · ')[0];
                     const timeStr = act.time ? formatDateTime(act.time) : '';
                     return (
-                      <tr key={act.id} onClick={() => nav(act.route, act.routeCtx)} className="border-b border-neutral-50 hover:bg-neutral-50/50 cursor-pointer transition-colors">
+                      <tr key={act.id} onClick={() => nav(act.route, act.highlightId ? { highlightId: act.highlightId, ...(act.routeCtx || {}) } : act.routeCtx)} className="border-b border-neutral-50 hover:bg-neutral-50/50 cursor-pointer transition-colors">
                         <td className="py-2.5 pr-2">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
@@ -2385,6 +2916,12 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                         </td>
                         <td className="py-2.5 pr-2">
                           <span className="text-xs text-neutral-500">{clientPart}</span>
+                        </td>
+                        <td className="py-2.5 pr-2">
+                          {act.siteName ? <span className="text-[10px] text-neutral-400 font-medium">{act.siteName}</span> : <span className="text-[10px] text-neutral-300">—</span>}
+                        </td>
+                        <td className="py-2.5 pr-2">
+                          {act.userName ? <span className="text-[10px] text-neutral-400 font-medium">{act.userName}</span> : <span className="text-[10px] text-neutral-300">—</span>}
                         </td>
                         <td className="py-2.5 pr-2 text-right">
                           <span className="text-xs text-neutral-400">{timeStr}</span>
@@ -2409,24 +2946,24 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
               )}
             </div>
             {stats.recentActivities.length > 0 && (
-              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 mt-3 pt-3 border-t border-neutral-100 transition-colors">
+              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 mt-2 pt-2 border-t border-neutral-100 transition-colors">
                 Voir toute l'activité <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
           {/* Priorités du jour */}
-          <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
-              <h2 className="text-base font-bold text-neutral-900">Priorités du jour</h2>
+          <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <h2 className="text-sm font-bold text-neutral-900">Priorités du jour</h2>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {stats.receivables > 0 && (
                 <button onClick={() => nav('tiers')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
                   <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
                   <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Relancer les clients</span>
-                  <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">{stats.customersToChase}</span>
+                  <span className="text-xs font-bold text-neutral-500">{stats.customersToChase}</span>
                   <ChevronRight className="w-4 h-4 text-neutral-300" />
                 </button>
               )}
@@ -2434,7 +2971,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 <button onClick={() => nav('supplier_orders')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
                   <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
                   <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Payer fournisseurs</span>
-                  <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">{stats.suppliersToChase}</span>
+                  <span className="text-xs font-bold text-neutral-500">{stats.suppliersToChase}</span>
                   <ChevronRight className="w-4 h-4 text-neutral-300" />
                 </button>
               )}
@@ -2442,7 +2979,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 <button onClick={() => nav('sales')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
                   <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
                   <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Réception fournisseur</span>
-                  <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">{stats.pendingReturns}</span>
+                  <span className="text-xs font-bold text-neutral-500">{stats.pendingReturns}</span>
                   <ChevronRight className="w-4 h-4 text-neutral-300" />
                 </button>
               )}
@@ -2450,48 +2987,109 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 <button onClick={() => nav('pos')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
                   <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
                   <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Clôturer la caisse</span>
-                  <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">Aujourd'hui</span>
+                  <span className="text-[10px] font-bold text-neutral-500">{periodLabel}</span>
                   <ChevronRight className="w-4 h-4 text-neutral-300" />
                 </button>
               )}
               {!stats.receivables && !stats.payables && !stats.pendingReturns && !stats.sessionInfo && (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <CheckCircle className="w-8 h-8 text-neutral-300 mb-2" />
-                  <p className="text-xs font-semibold text-neutral-600">Tout est en ordre</p>
+                <div className="flex items-center gap-2 py-2">
+                  <CheckCircle className="w-4 h-4 text-neutral-400 shrink-0" />
+                  <p className="text-xs font-semibold text-neutral-500">Tout est en ordre</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Mouvements de caisse */}
-          <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-5">
-            <div className="flex items-center justify-between mb-4">
+          {/* Mouvements de caisse — relevé financier */}
+          <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-3">
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Coins className="w-5 h-5 text-neutral-700" />
+                <Coins className="w-4 h-4 text-neutral-700" />
                 <h2 className="text-sm font-bold text-neutral-900">Mouvements de caisse</h2>
               </div>
-              <span className="text-[10px] font-medium text-neutral-400 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">Aujourd'hui</span>
+              <span className="text-[10px] font-medium text-neutral-500">{viewMode === 'session' ? 'Session' : periodLabel}</span>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-neutral-600">Solde d'ouverture</span>
-                <span className="text-sm font-semibold text-neutral-900 num">{formatCompactFCFA(stats.sessionInfo?.openingAmount || 0)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-neutral-600">Encaissements</span>
-                <span className="text-sm font-bold text-neutral-900 num">{formatCompactFCFA(stats.todayCollected)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-neutral-600">Dépenses</span>
-                <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionExpenses)}</span>
-              </div>
-              <div className="pt-3 mt-2 border-t border-neutral-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-neutral-900">Solde actuel</span>
-                  <span className="text-lg font-black text-neutral-900 num">{formatCompactFCFA(stats.cashBalance)}</span>
-                </div>
-              </div>
-              <button onClick={() => nav('cash_history')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 mt-2 transition-colors">
+            <div className="space-y-1">
+              {viewMode === 'session' ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-500">Solde d'ouverture</span>
+                    <span className="text-sm font-semibold text-neutral-800 num">{formatCompactFCFA(stats.sessionInfo?.openingAmount || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-500">Encaissements</span>
+                    <span className="text-sm font-bold text-neutral-900 num">+{formatCompactFCFA(stats.sessionEncaissements)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-500">Entrées directes</span>
+                    <span className="text-sm font-bold text-neutral-900 num">+{formatCompactFCFA(stats.sessionEntreesDirectes)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-500">Dépenses</span>
+                    <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionDepenses)}</span>
+                  </div>
+                  {stats.sessionRemboursements > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-500">Remboursements</span>
+                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionRemboursements)}</span>
+                    </div>
+                  )}
+                  {stats.sessionRetraits > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-500">Retraits</span>
+                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionRetraits)}</span>
+                    </div>
+                  )}
+                  {stats.sessionPretsClients > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-500">Prêts clients</span>
+                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionPretsClients)}</span>
+                    </div>
+                  )}
+                  <div className="pt-2 mt-1 border-t-2 border-neutral-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-neutral-900">Solde actuel</span>
+                      <span className="text-base font-black text-neutral-900 num">{formatCompactFCFA(stats.cashBalance)}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-500">Encaissements</span>
+                    <span className="text-sm font-bold text-neutral-900 num">+{formatCompactFCFA(stats.todayCollected)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-500">Dépenses</span>
+                    <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.periodExpenses)}</span>
+                  </div>
+                  {stats.periodRefunds > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-500">Remboursements</span>
+                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.periodRefunds)}</span>
+                    </div>
+                  )}
+                  {stats.periodWithdrawals > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-500">Retraits</span>
+                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.periodWithdrawals)}</span>
+                    </div>
+                  )}
+                  {stats.periodCustomerLoans > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-500">Prêts clients</span>
+                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.periodCustomerLoans)}</span>
+                    </div>
+                  )}
+                  <div className="pt-2 mt-1 border-t-2 border-neutral-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-neutral-900">Solde de la période</span>
+                      <span className="text-base font-black text-neutral-900 num">{formatCompactFCFA(stats.periodCashBalance)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+              <button onClick={() => nav('cash_history')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 mt-0.5 transition-colors">
                 Voir le détail de la caisse <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>

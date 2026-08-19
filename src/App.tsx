@@ -4,7 +4,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { usePermissions, type PermissionKey } from './lib/permissions';
 import { ToastProvider } from './context/ToastContext';
 import { Auth } from './pages/Auth';
-import { TenantWelcome } from './components/TenantWelcome';
+
 import { Shell, type Route } from './components/Shell';
 import { Dashboard } from './pages/Dashboard';
 import { TenantMessagePopup } from './components/TenantMessagePopup';
@@ -301,17 +301,7 @@ function Inner() {
   const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const [route, setRoute] = useState<Route>('dashboard');
-  const [showWelcome, setShowWelcome] = useState(false);
-  const prevUserIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    const prev = prevUserIdRef.current;
-    const curr = user?.id || null;
-    if (!prev && curr) {
-      setShowWelcome(true);
-    }
-    prevUserIdRef.current = curr;
-  }, [user?.id]);
 
   const enabled: string[] = Array.isArray((tenant as any)?.enabled_modules)
     ? (tenant as any).enabled_modules
@@ -336,11 +326,8 @@ function Inner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-brand-50/30">
-        <div className="flex flex-col items-center gap-4">
-          <img src="/newlogo.png" alt="" className="w-44 h-44 object-contain" />
-          <Loader2 className="w-5 h-5 animate-spin text-brand-700" />
-        </div>
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#F8FAFC]">
+        <img src="/newlogo.png" alt="" className="w-[140px] h-auto object-contain" />
       </div>
     );
   }
@@ -358,20 +345,8 @@ function Inner() {
     return <SuspendedTenant />;
   }
 
-  const welcomeName = tenant?.name || (isSuperAdmin ? 'Console plateforme' : 'WAARWI');
-  const welcomeLogo = (tenant as any)?.logo_url || null;
-  const welcomeTagline = tenant?.slogan || null;
-
   return (
     <>
-      {showWelcome && (
-        <TenantWelcome
-          logoUrl={welcomeLogo}
-          name={welcomeName}
-          tagline={welcomeTagline}
-          onDone={() => setShowWelcome(false)}
-        />
-      )}
     <Shell route={route} onRoute={setRoute}>
       <Suspense fallback={<div className="p-6 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>}>
         {route === 'dashboard' && <Dashboard onNavigate={(r: string) => setRoute(r as any)} />}

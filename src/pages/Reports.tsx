@@ -172,35 +172,45 @@ function printDoc(html: string): void {
 async function fetchCashStats(
   tenantId: string, siteId: string | undefined, from: string, to: string
 ) {
+  // 1. Central financial engine for KPIs
+  const summaryP = supabase.rpc('get_financial_summary', {
+    p_site_id: siteId || null, p_from: from, p_to: to,
+  });
+
+  // 2. Daily breakdown + payment methods (granular, not in RPC)
   let q = supabase
     .from('sales')
-    .select('id, total, status, created_at, site_id, sites(name), sale_items(unit_price, quantity, discount, purchase_cost, article_id, name:articles(name)), sale_payments(method_name, amount)')
+    .select('id, total, status, created_at, sale_items(unit_price, quantity, discount, purchase_cost, article_id, name:articles(name)), sale_payments(method_name, amount)')
     .eq('tenant_id', tenantId)
-    .neq('status', 'cancelled')
+    .in('status', ['paid', 'partial', 'validated'])
     .gte('created_at', `${from}T00:00:00`)
     .lte('created_at', `${to}T23:59:59`)
     .order('created_at');
   if (siteId) q = q.eq('site_id', siteId);
-  const { data, error } = await q;
-  if (error) throw error;
 
-  // Fetch approved returns in the same period
   let rq = supabase
     .from('sale_returns')
-    .select('id, total, created_at, customer_id, refund_method, sale_return_items(article_id, quantity, unit_price, purchase_cost)')
+    .select('id, total, created_at, refund_method, sale_return_items(article_id, quantity, unit_price, purchase_cost)')
     .eq('tenant_id', tenantId)
     .eq('status', 'approved')
     .gte('created_at', `${from}T00:00:00`)
     .lte('created_at', `${to}T23:59:59`);
   if (siteId) rq = rq.eq('site_id', siteId);
-  const { data: returns } = await rq;
+
+  const [summaryRes, salesRes, returnsRes] = await Promise.all([summaryP, q, rq]);
+  if (summaryRes.error) throw summaryRes.error;
+  if (salesRes.error) throw salesRes.error;
+
+  const summary = summaryRes.data as any;
+  const data = salesRes.data || [];
+  const returns = returnsRes.data || [];
 
   const byDay = new Map<string, { revenue: number; txCount: number; cost: number; paid: number; credit: number }>();
   const byMethod = new Map<string, number>();
   const byArticle = new Map<string, { name: string; qty: number; revenue: number; cost: number }>();
-  let totalRevenue = 0, totalCost = 0, totalPaid = 0, totalCredit = 0;
+  let totalPaid = 0, totalCredit = 0;
 
-  for (const row of (data || [])) {
+  for (const row of data) {
     const day = row.created_at.split('T')[0];
     const rev = row.total || 0;
     const rowCost = ((row.sale_items || []) as any[])
@@ -208,7 +218,7 @@ async function fetchCashStats(
     const paidSum = ((row.sale_payments || []) as any[]).reduce((s: number, p: any) => s + (p.amount || 0), 0);
     const rowPaid = row.status === 'paid' ? rev : paidSum;
     const rowCredit = Math.max(0, rev - paidSum);
-    totalRevenue += rev; totalCost += rowCost; totalPaid += rowPaid; totalCredit += rowCredit;
+    totalPaid += rowPaid; totalCredit += rowCredit;
 
     const prev = byDay.get(day) || { revenue: 0, txCount: 0, cost: 0, paid: 0, credit: 0 };
     byDay.set(day, {
@@ -231,15 +241,11 @@ async function fetchCashStats(
     }
   }
 
-  // Subtract returns from totals
-  for (const ret of (returns || [])) {
+  for (const ret of returns) {
     const retTotal = Number(ret.total) || 0;
     const day = ret.created_at.split('T')[0];
     const retCost = ((ret.sale_return_items || []) as any[])
       .reduce((s: number, i: any) => s + ((i.purchase_cost || 0) * i.quantity), 0);
-
-    totalRevenue -= retTotal;
-    totalCost -= retCost;
     totalPaid -= retTotal;
 
     const prev = byDay.get(day) || { revenue: 0, txCount: 0, cost: 0, paid: 0, credit: 0 };
@@ -248,11 +254,9 @@ async function fetchCashStats(
       cost: prev.cost - retCost, paid: prev.paid - retTotal, credit: prev.credit,
     });
 
-    // Subtract from payment method
     const method = ret.refund_method === 'cash' ? 'Espèces' : ret.refund_method || 'Espèces';
     byMethod.set(method, (byMethod.get(method) || 0) - retTotal);
 
-    // Subtract from article stats
     for (const item of ((ret.sale_return_items || []) as any[])) {
       const artId = item.article_id || '__unknown__';
       const artRev = item.unit_price * item.quantity;
@@ -265,8 +269,17 @@ async function fetchCashStats(
   }
 
   return {
-    totalRevenue, totalCost, totalPaid, totalCredit,
-    txCount: (data || []).length,
+    ventesValidees: Number(summary.ventes_validees) || 0,
+    retours: Number(summary.retours) || 0,
+    caNet: Number(summary.ca_net) || 0,
+    cogsNet: Number(summary.cogs_net) || 0,
+    margeBrute: Number(summary.marge_brute) || 0,
+    tauxMarge: Number(summary.taux_marge) || 0,
+    nbVentes: Number(summary.nb_ventes) || 0,
+    nbRetours: Number(summary.nb_retours) || 0,
+    nbAnnulations: Number(summary.nb_annulations) || 0,
+    montantAnnule: Number(summary.montant_annule) || 0,
+    totalPaid, totalCredit,
     byDay: Array.from(byDay.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([date, v]) => ({ date, ...v })),
@@ -281,52 +294,22 @@ async function fetchCashStats(
 }
 
 async function fetchArticleStats(
-  tenantId: string, siteId: string | undefined, from: string, to: string
+  _tenantId: string, siteId: string | undefined, from: string, to: string
 ) {
-  let q = supabase
-    .from('sale_items')
-    .select('article_id, name:articles(name), quantity, unit_price, discount, purchase_cost, sales!inner(tenant_id, site_id, created_at, status)')
-    .eq('sales.tenant_id', tenantId)
-    .neq('sales.status', 'cancelled')
-    .gte('sales.created_at', `${from}T00:00:00`)
-    .lte('sales.created_at', `${to}T23:59:59`);
-  if (siteId) q = q.eq('sales.site_id', siteId);
-  const { data, error } = await q;
+  const { data, error } = await supabase.rpc('get_sales_by_article', {
+    p_site_id: siteId || null, p_from: from, p_to: to,
+  });
   if (error) throw error;
 
-  // Fetch return items in same period
-  let rq = supabase
-    .from('sale_return_items')
-    .select('article_id, quantity, unit_price, purchase_cost, sale_returns!inner(tenant_id, site_id, created_at, status)')
-    .eq('sale_returns.tenant_id', tenantId)
-    .eq('sale_returns.status', 'approved')
-    .gte('sale_returns.created_at', `${from}T00:00:00`)
-    .lte('sale_returns.created_at', `${to}T23:59:59`);
-  if (siteId) rq = rq.eq('sale_returns.site_id', siteId);
-  const { data: retItems } = await rq;
-
-  const map = new Map<string, { name: string; qty: number; revenue: number; cost: number }>();
-  for (const row of (data || [])) {
-    const key = row.article_id;
-    const rev = (row.unit_price * row.quantity) - (row.discount || 0);
-    const cost = (row.purchase_cost || 0) * row.quantity;
-    const name = (row.name as any)?.name || row.article_id;
-    const prev = map.get(key) || { name, qty: 0, revenue: 0, cost: 0 };
-    map.set(key, { name, qty: prev.qty + row.quantity, revenue: prev.revenue + rev, cost: prev.cost + cost });
-  }
-
-  // Subtract returned quantities
-  for (const row of (retItems || [])) {
-    const key = row.article_id;
-    const rev = row.unit_price * row.quantity;
-    const cost = (row.purchase_cost || 0) * row.quantity;
-    const prev = map.get(key);
-    if (prev) {
-      map.set(key, { name: prev.name, qty: prev.qty - row.quantity, revenue: prev.revenue - rev, cost: prev.cost - cost });
-    }
-  }
-
-  return Array.from(map.values()).filter(a => a.qty > 0 || a.revenue > 0).sort((a, b) => b.revenue - a.revenue);
+  return ((data || []) as any[]).map((r: any) => ({
+    name: r.article_name || r.article_id,
+    qty: Number(r.quantite_vendue) || 0,
+    qtyReturned: Number(r.quantite_retournee) || 0,
+    revenue: Number(r.ca) || 0,
+    cost: Number(r.cout) || 0,
+    margin: Number(r.marge) || 0,
+    tauxMarge: Number(r.taux_marge) || 0,
+  }));
 }
 
 async function fetchCustomerStats(
@@ -334,7 +317,7 @@ async function fetchCustomerStats(
 ) {
   let q = supabase
     .from('sales')
-    .select('id, customer_id, customers(name), total, status, sale_items(unit_price, quantity, purchase_cost)')
+    .select('id, customer_id, customers(name), total, status, sale_items(unit_price, quantity, purchase_cost), sale_payments(amount)')
     .eq('tenant_id', tenantId)
     .neq('status', 'cancelled')
     .gte('created_at', `${from}T00:00:00`)
@@ -360,8 +343,9 @@ async function fetchCustomerStats(
     const name = row.customer_id ? ((row.customers as any)?.name || 'Client supprimé') : 'Comptoir';
     const rev = row.total || 0;
     const cost = ((row.sale_items || []) as any[]).reduce((s: number, i: any) => s + ((i.purchase_cost || 0) * i.quantity), 0);
-    const paid = row.status === 'paid' ? rev : row.status === 'partial' ? rev * 0.5 : 0;
-    const credit = (row.status === 'credit' || row.status === 'validated') ? rev : row.status === 'partial' ? rev * 0.5 : 0;
+    const paidSum = ((row.sale_payments || []) as any[]).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    const paid = row.status === 'paid' ? rev : Math.min(paidSum, rev);
+    const credit = Math.max(0, rev - paid);
     const prev = map.get(key) || { name, txCount: 0, revenue: 0, paid: 0, credit: 0, cost: 0 };
     map.set(key, { name, txCount: prev.txCount + 1, revenue: prev.revenue + rev, paid: prev.paid + paid, credit: prev.credit + credit, cost: prev.cost + cost });
   }
@@ -406,15 +390,16 @@ async function fetchSupplierStats(tenantId: string, from: string, to: string) {
 async function fetchExpenseStats(
   tenantId: string, siteId: string | undefined, from: string, to: string
 ) {
-  let salesQ = supabase
-    .from('sales')
-    .select('total, sale_items(quantity, purchase_cost)')
-    .eq('tenant_id', tenantId)
-    .neq('status', 'cancelled')
-    .gte('created_at', `${from}T00:00:00`)
-    .lte('created_at', `${to}T23:59:59`);
-  if (siteId) salesQ = salesQ.eq('site_id', siteId);
+  // 1. Financial summary from the central engine (source of truth)
+  const { data: summaryRaw, error: summaryErr } = await supabase.rpc('get_financial_summary', {
+    p_site_id: siteId || null,
+    p_from: from,
+    p_to: to,
+  });
+  if (summaryErr) throw summaryErr;
+  const summary = summaryRaw as any;
 
+  // 2. Expense detail by category (kind='expense' only, never 'refund')
   let movQ = supabase
     .from('cash_movements')
     .select('amount, reason, note, created_at, expense_category_id, expense_categories(name)')
@@ -424,26 +409,17 @@ async function fetchExpenseStats(
     .lte('created_at', `${to}T23:59:59`)
     .order('created_at');
   if (siteId) movQ = movQ.eq('site_id', siteId);
-
-  const [salesRes, movRes] = await Promise.all([salesQ, movQ]);
-  if (salesRes.error) throw salesRes.error;
-  if (movRes.error) throw movRes.error;
-
-  let totalRevenue = 0, totalCost = 0;
-  for (const row of (salesRes.data || [])) {
-    totalRevenue += row.total || 0;
-    totalCost += ((row.sale_items || []) as any[])
-      .reduce((s: number, i: any) => s + ((i.purchase_cost || 0) * i.quantity), 0);
-  }
+  const { data: movData, error: movErr } = await movQ;
+  if (movErr) throw movErr;
 
   const byCategory = new Map<string, { count: number; amount: number }>();
   const detail: { date: string; category: string; note: string; amount: number }[] = [];
-  let totalExpenses = 0;
+  let detailTotal = 0;
 
-  for (const m of (movRes.data || []) as any[]) {
+  for (const m of (movData || []) as any[]) {
     const category = (m.expense_categories as any)?.name || m.reason || 'Non catégorisé';
     const amount = Number(m.amount) || 0;
-    totalExpenses += amount;
+    detailTotal += amount;
     const prev = byCategory.get(category) || { count: 0, amount: 0 };
     byCategory.set(category, { count: prev.count + 1, amount: prev.amount + amount });
     detail.push({
@@ -454,8 +430,18 @@ async function fetchExpenseStats(
     });
   }
 
+  const ventesValidees = Number(summary.ventes_validees) || 0;
+  const retours = Number(summary.retours) || 0;
+  const caNet = Number(summary.ca_net) || 0;
+  const cogsNet = Number(summary.cogs_net) || 0;
+  const margeBrute = Number(summary.marge_brute) || 0;
+  const tauxMarge = Number(summary.taux_marge) || 0;
+  const chargesExploitation = Number(summary.charges_exploitation) || 0;
+  const resultatExploitation = Number(summary.resultat_exploitation) || 0;
+
   return {
-    totalRevenue, totalCost, totalExpenses,
+    ventesValidees, retours, caNet, cogsNet, margeBrute, tauxMarge,
+    chargesExploitation, resultatExploitation,
     byCategory: Array.from(byCategory.entries())
       .sort((a, b) => b[1].amount - a[1].amount)
       .map(([category, v]) => ({ category, ...v })),
@@ -470,9 +456,11 @@ function buildCashReport(
   stats: Awaited<ReturnType<typeof fetchCashStats>>,
   showMargin: boolean, siteName?: string
 ): string {
-  const { totalRevenue, totalCost, totalPaid, totalCredit, txCount, byDay, byMethod, byArticle } = stats;
-  const margin = totalRevenue - totalCost;
-  const marginPct = totalRevenue > 0 ? Math.round((margin / totalRevenue) * 100) : 0;
+  const {
+    ventesValidees, retours, caNet, cogsNet, margeBrute, tauxMarge,
+    nbVentes, nbRetours, nbAnnulations, montantAnnule,
+    totalPaid, totalCredit, byDay, byMethod, byArticle,
+  } = stats;
   const period = labelRange(range);
   const now = new Date().toLocaleString('fr-FR');
 
@@ -508,7 +496,7 @@ function buildCashReport(
       <td>${esc(a.name)}</td>
       <td class="r num">${fmtNum(a.qty)}</td>
       <td class="r num b">${fmtMoney(a.revenue)}</td>
-      <td class="r num">${pct(a.revenue, totalRevenue)}</td>
+      <td class="r num">${pct(a.revenue, caNet)}</td>
       ${artMargin}
     </tr>`;
   }).join('');
@@ -525,21 +513,39 @@ function buildCashReport(
   const kpiMarginCells = showMargin ? `
     <div class="kpi-cell success">
       <div class="kpi-label">Marge brute</div>
-      <div class="kpi-value ${margin >= 0 ? 'green' : 'red'}">${fmtMoney(margin)} FCFA</div>
+      <div class="kpi-value ${margeBrute >= 0 ? 'green' : 'red'}">${fmtMoney(margeBrute)} FCFA</div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-label">Taux de marge</div>
-      <div class="kpi-value ${margin >= 0 ? 'green' : 'red'}">${marginPct} %</div>
+      <div class="kpi-value ${margeBrute >= 0 ? 'green' : 'red'}">${tauxMarge} %</div>
     </div>` : '';
 
+  const annulationRow = nbAnnulations > 0 ? `
+    <div class="kpi-cell"><div class="kpi-label">Annulations</div><div class="kpi-value">${fmtNum(nbAnnulations)} (${fmtMoney(montantAnnule)} FCFA)</div></div>` : '';
+
   return `
-    ${docHeader(tenant, 'Statistiques de Caisse', 'Ventes · Encaissements · Articles', period, siteName)}
+    ${docHeader(tenant, 'Statistiques de Caisse', 'Activité · Rentabilité · Encaissements · Articles', period, siteName)}
+
+    <div class="section-title">Activité commerciale</div>
     <div class="kpi-row">
-      <div class="kpi-cell accent"><div class="kpi-label">CA Total</div><div class="kpi-value">${fmtMoney(totalRevenue)} FCFA</div></div>
+      <div class="kpi-cell accent"><div class="kpi-label">Ventes validées</div><div class="kpi-value">${fmtMoney(ventesValidees)} FCFA</div></div>
+      <div class="kpi-cell ${retours > 0 ? 'danger' : ''}"><div class="kpi-label">Retours / avoirs</div><div class="kpi-value ${retours > 0 ? 'red' : ''}">${retours > 0 ? '− ' : ''}${fmtMoney(retours)} FCFA</div></div>
+      <div class="kpi-cell accent"><div class="kpi-label">CA net</div><div class="kpi-value">${fmtMoney(caNet)} FCFA</div></div>
+      <div class="kpi-cell"><div class="kpi-label">Nb ventes</div><div class="kpi-value">${fmtNum(nbVentes)}</div></div>
+      ${nbRetours > 0 ? `<div class="kpi-cell"><div class="kpi-label">Nb retours</div><div class="kpi-value">${fmtNum(nbRetours)}</div></div>` : ''}
+      ${annulationRow}
+    </div>
+
+    ${showMargin ? `<div class="section-title">Rentabilité</div>
+    <div class="kpi-row">
+      <div class="kpi-cell"><div class="kpi-label">Coût des marchandises</div><div class="kpi-value">${fmtMoney(cogsNet)} FCFA</div></div>
+      ${kpiMarginCells}
+    </div>` : ''}
+
+    <div class="section-title">Trésorerie</div>
+    <div class="kpi-row">
       <div class="kpi-cell success"><div class="kpi-label">Encaissé</div><div class="kpi-value green">${fmtMoney(totalPaid)} FCFA</div></div>
       <div class="kpi-cell danger"><div class="kpi-label">Crédit impayé</div><div class="kpi-value red">${fmtMoney(totalCredit)} FCFA</div></div>
-      <div class="kpi-cell"><div class="kpi-label">Transactions</div><div class="kpi-value">${fmtNum(txCount)}</div></div>
-      ${kpiMarginCells}
     </div>
 
     <div class="section-title">Évolution journalière</div>
@@ -549,11 +555,11 @@ function buildCashReport(
         ${dayRows}
         <tr class="total-row">
           <td></td><td class="b">TOTAL</td>
-          <td class="r num">${fmtNum(txCount)}</td>
-          <td class="r num">${fmtMoney(totalRevenue)}</td>
+          <td class="r num">${fmtNum(nbVentes)}</td>
+          <td class="r num">${fmtMoney(caNet)}</td>
           <td class="r num">${fmtMoney(totalPaid)}</td>
           <td class="r num">${fmtMoney(totalCredit)}</td>
-          ${mTotal(margin)}
+          ${mTotal(margeBrute)}
         </tr>
       </tbody>
     </table>
@@ -591,6 +597,7 @@ function buildArticleReport(
   const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
   const totalCost = rows.reduce((s, r) => s + r.cost, 0);
   const totalQty = rows.reduce((s, r) => s + r.qty, 0);
+  const totalReturned = rows.reduce((s, r) => s + r.qtyReturned, 0);
   const margin = totalRevenue - totalCost;
 
   const mHeader = showMargin ? '<th class="r">Marge (FCFA)</th><th class="r">Tx marge</th>' : '';
@@ -599,15 +606,14 @@ function buildArticleReport(
     : '';
 
   const tableRows = rows.map((r, i) => {
-    const m = r.revenue - r.cost;
-    const mPct = r.revenue > 0 ? Math.round((m / r.revenue) * 100) : 0;
     const mCells = showMargin
-      ? `<td class="r num ${m >= 0 ? 'mc' : 'mr'}">${fmtMoney(m)}</td><td class="r num ${m >= 0 ? 'mc' : 'mr'}">${mPct} %</td>`
+      ? `<td class="r num ${r.margin >= 0 ? 'mc' : 'mr'}">${fmtMoney(r.margin)}</td><td class="r num ${r.margin >= 0 ? 'mc' : 'mr'}">${r.tauxMarge} %</td>`
       : '';
     return `<tr>
       <td class="num c">${i + 1}</td>
       <td>${esc(r.name)}</td>
       <td class="r num">${fmtNum(r.qty)}</td>
+      ${r.qtyReturned > 0 ? `<td class="r num mr">${fmtNum(r.qtyReturned)}</td>` : '<td class="r muted">—</td>'}
       <td class="r num b">${fmtMoney(r.revenue)}</td>
       <td class="r num">${pct(r.revenue, totalRevenue)}</td>
       ${mCells}
@@ -621,21 +627,23 @@ function buildArticleReport(
     </div>` : '';
 
   return `
-    ${docHeader(tenant, 'Statistiques Articles', 'Classement par chiffre d\'affaires', period, siteName)}
+    ${docHeader(tenant, 'Statistiques Articles', 'CA net par article (remises globales ventilées)', period, siteName)}
     <div class="kpi-row">
-      <div class="kpi-cell accent"><div class="kpi-label">CA Total</div><div class="kpi-value">${fmtMoney(totalRevenue)} FCFA</div></div>
+      <div class="kpi-cell accent"><div class="kpi-label">CA net</div><div class="kpi-value">${fmtMoney(totalRevenue)} FCFA</div></div>
       <div class="kpi-cell"><div class="kpi-label">Références vendues</div><div class="kpi-value">${fmtNum(rows.length)}</div></div>
-      <div class="kpi-cell"><div class="kpi-label">Quantité totale</div><div class="kpi-value">${fmtNum(totalQty)}</div></div>
+      <div class="kpi-cell"><div class="kpi-label">Quantité vendue</div><div class="kpi-value">${fmtNum(totalQty)}</div></div>
+      ${totalReturned > 0 ? `<div class="kpi-cell danger"><div class="kpi-label">Quantité retournée</div><div class="kpi-value red">${fmtNum(totalReturned)}</div></div>` : ''}
       ${kpiMarginCell}
     </div>
     <div class="section-title">Classement des articles — CA décroissant</div>
     <table>
-      <thead><tr><th class="c">#</th><th>Article</th><th class="r">Qté vendue</th><th class="r">CA (FCFA)</th><th class="r">Part CA</th>${mHeader}</tr></thead>
+      <thead><tr><th class="c">#</th><th>Article</th><th class="r">Qté vendue</th><th class="r">Qté retournée</th><th class="r">CA net (FCFA)</th><th class="r">Part CA</th>${mHeader}</tr></thead>
       <tbody>
         ${tableRows}
         <tr class="total-row">
           <td></td><td class="b">TOTAL</td>
           <td class="r num">${fmtNum(totalQty)}</td>
+          <td class="r num">${totalReturned > 0 ? fmtNum(totalReturned) : '—'}</td>
           <td class="r num">${fmtMoney(totalRevenue)}</td>
           <td class="r">100 %</td>
           ${mTotalCell}
@@ -683,7 +691,7 @@ function buildCustomerReport(
   return `
     ${docHeader(tenant, 'Statistiques Clients', 'Portefeuille client — CA & crédits', period, siteName)}
     <div class="kpi-row">
-      <div class="kpi-cell accent"><div class="kpi-label">CA Total</div><div class="kpi-value">${fmtMoney(totalRevenue)} FCFA</div></div>
+      <div class="kpi-cell accent"><div class="kpi-label">CA net</div><div class="kpi-value">${fmtMoney(totalRevenue)} FCFA</div></div>
       <div class="kpi-cell"><div class="kpi-label">Clients actifs</div><div class="kpi-value">${fmtNum(rows.length)}</div></div>
       <div class="kpi-cell danger"><div class="kpi-label">Encours crédit</div><div class="kpi-value red">${fmtMoney(totalCredit)} FCFA</div></div>
       ${kpiMarginCell}
@@ -761,10 +769,10 @@ function buildExpenseReport(
   stats: Awaited<ReturnType<typeof fetchExpenseStats>>,
   siteName?: string
 ): string {
-  const { totalRevenue, totalCost, totalExpenses, byCategory, detail } = stats;
-  const grossMargin = totalRevenue - totalCost;
-  const netMargin = grossMargin - totalExpenses;
-  const netPct = totalRevenue > 0 ? Math.round((netMargin / totalRevenue) * 100) : 0;
+  const {
+    ventesValidees, retours, caNet, cogsNet, margeBrute, tauxMarge,
+    chargesExploitation, resultatExploitation, byCategory, detail,
+  } = stats;
   const period = labelRange(range);
   const now = new Date().toLocaleString('fr-FR');
 
@@ -773,7 +781,7 @@ function buildExpenseReport(
     <td class="b">${esc(c.category)}</td>
     <td class="r num">${fmtNum(c.count)}</td>
     <td class="r num b">${fmtMoney(c.amount)}</td>
-    <td class="r num">${pct(c.amount, totalExpenses)}</td>
+    <td class="r num">${pct(c.amount, chargesExploitation)}</td>
   </tr>`).join('');
 
   const detailRows = detail.slice(0, 200).map((d, i) => `<tr>
@@ -785,28 +793,37 @@ function buildExpenseReport(
   </tr>`).join('');
 
   return `
-    ${docHeader(tenant, 'État des Dépenses', 'Dépenses par type · Marge nette après dépenses', period, siteName)}
+    ${docHeader(tenant, 'État des Dépenses', 'Activité commerciale · Rentabilité · Charges · Résultat', period, siteName)}
+
+    <div class="section-title">Activité commerciale</div>
     <div class="kpi-row">
-      <div class="kpi-cell accent"><div class="kpi-label">CA Total</div><div class="kpi-value">${fmtMoney(totalRevenue)} FCFA</div></div>
-      <div class="kpi-cell success"><div class="kpi-label">Marge brute</div><div class="kpi-value ${grossMargin >= 0 ? 'green' : 'red'}">${fmtMoney(grossMargin)} FCFA</div></div>
-      <div class="kpi-cell danger"><div class="kpi-label">Total dépenses</div><div class="kpi-value red">${fmtMoney(totalExpenses)} FCFA</div></div>
-      <div class="kpi-cell ${netMargin >= 0 ? 'success' : 'danger'}"><div class="kpi-label">Marge nette après dépenses</div><div class="kpi-value ${netMargin >= 0 ? 'green' : 'red'}">${fmtMoney(netMargin)} FCFA</div></div>
-      <div class="kpi-cell"><div class="kpi-label">Taux de marge nette</div><div class="kpi-value ${netMargin >= 0 ? 'green' : 'red'}">${netPct} %</div></div>
+      <div class="kpi-cell accent"><div class="kpi-label">Ventes validées</div><div class="kpi-value">${fmtMoney(ventesValidees)} FCFA</div></div>
+      <div class="kpi-cell ${retours > 0 ? 'danger' : ''}"><div class="kpi-label">Retours / avoirs</div><div class="kpi-value ${retours > 0 ? 'red' : ''}">${retours > 0 ? '− ' : ''}${fmtMoney(retours)} FCFA</div></div>
+      <div class="kpi-cell accent"><div class="kpi-label">CA net</div><div class="kpi-value">${fmtMoney(caNet)} FCFA</div></div>
     </div>
 
-    <div class="section-title">Synthèse — marge nette après dépenses</div>
+    <div class="section-title">Rentabilité</div>
+    <div class="kpi-row">
+      <div class="kpi-cell"><div class="kpi-label">Coût des marchandises</div><div class="kpi-value">${fmtMoney(cogsNet)} FCFA</div></div>
+      <div class="kpi-cell ${margeBrute >= 0 ? 'success' : 'danger'}"><div class="kpi-label">Marge brute</div><div class="kpi-value ${margeBrute >= 0 ? 'green' : 'red'}">${fmtMoney(margeBrute)} FCFA</div></div>
+      <div class="kpi-cell"><div class="kpi-label">Taux de marge</div><div class="kpi-value">${tauxMarge} %</div></div>
+    </div>
+
+    <div class="section-title">Synthèse — Résultat d'exploitation</div>
     <table>
       <thead><tr><th>Élément</th><th class="r">Montant (FCFA)</th></tr></thead>
       <tbody>
-        <tr><td>Chiffre d'affaires</td><td class="r num b">${fmtMoney(totalRevenue)}</td></tr>
-        <tr><td>Coût des marchandises vendues</td><td class="r num mr">− ${fmtMoney(totalCost)}</td></tr>
-        <tr><td class="b">Marge brute</td><td class="r num ${grossMargin >= 0 ? 'mc' : 'mr'}">${fmtMoney(grossMargin)}</td></tr>
-        <tr><td>Total des dépenses</td><td class="r num mr">− ${fmtMoney(totalExpenses)}</td></tr>
-        <tr class="total-row"><td class="b">MARGE NETTE APRÈS DÉPENSES</td><td class="r num ${netMargin >= 0 ? 'mc' : 'mr'}">${fmtMoney(netMargin)}</td></tr>
+        <tr><td>Ventes validées</td><td class="r num b">${fmtMoney(ventesValidees)}</td></tr>
+        <tr><td>Retours / avoirs</td><td class="r num mr">− ${fmtMoney(retours)}</td></tr>
+        <tr><td class="b">CA net</td><td class="r num b">${fmtMoney(caNet)}</td></tr>
+        <tr><td>Coût des marchandises</td><td class="r num mr">− ${fmtMoney(cogsNet)}</td></tr>
+        <tr><td class="b">Marge brute</td><td class="r num ${margeBrute >= 0 ? 'mc' : 'mr'}">${fmtMoney(margeBrute)}</td></tr>
+        <tr><td>Charges d'exploitation</td><td class="r num mr">− ${fmtMoney(chargesExploitation)}</td></tr>
+        <tr class="total-row"><td class="b">RÉSULTAT D'EXPLOITATION</td><td class="r num ${resultatExploitation >= 0 ? 'mc' : 'mr'}">${fmtMoney(resultatExploitation)}</td></tr>
       </tbody>
     </table>
 
-    <div class="section-title">Dépenses par type</div>
+    <div class="section-title">Charges d'exploitation par type</div>
     <table>
       <thead><tr><th class="c">#</th><th>Type de dépense</th><th class="r">Nombre</th><th class="r">Montant (FCFA)</th><th class="r">Part</th></tr></thead>
       <tbody>
@@ -814,7 +831,7 @@ function buildExpenseReport(
         ${byCategory.length ? `<tr class="total-row">
           <td></td><td class="b">TOTAL</td>
           <td class="r num">${fmtNum(byCategory.reduce((s, c) => s + c.count, 0))}</td>
-          <td class="r num">${fmtMoney(totalExpenses)}</td>
+          <td class="r num">${fmtMoney(chargesExploitation)}</td>
           <td class="r">100 %</td>
         </tr>` : ''}
       </tbody>
@@ -1046,7 +1063,7 @@ const REPORT_DEFS: {
   { key: 'articles',      label: 'Articles',         sublabel: "Classement des articles vendus par chiffre d'affaires", hasMargin: true,  hasZeroToggle: false },
   { key: 'customers',     label: 'Clients',          sublabel: "Portefeuille client, CA et encours de crédit",       hasMargin: true,  hasZeroToggle: false },
   { key: 'suppliers',     label: 'Fournisseurs',     sublabel: "Achats et règlements par fournisseur",               hasMargin: false, hasZeroToggle: false },
-  { key: 'expenses',      label: 'Dépenses',        sublabel: "Dépenses par type et marge nette après dépenses",    hasMargin: false, hasZeroToggle: false },
+  { key: 'expenses',      label: 'Dépenses',        sublabel: "Dépenses par type et résultat d'exploitation",    hasMargin: false, hasZeroToggle: false },
   { key: 'tiers_balance', label: 'Balance des Tiers', sublabel: "Créances et dettes complètes — ventes, achats et soldes positionnés", hasMargin: false, hasZeroToggle: true },
 ];
 

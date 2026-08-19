@@ -188,7 +188,7 @@ export function ExpenseCategoriesTab() {
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />
             <span>
               Les types désactivés ne sont plus proposés en caisse mais restent visibles dans l'historique et les états.
-              Les dépenses sont suivies dans l'état « Dépenses » pour calculer la marge nette après dépenses.
+              Les dépenses sont suivies dans l'état « Dépenses » pour calculer le résultat d'exploitation.
             </span>
           </div>
         </div>

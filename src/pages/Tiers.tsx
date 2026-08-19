@@ -324,7 +324,7 @@ export function Tiers() {
   };
   const deactivateCust = async () => {
     if (!toDeactivateCust) return;
-    if (!can('manage_customers')) { error('Vous n\'avez pas la permission de supprimer les clients'); return; }
+    if (!can('delete_customers')) { error('Vous n\'avez pas la permission de supprimer les clients'); return; }
     const { error: hardErr } = await supabase.rpc('tenant_delete_customer_safe', { p_id: toDeactivateCust.id });
     if (!hardErr) { success('Client supprimé définitivement'); setToDeactivateCust(null); load(); return; }
     const { error: e } = await supabase.from('customers').update({ is_active: false }).eq('id', toDeactivateCust.id);
@@ -333,7 +333,7 @@ export function Tiers() {
   };
 
   const reactivateCust = async (c: Customer) => {
-    if (!can('manage_customers')) { error('Vous n\'avez pas la permission'); return; }
+    if (!can('delete_customers')) { error('Vous n\'avez pas la permission'); return; }
     const { error: e } = await supabase.from('customers').update({ is_active: true }).eq('id', c.id);
     if (e) error(e.message);
     else { success('Client réactivé'); load(); }
@@ -412,7 +412,7 @@ export function Tiers() {
   };
   const deactivateSup = async () => {
     if (!toDeactivateSup) return;
-    if (!can('manage_customers')) { error('Vous n\'avez pas la permission de supprimer les fournisseurs'); return; }
+    if (!can('delete_customers')) { error('Vous n\'avez pas la permission de supprimer les fournisseurs'); return; }
     const { error: hardErr } = await supabase.rpc('tenant_delete_supplier_safe', { p_id: toDeactivateSup.id });
     if (!hardErr) { success('Fournisseur supprimé définitivement'); setToDeactivateSup(null); load(); return; }
     const { error: e } = await supabase.from('suppliers').update({ is_active: false }).eq('id', toDeactivateSup.id);
@@ -421,7 +421,7 @@ export function Tiers() {
   };
 
   const reactivateSup = async (s: Supplier) => {
-    if (!can('manage_customers')) { error('Vous n\'avez pas la permission'); return; }
+    if (!can('delete_customers')) { error('Vous n\'avez pas la permission'); return; }
     const { error: e } = await supabase.from('suppliers').update({ is_active: true }).eq('id', s.id);
     if (e) error(e.message);
     else { success('Fournisseur réactivé'); load(); }
@@ -967,8 +967,8 @@ export function Tiers() {
           subtitle={<span className="capitalize">{optCust.customer_type || 'particulier'}{(optCust as any).is_active === false ? ' · Inactif' : ''}</span>}
           onClose={() => setOptCust(null)}
           onEdit={() => { const c = optCust; setOptCust(null); openCustEdit(c); }}
-          onDeactivate={(optCust as any).is_active !== false ? () => { const c = optCust; setOptCust(null); setToDeactivateCust(c); } : undefined}
-          onReactivate={(optCust as any).is_active === false ? () => { const c = optCust; setOptCust(null); reactivateCust(c); } : undefined}
+          onDeactivate={(optCust as any).is_active !== false && can('delete_customers') ? () => { const c = optCust; setOptCust(null); setToDeactivateCust(c); } : undefined}
+          onReactivate={(optCust as any).is_active === false && can('delete_customers') ? () => { const c = optCust; setOptCust(null); reactivateCust(c); } : undefined}
           actions={[
             { icon: Info, label: 'Interroger le compte', desc: 'Solde, totaux et historique rapide', onClick: () => { setCustView({ c: optCust, key: 'info' }); setOptCust(null); } },
             { icon: Scale, label: 'Positionner le solde', desc: 'Ajuster manuellement le solde comptable', onClick: () => { const c = optCust; setOptCust(null); openBalanceAdjust(c.id, c.name, 'customer', Number((c as any).balance || 0), prepayMap[c.id] || 0, avoirMap[c.id] || 0); } },
@@ -986,8 +986,8 @@ export function Tiers() {
           subtitle={<span>{optSup.country || 'Fournisseur'}{!optSup.is_active ? ' · Inactif' : ''}</span>}
           onClose={() => setOptSup(null)}
           onEdit={() => { const s = optSup; setOptSup(null); openSupEdit(s); }}
-          onDeactivate={optSup.is_active ? () => { const s = optSup; setOptSup(null); setToDeactivateSup(s); } : undefined}
-          onReactivate={!optSup.is_active ? () => { const s = optSup; setOptSup(null); reactivateSup(s); } : undefined}
+          onDeactivate={optSup.is_active && can('delete_customers') ? () => { const s = optSup; setOptSup(null); setToDeactivateSup(s); } : undefined}
+          onReactivate={!optSup.is_active && can('delete_customers') ? () => { const s = optSup; setOptSup(null); reactivateSup(s); } : undefined}
           actions={[
             { icon: Info, label: 'Interroger le compte', desc: 'Dette, totaux et derniers mouvements', onClick: () => { setSupView({ s: optSup, key: 'info' }); setOptSup(null); } },
             { icon: Scale, label: 'Positionner le solde', desc: 'Ajuster manuellement le solde comptable', onClick: () => { const s = optSup; setOptSup(null); openBalanceAdjust(s.id, s.name, 'supplier', Number((s as any).balance || 0)); } },
