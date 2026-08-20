@@ -2800,7 +2800,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 )}
               </div>
               <button
-                onClick={() => nav('/sales')}
+                onClick={() => nav('sales')}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-500 hover:text-neutral-900 transition-colors"
               >
                 Voir le journal des ventes
