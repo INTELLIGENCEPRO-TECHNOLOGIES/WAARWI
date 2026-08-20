@@ -212,6 +212,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
   useEffect(() => {
     if (!tenant || !currentSite) return;
     const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
+    const sharedArticles = (tenant as any)?.settings?.shared_articles !== false;
     let cancelled = false;
     (async () => {
       const now = new Date();
@@ -256,7 +257,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const yestDate = yest.toISOString().slice(0, 10);
 
       const [
-        todayData, _yestRpc, _monthRpc, _periodRpc, articlesCount, recent,
+        todayData, _yestRpc, _monthRpc, _periodRpc, articlesCount, trackedArticlesCount, recent,
         custData, suppData, quotesData, returnsData, shopData,
         webNewData, webPrepData, webReadyData, webTodayData, webWaitData, lastWebOrderData,
         openSessions, stockInTodayData,
@@ -265,7 +266,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: yestDate, p_to: yestDate }),
         supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: firstOfMonth.toISOString().slice(0, 10), p_to: new Date().toISOString().slice(0, 10) }),
         supabase.rpc('get_financial_summary', { p_site_id: siteId, p_from: periodFromDate, p_to: periodToDate }),
-        supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true).eq('track_stock', true),
+        sharedArticles
+          ? supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true)
+          : supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true),
+        sharedArticles
+          ? supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true).eq('track_stock', true)
+          : supabase.from('articles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('site_id', siteId).eq('is_active', true).eq('track_stock', true),
         supabase.from('sales').select('id, sale_number, total, created_at, customers(name), sale_payments(method_name)').eq('tenant_id', tenant.id).eq('site_id', siteId).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
         supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('is_active', true),
         sharedSuppliers
@@ -339,7 +345,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const monthMargin = Number(monthRpc.marge_brute || 0);
 
       const stockRows = allStockRows;
-      const siteArticlesTotal = articlesCount.count || 0;
+      const siteArticlesTotal = trackedArticlesCount.count || 0;
       const low = stockRows.filter((r: any) => Number(r.quantity) > 0 && Number(r.articles?.stock_min || 0) > 0 && Number(r.quantity) <= Number(r.articles.stock_min)).length;
       const outInLevels = stockRows.filter((r: any) => Number(r.quantity) <= 0).length;
       const articlesInStockCount = stockRows.filter((r: any) => Number(r.quantity) > 0).length;
@@ -497,7 +503,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
         supabase.from('online_orders').select('id, order_number, total, created_at, status, customer_name').eq('tenant_id', tenant.id).order('created_at', { ascending: false }).limit(5),
         supabase.from('sale_returns').select('id, return_number, total, created_at, status, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(3),
         supabase.from('sale_payments').select('id, amount, created_at, method_name, sales!inner(sale_number, site_id, user_id, customers(name))').eq('tenant_id', tenant.id).eq('sales.site_id', siteId).order('created_at', { ascending: false }).limit(5),
-        supabase.from('cash_movements').select('id, kind, amount, note, created_at, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('kind', ['expense', 'refund', 'customer_loan', 'withdrawal', 'deposit']).order('created_at', { ascending: false }).limit(8),
+        supabase.from('cash_movements').select('id, kind, amount, note, created_at, site_id, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', siteId).in('kind', ['expense', 'refund', 'customer_loan', 'withdrawal', 'deposit', 'customer_prepayment']).order('created_at', { ascending: false }).limit(8),
       ]);
 
       // Batch-fetch profile names for all user_ids referenced in activities
@@ -627,7 +633,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       }
 
       for (const m of (actMovements.data || []) as any[]) {
-        const kindLabels: Record<string, string> = { expense: 'Dépense', refund: 'Remboursement', customer_loan: 'Prêt client', withdrawal: 'Retrait', deposit: 'Entrée caisse' };
+        const kindLabels: Record<string, string> = { expense: 'Dépense', refund: 'Remboursement', customer_loan: 'Prêt client', withdrawal: 'Retrait', deposit: 'Entrée caisse', customer_prepayment: 'Acompte client' };
         const label = kindLabels[m.kind] || m.kind;
         const client = m.customers?.name;
         activities.push({
@@ -636,7 +642,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           title: label,
           detail: `${client ? client + ' · ' : ''}${m.note || ''}`.replace(/ · $/, '') || label,
           amount: Number(m.amount),
-          amountType: m.kind === 'deposit' ? 'positive' : 'negative',
+          amountType: (m.kind === 'deposit' || m.kind === 'customer_prepayment') ? 'positive' : 'negative',
           time: m.created_at,
           route: 'cash_history',
           siteName: hasMultiSitesAct ? (siteNameMap[m.site_id] || '') : '',
@@ -1237,16 +1243,6 @@ function MobileDashboard({
               {balanceHidden ? '••••••' : formatFCFA(viewMode === 'session' ? stats.sessionCaNet : stats.todayCollected)}
             </div>
             <div className="flex items-center gap-1.5 mb-0.5">
-              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${
-                heroLight
-                  ? (dayDelta >= 0 ? 'bg-neutral-100 text-neutral-700 border border-neutral-200' : 'bg-rose-50 text-rose-700 border border-rose-100')
-                  : (dayDelta >= 0 ? 'bg-white/10 text-white/80' : 'bg-rose-400/15 text-rose-200')
-              }`}>
-                {dayDelta >= 0 ? <TrendingUp className="w-2 h-2" /> : <TrendingDown className="w-2 h-2" />}
-                {dayDelta >= 0 ? '+' : ''}{dayDelta}%
-              </span>
-              <span className={`text-[8px] ${heroLight ? 'text-neutral-400' : 'text-white/35'}`}>vs hier</span>
-              <span className={`text-[8px] ${heroLight ? 'text-neutral-300' : 'text-white/35'}`}>·</span>
               <span className={`text-[8px] num ${heroLight ? 'text-neutral-500' : 'text-white/45'}`}>{viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount} ticket{(viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount) > 1 ? 's' : ''}</span>
             </div>
           </div>

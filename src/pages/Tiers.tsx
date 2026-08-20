@@ -4,7 +4,7 @@ import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
   X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
   ShoppingBag, Check, Printer, Tag, Trash2,
-  Download, Upload, Scale, RotateCcw, Save
+  Download, Upload, Scale, RotateCcw, Save, Search, ChevronDown, TrendingUp
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -31,9 +31,10 @@ type Supplier = {
   balance: number;
 };
 
-type TabKey = 'customers' | 'suppliers';
+type TabKey = 'all' | 'customers' | 'suppliers';
 type CustomerOptionKey = 'info' | 'payment' | 'docs' | 'pricing' | null;
 type SupplierOptionKey = 'info' | 'payment' | 'docs' | 'articles' | null;
+type SelectedRow = { id: string; type: 'customer' | 'supplier'; data: Customer | Supplier } | null;
 
 export function Tiers() {
   const { tenant, currentSite, sites, profile, dataTick } = useApp();
@@ -42,7 +43,8 @@ export function Tiers() {
   const { success, error } = useToast();
   const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
-  const [tab, setTab] = useState<TabKey>('customers');
+  const [tab, setTab] = useState<TabKey>('all');
+  const [selectedRow, setSelectedRow] = useState<SelectedRow>(null);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -53,6 +55,7 @@ export function Tiers() {
   const [prepayMap, setPrepayMap] = useState<Record<string, number>>({});
   const [avoirMap, setAvoirMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [reconciling, setReconciling] = useState(false);
 
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -140,11 +143,11 @@ export function Tiers() {
   const load = async (silent = false) => {
     if (!tenant) return;
     if (!silent) setLoading(true);
-    let custQuery = supabase.from('customers').select('id, name, phone, email, address, customer_type, whatsapp, is_active, tenant_id, site_id, credit_limit, balance').eq('tenant_id', tenant.id).order('name');
+    let custQuery = supabase.from('customers').select('id, name, phone, email, address, customer_type, whatsapp, is_active, tenant_id, site_id, credit_limit, balance, account_code').eq('tenant_id', tenant.id).order('name');
     if (!sharedCustomers && currentSite) {
       custQuery = custQuery.eq('site_id', currentSite.id);
     }
-    let supQuery = supabase.from('suppliers').select('id, name, phone, email, address, whatsapp, is_active, tenant_id, site_id, balance, credit_limit').eq('tenant_id', tenant.id).order('name');
+    let supQuery = supabase.from('suppliers').select('id, name, phone, email, address, whatsapp, is_active, tenant_id, site_id, balance, credit_limit, account_code').eq('tenant_id', tenant.id).order('name');
     if (!sharedSuppliers && currentSite) {
       supQuery = supQuery.eq('site_id', currentSite.id);
     }
@@ -233,7 +236,8 @@ export function Tiers() {
       (c.phone || '').includes(q) ||
       ((c as any).whatsapp || '').includes(q) ||
       (c.email || '').toLowerCase().includes(q) ||
-      (c.customer_type || '').toLowerCase().includes(q)
+      (c.customer_type || '').toLowerCase().includes(q) ||
+      ((c as any).account_code || '').toLowerCase().includes(q)
     );
   }, [customers, search, statusFilter]);
 
@@ -248,7 +252,8 @@ export function Tiers() {
       (s.contact || '').toLowerCase().includes(q) ||
       (s.phone || '').includes(q) ||
       (s.email || '').toLowerCase().includes(q) ||
-      (s.country || '').toLowerCase().includes(q)
+      (s.country || '').toLowerCase().includes(q) ||
+      ((s as any).account_code || '').toLowerCase().includes(q)
     );
   }, [suppliers, search, statusFilter]);
 
@@ -470,6 +475,26 @@ export function Tiers() {
     { key: 'solde', label: 'Solde comptable', required: false },
   ];
 
+  const reconcileBalances = async () => {
+    if (!tenant || reconciling) return;
+    setReconciling(true);
+    try {
+      const { data, error } = await supabase.rpc('reconcile_customer_balances', { p_tenant_id: tenant.id });
+      if (error) throw error;
+      const count = data?.corrected_count || 0;
+      if (count > 0) {
+        success(`Rapprochement terminé : ${count} client(s) corrigé(s), ${formatFCFA(data.total_reduced)} déduit(s)`);
+        load();
+      } else {
+        success('Tous les soldes sont déjà corrects.');
+      }
+    } catch (e: any) {
+      error('Erreur lors du rapprochement : ' + (e.message || ''));
+    } finally {
+      setReconciling(false);
+    }
+  };
+
   const exportTiers = async () => {
     const XLSX = await import('xlsx');
     const headers = tab === 'customers' ? CUST_HEADERS : SUP_HEADERS;
@@ -630,9 +655,24 @@ export function Tiers() {
     load();
   };
 
-  const openBalanceAdjust = (id: string, name: string, type: 'customer' | 'supplier', currentBalance: number, prepay = 0, avoir = 0) => {
-    setBalanceTarget({ id, name, type, currentBalance, prepay, avoir });
-    setBalanceAmount(String(currentBalance));
+  const openBalanceAdjust = async (id: string, name: string, type: 'customer' | 'supplier', currentBalance: number, prepay = 0, avoir = 0) => {
+    let freshPrepay = prepay;
+    let freshAvoir = avoir;
+    let freshBalance = currentBalance;
+    if (tenant) {
+      const [ppRes, avRes, balRes] = await Promise.all([
+        supabase.from('customer_prepayments').select('amount, amount_used').eq('tenant_id', tenant.id).eq('customer_id', id),
+        supabase.from('sale_returns').select('total, credit_used').eq('tenant_id', tenant.id).eq('customer_id', id).eq('status', 'approved').eq('refund_method', 'avoir'),
+        type === 'customer'
+          ? supabase.from('customers').select('balance').eq('id', id).maybeSingle()
+          : supabase.from('suppliers').select('balance').eq('id', id).maybeSingle(),
+      ]);
+      freshPrepay = (ppRes.data || []).reduce((a: number, p: any) => a + Math.max(0, Number(p.amount) - Number(p.amount_used)), 0);
+      freshAvoir = (avRes.data || []).reduce((a: number, r: any) => a + Math.max(0, Number(r.total) - Number(r.credit_used)), 0);
+      if (balRes.data) freshBalance = Number(balRes.data.balance || 0);
+    }
+    setBalanceTarget({ id, name, type, currentBalance: freshBalance, prepay: freshPrepay, avoir: freshAvoir });
+    setBalanceAmount(String(freshBalance));
     setBalanceNote('');
     setBalanceOpen(true);
   };
@@ -666,135 +706,388 @@ export function Tiers() {
     }
   };
 
+  const unifiedRows = useMemo(() => {
+    type Row = { id: string; type: 'customer' | 'supplier'; accountCode: string; name: string; phone: string; balance: number; isActive: boolean; raw: any };
+    const rows: Row[] = [];
+    if (tab !== 'suppliers') {
+      for (const c of filteredCustomers) {
+        const rawBal = Number((c as any).balance || 0);
+        const prepay = prepayMap[c.id] || 0;
+        const avoir = avoirMap[c.id] || 0;
+        const applied = Math.min(prepay, Math.max(0, rawBal));
+        const avoirApp = Math.min(avoir, Math.max(0, rawBal - applied));
+        const netBal = rawBal - applied - avoirApp;
+        rows.push({ id: c.id, type: 'customer', accountCode: (c as any).account_code || '', name: c.name, phone: c.phone || '', balance: netBal, isActive: (c as any).is_active !== false, raw: c });
+      }
+    }
+    if (tab !== 'customers') {
+      for (const s of filteredSuppliers) {
+        rows.push({ id: s.id, type: 'supplier', accountCode: (s as any).account_code || '', name: s.name, phone: s.phone || '', balance: Number(s.balance || 0), isActive: s.is_active, raw: s });
+      }
+    }
+    return rows;
+  }, [tab, filteredCustomers, filteredSuppliers, prepayMap, avoirMap]);
+
+  const handleRowClick = (row: typeof unifiedRows[0]) => {
+    if (selectedRow?.id === row.id) { setSelectedRow(null); return; }
+    setSelectedRow({ id: row.id, type: row.type, data: row.raw });
+  };
+
+  const handleActionInterroger = () => {
+    if (!selectedRow) return;
+    if (selectedRow.type === 'customer') setCustView({ c: selectedRow.data as Customer, key: 'info' });
+    else setSupView({ s: selectedRow.data as Supplier, key: 'info' });
+  };
+  const handleActionBalance = () => {
+    if (!selectedRow) return;
+    const d = selectedRow.data;
+    if (selectedRow.type === 'customer') {
+      const c = d as Customer;
+      openBalanceAdjust(c.id, c.name, 'customer', Number((c as any).balance || 0), prepayMap[c.id] || 0, avoirMap[c.id] || 0);
+    } else {
+      const s = d as Supplier;
+      openBalanceAdjust(s.id, s.name, 'supplier', Number(s.balance || 0));
+    }
+  };
+  const handleActionPricing = () => {
+    if (!selectedRow || selectedRow.type !== 'customer') return;
+    setCustView({ c: selectedRow.data as Customer, key: 'pricing' });
+  };
+  const handleActionPayment = () => {
+    if (!selectedRow) return;
+    if (selectedRow.type === 'customer') setCustView({ c: selectedRow.data as Customer, key: 'payment' });
+    else setSupView({ s: selectedRow.data as Supplier, key: 'payment' });
+  };
+  const handleActionDocs = () => {
+    if (!selectedRow) return;
+    if (selectedRow.type === 'customer') setCustView({ c: selectedRow.data as Customer, key: 'docs' });
+    else setSupView({ s: selectedRow.data as Supplier, key: 'docs' });
+  };
+  const handleActionEdit = () => {
+    if (!selectedRow) return;
+    if (selectedRow.type === 'customer') openCustEdit(selectedRow.data as Customer);
+    else openSupEdit(selectedRow.data as Supplier);
+  };
+  const handleActionDeactivate = () => {
+    if (!selectedRow) return;
+    if (selectedRow.type === 'customer') setToDeactivateCust(selectedRow.data as Customer);
+    else setToDeactivateSup(selectedRow.data as Supplier);
+  };
+
+  const filterTabs: { k: TabKey; l: string; count: number; Icon: typeof Users }[] = [
+    { k: 'all', l: 'Tous', count: activeCustCount + activeSupCount, Icon: Users },
+    { k: 'customers', l: 'Clients', count: activeCustCount, Icon: Users },
+    { k: 'suppliers', l: 'Fournisseurs', count: activeSupCount, Icon: Truck },
+  ];
+
   return (
-    <div className="space-y-3 pb-6">
-      {/* ── Embedded header: title + search + filter trigger (like Billing) ── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
-            <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
-              <div className="leading-tight">
-                <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Gestion des tiers</h1>
-              </div>
-            </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* ── Top bar ── */}
+      <div className="shrink-0 bg-white border-b border-slate-200 px-3 sm:px-4 py-2 sm:py-2.5">
+        {/* Row 1: title + action buttons (desktop: all on one row) */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <h1 className="text-sm font-bold tracking-tight text-slate-900 whitespace-nowrap">Gestion des tiers</h1>
+          {/* Search — hidden on mobile row 1, shown on desktop */}
+          <div className="hidden sm:flex flex-1 min-w-0 items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <input
               value={searchInput}
               onChange={e => { setSearchInput(e.target.value); if (searchTimerRef.current) clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearch(e.target.value), 250); }}
-              placeholder="Nom, téléphone, email, pays…"
-              className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
+              placeholder="N° compte, nom, téléphone, email…"
+              className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
             />
             {searchInput && (
-              <button onClick={() => { setSearchInput(''); setSearch(''); }} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors">
-                <X className="w-3.5 h-3.5" />
-              </button>
+              <button onClick={() => { setSearchInput(''); setSearch(''); }} className="p-0.5 text-slate-400 hover:text-slate-600"><X className="w-3 h-3" /></button>
             )}
-            <button
-              onClick={() => setStatusFilter(prev => prev === 'active' ? '' : 'active')}
-              className="shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-semibold transition-colors text-slate-500 hover:text-slate-700"
-              title="Afficher uniquement les tiers actifs"
-            >
-              <span className="relative inline-flex items-center">
-                <span className={`w-7 h-4 rounded-full transition-colors ${statusFilter === 'active' ? 'bg-brand-600' : 'bg-slate-300'}`} />
-                <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${statusFilter === 'active' ? 'translate-x-3' : ''}`} />
-              </span>
-              <span className="hidden md:inline">Actifs</span>
-            </button>
-            <button
-              onClick={exportTiers}
-              className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
-              title="Exporter en Excel"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }}
-              className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
-              title="Importer depuis Excel"
-            >
-              <Upload className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => { setBalanceTarget(null); setBalanceOpen(true); }}
-              className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
-              title="Positionner un solde"
-            >
-              <Scale className="w-3.5 h-3.5" />
-            </button>
+          </div>
+          <div className="flex-1 sm:hidden" />
+          <button
+            onClick={() => setStatusFilter(prev => prev === 'active' ? '' : 'active')}
+            className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors"
+            title="Afficher uniquement les tiers actifs"
+          >
+            <span className="relative inline-flex items-center">
+              <span className={`w-7 h-4 rounded-full transition-colors ${statusFilter === 'active' ? 'bg-neutral-800' : 'bg-slate-300'}`} />
+              <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${statusFilter === 'active' ? 'translate-x-3' : ''}`} />
+            </span>
+            <span className="hidden md:inline">Actifs</span>
+          </button>
+          <div className="flex items-center gap-0.5 border-l border-slate-200 pl-2">
+            <button onClick={reconcileBalances} disabled={reconciling} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-emerald-600 transition-colors disabled:opacity-50" title="Rapprochement des soldes"><RotateCcw className={`w-3.5 h-3.5 ${reconciling ? 'animate-spin' : ''}`} /></button>
+            <button onClick={exportTiers} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Exporter"><Download className="w-3.5 h-3.5" /></button>
+            <button onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Importer"><Upload className="w-3.5 h-3.5" /></button>
             <div className="relative">
-              <button
-                ref={createBtnRef}
-                onClick={() => setCreateMenuOpen(v => !v)}
-              className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-700 transition-colors"
-              aria-label="Nouveau tiers"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-            {createMenuOpen && createMenuDropdown}
+              <button ref={createBtnRef} onClick={() => setCreateMenuOpen(v => !v)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-colors" aria-label="Nouveau tiers"><Plus className="w-4 h-4" /></button>
+              {createMenuOpen && createMenuDropdown}
             </div>
+          </div>
+        </div>
+        {/* Row 2: search bar (mobile only) */}
+        <div className="sm:hidden mt-2 flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <input
+            value={searchInput}
+            onChange={e => { setSearchInput(e.target.value); if (searchTimerRef.current) clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearch(e.target.value), 250); }}
+            placeholder="Rechercher un tiers…"
+            className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
+          />
+          {searchInput && (
+            <button onClick={() => { setSearchInput(''); setSearch(''); }} className="p-0.5 text-slate-400 hover:text-slate-600"><X className="w-3 h-3" /></button>
+          )}
+        </div>
+        {/* Row 3: filter tabs (mobile only, wrapping) */}
+        <div className="sm:hidden mt-2 flex flex-wrap gap-1.5">
+          {filterTabs.map(ft => (
+            <button
+              key={ft.k}
+              onClick={() => { setTab(ft.k); setSelectedRow(null); }}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${tab === ft.k ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              {ft.l} <span className="num">{ft.count}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Tabs as flat filter chips ── */}
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 text-slate-500 num">{tab === 'customers' ? filteredCustomers.length : filteredSuppliers.length} / {tab === 'customers' ? customers.length : suppliers.length}</span>
-        {[
-            { k: 'customers' as TabKey, l: 'Clients', c: activeCustCount, Icon: Users },
-            { k: 'suppliers' as TabKey, l: 'Fournisseurs', c: activeSupCount, Icon: Truck },
-          ].map(t => {
-            const active = tab === t.k;
-            const Icon = t.Icon;
+      {/* ── Body: filter panel + table ── */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Left filter panel — desktop */}
+        <aside className="hidden md:flex flex-col w-48 shrink-0 bg-slate-50 border-r border-slate-200 py-3 px-2 gap-0.5">
+          {filterTabs.map(ft => {
+            const active = tab === ft.k;
             return (
               <button
-                key={t.k}
-                onClick={() => setTab(t.k)}
-                className={`shrink-0 inline-flex items-center gap-1 transition-colors ${
-                  active ? 'text-neutral-900 font-bold' : 'text-slate-500 hover:text-slate-700'
-                }`}
+                key={ft.k}
+                onClick={() => { setTab(ft.k); setSelectedRow(null); }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium transition-colors ${active ? 'bg-white text-slate-900 border border-slate-200' : 'text-slate-600 hover:bg-white/60 hover:text-slate-800'}`}
               >
-                <Icon className="w-3 h-3" />
-                {t.l}
-                <span className="num">{t.c}</span>
+                <ft.Icon className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1">{ft.l}</span>
+                <span className={`num text-[10px] font-bold ${active ? 'text-slate-700' : 'text-slate-400'}`}>{ft.count}</span>
               </button>
             );
           })}
-      </div>
-      </div>
+        </aside>
 
-{/* Content */}
-      {loading ? (
-        <div className="card py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-      ) : (
-        <div className="space-y-3">
-          {tab === 'customers' && (
-            <section className={flashTarget === 'customers' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
-              <CustomerList
-                list={filteredCustomers} total={customers.length}
-                dueMap={dueMap} paidMap={paidMap} totalMap={totalMap}
-                prepayMap={prepayMap} avoirMap={avoirMap}
-                onCreate={openCustCreate}
-                onClickRow={c => setOptCust(c)}
+        {/* Table area */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          {loading ? (
+            <div className="flex-1 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
+          ) : unifiedRows.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <EmptyState
+                icon={Users}
+                title="Aucun tiers trouvé"
+                description={search ? 'Aucun résultat pour cette recherche.' : 'Commencez par créer un client ou un fournisseur.'}
+                action={!search ? { label: 'Nouveau client', onClick: openCustCreate } : undefined}
               />
-            </section>
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 overflow-auto">
+              {/* Desktop table */}
+              <table className="w-full text-xs hidden sm:table">
+                <thead className="sticky top-0 z-[5]">
+                  <tr className="bg-slate-100 border-b border-slate-200">
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[110px]">N° tiers</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[60px]">Type</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600">Intitulé</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600">Téléphone</th>
+                    <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[120px]">Solde</th>
+                    <th className="px-3 py-2 text-center font-semibold text-slate-600 w-[60px]">Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unifiedRows.map(row => {
+                    const isSelected = selectedRow?.id === row.id;
+                    return (
+                      <tr
+                        key={`${row.type}-${row.id}`}
+                        onClick={() => handleRowClick(row)}
+                        onDoubleClick={() => {
+                          setSelectedRow({ id: row.id, type: row.type, data: row.raw });
+                          if (row.type === 'customer') setCustView({ c: row.raw as Customer, key: 'info' });
+                          else setSupView({ s: row.raw as Supplier, key: 'info' });
+                        }}
+                        className={`border-b border-slate-100 cursor-pointer transition-colors ${isSelected ? 'bg-slate-800 text-white' : 'hover:bg-slate-50'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
+                      >
+                        <td className={`px-3 py-2 font-mono text-[11px] ${isSelected ? 'text-slate-200' : 'text-slate-500'}`}>{row.accountCode || '—'}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase ${isSelected ? 'text-slate-300' : row.type === 'customer' ? 'text-brand-700' : 'text-amber-600'}`}>
+                            {row.type === 'customer' ? <Users className="w-3 h-3" /> : <Truck className="w-3 h-3" />}
+                            <span className="hidden lg:inline">{row.type === 'customer' ? 'Client' : 'Fourn.'}</span>
+                          </span>
+                        </td>
+                        <td className={`px-3 py-2 font-medium ${isSelected ? 'text-white' : 'text-slate-900'}`}>{row.name}</td>
+                        <td className={`px-3 py-2 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>{row.phone || '—'}</td>
+                        <td className={`px-3 py-2 text-right font-semibold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{formatFCFA(row.balance)}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`inline-block w-2 h-2 rounded-full ${row.isActive ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Mobile card list */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {unifiedRows.map(row => {
+                  const isSelected = selectedRow?.id === row.id;
+                  return (
+                    <button
+                      key={`m-${row.type}-${row.id}`}
+                      onClick={() => handleRowClick(row)}
+                      className={`w-full text-left px-3 py-2.5 transition-colors ${isSelected ? 'bg-slate-800' : 'active:bg-slate-50'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className={`mt-0.5 inline-flex items-center justify-center w-6 h-6 rounded-full shrink-0 ${isSelected ? 'bg-slate-700' : row.type === 'customer' ? 'bg-brand-50' : 'bg-amber-50'}`}>
+                          {row.type === 'customer'
+                            ? <Users className={`w-3 h-3 ${isSelected ? 'text-slate-300' : 'text-brand-700'}`} />
+                            : <Truck className={`w-3 h-3 ${isSelected ? 'text-slate-300' : 'text-amber-600'}`} />
+                          }
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : 'text-slate-900'}`} style={{ wordBreak: 'break-word' }}>
+                            {row.name}
+                          </div>
+                          <div className={`text-[11px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {row.accountCode && <span className="font-mono">{row.accountCode}</span>}
+                            {row.phone && <span>{row.phone}</span>}
+                            {!row.isActive && <span className="text-red-400 font-semibold">Inactif</span>}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className={`text-[12px] font-bold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {formatFCFA(row.balance)}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
-          {tab === 'suppliers' && (
-            <section className={flashTarget === 'suppliers' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
-              <SupplierList
-                list={filteredSuppliers} total={suppliers.length}
-                dueMap={supDueMap}
-                onCreate={openSupCreate}
-                onClickRow={s => setOptSup(s)}
-              />
-            </section>
+          {/* ── Bottom summary ── */}
+          {!loading && unifiedRows.length > 0 && (
+            <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-1.5 hidden sm:flex items-center gap-4 text-[11px] text-slate-500">
+              <span className="num font-semibold">{unifiedRows.length}</span> tiers affichés
+              {tab !== 'suppliers' && <span>| <span className="num font-semibold">{filteredCustomers.length}</span> clients</span>}
+              {tab !== 'customers' && <span>| <span className="num font-semibold">{filteredSuppliers.length}</span> fournisseurs</span>}
+            </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Desktop action bar (always visible) ── */}
+      <div className="hidden sm:flex shrink-0 border-t border-slate-200 bg-white px-4 py-2 items-center gap-2">
+        {selectedRow ? (
+          <>
+            <span className="text-xs font-bold text-slate-900 truncate max-w-[200px]">
+              {selectedRow.type === 'customer' ? (selectedRow.data as Customer).name : (selectedRow.data as Supplier).name}
+            </span>
+            <span className="text-[10px] font-semibold uppercase text-slate-400 shrink-0">{selectedRow.type === 'customer' ? 'Client' : 'Fournisseur'}</span>
+          </>
+        ) : (
+          <span className="text-[11px] text-slate-400">Sélectionnez un tiers pour agir</span>
+        )}
+        <div className="flex-1" />
+        <div className="flex items-center gap-1">
+          <button onClick={handleActionInterroger} disabled={!selectedRow} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" title="Interroger le compte">
+            <Info className="w-3.5 h-3.5" /> Interroger
+          </button>
+          <button onClick={handleActionBalance} disabled={!selectedRow} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" title="Positionner le solde">
+            <Scale className="w-3.5 h-3.5" /> Solde
+          </button>
+          {(!selectedRow || selectedRow.type === 'customer') && (
+            <button onClick={handleActionPricing} disabled={!selectedRow} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" title="Tarifs d'exception">
+              <Tag className="w-3.5 h-3.5" /> Tarifs
+            </button>
+          )}
+          <button onClick={handleActionPayment} disabled={!selectedRow} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" title="Saisir un règlement">
+            <Wallet className="w-3.5 h-3.5" /> Règlement
+          </button>
+          <button onClick={handleActionDocs} disabled={!selectedRow} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" title="Documents">
+            <FileText className="w-3.5 h-3.5" /> Documents
+          </button>
+          <div className="w-px h-5 bg-slate-200 mx-0.5" />
+          <button onClick={handleActionEdit} disabled={!selectedRow} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" title="Modifier">
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          {can('delete_customers') && (
+            <button onClick={handleActionDeactivate} disabled={!selectedRow} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" title="Supprimer">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Mobile action modal (full screen) ── */}
+      {selectedRow && (
+        <div className="sm:hidden fixed inset-0 z-[60] flex flex-col bg-white animate-fade-in">
+          <div className="shrink-0 border-b border-slate-200 px-4 py-3 flex items-center gap-3">
+            <button onClick={() => setSelectedRow(null)} className="p-1 -ml-1 text-slate-500 hover:text-slate-800">
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-slate-900" style={{ wordBreak: 'break-word' }}>
+                {selectedRow.type === 'customer' ? (selectedRow.data as Customer).name : (selectedRow.data as Supplier).name}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {selectedRow.type === 'customer' ? 'Client' : 'Fournisseur'}
+                {(selectedRow.data as any).account_code && <span className="ml-1.5 font-mono">{(selectedRow.data as any).account_code}</span>}
+              </div>
+            </div>
+            <div className={`text-sm font-bold num ${(selectedRow.data as any).balance > 0 ? 'text-amber-600' : (selectedRow.data as any).balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+              {formatFCFA(Number((selectedRow.data as any).balance || 0))}
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto px-4 py-4">
+            <div className="space-y-2">
+              <button onClick={() => { handleActionInterroger(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
+                <div className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center shrink-0"><Info className="w-4 h-4 text-white" /></div>
+                <div><div className="text-sm font-semibold text-slate-900">Interroger le compte</div><div className="text-[11px] text-slate-500 mt-0.5">Voir le détail comptable, commercial et statistiques</div></div>
+              </button>
+              <button onClick={() => { handleActionBalance(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><Scale className="w-4 h-4 text-brand-700" /></div>
+                <div><div className="text-sm font-semibold text-slate-900">Positionner le solde</div><div className="text-[11px] text-slate-500 mt-0.5">Ajuster manuellement le solde du tiers</div></div>
+              </button>
+              {selectedRow.type === 'customer' && (
+                <button onClick={() => { handleActionPricing(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><Tag className="w-4 h-4 text-brand-700" /></div>
+                  <div><div className="text-sm font-semibold text-slate-900">Tarifs d'exception</div><div className="text-[11px] text-slate-500 mt-0.5">Gérer les prix spéciaux pour ce client</div></div>
+                </button>
+              )}
+              <button onClick={() => { handleActionPayment(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><Wallet className="w-4 h-4 text-brand-700" /></div>
+                <div><div className="text-sm font-semibold text-slate-900">Saisir un règlement</div><div className="text-[11px] text-slate-500 mt-0.5">Enregistrer un paiement reçu ou versé</div></div>
+              </button>
+              <button onClick={() => { handleActionDocs(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><FileText className="w-4 h-4 text-brand-700" /></div>
+                <div><div className="text-sm font-semibold text-slate-900">Documents</div><div className="text-[11px] text-slate-500 mt-0.5">Consulter les factures et bons de commande</div></div>
+              </button>
+              <div className="border-t border-slate-100 my-3" />
+              <button onClick={() => { handleActionEdit(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><Edit2 className="w-4 h-4 text-slate-600" /></div>
+                <div><div className="text-sm font-semibold text-slate-900">Modifier la fiche</div><div className="text-[11px] text-slate-500 mt-0.5">Éditer les informations du tiers</div></div>
+              </button>
+              {can('delete_customers') && (
+                <button onClick={() => { handleActionDeactivate(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-red-100 hover:bg-red-50 active:bg-red-100 transition-colors text-left">
+                  <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0"><Trash2 className="w-4 h-4 text-red-500" /></div>
+                  <div><div className="text-sm font-semibold text-red-600">Supprimer</div><div className="text-[11px] text-red-400 mt-0.5">Désactiver ou supprimer ce tiers</div></div>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-
+      {/* ── Modals (preserved) ── */}
 
       {/* Customer form */}
       <Modal open={custOpen} onClose={() => setCustOpen(false)} title={custEdit ? t('tiers.editCustomer') : t('tiers.addCustomer')}
-        size="md"
+        size="md" layer="top" fullscreenMobile
         footer={<>
           <button onClick={() => setCustOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button onClick={saveCust} disabled={saving} className="btn-icon-primary" title="Enregistrer">
@@ -874,7 +1167,7 @@ export function Tiers() {
 
       {/* Supplier form */}
       <Modal open={supOpen} onClose={() => setSupOpen(false)} title={supEdit ? t('tiers.editSupplier') : t('tiers.addSupplier')}
-        size="md"
+        size="md" layer="top" fullscreenMobile
         footer={<>
           <button onClick={() => setSupOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button onClick={saveSup} disabled={saving} className="btn-icon-primary" title="Enregistrer">
@@ -960,44 +1253,6 @@ export function Tiers() {
         </div>
       </Modal>
 
-      {/* Options sheet — customer */}
-      {optCust && (
-        <OptionsSheet
-          title={optCust.name}
-          subtitle={<span className="capitalize">{optCust.customer_type || 'particulier'}{(optCust as any).is_active === false ? ' · Inactif' : ''}</span>}
-          onClose={() => setOptCust(null)}
-          onEdit={() => { const c = optCust; setOptCust(null); openCustEdit(c); }}
-          onDeactivate={(optCust as any).is_active !== false && can('delete_customers') ? () => { const c = optCust; setOptCust(null); setToDeactivateCust(c); } : undefined}
-          onReactivate={(optCust as any).is_active === false && can('delete_customers') ? () => { const c = optCust; setOptCust(null); reactivateCust(c); } : undefined}
-          actions={[
-            { icon: Info, label: 'Interroger le compte', desc: 'Solde, totaux et historique rapide', onClick: () => { setCustView({ c: optCust, key: 'info' }); setOptCust(null); } },
-            { icon: Scale, label: 'Positionner le solde', desc: 'Ajuster manuellement le solde comptable', onClick: () => { const c = optCust; setOptCust(null); openBalanceAdjust(c.id, c.name, 'customer', Number((c as any).balance || 0), prepayMap[c.id] || 0, avoirMap[c.id] || 0); } },
-            { icon: Tag, label: 'Tarifs d\'exception', desc: 'Prix spéciaux par article', onClick: () => { setCustView({ c: optCust, key: 'pricing' }); setOptCust(null); } },
-            { icon: Wallet, label: 'Saisir un règlement', desc: 'Encaissement + imputation facture', onClick: () => { setCustView({ c: optCust, key: 'payment' }); setOptCust(null); } },
-            { icon: FileText, label: 'Documents de ventes', desc: 'Factures filtrées par période', onClick: () => { setCustView({ c: optCust, key: 'docs' }); setOptCust(null); } },
-          ]}
-        />
-      )}
-
-      {/* Options sheet — supplier */}
-      {optSup && (
-        <OptionsSheet
-          title={optSup.name}
-          subtitle={<span>{optSup.country || 'Fournisseur'}{!optSup.is_active ? ' · Inactif' : ''}</span>}
-          onClose={() => setOptSup(null)}
-          onEdit={() => { const s = optSup; setOptSup(null); openSupEdit(s); }}
-          onDeactivate={optSup.is_active && can('delete_customers') ? () => { const s = optSup; setOptSup(null); setToDeactivateSup(s); } : undefined}
-          onReactivate={!optSup.is_active && can('delete_customers') ? () => { const s = optSup; setOptSup(null); reactivateSup(s); } : undefined}
-          actions={[
-            { icon: Info, label: 'Interroger le compte', desc: 'Dette, totaux et derniers mouvements', onClick: () => { setSupView({ s: optSup, key: 'info' }); setOptSup(null); } },
-            { icon: Scale, label: 'Positionner le solde', desc: 'Ajuster manuellement le solde comptable', onClick: () => { const s = optSup; setOptSup(null); openBalanceAdjust(s.id, s.name, 'supplier', Number((s as any).balance || 0)); } },
-            { icon: Wallet, label: 'Saisir un règlement', desc: 'Paiement + imputation commande', onClick: () => { setSupView({ s: optSup, key: 'payment' }); setOptSup(null); } },
-            { icon: FileText, label: 'Documents d\'achats', desc: 'Commandes filtrées par période', onClick: () => { setSupView({ s: optSup, key: 'docs' }); setOptSup(null); } },
-            { icon: ShoppingBag, label: 'Articles liés', desc: 'Catalogue rattaché', onClick: () => { setSupView({ s: optSup, key: 'articles' }); setOptSup(null); } },
-          ]}
-        />
-      )}
-
       {custView && (
         <CustomerDetailModal
           view={custView}
@@ -1030,7 +1285,7 @@ export function Tiers() {
       />
 
       {/* Import modal */}
-      <Modal open={importExportOpen} onClose={() => setImportExportOpen(false)} title={`Importer des ${tab === 'customers' ? 'clients' : 'fournisseurs'}`} size="md"
+      <Modal open={importExportOpen} onClose={() => setImportExportOpen(false)} title={`Importer des ${tab === 'suppliers' ? 'fournisseurs' : 'clients'}`} size="md" fullscreenMobile
         footer={importRows.length > 0 && !importResult ? <>
           <button onClick={() => setImportExportOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button onClick={runImport} disabled={importing} className="btn-icon-primary" title="Importer">
@@ -1048,7 +1303,7 @@ export function Tiers() {
                 </button>
               </div>
               <div
-                className="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:border-brand-400 transition-colors cursor-pointer"
+                className="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:border-slate-400 transition-colors cursor-pointer"
                 onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
                 onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleImportFile(f); }}
                 onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.csv'; inp.onchange = () => { if (inp.files?.[0]) handleImportFile(inp.files[0]); }; inp.click(); }}
@@ -1098,9 +1353,9 @@ export function Tiers() {
                   <div className="text-2xl font-black text-emerald-700 num">{importResult.created}</div>
                   <div className="text-[10px] font-semibold text-emerald-600 uppercase">Créés</div>
                 </div>
-                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-center">
-                  <div className="text-2xl font-black text-blue-700 num">{importResult.updated}</div>
-                  <div className="text-[10px] font-semibold text-blue-600 uppercase">Mis à jour</div>
+                <div className="p-3 rounded-xl bg-brand-50 border border-brand-200 text-center">
+                  <div className="text-2xl font-black text-brand-700 num">{importResult.updated}</div>
+                  <div className="text-[10px] font-semibold text-brand-600 uppercase">Mis à jour</div>
                 </div>
               </div>
               {importResult.errors.length > 0 && (
@@ -1118,7 +1373,7 @@ export function Tiers() {
       </Modal>
 
       {/* Balance adjustment modal */}
-      <Modal open={balanceOpen && !!balanceTarget} onClose={() => { setBalanceOpen(false); setBalanceTarget(null); }} title="Positionner le solde" size="sm"
+      <Modal open={balanceOpen && !!balanceTarget} onClose={() => { setBalanceOpen(false); setBalanceTarget(null); }} title="Positionner le solde" size="sm" layer="top" fullscreenMobile
         footer={<>
           <button onClick={() => setBalanceOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button onClick={saveBalance} disabled={savingBalance} className="btn-icon-primary" title="Valider">
@@ -1166,12 +1421,12 @@ export function Tiers() {
         )}
       </Modal>
 
-      {/* Balance quick-select: shown when clicking Solde button without preselection */}
+      {/* Balance quick-select */}
       <BalanceQuickSelect
         open={balanceOpen && !balanceTarget}
         onClose={() => setBalanceOpen(false)}
-        customers={tab === 'customers' ? filteredCustomers : []}
-        suppliers={tab === 'suppliers' ? filteredSuppliers : []}
+        customers={tab !== 'suppliers' ? filteredCustomers : []}
+        suppliers={tab !== 'customers' ? filteredSuppliers : []}
         onSelect={(id, name, type, bal, prepay, avoir) => openBalanceAdjust(id, name, type, bal, prepay, avoir)}
         tab={tab}
         prepayMap={prepayMap}
@@ -1531,16 +1786,14 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       rows.push({ id: 's-' + s.id, ts: s.created_at, label: 'Vente', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'sale' });
     });
     realPayments.forEach(p => {
+      if (p.method_name && p.method_name.startsWith('Acompte ·')) return;
       const s = sales.find(x => x.id === p.sale_id);
       rows.push({ id: 'p-' + p.id, ts: p.created_at, label: `Règlement${p.method_name ? ' · ' + p.method_name : ''}`, ref: s?.sale_number || '', debit: 0, credit: Number(p.amount), kind: 'payment' });
     });
-    const totalWithdrawals = withdrawals.reduce((a, w) => a + Number(w.amount), 0);
-    const oldestPrepayId = prepayments.length > 0 ? prepayments[prepayments.length - 1].id : null;
     prepayments.forEach(pp => {
-      const unused = Math.max(0, Number(pp.amount) - Number(pp.amount_used));
-      const credit = unused + (pp.id === oldestPrepayId ? totalWithdrawals : 0);
+      const credit = Number(pp.amount);
       if (credit > 0) {
-        rows.push({ id: 'pp-' + pp.id, ts: pp.created_at, label: `Acompte · avoir${pp.method_name ? ' · ' + pp.method_name : ''}`, ref: pp.reference || '', debit: 0, credit, kind: 'payment' });
+        rows.push({ id: 'pp-' + pp.id, ts: pp.created_at, label: `Acompte${pp.method_name ? ' · ' + pp.method_name : ''}`, ref: pp.reference || '', debit: 0, credit, kind: 'payment' });
       }
     });
     withdrawals.forEach(w => {
@@ -1663,29 +1916,282 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     });
   };
 
-  const prepayApplied = Math.min(totals.unusedPrepay, Math.max(0, customerBalance));
-  const avoirApplied = Math.min(totals.unusedAvoir, Math.max(0, customerBalance - prepayApplied));
-  const netDebt = Math.max(0, customerBalance - prepayApplied - avoirApplied);
+  const ledgerNetBalance = ledger.length > 0 ? ledger[ledger.length - 1].running : 0;
+  const effectiveBalance = customerBalance;
+  const prepayApplied = Math.min(totals.unusedPrepay, Math.max(0, effectiveBalance));
+  const avoirApplied = Math.min(totals.unusedAvoir, Math.max(0, effectiveBalance - prepayApplied));
+  const netDebt = Math.max(0, effectiveBalance - prepayApplied - avoirApplied);
   const excessPrepay = totals.unusedPrepay - prepayApplied;
   const excessAvoir = totals.unusedAvoir - avoirApplied;
 
-  const modalTitle = key === 'info' ? 'Compte client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
+  const modalTitle = key === 'info' ? 'Interrogation client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
+  const [infoTab, setInfoTab] = useState<'commerciale' | 'comptable' | 'statistiques'>('comptable');
+
+  const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+
+  const commercialeSummary = useMemo(() => {
+    const validSales = sales.filter(s => s.status !== 'cancelled');
+    const itemsBySale = new Map<string, any[]>();
+    saleItems.forEach(it => {
+      const arr = itemsBySale.get(it.sale_id) || [];
+      arr.push(it);
+      itemsBySale.set(it.sale_id, arr);
+    });
+    const rows: { saleNumber: string; date: string; items: any[]; qty: number; total: number; cost: number; saleId: string }[] = [];
+    validSales.forEach(s => {
+      const its = itemsBySale.get(s.id) || [];
+      const qty = its.reduce((a: number, it: any) => a + Number(it.quantity), 0);
+      const cost = its.reduce((a: number, it: any) => a + Number(it.purchase_cost || 0) * Number(it.quantity), 0);
+      rows.push({ saleNumber: s.sale_number, date: s.created_at, items: its, qty, total: Number(s.total), cost, saleId: s.id });
+    });
+    const totalCA = rows.reduce((a, r) => a + r.total, 0);
+    const totalCost = rows.reduce((a, r) => a + r.cost, 0);
+    const totalQty = rows.reduce((a, r) => a + r.qty, 0);
+    return { rows, totalCA, totalCost, totalMarge: totalCA - totalCost, totalQty };
+  }, [sales, saleItems]);
+
+  if (key === 'info') {
+    return (
+      <>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4 animate-fade-in">
+        <div className="scrim" onClick={onClose} />
+        <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-white sm:rounded-lg border border-slate-200 shadow-lg flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-slate-900 truncate">{c.name}</div>
+              <div className="text-[10px] text-slate-500 font-mono">{(c as any).account_code || ''}</div>
+            </div>
+            <div className="text-right shrink-0">
+              {!loading && (
+                netDebt > 0 ? (
+                  <div className="text-amber-700">
+                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-70">Solde</div>
+                    <div className="text-sm font-bold num">{formatFCFA(netDebt)}</div>
+                  </div>
+                ) : excessPrepay > 0 ? (
+                  <div className="text-emerald-700">
+                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-70">Acompte dispo.</div>
+                    <div className="text-sm font-bold num">{formatFCFA(excessPrepay)}</div>
+                  </div>
+                ) : excessAvoir > 0 ? (
+                  <div className="text-teal-700">
+                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-70">Avoir dispo.</div>
+                    <div className="text-sm font-bold num">{formatFCFA(excessAvoir)}</div>
+                  </div>
+                ) : (
+                  <div className="text-slate-400">
+                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-70">Solde</div>
+                    <div className="text-sm font-bold num">0 FCFA</div>
+                  </div>
+                )
+              )}
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"><X className="w-5 h-5" /></button>
+          </div>
+
+          {/* Body: left nav + content */}
+          <div className="flex-1 flex min-h-0">
+            {/* Left nav — desktop */}
+            <aside className="hidden md:flex flex-col w-44 shrink-0 bg-slate-50 border-r border-slate-200 py-3 px-2 gap-0.5">
+              {([
+                { k: 'comptable' as const, l: 'Comptable', icon: FileText },
+                { k: 'commerciale' as const, l: 'Commerciale', icon: ShoppingBag },
+                { k: 'statistiques' as const, l: 'Statistiques', icon: TrendingUp },
+              ]).map(t => (
+                <button key={t.k} onClick={() => setInfoTab(t.k)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium transition-colors ${infoTab === t.k ? 'bg-white text-slate-900 border border-slate-200' : 'text-slate-600 hover:bg-white/60'}`}>
+                  <t.icon className="w-3.5 h-3.5 shrink-0" />
+                  {t.l}
+                </button>
+              ))}
+              {excessPrepay > 0 && (
+                <div className="mt-auto px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <div className="text-[9px] font-bold uppercase text-emerald-700">Créditeur</div>
+                  <div className="text-xs font-bold num text-emerald-800">{formatFCFA(excessPrepay)}</div>
+                </div>
+              )}
+              {excessAvoir > 0 && (
+                <div className="mt-1 px-3 py-2 rounded-lg bg-teal-50 border border-teal-200">
+                  <div className="text-[9px] font-bold uppercase text-teal-700">Avoir</div>
+                  <div className="text-xs font-bold num text-teal-800">{formatFCFA(excessAvoir)}</div>
+                </div>
+              )}
+            </aside>
+
+            {/* Mobile tabs */}
+            <div className="md:hidden absolute top-[3.25rem] left-0 right-0 z-10 bg-white border-b border-slate-200 px-3 py-1.5 flex gap-1.5">
+              {([
+                { k: 'comptable' as const, l: 'Comptable' },
+                { k: 'commerciale' as const, l: 'Commerciale' },
+                { k: 'statistiques' as const, l: 'Statistiques' },
+              ]).map(t => (
+                <button key={t.k} onClick={() => setInfoTab(t.k)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${infoTab === t.k ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  {t.l}
+                </button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0 overflow-auto p-4 md:pt-4 pt-12">
+              {loading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+              ) : (
+                <>
+                  {infoTab === 'comptable' && (
+                    <LedgerView customerName={c.name} ledger={ledger} totalDebit={totals.total} totalCredit={totals.paid} balance={totals.due} unusedAvoir={totals.unusedAvoir}
+                      dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} />
+                  )}
+
+                  {infoTab === 'commerciale' && (
+                    <div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                        <div className="rounded-xl border border-slate-200 p-2.5">
+                          <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Factures</div>
+                          <div className="text-lg font-bold text-slate-900 num">{commercialeSummary.rows.length}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-2.5">
+                          <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">CA total</div>
+                          <div className="text-sm font-bold text-slate-900 num">{formatFCFA(commercialeSummary.totalCA)}</div>
+                        </div>
+                        <div className={`rounded-xl border p-2.5 ${commercialeSummary.totalMarge >= 0 ? 'border-emerald-200' : 'border-red-200'}`}>
+                          <div className={`text-[9px] uppercase tracking-wider font-bold ${commercialeSummary.totalMarge >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>Marge</div>
+                          <div className={`text-sm font-bold num ${commercialeSummary.totalMarge >= 0 ? 'text-emerald-800' : 'text-red-800'}`}>{formatFCFA(commercialeSummary.totalMarge)}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-2.5">
+                          <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Articles</div>
+                          <div className="text-lg font-bold text-slate-900 num">{commercialeSummary.totalQty.toLocaleString('fr-FR')}</div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="max-h-[55vh] overflow-auto">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-slate-100 z-[2]">
+                              <tr className="border-b border-slate-200">
+                                <th className="px-3 py-2 text-left font-semibold text-slate-600">N° Facture</th>
+                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Date</th>
+                                <th className="px-3 py-2 text-right font-semibold text-slate-600">Qté</th>
+                                <th className="px-3 py-2 text-right font-semibold text-slate-600">Total</th>
+                                <th className="px-3 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">Coût</th>
+                                <th className="px-3 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">Marge</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {commercialeSummary.rows.map(r => {
+                                const marge = r.total - r.cost;
+                                return (
+                                  <tr key={r.saleId} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => openInvoice(r.saleId)}>
+                                    <td className="px-3 py-2 font-mono font-semibold text-slate-700">{r.saleNumber}</td>
+                                    <td className="px-3 py-2 text-slate-500">{new Date(r.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}</td>
+                                    <td className="px-3 py-2 text-right num text-slate-700">{r.qty.toLocaleString('fr-FR')}</td>
+                                    <td className="px-3 py-2 text-right num font-semibold text-slate-900">{formatFCFA(r.total)}</td>
+                                    <td className="px-3 py-2 text-right num text-slate-500 hidden sm:table-cell">{formatFCFA(r.cost)}</td>
+                                    <td className={`px-3 py-2 text-right num font-semibold hidden sm:table-cell ${marge >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatFCFA(marge)}</td>
+                                  </tr>
+                                );
+                              })}
+                              {commercialeSummary.rows.length === 0 && (
+                                <tr><td colSpan={6} className="px-3 py-8 text-center text-slate-400">Aucune vente enregistrée.</td></tr>
+                              )}
+                            </tbody>
+                            {commercialeSummary.rows.length > 0 && (
+                              <tfoot className="bg-slate-50 border-t border-slate-300 sticky bottom-0">
+                                <tr>
+                                  <td className="px-3 py-2 font-bold text-[11px] text-slate-700" colSpan={2}>TOTAUX</td>
+                                  <td className="px-3 py-2 text-right num font-bold text-slate-800">{commercialeSummary.totalQty.toLocaleString('fr-FR')}</td>
+                                  <td className="px-3 py-2 text-right num font-bold text-slate-800">{formatFCFA(commercialeSummary.totalCA)}</td>
+                                  <td className="px-3 py-2 text-right num font-bold text-slate-800 hidden sm:table-cell">{formatFCFA(commercialeSummary.totalCost)}</td>
+                                  <td className={`px-3 py-2 text-right num font-bold hidden sm:table-cell ${commercialeSummary.totalMarge >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatFCFA(commercialeSummary.totalMarge)}</td>
+                                </tr>
+                              </tfoot>
+                            )}
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {infoTab === 'statistiques' && (
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 mb-3">Statistiques mensuelles {yearStats.year}</div>
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-100">
+                            <tr className="border-b border-slate-200">
+                              <th className="px-3 py-2 text-left font-semibold text-slate-600">Mois</th>
+                              <th className="px-3 py-2 text-right font-semibold text-slate-600">Factures</th>
+                              <th className="px-3 py-2 text-right font-semibold text-slate-600">CA</th>
+                              <th className="px-3 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">Coût</th>
+                              <th className="px-3 py-2 text-right font-semibold text-slate-600">Marge</th>
+                              <th className="px-3 py-2 w-24 font-semibold text-slate-600 hidden sm:table-cell"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {yearStats.months.map((m: any) => {
+                              const marge = m.total - m.cost;
+                              const maxTotal = Math.max(1, ...yearStats.months.map((x: any) => x.total));
+                              const pct = m.total > 0 ? (m.total / maxTotal) * 100 : 0;
+                              return (
+                                <tr key={m.m} className="border-b border-slate-100">
+                                  <td className="px-3 py-2 font-semibold text-slate-700">{monthNames[m.m]}</td>
+                                  <td className="px-3 py-2 text-right num text-slate-600">{m.count}</td>
+                                  <td className="px-3 py-2 text-right num font-semibold text-slate-900">{formatFCFA(m.total)}</td>
+                                  <td className="px-3 py-2 text-right num text-slate-500 hidden sm:table-cell">{formatFCFA(m.cost)}</td>
+                                  <td className={`px-3 py-2 text-right num font-semibold ${marge >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatFCFA(marge)}</td>
+                                  <td className="px-3 py-2 hidden sm:table-cell">
+                                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                      <div className="h-full bg-slate-800 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot className="bg-slate-50 border-t border-slate-300">
+                            <tr>
+                              <td className="px-3 py-2 font-bold text-slate-700">TOTAL</td>
+                              <td className="px-3 py-2 text-right num font-bold text-slate-800">{yearStats.months.reduce((a: number, m: any) => a + m.count, 0)}</td>
+                              <td className="px-3 py-2 text-right num font-bold text-slate-800">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total, 0))}</td>
+                              <td className="px-3 py-2 text-right num font-bold text-slate-800 hidden sm:table-cell">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.cost, 0))}</td>
+                              <td className={`px-3 py-2 text-right num font-bold ${yearStats.months.reduce((a: number, m: any) => a + m.total - m.cost, 0) >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total - m.cost, 0))}</td>
+                              <td className="hidden sm:table-cell" />
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
+
+      {invoiceView && (
+        <InvoiceViewModal data={invoiceView} customerName={c.name} onClose={() => setInvoiceView(null)} onPrint={() => printInvoice(invoiceView)} />
+      )}
+      </>
+    );
+  }
 
   return (
-    <Modal open onClose={onClose} title={modalTitle} size="lg" layer="top"
+    <Modal open onClose={onClose} title={modalTitle} size="lg" layer="top" fullscreenMobile
       footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
 
       {/* Premium embedded title bar */}
-      <div className="mb-3 rounded-2xl bg-white border border-slate-200 shadow-sm p-3">
+      <div className="mb-3 rounded-lg bg-white border border-slate-200 p-3">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 shrink-0 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow">
-            <Users className="w-4 h-4 text-white" />
+          <div className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center">
+            <Users className="w-4 h-4 text-brand-600" />
           </div>
           <div className="text-sm font-bold tracking-tight text-slate-900">{c.name}</div>
         </div>
         <div className="flex items-center justify-between">
           <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400">
-            {key === 'info' && 'Compte client · débit / crédit'}
             {key === 'payment' && 'Encaissement avec imputation'}
             {key === 'docs' && 'Documents de ventes · statistiques'}
             {key === 'pricing' && 'Prix spéciaux par article'}
@@ -1697,10 +2203,15 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
                 <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
                 <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(netDebt)}</div>
               </div>
-            ) : customerBalance < 0 ? (
+            ) : excessPrepay > 0 ? (
               <div className="text-emerald-700">
-                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde créditeur</div>
-                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(Math.abs(customerBalance))}</div>
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Acompte dispo.</div>
+                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(excessPrepay)}</div>
+              </div>
+            ) : excessAvoir > 0 ? (
+              <div className="text-teal-700">
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Avoir dispo.</div>
+                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(excessAvoir)}</div>
               </div>
             ) : (
               <div className="text-slate-500">
@@ -1708,13 +2219,13 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
                 <div className="text-sm font-bold tabular-nums leading-none mt-0.5">0 FCFA</div>
               </div>
             )}
-            {excessPrepay > 0 && (
+            {excessPrepay > 0 && netDebt > 0 && (
               <div className="text-emerald-700 mt-1">
-                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Acompte disponible</div>
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Créditeur</div>
                 <div className="text-xs font-bold tabular-nums leading-none mt-0.5">{formatFCFA(excessPrepay)}</div>
               </div>
             )}
-            {excessAvoir > 0 && (
+            {excessAvoir > 0 && netDebt > 0 && (
               <div className="text-teal-700 mt-1">
                 <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Avoir disponible</div>
                 <div className="text-xs font-bold tabular-nums leading-none mt-0.5">{formatFCFA(excessAvoir)}</div>
@@ -1725,13 +2236,8 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
         </div>
       </div>
 
-      {loading && key !== 'pricing' ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div> : (
+      {loading ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div> : (
         <>
-          {key === 'info' && (
-            <LedgerView customerName={c.name} ledger={ledger} totalDebit={totals.total} totalCredit={totals.paid} balance={totals.due} unusedAvoir={totals.unusedAvoir}
-              dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} />
-          )}
-
           {key === 'payment' && (
             <PaymentForm
               unpaid={unpaidSales} methods={methods}
@@ -1778,7 +2284,6 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
   dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void;
 }) {
   const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment' | 'loan'>('');
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const filteredLedger = useMemo(() => {
     let r = ledger;
@@ -1794,164 +2299,93 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
     return r;
   }, [ledger, dateFrom, dateTo, kindFilter]);
 
-  const groups = useMemo(() => {
-    const map = new Map<string, typeof ledger>();
-    filteredLedger.slice().reverse().forEach(r => {
-      const d = new Date(r.ts); const k = d.toISOString().slice(0, 10);
-      if (!map.has(k)) map.set(k, [] as any);
-      map.get(k)!.push(r);
-    });
-    return Array.from(map.entries());
-  }, [filteredLedger]);
-
+  const sortedLedger = useMemo(() => [...filteredLedger].reverse(), [filteredLedger]);
   const filteredDebit = useMemo(() => filteredLedger.reduce((s, r) => s + r.debit, 0), [filteredLedger]);
   const filteredCredit = useMemo(() => filteredLedger.reduce((s, r) => s + r.credit, 0), [filteredLedger]);
   const filteredBalance = filteredDebit - filteredCredit;
 
-  const toggleDay = (day: string) => setExpanded(prev => ({ ...prev, [day]: !prev[day] }));
-  const expandAll = () => { const m: Record<string, boolean> = {}; groups.forEach(([d]) => { m[d] = true; }); setExpanded(m); };
-  const collapseAll = () => setExpanded({});
-
   if (ledger.length === 0) {
     return (
       <div className="py-10 text-center">
-        <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 mb-3"><FileText className="w-6 h-6" /></div>
-        <div className="text-sm font-semibold text-slate-700">Compte vide</div>
-        <div className="text-xs text-slate-500 mt-1">Aucun mouvement pour {customerName}.</div>
+        <div className="text-sm font-medium text-slate-500">Aucun mouvement pour {customerName}.</div>
       </div>
     );
   }
 
   return (
     <div>
-      {/* Filters bar */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-slate-200 rounded text-[11px] font-medium text-slate-600 hover:bg-slate-50">
+          <Calendar className="w-3 h-3 text-slate-400" />
           {dateFrom || dateTo ? (
             <span>{dateFrom && new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} — {dateTo && new Date(dateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>
-          ) : (
-            <span>Période</span>
-          )}
+          ) : 'Période'}
         </button>
         {(dateFrom || dateTo) && (
-          <button onClick={onClearDates} className="inline-flex items-center justify-center w-7 h-7 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Effacer">
-            <X className="w-3.5 h-3.5" />
-          </button>
+          <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5" title="Effacer"><X className="w-3.5 h-3.5" /></button>
         )}
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="flex items-center gap-0.5 ml-auto">
           {[{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }, { v: 'loan' as const, l: 'Prêts' }].map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${kindFilter === o.v ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'text-slate-500 hover:bg-slate-100'}`}>
+              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-slate-900 border-b-2 border-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
               {o.l}
             </button>
           ))}
         </div>
+        <span className="text-[10px] text-slate-400 ml-2 num">{sortedLedger.length} ligne{sortedLedger.length > 1 ? 's' : ''}</span>
       </div>
 
-      {/* Expand/collapse controls */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] text-slate-400 font-semibold">{groups.length} jour{groups.length > 1 ? 's' : ''} · {filteredLedger.length} opération{filteredLedger.length > 1 ? 's' : ''}</span>
-        <div className="flex-1" />
-        <button onClick={expandAll} className="text-[10px] font-semibold text-brand-600 hover:underline">Tout déplier</button>
-        <button onClick={collapseAll} className="text-[10px] font-semibold text-slate-500 hover:underline">Tout replier</button>
-      </div>
-
-      <div className="space-y-2 max-h-[50vh] overflow-auto">
-        {groups.map(([day, rows]) => {
-          const isOpen = expanded[day] ?? false;
-          const dayDebit = rows.reduce((s, r) => s + r.debit, 0);
-          const dayCredit = rows.reduce((s, r) => s + r.credit, 0);
-          return (
-            <div key={day} className="rounded-2xl border border-slate-200 overflow-hidden bg-white">
-              <button onClick={() => toggleDay(day)} className="w-full px-3 py-2.5 hover:bg-slate-50/70 transition-colors">
-                <div className="flex items-center gap-2">
-                  <ChevronRight className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                  <span className="text-[11px] font-bold text-slate-700 text-left">
-                    {new Date(day).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 mt-1.5 pl-5.5">
-                  <span className="text-[10px] font-medium text-slate-400">{rows.length} opération{rows.length > 1 ? 's' : ''}</span>
-                  {dayDebit > 0 && <span className="text-[11px] font-bold text-amber-700 tabular-nums">-{formatFCFA(dayDebit)}</span>}
-                  {dayCredit > 0 && <span className="text-[11px] font-bold text-emerald-700 tabular-nums">+{formatFCFA(dayCredit)}</span>}
-                </div>
-              </button>
-              {isOpen && (
-                <div className="divide-y divide-slate-100 border-t border-slate-100">
-                  {rows.map(r => (
-                    <div key={r.id} className="flex items-center gap-2 px-2.5 py-2">
-                      <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center ${r.kind === 'sale' ? 'bg-neutral-50 text-neutral-700' : r.kind === 'payment' ? 'bg-emerald-50 text-emerald-700' : r.kind === 'loan' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>
-                        {r.kind === 'sale' ? <FileText className="w-3.5 h-3.5" /> : r.kind === 'payment' ? <Wallet className="w-3.5 h-3.5" /> : r.kind === 'loan' ? <Wallet className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-semibold text-slate-900">{r.label}</div>
-                        <div className="text-[10px] text-slate-500 flex items-center gap-1 flex-wrap">
-                          {r.ref && <span className="font-mono">{r.ref}</span>}
-                          {r.ref && <span className="text-slate-300">·</span>}
-                          <span>{new Date(r.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        {r.debit > 0 && <div className="text-[13px] font-bold text-amber-700 tabular-nums whitespace-nowrap">-{formatFCFA(r.debit)}</div>}
-                        {r.credit > 0 && <div className="text-[13px] font-bold text-emerald-700 tabular-nums whitespace-nowrap">+{formatFCFA(r.credit)}</div>}
-                        {r.debit === 0 && r.credit === 0 && <div className="text-xs text-slate-400">—</div>}
-                        <div className="text-[10px] text-slate-400 tabular-nums whitespace-nowrap">Solde {r.running < 0 ? '-' : ''}{formatFCFA(Math.abs(r.running))}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Totals footer */}
-      <div className="mt-4 rounded-2xl bg-slate-900 text-white p-3 shadow-premium">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="text-left">
-            <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Ventes</div>
-            <div className="mt-0.5 text-[13px] sm:text-sm font-bold tabular-nums text-amber-300">-{formatFCFA(filteredDebit)}</div>
-            {filteredBalance > 0 && (
-              <div className="mt-2 pt-2 border-t border-slate-700">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Solde dû</div>
-                <div className="mt-0.5 text-sm font-bold tabular-nums text-amber-300">{formatFCFA(filteredBalance)}</div>
-              </div>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Règlements</div>
-            <div className="mt-0.5 text-[13px] sm:text-sm font-bold tabular-nums text-emerald-300">+{formatFCFA(filteredCredit)}</div>
-            {filteredBalance < 0 && (
-              <div className="mt-2 pt-2 border-t border-slate-700">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Solde créditeur</div>
-                <div className="mt-0.5 text-sm font-bold tabular-nums text-emerald-300">{formatFCFA(Math.abs(filteredBalance))}</div>
-              </div>
-            )}
-          </div>
-          {filteredBalance === 0 && (
-            <div className="col-span-2 text-center pt-2 border-t border-slate-700">
-              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Solde</div>
-              <div className="mt-0.5 text-sm font-bold tabular-nums text-white">0 FCFA</div>
-            </div>
-          )}
+      {/* Flat accounting table */}
+      <div className="border border-slate-200 rounded-lg overflow-hidden">
+        <div className="max-h-[60vh] overflow-auto">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 z-[2] bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[90px]">Date</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[110px] hidden sm:table-cell">Pièce</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600">Libellé</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[130px]">Débit</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[130px]">Crédit</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[140px] hidden sm:table-cell">Solde</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedLedger.map(r => (
+                <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                  <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                  <td className="px-3 py-1.5 font-mono text-slate-500 hidden sm:table-cell">{r.ref || '—'}</td>
+                  <td className="px-3 py-1.5 text-slate-800 font-medium truncate max-w-[200px]">{r.label}</td>
+                  <td className="px-3 py-1.5 text-right num font-medium text-amber-700 whitespace-nowrap">{r.debit > 0 ? formatFCFA(r.debit) : ''}</td>
+                  <td className="px-3 py-1.5 text-right num font-medium text-emerald-700 whitespace-nowrap">{r.credit > 0 ? formatFCFA(r.credit) : ''}</td>
+                  <td className={`px-3 py-1.5 text-right num font-semibold hidden sm:table-cell whitespace-nowrap ${r.running > 0 ? 'text-amber-700' : r.running < 0 ? 'text-emerald-700' : 'text-slate-400'}`}>{formatFCFA(r.running)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        {unusedAvoir > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-700 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-teal-400" />
-              <div className="text-[9px] uppercase tracking-wider text-teal-400 font-bold">Avoirs disponibles</div>
-            </div>
-            <div className="text-sm font-bold tabular-nums text-teal-300">+{formatFCFA(unusedAvoir)}</div>
-          </div>
-        )}
+        {/* Totals row */}
+        <div className="border-t border-slate-300 bg-slate-50 px-3 py-2.5 flex items-center text-xs gap-3">
+          <span className="font-semibold text-slate-600 w-[90px]">TOTAUX</span>
+          <span className="flex-1" />
+          <span className="num font-bold text-amber-700 w-[130px] text-right whitespace-nowrap">{formatFCFA(filteredDebit)}</span>
+          <span className="num font-bold text-emerald-700 w-[130px] text-right whitespace-nowrap">{formatFCFA(filteredCredit)}</span>
+          <span className={`num font-bold w-[140px] text-right hidden sm:inline whitespace-nowrap ${filteredBalance > 0 ? 'text-amber-700' : filteredBalance < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>{formatFCFA(filteredBalance)}</span>
+        </div>
+      </div>
+
+      {/* Balance summary line */}
+      <div className="mt-2 flex items-center gap-4 text-[11px] text-slate-500 px-1">
+        {filteredBalance > 0 && <span>Solde dû : <span className="font-bold text-amber-700 num">{formatFCFA(filteredBalance)}</span></span>}
+        {filteredBalance < 0 && <span>Solde créditeur : <span className="font-bold text-emerald-700 num">{formatFCFA(Math.abs(filteredBalance))}</span></span>}
+        {filteredBalance === 0 && <span>Solde : <span className="font-bold text-slate-700 num">0 FCFA</span></span>}
+        {unusedAvoir > 0 && <span className="ml-auto">Avoirs disponibles : <span className="font-bold text-teal-700 num">{formatFCFA(unusedAvoir)}</span></span>}
       </div>
     </div>
   );
 }
 
-/* ───────────────────────── Premium payment form ───────────────────────── */
+/* ───────────────────────── Payment form ───────────────────────── */
 function PaymentForm({
   unpaid, methods, paySale, setPaySale, payAmount, setPayAmount, payMethod, setPayMethod,
   payRef, setPayRef, paying, onSubmit, onSelectSale, recentPayments,
@@ -1962,79 +2396,86 @@ function PaymentForm({
   const remaining = Math.max(0, due - amt);
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 text-white p-5 shadow-premium">
-        <div className="text-[10px] uppercase tracking-wider font-bold text-white/70">Montant à encaisser</div>
-        <div className="mt-1 flex items-baseline gap-2">
-          <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-            className="bg-transparent text-3xl font-bold tracking-tight focus:outline-none flex-1 min-w-0 placeholder:text-white/30" placeholder="0" min={0} />
-          <span className="text-sm font-semibold text-white/70">FCFA</span>
+    <div className="space-y-3">
+      {/* Compact form */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">Imputer sur</label>
+          <SearchableSelect
+            options={[
+              { value: '', label: '— Sélectionner une créance —' },
+              ...unpaid.map((s: any) => {
+                const d = Math.max(0, Number(s.total) - Number(s.paid));
+                return { value: s.id, label: `${s.sale_number} · dû ${formatFCFA(d)}` };
+              })
+            ]}
+            value={paySale}
+            onChange={v => { setPaySale(v); onSelectSale(v); }}
+            placeholder="— Sélectionner une créance —"
+          />
+          {unpaid.length === 0 && <div className="text-[11px] text-emerald-600 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Aucune créance en attente.</div>}
         </div>
-        {selected && (
-          <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
-            <span className="text-white/60">{selected.id === '__balance__' ? 'Solde positionné' : 'Dû sur cette facture'}</span>
-            <span className="font-bold tabular-nums">{formatFCFA(due)}</span>
-          </div>
-        )}
-        {selected && amt > 0 && (
-          <div className="flex items-center justify-between text-[11px] mt-1">
-            <span className="text-white/60">Reste après règlement</span>
-            <span className={`font-bold tabular-nums ${remaining === 0 ? 'text-emerald-300' : 'text-amber-300'}`}>{formatFCFA(remaining)}</span>
-          </div>
-        )}
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">Montant (FCFA)</label>
+          <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+            className="input" placeholder="0" min={0} />
+          {selected && amt > 0 && (
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              Dû : <span className="num font-semibold">{formatFCFA(due)}</span>
+              {remaining > 0 && <> — Reste : <span className="num font-semibold text-amber-600">{formatFCFA(remaining)}</span></>}
+              {remaining === 0 && amt > 0 && <> — <span className="text-emerald-600 font-semibold">Soldé</span></>}
+            </div>
+          )}
+        </div>
       </div>
 
       <div>
-        <label className="label">Imputer sur</label>
-        <SearchableSelect
-          options={[
-            { value: '', label: '— Sélectionner une créance —' },
-            ...unpaid.map((s: any) => {
-              const d = Math.max(0, Number(s.total) - Number(s.paid));
-              return { value: s.id, label: `${s.sale_number} · dû ${formatFCFA(d)}` };
-            })
-          ]}
-          value={paySale}
-          onChange={v => { setPaySale(v); onSelectSale(v); }}
-          placeholder="— Sélectionner une créance —"
-        />
-        {unpaid.length === 0 && <div className="text-xs text-emerald-700 mt-1.5 inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" />Aucune créance en attente.</div>}
-      </div>
-
-      <div>
-        <label className="label">Mode de règlement</label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">Mode de règlement</label>
+        <div className="flex flex-wrap gap-1.5">
           {methods.map((m: any) => (
             <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${payMethod === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+              className={`px-3 py-1.5 rounded text-[11px] font-semibold border transition-colors ${payMethod === m.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
               {m.name}
             </button>
           ))}
         </div>
       </div>
 
-      <div>
-        <label className="label">Référence (optionnel)</label>
-        <input value={payRef} onChange={e => setPayRef(e.target.value)} className="input" placeholder="N° bordereau, transaction…" />
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">Référence (optionnel)</label>
+          <input value={payRef} onChange={e => setPayRef(e.target.value)} className="input text-xs" placeholder="N° bordereau, transaction…" />
+        </div>
+        <button onClick={onSubmit} disabled={paying || !paySale || amt <= 0} className="h-[38px] px-5 rounded bg-slate-900 text-white text-xs font-semibold hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1.5">
+          {paying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          Valider
+        </button>
       </div>
 
-      <button onClick={onSubmit} disabled={paying || !paySale || amt <= 0} className="btn-icon-primary w-full justify-center py-3" title="Valider le règlement">
-        {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-      </button>
-
       {recentPayments.length > 0 && (
-        <div>
-          <div className="text-[11px] font-bold tracking-wider uppercase text-slate-400 mb-2 px-1">Derniers encaissements</div>
-          <div className="space-y-1">
-            {recentPayments.map((p: any) => (
-              <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <div className="font-semibold text-slate-800 truncate">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
-                  <div className="text-[11px] text-slate-500">{p.sale_number || '—'} · {formatDateTime(p.created_at)}</div>
-                </div>
-                <div className="font-bold text-emerald-700">{formatFCFA(p.amount)}</div>
-              </div>
-            ))}
+        <div className="mt-2 pt-3 border-t border-slate-200">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Derniers encaissements</div>
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-2.5 py-1.5 text-left font-semibold text-slate-600">Date</th>
+                  <th className="px-2.5 py-1.5 text-left font-semibold text-slate-600">Facture</th>
+                  <th className="px-2.5 py-1.5 text-left font-semibold text-slate-600 hidden sm:table-cell">Mode</th>
+                  <th className="px-2.5 py-1.5 text-right font-semibold text-slate-600">Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentPayments.map((p: any) => (
+                  <tr key={p.id} className="border-b border-slate-100">
+                    <td className="px-2.5 py-1.5 text-slate-500">{formatDateTime(p.created_at)}</td>
+                    <td className="px-2.5 py-1.5 font-mono text-slate-600">{p.sale_number || '—'}</td>
+                    <td className="px-2.5 py-1.5 text-slate-500 hidden sm:table-cell">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</td>
+                    <td className="px-2.5 py-1.5 text-right num font-semibold text-emerald-700">{formatFCFA(p.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -2044,113 +2485,61 @@ function PaymentForm({
 
 /* ───────────────────────── Documents view ───────────────────────── */
 function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPicker, onClearDates, onOpenInvoice }: any) {
-  const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-  const maxMonth = Math.max(1, ...yearStats.months.map((m: any) => m.total));
-  const [statsOpen, setStatsOpen] = useState(false);
-
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-2xl border border-slate-200 p-2.5 min-w-0">
-          <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Factures</div>
-          <div className="mt-0.5 text-[15px] font-bold text-slate-900 tabular-nums">{kpis.count}</div>
-        </div>
-        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/40 p-2.5 min-w-0">
-          <div className="text-[9px] uppercase tracking-wider text-neutral-700 font-bold">CA total</div>
-          <div className="mt-0.5 text-[13px] font-bold text-neutral-900 tabular-nums break-words">{formatFCFA(kpis.ca)}</div>
-        </div>
-        <div className={`rounded-2xl border p-2.5 min-w-0 ${kpis.marge >= 0 ? 'border-emerald-200 bg-emerald-50/40' : 'border-red-200 bg-red-50/40'}`}>
-          <div className={`text-[9px] uppercase tracking-wider font-bold ${kpis.marge >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>Marge</div>
-          <div className={`mt-0.5 text-[13px] font-bold tabular-nums break-words ${kpis.marge >= 0 ? 'text-emerald-800' : 'text-red-800'}`}>{formatFCFA(kpis.marge)}</div>
-          <div className={`text-[9px] font-semibold ${kpis.marge >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{kpis.margePct.toFixed(1)}%</div>
-        </div>
-      </div>
-
-      <div>
-        <button onClick={() => setStatsOpen(v => !v)} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-2xl border border-slate-200 bg-white hover:border-brand-300 transition-all">
-          <span className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center"><Calendar className="w-3.5 h-3.5" /></span>
-            <span className="text-[12px] font-bold text-slate-900">Statistiques {yearStats.year}</span>
-            <span className="text-[10px] text-slate-400 font-semibold">jan → déc</span>
-          </span>
-          <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${statsOpen ? 'rotate-90' : ''}`} />
+    <div>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-slate-200 rounded text-[11px] font-medium text-slate-600 hover:bg-slate-50">
+          <Calendar className="w-3 h-3 text-slate-400" />
+          {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
         </button>
-        {statsOpen && (
-          <div className="mt-2 rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
-            {yearStats.months.map((m: any) => {
-              const marge = m.total - m.cost;
-              const pct = m.total > 0 ? (m.total / maxMonth) * 100 : 0;
-              return (
-                <div key={m.m} className="flex items-center gap-2 px-2.5 py-1.5 text-[11px]">
-                  <div className="w-8 text-[10px] font-bold uppercase tracking-wider text-slate-500 shrink-0">{monthNames[m.m]}</div>
-                  <div className="w-6 text-center text-[10px] font-semibold text-slate-600 tabular-nums shrink-0">{m.count}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-brand-500 to-brand-700 transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                  <div className="text-right font-semibold text-slate-800 tabular-nums whitespace-nowrap shrink-0">{formatFCFA(m.total)}</div>
-                  <div className={`text-right text-[10px] font-semibold tabular-nums whitespace-nowrap shrink-0 hidden sm:block ${marge >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatFCFA(marge)}</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5"><X className="w-3.5 h-3.5" /></button>}
+        <span className="ml-auto text-[10px] text-slate-400 num">{kpis.count} factures | CA {formatFCFA(kpis.ca)} | Marge {formatFCFA(kpis.marge)} ({kpis.margePct.toFixed(1)}%)</span>
       </div>
 
-      <div>
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <button onClick={onOpenPicker} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${dateFrom || dateTo ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
-            <Calendar className="w-3.5 h-3.5" />
-            {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
-          </button>
-          {(dateFrom || dateTo) && <button onClick={onClearDates} className="inline-flex items-center justify-center w-6 h-6 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Effacer"><X className="w-3 h-3" /></button>}
-          <span className="ml-auto text-[11px] text-slate-500">{docs.length} document{docs.length > 1 ? 's' : ''}</span>
-        </div>
-        {docs.length === 0 ? <div className="text-sm text-slate-500 py-8 text-center">Aucun document sur cette période.</div> : (
-          <div className="space-y-1.5">
-            {docs.map((s: any) => {
-              const items = (saleItems || []).filter((it: any) => it.sale_id === s.id);
-              const qty = items.reduce((a: number, it: any) => a + Number(it.quantity || 0), 0);
-              const avgPU = qty > 0 ? items.reduce((a: number, it: any) => a + Number(it.unit_price || 0) * Number(it.quantity || 0), 0) / qty : 0;
-              const designation = items.length === 0
-                ? s.sale_number
-                : items.length === 1
-                  ? items[0].name
-                  : `${items[0].name} + ${items.length - 1} article${items.length - 1 > 1 ? 's' : ''}`;
-              return (
-                <button key={s.id} onClick={() => onOpenInvoice(s.id)} className="w-full rounded-2xl border border-slate-200 bg-white hover:border-brand-300 hover:shadow-md transition-all px-3 py-2.5 text-left active:scale-[0.995]">
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-semibold text-slate-900 line-clamp-2 leading-snug article-text">{designation}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono text-brand-700 font-semibold">{s.sale_number}</span>
-                        <span className="text-slate-300">·</span>
-                        <span>{formatDateTime(s.created_at)}</span>
-                      </div>
-                    </div>
-                    <StatusBadgeSale sale={s} />
-                  </div>
-                  <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-[11px]">
-                    <div>
-                      <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Quantité</div>
-                      <div className="font-semibold text-slate-800 tabular-nums">{qty.toLocaleString('fr-FR')}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">PU moyen</div>
-                      <div className="font-semibold text-slate-800 tabular-nums">{formatFCFA(avgPU)}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Total</div>
-                      <div className="font-bold text-brand-700 tabular-nums whitespace-nowrap">{formatFCFA(s.total)}</div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+      {/* Documents table */}
+      {docs.length === 0 ? (
+        <div className="text-sm text-slate-500 py-10 text-center">Aucun document sur cette période.</div>
+      ) : (
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 z-[2] bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-2.5 py-2 text-left font-semibold text-slate-600">N° document</th>
+                  <th className="px-2.5 py-2 text-left font-semibold text-slate-600 hidden sm:table-cell">Date</th>
+                  <th className="px-2.5 py-2 text-left font-semibold text-slate-600">Statut</th>
+                  <th className="px-2.5 py-2 text-right font-semibold text-slate-600">Qté</th>
+                  <th className="px-2.5 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">PU moyen</th>
+                  <th className="px-2.5 py-2 text-right font-semibold text-slate-600">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {docs.map((s: any) => {
+                  const items = (saleItems || []).filter((it: any) => it.sale_id === s.id);
+                  const qty = items.reduce((a: number, it: any) => a + Number(it.quantity || 0), 0);
+                  const avgPU = qty > 0 ? items.reduce((a: number, it: any) => a + Number(it.unit_price || 0) * Number(it.quantity || 0), 0) / qty : 0;
+                  return (
+                    <tr key={s.id} onClick={() => onOpenInvoice(s.id)} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer">
+                      <td className="px-2.5 py-1.5 font-mono font-semibold text-slate-700">{s.sale_number}</td>
+                      <td className="px-2.5 py-1.5 text-slate-500 hidden sm:table-cell">{new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                      <td className="px-2.5 py-1.5"><StatusBadgeSale sale={s} /></td>
+                      <td className="px-2.5 py-1.5 text-right num text-slate-700">{qty.toLocaleString('fr-FR')}</td>
+                      <td className="px-2.5 py-1.5 text-right num text-slate-500 hidden sm:table-cell">{formatFCFA(avgPU)}</td>
+                      <td className="px-2.5 py-1.5 text-right num font-semibold text-slate-900">{formatFCFA(s.total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+          <div className="border-t border-slate-300 bg-slate-50 px-2.5 py-1.5 flex items-center text-xs">
+            <span className="font-semibold text-slate-600">TOTAL</span>
+            <span className="flex-1" />
+            <span className="num font-bold text-slate-900">{formatFCFA(kpis.ca)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2432,40 +2821,248 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     });
   };
 
-  const modalTitle = key === 'info' ? 'Compte fournisseur' : key === 'payment' ? 'Saisir un règlement' : key === 'articles' ? 'Articles liés' : 'Documents d\'achats';
+  const modalTitle = key === 'info' ? 'Interrogation fournisseur' : key === 'payment' ? 'Saisir un règlement' : key === 'articles' ? 'Articles liés' : 'Documents d\'achats';
+  const [infoTab, setInfoTab] = useState<'comptable' | 'commerciale' | 'statistiques'>('comptable');
+  const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+
+  const commercialeSummary = useMemo(() => {
+    const validOrders = orders.filter(o => o.status !== 'cancelled');
+    const itemsByOrder = new Map<string, any[]>();
+    orderItems.forEach((it: any) => {
+      const arr = itemsByOrder.get(it.order_id) || [];
+      arr.push(it);
+      itemsByOrder.set(it.order_id, arr);
+    });
+    const rows: { orderNumber: string; date: string; qty: number; total: number; paid: number; orderId: string }[] = [];
+    validOrders.forEach(o => {
+      const its = itemsByOrder.get(o.id) || [];
+      const qty = its.reduce((a: number, it: any) => a + Number(it.quantity_ordered || 0), 0);
+      rows.push({ orderNumber: o.order_number, date: o.created_at, qty, total: Number(o.total), paid: Number(o.paid || 0), orderId: o.id });
+    });
+    const totalAchats = rows.reduce((a, r) => a + r.total, 0);
+    const totalPaid = rows.reduce((a, r) => a + r.paid, 0);
+    const totalQty = rows.reduce((a, r) => a + r.qty, 0);
+    return { rows, totalAchats, totalPaid, totalDue: Math.max(0, totalAchats - totalPaid), totalQty };
+  }, [orders, orderItems]);
+
+  if (key === 'info') {
+    return (
+      <>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4 animate-fade-in">
+        <div className="scrim" onClick={onClose} />
+        <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-white sm:rounded-lg border border-slate-200 shadow-lg flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-slate-900 truncate">{s.name}</div>
+              <div className="text-[10px] text-slate-500 font-mono">{(s as any).account_code || ''}</div>
+            </div>
+            <div className={`text-right shrink-0 ${supplierBalance > 0 ? 'text-amber-700' : supplierBalance < 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+              <div className="text-[9px] font-bold uppercase tracking-wider opacity-70">Solde</div>
+              <div className="text-sm font-bold num">{loading ? '...' : formatFCFA(supplierBalance)}</div>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"><X className="w-5 h-5" /></button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 flex min-h-0">
+            <aside className="hidden md:flex flex-col w-44 shrink-0 bg-slate-50 border-r border-slate-200 py-3 px-2 gap-0.5">
+              {([
+                { k: 'comptable' as const, l: 'Comptable', icon: FileText },
+                { k: 'commerciale' as const, l: 'Commerciale', icon: ShoppingBag },
+                { k: 'statistiques' as const, l: 'Statistiques', icon: TrendingUp },
+              ]).map(t => (
+                <button key={t.k} onClick={() => setInfoTab(t.k)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium transition-colors ${infoTab === t.k ? 'bg-white text-slate-900 border border-slate-200' : 'text-slate-600 hover:bg-white/60'}`}>
+                  <t.icon className="w-3.5 h-3.5 shrink-0" />
+                  {t.l}
+                </button>
+              ))}
+            </aside>
+
+            <div className="md:hidden absolute top-[3.25rem] left-0 right-0 z-10 bg-white border-b border-slate-200 px-3 py-1.5 flex gap-1.5">
+              {([
+                { k: 'comptable' as const, l: 'Comptable' },
+                { k: 'commerciale' as const, l: 'Commerciale' },
+                { k: 'statistiques' as const, l: 'Statistiques' },
+              ]).map(t => (
+                <button key={t.k} onClick={() => setInfoTab(t.k)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${infoTab === t.k ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  {t.l}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 min-w-0 overflow-auto p-4 md:pt-4 pt-12">
+              {loading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+              ) : (
+                <>
+                  {infoTab === 'comptable' && (
+                    <SupplierLedgerView supplierName={s.name} ledger={ledger} totalCredit={totals.total} totalDebit={totals.paid} due={totals.due}
+                      dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} />
+                  )}
+
+                  {infoTab === 'commerciale' && (
+                    <div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                        <div className="rounded-xl border border-slate-200 p-2.5">
+                          <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Commandes</div>
+                          <div className="text-lg font-bold text-slate-900 num">{commercialeSummary.rows.length}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-2.5">
+                          <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Achats</div>
+                          <div className="text-sm font-bold text-slate-900 num">{formatFCFA(commercialeSummary.totalAchats)}</div>
+                        </div>
+                        <div className="rounded-xl border border-emerald-200 p-2.5">
+                          <div className="text-[9px] uppercase tracking-wider text-emerald-700 font-bold">Payé</div>
+                          <div className="text-sm font-bold text-emerald-800 num">{formatFCFA(commercialeSummary.totalPaid)}</div>
+                        </div>
+                        <div className={`rounded-xl border p-2.5 ${commercialeSummary.totalDue > 0 ? 'border-amber-200' : 'border-slate-200'}`}>
+                          <div className={`text-[9px] uppercase tracking-wider font-bold ${commercialeSummary.totalDue > 0 ? 'text-amber-700' : 'text-slate-400'}`}>Dette</div>
+                          <div className={`text-sm font-bold num ${commercialeSummary.totalDue > 0 ? 'text-amber-800' : 'text-slate-400'}`}>{formatFCFA(commercialeSummary.totalDue)}</div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="max-h-[55vh] overflow-auto">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-slate-100 z-[2]">
+                              <tr className="border-b border-slate-200">
+                                <th className="px-3 py-2 text-left font-semibold text-slate-600">N° Commande</th>
+                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Date</th>
+                                <th className="px-3 py-2 text-right font-semibold text-slate-600">Qté</th>
+                                <th className="px-3 py-2 text-right font-semibold text-slate-600">Total</th>
+                                <th className="px-3 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">Payé</th>
+                                <th className="px-3 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">Reste</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {commercialeSummary.rows.map(r => {
+                                const reste = Math.max(0, r.total - r.paid);
+                                return (
+                                  <tr key={r.orderId} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => openOrder(r.orderId)}>
+                                    <td className="px-3 py-2 font-mono font-semibold text-slate-700">{r.orderNumber}</td>
+                                    <td className="px-3 py-2 text-slate-500">{new Date(r.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}</td>
+                                    <td className="px-3 py-2 text-right num text-slate-700">{r.qty.toLocaleString('fr-FR')}</td>
+                                    <td className="px-3 py-2 text-right num font-semibold text-slate-900">{formatFCFA(r.total)}</td>
+                                    <td className="px-3 py-2 text-right num text-emerald-700 hidden sm:table-cell">{formatFCFA(r.paid)}</td>
+                                    <td className={`px-3 py-2 text-right num font-semibold hidden sm:table-cell ${reste > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{formatFCFA(reste)}</td>
+                                  </tr>
+                                );
+                              })}
+                              {commercialeSummary.rows.length === 0 && (
+                                <tr><td colSpan={6} className="px-3 py-8 text-center text-slate-400">Aucune commande enregistrée.</td></tr>
+                              )}
+                            </tbody>
+                            {commercialeSummary.rows.length > 0 && (
+                              <tfoot className="bg-slate-50 border-t border-slate-300 sticky bottom-0">
+                                <tr>
+                                  <td className="px-3 py-2 font-bold text-[11px] text-slate-700" colSpan={2}>TOTAUX</td>
+                                  <td className="px-3 py-2 text-right num font-bold text-slate-800">{commercialeSummary.totalQty.toLocaleString('fr-FR')}</td>
+                                  <td className="px-3 py-2 text-right num font-bold text-slate-800">{formatFCFA(commercialeSummary.totalAchats)}</td>
+                                  <td className="px-3 py-2 text-right num font-bold text-emerald-700 hidden sm:table-cell">{formatFCFA(commercialeSummary.totalPaid)}</td>
+                                  <td className={`px-3 py-2 text-right num font-bold hidden sm:table-cell ${commercialeSummary.totalDue > 0 ? 'text-amber-700' : 'text-slate-500'}`}>{formatFCFA(commercialeSummary.totalDue)}</td>
+                                </tr>
+                              </tfoot>
+                            )}
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {infoTab === 'statistiques' && (
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 mb-3">Statistiques mensuelles {yearStats.year}</div>
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-100">
+                            <tr className="border-b border-slate-200">
+                              <th className="px-3 py-2 text-left font-semibold text-slate-600">Mois</th>
+                              <th className="px-3 py-2 text-right font-semibold text-slate-600">Commandes</th>
+                              <th className="px-3 py-2 text-right font-semibold text-slate-600">Achats</th>
+                              <th className="px-3 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">Payé</th>
+                              <th className="px-3 py-2 text-right font-semibold text-slate-600">Dette</th>
+                              <th className="px-3 py-2 w-24 hidden sm:table-cell"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {yearStats.months.map((m: any) => {
+                              const due = Math.max(0, m.total - m.paid);
+                              const maxTotal = Math.max(1, ...yearStats.months.map((x: any) => x.total));
+                              const pct = m.total > 0 ? (m.total / maxTotal) * 100 : 0;
+                              return (
+                                <tr key={m.m} className="border-b border-slate-100">
+                                  <td className="px-3 py-2 font-semibold text-slate-700">{monthNames[m.m]}</td>
+                                  <td className="px-3 py-2 text-right num text-slate-600">{m.count}</td>
+                                  <td className="px-3 py-2 text-right num font-semibold text-slate-900">{formatFCFA(m.total)}</td>
+                                  <td className="px-3 py-2 text-right num text-emerald-700 hidden sm:table-cell">{formatFCFA(m.paid)}</td>
+                                  <td className={`px-3 py-2 text-right num font-semibold ${due > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{formatFCFA(due)}</td>
+                                  <td className="px-3 py-2 hidden sm:table-cell">
+                                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                      <div className="h-full bg-slate-800 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot className="bg-slate-50 border-t border-slate-300">
+                            <tr>
+                              <td className="px-3 py-2 font-bold text-slate-700">TOTAL</td>
+                              <td className="px-3 py-2 text-right num font-bold text-slate-800">{yearStats.months.reduce((a: number, m: any) => a + m.count, 0)}</td>
+                              <td className="px-3 py-2 text-right num font-bold text-slate-800">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total, 0))}</td>
+                              <td className="px-3 py-2 text-right num font-bold text-emerald-700 hidden sm:table-cell">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.paid, 0))}</td>
+                              <td className={`px-3 py-2 text-right num font-bold ${yearStats.months.reduce((a: number, m: any) => a + Math.max(0, m.total - m.paid), 0) > 0 ? 'text-amber-700' : 'text-slate-500'}`}>{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + Math.max(0, m.total - m.paid), 0))}</td>
+                              <td className="hidden sm:table-cell" />
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
+
+      {orderView && (
+        <OrderViewModal data={orderView} supplierName={s.name} onClose={() => setOrderView(null)} onPrint={() => printOrder(orderView)} />
+      )}
+      </>
+    );
+  }
 
   return (
-    <Modal open onClose={onClose} title={modalTitle} size="lg" layer="top"
+    <Modal open onClose={onClose} title={modalTitle} size="lg" layer="top" fullscreenMobile
       footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
 
-      <div className="mb-3 rounded-2xl bg-white border border-slate-200 shadow-sm p-3">
+      <div className="mb-3 rounded-lg bg-white border border-slate-200 p-3">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 shrink-0 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow">
-            <Truck className="w-4 h-4 text-white" />
+          <div className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center">
+            <Truck className="w-4 h-4 text-brand-600" />
           </div>
           <div className="text-sm font-bold tracking-tight text-slate-900">{s.name}</div>
         </div>
         <div className="flex items-center justify-between">
           <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400">
-            {key === 'info' && 'Compte fournisseur · débit / crédit'}
             {key === 'payment' && 'Règlement avec imputation'}
             {key === 'docs' && 'Documents d\'achats · statistiques'}
             {key === 'articles' && `${articles.length} article${articles.length > 1 ? 's' : ''} lié${articles.length > 1 ? 's' : ''}`}
           </div>
           <div className={`text-right ${supplierBalance > 0 ? 'text-amber-700' : supplierBalance < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
             <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
-            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{loading ? '…' : formatFCFA(supplierBalance)}</div>
+            <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{loading ? '...' : formatFCFA(supplierBalance)}</div>
           </div>
         </div>
       </div>
 
-      {loading ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div> : (
+      {loading ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div> : (
         <>
-          {key === 'info' && (
-            <SupplierLedgerView supplierName={s.name} ledger={ledger} totalCredit={totals.total} totalDebit={totals.paid} due={totals.due}
-              dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} />
-          )}
-
           {key === 'payment' && (
             <SupplierPaymentForm
               unpaid={unpaidOrders} methods={methods}
@@ -2501,7 +3098,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
                   <tbody className="divide-y divide-slate-100">
                     {articles.map(a => (
                       <tr key={a.id}>
-                        <td className="px-3 py-2 font-mono text-xs text-brand-700">{a.internal_ref}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-slate-700">{a.internal_ref}</td>
                         <td className="px-3 py-2">{a.name}</td>
                         <td className="px-3 py-2 text-xs text-slate-500">{a.supplier_ref || '—'}</td>
                         <td className="px-3 py-2 text-right">{formatFCFA(a.sale_price)}</td>
@@ -2533,7 +3130,6 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
   dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void;
 }) {
   const [kindFilter, setKindFilter] = useState<'' | 'order' | 'payment'>('');
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const filteredLedger = useMemo(() => {
     let r = ledger;
@@ -2543,149 +3139,76 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
     return r;
   }, [ledger, dateFrom, dateTo, kindFilter]);
 
-  const groups = useMemo(() => {
-    const map = new Map<string, typeof ledger>();
-    filteredLedger.slice().reverse().forEach(r => {
-      const d = new Date(r.ts); const k = d.toISOString().slice(0, 10);
-      if (!map.has(k)) map.set(k, [] as any);
-      map.get(k)!.push(r);
-    });
-    return Array.from(map.entries());
-  }, [filteredLedger]);
-
+  const sortedLedger = useMemo(() => [...filteredLedger].reverse(), [filteredLedger]);
   const filteredAchats = useMemo(() => filteredLedger.reduce((s, r) => s + r.credit, 0), [filteredLedger]);
   const filteredRegle = useMemo(() => filteredLedger.reduce((s, r) => s + r.debit, 0), [filteredLedger]);
   const filteredDette = filteredAchats - filteredRegle;
 
-  const toggleDay = (day: string) => setExpanded(prev => ({ ...prev, [day]: !prev[day] }));
-  const expandAll = () => { const m: Record<string, boolean> = {}; groups.forEach(([d]) => { m[d] = true; }); setExpanded(m); };
-  const collapseAll = () => setExpanded({});
-
   if (ledger.length === 0) {
-    return (
-      <div className="py-10 text-center">
-        <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 mb-3"><FileText className="w-6 h-6" /></div>
-        <div className="text-sm font-semibold text-slate-700">Compte vide</div>
-        <div className="text-xs text-slate-500 mt-1">Aucun mouvement pour {supplierName}.</div>
-      </div>
-    );
+    return <div className="py-10 text-center text-sm text-slate-500">Aucun mouvement pour {supplierName}.</div>;
   }
 
   return (
     <div>
-      {/* Filters bar */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-slate-200 rounded text-[11px] font-medium text-slate-600 hover:bg-slate-50">
+          <Calendar className="w-3 h-3 text-slate-400" />
           {dateFrom || dateTo ? (
             <span>{dateFrom && new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} — {dateTo && new Date(dateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>
-          ) : (
-            <span>Période</span>
-          )}
+          ) : 'Période'}
         </button>
-        {(dateFrom || dateTo) && (
-          <button onClick={onClearDates} className="inline-flex items-center justify-center w-7 h-7 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Effacer">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
-        <div className="flex items-center gap-1 ml-auto">
+        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5"><X className="w-3.5 h-3.5" /></button>}
+        <div className="flex items-center gap-0.5 ml-auto">
           {[{ v: '' as const, l: 'Tout' }, { v: 'order' as const, l: 'Achats' }, { v: 'payment' as const, l: 'Règlements' }].map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${kindFilter === o.v ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'text-slate-500 hover:bg-slate-100'}`}>
+              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-slate-900 border-b-2 border-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
               {o.l}
             </button>
           ))}
         </div>
+        <span className="text-[10px] text-slate-400 ml-2 num">{sortedLedger.length} ligne{sortedLedger.length > 1 ? 's' : ''}</span>
       </div>
 
-      {/* Expand/collapse controls */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] text-slate-400 font-semibold">{groups.length} jour{groups.length > 1 ? 's' : ''} · {filteredLedger.length} opération{filteredLedger.length > 1 ? 's' : ''}</span>
-        <div className="flex-1" />
-        <button onClick={expandAll} className="text-[10px] font-semibold text-brand-600 hover:underline">Tout déplier</button>
-        <button onClick={collapseAll} className="text-[10px] font-semibold text-slate-500 hover:underline">Tout replier</button>
-      </div>
-
-      <div className="space-y-2 max-h-[50vh] overflow-auto">
-        {groups.map(([day, rows]) => {
-          const isOpen = expanded[day] ?? false;
-          const dayCredit = rows.reduce((s, r) => s + r.credit, 0);
-          const dayDebit = rows.reduce((s, r) => s + r.debit, 0);
-          return (
-            <div key={day} className="rounded-2xl border border-slate-200 overflow-hidden bg-white">
-              <button onClick={() => toggleDay(day)} className="w-full px-3 py-2.5 hover:bg-slate-50/70 transition-colors">
-                <div className="flex items-center gap-2">
-                  <ChevronRight className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                  <span className="text-[11px] font-bold text-slate-700 text-left">
-                    {new Date(day).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 mt-1.5 pl-5.5">
-                  <span className="text-[10px] font-medium text-slate-400">{rows.length} opération{rows.length > 1 ? 's' : ''}</span>
-                  {dayCredit > 0 && <span className="text-[11px] font-bold text-amber-700 tabular-nums">+{formatFCFA(dayCredit)}</span>}
-                  {dayDebit > 0 && <span className="text-[11px] font-bold text-emerald-700 tabular-nums">-{formatFCFA(dayDebit)}</span>}
-                </div>
-              </button>
-              {isOpen && (
-                <div className="divide-y divide-slate-100 border-t border-slate-100">
-                  {rows.map(r => (
-                    <div key={r.id} className="flex items-center gap-2 px-2.5 py-2">
-                      <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center ${r.kind === 'order' ? 'bg-amber-50 text-amber-700' : r.kind === 'payment' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-                        {r.kind === 'order' ? <ShoppingBag className="w-3.5 h-3.5" /> : r.kind === 'payment' ? <Wallet className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-semibold text-slate-900">{r.label}</div>
-                        <div className="text-[10px] text-slate-500 flex items-center gap-1 flex-wrap">
-                          {r.ref && <span className="font-mono">{r.ref}</span>}
-                          {r.ref && <span className="text-slate-300">·</span>}
-                          <span>{new Date(r.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        {r.credit > 0 && <div className="text-[13px] font-bold text-amber-700 tabular-nums whitespace-nowrap">+{formatFCFA(r.credit)}</div>}
-                        {r.debit > 0 && <div className="text-[13px] font-bold text-emerald-700 tabular-nums whitespace-nowrap">-{formatFCFA(r.debit)}</div>}
-                        {r.debit === 0 && r.credit === 0 && <div className="text-xs text-slate-400">—</div>}
-                        <div className="text-[10px] text-slate-400 tabular-nums whitespace-nowrap">Dette {formatFCFA(r.running)}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Totals footer */}
-      <div className="mt-4 rounded-2xl bg-slate-900 text-white p-3 shadow-premium">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="text-left">
-            <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Achats</div>
-            <div className="mt-0.5 text-[13px] sm:text-sm font-bold tabular-nums text-amber-300">{formatFCFA(filteredAchats)}</div>
-            {filteredDette > 0 && (
-              <div className="mt-2 pt-2 border-t border-slate-700">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Dette</div>
-                <div className="mt-0.5 text-sm font-bold tabular-nums text-amber-300">{formatFCFA(filteredDette)}</div>
-              </div>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Réglements</div>
-            <div className="mt-0.5 text-[13px] sm:text-sm font-bold tabular-nums text-emerald-300">{formatFCFA(filteredRegle)}</div>
-            {filteredDette < 0 && (
-              <div className="mt-2 pt-2 border-t border-slate-700">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Avoir</div>
-                <div className="mt-0.5 text-sm font-bold tabular-nums text-emerald-300">{formatFCFA(Math.abs(filteredDette))}</div>
-              </div>
-            )}
-          </div>
-          {filteredDette === 0 && (
-            <div className="col-span-2 text-center pt-2 border-t border-slate-700">
-              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Solde</div>
-              <div className="mt-0.5 text-sm font-bold tabular-nums text-white">0 FCFA</div>
-            </div>
-          )}
+      <div className="border border-slate-200 rounded-lg overflow-hidden">
+        <div className="max-h-[60vh] overflow-auto">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 z-[2] bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[90px]">Date</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[110px] hidden sm:table-cell">Pièce</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600">Libellé</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[130px]">Crédit</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[130px]">Débit</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[140px] hidden sm:table-cell">Solde</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedLedger.map(r => (
+                <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                  <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                  <td className="px-3 py-1.5 font-mono text-slate-500 hidden sm:table-cell">{r.ref || '—'}</td>
+                  <td className="px-3 py-1.5 text-slate-800 font-medium truncate max-w-[200px]">{r.label}</td>
+                  <td className="px-3 py-1.5 text-right num font-medium text-amber-700 whitespace-nowrap">{r.credit > 0 ? formatFCFA(r.credit) : ''}</td>
+                  <td className="px-3 py-1.5 text-right num font-medium text-emerald-700 whitespace-nowrap">{r.debit > 0 ? formatFCFA(r.debit) : ''}</td>
+                  <td className={`px-3 py-1.5 text-right num font-semibold hidden sm:table-cell whitespace-nowrap ${r.running > 0 ? 'text-amber-700' : r.running < 0 ? 'text-emerald-700' : 'text-slate-400'}`}>{formatFCFA(r.running)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+        <div className="border-t border-slate-300 bg-slate-50 px-3 py-2.5 flex items-center text-xs gap-3">
+          <span className="font-semibold text-slate-600 w-[90px]">TOTAUX</span>
+          <span className="flex-1" />
+          <span className="num font-bold text-amber-700 w-[130px] text-right whitespace-nowrap">{formatFCFA(filteredAchats)}</span>
+          <span className="num font-bold text-emerald-700 w-[130px] text-right whitespace-nowrap">{formatFCFA(filteredRegle)}</span>
+          <span className={`num font-bold w-[140px] text-right hidden sm:inline whitespace-nowrap ${filteredDette > 0 ? 'text-amber-700' : filteredDette < 0 ? 'text-emerald-700' : 'text-slate-500'}`}>{formatFCFA(filteredDette)}</span>
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center gap-4 text-[11px] text-slate-500 px-1">
+        {filteredDette > 0 && <span>Dette : <span className="font-bold text-amber-700 num">{formatFCFA(filteredDette)}</span></span>}
+        {filteredDette < 0 && <span>Avoir : <span className="font-bold text-emerald-700 num">{formatFCFA(Math.abs(filteredDette))}</span></span>}
+        {filteredDette === 0 && <span>Solde : <span className="font-bold text-slate-700 num">0 FCFA</span></span>}
       </div>
     </div>
   );
@@ -2703,94 +3226,98 @@ function SupplierPaymentForm({
   const remaining = Math.max(0, due - amt);
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 text-white p-5 shadow-premium">
-        <div className="text-[10px] uppercase tracking-wider font-bold text-white/70">Montant à régler</div>
-        <div className="mt-1 flex items-baseline gap-2">
-          <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-            className="bg-transparent text-3xl font-bold tracking-tight focus:outline-none flex-1 min-w-0 placeholder:text-white/30" placeholder="0" min={0} />
-          <span className="text-sm font-semibold text-white/70">FCFA</span>
+    <div>
+      <div className="border border-slate-200 rounded-lg overflow-hidden mb-3">
+        <div className="grid grid-cols-2 gap-px bg-slate-200">
+          <div className="bg-white p-3">
+            <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Montant à régler</label>
+            <div className="mt-1 flex items-baseline gap-1">
+              <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                className="text-lg font-bold text-slate-900 focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
+              <span className="text-xs text-slate-500 font-medium">FCFA</span>
+            </div>
+          </div>
+          <div className="bg-white p-3">
+            {selected ? (
+              <>
+                <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">{isBalance ? 'Solde positionné' : 'Dû'}</div>
+                <div className="mt-1 text-sm font-bold text-slate-800 num">{formatFCFA(due)}</div>
+                {amt > 0 && <div className="text-[11px] text-slate-500 mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
+              </>
+            ) : (
+              <>
+                <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Imputation</div>
+                <div className="mt-1 text-xs text-slate-400">Aucune commande</div>
+              </>
+            )}
+          </div>
         </div>
-        {selected && (
-          <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
-            <span className="text-white/60">{isBalance ? 'Solde positionné' : 'Dû sur cette commande'}</span>
-            <span className="font-bold tabular-nums">{formatFCFA(due)}</span>
-          </div>
-        )}
-        {selected && amt > 0 && (
-          <div className="flex items-center justify-between text-[11px] mt-1">
-            <span className="text-white/60">Reste après règlement</span>
-            <span className={`font-bold tabular-nums ${remaining === 0 ? 'text-emerald-300' : 'text-amber-300'}`}>{formatFCFA(remaining)}</span>
-          </div>
-        )}
       </div>
 
-      <div>
-        <label className="label">Imputer sur la commande</label>
-        <SearchableSelect
-          options={[
-            { value: '', label: 'Acompte libre (sans commande)' },
-            ...unpaid.filter((o: any) => o.id !== '__balance__').map((o: any) => {
-              const d = Math.max(0, Number(o.total) - Number(o.paid || 0));
-              return { value: o.id, label: `${o.order_number} · du ${formatFCFA(d)}` };
-            })
-          ]}
-          value={payOrder}
-          onChange={v => { setPayOrder(v); onSelectOrder(v); }}
-          placeholder="Acompte libre (sans commande)"
-        />
-        {unpaid.some((o: any) => o.id === '__balance__') && (
-          <button type="button" onClick={() => { setPayOrder('__balance__'); onSelectOrder('__balance__'); }}
-            className={`mt-2 w-full px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${isBalance ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
-            Solde positionné · {formatFCFA(unpaid.find((o: any) => o.id === '__balance__')?.total || 0)}
-          </button>
-        )}
-        {unpaid.length === 0 && <div className="text-xs text-emerald-700 mt-1.5 inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" />Toutes les commandes sont soldées.</div>}
-      </div>
-
-      <div>
-        <label className="label">Mode de règlement</label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {methods.map((m: any) => (
-            <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all ${payMethod === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
-              {m.name}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Imputer sur</label>
+          <SearchableSelect
+            options={[
+              { value: '', label: 'Acompte libre (sans commande)' },
+              ...unpaid.filter((o: any) => o.id !== '__balance__').map((o: any) => {
+                const d = Math.max(0, Number(o.total) - Number(o.paid || 0));
+                return { value: o.id, label: `${o.order_number} · dû ${formatFCFA(d)}` };
+              })
+            ]}
+            value={payOrder}
+            onChange={v => { setPayOrder(v); onSelectOrder(v); }}
+            placeholder="Acompte libre (sans commande)"
+          />
+          {unpaid.some((o: any) => o.id === '__balance__') && (
+            <button type="button" onClick={() => { setPayOrder('__balance__'); onSelectOrder('__balance__'); }}
+              className={`mt-1.5 w-full px-2.5 py-1.5 rounded text-[11px] font-medium border transition-colors ${isBalance ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+              Solde positionné · {formatFCFA(unpaid.find((o: any) => o.id === '__balance__')?.total || 0)}
             </button>
-          ))}
+          )}
+          {unpaid.length === 0 && <div className="text-[11px] text-emerald-700 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Tout soldé</div>}
+        </div>
+        <div>
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Mode</label>
+          <div className="grid grid-cols-2 gap-1">
+            {methods.map((m: any) => (
+              <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
+                className={`px-2 py-1.5 rounded text-[11px] font-medium border transition-colors ${payMethod === m.id ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                {m.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div>
-        <label className="label">Référence (optionnel)</label>
+      <div className="mb-3">
+        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Référence (optionnel)</label>
         <input value={payRef} onChange={e => setPayRef(e.target.value)} className="input" placeholder="N° chèque, virement…" />
       </div>
 
-      <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-brand-50 border border-brand-200">
-        <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-brand-600">
-          <span className="inline-block h-4 w-4 transform rounded-full bg-white shadow translate-x-4" />
-        </span>
-        <span className="text-xs font-semibold text-brand-800">Imputé sur la caisse du jour</span>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-700 ml-auto">Caisse</span>
+      <div className="flex items-center gap-2 mb-3 text-[11px] text-slate-500">
+        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+        Imputé sur la caisse du jour
       </div>
 
-      <button onClick={onSubmit} disabled={paying || amt <= 0} className="btn-icon-primary w-full justify-center py-3" title="Valider le règlement">
+      <button onClick={onSubmit} disabled={paying || amt <= 0} className="btn-icon-primary w-full justify-center py-2.5" title="Valider le règlement">
         {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
       </button>
 
       {recentPayments.length > 0 && (
-        <div>
-          <div className="text-[11px] font-bold tracking-wider uppercase text-slate-400 mb-2 px-1">Derniers règlements</div>
-          <div className="space-y-1">
-            {recentPayments.map((p: any) => (
-              <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <div className="font-semibold text-slate-800 truncate">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
-                  <div className="text-[11px] text-slate-500">{p.order_number || 'Acompte libre'} · {formatDateTime(p.paid_at || p.created_at)}</div>
-                </div>
-                <div className="font-bold text-emerald-700">{formatFCFA(p.amount)}</div>
-              </div>
-            ))}
-          </div>
+        <div className="mt-4 border border-slate-200 rounded-lg overflow-hidden">
+          <div className="bg-slate-50 border-b border-slate-200 px-2.5 py-1.5 text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Derniers règlements</div>
+          <table className="w-full text-xs">
+            <tbody>
+              {recentPayments.map((p: any) => (
+                <tr key={p.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-2.5 py-1.5 text-slate-600">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</td>
+                  <td className="px-2.5 py-1.5 text-slate-400 text-[11px]">{p.order_number || 'Acompte'} · {formatDateTime(p.paid_at || p.created_at)}</td>
+                  <td className="px-2.5 py-1.5 text-right font-bold text-emerald-700 num">{formatFCFA(p.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -2804,107 +3331,93 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
   const [statsOpen, setStatsOpen] = useState(false);
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-2xl border border-slate-200 p-2.5 min-w-0">
-          <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Commandes</div>
-          <div className="mt-0.5 text-[15px] font-bold text-slate-900 tabular-nums">{kpis.count}</div>
-        </div>
-        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/40 p-2.5 min-w-0">
-          <div className="text-[9px] uppercase tracking-wider text-neutral-700 font-bold">Achats</div>
-          <div className="mt-0.5 text-[13px] font-bold text-neutral-900 tabular-nums break-words">{formatFCFA(kpis.achats)}</div>
-        </div>
-        <div className={`rounded-2xl border p-2.5 min-w-0 ${kpis.due > 0 ? 'border-amber-200 bg-amber-50/40' : 'border-emerald-200 bg-emerald-50/40'}`}>
-          <div className={`text-[9px] uppercase tracking-wider font-bold ${kpis.due > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>Dette</div>
-          <div className={`mt-0.5 text-[13px] font-bold tabular-nums break-words ${kpis.due > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>{formatFCFA(kpis.due)}</div>
-        </div>
+    <div>
+      <div className="flex items-center gap-4 text-xs mb-3 px-1">
+        <span className="text-slate-500">Commandes : <span className="font-bold text-slate-800 num">{kpis.count}</span></span>
+        <span className="text-slate-500">Achats : <span className="font-bold text-slate-800 num">{formatFCFA(kpis.achats)}</span></span>
+        <span className={kpis.due > 0 ? 'text-amber-700' : 'text-emerald-700'}>Dette : <span className="font-bold num">{formatFCFA(kpis.due)}</span></span>
       </div>
 
-      <div>
-        <button onClick={() => setStatsOpen(v => !v)} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-2xl border border-slate-200 bg-white hover:border-brand-300 transition-all">
-          <span className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center"><Calendar className="w-3.5 h-3.5" /></span>
-            <span className="text-[12px] font-bold text-slate-900">Statistiques {yearStats.year}</span>
-            <span className="text-[10px] text-slate-400 font-semibold">jan → déc</span>
-          </span>
-          <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${statsOpen ? 'rotate-90' : ''}`} />
+      <div className="mb-3">
+        <button onClick={() => setStatsOpen(v => !v)} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 hover:text-slate-800">
+          <ChevronRight className={`w-3 h-3 transition-transform ${statsOpen ? 'rotate-90' : ''}`} />
+          Statistiques {yearStats.year}
         </button>
         {statsOpen && (
-          <div className="mt-2 rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
-            {yearStats.months.map((m: any) => {
-              const pct = m.total > 0 ? (m.total / maxMonth) * 100 : 0;
-              const due = Math.max(0, m.total - m.paid);
-              return (
-                <div key={m.m} className="flex items-center gap-2 px-2.5 py-1.5 text-[11px]">
-                  <div className="w-8 text-[10px] font-bold uppercase tracking-wider text-slate-500 shrink-0">{monthNames[m.m]}</div>
-                  <div className="w-6 text-center text-[10px] font-semibold text-slate-600 tabular-nums shrink-0">{m.count}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-brand-500 to-brand-700 transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                  <div className="text-right font-semibold text-slate-800 tabular-nums whitespace-nowrap shrink-0">{formatFCFA(m.total)}</div>
-                  <div className={`text-right text-[10px] font-semibold tabular-nums whitespace-nowrap shrink-0 hidden sm:block ${due > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{due > 0 ? formatFCFA(due) : 'Soldée'}</div>
-                </div>
-              );
-            })}
+          <div className="mt-1.5 border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-[11px]">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-2 py-1 text-left font-semibold text-slate-600 w-10">Mois</th>
+                  <th className="px-2 py-1 text-center font-semibold text-slate-600 w-8">Nb</th>
+                  <th className="px-2 py-1 text-left font-semibold text-slate-600">Répartition</th>
+                  <th className="px-2 py-1 text-right font-semibold text-slate-600">Total</th>
+                  <th className="px-2 py-1 text-right font-semibold text-slate-600 hidden sm:table-cell">Dû</th>
+                </tr>
+              </thead>
+              <tbody>
+                {yearStats.months.map((m: any) => {
+                  const pct = m.total > 0 ? (m.total / maxMonth) * 100 : 0;
+                  const due = Math.max(0, m.total - m.paid);
+                  return (
+                    <tr key={m.m} className="border-b border-slate-100">
+                      <td className="px-2 py-1 font-medium text-slate-500">{monthNames[m.m]}</td>
+                      <td className="px-2 py-1 text-center num text-slate-600">{m.count}</td>
+                      <td className="px-2 py-1"><div className="h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-slate-400" style={{ width: `${pct}%` }} /></div></td>
+                      <td className="px-2 py-1 text-right num font-medium text-slate-800">{formatFCFA(m.total)}</td>
+                      <td className={`px-2 py-1 text-right num font-medium hidden sm:table-cell ${due > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{due > 0 ? formatFCFA(due) : 'Soldé'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
 
-      <div>
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <button onClick={onOpenPicker} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${dateFrom || dateTo ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
-            <Calendar className="w-3.5 h-3.5" />
-            {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
-          </button>
-          {(dateFrom || dateTo) && <button onClick={onClearDates} className="inline-flex items-center justify-center w-6 h-6 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Effacer"><X className="w-3 h-3" /></button>}
-          <span className="ml-auto text-[11px] text-slate-500">{docs.length} document{docs.length > 1 ? 's' : ''}</span>
-        </div>
-        {docs.length === 0 ? <div className="text-sm text-slate-500 py-8 text-center">Aucune commande sur cette période.</div> : (
-          <div className="space-y-1.5">
-            {docs.map((o: any) => {
-              const items = (orderItems || []).filter((it: any) => it.order_id === o.id);
-              const qty = items.reduce((a: number, it: any) => a + Number(it.quantity_ordered || 0), 0);
-              const avgPU = qty > 0 ? items.reduce((a: number, it: any) => a + Number(it.unit_price || 0) * Number(it.quantity_ordered || 0), 0) / qty : 0;
-              const designation = items.length === 0
-                ? o.order_number
-                : items.length === 1
-                  ? items[0].name
-                  : `${items[0].name} + ${items.length - 1} article${items.length - 1 > 1 ? 's' : ''}`;
-              return (
-                <button key={o.id} onClick={() => onOpenOrder(o.id)} className="w-full rounded-2xl border border-slate-200 bg-white hover:border-brand-300 hover:shadow-md transition-all px-3 py-2.5 text-left active:scale-[0.995]">
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-semibold text-slate-900 line-clamp-2 leading-snug article-text">{designation}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono text-brand-700 font-semibold">{o.order_number}</span>
-                        <span className="text-slate-300">·</span>
-                        <span>{formatDateTime(o.created_at)}</span>
-                      </div>
-                    </div>
-                    <StatusBadgeOrder order={o} />
-                  </div>
-                  <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-[11px]">
-                    <div>
-                      <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Quantité</div>
-                      <div className="font-semibold text-slate-800 tabular-nums">{qty.toLocaleString('fr-FR')}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">PU moyen</div>
-                      <div className="font-semibold text-slate-800 tabular-nums">{formatFCFA(avgPU)}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Total</div>
-                      <div className="font-bold text-brand-700 tabular-nums whitespace-nowrap">{formatFCFA(o.total)}</div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <div className="flex items-center gap-2 mb-2">
+        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-slate-200 rounded text-[11px] font-medium text-slate-600 hover:bg-slate-50">
+          <Calendar className="w-3 h-3 text-slate-400" />
+          {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
+        </button>
+        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5"><X className="w-3.5 h-3.5" /></button>}
+        <span className="ml-auto text-[10px] text-slate-400">{docs.length} document{docs.length > 1 ? 's' : ''}</span>
       </div>
+
+      {docs.length === 0 ? <div className="text-xs text-slate-500 py-6 text-center">Aucune commande sur cette période.</div> : (
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-2.5 py-2 text-left font-semibold text-slate-600">N°</th>
+                <th className="px-2.5 py-2 text-left font-semibold text-slate-600">Désignation</th>
+                <th className="px-2.5 py-2 text-left font-semibold text-slate-600 hidden sm:table-cell">Date</th>
+                <th className="px-2.5 py-2 text-right font-semibold text-slate-600">Total</th>
+                <th className="px-2.5 py-2 text-center font-semibold text-slate-600 w-16">Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((o: any) => {
+                const items = (orderItems || []).filter((it: any) => it.order_id === o.id);
+                const designation = items.length === 0
+                  ? o.order_number
+                  : items.length === 1
+                    ? items[0].name
+                    : `${items[0].name} + ${items.length - 1} autre${items.length - 1 > 1 ? 's' : ''}`;
+                return (
+                  <tr key={o.id} onClick={() => onOpenOrder(o.id)} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer">
+                    <td className="px-2.5 py-1.5 font-mono text-slate-600 whitespace-nowrap">{o.order_number}</td>
+                    <td className="px-2.5 py-1.5 text-slate-800 font-medium truncate max-w-[160px]">{designation}</td>
+                    <td className="px-2.5 py-1.5 text-slate-500 hidden sm:table-cell whitespace-nowrap">{formatDateTime(o.created_at)}</td>
+                    <td className="px-2.5 py-1.5 text-right num font-bold text-slate-800">{formatFCFA(o.total)}</td>
+                    <td className="px-2.5 py-1.5 text-center"><StatusBadgeOrder order={o} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -2947,14 +3460,14 @@ function OrderViewModal({ data, supplierName, onClose, onPrint }: { data: { orde
             </table>
           </div>
           <div className="flex justify-end">
-            <div className="w-full sm:w-80 rounded-2xl bg-slate-900 text-white p-4 space-y-1.5">
+            <div className="w-full sm:w-80 border border-slate-200 rounded-lg p-3 space-y-1.5">
               <Line label="Sous-total" value={formatFCFA(items.reduce((a: number, it: any) => a + Number(it.total), 0))} />
               <Line label="Total" value={formatFCFA(order.total)} strong />
-              <div className="pt-2 mt-2 border-t border-white/10 space-y-1">
+              <div className="pt-2 mt-2 border-t border-slate-200 space-y-1">
                 {pays.map((p: any) => (
-                  <div key={p.id} className="flex items-center justify-between text-[12px] text-white/80"><span>{p.method_name}</span><span className="tabular-nums">{formatFCFA(p.amount)}</span></div>
+                  <div key={p.id} className="flex items-center justify-between text-[12px] text-slate-600"><span>{p.method_name}</span><span className="tabular-nums">{formatFCFA(p.amount)}</span></div>
                 ))}
-                {pays.length === 0 && <div className="text-[12px] text-white/60 text-center py-1">Aucun règlement</div>}
+                {pays.length === 0 && <div className="text-[12px] text-slate-400 text-center py-1">Aucun règlement</div>}
               </div>
               <Line label="Payé" value={formatFCFA(order.paid || 0)} tone="emerald" />
               <Line label="Dette" value={formatFCFA(Math.max(0, Number(order.total) - Number(order.paid || 0)))} tone="amber" />
@@ -3031,75 +3544,81 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
     ? availableArticles.filter(a => a.name.toLowerCase().includes(search.toLowerCase()) || a.internal_ref.toLowerCase().includes(search.toLowerCase()))
     : availableArticles;
 
-  if (loading) return <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>;
+  if (loading) return <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
 
   return (
-    <div className="space-y-4">
-      {/* Add new exception price */}
-      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ajouter un tarif d'exception</div>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_1fr_auto] gap-2 items-end">
-          <div>
-            <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Article</label>
-            <SearchableSelect
-              options={filteredAvailable.map(a => ({ value: a.id, label: a.name, sublabel: `${a.internal_ref} — ${formatFCFA(a.sale_price)}` }))}
-              value={newArticleId}
-              onChange={v => {
-                setNewArticleId(v);
-                const art = articles.find(a => a.id === v);
-                if (art && newPrice === '') setNewPrice(art.sale_price);
-              }}
-              placeholder="— Choisir un article —"
-            />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Prix spécial</label>
-            <input type="number" min={0} value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="input text-xs" placeholder="FCFA" />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Note</label>
-            <input value={newNote} onChange={e => setNewNote(e.target.value)} className="input text-xs" placeholder="Optionnelle" />
-          </div>
-          <button onClick={addPrice} disabled={saving || !newArticleId || newPrice === ''} className="btn-icon-primary" title="Ajouter">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          </button>
+    <div>
+      {/* Add row - compact toolbar */}
+      <div className="flex flex-wrap items-end gap-2 mb-3 pb-3 border-b border-slate-200">
+        <div className="flex-1 min-w-[150px]">
+          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Article</label>
+          <SearchableSelect
+            options={filteredAvailable.map(a => ({ value: a.id, label: a.name, sublabel: `${a.internal_ref} — ${formatFCFA(a.sale_price)}` }))}
+            value={newArticleId}
+            onChange={v => {
+              setNewArticleId(v);
+              const art = articles.find(a => a.id === v);
+              if (art && newPrice === '') setNewPrice(art.sale_price);
+            }}
+            placeholder="— Choisir —"
+          />
         </div>
+        <div className="w-[100px]">
+          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Prix spécial</label>
+          <input type="number" min={0} value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="input text-xs" placeholder="FCFA" />
+        </div>
+        <div className="w-[120px] hidden sm:block">
+          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Note</label>
+          <input value={newNote} onChange={e => setNewNote(e.target.value)} className="input text-xs" placeholder="Optionnelle" />
+        </div>
+        <button onClick={addPrice} disabled={saving || !newArticleId || newPrice === ''} className="h-[38px] px-3 rounded bg-slate-900 text-white text-xs font-semibold hover:bg-slate-700 disabled:opacity-40 transition-colors inline-flex items-center gap-1">
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          Ajouter
+        </button>
       </div>
 
-      {/* Existing exception prices */}
+      {/* Table of existing prices */}
       {prices.length === 0 ? (
-        <div className="text-center py-6 text-slate-400 text-sm">
-          Aucun tarif d'exception configuré pour ce client.
-        </div>
+        <div className="text-center py-8 text-sm text-slate-400">Aucun tarif d'exception configuré.</div>
       ) : (
-        <div className="space-y-1.5">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-1">
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-2.5 py-2 text-left font-semibold text-slate-600">Référence</th>
+                <th className="px-2.5 py-2 text-left font-semibold text-slate-600">Désignation</th>
+                <th className="px-2.5 py-2 text-right font-semibold text-slate-600">Prix normal</th>
+                <th className="px-2.5 py-2 text-right font-semibold text-slate-600">Prix exception</th>
+                <th className="px-2.5 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">Écart</th>
+                <th className="px-2.5 py-2 text-left font-semibold text-slate-600 hidden sm:table-cell">Note</th>
+                <th className="px-2.5 py-2 w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {prices.map((p: any) => {
+                const art = p.articles;
+                const normalPrice = art?.sale_price || 0;
+                const diff = Number(p.exception_price) - normalPrice;
+                const pct = normalPrice > 0 ? ((diff / normalPrice) * 100).toFixed(1) : '0';
+                return (
+                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="px-2.5 py-1.5 font-mono text-slate-500">{art?.internal_ref || '-'}</td>
+                    <td className="px-2.5 py-1.5 font-medium text-slate-800 truncate max-w-[150px]">{art?.name || 'Supprimé'}</td>
+                    <td className="px-2.5 py-1.5 text-right num text-slate-500">{formatFCFA(normalPrice)}</td>
+                    <td className="px-2.5 py-1.5 text-right num font-semibold text-slate-900">{formatFCFA(p.exception_price)}</td>
+                    <td className={`px-2.5 py-1.5 text-right num font-medium hidden sm:table-cell ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{diff < 0 ? '' : '+'}{pct}%</td>
+                    <td className="px-2.5 py-1.5 text-slate-400 truncate max-w-[80px] hidden sm:table-cell">{p.note || '—'}</td>
+                    <td className="px-2.5 py-1.5">
+                      <button onClick={() => removePrice(p.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="border-t border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] text-slate-500">
             {prices.length} tarif{prices.length > 1 ? 's' : ''} configuré{prices.length > 1 ? 's' : ''}
           </div>
-          {prices.map((p: any) => {
-            const art = p.articles;
-            const normalPrice = art?.sale_price || 0;
-            const diff = Number(p.exception_price) - normalPrice;
-            const pct = normalPrice > 0 ? ((diff / normalPrice) * 100).toFixed(1) : '0';
-            return (
-              <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-slate-900 truncate">{art?.name || 'Article supprimé'}</div>
-                  <div className="text-[10px] text-slate-400 font-mono">{art?.internal_ref || '-'}</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-xs font-bold text-slate-900 num">{formatFCFA(p.exception_price)}</div>
-                  <div className={`text-[10px] font-semibold ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                    {diff < 0 ? '' : '+'}{pct}% vs {formatFCFA(normalPrice)}
-                  </div>
-                </div>
-                {p.note && <div className="text-[10px] text-slate-400 max-w-[80px] truncate shrink-0" title={p.note}>{p.note}</div>}
-                <button onClick={() => removePrice(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors shrink-0">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-          })}
         </div>
       )}
     </div>
@@ -3111,18 +3630,18 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
   open: boolean; onClose: () => void;
   customers: Customer[]; suppliers: Supplier[];
   onSelect: (id: string, name: string, type: 'customer' | 'supplier', balance: number, prepay: number, avoir: number) => void;
-  tab: 'customers' | 'suppliers';
+  tab: TabKey;
   prepayMap: Record<string, number>;
   avoirMap: Record<string, number>;
 }) {
   const [search, setSearch] = useState('');
-  const items = tab === 'customers'
-    ? customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()))
-    : suppliers.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()));
+  const custItems = tab !== 'suppliers' ? customers.filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase())) : [];
+  const supItems = tab !== 'customers' ? suppliers.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase())) : [];
+  const items: any[] = [...custItems, ...supItems];
 
   if (!open) return null;
   return (
-    <Modal open={open} onClose={onClose} title={`Positionner un solde - ${tab === 'customers' ? 'Client' : 'Fournisseur'}`} size="md">
+    <Modal open={open} onClose={onClose} title="Positionner un solde" size="md" fullscreenMobile>
       <div className="space-y-3">
         <input
           value={search}
@@ -3136,7 +3655,7 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
           {items.map((item: any) => (
             <button
               key={item.id}
-              onClick={() => { onClose(); onSelect(item.id, item.name, tab === 'customers' ? 'customer' : 'supplier', Number(item.balance || 0), tab === 'customers' ? (prepayMap[item.id] || 0) : 0, tab === 'customers' ? (avoirMap[item.id] || 0) : 0); }}
+              onClick={() => { const isCust = custItems.some(c => c.id === item.id); onClose(); onSelect(item.id, item.name, isCust ? 'customer' : 'supplier', Number(item.balance || 0), isCust ? (prepayMap[item.id] || 0) : 0, isCust ? (avoirMap[item.id] || 0) : 0); }}
               className="w-full flex items-center justify-between gap-2 p-2.5 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all text-left"
             >
               <div className="min-w-0">
@@ -3146,8 +3665,9 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
               <div className="text-right shrink-0">
                 {(() => {
                   const bal = Number(item.balance || 0);
-                  const prepay = tab === 'customers' ? (prepayMap[item.id] || 0) : 0;
-                  const avoir = tab === 'customers' ? (avoirMap[item.id] || 0) : 0;
+                  const isCust = custItems.some(c => c.id === item.id);
+                  const prepay = isCust ? (prepayMap[item.id] || 0) : 0;
+                  const avoir = isCust ? (avoirMap[item.id] || 0) : 0;
                   const net = bal - prepay - avoir;
                   if (prepay > 0 || avoir > 0) {
                     return (

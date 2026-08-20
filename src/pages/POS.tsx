@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
   ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
   Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin, Network,
-  TrendingUp, UserPlus
+  TrendingUp, UserPlus, Store
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -513,11 +513,11 @@ function ActionIconBtn({ icon: Icon, label, onClick, disabled }: {
 }
 
 function POSLandingResume({
-  session, currentSite, onResume, tenantId, onSeeAll, cashierName,
+  session, currentSite, onResume, tenantId, onSeeAll, cashierName, tenantName, onSwitchSite, siteCount,
   actions,
 }: {
   session: CashSession; currentSite: LandingSite;
-  onResume: () => void; tenantId?: string; onSeeAll?: () => void; cashierName: string;
+  onResume: () => void; tenantId?: string; onSeeAll?: () => void; cashierName: string; tenantName?: string; onSwitchSite?: () => void; siteCount?: number;
   actions?: {
     onStats: () => void;
     onTickets: () => void;
@@ -690,104 +690,146 @@ function POSLandingResume({
       </div>
 
       {/* ── Mobile layout ── */}
-      <div className="lg:hidden px-0 pt-2">
-        <div>
-          {/* Header */}
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="leading-tight">
-              <h2 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h2>
-              {currentSite && (
-                <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
+      <div className="lg:hidden px-0 pt-1">
+        <div className="px-3">
+          {/* Header: title + tenant + status badge */}
+          <div className="flex items-center justify-between py-2.5">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[15px] font-bold tracking-tight text-neutral-900 leading-tight">Caisse</h2>
+              <p className="text-[10px] text-neutral-400 leading-tight mt-0.5 truncate">{tenantName || currentSite?.name || '-'}</p>
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-neutral-200 bg-white shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span className="text-[10px] font-semibold text-emerald-600">Ouverte</span>
+            </div>
+          </div>
+
+          {/* Session info: 3 columns with vertical separators */}
+          <div className="flex items-stretch border-y border-neutral-100 py-3">
+            <div className="flex-1 flex flex-col items-center text-center px-1">
+              <ClockIcon className="w-3.5 h-3.5 text-neutral-400 mb-1" />
+              <p className="text-[8px] text-neutral-400 uppercase tracking-wide leading-none mb-1">Durée</p>
+              <p className="text-[10px] font-semibold text-neutral-900 leading-tight truncate w-full">{sessionDuration(session.opened_at)}</p>
+            </div>
+            <div className="w-px bg-neutral-100" />
+            <div className="flex-1 flex flex-col items-center text-center px-1">
+              <Banknote className="w-3.5 h-3.5 text-neutral-400 mb-1" />
+              <p className="text-[8px] text-neutral-400 uppercase tracking-wide leading-none mb-1">Fond initial</p>
+              <p className="text-[10px] font-semibold text-neutral-900 leading-tight truncate w-full">{formatFCFA(Number(session.opening_amount))}</p>
+            </div>
+            <div className="w-px bg-neutral-100" />
+            <div className="flex-1 flex flex-col items-center text-center px-1">
+              <User className="w-3.5 h-3.5 text-neutral-400 mb-1" />
+              <p className="text-[8px] text-neutral-400 uppercase tracking-wide leading-none mb-1">Vendeur</p>
+              <p className="text-[10px] font-semibold text-neutral-900 leading-tight truncate w-full">{cashierName ? cashierName.charAt(0).toUpperCase() + cashierName.slice(1).toLowerCase() : '-'}</p>
+            </div>
+          </div>
+
+          {/* Action buttons: Reprendre (dominant) / Clôturer (secondary) */}
+          <div className="grid grid-cols-2 gap-2 pt-3">
+            <button onClick={onResume} className="flex items-center gap-2 py-3 px-3 rounded-lg bg-neutral-900 text-white text-xs font-bold transition-all active:scale-[0.97] shadow-sm">
+              <Play className="w-4 h-4 fill-current text-white shrink-0" />
+              <div className="flex flex-col items-start leading-tight">
+                <span>Reprendre</span>
+                <span className="text-[9px] font-normal text-white/60">Continuer la session</span>
+              </div>
+            </button>
+            {actions?.canClose ? (
+              <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-2 py-3 px-3 rounded-lg bg-white border border-neutral-200 text-neutral-900 text-xs font-bold transition-all active:scale-[0.97] disabled:opacity-40">
+                <Lock className="w-4 h-4 text-neutral-900 shrink-0" />
+                <div className="flex flex-col items-start leading-tight">
+                  <span>Clôturer</span>
+                  <span className="text-[9px] font-normal text-neutral-400">Fermer la caisse</span>
+                </div>
+              </button>
+            ) : <div />}
+          </div>
+
+          {/* Quick actions: 4 compact actions with vertical separators */}
+          {shortcutBtns.length > 0 && (
+            <div className="flex items-stretch mt-3 border border-neutral-200 rounded-lg overflow-hidden bg-white">
+              {shortcutBtns.map((btn, i) => (
+                <Fragment key={btn.label}>
+                  <button onClick={btn.onClick} disabled={!isOpen} className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 active:bg-neutral-50 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
+                    <btn.icon className="w-4 h-4 text-neutral-700" />
+                    <span className="text-[8px] font-medium text-neutral-600 leading-none">{btn.label}</span>
+                  </button>
+                  {i < shortcutBtns.length - 1 && <div className="w-px bg-neutral-100" />}
+                </Fragment>
+              ))}
+            </div>
+          )}
+
+          {/* Summary: title row + dark total card + sub-indicators */}
+          {actions?.canViewSummary !== false && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <BarChart2 className="w-3.5 h-3.5 text-neutral-700" />
+                  <h3 className="text-xs font-bold text-neutral-900">Résumé</h3>
+                </div>
+                <span className="text-[10px] text-neutral-400 px-1.5 py-0.5 rounded bg-neutral-50">Aujourd'hui</span>
+              </div>
+              {loadingSummary ? (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-16 bg-neutral-100 rounded-lg" />
+                  <div className="h-8 bg-neutral-100 rounded-lg" />
+                </div>
+              ) : summary ? (
+                <>
+                  {/* Dark total card */}
+                  <div className="rounded-lg bg-neutral-900 px-3 py-3">
+                    <p className="text-[10px] text-white/50 uppercase tracking-wide leading-none mb-1">Total encaissé</p>
+                    <p className="text-lg font-bold text-white tabular-nums leading-tight">{formatFCFA(summary.salesTotal)}</p>
+                  </div>
+                  {/* Sub-indicators */}
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-neutral-200 bg-white">
+                      <span className="text-[10px] text-neutral-500">Ventes</span>
+                      <span className="text-xs font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
+                    </div>
+                    {(() => {
+                      const cash = summary.byMethod.find(m => /esp[èe]ces|cash/i.test(m.method_name));
+                      return (
+                        <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-neutral-200 bg-white">
+                          <span className="text-[10px] text-neutral-500">Espèces</span>
+                          <span className="text-xs font-bold text-neutral-900 tabular-nums">{cash ? formatFCFA(cash.amount) : formatFCFA(0)}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                  <p className="text-[11px] text-neutral-400 text-center">Aucune donnée</p>
+                </div>
               )}
             </div>
-            <div className="flex-1" />
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span className="text-[11px] font-medium text-emerald-600">Ouverte</span>
-            </div>
-          </div>
-
-          {/* Session info */}
-          <div className="px-3 py-3 border-t border-neutral-100">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center gap-2">
-                <ClockIcon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <div className="min-w-0"><p className="text-[10px] text-neutral-400">Durée</p><p className="text-xs font-semibold text-neutral-800 truncate">{sessionDuration(session.opened_at)}</p></div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Banknote className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <div className="min-w-0"><p className="text-[10px] text-neutral-400">Fond initial</p><p className="text-xs font-semibold text-neutral-700 truncate">{formatFCFA(Number(session.opening_amount))}</p></div>
-              </div>
-            </div>
-            {cashierName && (
-              <div className="flex items-center gap-2 mt-2">
-                <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <div className="min-w-0"><p className="text-[10px] text-neutral-400">Vendeur</p><p className="text-xs font-semibold text-neutral-800 uppercase truncate">{cashierName}</p></div>
-              </div>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          <div className="grid grid-cols-2 gap-2 px-3 py-3 border-t border-neutral-100">
-            <button onClick={onResume} className="flex items-center justify-center gap-2 py-3 rounded-md text-neutral-900 text-sm font-semibold transition-colors active:scale-[0.98]">
-              <Play className="w-4 h-4 fill-current text-neutral-900" /> Reprendre
-            </button>
-            {actions?.canClose && (
-              <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2 py-3 rounded-md text-neutral-800 text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-40">
-                <Lock className="w-4 h-4" /> Clôturer
-              </button>
-            )}
-          </div>
-
-          {/* Shortcut buttons */}
-          {shortcutBtns.length > 0 && (
-            <div className="grid grid-cols-4 gap-1.5 px-3 py-3 border-t border-neutral-100">
-              {shortcutBtns.map(btn => (
-                <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1 py-3 rounded-md active:bg-neutral-50 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
-                  <btn.icon className="w-4.5 h-4.5 text-neutral-700" />
-                  <span className="text-[9px] font-medium text-neutral-600">{btn.label}</span>
-                </button>
-              ))}
-            </div>
           )}
 
-          {/* Summary */}
-          {actions?.canViewSummary !== false && !loadingSummary && summary && (
-            <div className="px-3 py-3 border-t border-neutral-100">
-              <div className="flex items-center gap-2 mb-2">
-                <BarChart2 className="w-3.5 h-3.5 text-neutral-700" />
-                <h3 className="text-xs font-bold text-neutral-900">Résumé</h3>
-              </div>
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-xs text-neutral-500">Total encaissé</span>
-                <span className="text-sm font-bold text-neutral-700 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
-              </div>
-              <div className="flex items-center justify-between py-1.5 border-t border-neutral-100">
-                <span className="text-xs text-neutral-500">Ventes</span>
-                <span className="text-sm font-bold text-neutral-800 tabular-nums">{summary.salesCount}</span>
-              </div>
-              {summary.byMethod.length > 0 && summary.byMethod.map(m => (
-                <div key={m.method_name} className="flex items-center justify-between py-1 border-t border-neutral-50">
-                  <span className="text-[11px] text-neutral-400">{m.method_name}</span>
-                  <span className="text-[11px] font-bold text-neutral-600 tabular-nums">{formatFCFA(m.amount)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Quick links */}
-          <div className="flex gap-1.5 px-3 py-3 border-t border-neutral-100">
+          {/* Access links: Historique / Point de vente */}
+          <div className="mt-3 space-y-0">
             {onSeeAll && (
-              <button onClick={onSeeAll} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-md text-left active:bg-neutral-50 transition-colors">
-                <ClockIcon className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
-                <span className="text-xs font-medium text-neutral-700">Historique</span>
+              <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg active:bg-neutral-50 transition-colors text-left border-b border-neutral-100">
+                <ClockIcon className="w-4 h-4 text-neutral-700 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-semibold text-neutral-900 leading-tight">Historique</p>
+                  <p className="text-[9px] text-neutral-400 leading-tight">Voir les opérations</p>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
               </button>
             )}
-            <button onClick={onResume} className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-md text-left active:bg-neutral-50 transition-colors">
-              <ShoppingCart className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
-              <span className="text-xs font-medium text-neutral-700">Point de vente</span>
+            <button onClick={() => { if (siteCount && siteCount > 1 && onSwitchSite) onSwitchSite(); else if (onResume) onResume(); }} className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg active:bg-neutral-50 transition-colors text-left">
+              <ShoppingCart className="w-4 h-4 text-neutral-700 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold text-neutral-900 leading-tight">Point de vente</p>
+                <p className="text-[9px] text-neutral-400 leading-tight">{siteCount && siteCount > 1 ? 'Changer de point de vente' : 'Un seul point de vente'}</p>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
             </button>
           </div>
+
+          <div className="h-2" />
         </div>
       </div>
     </div>
@@ -810,7 +852,7 @@ const posCache: {
 } = { key: '', articles: [], customers: [], methods: [], session: null, categories: [], topScores: {}, articleTiers: [], screen: 'open-form' };
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
-  const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange } = useApp();
+  const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange, setCurrentSite } = useApp();
   const { can } = usePermissions();
   const enabledModules: string[] = Array.isArray((tenant as any)?.enabled_modules)
     ? (tenant as any).enabled_modules
@@ -1134,6 +1176,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // Close workflow
   const [closeOpen, setCloseOpen] = useState(false);
+  const [sitePickerOpen, setSitePickerOpen] = useState(false);
   const [closeStep, setCloseStep] = useState<CloseStep>('control');
   const [controlLines, setControlLines] = useState<ControlLine[]>([]);
   const [loadingControl, setLoadingControl] = useState(false);
@@ -2797,6 +2840,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             tenantId={tenant?.id}
             onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
             cashierName={cashierName}
+            tenantName={tenant?.name}
+            onSwitchSite={() => setSitePickerOpen(true)}
+            siteCount={sites.length}
             actions={{
               onStats: openStats,
               onTickets: openTickets,
@@ -4685,6 +4731,51 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>Action irréversible. La session sera verrouillée.</span>
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Site picker modal */}
+      <Modal open={sitePickerOpen} onClose={() => setSitePickerOpen(false)} title="Changer de point de vente" size="md"
+        footer={<button onClick={() => setSitePickerOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
+        {sites.length <= 1 ? (
+          <div className="py-8 text-center">
+            <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-3">
+              <Store className="w-6 h-6 text-neutral-400" />
+            </div>
+            <p className="text-sm font-semibold text-neutral-900">Un seul point de vente</p>
+            <p className="text-xs text-neutral-500 mt-1">Vous n'avez qu'un seul magasin configuré. Contactez l'administrateur pour en ajouter d'autres.</p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-neutral-500 uppercase tracking-wider font-semibold mb-2">Sélectionnez un magasin</p>
+            {sites.map(s => {
+              const active = s.id === currentSite?.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    if (!active) {
+                      setCurrentSite(s);
+                      localStorage.setItem('currentSiteId', s.id);
+                      setSitePickerOpen(false);
+                      setScreen('open-form');
+                    }
+                  }}
+                  disabled={active}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${active ? 'bg-neutral-100 border border-neutral-200' : 'bg-white border border-neutral-200 hover:border-neutral-400 active:scale-[0.98]'}`}
+                >
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-600'}`}>
+                    <Store className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-neutral-900 truncate">{s.name}</p>
+                    {s.address && <p className="text-[10px] text-neutral-500 truncate">{s.address}</p>}
+                  </div>
+                  {active && <Check className="w-4 h-4 text-neutral-500 shrink-0" />}
+                </button>
+              );
+            })}
           </div>
         )}
       </Modal>

@@ -276,6 +276,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [siteConfirmPending, setSiteConfirmPending] = useState<typeof sites[0] | null>(null);
 
   const isPOS = route === 'pos';
+  const isTiers = route === 'tiers';
   const isDashboard = route === 'dashboard';
   const isPlatformAdmin = route === 'platform_admin';
   const [dashMenuOpen, setDashMenuOpen] = useState(false);
@@ -955,12 +956,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             top: 'calc(env(safe-area-inset-top) + 14px)',
             left: '12px',
             height: '48px',
-            borderRadius: '12px',
-            background: '#ffffff',
-            border: '1px solid #e5e5e5',
-            boxShadow: '0 2px 8px -2px rgba(0,0,0,0.08)',
-            paddingLeft: '10px',
-            paddingRight: '8px',
+            borderRadius: '0',
+            background: 'transparent',
+            border: 'none',
+            boxShadow: 'none',
+            paddingLeft: '0',
+            paddingRight: '0',
             gap: '8px',
           }}
           aria-label="Menu"
@@ -1028,7 +1029,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           <div className="relative">
             <button
               onClick={() => setUserOpen(v => !v)}
-              className="w-10 h-10 rounded-xl bg-neutral-900 flex items-center justify-center text-white text-[13px] font-bold"
+              className="w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center text-white text-[13px] font-bold"
             >
               {(profile?.full_name || profile?.email || '?').charAt(0).toUpperCase()}
             </button>
@@ -1054,7 +1055,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </header>
 
         {/* Desktop breadcrumb bar */}
-        {!isDashboard && !isPOS && !isPlatformAdmin && !isSuperAdmin && BREADCRUMB_MAP[route] && (
+        {!isDashboard && !isPOS && !isTiers && !isPlatformAdmin && !isSuperAdmin && BREADCRUMB_MAP[route] && (
           <div className="hidden lg:flex items-center gap-1.5 px-8 pt-3 pb-0 text-[12px] text-neutral-500">
             <span>{t(BREADCRUMB_MAP[route].group)}</span>
             <ChevronRight className="w-3 h-3 text-neutral-300" />
@@ -1062,8 +1063,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         )}
 
-        <main className={`flex-1 w-full min-h-0 ${isPOS ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
-          {isPOS ? (
+        <main className={`flex-1 w-full min-h-0 ${isPOS || isTiers ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
+          {isPOS || isTiers ? (
             <div className="flex-1 flex flex-col min-h-0 pb-[60px] lg:pb-0">{children}</div>
           ) : isPlatformAdmin ? (
             <div className="flex-1 min-h-0">{children}</div>
@@ -1078,7 +1079,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         {!isPlatformAdmin && (
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="pointer-events-auto">
-            <div className="relative flex items-center justify-around h-[52px] bg-neutral-900 border-t border-neutral-800">
+            <div className="relative flex items-center justify-around h-[52px] bg-white border-t border-neutral-200">
+              <div className="absolute top-0 inset-x-0 h-px bg-neutral-100" />
               {(() => {
                 const tabs = isSuperAdmin ? [{ key: 'platform_admin' as Route, labelKey: 'nav.platform', icon: Crown }] : visibleMobileTabs;
                 const mid = Math.floor(tabs.length / 2);
@@ -1097,15 +1099,15 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                           className="relative flex flex-col items-center justify-center gap-[2px] transition-all duration-150 active:scale-[0.88] min-w-0 flex-1 h-full"
                         >
                           <div className="relative flex items-center justify-center">
-                            <Icon className={`w-[17px] h-[17px] ${active ? 'text-white' : 'text-neutral-500'}`} strokeWidth={active ? 2.2 : 1.8} />
+                            <Icon className={`w-[17px] h-[17px] ${active ? 'text-neutral-900' : 'text-neutral-400'}`} strokeWidth={active ? 2.2 : 1.8} />
                             {badge > 0 && (
                               <span className="absolute -top-1 -right-1.5 min-w-[12px] h-[12px] px-0.5 rounded-full bg-red-500 text-white text-[7px] font-bold flex items-center justify-center num">
                                 {badge > 9 ? '9+' : badge}
                               </span>
                             )}
                           </div>
-                          <span className={`text-[8px] font-medium leading-none ${active ? 'text-white' : 'text-neutral-500'}`}>{t(tab.labelKey)}</span>
-                          {active && <span className="absolute bottom-[5px] left-1/2 -translate-x-1/2 w-3 h-[1.5px] rounded-full bg-white" />}
+                          <span className={`text-[8px] font-medium leading-none ${active ? 'text-neutral-900' : 'text-neutral-400'}`}>{t(tab.labelKey)}</span>
+                          {active && <span className="absolute bottom-[5px] left-1/2 -translate-x-1/2 w-3 h-[1.5px] rounded-full bg-neutral-900" />}
                         </button>
                       );
                     })}
@@ -1121,15 +1123,15 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                           className="relative flex flex-col items-center justify-center gap-[2px] transition-all duration-150 active:scale-[0.88] min-w-0 flex-1 h-full"
                         >
                           <div className="relative flex items-center justify-center">
-                            <Icon className={`w-[17px] h-[17px] ${active ? 'text-white' : 'text-neutral-500'}`} strokeWidth={active ? 2.2 : 1.8} />
+                            <Icon className={`w-[17px] h-[17px] ${active ? 'text-neutral-900' : 'text-neutral-400'}`} strokeWidth={active ? 2.2 : 1.8} />
                             {badge > 0 && (
                               <span className="absolute -top-1 -right-1.5 min-w-[12px] h-[12px] px-0.5 rounded-full bg-red-500 text-white text-[7px] font-bold flex items-center justify-center num">
                                 {badge > 9 ? '9+' : badge}
                               </span>
                             )}
                           </div>
-                          <span className={`text-[8px] font-medium leading-none ${active ? 'text-white' : 'text-neutral-500'}`}>{t(tab.labelKey)}</span>
-                          {active && <span className="absolute bottom-[5px] left-1/2 -translate-x-1/2 w-3 h-[1.5px] rounded-full bg-white" />}
+                          <span className={`text-[8px] font-medium leading-none ${active ? 'text-neutral-900' : 'text-neutral-400'}`}>{t(tab.labelKey)}</span>
+                          {active && <span className="absolute bottom-[5px] left-1/2 -translate-x-1/2 w-3 h-[1.5px] rounded-full bg-neutral-900" />}
                         </button>
                       );
                     })}
@@ -1195,13 +1197,13 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               transform: 'translateX(-50%)',
               width: '48px',
               height: '48px',
-              borderRadius: '14px',
-              background: posCartOpen ? '#0a0a0a' : posCartCount > 0 ? '#0a0a0a' : '#ffffff',
-              boxShadow: '0 4px 12px -2px rgba(0,0,0,0.15)',
-              border: posCartOpen || posCartCount > 0 ? 'none' : '1px solid #e5e5e5',
+              borderRadius: '50%',
+              background: '#0a0a0a',
+              boxShadow: '0 4px 12px -2px rgba(0,0,0,0.25)',
+              border: 'none',
             }}
           >
-            <ShoppingCart className={`w-5 h-5 ${posCartOpen || posCartCount > 0 ? 'text-white' : 'text-neutral-900'}`} strokeWidth={2} />
+            <ShoppingCart className="w-5 h-5 text-white" strokeWidth={2} />
             {posCartCount > 0 && !posCartOpen && (
               <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{posCartCount}</span>
             )}
@@ -1215,13 +1217,13 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               transform: `translateX(-50%) ${fabOpen ? 'rotate(135deg)' : 'rotate(0deg)'}`,
               width: '48px',
               height: '48px',
-              borderRadius: '14px',
-              background: fabOpen ? '#0a0a0a' : '#ffffff',
-              boxShadow: '0 4px 12px -2px rgba(0,0,0,0.12)',
-              border: fabOpen ? 'none' : '1px solid #e5e5e5',
+              borderRadius: '50%',
+              background: '#0a0a0a',
+              boxShadow: '0 4px 12px -2px rgba(0,0,0,0.25)',
+              border: 'none',
             }}
           >
-            <Plus className={`w-5 h-5 ${fabOpen ? 'text-white' : 'text-neutral-900'}`} strokeWidth={2} />
+            <Plus className="w-5 h-5 text-white" strokeWidth={2} />
           </button>
         ))}
       </div>

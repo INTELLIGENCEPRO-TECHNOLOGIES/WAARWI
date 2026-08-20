@@ -257,7 +257,7 @@ export function CashHistory() {
       ) : (
         <>
           {/* MOBILE: cards */}
-          <div className="md:hidden grid grid-cols-1 gap-2.5">
+          <div className="md:hidden grid grid-cols-1 gap-2">
             {filtered.map(s => {
               const variance = s.variance != null ? Number(s.variance) : null;
               const isOpen = s.status === 'open';
@@ -266,23 +266,19 @@ export function CashHistory() {
               const closed = s.closed_at ? new Date(s.closed_at) : null;
               const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
               return (
-                <button key={s.id} data-row-id={s.id} onClick={() => openDetail(s)} className="card-premium text-left p-3 flex flex-col gap-2 hover:border-brand-400 transition-all duration-300 group">
+                <button key={s.id} data-row-id={s.id} onClick={() => openDetail(s)} className="card-premium text-left p-2.5 flex flex-col gap-1.5 hover:border-brand-400 transition-all duration-300 group">
                   <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${isOpen ? 'bg-gradient-to-br from-neutral-400 to-neutral-600 text-white shadow-glow' : balanced ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white' : 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'}`}>
-                      {isOpen ? <Clock className="w-3.5 h-3.5" /> : balanced ? <Check className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
-                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="doc-number text-[12px] font-bold tracking-wider text-brand-700">#{s.id.slice(0, 8).toUpperCase()}</span>
+                        <span className="doc-number text-[11px] font-bold tracking-wider text-brand-700">#{s.id.slice(0, 8).toUpperCase()}</span>
                         <span className={`text-[9px] font-bold uppercase tracking-wider ${isOpen ? 'text-neutral-700' : 'text-neutral-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
                       </div>
-                      <div className="text-[11px] text-neutral-500 num leading-tight mt-0.5 truncate">
+                      <div className="text-[10px] text-neutral-500 num leading-tight mt-0.5 truncate">
                         {opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         {closed && <>→{closed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</>}
                         {duration != null && <span className="text-neutral-400"> · {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
                       </div>
                     </div>
-                    <Eye className="w-3.5 h-3.5 text-neutral-300 group-hover:text-brand-600 transition-colors shrink-0" />
                     <span className="text-[10px] font-semibold text-neutral-400 group-hover:text-brand-600 transition-colors shrink-0">Voir</span>
                   </div>
                   <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-neutral-100">
@@ -298,8 +294,8 @@ export function CashHistory() {
                       <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Écart</div>
                       <div className="leading-tight mt-0.5">
                         {variance != null ? (
-                          <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold num ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                            {balanced ? 'OK' : <>{variance > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(variance))}</>}
+                          <span className={`text-[11px] font-bold num ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                            {balanced ? 'OK' : `${variance > 0 ? '+' : ''}${formatFCFA(Math.abs(variance))}`}
                           </span>
                         ) : <span className="text-[11px] text-neutral-400">—</span>}
                       </div>

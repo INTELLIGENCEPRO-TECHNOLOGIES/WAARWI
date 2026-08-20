@@ -900,15 +900,43 @@ async function fetchTiersBalanceStats(
     custAdjustments.set(a.entity_id, (custAdjustments.get(a.entity_id) || 0) + (a.amount || 0));
   }
 
+  // Acomptes et avoirs non utilisés par client
+  const { data: prepays } = await supabase
+    .from('customer_prepayments')
+    .select('customer_id, amount, amount_used')
+    .eq('tenant_id', tenantId);
+  const custPrepay = new Map<string, number>();
+  for (const p of (prepays || []) as any[]) {
+    const unused = Math.max(0, Number(p.amount) - Number(p.amount_used));
+    if (unused > 0) custPrepay.set(p.customer_id, (custPrepay.get(p.customer_id) || 0) + unused);
+  }
+  const { data: avoirs } = await supabase
+    .from('sale_returns')
+    .select('customer_id, total, credit_used')
+    .eq('tenant_id', tenantId)
+    .eq('status', 'approved')
+    .eq('refund_method', 'avoir');
+  const custAvoir = new Map<string, number>();
+  for (const a of (avoirs || []) as any[]) {
+    const unused = Math.max(0, Number(a.total) - Number(a.credit_used));
+    if (unused > 0) custAvoir.set(a.customer_id, (custAvoir.get(a.customer_id) || 0) + unused);
+  }
+
   const customerRows: TiersBalanceRow[] = (customers || []).map((c: any) => {
     const outstanding = custOutstanding.get(c.id) || 0;
     const adjustments = custAdjustments.get(c.id) || 0;
+    const rawBal = Number(c.balance) || 0;
+    const prepay = custPrepay.get(c.id) || 0;
+    const avoir = custAvoir.get(c.id) || 0;
+    const applied = Math.min(prepay, Math.max(0, rawBal));
+    const avoirApp = Math.min(avoir, Math.max(0, rawBal - applied));
+    const netBalance = rawBal - applied - avoirApp;
     return {
       id: c.id,
       name: c.name || 'Client inconnu',
       outstanding,
       adjustments,
-      finalBalance: Number(c.balance) || 0,
+      finalBalance: netBalance,
     };
   }).sort((a, b) => b.finalBalance - a.finalBalance);
 
