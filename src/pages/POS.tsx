@@ -18,7 +18,6 @@ import { EmptyState } from '../components/EmptyState';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
-import { MarqueeText } from '../components/MarqueeText';
 import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
 import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, printDecaissementTicket80, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
@@ -27,6 +26,7 @@ import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments } from '../lib/ipm';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
+import { PosNumpad, type NumpadField } from '../components/PosNumpad';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 
 type ArticleLite = {
@@ -955,6 +955,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [articleTiers, setArticleTiers] = useState<ArticleTier[]>([]);
   const [tierPickerOpen, setTierPickerOpen] = useState(false);
   const [tierPickerArticle, setTierPickerArticle] = useState<ArticleLite | null>(null);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+
+  // Auto-select first cart line for desktop numpad editing
+  useEffect(() => {
+    if (cart.length > 0 && !cart.some(i => i.article_id === selectedLineId)) {
+      setSelectedLineId(cart[0].article_id);
+    } else if (cart.length === 0) {
+      setSelectedLineId(null);
+    }
+  }, [cart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Quick-create modals
   const [quickArticleOpen, setQuickArticleOpen] = useState(false);
@@ -1572,6 +1582,23 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const removeLine = (id: string) => setCart(c => c.filter(i => i.article_id !== id));
+
+  const commitNumpad = (field: NumpadField, value: number) => {
+    if (!selectedLineId) return;
+    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    if (field === 'qty') {
+      const item = cart.find(i => i.article_id === selectedLineId);
+      if (!allowNeg && item && tracksStock(articles.find(a => a.id === selectedLineId)!) && value > (item.stock_available ?? value)) {
+        error(`Stock insuffisant (${item.stock_available})`);
+        return;
+      }
+      setCart(c => c.map(i => i.article_id === selectedLineId ? { ...i, quantity: Math.max(1, value) } : i));
+    } else if (field === 'price') {
+      setCart(c => c.map(i => i.article_id === selectedLineId ? { ...i, unit_price: Math.max(0, value) } : i));
+    } else if (field === 'discount') {
+      setCart(c => c.map(i => i.article_id === selectedLineId ? { ...i, discount: Math.max(0, value) } : i));
+    }
+  };
 
   const subtotal = cart.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
   const total = Math.max(0, subtotal - discount);
@@ -2715,6 +2742,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Screen: resume (active session found — opened by someone else or after "Quitter")
   const isResumeScreen = screen === 'resume' && !!session;
 
+  const selectedLine = cart.find(i => i.article_id === selectedLineId) || null;
+
   // ─── Main POS screen ──────────────────────────────────────────────────────
 
   const CartPanel = (
@@ -2785,20 +2814,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : (
           <div className="divide-y divide-neutral-100">
             {cart.map(i => (
-              <div key={i.article_id} className="group px-3 py-1.5 hover:bg-neutral-50 transition-colors">
+              <div key={i.article_id} onClick={() => setSelectedLineId(i.article_id)} className={`group px-3 py-1.5 cursor-pointer transition-colors ${selectedLineId === i.article_id ? 'bg-brand-50/50 border-l-2 border-l-neutral-900' : 'hover:bg-neutral-50 border-l-2 border-l-transparent'}`}>
                 <div className="flex items-start justify-between gap-1">
                   <div className="min-w-0 flex-1">
                     <div className="text-[11px] font-semibold text-neutral-900 leading-snug">{i.name}</div>
                     {i.tier_name && <div className="text-[9px] font-medium text-brand-600 leading-tight">{i.tier_name}</div>}
                   </div>
-                  <button onClick={() => removeLine(i.article_id)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-red-400 transition-all shrink-0 mt-0.5">
+                  <button onClick={(e) => { e.stopPropagation(); removeLine(i.article_id); }} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-red-400 transition-all shrink-0 mt-0.5">
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} className="w-12 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-center font-bold num focus:outline-none focus:border-neutral-900 shrink-0" title="Quantité" />
+                  <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} onClick={e => e.stopPropagation()} className="w-12 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-center font-bold num focus:outline-none focus:border-neutral-900 shrink-0" title="Quantité" />
                   <span className="text-[10px] text-neutral-400">x</span>
-                  <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-right num focus:outline-none focus:border-neutral-900 shrink-0" title="Prix unitaire" />
+                  <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} onClick={e => e.stopPropagation()} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-right num focus:outline-none focus:border-neutral-900 shrink-0" title="Prix unitaire" />
                   <span className="text-[10px] text-neutral-400">=</span>
                   <div className="text-[11px] font-bold text-neutral-900 num whitespace-nowrap ml-auto">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
                 </div>
@@ -2808,8 +2837,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         )}
       </div>
 
-      {/* Footer totals + pay button */}
-      <div className="border-t border-neutral-200 px-3 pt-2 pb-3 bg-white pb-safe space-y-1.5">
+      {/* Footer totals + pay button — MOBILE (unchanged) */}
+      <div className="lg:hidden border-t border-neutral-200 px-3 pt-2 pb-3 bg-white pb-safe space-y-1.5">
         <div className="flex items-center justify-between text-[11px]">
           <span className="text-neutral-500">Sous-total</span>
           <span className="font-semibold text-neutral-800 num">{formatFCFA(subtotal)}</span>
@@ -2850,6 +2879,62 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           {cart.length > 0 && <span className="text-sm font-bold tracking-wide">PAIEMENT</span>}
         </button>
       </div>
+
+      {/* Footer — DESKTOP with virtual numpad (Warwi branded) */}
+      {cart.length > 0 && (
+        <div className="hidden lg:flex flex-col flex-shrink-0 border-t border-neutral-200 bg-white pb-1">
+          {/* Compact totals row */}
+          <div className="px-3 py-1.5 space-y-0.5 shrink-0">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-neutral-500">Sous-total</span>
+              <span className="font-semibold text-neutral-800 num">{formatFCFA(subtotal)}</span>
+            </div>
+            {can('apply_discounts') && (
+              <div className="flex items-center justify-between text-[11px] gap-2">
+                <span className="text-neutral-500 shrink-0">Remise globale</span>
+                <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="px-2 py-1 rounded-md border border-neutral-200 bg-white text-[11px] text-right num w-24 focus:outline-none focus:border-brand-500" placeholder="0" />
+              </div>
+            )}
+            {ipmBeneficiaire && total > 0 && (
+              <div className="px-2 py-1.5 bg-neutral-100 border border-neutral-200 rounded-lg text-[10px] space-y-1">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold text-neutral-900">IPM {ipmBeneficiaire.ipm_organismes?.nom}</span>
+                    <span className="text-neutral-700 ml-1">({ipmTaux}%{ipmModeCalcul === 'articles_eligibles' ? ' sur articles eligibles' : ipmModeCalcul === 'ligne_par_ligne' ? ' ligne/ligne' : ''})</span>
+                  </div>
+                  <div className="text-right shrink-0 leading-tight">
+                    <div className="text-neutral-700">IPM: <span className="font-bold">{formatFCFA(ipmPartIpm)}</span></div>
+                    <div className="text-neutral-900 font-bold">Client: {formatFCFA(ipmPartClient)}</div>
+                  </div>
+                </div>
+                {ipmModeCalcul === 'articles_eligibles' && cart.some(i => i.ipm_eligible === false) && (
+                  <div className="text-[9px] text-amber-700 bg-amber-50 px-2 py-1 rounded">
+                    {cart.filter(i => i.ipm_eligible === false).length} article(s) non eligible(s) IPM, exclu(s) du calcul
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Total</span>
+              <div className="text-xl font-bold text-neutral-900 num leading-none">{formatFCFA(total)}</div>
+            </div>
+          </div>
+          {/* Virtual numpad — Warwi branded, fills remaining space */}
+          <PosNumpad
+            target={{
+              qty: selectedLine?.quantity || 1,
+              price: selectedLine?.unit_price || 0,
+              discount: selectedLine?.discount || 0,
+              total: total,
+            }}
+            onCommit={commitNumpad}
+            onValidate={openPayment}
+            canDiscount={can('apply_discounts')}
+            compact={true}
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -3082,7 +3167,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 })}
               </div>
             ) : (
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col divide-y divide-neutral-100 border-y border-neutral-100">
                 {filtered.map(a => {
                   const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
                   const tracked = tracksStock(a);
@@ -3092,15 +3177,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       key={a.id}
                       onClick={() => addToCart(a)}
                       disabled={out}
-                      className={`w-full px-3 py-1.5 rounded-lg border transition-all text-left active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${out ? 'border-neutral-200 bg-neutral-50/50' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'}`}
+                      className="w-full flex items-center gap-2 px-3 py-2 transition-colors text-left active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50"
                     >
-                      <MarqueeText className="text-[12px] font-semibold text-neutral-900">{a.name}</MarqueeText>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <span className={`text-[10px] font-bold num leading-none ${!a._stockLoaded ? 'text-neutral-400' : a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                          {tracked && can('view_stock_levels') ? (!a._stockLoaded ? '...' : a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rup.') : `×${a.stock_available}`) : ''}
-                        </span>
-                        <span className="text-[12px] font-bold text-neutral-900 num shrink-0">{formatFCFA(a.sale_price)}</span>
-                      </div>
+                      <span className={`text-[11px] font-bold num tabular-nums w-12 shrink-0 text-center ${!a._stockLoaded ? 'text-neutral-300' : a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-700'}`}>
+                        {tracked && can('view_stock_levels') ? (!a._stockLoaded ? '…' : a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup') : `${a.stock_available}`) : ''}
+                      </span>
+                      <span className="w-px h-4 bg-neutral-200 shrink-0" />
+                      <span className="flex-1 min-w-0 text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
+                      <span className="w-px h-4 bg-neutral-200 shrink-0" />
+                      <span className="text-[12px] font-bold text-neutral-900 num shrink-0 tabular-nums">{formatFCFA(a.sale_price)}</span>
                     </button>
                   );
                 })}
