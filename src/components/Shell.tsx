@@ -706,7 +706,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       <aside
         className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[64px]' : 'w-[240px]'} ${sidebarDark ? 'border-white/10' : 'border-neutral-200'}`}
         style={sidebarDark
-          ? { background: 'linear-gradient(180deg, #0a0a0a 0%, #171717 40%, #262626 100%)' }
+          ? { background: '#000000' }
           : { background: '#ffffff' }
         }
       >
@@ -751,7 +751,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           >
             <div
               className="float-sidebar-content"
-              style={sidebarDark ? { background: 'linear-gradient(180deg, #0a0a0a 0%, #171717 40%, #262626 100%)', border: '1px solid rgba(255,255,255,0.08)' } : undefined}
+              style={sidebarDark ? { background: '#000000', border: '1px solid rgba(255,255,255,0.08)' } : undefined}
             >
               <div className="flex items-center justify-between px-4 pt-4 pb-3">
                 <div className="flex items-center min-w-0">
@@ -1069,7 +1069,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           ) : isPlatformAdmin ? (
             <div className="flex-1 min-h-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
-            <div className="flex-1 min-h-0 px-2 sm:px-3 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0">{children}</div>
+            <div className="flex-1 min-h-0 px-1 sm:px-2 lg:px-0 pt-3 lg:pt-0 pb-[100px] lg:pb-0">{children}</div>
           ) : (
             <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-6 pb-[72px] lg:pb-8">{children}</div>
           )}

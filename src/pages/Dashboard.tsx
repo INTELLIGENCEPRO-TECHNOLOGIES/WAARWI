@@ -633,7 +633,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       }
 
       for (const m of (actMovements.data || []) as any[]) {
-        const kindLabels: Record<string, string> = { expense: 'Dépense', refund: 'Remboursement', customer_loan: 'Prêt client', withdrawal: 'Retrait', deposit: 'Entrée caisse', customer_prepayment: 'Acompte client' };
+        const kindLabels: Record<string, string> = { expense: 'Sortie', refund: 'Remboursement', customer_loan: 'Prêt client', withdrawal: 'Retrait', deposit: 'Entrée', customer_prepayment: 'Acompte' };
         const label = kindLabels[m.kind] || m.kind;
         const client = m.customers?.name;
         activities.push({
@@ -1189,7 +1189,7 @@ function MobileDashboard({
         className={`w-full text-left relative overflow-hidden rounded-[18px] p-3.5 active:scale-[0.985] transition-transform duration-200 ${heroLight ? '' : ''}`}
         style={heroLight
           ? { background: '#ffffff', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }
-          : { background: 'linear-gradient(160deg, #0a0a0a 0%, #171717 35%, #262626 65%, #404040 100%)', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
+          : { background: '#000000', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
         }
       >
         {!heroLight && (
@@ -2535,7 +2535,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       </div>{/* closes sticky top bar wrapper */}
 
       {/* ── Hero + Rentabilité (left column) + Situation actuelle (right column) ── */}
-      <div className="px-5 xl:px-8 pt-2 pb-1">
+      <div className="px-1 xl:px-2 pt-2 pb-1">
         <div className="flex gap-2 items-stretch">
           {/* Left column: Hero + Rentabilité stacked */}
           <div className="flex-1 flex flex-col gap-2 min-w-0">
@@ -2544,7 +2544,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             className="relative overflow-hidden rounded-xl p-5 flex flex-col transition-all duration-300"
             style={heroLight
               ? { background: '#ffffff', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 0 0 1px rgba(226,232,240,0.6)' }
-              : { background: 'linear-gradient(160deg, #0a0a0a 0%, #171717 35%, #262626 65%, #404040 100%)', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
+              : { background: '#000000', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
             }
           >
             {!heroLight && (
@@ -2726,7 +2726,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       </div>{/* closes normal-scroll section: hero + rentabilité */}
 
       {/* ── Cards area (scrolls below hero) ── */}
-      <div className="relative z-0 px-5 xl:px-8 pt-2 pb-2 space-y-2">
+      <div className="relative z-0 px-1 xl:px-2 pt-2 pb-2 space-y-2">
 
         {/* ── ROW 2: Vue multi-magasins (2+ sites) ou Top articles du jour (1 site) ── */}
         {hasMultiSites ? (multiSiteStats.length > 0 && (
@@ -2860,69 +2860,69 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         )}
 
         {/* ── ROW 3: Activité récente + Priorités du jour + Mouvements de caisse ── */}
-        <div className="grid grid-cols-12 gap-2">
+        <div className="flex flex-col xl:flex-row gap-2">
           {/* Activité récente */}
-          <div className="col-span-12 xl:col-span-6 bg-white rounded-xl border border-neutral-200 p-3 flex flex-col max-h-[260px]">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-neutral-500" />
-              <h2 className="text-sm font-bold text-neutral-900">Activités récentes</h2>
+          <div className="flex-1 min-w-0 bg-white rounded-xl border border-neutral-200 p-3 flex flex-col h-[260px]">
+            <div className="flex items-center justify-between mb-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Clock className="w-4 h-4 text-neutral-500" />
+                <h2 className="text-sm font-bold text-neutral-900">Activités récentes</h2>
+              </div>
+              {stats.recentActivities.length > 0 && (
+                <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 transition-colors shrink-0">
+                  Voir toute l'activité <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 pr-1.5 -mr-1.5" style={{ scrollbarGutter: 'stable' } as React.CSSProperties}>
               <table className="w-full">
-                <thead>
+                <thead className="sticky top-0 bg-white z-10">
                   <tr className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100">
-                    <th className="text-left py-2 pr-2">Type</th>
-                    <th className="text-left py-2 pr-2">Référence</th>
-                    <th className="text-left py-2 pr-2">Client / Fournisseur</th>
-                    <th className="text-left py-2 pr-2">Magasin</th>
-                    <th className="text-left py-2 pr-2">Par</th>
-                    <th className="text-right py-2 pr-2">Heure</th>
+                    <th className="text-left py-2 pr-1 w-10">Type</th>
+                    <th className="text-left py-2 pr-2">Réf</th>
+                    <th className="text-left py-2 pr-2">Tiers</th>
+                    <th className="text-left py-2 pr-2 whitespace-nowrap">Par</th>
+                    <th className="text-right py-2 pr-2 whitespace-nowrap">Date</th>
                     <th className="text-right py-2">Montant</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.recentActivities.slice(0, 8).map((act: ActivityItem) => {
-                    const iconMap: Record<ActivityItem['type'], { icon: typeof Receipt; bg: string; fg: string; label: string }> = {
-                      sale: { icon: Receipt, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Vente' },
-                      quote: { icon: ClipboardList, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Devis' },
-                      supplier_order: { icon: Truck, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Commande' },
-                      payment_received: { icon: Coins, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Règlement client' },
-                      online_order: { icon: Globe, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Commande web' },
-                      stock_movement: { icon: RefreshCw, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Entrée stock' },
-                      return: { icon: RotateCcw, bg: 'bg-neutral-100', fg: 'text-neutral-700', label: 'Retour' },
-                      expense: { icon: ArrowUpLeft, bg: 'bg-rose-50', fg: 'text-rose-600', label: 'Mouvement' },
+                  {stats.recentActivities.slice(0, 9).map((act: ActivityItem) => {
+                    const codeMap: Record<ActivityItem['type'], string> = {
+                      sale: 'VTE',
+                      quote: 'DEV',
+                      supplier_order: 'CMD',
+                      payment_received: 'REG',
+                      online_order: 'WEB',
+                      stock_movement: 'STK',
+                      return: 'RET',
+                      expense: 'MVT',
                     };
-                    const cfg = iconMap[act.type];
-                    const Icon = cfg.icon;
-                    const refPart = act.title.split(' ').slice(1).join(' ');
-                    const clientPart = act.detail.split(' · ')[0];
-                    const timeStr = act.time ? formatDateTime(act.time) : '';
+                    const isMovement = act.type === 'expense';
+                    const refPart = isMovement ? act.title : act.title.split(' ').slice(1).join(' ');
+                    const clientPart = isMovement ? '' : act.detail.split(' · ')[0];
+                    const d = act.time ? new Date(act.time) : null;
+                    const dateStr = d
+                      ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                      : '';
                     return (
-                      <tr key={act.id} onClick={() => nav(act.route, act.highlightId ? { highlightId: act.highlightId, ...(act.routeCtx || {}) } : act.routeCtx)} className="border-b border-neutral-50 hover:bg-neutral-50/50 cursor-pointer transition-colors">
-                        <td className="py-2.5 pr-2">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                              <Icon className={`w-3 h-3 ${cfg.fg}`} />
-                            </div>
-                            <span className="text-xs font-medium text-neutral-600">{cfg.label}</span>
-                          </div>
+                      <tr key={act.id} onClick={() => nav(act.route, act.highlightId ? { highlightId: act.highlightId, ...(act.routeCtx || {}) } : act.routeCtx)} className="border-b border-neutral-50 hover:bg-neutral-50/50 cursor-pointer transition-colors whitespace-nowrap">
+                        <td className="py-2 pr-1">
+                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide">{codeMap[act.type]}</span>
                         </td>
-                        <td className="py-2.5 pr-2">
-                          <span className="text-xs font-semibold text-neutral-700">{refPart}</span>
+                        <td className="py-2 pr-2">
+                          <span className="text-xs font-semibold text-neutral-700 truncate max-w-[100px] inline-block align-bottom">{refPart}</span>
                         </td>
-                        <td className="py-2.5 pr-2">
-                          <span className="text-xs text-neutral-500">{clientPart}</span>
+                        <td className="py-2 pr-2 max-w-[120px]">
+                          {clientPart ? <span className="text-xs text-neutral-500 truncate inline-block align-bottom max-w-full">{clientPart}</span> : <span className="text-[10px] text-neutral-300">—</span>}
                         </td>
-                        <td className="py-2.5 pr-2">
-                          {act.siteName ? <span className="text-[10px] text-neutral-400 font-medium">{act.siteName}</span> : <span className="text-[10px] text-neutral-300">—</span>}
+                        <td className="py-2 pr-2">
+                          {act.userName ? <span className="text-[10px] text-neutral-400 font-medium whitespace-nowrap">{act.userName}</span> : <span className="text-[10px] text-neutral-300">—</span>}
                         </td>
-                        <td className="py-2.5 pr-2">
-                          {act.userName ? <span className="text-[10px] text-neutral-400 font-medium">{act.userName}</span> : <span className="text-[10px] text-neutral-300">—</span>}
+                        <td className="py-2 pr-2 text-right">
+                          <span className="text-[10px] text-neutral-400 num whitespace-nowrap">{dateStr}</span>
                         </td>
-                        <td className="py-2.5 pr-2 text-right">
-                          <span className="text-xs text-neutral-400">{timeStr}</span>
-                        </td>
-                        <td className="py-2.5 text-right">
+                        <td className="py-2 text-right">
                           {act.amount !== null && (
                             <span className={`text-xs font-bold num ${act.amountType === 'positive' ? 'text-neutral-900' : act.amountType === 'negative' ? 'text-rose-500' : 'text-neutral-600'}`}>
                               {act.amountType === 'positive' ? '+' : act.amountType === 'negative' ? '-' : ''}{formatCompactFCFA(Math.abs(act.amount))}
@@ -2941,50 +2941,145 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                 </div>
               )}
             </div>
-            {stats.recentActivities.length > 0 && (
-              <button onClick={() => nav('sales')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 mt-2 pt-2 border-t border-neutral-100 transition-colors">
-                Voir toute l'activité <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
 
-          {/* Priorités du jour */}
-          <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-3">
+          {/* Mouvements de caisse + Priorités du jour — carte fusionnée */}
+          <div className="w-full xl:w-[500px] shrink-0 bg-white rounded-xl border border-neutral-200 p-3 flex flex-col overflow-hidden xl:h-[260px]">
+            {/* Section haute: Mouvements de caisse */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Coins className="w-4 h-4 text-neutral-700 shrink-0" />
+                <h2 className="text-sm font-bold text-neutral-900 truncate">Mouvements de caisse</h2>
+              </div>
+              <span className="text-[10px] font-medium text-neutral-500 shrink-0 ml-2">{viewMode === 'session' ? 'Session' : periodLabel}</span>
+            </div>
+            <div className="space-y-1">
+              {viewMode === 'session' ? (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs text-neutral-500 leading-tight">Solde d'ouverture</span>
+                    <span className="text-xs font-semibold text-neutral-800 num text-right shrink-0">{formatCompactFCFA(stats.sessionInfo?.openingAmount || 0)}</span>
+                  </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs text-neutral-500 leading-tight">Encaissements</span>
+                    <span className="text-xs font-bold text-neutral-900 num text-right shrink-0">+{formatCompactFCFA(stats.sessionEncaissements)}</span>
+                  </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs text-neutral-500 leading-tight">Entrées directes</span>
+                    <span className="text-xs font-bold text-neutral-900 num text-right shrink-0">+{formatCompactFCFA(stats.sessionEntreesDirectes)}</span>
+                  </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs text-neutral-500 leading-tight">Dépenses</span>
+                    <span className="text-xs font-bold text-rose-500 num text-right shrink-0">-{formatCompactFCFA(stats.sessionDepenses)}</span>
+                  </div>
+                  {stats.sessionRemboursements > 0 && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-neutral-500 leading-tight">Remboursements</span>
+                      <span className="text-xs font-bold text-rose-500 num text-right shrink-0">-{formatCompactFCFA(stats.sessionRemboursements)}</span>
+                    </div>
+                  )}
+                  {stats.sessionRetraits > 0 && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-neutral-500 leading-tight">Retraits</span>
+                      <span className="text-xs font-bold text-rose-500 num text-right shrink-0">-{formatCompactFCFA(stats.sessionRetraits)}</span>
+                    </div>
+                  )}
+                  {stats.sessionPretsClients > 0 && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-neutral-500 leading-tight">Prêts clients</span>
+                      <span className="text-xs font-bold text-rose-500 num text-right shrink-0">-{formatCompactFCFA(stats.sessionPretsClients)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-neutral-200">
+                    <button onClick={() => nav('cash_history')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 transition-colors">
+                      Voir le détail <ArrowUpRight className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="flex items-baseline gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-900 leading-tight">Solde actuel</span>
+                      <span className="text-sm font-black text-neutral-900 num text-right">{formatCompactFCFA(stats.cashBalance)}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs text-neutral-500 leading-tight">Encaissements</span>
+                    <span className="text-xs font-bold text-neutral-900 num text-right shrink-0">+{formatCompactFCFA(stats.todayCollected)}</span>
+                  </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs text-neutral-500 leading-tight">Dépenses</span>
+                    <span className="text-xs font-bold text-rose-500 num text-right shrink-0">-{formatCompactFCFA(stats.periodExpenses)}</span>
+                  </div>
+                  {stats.periodRefunds > 0 && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-neutral-500 leading-tight">Remboursements</span>
+                      <span className="text-xs font-bold text-rose-500 num text-right shrink-0">-{formatCompactFCFA(stats.periodRefunds)}</span>
+                    </div>
+                  )}
+                  {stats.periodWithdrawals > 0 && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-neutral-500 leading-tight">Retraits</span>
+                      <span className="text-xs font-bold text-rose-500 num text-right shrink-0">-{formatCompactFCFA(stats.periodWithdrawals)}</span>
+                    </div>
+                  )}
+                  {stats.periodCustomerLoans > 0 && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-neutral-500 leading-tight">Prêts clients</span>
+                      <span className="text-xs font-bold text-rose-500 num text-right shrink-0">-{formatCompactFCFA(stats.periodCustomerLoans)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-neutral-200">
+                    <button onClick={() => nav('cash_history')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 transition-colors">
+                      Voir le détail <ArrowUpRight className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="flex items-baseline gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-900 leading-tight">Solde période</span>
+                      <span className="text-sm font-black text-neutral-900 num text-right">{formatCompactFCFA(stats.periodCashBalance)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Trait fin de séparation */}
+            <div className="my-2.5 h-px bg-neutral-100" />
+
+            {/* Section basse: Priorités du jour */}
             <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              <h2 className="text-sm font-bold text-neutral-900">Priorités du jour</h2>
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <h2 className="text-sm font-bold text-neutral-900 truncate">Priorités du jour</h2>
             </div>
             <div className="space-y-0.5">
               {stats.receivables > 0 && (
-                <button onClick={() => nav('tiers')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
+                <button onClick={() => nav('tiers')} className="w-full flex items-center gap-2 py-2 px-1.5 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
                   <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
-                  <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Relancer les clients</span>
-                  <span className="text-xs font-bold text-neutral-500">{stats.customersToChase}</span>
-                  <ChevronRight className="w-4 h-4 text-neutral-300" />
+                  <span className="flex-1 text-xs text-neutral-700 group-hover:text-neutral-900 transition-colors leading-tight">Relancer clients</span>
+                  <span className="text-xs font-bold text-neutral-500 shrink-0">{stats.customersToChase}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
                 </button>
               )}
               {stats.payables > 0 && (
-                <button onClick={() => nav('supplier_orders')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
+                <button onClick={() => nav('supplier_orders')} className="w-full flex items-center gap-2 py-2 px-1.5 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
                   <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
-                  <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Payer fournisseurs</span>
-                  <span className="text-xs font-bold text-neutral-500">{stats.suppliersToChase}</span>
-                  <ChevronRight className="w-4 h-4 text-neutral-300" />
+                  <span className="flex-1 text-xs text-neutral-700 group-hover:text-neutral-900 transition-colors leading-tight">Payer fournisseurs</span>
+                  <span className="text-xs font-bold text-neutral-500 shrink-0">{stats.suppliersToChase}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
                 </button>
               )}
               {stats.pendingReturns > 0 && (
-                <button onClick={() => nav('sales')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
+                <button onClick={() => nav('sales')} className="w-full flex items-center gap-2 py-2 px-1.5 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
                   <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
-                  <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Réception fournisseur</span>
-                  <span className="text-xs font-bold text-neutral-500">{stats.pendingReturns}</span>
-                  <ChevronRight className="w-4 h-4 text-neutral-300" />
+                  <span className="flex-1 text-xs text-neutral-700 group-hover:text-neutral-900 transition-colors leading-tight">Réception fournisseur</span>
+                  <span className="text-xs font-bold text-neutral-500 shrink-0">{stats.pendingReturns}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
                 </button>
               )}
               {stats.sessionInfo && (
-                <button onClick={() => nav('pos')} className="w-full flex items-center gap-3 py-3 px-2 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
+                <button onClick={() => nav('pos')} className="w-full flex items-center gap-2 py-2 px-1.5 rounded-xl hover:bg-neutral-50 active:scale-[0.98] transition-all text-left group">
                   <div className="w-2 h-2 rounded-full bg-neutral-300 shrink-0" />
-                  <span className="flex-1 text-sm text-neutral-700 group-hover:text-neutral-900 transition-colors">Clôturer la caisse</span>
-                  <span className="text-[10px] font-bold text-neutral-500">{periodLabel}</span>
-                  <ChevronRight className="w-4 h-4 text-neutral-300" />
+                  <span className="flex-1 text-xs text-neutral-700 group-hover:text-neutral-900 transition-colors leading-tight">Clôturer caisse</span>
+                  <span className="text-[10px] font-bold text-neutral-500 shrink-0">{periodLabel}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
                 </button>
               )}
               {!stats.receivables && !stats.payables && !stats.pendingReturns && !stats.sessionInfo && (
@@ -2993,101 +3088,6 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   <p className="text-xs font-semibold text-neutral-500">Tout est en ordre</p>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Mouvements de caisse — relevé financier */}
-          <div className="col-span-12 xl:col-span-3 bg-white rounded-xl border border-neutral-200 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Coins className="w-4 h-4 text-neutral-700" />
-                <h2 className="text-sm font-bold text-neutral-900">Mouvements de caisse</h2>
-              </div>
-              <span className="text-[10px] font-medium text-neutral-500">{viewMode === 'session' ? 'Session' : periodLabel}</span>
-            </div>
-            <div className="space-y-1">
-              {viewMode === 'session' ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-500">Solde d'ouverture</span>
-                    <span className="text-sm font-semibold text-neutral-800 num">{formatCompactFCFA(stats.sessionInfo?.openingAmount || 0)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-500">Encaissements</span>
-                    <span className="text-sm font-bold text-neutral-900 num">+{formatCompactFCFA(stats.sessionEncaissements)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-500">Entrées directes</span>
-                    <span className="text-sm font-bold text-neutral-900 num">+{formatCompactFCFA(stats.sessionEntreesDirectes)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-500">Dépenses</span>
-                    <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionDepenses)}</span>
-                  </div>
-                  {stats.sessionRemboursements > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-neutral-500">Remboursements</span>
-                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionRemboursements)}</span>
-                    </div>
-                  )}
-                  {stats.sessionRetraits > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-neutral-500">Retraits</span>
-                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionRetraits)}</span>
-                    </div>
-                  )}
-                  {stats.sessionPretsClients > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-neutral-500">Prêts clients</span>
-                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.sessionPretsClients)}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 mt-1 border-t-2 border-neutral-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-neutral-900">Solde actuel</span>
-                      <span className="text-base font-black text-neutral-900 num">{formatCompactFCFA(stats.cashBalance)}</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-500">Encaissements</span>
-                    <span className="text-sm font-bold text-neutral-900 num">+{formatCompactFCFA(stats.todayCollected)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-500">Dépenses</span>
-                    <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.periodExpenses)}</span>
-                  </div>
-                  {stats.periodRefunds > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-neutral-500">Remboursements</span>
-                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.periodRefunds)}</span>
-                    </div>
-                  )}
-                  {stats.periodWithdrawals > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-neutral-500">Retraits</span>
-                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.periodWithdrawals)}</span>
-                    </div>
-                  )}
-                  {stats.periodCustomerLoans > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-neutral-500">Prêts clients</span>
-                      <span className="text-sm font-bold text-rose-500 num">-{formatCompactFCFA(stats.periodCustomerLoans)}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 mt-1 border-t-2 border-neutral-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-neutral-900">Solde de la période</span>
-                      <span className="text-base font-black text-neutral-900 num">{formatCompactFCFA(stats.periodCashBalance)}</span>
-                    </div>
-                  </div>
-                </>
-              )}
-              <button onClick={() => nav('cash_history')} className="flex items-center gap-1 text-xs font-bold text-neutral-900 hover:text-neutral-600 mt-0.5 transition-colors">
-                Voir le détail de la caisse <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
         </div>

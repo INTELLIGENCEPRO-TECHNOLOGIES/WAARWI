@@ -5,7 +5,7 @@ import {
   ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
   Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin, Network,
-  TrendingUp, UserPlus, Store
+  TrendingUp, UserPlus, Store, History
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -13,6 +13,7 @@ import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal } from '../components/Modal';
+import { CashModal } from '../components/CashModal';
 import { EmptyState } from '../components/EmptyState';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
@@ -228,28 +229,20 @@ function POSLandingOpen({
   return (
     <div className="pb-2">
       {/* ── Header (desktop only — mobile has its own) ── */}
-      <div className="hidden lg:block px-6 pt-5 pb-4">
-        <div className="flex items-center gap-2 px-3 py-2">
+      <div className="hidden lg:block">
+        <div className="flex items-end px-8 pt-6 pb-5 border-b border-neutral-100">
           <div className="leading-tight">
-            <h1 className="text-xs font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
-            {currentSite && (
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
-            )}
-          </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
-            <span className="text-[10px] font-medium text-neutral-500">Fermée</span>
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Caisse</h1>
+            <p className="text-sm text-neutral-500 mt-0.5">{currentSite?.name || '-'}</p>
           </div>
         </div>
       </div>
 
       {/* ── Desktop grid (mirrors resume — no cards, border separators) ── */}
-      <div className="hidden lg:block px-6 pt-4">
-        <div className="p-6">
-          <div className="grid lg:grid-cols-[1fr_320px]">
-            {/* Left: Ouvrir la caisse */}
-            <div className="pr-6">
+      <div className="hidden lg:block px-8 pt-6">
+        <div className="grid lg:grid-cols-[1fr_300px]">
+          {/* Left: Ouvrir la caisse */}
+          <div className="pr-8">
               <div className="space-y-0">
                 {/* Fond de caisse */}
                 <div className="py-5 border-b border-neutral-100">
@@ -314,7 +307,7 @@ function POSLandingOpen({
             </div>
 
             {/* Vertical divider + Right column */}
-            <div className="lg:border-l border-neutral-100 pl-6 flex flex-col">
+            <div className="lg:border-l border-neutral-100 pl-8 flex flex-col">
               {/* Rappel */}
               <div>
                 <div className="flex items-center gap-2.5 mb-4">
@@ -328,7 +321,6 @@ function POSLandingOpen({
                 </ul>
               </div>
             </div>
-          </div>
         </div>
       </div>
 
@@ -342,11 +334,6 @@ function POSLandingOpen({
               {currentSite && (
                 <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
               )}
-            </div>
-            <div className="flex-1" />
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" />
-              <span className="text-[10px] font-medium text-neutral-500">Fermée</span>
             </div>
           </div>
 
@@ -547,142 +534,168 @@ function POSLandingResume({
 
   return (
     <div className="h-full overflow-hidden lg:overflow-auto pb-0 lg:pb-6">
-      {/* ── Desktop grid ── */}
-      <div className="hidden lg:block px-6 pt-4">
-        <div className="p-6">
-          <div className="grid lg:grid-cols-[1fr_320px]">
-            {/* Left: Session info + actions */}
-            <div className="pr-6">
-              <div className="grid grid-cols-2 gap-x-8 gap-y-0">
-                <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
-                  <Network className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
-                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Point de vente</p><p className="text-[15px] font-bold text-neutral-900">{currentSite?.name || '-'}</p></div>
-                </div>
-                <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
-                  <ClockIcon className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
-                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Ouverte le</p><p className="text-[15px] font-bold text-neutral-900">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {fmtTimeLanding(session.opened_at)}</p></div>
-                </div>
-                <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
-                  <ClockIcon className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
-                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Durée</p><p className="text-[15px] font-bold text-neutral-900">{sessionDuration(session.opened_at)}</p></div>
-                </div>
-                <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
-                  <Banknote className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
-                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Fond initial</p><p className="text-[15px] font-bold text-neutral-900">{formatFCFA(Number(session.opening_amount))}</p></div>
-                </div>
-                <div className="flex items-center gap-3 py-5">
-                  <User className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
-                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Vendeur</p><p className="text-[15px] font-bold text-neutral-900 uppercase">{cashierName || '-'}</p></div>
-                </div>
-                <div className="flex items-center gap-3 py-5">
-                  <CheckCircle2 className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
-                  <div><p className="text-[11px] text-neutral-400 leading-none mb-1.5">Statut</p><span className="text-[11px] font-bold uppercase tracking-wide text-neutral-800">OUVERTE</span></div>
+      {/* ── Desktop layout ── */}
+      <div className="hidden lg:block">
+        {/* Title row: Caisse + tenant */}
+        <div className="flex items-end px-8 pt-6 pb-5 border-b border-neutral-100">
+          <div className="leading-tight">
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Caisse</h1>
+            <p className="text-sm text-neutral-500 mt-0.5">{tenantName || currentSite?.name || '-'}</p>
+          </div>
+        </div>
+
+        {/* Two-column body */}
+        <div className="grid lg:grid-cols-[1fr_300px] px-8 pt-6">
+          {/* ── Left: session info + actions + shortcuts ── */}
+          <div className="pr-8">
+            {/* Session info — 2 rows × 3 cols, fine separators */}
+            <div className="grid grid-cols-3">
+              {/* Row 1 */}
+              <div className="flex items-start gap-2.5 py-4 pr-4 border-b border-neutral-100">
+                <Network className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Point de vente</p>
+                  <p className="text-[13px] font-bold text-neutral-900 truncate">{currentSite?.name || '-'}</p>
                 </div>
               </div>
-
-              {/* Action buttons */}
-              <div className="grid grid-cols-2 gap-3 mt-6 pt-5 border-t border-neutral-100">
-                <button onClick={onResume} className="flex items-center justify-center gap-2.5 py-4 rounded-md text-neutral-900 text-sm font-semibold transition-all active:scale-[0.98]">
-                  <Play className="w-4 h-4 fill-current text-neutral-900" /> Reprendre la session
-                </button>
-                {actions?.canClose && (
-                  <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center justify-center gap-2.5 py-4 rounded-md text-neutral-800 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-40">
-                    <Lock className="w-4 h-4" /> Clôturer
-                  </button>
-                )}
-              </div>
-
-              {/* Shortcut buttons */}
-              {shortcutBtns.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    {shortcutBtns.slice(0, 2).map(btn => (
-                      <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-md hover:bg-neutral-50 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
-                        <btn.icon className="w-5 h-5 text-neutral-600" />
-                        <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {shortcutBtns.slice(2, 4).map(btn => (
-                      <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-md hover:bg-neutral-50 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
-                        <btn.icon className="w-5 h-5 text-neutral-600" />
-                        <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
-                      </button>
-                    ))}
-                  </div>
+              <div className="flex items-start gap-2.5 py-4 px-4 border-l border-b border-neutral-100">
+                <ClockIcon className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Ouverte le</p>
+                  <p className="text-[13px] font-bold text-neutral-900 leading-tight">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })} · {fmtTimeLanding(session.opened_at)}</p>
                 </div>
-              )}
+              </div>
+              <div className="flex items-start gap-2.5 py-4 pl-4 border-l border-b border-neutral-100">
+                <ClockIcon className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Durée</p>
+                  <p className="text-[13px] font-bold text-neutral-900">{sessionDuration(session.opened_at)}</p>
+                </div>
+              </div>
+              {/* Row 2 */}
+              <div className="flex items-start gap-2.5 py-4 pr-4">
+                <Banknote className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Fond initial</p>
+                  <p className="text-[13px] font-bold text-neutral-900 tabular-nums">{formatFCFA(Number(session.opening_amount))}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 py-4 px-4 border-l border-neutral-100">
+                <User className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Vendeur</p>
+                  <p className="text-[13px] font-bold text-neutral-900 uppercase truncate">{cashierName || '-'}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 py-4 pl-4 border-l border-neutral-100">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Statut</p>
+                  <p className="text-[13px] font-bold text-emerald-600">Ouverte</p>
+                </div>
+              </div>
             </div>
 
-            {/* Vertical divider + Right column */}
-            <div className="lg:border-l border-neutral-100 pl-6 flex flex-col">
-              {/* Résumé de session */}
-              {actions?.canViewSummary !== false && (
-                <div>
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <BarChart2 className="w-4.5 h-4.5 text-neutral-700" />
-                    <h3 className="text-base font-bold text-neutral-900">Résumé de session</h3>
+            {/* Actions principales — Reprendre (dominant) / Clôturer (secondary) */}
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <button onClick={onResume} className="flex items-center gap-3 px-4 py-3.5 rounded-md bg-neutral-900 hover:bg-neutral-800 text-white transition-all active:scale-[0.98]">
+                <Play className="w-4 h-4 fill-current shrink-0" />
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-sm font-bold">Reprendre</span>
+                  <span className="text-[11px] text-white/60">Continuer la session</span>
+                </div>
+              </button>
+              {actions?.canClose ? (
+                <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-3 px-4 py-3.5 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-900 transition-all active:scale-[0.98] disabled:opacity-40">
+                  <Lock className="w-4 h-4 shrink-0" />
+                  <div className="flex flex-col items-start leading-tight">
+                    <span className="text-sm font-bold">Clôturer</span>
+                    <span className="text-[11px] text-neutral-400">Fermer la caisse</span>
                   </div>
-                  {loadingSummary ? (
-                    <div className="space-y-3 animate-pulse"><div className="h-12 bg-neutral-100 rounded-lg" /><div className="h-12 bg-neutral-100 rounded-lg" /></div>
-                  ) : summary ? (
-                    <div>
-                      <div className="flex items-center justify-between py-3 border-b border-neutral-100">
-                        <span className="text-sm text-neutral-600 font-medium">Total encaissé</span>
-                        <span className="text-base font-bold text-neutral-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-3 border-b border-neutral-100">
-                        <span className="text-sm text-neutral-600 font-medium">Nombre de ventes</span>
-                        <span className="text-base font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
-                      </div>
-                      {summary.byMethod.length > 0 && (
-                        <div className="pt-3">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Par mode de paiement</p>
-                          {summary.byMethod.map(m => (
-                            <div key={m.method_name} className="flex items-center justify-between py-2">
-                              <span className="text-sm text-neutral-500">{m.method_name}</span>
-                              <span className="text-sm font-bold text-neutral-800 tabular-nums">{formatFCFA(m.amount)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-neutral-400 text-center py-3">Aucune donnée</p>
-                  )}
-                </div>
-              )}
+                </button>
+              ) : <div />}
+            </div>
 
-              {/* Horizontal divider */}
-              <div className="h-px bg-neutral-100 my-5" />
-
-              {/* Accès rapides */}
-              <div className="flex-1">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <ClockIcon className="w-4.5 h-4.5 text-neutral-500" />
-                  <h3 className="text-base font-bold text-neutral-900">Accès rapides</h3>
-                </div>
-                <div className="space-y-1">
-                  {onSeeAll && (
-                    <button onClick={onSeeAll} className="w-full flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-neutral-50 text-left transition-colors group">
-                      <ClockIcon className="w-4 h-4 text-neutral-700 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-neutral-800">Historique des sessions</p>
-                        <p className="text-xs text-neutral-400">Consulter les sessions précédentes</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+            {/* Raccourcis opérationnels — single row, fine separators */}
+            {shortcutBtns.length > 0 && (
+              <div className="flex items-stretch mt-3 border border-neutral-200 rounded-md overflow-hidden bg-white">
+                {shortcutBtns.map((btn, i) => (
+                  <Fragment key={btn.label}>
+                    <button onClick={btn.onClick} disabled={!isOpen} className="flex-1 flex flex-col items-center justify-center gap-1.5 py-3 hover:bg-neutral-50 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                      <btn.icon className="w-4 h-4 text-neutral-600" />
+                      <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
                     </button>
-                  )}
-                  <button onClick={onResume} className="w-full flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-neutral-50 text-left transition-colors group">
-                    <ShoppingCart className="w-4 h-4 text-neutral-700 shrink-0" />
+                    {i < shortcutBtns.length - 1 && <div className="w-px bg-neutral-100" />}
+                  </Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Right: résumé + accès rapides ── */}
+          <div className="lg:border-l border-neutral-100 pl-8 flex flex-col">
+            {/* Résumé de session */}
+            {actions?.canViewSummary !== false && (
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900 mb-3">Résumé de session</h3>
+                {loadingSummary ? (
+                  <div className="space-y-2.5 animate-pulse">
+                    <div className="h-10 bg-neutral-100 rounded" />
+                    <div className="h-10 bg-neutral-100 rounded" />
+                  </div>
+                ) : summary ? (
+                  <div>
+                    <div className="flex items-center justify-between py-2.5 border-b border-neutral-100">
+                      <span className="text-[13px] text-neutral-600">Total encaissé</span>
+                      <span className="text-[14px] font-bold text-neutral-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2.5 border-b border-neutral-100">
+                      <span className="text-[13px] text-neutral-600">Nombre de ventes</span>
+                      <span className="text-[14px] font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
+                    </div>
+                    {summary.byMethod.length > 0 && (
+                      <div className="pt-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5">Par mode de paiement</p>
+                        {summary.byMethod.map(m => (
+                          <div key={m.method_name} className="flex items-center justify-between py-1.5">
+                            <span className="text-[12px] text-neutral-500">{m.method_name}</span>
+                            <span className="text-[13px] font-bold text-neutral-800 tabular-nums">{formatFCFA(m.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[13px] text-neutral-400 text-center py-3">Aucune donnée</p>
+                )}
+              </div>
+            )}
+
+            {/* Separator */}
+            <div className="h-px bg-neutral-100 my-5" />
+
+            {/* Accès rapides */}
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-neutral-900 mb-3">Accès rapides</h3>
+              <div className="space-y-0.5">
+                {onSeeAll && (
+                  <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-1 py-2.5 rounded-md hover:bg-neutral-50 text-left transition-colors group">
+                    <History className="w-4 h-4 text-neutral-500 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-neutral-800">Point de vente</p>
-                      <p className="text-xs text-neutral-400">Accéder à la caisse</p>
+                      <p className="text-[13px] font-semibold text-neutral-800 leading-tight">Historique des sessions</p>
+                      <p className="text-[11px] text-neutral-400 leading-tight">Consulter les sessions précédentes</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
                   </button>
-                </div>
+                )}
+                <button onClick={onResume} className="w-full flex items-center gap-2.5 px-1 py-2.5 rounded-md hover:bg-neutral-50 text-left transition-colors group">
+                  <Store className="w-4 h-4 text-neutral-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-neutral-800 leading-tight">Point de vente</p>
+                    <p className="text-[11px] text-neutral-400 leading-tight">Accéder à la caisse</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+                </button>
               </div>
             </div>
           </div>
@@ -1225,7 +1238,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [regReason, setRegReason] = useState('');
   const [regNote, setRegNote] = useState('');
   const [savingReg, setSavingReg] = useState(false);
-  const [sessionRegs, setSessionRegs] = useState<{ reg_type: string; amount: number; reason: string; note: string }[]>([]);
+  const [sessionRegs, setSessionRegs] = useState<{ id?: string; reg_type: string; amount: number; reason: string; note: string }[]>([]);
 
   // Lot picker for sale
   const [lotPickerOpen, setLotPickerOpen] = useState(false);
@@ -1863,13 +1876,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       success('Acompte enregistré · en attente de facture');
     }
 
-    if (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') {
+    if (mvPrint) {
       setMvAmount(0);
       setMvReason('');
       setMvNote('');
       setMvRef('');
       setMvCustomer(null);
       setMvCustSearch('');
+      setMvCustPrepay(0);
+      setMvCustBalance(0);
       load();
     } else {
       setMvOpen(false);
@@ -2492,7 +2507,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
     const [{ data: pmts }, { data: regs }, salesResult, { data: mvs }] = await Promise.all([
       supabase.from('sale_payments').select('payment_method_id, method_name, amount, created_at, reference, sales(sale_number, cash_session_id, customers(name))').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
-      supabase.from('cash_regularizations').select('reg_type, amount, reason, note').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
+      supabase.from('cash_regularizations').select('id, reg_type, amount, reason, note').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
       supabase.from('sales').select('id, total, sale_items(name, quantity, total)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).neq('status', 'cancelled'),
       supabase.from('cash_movements').select('kind, amount, payment_method_id, method_name, reason, customers(name)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
     ]);
@@ -2603,9 +2618,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     });
     setSavingReg(false);
     if (e) { error(e.message); return; }
-    setSessionRegs(r => [...r, { reg_type: regType, amount: regAmount, reason: regReason, note: regNote }]);
+    setSessionRegs(r => [...r, { id: (data as any)?.id, reg_type: regType, amount: regAmount, reason: regReason, note: regNote }]);
     setRegOpen(false); setRegAmount(0); setRegReason(''); setRegNote('');
     success('Régularisation enregistrée');
+  };
+
+  const deleteRegularization = async (idx: number) => {
+    const reg = sessionRegs[idx];
+    if (!reg) return;
+    if (reg.id) {
+      const { error: e } = await supabase.from('cash_regularizations').delete().eq('id', reg.id);
+      if (e) { error(e.message); return; }
+    }
+    setSessionRegs(r => r.filter((_, i) => i !== idx));
+    success('Régularisation supprimée');
   };
 
   const confirmClose = async () => {
@@ -3227,72 +3253,80 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* Cash movement (expense / income / customer prepayment) */}
       {mvOpen && (
-        <Modal open onClose={() => setMvOpen(false)} title="Mouvement de caisse" size="sm"
-          footer={
-            <div className="flex gap-2 justify-end">
+        <CashModal open={true} onClose={() => setMvOpen(false)} title="Mouvement de caisse"
+          footerLeft={
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={mvPrint} onChange={e => setMvPrint(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-neutral-300 text-neutral-900 focus:ring-0 focus:ring-offset-0 accent-neutral-900" />
+              <Printer className="w-3.5 h-3.5 text-neutral-400" />
+              <span className="text-[12px] font-medium text-neutral-600">Imprimer le reçu</span>
+            </label>
+          }
+          footer={<>
               <button onClick={() => setMvOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
               <button onClick={submitMovement} disabled={mvSubmitting || mvAmount <= 0}
                 className="btn-icon-primary" title="Enregistrer">
                 {mvSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
-            </div>
-          }>
-          <div className="space-y-3">
-            <div>
-              <label className="label">Type</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+          </>}>
+          <div>
+            {/* Type */}
+            <div className="pb-4">
+              <div className="text-[13px] font-bold text-neutral-900 mb-2">Type</div>
+              <div className="flex gap-1.5">
                 <button type="button" onClick={() => setMvKind('expense')}
-                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'expense' ? 'border-red-500 bg-red-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <ArrowUpRight className={`w-4 h-4 mx-auto ${mvKind === 'expense' ? 'text-red-600' : 'text-neutral-400'}`} />
-                  <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'expense' ? 'text-red-700' : 'text-neutral-600'}`}>Dépense</div>
+                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'expense' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <ArrowUpRight className={`w-5 h-5 ${mvKind === 'expense' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[11px] font-semibold ${mvKind === 'expense' ? 'text-neutral-900' : 'text-neutral-500'}`}>Dépense</span>
                 </button>
                 <button type="button" onClick={() => setMvKind('income')}
-                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'income' ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <ArrowDownRight className={`w-4 h-4 mx-auto ${mvKind === 'income' ? 'text-neutral-700' : 'text-neutral-400'}`} />
-                  <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'income' ? 'text-neutral-800' : 'text-neutral-600'}`}>Entrée</div>
+                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'income' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <ArrowDownRight className={`w-5 h-5 ${mvKind === 'income' ? 'text-neutral-700' : 'text-neutral-400'}`} />
+                  <span className={`text-[11px] font-semibold ${mvKind === 'income' ? 'text-neutral-900' : 'text-neutral-500'}`}>Entrée</span>
                 </button>
                 <button type="button" onClick={() => setMvKind('customer_prepayment')}
-                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'customer_prepayment' ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <Banknote className={`w-4 h-4 mx-auto ${mvKind === 'customer_prepayment' ? 'text-neutral-700' : 'text-neutral-400'}`} />
-                  <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_prepayment' ? 'text-neutral-800' : 'text-neutral-600'}`}>Acompte</div>
+                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'customer_prepayment' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <Banknote className={`w-5 h-5 ${mvKind === 'customer_prepayment' ? 'text-neutral-700' : 'text-neutral-400'}`} />
+                  <span className={`text-[11px] font-semibold ${mvKind === 'customer_prepayment' ? 'text-neutral-900' : 'text-neutral-500'}`}>Acompte</span>
                 </button>
                 {can('pos_customer_withdrawal') && !!(tenant as any)?.settings?.enable_customer_withdrawals && (
                 <button type="button" onClick={() => { setMvKind('customer_withdrawal'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'customer_withdrawal' ? 'border-amber-500 bg-amber-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <ArrowDownToLine className={`w-4 h-4 mx-auto ${mvKind === 'customer_withdrawal' ? 'text-amber-600' : 'text-neutral-400'}`} />
-                  <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_withdrawal' ? 'text-amber-700' : 'text-neutral-600'}`}>Retrait</div>
+                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'customer_withdrawal' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <ArrowDownToLine className={`w-5 h-5 ${mvKind === 'customer_withdrawal' ? 'text-neutral-700' : 'text-neutral-400'}`} />
+                  <span className={`text-[11px] font-semibold ${mvKind === 'customer_withdrawal' ? 'text-neutral-900' : 'text-neutral-500'}`}>Retrait</span>
                 </button>
                 )}
                 {can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans && (
                 <button type="button" onClick={() => { setMvKind('customer_loan'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`py-2 px-2 rounded-md border-2 text-center transition-all ${mvKind === 'customer_loan' ? 'border-blue-500 bg-blue-50' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <HandCoins className={`w-4 h-4 mx-auto ${mvKind === 'customer_loan' ? 'text-blue-600' : 'text-neutral-400'}`} />
-                  <div className={`text-[11px] font-bold mt-0.5 ${mvKind === 'customer_loan' ? 'text-blue-700' : 'text-neutral-600'}`}>Prêt</div>
+                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'customer_loan' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <HandCoins className={`w-5 h-5 ${mvKind === 'customer_loan' ? 'text-neutral-700' : 'text-neutral-400'}`} />
+                  <span className={`text-[11px] font-semibold ${mvKind === 'customer_loan' ? 'text-neutral-900' : 'text-neutral-500'}`}>Prêt</span>
                 </button>
                 )}
               </div>
             </div>
 
+            {/* Customer section (for prepayment/withdrawal/loan) */}
             {(mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') && (
-              <div>
-                <label className="label">Client</label>
+              <div className="pb-4 border-t border-neutral-100 pt-4">
+                <div className="text-[13px] font-bold text-neutral-900 mb-2">Client</div>
                 {mvCustomer ? (
-                  <div className="flex items-center gap-2 p-2 rounded-md bg-neutral-50 border border-neutral-200">
-                    <div className="w-7 h-7 rounded-lg bg-neutral-900 text-white flex items-center justify-center shrink-0"><User className="w-3.5 h-3.5" /></div>
+                  <div className="flex items-center gap-2.5 py-2">
+                    <User className="w-4 h-4 text-neutral-400 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold text-neutral-900 truncate">{mvCustomer.name}</div>
-                      {mvCustomer.phone && <div className="text-[10px] text-neutral-500 truncate">{mvCustomer.phone}</div>}
+                      <div className="text-[13px] font-semibold text-neutral-900 truncate">{mvCustomer.name}</div>
+                      {mvCustomer.phone && <div className="text-[11px] text-neutral-500 truncate">{mvCustomer.phone}</div>}
                     </div>
-                    <button onClick={() => { setMvCustomer(null); setMvCustPrepay(0); setMvCustBalance(0); }} className="text-[10px] font-semibold text-neutral-700 hover:underline shrink-0">Changer</button>
+                    <button onClick={() => { setMvCustomer(null); setMvCustPrepay(0); setMvCustBalance(0); }} className="text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors shrink-0">Changer</button>
                   </div>
                 ) : (
                   <>
                     <div className="relative">
-                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                       <input autoFocus value={mvCustSearch} onChange={e => setMvCustSearch(e.target.value)}
-                        className="input pl-9 h-9 text-xs" placeholder="Rechercher un client…" />
+                        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder="Rechercher un client…" />
                     </div>
-                    <div className="mt-1.5 max-h-32 overflow-y-auto rounded-md border border-neutral-200 divide-y divide-neutral-100">
+                    <div className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-neutral-200 divide-y divide-neutral-100">
                       {customers
                         .filter(cu => {
                           const q = mvCustSearch.toLowerCase().trim();
@@ -3315,10 +3349,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                               setMvCustBalance(Math.max(0, Number(cu.balance || 0)));
                             }
                           }}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-neutral-50 text-left transition-colors">
-                            <User className="w-3 h-3 text-neutral-400 shrink-0" />
-                            <span className="text-xs font-semibold text-neutral-800 truncate">{cu.name}</span>
-                            {cu.phone && <span className="text-[10px] text-neutral-500 ml-auto shrink-0">{cu.phone}</span>}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-neutral-50 text-left transition-colors">
+                            <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                            <span className="text-[12px] font-semibold text-neutral-800 truncate">{cu.name}</span>
+                            {cu.phone && <span className="text-[11px] text-neutral-500 ml-auto shrink-0">{cu.phone}</span>}
                           </button>
                         ))}
                     </div>
@@ -3328,93 +3362,100 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   const debt = Math.max(0, mvCustBalance);
                   const net = mvCustPrepay - debt;
                   if (mvCustPrepay <= 0) {
-                    return <div className="mt-2 px-3 py-2 rounded-md border border-red-200 bg-red-50 text-red-700 text-xs font-semibold">Aucun acompte disponible pour ce client</div>;
+                    return <div className="mt-3 text-[12px] font-semibold text-red-600">Aucun acompte disponible pour ce client</div>;
                   }
                   return (
-                    <div className={`mt-2 px-3 py-2 rounded-md border text-xs font-semibold ${net > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                    <div className="mt-3 space-y-1">
                       {debt > 0 ? (
-                        <div className="space-y-1">
-                          <div className="flex justify-between"><span>Acompte disponible :</span><span className="font-bold tabular-nums text-emerald-700">{formatFCFA(mvCustPrepay)}</span></div>
-                          <div className="flex justify-between"><span>Dette en cours :</span><span className="font-bold tabular-nums text-rose-700">-{formatFCFA(debt)}</span></div>
-                          <div className="flex justify-between border-t border-emerald-200 pt-1"><span>Retrait maximum :</span><span className="font-bold tabular-nums">{formatFCFA(net)}</span></div>
-                        </div>
+                        <>
+                          <div className="flex justify-between text-[12px]"><span className="text-neutral-600">Acompte disponible</span><span className="font-bold num text-emerald-700">{formatFCFA(mvCustPrepay)}</span></div>
+                          <div className="flex justify-between text-[12px]"><span className="text-neutral-600">Dette en cours</span><span className="font-bold num text-red-600">-{formatFCFA(debt)}</span></div>
+                          <div className="flex justify-between text-[12px] pt-1 border-t border-neutral-100"><span className="font-semibold text-neutral-900">Retrait maximum</span><span className={`font-bold num ${net > 0 ? 'text-neutral-900' : 'text-red-600'}`}>{formatFCFA(net)}</span></div>
+                        </>
                       ) : (
-                        <>Acompte disponible : <span className="font-bold tabular-nums">{formatFCFA(mvCustPrepay)}</span> &middot; Retrait max : <span className="font-bold tabular-nums">{formatFCFA(net)}</span></>
+                        <div className="flex justify-between text-[12px]"><span className="text-neutral-600">Retrait maximum</span><span className="font-bold num text-neutral-900">{formatFCFA(net)}</span></div>
                       )}
-                      {net <= 0 && <div className="mt-1 text-red-600">La dette couvre l'acompte. Retrait impossible.</div>}
+                      {net <= 0 && <div className="text-[11px] font-semibold text-red-600 mt-1">La dette couvre l'acompte. Retrait impossible.</div>}
                     </div>
                   );
                 })()}
                 {mvKind === 'customer_loan' && mvCustomer && (
-                  <div className="mt-2 px-3 py-2 rounded-md border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-800 space-y-1">
-                    <div className="flex justify-between"><span>Créance actuelle :</span><span className="font-bold tabular-nums">{formatFCFA(Math.max(0, mvCustBalance))}</span></div>
-                    <div className="text-[10px] text-blue-600 font-medium mt-1">Le montant du prêt sera ajouté à la créance du client.</div>
+                  <div className="mt-3 space-y-1">
+                    <div className="flex justify-between text-[12px]"><span className="text-neutral-600">Créance actuelle</span><span className="font-bold num text-neutral-900">{formatFCFA(Math.max(0, mvCustBalance))}</span></div>
+                    <div className="text-[11px] text-neutral-500 mt-1">Le montant du prêt sera ajouté à la créance du client.</div>
                   </div>
                 )}
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="label">Montant</label>
-                <input type="number" value={mvAmount || ''} onChange={e => setMvAmount(Math.max(0, Number(e.target.value)))}
-                  className="input text-sm font-bold num h-9" placeholder="0" min={0} />
-              </div>
-              <div>
-                <label className="label">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</label>
-                {mvKind === 'expense' && expenseCats.length > 0 ? (
-                  <select value={mvExpenseCat} onChange={e => setMvExpenseCat(e.target.value)}
-                    className="input h-9 text-xs">
-                    <option value="">Sélectionner…</option>
-                    {expenseCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                ) : (
-                  <input value={mvReason} onChange={e => setMvReason(e.target.value)}
-                    className="input h-9 text-xs" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
-                )}
-              </div>
-            </div>
-
-            {(mvKind === 'income' || mvKind === 'customer_prepayment') && (
-              <div>
-                <label className="label">Mode de règlement</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {methods.map(m => (
-                    <button key={m.id} type="button" onClick={() => setMvMethod(m)}
-                      className={`px-2 py-2 rounded-md text-[11px] font-semibold border-2 transition-all ${mvMethod?.id === m.id ? 'border-neutral-900 bg-neutral-100 text-neutral-900' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
-                      {m.name}
-                    </button>
-                  ))}
+            {/* Form fields */}
+            <div className="border-t border-neutral-100 pt-4 pb-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">Montant</div>
+                  <input type="number" value={mvAmount || ''} onChange={e => setMvAmount(Math.max(0, Number(e.target.value)))}
+                    className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-sm font-bold num text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder="0" min={0} />
+                </div>
+                <div>
+                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</div>
+                  {mvKind === 'expense' && expenseCats.length > 0 ? (
+                    <select value={mvExpenseCat} onChange={e => setMvExpenseCat(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 focus:outline-none focus:border-neutral-400 transition-colors appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%239ca3af%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22/%3E%3C/svg%3E')] bg-no-repeat bg-[right_12px_center]">
+                      <option value="">Sélectionner...</option>
+                      {expenseCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  ) : (
+                    <input value={mvReason} onChange={e => setMvReason(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
+                  )}
                 </div>
               </div>
-            )}
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="label">Référence (opt.)</label>
-                <input value={mvRef} onChange={e => setMvRef(e.target.value)} className="input h-9 text-xs" placeholder="N° pièce…" />
-              </div>
-              <div>
-                <label className="label">Note (opt.)</label>
-                <input value={mvNote} onChange={e => setMvNote(e.target.value)} className="input h-9 text-xs" placeholder="Détails…" />
+              {(mvKind === 'income' || mvKind === 'customer_prepayment') && (
+                <div className="mt-3">
+                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">Mode de règlement</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {methods.map(m => (
+                      <button key={m.id} type="button" onClick={() => setMvMethod(m)}
+                        className={`px-3 py-2 rounded-lg text-[12px] font-semibold border transition-all ${mvMethod?.id === m.id ? 'border-neutral-900 text-neutral-900 bg-white' : 'border-neutral-200 text-neutral-500 bg-white hover:border-neutral-300'}`}>
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">Référence (opt.)</div>
+                  <input value={mvRef} onChange={e => setMvRef(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder="N° pièce…" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">Note (opt.)</div>
+                  <input value={mvNote} onChange={e => setMvNote(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder="Détails…" />
+                </div>
               </div>
             </div>
-
-            <label className="flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-200 bg-neutral-50 cursor-pointer select-none">
-              <input type="checkbox" checked={mvPrint} onChange={e => setMvPrint(e.target.checked)}
-                className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900" />
-              <Printer className="w-3.5 h-3.5 text-neutral-500" />
-              <span className="text-[11px] font-semibold text-neutral-700">Imprimer le reçu après validation</span>
-            </label>
           </div>
-        </Modal>
+        </CashModal>
       )}
 
       {/* Customer payment (encaissement libre) */}
       {custPayOpen && (
-        <Modal open onClose={() => setCustPayOpen(false)} title="Encaisser un client" size="md"
-          footer={
-            <div className="flex gap-2 justify-end">
+        <CashModal open={true} onClose={() => setCustPayOpen(false)} title="Encaisser un client"
+          footerLeft={
+            (custPayMode === 'direct' || (custPayMode === 'invoice' && custPayCustomer && custPayUnpaid.length > 0)) ? (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={custPayPrint} onChange={e => setCustPayPrint(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-neutral-300 text-neutral-900 focus:ring-0 focus:ring-offset-0 accent-neutral-900" />
+                <Printer className="w-3.5 h-3.5 text-neutral-400" />
+                <span className="text-[12px] font-medium text-neutral-600">Imprimer le reçu</span>
+              </label>
+            ) : undefined
+          }
+          footer={<>
               <button onClick={() => setCustPayOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
               {custPayMode === 'direct' ? (
                 <button onClick={submitDirectEncaissement} disabled={custPaySubmitting || !custPayMethod || custPayAmount <= 0}
@@ -3427,8 +3468,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 </button>
               )}
-            </div>
-          }>
+          </>}>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-neutral-100 rounded-md">
               <button type="button"
@@ -3456,10 +3496,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
             {custPayMode === 'direct' ? (
               <>
-                <div className="rounded-lg bg-gradient-to-br from-neutral-50 to-white border border-neutral-200/70 p-3">
-                  <div className="text-[11px] font-semibold text-neutral-900 uppercase tracking-wide">Encaissement direct</div>
-                  <div className="text-[11px] text-neutral-800 mt-0.5">Pour un client divers, sans facture rattachée. Un reçu numéroté sera imprimé.</div>
-                </div>
+                <p className="text-[11px] text-neutral-500">Pour un client divers, sans facture rattachée.</p>
 
                 <div>
                   <label className="label">Montant</label>
@@ -3478,7 +3515,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {methods.map(m => (
                       <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
-                        className={`px-3 py-2.5 rounded-md text-xs font-semibold border-2 transition-all ${custPayMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
+                        className={`px-3 py-2.5 rounded-md text-xs font-semibold border transition-all ${custPayMethod?.id === m.id ? 'border-neutral-900 bg-neutral-50 text-neutral-900' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
                         {m.name}
                       </button>
                     ))}
@@ -3508,8 +3545,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     .slice(0, 30)
                     .map(c => (
                       <button key={c.id} onClick={() => loadCustomerUnpaid(c)}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-50 active:bg-neutral-100 text-left transition-colors">
-                        <div className="w-8 h-8 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"><User className="w-4 h-4" /></div>
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-50 active:bg-neutral-100 text-left transition-colors">
+                        <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-neutral-900 truncate">{c.name}</div>
                           {c.phone && <div className="text-[11px] text-neutral-500 truncate">{c.phone}</div>}
@@ -3521,15 +3558,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-br from-brand-50 to-white border border-brand-200/70">
-                  <div className="w-10 h-10 rounded-md bg-brand-600 text-white flex items-center justify-center shrink-0"><User className="w-5 h-5" /></div>
+                <div className="flex items-center gap-2 py-2 border-b border-neutral-100">
+                  <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-bold text-neutral-900 truncate">{custPayCustomer.name}</div>
                     <div className="text-[11px] text-neutral-500">
                       {custPayUnpaid.filter(s => s.id !== '__balance__').length} facture(s) impayée(s) · Solde total {formatFCFA(Number((custPayCustomer as any).balance || 0))}
                     </div>
                   </div>
-                  <button onClick={() => setCustPayCustomer(null)} className="text-xs font-semibold text-brand-700 hover:underline shrink-0">Changer</button>
+                  <button onClick={() => setCustPayCustomer(null)} className="text-xs font-semibold text-neutral-700 hover:underline shrink-0">Changer</button>
                 </div>
 
                 {custPayUnpaid.length === 0 && Number((custPayCustomer as any).balance || 0) <= 0 ? (
@@ -3576,7 +3613,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {methods.map(m => (
                           <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
-                            className={`px-3 py-2.5 rounded-md text-xs font-semibold border-2 transition-all ${custPayMethod?.id === m.id ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
+                            className={`px-3 py-2.5 rounded-md text-xs font-semibold border transition-all ${custPayMethod?.id === m.id ? 'border-neutral-900 bg-neutral-50 text-neutral-900' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
                             {m.name}
                           </button>
                         ))}
@@ -3591,17 +3628,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 )}
               </>
             )}
-
-            {(custPayMode === 'direct' || (custPayMode === 'invoice' && custPayCustomer && custPayUnpaid.length > 0)) && (
-              <label className="flex items-center gap-2 px-3 py-2.5 rounded-md border border-neutral-200 bg-neutral-50 cursor-pointer select-none">
-                <input type="checkbox" checked={custPayPrint} onChange={e => setCustPayPrint(e.target.checked)}
-                  className="w-4 h-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500" />
-                <Printer className="w-4 h-4 text-neutral-500" />
-                <span className="text-xs font-semibold text-neutral-700">Imprimer le reçu après validation</span>
-              </label>
-            )}
           </div>
-        </Modal>
+        </CashModal>
       )}
 
       {/* Fullscreen immersive payment */}
@@ -3695,7 +3723,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       </Modal>
 
       {/* Return ticket */}
-      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title="Ticket de retour" size="lg"
+      <CashModal open={returnOpen} onClose={() => setReturnOpen(false)} title="Ticket de retour"
         footer={<>
           <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           {returnSelected && (
@@ -3716,18 +3744,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {filteredReturnSales.length === 0 ? (
               <div className="py-8 text-center text-sm text-neutral-500">Aucun ticket dans cette session.</div>
             ) : (
-              <div className="space-y-1 max-h-80 overflow-y-auto">
+              <div className="divide-y divide-neutral-100 max-h-80 overflow-y-auto">
                 {filteredReturnSales.map(s => (
-                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left p-3 border rounded-md transition-colors ${s.fullyReturned ? 'border-neutral-100 bg-neutral-50 opacity-60 cursor-not-allowed' : 'border-neutral-200 hover:bg-brand-50 hover:border-brand-200'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="doc-number font-semibold text-sm text-brand-700">{s.sale_number}</span>
-                        {s.customer_name && <span className="text-xs text-neutral-500">· {s.customer_name}</span>}
-                        {s.fullyReturned && <span className="text-[10px] font-bold uppercase text-neutral-500 bg-neutral-200 px-1.5 py-0.5 rounded">Retourne</span>}
-                      </div>
-                      <span className="font-bold text-sm">{formatFCFA(s.total)}</span>
+                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left px-2 py-2.5 flex items-center justify-between gap-2 transition-colors hover:bg-neutral-50 active:bg-neutral-100 ${s.fullyReturned ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <div className="min-w-0 flex-1">
+                      <span className="doc-number font-semibold text-sm text-brand-700">{s.sale_number}</span>
+                      {s.customer_name && <span className="text-xs text-neutral-500 ml-1.5">· {s.customer_name}</span>}
+                      {s.fullyReturned && <span className="text-[10px] font-bold uppercase text-neutral-500 bg-neutral-200 px-1.5 py-0.5 rounded ml-1.5">Retourne</span>}
                     </div>
-                    <div className="text-xs text-neutral-400 mt-0.5">{new Date(s.created_at).toLocaleString('fr-FR')} · {s.items.length} article{s.items.length > 1 ? 's' : ''}</div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-bold text-sm num">{formatFCFA(s.total)}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />
+                    </div>
                   </button>
                 ))}
               </div>
@@ -3735,7 +3763,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-md text-sm">
+            <div className="flex items-center justify-between py-2 border-b border-neutral-100 text-sm">
               <div>
                 <span className="doc-number font-semibold text-brand-700">{returnSelected.sale_number}</span>
                 {returnSelected.customer_name && <span className="text-neutral-500 ml-2">· {returnSelected.customer_name}</span>}
@@ -3748,7 +3776,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 const toggle = (v: boolean) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, selected: v } : x));
                 const setQ = (q: number) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, quantity: Math.min(l.maxQty, Math.max(1, q)) } : x));
                 return (
-                  <div key={i} className={`rounded-lg border p-3 transition-all ${l.selected ? 'border-red-200 bg-red-50/40 shadow-sm' : 'border-neutral-200 bg-white'}`}>
+                  <div key={i} className={`py-2.5 border-b border-neutral-100 ${l.selected ? 'bg-red-50/30' : ''}`}>
                     <div className="flex items-start gap-3">
                       <button type="button" onClick={() => toggle(!l.selected)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-neutral-300'}`}>
                         {l.selected && <Check className="w-4 h-4 text-white" />}
@@ -3764,29 +3792,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     {l.selected && (
                       <div className="mt-3 flex items-center gap-2">
                         <span className="text-xs font-semibold text-neutral-500">Qté à retourner</span>
-                        <div className="ml-auto flex items-center gap-1.5 bg-white border border-neutral-200 rounded-md p-1">
-                          <button type="button" onClick={() => setQ(l.quantity - 1)} className="w-8 h-8 rounded-lg hover:bg-neutral-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
+                        <div className="ml-auto flex items-center gap-1">
+                          <button type="button" onClick={() => setQ(l.quantity - 1)} className="w-7 h-7 rounded-lg hover:bg-neutral-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
                           <input type="number" value={l.quantity} min="1" max={l.maxQty} onChange={e => setQ(Number(e.target.value))} className="w-12 text-center text-sm font-bold num bg-transparent outline-none" />
-                          <button type="button" onClick={() => setQ(l.quantity + 1)} className="w-8 h-8 rounded-lg hover:bg-neutral-100 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
+                          <button type="button" onClick={() => setQ(l.quantity + 1)} className="w-7 h-7 rounded-lg hover:bg-neutral-100 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
                         </div>
                       </div>
                     )}
                   </div>
                 );
               })}
-              <div className="rounded-lg bg-gradient-to-br from-red-50 to-amber-50 border border-red-200 p-4 flex items-center justify-between mt-1">
+              <div className="flex items-center justify-between py-2.5 border-t border-neutral-200 mt-1">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-red-700">Avoir total</div>
-                  <div className="text-xs text-neutral-600 mt-0.5">{returnLines.filter(l => l.selected).length} article{returnLines.filter(l => l.selected).length > 1 ? 's' : ''}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-black">Avoir total</div>
+                  <div className="text-[10px] text-neutral-500 mt-0.5">{returnLines.filter(l => l.selected).length} article{returnLines.filter(l => l.selected).length > 1 ? 's' : ''}</div>
                 </div>
-                <div className="num text-2xl font-bold text-red-700">
+                <div className="text-lg font-bold text-red-600 num">
                   -{formatFCFA(returnLines.filter(l => l.selected).reduce((s, l) => s + l.quantity * l.unit_price, 0))}
                 </div>
               </div>
             </div>
           </div>
         )}
-      </Modal>
+      </CashModal>
 
       {/* Lot picker modal for manual lot selection */}
       <LotPickerModal
@@ -3799,7 +3827,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       />
 
       {/* Session tickets list */}
-      <Modal open={ticketsOpen} onClose={() => setTicketsOpen(false)} title="Tickets de la session" size="lg"
+      <CashModal open={ticketsOpen} onClose={() => setTicketsOpen(false)} title="Tickets de la session"
         footer={<button onClick={() => setTicketsOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}
       >
         {loadingTickets ? (
@@ -3820,79 +3848,79 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           const retraitsTotal = retraitsList.reduce((s, m) => s + m.amount, 0);
           const pretsTotal = pretsList.reduce((s, m) => s + m.amount, 0);
           return (
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <div className="card p-2.5 text-center">
-                <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-semibold">Tickets</div>
-                <div className="text-lg font-bold mt-0.5 num">{sessionSales.filter(x => x.status !== 'return').length}</div>
+          <div>
+            {/* KPI strip (2 columns, matching stats modal style) */}
+            <div className="grid grid-cols-2 border-b border-neutral-200 pb-3 mb-1">
+              <div className="text-center border-r border-neutral-200 pr-2">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Tickets</div>
+                <div className="text-lg font-bold text-neutral-900 num">{sessionSales.filter(x => x.status !== 'return').length}</div>
               </div>
-              <div className="card p-2.5 text-center col-span-2">
-                <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-semibold">Total encaissé</div>
-                <div className="text-lg font-bold text-brand-800 mt-0.5 num">{formatFCFA(sessionEncaisse)}</div>
+              <div className="text-center pl-2">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Total encaissé</div>
+                <div className="text-lg font-bold text-neutral-900 num">{formatFCFA(sessionEncaisse)}</div>
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            {/* Collapsible sections */}
+            <div className="mt-1 divide-y divide-neutral-100">
               {/* Tickets */}
-              <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'tickets' ? 'border-brand-300 bg-brand-50/30' : 'border-neutral-200 bg-white'}`}>
-                <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'tickets' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
-                      <List className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-neutral-800">Tickets de vente</div>
-                      <div className="text-[10px] text-neutral-500">{sessionSales.length} ticket{sessionSales.length > 1 ? 's' : ''}</div>
-                    </div>
+              <div>
+                <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <List className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-800 truncate">Tickets de vente</span>
+                    <span className="text-[10px] text-neutral-400 shrink-0">{sessionSales.length}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-brand-800 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</span>
-                    <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'tickets' ? 'rotate-90' : ''}`} />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold text-neutral-800 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</span>
+                    <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'tickets' ? 'rotate-90' : ''}`} />
                   </div>
                 </button>
                 {ticketsExpanded === 'tickets' && (
-                  <div className="px-3 pb-3 space-y-2 max-h-[45vh] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                     {sessionSales.length === 0 ? (
                       <div className="text-center py-3 text-[11px] text-neutral-500">Aucun ticket.</div>
                     ) : sessionSales.map(s => (
-                      <div key={s.id} className={`card p-3 flex items-start gap-3 hover:shadow-elevated transition-all ${s.status === 'return' ? 'border-red-200 bg-red-50/30' : ''}`}>
+                      <div key={s.id} className={`flex items-center justify-between py-1.5 pl-6 gap-2 ${s.status === 'return' ? 'bg-red-50/30' : ''}`}>
                         <div className="min-w-0 flex-1">
-                          <div className="text-xs font-semibold text-neutral-900">
+                          <div className={`text-xs font-medium truncate ${s.status === 'return' ? 'text-red-700' : 'text-neutral-800'}`}>
                             {s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}
-                            {s.status === 'return' && <span className="ml-1.5 text-[10px] font-bold uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded align-middle">Retour</span>}
+                            {s.status === 'return' && <span className="ml-1.5 text-[10px] font-bold uppercase text-red-600">Retour</span>}
                           </div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className={`doc-number text-[12px] font-bold ${s.status === 'return' ? 'text-red-600' : 'text-brand-700'}`}>{s.sale_number}</span>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(s.created_at)}</span>
-                            <span className={`num font-bold text-xs ${s.total < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</span>
+                          <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                            <span className={`doc-number font-semibold ${s.status === 'return' ? 'text-red-600' : ''}`}>{s.sale_number}</span>
+                            <span>{formatDateTime(s.created_at)}</span>
                           </div>
                         </div>
-                        {s.status !== 'return' && can('pos_reprint') && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button title="Ticket 80mm" onClick={() => {
-                                  const fakeSale = {
-                                    sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
-                                    items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                                    payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
-                                    customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
-                                  };
-                                  printSaleTicket(fakeSale as any, s.doc_header);
-                                }} className="p-1.5 rounded hover:bg-neutral-100 text-neutral-600">
-                                  <Printer className="w-4 h-4" />
-                                </button>
-                                <button title="Facture A4" onClick={() => {
-                                  const fakeSale = {
-                                    sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
-                                    items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                                    payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
-                                    customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
-                                  };
-                                  printSaleInvoice(fakeSale as any, s.doc_header, (s.user_id && sessionProfileNames[s.user_id]) || 'Utilisateur non renseigné');
-                                }} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600">
-                                  <FileText className="w-4 h-4" />
-                                </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {s.status !== 'return' && can('pos_reprint') && (
+                            <>
+                              <button title="Ticket 80mm" onClick={() => {
+                                const fakeSale = {
+                                  sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
+                                  items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
+                                  payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                                  customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
+                                };
+                                printSaleTicket(fakeSale as any, s.doc_header);
+                              }} className="p-1 rounded hover:bg-neutral-100 text-neutral-500">
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+                              <button title="Facture A4" onClick={() => {
+                                const fakeSale = {
+                                  sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
+                                  items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
+                                  payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                                  customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
+                                };
+                                printSaleInvoice(fakeSale as any, s.doc_header, (s.user_id && sessionProfileNames[s.user_id]) || 'Utilisateur non renseigné');
+                              }} className="p-1 rounded hover:bg-neutral-100 text-neutral-500">
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                          <span className={`text-xs font-semibold num ${s.total < 0 ? 'text-red-600' : 'text-neutral-700'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</span>
                         </div>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -3901,54 +3929,52 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Encaissements directs */}
               {encDirectList.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-100/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'encDirect' ? 'bg-neutral-200 text-neutral-900' : 'bg-neutral-100 text-neutral-800'}`}>
-                        <ArrowDownRight className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Encaissements directs</div>
-                        <div className="text-[10px] text-neutral-500">{encDirectList.length} entrée{encDirectList.length > 1 ? 's' : ''}</div>
-                      </div>
+                <div>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ArrowDownRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-800 truncate">Encaissements directs</span>
+                      <span className="text-[10px] text-neutral-400 shrink-0">{encDirectList.length}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-neutral-800 num">+{formatFCFA(encDirectTotal)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(encDirectTotal)}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'encDirect' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {encDirectList.map((m, i) => (
-                        <div key={i} className="p-2.5 rounded-lg bg-white border border-neutral-100">
-                          <div className="text-xs font-semibold text-neutral-900">{m.reason || 'Encaissement direct'}</div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Espèces'}</span>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(m.amount)}</span>
-                              {can('pos_reprint') && <button
-                                title="Réimprimer le reçu"
-                                onClick={() => {
-                                  try {
-                                    printEncaissementTicket80({
-                                      receiptNumber: `ENC-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                      amount: m.amount,
-                                      method: m.method_name || 'Espèces',
-                                      label: m.reason || undefined,
-                                      reference: m.reference || undefined,
-                                      customerName: m.customer_name,
-                                      createdAt: m.created_at,
-                                      tenant: tenantForPrint as PrintTenant,
-                                      cashier: cashierName,
-                                    });
-                                  } catch {}
-                                }}
-                                className="p-1 rounded hover:bg-neutral-100 text-neutral-800"
-                              >
-                                <Printer className="w-3 h-3" />
-                              </button>}
+                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Encaissement direct'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              <span>{m.method_name || 'Espèces'}</span>
+                              <span>{formatDateTime(m.created_at)}</span>
                             </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {can('pos_reprint') && <button
+                              title="Réimprimer le reçu"
+                              onClick={() => {
+                                try {
+                                  printEncaissementTicket80({
+                                    receiptNumber: `ENC-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                    amount: m.amount,
+                                    method: m.method_name || 'Espèces',
+                                    label: m.reason || undefined,
+                                    reference: m.reference || undefined,
+                                    customerName: m.customer_name,
+                                    createdAt: m.created_at,
+                                    tenant: tenantForPrint as PrintTenant,
+                                    cashier: cashierName,
+                                  });
+                                } catch {}
+                              }}
+                              className="p-1 rounded hover:bg-neutral-100 text-neutral-500"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>}
+                            <span className="text-xs font-semibold text-neutral-700 num">+{formatFCFA(m.amount)}</span>
                           </div>
                         </div>
                       ))}
@@ -3959,35 +3985,31 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Reglements factures */}
               {sessionInvPayments.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'reglements' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
-                        <Wallet className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Reglements factures</div>
-                        <div className="text-[10px] text-neutral-500">{sessionInvPayments.length} reglement{sessionInvPayments.length > 1 ? 's' : ''}</div>
-                      </div>
+                <div>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Wallet className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-800 truncate">Reglements factures</span>
+                      <span className="text-[10px] text-neutral-400 shrink-0">{sessionInvPayments.length}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-neutral-800 num">+{formatFCFA(sessionInvPayments.reduce((s, p) => s + p.amount, 0))}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(sessionInvPayments.reduce((s, p) => s + p.amount, 0))}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'reglements' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {sessionInvPayments.map((p, i) => (
-                        <div key={i} className="p-2.5 rounded-lg bg-white border border-neutral-100">
-                          <div className="text-xs font-bold text-neutral-900">{p.customer_name || 'Client'}</div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className="doc-number text-[12px] font-semibold text-neutral-500 shrink-0">{p.sale_number}</span>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(p.created_at)}</span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {p.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px]">{p.method_name}</span>}
-                              <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(p.amount)}</span>
+                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{p.customer_name || 'Client'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              <span className="doc-number font-semibold">{p.sale_number}</span>
+                              {p.method_name && <span>{p.method_name}</span>}
+                              <span>{formatDateTime(p.created_at)}</span>
                             </div>
                           </div>
+                          <span className="text-xs font-semibold text-neutral-700 num shrink-0">+{formatFCFA(p.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -3997,54 +4019,52 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Acomptes */}
               {acomptesList.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
-                        <Wallet className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Acomptes clients</div>
-                        <div className="text-[10px] text-neutral-500">{acomptesList.length} acompte{acomptesList.length > 1 ? 's' : ''}</div>
-                      </div>
+                <div>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Wallet className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-800 truncate">Acomptes clients</span>
+                      <span className="text-[10px] text-neutral-400 shrink-0">{acomptesList.length}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-brand-700 num">+{formatFCFA(acomptesTotal)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(acomptesTotal)}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'acomptes' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {acomptesList.map((m, i) => (
-                        <div key={i} className="p-2.5 rounded-lg bg-white border border-brand-100">
-                          <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Acompte'}</span>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <span className="text-xs font-bold text-brand-700 num">+{formatFCFA(m.amount)}</span>
-                              {can('pos_reprint') && <button
-                                title="Réimprimer le reçu"
-                                onClick={() => {
-                                  try {
-                                    printEncaissementTicket80({
-                                      receiptNumber: `ACO-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                      amount: m.amount,
-                                      method: m.method_name || 'Espèces',
-                                      label: m.reason ? `Acompte · ${m.reason}` : 'Acompte client',
-                                      reference: m.reference || undefined,
-                                      customerName: m.customer_name,
-                                      createdAt: m.created_at,
-                                      tenant: tenantForPrint as PrintTenant,
-                                      cashier: cashierName,
-                                    });
-                                  } catch {}
-                                }}
-                                className="p-1 rounded hover:bg-brand-100 text-brand-700"
-                              >
-                                <Printer className="w-3 h-3" />
-                              </button>}
+                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              <span>{m.method_name || 'Acompte'}</span>
+                              <span>{formatDateTime(m.created_at)}</span>
                             </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {can('pos_reprint') && <button
+                              title="Réimprimer le reçu"
+                              onClick={() => {
+                                try {
+                                  printEncaissementTicket80({
+                                    receiptNumber: `ACO-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                    amount: m.amount,
+                                    method: m.method_name || 'Espèces',
+                                    label: m.reason ? `Acompte · ${m.reason}` : 'Acompte client',
+                                    reference: m.reference || undefined,
+                                    customerName: m.customer_name,
+                                    createdAt: m.created_at,
+                                    tenant: tenantForPrint as PrintTenant,
+                                    cashier: cashierName,
+                                  });
+                                } catch {}
+                              }}
+                              className="p-1 rounded hover:bg-neutral-100 text-neutral-500"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>}
+                            <span className="text-xs font-semibold text-neutral-700 num">+{formatFCFA(m.amount)}</span>
                           </div>
                         </div>
                       ))}
@@ -4055,54 +4075,52 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Décaissements */}
               {depensesList.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Décaissements</div>
-                        <div className="text-[10px] text-neutral-500">{depensesList.length} dépense{depensesList.length > 1 ? 's' : ''}</div>
-                      </div>
+                <div>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ArrowUpRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-800 truncate">Décaissements</span>
+                      <span className="text-[10px] text-neutral-400 shrink-0">{depensesList.length}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-red-700 num">-{formatFCFA(depensesTotal)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-800 num">-{formatFCFA(depensesTotal)}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'depenses' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {depensesList.map((m, i) => (
-                        <div key={i} className="p-2.5 rounded-lg bg-white border border-red-100">
-                          <div className="text-xs font-semibold text-neutral-900">{m.reason || 'Dépense'}</div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Espèces'}</span>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <span className="text-xs font-bold text-red-700 num">-{formatFCFA(m.amount)}</span>
-                              {can('pos_reprint') && <button
-                                title="Réimprimer le bon"
-                                onClick={() => {
-                                  try {
-                                    printDecaissementTicket80({
-                                      receiptNumber: `DEC-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                      amount: m.amount,
-                                      method: m.method_name || 'Espèces',
-                                      label: m.reason || undefined,
-                                      reference: m.reference || undefined,
-                                      beneficiary: m.customer_name,
-                                      createdAt: m.created_at,
-                                      tenant: tenantForPrint as PrintTenant,
-                                      cashier: cashierName,
-                                    });
-                                  } catch {}
-                                }}
-                                className="p-1 rounded hover:bg-red-100 text-red-700"
-                              >
-                                <Printer className="w-3 h-3" />
-                              </button>}
+                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Dépense'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              <span>{m.method_name || 'Espèces'}</span>
+                              <span>{formatDateTime(m.created_at)}</span>
                             </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {can('pos_reprint') && <button
+                              title="Réimprimer le bon"
+                              onClick={() => {
+                                try {
+                                  printDecaissementTicket80({
+                                    receiptNumber: `DEC-${String(m.id).slice(0, 8).toUpperCase()}`,
+                                    amount: m.amount,
+                                    method: m.method_name || 'Espèces',
+                                    label: m.reason || undefined,
+                                    reference: m.reference || undefined,
+                                    beneficiary: m.customer_name,
+                                    createdAt: m.created_at,
+                                    tenant: tenantForPrint as PrintTenant,
+                                    cashier: cashierName,
+                                  });
+                                } catch {}
+                              }}
+                              className="p-1 rounded hover:bg-neutral-100 text-neutral-500"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>}
+                            <span className="text-xs font-semibold text-neutral-700 num">-{formatFCFA(m.amount)}</span>
                           </div>
                         </div>
                       ))}
@@ -4113,32 +4131,30 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Remboursements */}
               {remboursementsList.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'remboursements' ? 'border-amber-300 bg-amber-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'remboursements' ? null : 'remboursements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'remboursements' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Remboursements</div>
-                        <div className="text-[10px] text-neutral-500">{remboursementsList.length} remboursement{remboursementsList.length > 1 ? 's' : ''}</div>
-                      </div>
+                <div>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'remboursements' ? null : 'remboursements')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <RotateCcw className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-800 truncate">Remboursements</span>
+                      <span className="text-[10px] text-neutral-400 shrink-0">{remboursementsList.length}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-amber-700 num">-{formatFCFA(remboursementsTotal)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'remboursements' ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-800 num">-{formatFCFA(remboursementsTotal)}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'remboursements' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'remboursements' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {remboursementsList.map((m, i) => (
-                        <div key={i} className="p-2.5 rounded-lg bg-white border border-amber-100">
-                          <div className="text-xs font-semibold text-neutral-900">{m.reason || 'Remboursement'}</div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Espèces'}</span>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                            <span className="text-xs font-bold text-amber-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Remboursement'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              <span>{m.method_name || 'Espèces'}</span>
+                              <span>{formatDateTime(m.created_at)}</span>
+                            </div>
                           </div>
+                          <span className="text-xs font-semibold text-neutral-700 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -4148,65 +4164,63 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Retraits clients */}
               {retraitsList.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'retraits' ? 'bg-orange-200 text-orange-800' : 'bg-orange-100 text-orange-700'}`}>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Retraits clients</div>
-                        <div className="text-[10px] text-neutral-500">{retraitsList.length} retrait{retraitsList.length > 1 ? 's' : ''}</div>
-                      </div>
+                <div>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ArrowUpRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-800 truncate">Retraits clients</span>
+                      <span className="text-[10px] text-neutral-400 shrink-0">{retraitsList.length}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-orange-700 num">-{formatFCFA(retraitsTotal)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-800 num">-{formatFCFA(retraitsTotal)}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'retraits' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {retraitsList.map((m, i) => (
-                        <div key={i} className="p-2.5 rounded-lg bg-white border border-orange-100">
-                          <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Espèces'}</span>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                            <span className="text-xs font-bold text-orange-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              <span>{m.method_name || 'Espèces'}</span>
+                              <span>{formatDateTime(m.created_at)}</span>
+                            </div>
                           </div>
+                          <span className="text-xs font-semibold text-neutral-700 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
               )}
+
+              {/* Prêts clients */}
               {pretsList.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${ticketsExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${ticketsExpanded === 'prets' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'}`}>
-                        <HandCoins className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Prêts clients</div>
-                        <div className="text-[10px] text-neutral-500">{pretsList.length} prêt{pretsList.length > 1 ? 's' : ''}</div>
-                      </div>
+                <div>
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <HandCoins className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-800 truncate">Prêts clients</span>
+                      <span className="text-[10px] text-neutral-400 shrink-0">{pretsList.length}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-blue-700 num">-{formatFCFA(pretsTotal)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${ticketsExpanded === 'prets' ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-neutral-800 num">-{formatFCFA(pretsTotal)}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'prets' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'prets' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {pretsList.map((m, i) => (
-                        <div key={i} className="p-2.5 rounded-lg bg-white border border-blue-100">
-                          <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium text-[9px] shrink-0">Prêt</span>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                            <span className="text-xs font-bold text-blue-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              <span>Prêt</span>
+                              <span>{formatDateTime(m.created_at)}</span>
+                            </div>
                           </div>
+                          <span className="text-xs font-semibold text-neutral-700 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -4217,9 +4231,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
           );
         })()}
-      </Modal>
+      </CashModal>
 
-      <Modal open={statsOpen} onClose={() => setStatsOpen(false)} title="Statistiques de la session" size="md"
+      <CashModal open={statsOpen} onClose={() => setStatsOpen(false)} title="Statistiques de la session"
         footer={<>
           <button onClick={() => setStatsOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           {statsData && (
@@ -4238,94 +4252,104 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         {loadingStats ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         ) : statsData ? (
-          <div className="space-y-3">
-            {/* KPI strip */}
-            <div className="flex items-stretch gap-2 p-2 rounded-lg bg-gradient-to-br from-slate-50 to-white border border-neutral-200">
-              <div className="flex-1 text-center px-2 py-1.5">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Ventes</div>
-                <div className="text-lg font-bold text-neutral-900 num leading-tight">{statsData.count}</div>
+          <div>
+            {/* 3-column KPI strip */}
+            <div className="grid grid-cols-3 border-b border-neutral-200 pb-3 mb-1">
+              <div className="text-center border-r border-neutral-200 pr-2">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Ventes</div>
+                <div className="text-lg font-bold text-neutral-900 num">{statsData.count}</div>
               </div>
-              <div className="w-px bg-neutral-200" />
-              <div className="flex-1 text-center px-2 py-1.5">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-brand-600">Total encaissé</div>
-                <div className="text-lg font-bold text-brand-900 num leading-tight">{formatFCFA((statsData.totalPayments || 0) + (statsData.movIncome || 0) + (statsData.movPrepay || 0))}</div>
+              <div className="text-center border-r border-neutral-200 px-2">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Total encaissé</div>
+                <div className="text-lg font-bold text-neutral-900 num">{formatFCFA((statsData.totalPayments || 0) + (statsData.movIncome || 0) + (statsData.movPrepay || 0))}</div>
               </div>
-              {statsData.movements.length > 0 && <>
-                <div className="w-px bg-neutral-200" />
-                <div className="flex-1 text-center px-2 py-1.5">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-brand-700">Net</div>
-                  <div className="text-lg font-bold text-brand-900 num leading-tight">{formatFCFA(statsData.netTotal)}</div>
-                </div>
-              </>}
+              <div className="text-center pl-2">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Net</div>
+                <div className="text-lg font-bold text-neutral-900 num">{formatFCFA(statsData.netTotal)}</div>
+              </div>
             </div>
 
             {/* Collapsible sections */}
-            <div className="space-y-1.5">
+            <div className="divide-y divide-neutral-100">
               {/* Encaissements par mode */}
               {statsData.byMethod.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'modes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
-                        <CreditCard className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Encaissements par mode</div>
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <CreditCard className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Encaissements par mode</div>
                         <div className="text-[10px] text-neutral-500">{statsData.byMethod.length} mode{statsData.byMethod.length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-brand-800 num">{formatFCFA(statsData.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(statsData.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'modes' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
-                  {statsExpanded === 'modes' && (
-                    <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.byMethod.map(m => (
-                        <div key={m.method_name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-neutral-100 text-xs">
-                          <span className="font-medium text-neutral-700">{m.method_name}</span>
-                          <span className="font-bold text-neutral-900 num">{formatFCFA(m.amount)}</span>
+                  {statsExpanded === 'modes' && (() => {
+                    const totalMethods = statsData.byMethod.reduce((s, m) => s + m.amount, 0);
+                    return (
+                      <div className="pb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="border border-neutral-100 rounded-md overflow-hidden">
+                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-1.5 bg-neutral-50 border-b border-neutral-100">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-500">Mode de paiement</span>
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 text-right">Montant</span>
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 text-right w-12">%</span>
+                          </div>
+                          {statsData.byMethod.map(m => {
+                            const pct = totalMethods > 0 ? (m.amount / totalMethods * 100) : 0;
+                            return (
+                              <div key={m.method_name} className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 border-b border-neutral-50 last:border-b-0">
+                                <span className="text-xs text-neutral-800 truncate">{m.method_name}</span>
+                                <span className="text-xs font-semibold text-neutral-900 num text-right">{formatFCFA(m.amount)}</span>
+                                <span className="text-xs text-neutral-500 num text-right w-12">{pct.toFixed(0)}%</span>
+                              </div>
+                            );
+                          })}
+                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 bg-neutral-50 border-t border-neutral-200">
+                            <span className="text-xs font-bold text-neutral-900">Total</span>
+                            <span className="text-xs font-bold text-neutral-900 num text-right">{formatFCFA(totalMethods)}</span>
+                            <span className="text-xs font-bold text-neutral-900 num text-right w-12">100%</span>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
               {/* Reglements */}
               {statsData.invoicePayments.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40 order-first' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'reglements' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
-                        <Wallet className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Reglements factures</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.invoicePayments.length} reglement{statsData.invoicePayments.length > 1 ? 's' : ''}</div>
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Wallet className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Règlements factures</div>
+                        <div className="text-[10px] text-neutral-500">{statsData.invoicePayments.length} règlement{statsData.invoicePayments.length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-neutral-800 num">{formatFCFA(statsData.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-emerald-700 num">+{formatFCFA(statsData.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {statsExpanded === 'reglements' && (
-                    <div className="px-3 pb-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.invoicePayments.map((p, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-200">
+                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-bold text-neutral-900">
+                            <div className="text-xs font-medium text-neutral-800 truncate">
                               <span className="doc-number">{p.sale_number}</span>
-                              {p.customer_name && <span className="text-neutral-600 font-medium ml-1">- {p.customer_name}</span>}
+                              {p.customer_name && <span className="text-neutral-500 ml-1">- {p.customer_name}</span>}
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              <span>{new Date(p.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} {new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{p.method_name}</span>
-                              {p.user_name && <span className="inline-flex items-center gap-0.5"><User className="w-2.5 h-2.5" />{p.user_name}</span>}
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              <span>{p.method_name}</span>
+                              {p.user_name && <span>{p.user_name}</span>}
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-neutral-800 num shrink-0">+{formatFCFA(p.amount)}</span>
+                          <span className="text-xs font-semibold text-emerald-700 num shrink-0">+{formatFCFA(p.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -4335,34 +4359,32 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Encaissements directs */}
               {statsData.movIncome > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-100/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'encDirect' ? 'bg-neutral-200 text-neutral-900' : 'bg-neutral-100 text-neutral-800'}`}>
-                        <ArrowDownRight className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Encaissements directs</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'income').length} entrée{statsData.movements.filter(m => m.kind === 'income').length > 1 ? 's' : ''}</div>
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ArrowDownRight className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Encaissements directs</div>
+                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'income').length} encaissement{statsData.movements.filter(m => m.kind === 'income').length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-neutral-800 num">+{formatFCFA(statsData.movIncome)}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-emerald-700 num">+{formatFCFA(statsData.movIncome)}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {statsExpanded === 'encDirect' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'income').map((m, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-neutral-100">
+                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Encaissement direct'}</div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Encaissement direct'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              {m.method_name && <span>{m.method_name}</span>}
                               {m.customer_name && <span>{m.customer_name}</span>}
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-neutral-800 num shrink-0">+{formatFCFA(m.amount)}</span>
+                          <span className="text-xs font-semibold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -4372,34 +4394,32 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Acomptes */}
               {statsData.movPrepay > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
-                        <Wallet className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Acomptes clients</div>
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Wallet className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Acomptes clients</div>
                         <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'customer_prepayment').length} acompte{statsData.movements.filter(m => m.kind === 'customer_prepayment').length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-brand-700 num">+{formatFCFA(statsData.movPrepay)}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-emerald-700 num">+{formatFCFA(statsData.movPrepay)}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {statsExpanded === 'acomptes' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'customer_prepayment').map((m, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-brand-100">
+                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.customer_name || 'Client'}</div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
-                              {m.reason && <span className="line-clamp-1">{m.reason}</span>}
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              {m.method_name && <span>{m.method_name}</span>}
+                              {m.reason && <span className="truncate">{m.reason}</span>}
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-brand-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                          <span className="text-xs font-semibold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -4408,43 +4428,39 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               )}
 
               {/* Décaissements */}
-              {statsData.movExpense > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Décaissements</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'expense').length} dépense{statsData.movements.filter(m => m.kind === 'expense').length > 1 ? 's' : ''}{statsData.movements.filter(m => m.kind === 'refund').length > 0 ? `, ${statsData.movements.filter(m => m.kind === 'refund').length} remb.` : ''}</div>
+              {(statsData.movExpense + statsData.movRefund) > 0 && (
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Décaissements</div>
+                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'expense' || m.kind === 'refund').length} mouvement{statsData.movements.filter(m => m.kind === 'expense' || m.kind === 'refund').length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-red-700 num">-{formatFCFA(statsData.movExpense + statsData.movRefund)}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-red-600 num">-{formatFCFA(statsData.movExpense + statsData.movRefund)}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {statsExpanded === 'depenses' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'refund').map((m, i) => (
-                        <div key={`ref-${i}`} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-amber-100">
+                        <div key={`ref-${i}`} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Remboursement'}</div>
-                            <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium text-[9px]">Remboursement</span>
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Remboursement'}</div>
+                            <div className="text-[10px] text-neutral-400">Remboursement</div>
                           </div>
-                          <span className="text-xs font-bold text-amber-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                       {statsData.movements.filter(m => m.kind === 'expense').map((m, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100">
+                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Dépense'}</div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
-                            </div>
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Dépense'}</div>
+                            {m.method_name && <div className="text-[10px] text-neutral-400">{m.method_name}</div>}
                           </div>
-                          <span className="text-xs font-bold text-red-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -4454,33 +4470,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Retraits clients */}
               {(statsData.movWithdrawal || 0) > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'retraits' ? 'border-orange-300 bg-orange-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'retraits' ? 'bg-orange-200 text-orange-800' : 'bg-orange-100 text-orange-700'}`}>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Retraits clients</div>
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Retraits clients</div>
                         <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'customer_withdrawal').length} retrait{statsData.movements.filter(m => m.kind === 'customer_withdrawal').length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-orange-700 num">-{formatFCFA(statsData.movWithdrawal || 0)}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-red-600 num">-{formatFCFA(statsData.movWithdrawal || 0)}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {statsExpanded === 'retraits' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'customer_withdrawal').map((m, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-orange-100">
+                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.customer_name || 'Client'}</div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
-                            </div>
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
+                            {m.method_name && <div className="text-[10px] text-neutral-400">{m.method_name}</div>}
                           </div>
-                          <span className="text-xs font-bold text-orange-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -4490,33 +4502,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Prêts clients */}
               {(statsData.movLoan || 0) > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'prets' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'}`}>
-                        <HandCoins className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Prêts clients</div>
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <HandCoins className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Prêts clients</div>
                         <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'customer_loan').length} prêt{statsData.movements.filter(m => m.kind === 'customer_loan').length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-blue-700 num">-{formatFCFA(statsData.movLoan || 0)}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-red-600 num">-{formatFCFA(statsData.movLoan || 0)}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'prets' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {statsExpanded === 'prets' && (
-                    <div className="px-3 pb-3 space-y-1.5 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'customer_loan').map((m, i) => (
-                        <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-blue-100">
+                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.customer_name || 'Client'}</div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                              {m.reason && <span className="line-clamp-1">{m.reason}</span>}
-                            </div>
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
+                            {m.reason && <div className="text-[10px] text-neutral-400 truncate">{m.reason}</div>}
                           </div>
-                          <span className="text-xs font-bold text-blue-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
                         </div>
                       ))}
                     </div>
@@ -4526,30 +4534,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
               {/* Top articles */}
               {statsData.topArticles.length > 0 && (
-                <div className={`rounded-md border transition-all duration-200 ${statsExpanded === 'articles' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'articles' ? null : 'articles')} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${statsExpanded === 'articles' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
-                        <Package className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-neutral-800">Top articles</div>
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'articles' ? null : 'articles')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Package className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Top articles</div>
                         <div className="text-[10px] text-neutral-500">{statsData.topArticles.length} article{statsData.topArticles.length > 1 ? 's' : ''}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-amber-700 num">{formatFCFA(statsData.topArticles.reduce((s, a) => s + a.total, 0))}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-amber-700 num">{formatFCFA(statsData.topArticles.reduce((s, a) => s + a.total, 0))}</span>
                       <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'articles' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {statsExpanded === 'articles' && (
-                    <div className="px-3 pb-3 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.topArticles.map((a, i) => (
-                        <div key={a.name} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-white border border-neutral-100">
-                          <div className="w-5 h-5 rounded-md bg-brand-50 flex items-center justify-center text-[9px] font-bold text-brand-700 num shrink-0">#{i + 1}</div>
-                          <div className="min-w-0 flex-1 text-xs font-medium text-neutral-800 truncate">{a.name}</div>
-                          <div className="text-[10px] text-neutral-500 num shrink-0">x{a.qty}</div>
-                          <div className="text-xs font-bold text-neutral-900 num shrink-0">{formatFCFA(a.total)}</div>
+                        <div key={a.name} className="flex items-center justify-between py-2 pl-7 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{a.name}</div>
+                            <div className="text-[10px] text-neutral-400 num">Qté: {a.qty}</div>
+                          </div>
+                          <span className="text-xs font-semibold text-amber-700 num shrink-0">{formatFCFA(a.total)}</span>
                         </div>
                       ))}
                     </div>
@@ -4559,7 +4566,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             </div>
           </div>
         ) : null}
-      </Modal>
+      </CashModal>
 
       {/* Regularization */}
       <Modal open={regOpen} onClose={() => setRegOpen(false)} title="Régularisation d'écart" size="sm" layer="top"
@@ -4596,7 +4603,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       </Modal>
 
       {/* Close workflow */}
-      <Modal open={closeOpen} onClose={() => !closing && setCloseOpen(false)} title="Clôture de caisse" size="md"
+      <CashModal open={closeOpen} onClose={() => !closing && setCloseOpen(false)} title="Clôture de caisse"
         footer={
           closeStep === 'control' ? (
             <>
@@ -4619,7 +4626,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           )
         }
       >
-        {/* Premium stepper */}
+        {/* Minimal stepper */}
         <div className="flex items-center gap-1.5 mb-4">
           {(['control', 'regularize', 'confirm'] as CloseStep[]).map((s, i) => {
             const labels = ['Contrôle', 'Régul.', 'Confirm.'];
@@ -4627,8 +4634,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             const done = (['control', 'regularize', 'confirm'] as CloseStep[]).indexOf(closeStep) > i;
             return (
               <div key={s} className="flex items-center gap-1.5 flex-1">
-                <div className={`relative flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-all duration-300 flex-1 justify-center ${active ? 'bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-glow' : done ? 'bg-neutral-100 text-neutral-800 border border-neutral-200' : 'bg-neutral-50 text-neutral-400 border border-neutral-200'}`}>
-                  {done ? <Check className="w-3 h-3" /> : <span className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[9px] ${active ? 'bg-white/25' : 'bg-neutral-200'}`}>{i + 1}</span>}
+                <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-all flex-1 justify-center ${active ? 'bg-neutral-900 text-white' : done ? 'bg-neutral-100 text-neutral-700 border border-neutral-200' : 'bg-neutral-50 text-neutral-400 border border-neutral-100'}`}>
+                  {done ? <Check className="w-3 h-3" /> : <span className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[9px] ${active ? 'bg-white/20' : 'bg-neutral-200 text-neutral-500'}`}>{i + 1}</span>}
                   <span>{labels[i]}</span>
                 </div>
               </div>
@@ -4639,20 +4646,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         {loadingControl ? (
           <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
         ) : closeStep === 'control' ? (
-          <div className="space-y-2.5 count-up">
-            <p className="text-[11px] text-neutral-500 uppercase tracking-wider font-semibold">Saisissez les montants comptés</p>
-            <div className="space-y-1.5">
+          <div className="space-y-0 count-up">
+            <p className="text-[11px] text-neutral-500 uppercase tracking-wider font-semibold mb-2">Saisissez les montants comptés</p>
+            <div>
               {controlLines.map((c, idx) => {
                 const diff = c.counted_amount - c.theoretical_amount;
                 const balanced = diff === 0 && c.counted_amount > 0;
                 return (
-                  <div key={c.method_name} className={`rounded-md border p-2.5 transition-all duration-300 ${balanced ? 'border-neutral-200 bg-neutral-100/40' : diff < 0 ? 'border-red-200 bg-red-50/40' : diff > 0 ? 'border-amber-200 bg-amber-50/40' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
+                  <div key={c.method_name} className="border-b border-neutral-100 py-2.5">
                     <div className="flex items-center gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-bold text-neutral-900 truncate">{c.method_name}</div>
                         <div className="text-[10px] text-neutral-500 num mt-0.5">Théorique: <span className="font-semibold text-neutral-700">{formatFCFA(c.theoretical_amount)}</span></div>
                       </div>
-                      <input type="number" value={c.counted_amount || ''} onChange={e => setControlLines(lines => lines.map((l, i) => i === idx ? { ...l, counted_amount: Number(e.target.value) } : l))} className="w-24 px-2 py-1.5 text-xs text-right font-bold num rounded-lg border border-neutral-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition" min="0" placeholder="0" />
+                      <input type="number" value={c.counted_amount || ''} onChange={e => setControlLines(lines => lines.map((l, i) => i === idx ? { ...l, counted_amount: Number(e.target.value) } : l))} className="w-24 px-2 py-1.5 text-xs text-right font-bold num bg-transparent focus:outline-none transition" min="0" placeholder="0" />
                       <div className={`text-[10px] font-bold num w-14 text-right ${balanced ? 'text-neutral-700' : diff < 0 ? 'text-red-600' : diff > 0 ? 'text-amber-600' : 'text-neutral-300'}`}>
                         {c.counted_amount === 0 ? '—' : diff === 0 ? 'OK' : `${diff > 0 ? '+' : ''}${formatFCFA(diff)}`}
                       </div>
@@ -4661,14 +4668,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 );
               })}
             </div>
-            <div className={`rounded-md p-2.5 flex items-center justify-between transition-all duration-300 ${totalVariance === 0 ? 'bg-gradient-to-br from-neutral-50 to-brand-50 border border-neutral-200' : 'bg-neutral-50 border border-neutral-200'}`}>
+            <div className="py-2.5 border-t border-neutral-200 mt-1 flex items-center justify-between">
               <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Écart total</div>
               <div className={`num font-bold text-sm ${totalVariance > 0 ? 'text-amber-600' : totalVariance < 0 ? 'text-red-600' : 'text-neutral-800'}`}>
                 {totalVariance === 0 ? <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Équilibré</span> : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
               </div>
             </div>
             {Math.abs(totalVariance) > 0 && (
-              <div className={`flex items-start gap-2 p-2 rounded-lg text-[11px] ${totalVariance < 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+              <div className={`flex items-start gap-2 py-2 text-[11px] ${totalVariance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <span>{totalVariance < 0 ? `Manquant de ${formatFCFA(-totalVariance)}` : `Excédent de ${formatFCFA(totalVariance)}`}</span>
               </div>
@@ -4676,31 +4683,34 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         ) : closeStep === 'regularize' ? (
           <div className="space-y-3 count-up">
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-md p-2.5 bg-white border border-neutral-200 text-center">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Écart</div>
-                <div className={`text-xs font-bold mt-0.5 num ${totalVariance === 0 ? 'text-neutral-800' : 'text-red-600'}`}>
+            <div className="divide-y divide-neutral-100 mb-3">
+              <div className="flex items-center justify-between py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Écart</span>
+                <span className={`text-sm font-bold num ${totalVariance === 0 ? 'text-neutral-800' : 'text-red-600'}`}>
                   {totalVariance === 0 ? 'OK' : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
-                </div>
+                </span>
               </div>
-              <div className="rounded-md p-2.5 bg-white border border-neutral-200 text-center">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Régul.</div>
-                <div className="text-xs font-bold mt-0.5 num">{sessionRegs.length}</div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Régularisations</span>
+                <span className="text-sm font-bold num">{sessionRegs.length}</span>
               </div>
-              <div className="rounded-md p-2.5 bg-white border border-neutral-200 text-center">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Montant</div>
-                <div className="text-xs font-bold mt-0.5 num">{formatFCFA(sessionRegs.reduce((s, r) => s + r.amount, 0))}</div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Total régularisations</span>
+                <span className="text-sm font-bold num text-neutral-700">{formatFCFA(sessionRegs.reduce((s, r) => s + r.amount, 0))}</span>
               </div>
             </div>
             {sessionRegs.length > 0 ? (
-              <div className="space-y-1.5">
+              <div>
                 {sessionRegs.map((r, i) => (
-                  <div key={i} className={`rounded-md p-2.5 flex items-center gap-2 border ${r.reg_type === 'manquant' ? 'bg-red-50/40 border-red-200' : r.reg_type === 'excedent' ? 'bg-amber-50/40 border-amber-200' : 'bg-white border-neutral-200'}`}>
+                  <div key={i} className="border-b border-neutral-100 py-2 flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-semibold capitalize text-neutral-800">{r.reg_type}</div>
                       {r.reason && <div className="text-[10px] text-neutral-500 article-text line-clamp-1 mt-0.5">{r.reason}</div>}
                     </div>
                     <div className="num font-bold text-xs text-neutral-900 shrink-0">{formatFCFA(r.amount)}</div>
+                    <button onClick={() => deleteRegularization(i)} className="shrink-0 p-1 rounded hover:bg-red-50 text-red-400 transition-colors" title="Supprimer">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -4713,27 +4723,30 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         ) : (
           <div className="space-y-3 count-up">
-            <div className="p-3 bg-gradient-to-br from-ink-900 to-slate-800 text-white rounded-lg space-y-2 shadow-premium">
-              <div className="flex items-center gap-1.5"><Lock className="w-4 h-4 text-neutral-300" /><span className="text-xs font-bold tracking-wide">RÉCAPITULATIF</span></div>
-              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                <span className="text-neutral-400">Fond ouverture</span>
-                <span className="text-right font-semibold num">{formatFCFA(session?.opening_amount ?? 0)}</span>
-                <span className="text-neutral-400">Total compté</span>
-                <span className="text-right font-semibold num">{formatFCFA(controlLines.reduce((s, c) => s + c.counted_amount, 0))}</span>
-                <span className="text-neutral-400 border-t border-neutral-700 pt-1.5">Écart final</span>
-                <span className={`border-t border-neutral-700 pt-1.5 text-right font-bold num ${totalVariance === 0 ? 'text-neutral-400' : totalVariance < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+            <div className="divide-y divide-neutral-100">
+              <div className="flex items-center justify-between py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Fond ouverture</span>
+                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(session?.opening_amount ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Total compté</span>
+                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(controlLines.reduce((s, c) => s + c.counted_amount, 0))}</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Écart final</span>
+                <span className={`text-sm font-bold num ${totalVariance === 0 ? 'text-neutral-800' : totalVariance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                   {totalVariance === 0 ? 'Équilibré' : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
                 </span>
               </div>
             </div>
-            <input value={closingNote} onChange={e => setClosingNote(e.target.value)} className="input text-sm" placeholder="Note de clôture (optionnel)" />
-            <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 text-[11px] text-amber-800">
+            <textarea value={closingNote} onChange={e => setClosingNote(e.target.value)} className="input text-sm resize-none" rows={4} placeholder="Note de clôture (optionnel)" />
+            <div className="flex items-start gap-2 py-2 text-[11px] text-amber-600">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>Action irréversible. La session sera verrouillée.</span>
             </div>
           </div>
         )}
-      </Modal>
+      </CashModal>
 
       {/* Site picker modal */}
       <Modal open={sitePickerOpen} onClose={() => setSitePickerOpen(false)} title="Changer de point de vente" size="md"

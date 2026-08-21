@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Loader2, X, Eye, Printer, Check, TrendingUp, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package, HandCoins, RotateCcw } from 'lucide-react';
+import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package, HandCoins, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
 import { Modal } from '../components/Modal';
+import { CashModal } from '../components/CashModal';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printXReport80, buildPrintTenantForSite } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
+
+const tap = () => { if (navigator.vibrate) navigator.vibrate(8); };
 
 type SessionRow = {
   id: string;
@@ -61,7 +64,7 @@ export function CashHistory() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | 'ventes' | 'controle' | null>(null);
+  const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'encDirect' | 'acomptes' | 'depenses' | 'remboursements' | 'retraits' | 'prets' | 'ventes' | 'controle' | null>(null);
   const [highlightSessionId, setHighlightSessionId] = useState<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -283,15 +286,15 @@ export function CashHistory() {
                   </div>
                   <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-neutral-100">
                     <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Fond</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-black">Fond</div>
                       <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{formatFCFA(s.opening_amount)}</div>
                     </div>
                     <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Compté</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-black">Compté</div>
                       <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</div>
                     </div>
                     <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Écart</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-black">Écart</div>
                       <div className="leading-tight mt-0.5">
                         {variance != null ? (
                           <span className={`text-[11px] font-bold num ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
@@ -363,7 +366,7 @@ export function CashHistory() {
       )}
 
       {/* Detail modal — fintech ultra compact */}
-      <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="Détail de la session" size="xl" fullscreenMobile
+      <CashModal open={detailOpen} onClose={() => setDetailOpen(false)} title="Détail de la session"
         footer={<>
           <button onClick={() => setDetailOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           {detail && (
@@ -376,8 +379,29 @@ export function CashHistory() {
         {loadingDetail ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
         ) : detail ? (
-          <div className="space-y-2.5 count-up">
-            {/* Compact KPI strip */}
+          <div className="count-up">
+            {/* Timeline inline row */}
+            {(() => {
+              const fmtTime = (d: string) => new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+              const fmtDay = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+              return (
+                <div className="flex items-center justify-between py-2 border-b border-neutral-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-black">Session</span>
+                  <div className="flex items-center gap-1.5 text-xs text-neutral-700 num">
+                    <span>{fmtDay(detail.session.opened_at)}</span>
+                    <span className="font-semibold">{fmtTime(detail.session.opened_at)}</span>
+                    <span className="text-neutral-300">&rarr;</span>
+                    {detail.session.closed_at ? (
+                      <span className="font-semibold">{fmtTime(detail.session.closed_at)}</span>
+                    ) : (
+                      <span className="text-neutral-400 italic text-[11px]">En cours</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* KPI hairline rows */}
             {(() => {
               const mvExp = detail.movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
               const mvRefund = detail.movements.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
@@ -390,157 +414,116 @@ export function CashHistory() {
               const totalSorties = mvExp + mvRefund + mvRetrait + mvPret;
               const net = openingAmount + totalEncaisse - totalSorties;
               const cancelledTotal = detail.cancelledSales.reduce((s, x) => s + x.total, 0);
+              const variance = detail.session.variance;
               return (
-                <div className="flex flex-col rounded-xl overflow-hidden border border-neutral-200 bg-neutral-200">
-                  <div className="bg-white p-2.5 flex items-center justify-between">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Ventes validées</div>
+                <div className="divide-y divide-neutral-100">
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-black">Ventes validées</span>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-neutral-900 num">{detail.sales.length}</div>
+                      <span className="text-sm font-bold text-neutral-900 num">{detail.sales.length}</span>
                       {detail.cancelledSales.length > 0 && (
-                        <div className="text-[8px] text-red-500 num mt-0.5">{detail.cancelledSales.length} annulée{detail.cancelledSales.length > 1 ? 's' : ''} ({formatFCFA(cancelledTotal)})</div>
+                        <span className="text-[9px] text-red-500 num ml-2">{detail.cancelledSales.length} ann. ({formatFCFA(cancelledTotal)})</span>
                       )}
                     </div>
                   </div>
-                  <div className="bg-white p-2.5 flex items-center justify-between">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Facturé</div>
-                    <div className="text-sm font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(salesTotal)}</div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-black">Facturé</span>
+                    <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(salesTotal)}</span>
                   </div>
-                  <div className="bg-white p-2.5 flex items-center justify-between">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Fond initial</div>
-                    <div className="text-sm font-bold text-neutral-900 num whitespace-nowrap">{formatFCFA(openingAmount)}</div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-black">Fond initial</span>
+                    <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(openingAmount)}</span>
                   </div>
-                  <div className="bg-white p-2.5 flex items-center justify-between">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Encaissé</div>
-                    <div className="text-sm font-bold text-emerald-700 num whitespace-nowrap">+{formatFCFA(totalEncaisse)}</div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-black">Encaissé</span>
+                    <span className="text-sm font-bold text-emerald-700 num">+{formatFCFA(totalEncaisse)}</span>
                   </div>
                   {totalSorties > 0 && (
-                    <div className="bg-white p-2.5 flex items-center justify-between">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Sorties</div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-red-600 num whitespace-nowrap">-{formatFCFA(totalSorties)}</div>
-                        <div className="flex flex-wrap justify-end gap-x-2 text-[8px] text-neutral-400 num mt-0.5">
-                          {mvExp > 0 && <span>Dép. {formatFCFA(mvExp)}</span>}
-                          {mvRefund > 0 && <span>Remb. {formatFCFA(mvRefund)}</span>}
-                          {mvRetrait > 0 && <span>Ret. {formatFCFA(mvRetrait)}</span>}
-                          {mvPret > 0 && <span>Prêts {formatFCFA(mvPret)}</span>}
-                        </div>
-                      </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-black">Sorties</span>
+                      <span className="text-sm font-bold text-red-600 num">-{formatFCFA(totalSorties)}</span>
                     </div>
                   )}
-                  <div className="bg-white p-2.5 flex items-center justify-between">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Caisse théorique</div>
-                    <div className="text-sm font-bold text-brand-800 num whitespace-nowrap">{formatFCFA(net)}</div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-black">Caisse théorique</span>
+                    <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(net)}</span>
                   </div>
-                  <div className="bg-white p-2.5 flex items-center justify-between">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Ecart</div>
-                    <div className={`text-sm font-bold num whitespace-nowrap ${(detail.session.variance || 0) === 0 ? 'text-neutral-700' : (detail.session.variance || 0) < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                      {detail.session.variance != null ? (detail.session.variance === 0 ? 'OK' : `${detail.session.variance > 0 ? '+' : ''}${formatFCFA(detail.session.variance)}`) : '--'}
-                    </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-black">Écart</span>
+                    <span className={`text-sm font-bold num ${(variance || 0) === 0 ? 'text-neutral-700' : (variance || 0) < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                      {variance != null ? (variance === 0 ? 'OK' : `${variance > 0 ? '+' : ''}${formatFCFA(variance)}`) : '--'}
+                    </span>
                   </div>
                 </div>
               );
             })()}
 
-            {/* Timeline compact */}
-            <div className="relative p-2.5 rounded-xl bg-gradient-to-br from-ink-900 to-slate-800 text-white overflow-hidden">
-              <div className="absolute inset-0 shimmer-bg opacity-30" />
-              <div className="relative flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[8px] font-bold uppercase tracking-[0.15em] text-white/80">Ouverture</div>
-                  <div className="text-xs font-bold mt-0.5 num truncate">{formatDateTime(detail.session.opened_at)}</div>
-                </div>
-                <ChevronRight className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
-                <div className="flex-1 min-w-0 text-right">
-                  <div className={`text-[8px] font-bold uppercase tracking-[0.15em] ${detail.session.closed_at ? 'text-amber-400' : 'text-neutral-500'}`}>Clôture</div>
-                  <div className="text-xs font-bold mt-0.5 num truncate">{detail.session.closed_at ? formatDateTime(detail.session.closed_at) : 'En cours'}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Collapsible accordion sections */}
-            <div className="space-y-1">
+            {/* Collapsible hairline sections */}
+            <div className="mt-1 divide-y divide-neutral-100">
               {/* Encaissements par mode */}
-              {detail.byMethod.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'modes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setDetailExpanded(detailExpanded === 'modes' ? null : 'modes')} className="w-full flex flex-col gap-1 px-3 py-2.5 text-left">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'modes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
-                          <CreditCard className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Encaissements par mode</div>
-                          <div className="text-[10px] text-neutral-500">{detail.byMethod.length} mode{detail.byMethod.length > 1 ? 's' : ''}</div>
-                        </div>
-                      </div>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'modes' ? 'rotate-90' : ''}`} />
-                    </div>
-                    <div className="text-right pl-9">
-                      <span className="text-sm font-bold text-brand-800 num whitespace-nowrap">{formatFCFA(detail.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
-                    </div>
-                  </button>
-                  {detailExpanded === 'modes' && (
-                    <div className="px-2 pb-2 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                      {detail.byMethod.map(m => {
-                        const total = detail.byMethod.reduce((s, x) => s + x.amount, 0);
-                        const pct = total > 0 ? (m.amount / total) * 100 : 0;
-                        return (
-                          <div key={m.method_name} className="relative flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-neutral-100 text-xs overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-r from-brand-50/60 to-transparent" style={{ width: `${pct}%` }} />
-                            <span className="relative font-medium text-neutral-700">{m.method_name}</span>
-                            <div className="relative flex items-center gap-2 shrink-0">
-                              <span className="text-[10px] font-bold text-neutral-400 num">{pct.toFixed(0)}%</span>
-                              <span className="font-bold text-neutral-900 num">{formatFCFA(m.amount)}</span>
-                            </div>
+              {detail.byMethod.length > 0 && (<>
+                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'modes' ? null : 'modes'); }} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CreditCard className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-800 truncate">Encaissements par mode</span>
+                    <span className="text-[10px] text-neutral-400 shrink-0">{detail.byMethod.length}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold text-neutral-800 num">{formatFCFA(detail.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
+                    <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${detailExpanded === 'modes' ? 'rotate-90' : ''}`} />
+                  </div>
+                </button>
+                {detailExpanded === 'modes' && (
+                  <div className="pb-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    {detail.byMethod.map(m => {
+                      const total = detail.byMethod.reduce((s, x) => s + x.amount, 0);
+                      const pct = total > 0 ? (m.amount / total) * 100 : 0;
+                      return (
+                        <div key={m.method_name} className="flex items-center justify-between py-1.5 pl-6 text-xs">
+                          <span className="text-neutral-600 truncate">{m.method_name}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[10px] text-neutral-400 num">{pct.toFixed(0)}%</span>
+                            <span className="font-semibold text-neutral-800 num">{formatFCFA(m.amount)}</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>)}
 
               {/* Reglements factures */}
-              {detail.invoicePayments.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'reglements' ? 'border-neutral-300 bg-neutral-50/40 order-first' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setDetailExpanded(detailExpanded === 'reglements' ? null : 'reglements')} className="w-full flex flex-col gap-1 px-3 py-2.5 text-left">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'reglements' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
-                          <Wallet className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Reglements factures</div>
-                          <div className="text-[10px] text-neutral-500">{detail.invoicePayments.length} reglement{detail.invoicePayments.length > 1 ? 's' : ''}</div>
-                        </div>
-                      </div>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'reglements' ? 'rotate-90' : ''}`} />
-                    </div>
-                    <div className="text-right pl-9">
-                      <span className="text-sm font-bold text-neutral-800 num whitespace-nowrap">+{formatFCFA(detail.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
-                    </div>
-                  </button>
-                  {detailExpanded === 'reglements' && (
-                    <div className="px-2 pb-2 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
-                      {detail.invoicePayments.map(p => (
-                        <div key={p.id} className="p-2.5 rounded-lg bg-white border border-neutral-200">
-                          <div className="text-xs font-bold text-neutral-900">{p.customer_name || 'Client'}</div>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className="doc-number text-[12px] font-semibold text-neutral-500">{p.sale_number}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px]">{p.method_name}</span>
-                            </div>
-                            <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(p.created_at)}</span>
-                            <span className="text-xs font-bold text-neutral-700 num shrink-0">+{formatFCFA(p.amount)}</span>
+              {detail.invoicePayments.length > 0 && (<>
+                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'reglements' ? null : 'reglements'); }} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Wallet className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-800 truncate">Règlements factures</span>
+                    <span className="text-[10px] text-neutral-400 shrink-0">{detail.invoicePayments.length}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(detail.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
+                    <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${detailExpanded === 'reglements' ? 'rotate-90' : ''}`} />
+                  </div>
+                </button>
+                {detailExpanded === 'reglements' && (
+                  <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    {detail.invoicePayments.map(p => (
+                      <div key={p.id} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-medium text-neutral-800 truncate">{p.customer_name || 'Client'}</div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                            <span className="doc-number font-semibold">{p.sale_number}</span>
+                            <span>{p.method_name}</span>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                        <span className="text-xs font-semibold text-neutral-700 num shrink-0">+{formatFCFA(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>)}
 
-              {/* Mouvements de caisse — split by kind */}
+              {/* Movement sections */}
               {(() => {
                 const encDirectList = detail.movements.filter(m => m.kind === 'income');
                 const acomptesList = detail.movements.filter(m => m.kind === 'customer_prepayment');
@@ -548,357 +531,160 @@ export function CashHistory() {
                 const remboursementsList = detail.movements.filter(m => m.kind === 'refund');
                 const retraitsList = detail.movements.filter(m => m.kind === 'customer_withdrawal');
                 const pretsList = detail.movements.filter(m => m.kind === 'customer_loan');
-                const encDirectTotal = encDirectList.reduce((s, m) => s + m.amount, 0);
-                const acomptesTotal = acomptesList.reduce((s, m) => s + m.amount, 0);
-                const depensesTotal = depensesList.reduce((s, m) => s + m.amount, 0);
-                const remboursementsTotal = remboursementsList.reduce((s, m) => s + m.amount, 0);
-                const retraitsTotal = retraitsList.reduce((s, m) => s + m.amount, 0);
-                const pretsTotal = pretsList.reduce((s, m) => s + m.amount, 0);
-                return (
-                  <>
-                    {encDirectList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'encDirect' ? 'border-neutral-300 bg-neutral-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'encDirect' ? 'bg-neutral-200 text-neutral-800' : 'bg-neutral-100 text-neutral-700'}`}>
-                                <ArrowDownRight className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Encaissements directs</div>
-                                <div className="text-[10px] text-neutral-500">{encDirectList.length} entrée{encDirectList.length > 1 ? 's' : ''}</div>
-                              </div>
-                            </div>
-                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
-                          </div>
-                          <div className="text-right pl-9">
-                            <span className="text-sm font-bold text-neutral-700 num whitespace-nowrap">+{formatFCFA(encDirectTotal)}</span>
-                          </div>
-                        </button>
-                        {detailExpanded === 'encDirect' && (
-                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
-                            {encDirectList.map(m => (
-                              <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-neutral-100">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Encaissement direct'}</div>
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                                    <span className="num">{formatDateTime(m.created_at)}</span>
-                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
-                                  </div>
-                                </div>
-                                <span className="text-xs font-bold text-neutral-700 num shrink-0">+{formatFCFA(m.amount)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
 
-                    {acomptesList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'acomptes' ? 'border-brand-300 bg-brand-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'acomptes' ? 'bg-brand-200 text-brand-800' : 'bg-brand-100 text-brand-700'}`}>
-                                <Wallet className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Acomptes clients</div>
-                                <div className="text-[10px] text-neutral-500">{acomptesList.length} acompte{acomptesList.length > 1 ? 's' : ''}</div>
-                              </div>
+                const MovSection = ({ id, icon: Icon, label, items, total, sign, color }: {
+                  id: typeof detailExpanded; icon: any; label: string;
+                  items: CashMovementRow[]; total: number; sign: string; color: string;
+                }) => items.length === 0 ? null : (<>
+                  <button onClick={() => { tap(); setDetailExpanded(detailExpanded === id ? null : id); }} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Icon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-800 truncate">{label}</span>
+                      <span className="text-[10px] text-neutral-400 shrink-0">{items.length}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs font-bold num ${color}`}>{sign}{formatFCFA(total)}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${detailExpanded === id ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {detailExpanded === id && (
+                    <div className="pb-2 max-h-72 overflow-y-auto divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {items.map(m => (
+                        <div key={m.id} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || m.reason || label}</div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                              {m.method_name && <span>{m.method_name}</span>}
+                              <span>{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
-                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
                           </div>
-                          <div className="text-right pl-9">
-                            <span className="text-sm font-bold text-brand-700 num whitespace-nowrap">+{formatFCFA(acomptesTotal)}</span>
-                          </div>
-                        </button>
-                        {detailExpanded === 'acomptes' && (
-                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
-                            {acomptesList.map(m => (
-                              <div key={m.id} className="p-2.5 rounded-lg bg-white border border-brand-100">
-                                <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
-                                <div className="flex items-center justify-between gap-2 mt-1">
-                                  <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Acompte'}</span>
-                                  <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                                  <span className="text-xs font-bold text-brand-700 num shrink-0">+{formatFCFA(m.amount)}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          <span className={`text-xs font-semibold num shrink-0 ${color}`}>{sign}{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>);
 
-                    {depensesList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'depenses' ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'depenses' ? null : 'depenses')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'depenses' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-700'}`}>
-                                <ArrowUpRight className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Décaissements</div>
-                                <div className="text-[10px] text-neutral-500">{depensesList.length} dépense{depensesList.length > 1 ? 's' : ''}</div>
-                              </div>
-                            </div>
-                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'depenses' ? 'rotate-90' : ''}`} />
-                          </div>
-                          <div className="text-right pl-9">
-                            <span className="text-sm font-bold text-red-700 num whitespace-nowrap">-{formatFCFA(depensesTotal)}</span>
-                          </div>
-                        </button>
-                        {detailExpanded === 'depenses' && (
-                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
-                            {depensesList.map(m => (
-                              <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-red-100">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Dépense'}</div>
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-neutral-500">
-                                    <span className="num">{formatDateTime(m.created_at)}</span>
-                                    {m.method_name && <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{m.method_name}</span>}
-                                  </div>
-                                </div>
-                                <span className="text-xs font-bold text-red-700 num shrink-0">-{formatFCFA(m.amount)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {remboursementsList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'remboursements' ? 'border-amber-300 bg-amber-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'remboursements' ? null : 'remboursements')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'remboursements' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Remboursements</div>
-                                <div className="text-[10px] text-neutral-500">{remboursementsList.length} remboursement{remboursementsList.length > 1 ? 's' : ''}</div>
-                              </div>
-                            </div>
-                            <span className="text-sm font-bold text-amber-700 num shrink-0">-{formatFCFA(remboursementsTotal)}</span>
-                          </div>
-                        </button>
-                        {detailExpanded === 'remboursements' && (
-                          <div className="px-2.5 pb-2.5 space-y-1 max-h-60 overflow-y-auto">
-                            {remboursementsList.map(m => (
-                              <div key={m.id} className="p-2 rounded-lg bg-white border border-amber-100 text-xs">
-                                <div className="font-semibold text-neutral-900 line-clamp-1">{m.reason || 'Remboursement'}</div>
-                                <div className="flex items-center justify-between mt-0.5">
-                                  <span className="text-[10px] text-neutral-400">{formatDateTime(m.created_at)}</span>
-                                  <span className="font-bold text-amber-700 num">-{formatFCFA(m.amount)}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {retraitsList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'retraits' ? 'border-amber-300 bg-amber-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'retraits' ? null : 'retraits')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'retraits' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
-                                <ArrowDownRight className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Retraits client</div>
-                                <div className="text-[10px] text-neutral-500">{retraitsList.length} retrait{retraitsList.length > 1 ? 's' : ''}</div>
-                              </div>
-                            </div>
-                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'retraits' ? 'rotate-90' : ''}`} />
-                          </div>
-                          <div className="text-right pl-9">
-                            <span className="text-sm font-bold text-amber-700 num whitespace-nowrap">-{formatFCFA(retraitsTotal)}</span>
-                          </div>
-                        </button>
-                        {detailExpanded === 'retraits' && (
-                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
-                            {retraitsList.map(m => (
-                              <div key={m.id} className="p-2.5 rounded-lg bg-white border border-amber-100">
-                                <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
-                                <div className="flex items-center justify-between gap-2 mt-1">
-                                  <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Caisse'}</span>
-                                  <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                                  <span className="text-xs font-bold text-amber-700 num shrink-0">-{formatFCFA(m.amount)}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {pretsList.length > 0 && (
-                      <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'prets' ? 'border-blue-300 bg-blue-50/40' : 'border-neutral-200 bg-white'}`}>
-                        <button onClick={() => setDetailExpanded(detailExpanded === 'prets' ? null : 'prets')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'prets' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'}`}>
-                                <HandCoins className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Prêts client</div>
-                                <div className="text-[10px] text-neutral-500">{pretsList.length} prêt{pretsList.length > 1 ? 's' : ''}</div>
-                              </div>
-                            </div>
-                            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'prets' ? 'rotate-90' : ''}`} />
-                          </div>
-                          <div className="text-right pl-9">
-                            <span className="text-sm font-bold text-blue-700 num whitespace-nowrap">-{formatFCFA(pretsTotal)}</span>
-                          </div>
-                        </button>
-                        {detailExpanded === 'prets' && (
-                          <div className="px-2 pb-2 space-y-1 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
-                            {pretsList.map(m => (
-                              <div key={m.id} className="p-2.5 rounded-lg bg-white border border-blue-100">
-                                <div className="text-xs font-semibold text-neutral-900">{m.customer_name || 'Client'}</div>
-                                <div className="flex items-center justify-between gap-2 mt-1">
-                                  <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium text-[9px] shrink-0">{m.method_name || 'Caisse'}</span>
-                                  <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(m.created_at)}</span>
-                                  <span className="text-xs font-bold text-blue-700 num shrink-0">-{formatFCFA(m.amount)}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                );
+                return (<>
+                  <MovSection id="encDirect" icon={ArrowDownRight} label="Encaissements directs" items={encDirectList} total={encDirectList.reduce((s, m) => s + m.amount, 0)} sign="+" color="text-neutral-700" />
+                  <MovSection id="acomptes" icon={Wallet} label="Acomptes clients" items={acomptesList} total={acomptesList.reduce((s, m) => s + m.amount, 0)} sign="+" color="text-neutral-700" />
+                  <MovSection id="depenses" icon={ArrowUpRight} label="Décaissements" items={depensesList} total={depensesList.reduce((s, m) => s + m.amount, 0)} sign="-" color="text-red-600" />
+                  <MovSection id="remboursements" icon={RotateCcw} label="Remboursements" items={remboursementsList} total={remboursementsList.reduce((s, m) => s + m.amount, 0)} sign="-" color="text-amber-600" />
+                  <MovSection id="retraits" icon={ArrowDownRight} label="Retraits client" items={retraitsList} total={retraitsList.reduce((s, m) => s + m.amount, 0)} sign="-" color="text-amber-600" />
+                  <MovSection id="prets" icon={HandCoins} label="Prêts client" items={pretsList} total={pretsList.reduce((s, m) => s + m.amount, 0)} sign="-" color="text-neutral-700" />
+                </>);
               })()}
 
               {/* Ventes */}
-              <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'ventes' ? 'border-brand-300 bg-brand-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
-                <button onClick={() => setDetailExpanded(detailExpanded === 'ventes' ? null : 'ventes')} className="w-full flex flex-col gap-1 px-2.5 py-2 text-left">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'ventes' ? 'bg-brand-200 text-brand-800' : 'bg-neutral-100 text-neutral-700'}`}>
-                        <Package className="w-3.5 h-3.5" />
+              <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'ventes' ? null : 'ventes'); }} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Package className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span className="text-xs font-semibold text-neutral-800 truncate">Ventes de la session</span>
+                  <span className="text-[10px] text-neutral-400 shrink-0">{detail.sales.length}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-bold text-neutral-800 num">{formatFCFA(detail.sales.reduce((s, x) => s + x.total, 0))}</span>
+                  <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${detailExpanded === 'ventes' ? 'rotate-90' : ''}`} />
+                </div>
+              </button>
+              {detailExpanded === 'ventes' && (
+                <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                  {detail.sales.length === 0 ? (
+                    <div className="py-3 text-center text-xs text-neutral-400">Aucune vente.</div>
+                  ) : detail.sales.map(s => (
+                    <div key={s.id} className="flex items-center justify-between py-1.5 pl-6 gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium text-neutral-800 truncate">{s.customer_name || 'Comptoir'}</div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                          <span className="doc-number font-semibold text-neutral-500">{s.sale_number}</span>
+                          <span>{new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Ventes de la session</div>
-                        <div className="text-[10px] text-neutral-500">{detail.sales.length} vente{detail.sales.length > 1 ? 's' : ''}</div>
-                      </div>
+                      <span className="text-xs font-semibold text-neutral-800 num shrink-0">{formatFCFA(s.total)}</span>
                     </div>
-                    <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'ventes' ? 'rotate-90' : ''}`} />
-                  </div>
-                  <div className="text-right pl-9">
-                    <span className="text-sm font-bold text-neutral-800 num whitespace-nowrap">{formatFCFA(detail.sales.reduce((s, x) => s + x.total, 0))}</span>
-                  </div>
-                </button>
-                {detailExpanded === 'ventes' && (
-                  <div className="px-2 pb-2 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                    {detail.sales.length === 0 ? (
-                      <div className="py-3 text-center text-xs text-neutral-500">Aucune vente.</div>
-                    ) : detail.sales.map(s => (
-                      <div key={s.id} className="p-2.5 rounded-lg bg-white border border-neutral-100 hover:border-brand-200 transition">
-                        <div className="text-xs font-semibold text-neutral-900">{s.customer_name || 'Comptoir'}</div>
-                        <div className="flex items-center justify-between gap-2 mt-1">
-                          <span className="doc-number text-[12px] font-bold text-brand-700">{s.sale_number}</span>
-                          <span className="text-[10px] text-neutral-400 num flex-1 text-center">{formatDateTime(s.created_at)}</span>
-                          <span className="num font-bold text-xs text-neutral-900">{formatFCFA(s.total)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Controle de caisse */}
-              {detail.controls.length > 0 && (
-                <div className={`rounded-xl border transition-all duration-200 ${detailExpanded === 'controle' ? 'border-amber-300 bg-amber-50/30 order-first' : 'border-neutral-200 bg-white'}`}>
-                  <button onClick={() => setDetailExpanded(detailExpanded === 'controle' ? null : 'controle')} className="w-full flex flex-col gap-1 px-3 py-2.5 text-left">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${detailExpanded === 'controle' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700'}`}>
-                          <Check className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-neutral-800 whitespace-nowrap">Controle de caisse</div>
-                          <div className="text-[10px] text-neutral-500">{detail.controls.length} methode{detail.controls.length > 1 ? 's' : ''}</div>
-                        </div>
-                      </div>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 shrink-0 ${detailExpanded === 'controle' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {detailExpanded === 'controle' && (
-                    <div className="px-3 pb-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                      {Number(detail.session.opening_amount) > 0 && (
-                        <div className="flex items-center justify-between px-3 py-2 mb-1.5 rounded-lg bg-amber-50/60 border border-amber-100 text-xs">
-                          <span className="font-medium text-neutral-600">Fond d'ouverture</span>
-                          <span className="font-bold text-neutral-800 num">{formatFCFA(Number(detail.session.opening_amount))}</span>
-                        </div>
-                      )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                        {detail.controls.map((c, i) => {
-                          const diff = Number(c.difference_amount);
-                          const balanced = diff === 0;
-                          return (
-                            <div key={i} className={`rounded-lg border p-2.5 ${balanced ? 'border-neutral-100 bg-white' : diff < 0 ? 'border-red-100 bg-red-50/40' : 'border-amber-100 bg-amber-50/40'}`}>
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-xs font-bold text-neutral-800 truncate">{c.method_name}</div>
-                                <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold num shrink-0 ${balanced ? 'text-neutral-700' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                                  {balanced ? <><Check className="w-3 h-3" /> OK</> : <>{diff > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{formatFCFA(Math.abs(diff))}</>}
-                                </span>
-                              </div>
-                              <div className="mt-1.5 flex items-center justify-between text-[10px]">
-                                <div><span className="text-neutral-400">Th.</span> <span className="num font-semibold text-neutral-700">{formatFCFA(c.theoretical_amount)}</span></div>
-                                <div><span className="text-neutral-400">Cpt.</span> <span className="num font-semibold text-neutral-800">{formatFCFA(c.counted_amount)}</span></div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </div>
               )}
+
+              {/* Controle de caisse */}
+              {detail.controls.length > 0 && (<>
+                <button onClick={() => { tap(); setDetailExpanded(detailExpanded === 'controle' ? null : 'controle'); }} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Check className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-800 truncate">Contrôle de caisse</span>
+                    <span className="text-[10px] text-neutral-400 shrink-0">{detail.controls.length}</span>
+                  </div>
+                  <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 shrink-0 ${detailExpanded === 'controle' ? 'rotate-90' : ''}`} />
+                </button>
+                {detailExpanded === 'controle' && (
+                  <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    {Number(detail.session.opening_amount) > 0 && (
+                      <div className="flex items-center justify-between py-1.5 pl-6 text-xs">
+                        <span className="text-neutral-500">Fond d'ouverture</span>
+                        <span className="font-semibold text-neutral-800 num">{formatFCFA(Number(detail.session.opening_amount))}</span>
+                      </div>
+                    )}
+                    {detail.controls.map((c, i) => {
+                      const diff = Number(c.difference_amount);
+                      const balanced = diff === 0;
+                      return (
+                        <div key={i} className="py-1.5 pl-6">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-medium text-neutral-800 truncate">{c.method_name}</span>
+                            <span className={`font-bold num shrink-0 ${balanced ? 'text-neutral-600' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                              {balanced ? 'OK' : `${diff > 0 ? '+' : ''}${formatFCFA(diff)}`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5 text-[10px] text-neutral-400 num">
+                            <span>Th. {formatFCFA(c.theoretical_amount)}</span>
+                            <span>Cpt. {formatFCFA(c.counted_amount)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>)}
             </div>
 
-            {/* Regularizations inline if any */}
+            {/* Regularizations — flat hairline rows */}
             {detail.regularizations.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Regularisations ({detail.regularizations.length})</div>
-                {detail.regularizations.map((r, i) => (
-                  <div key={i} className={`flex items-center justify-between p-2 rounded-lg text-xs ${r.reg_type === 'manquant' ? 'bg-red-50 border border-red-100' : r.reg_type === 'excedent' ? 'bg-amber-50 border border-amber-100' : 'bg-neutral-50 border border-neutral-100'}`}>
-                    <div className="min-w-0 truncate">
-                      <span className="font-semibold capitalize">{r.reg_type}</span>
-                      {r.reason && <span className="text-neutral-600 ml-2">-- {r.reason}</span>}
+              <div className="mt-2 border-t border-neutral-100 pt-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-black mb-1">Régularisations ({detail.regularizations.length})</div>
+                <div className="divide-y divide-neutral-100">
+                  {detail.regularizations.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between py-1.5 text-xs">
+                      <div className="min-w-0 truncate">
+                        <span className={`font-semibold capitalize ${r.reg_type === 'manquant' ? 'text-red-600' : r.reg_type === 'excedent' ? 'text-amber-600' : 'text-neutral-700'}`}>{r.reg_type}</span>
+                        {r.reason && <span className="text-neutral-500 ml-1.5">{r.reason}</span>}
+                      </div>
+                      <span className="font-bold num shrink-0 ml-2 text-neutral-800">{formatFCFA(r.amount)}</span>
                     </div>
-                    <span className="font-bold num shrink-0 ml-2">{formatFCFA(r.amount)}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Notes */}
+            {/* Notes — single-line entries */}
             {(detail.session.opening_note || detail.session.closing_note) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+              <div className="mt-2 border-t border-neutral-100 pt-2 divide-y divide-neutral-100">
                 {detail.session.opening_note && (
-                  <div className="p-2 bg-neutral-50 rounded-xl border border-neutral-100">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Note ouverture</div>
-                    <div className="text-neutral-700">{detail.session.opening_note}</div>
+                  <div className="flex items-start justify-between py-1.5 gap-3 text-[11px]">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-black shrink-0 pt-px">Ouverture</span>
+                    <span className="text-neutral-700 text-right">{detail.session.opening_note}</span>
                   </div>
                 )}
                 {detail.session.closing_note && (
-                  <div className="p-2 bg-neutral-50 rounded-xl border border-neutral-100">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Note cloture</div>
-                    <div className="text-neutral-700">{detail.session.closing_note}</div>
+                  <div className="flex items-start justify-between py-1.5 gap-3 text-[11px]">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-black shrink-0 pt-px">Clôture</span>
+                    <span className="text-neutral-700 text-right">{detail.session.closing_note}</span>
                   </div>
                 )}
               </div>
             )}
           </div>
         ) : null}
-      </Modal>
+      </CashModal>
     </div>
   );
 }
