@@ -106,7 +106,7 @@ export function CashHistory() {
     if (!silent) setLoading(true);
     const { data } = await supabase
       .from('cash_sessions')
-      .select('id, opening_amount, theoretical_amount, counted_cash, opened_at, closed_at, status, user_id, site_id, tenant_id')
+      .select('id, opening_amount, theoretical_amount, counted_cash, opened_at, closed_at, closing_amount, variance, status, user_id, site_id, tenant_id')
       .eq('tenant_id', tenant.id)
       .eq('site_id', currentSite.id)
       .order('opened_at', { ascending: false })
@@ -259,8 +259,8 @@ export function CashHistory() {
         <div className="card-premium"><EmptyState icon={Clock} title="Aucune session" description="Les sessions de caisse apparaîtront ici après ouverture." /></div>
       ) : (
         <>
-          {/* MOBILE: cards */}
-          <div className="md:hidden grid grid-cols-1 gap-2">
+          {/* MOBILE: flat list */}
+          <div className="md:hidden divide-y divide-neutral-100">
             {filtered.map(s => {
               const variance = s.variance != null ? Number(s.variance) : null;
               const isOpen = s.status === 'open';
@@ -269,12 +269,12 @@ export function CashHistory() {
               const closed = s.closed_at ? new Date(s.closed_at) : null;
               const duration = closed ? Math.round((closed.getTime() - opened.getTime()) / 60000) : null;
               return (
-                <button key={s.id} data-row-id={s.id} onClick={() => openDetail(s)} className="card-premium text-left p-2.5 flex flex-col gap-1.5 hover:border-brand-400 transition-all duration-300 group">
+                <button key={s.id} data-row-id={s.id} onClick={() => openDetail(s)} className="w-full text-left px-2 py-3 flex flex-col gap-1.5 active:bg-neutral-50 transition-colors">
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="doc-number text-[11px] font-bold tracking-wider text-brand-700">#{s.id.slice(0, 8).toUpperCase()}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider ${isOpen ? 'text-neutral-700' : 'text-neutral-500'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
+                        <span className="text-[11px] font-bold tracking-wider text-neutral-800">#{s.id.slice(0, 8).toUpperCase()}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${isOpen ? 'text-neutral-700' : 'text-neutral-400'}`}>{isOpen ? 'Ouverte' : 'Clôturée'}</span>
                       </div>
                       <div className="text-[10px] text-neutral-500 num leading-tight mt-0.5 truncate">
                         {opened.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} · {opened.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -282,26 +282,24 @@ export function CashHistory() {
                         {duration != null && <span className="text-neutral-400"> · {duration > 60 ? `${Math.floor(duration / 60)}h${duration % 60}` : `${duration}m`}</span>}
                       </div>
                     </div>
-                    <span className="text-[10px] font-semibold text-neutral-400 group-hover:text-brand-600 transition-colors shrink-0">Voir</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-neutral-100">
+                  <div className="flex items-center gap-4 pt-1">
                     <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-black">Fond</div>
-                      <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{formatFCFA(s.opening_amount)}</div>
+                      <span className="text-[9px] text-neutral-400">Fond</span>
+                      <span className="ml-1 text-[11px] font-bold text-neutral-800 num">{formatFCFA(s.opening_amount)}</span>
                     </div>
                     <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-black">Compté</div>
-                      <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</div>
+                      <span className="text-[9px] text-neutral-400">Compté</span>
+                      <span className="ml-1 text-[11px] font-bold text-neutral-800 num">{s.counted_cash != null ? formatFCFA(s.counted_cash) : '—'}</span>
                     </div>
-                    <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-black">Écart</div>
-                      <div className="leading-tight mt-0.5">
-                        {variance != null ? (
-                          <span className={`text-[11px] font-bold num ${balanced ? 'text-neutral-700' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                            {balanced ? 'OK' : `${variance > 0 ? '+' : ''}${formatFCFA(Math.abs(variance))}`}
-                          </span>
-                        ) : <span className="text-[11px] text-neutral-400">—</span>}
-                      </div>
+                    <div className="ml-auto">
+                      {variance != null ? (
+                        <span className={`text-[11px] font-bold num ${balanced ? 'text-neutral-600' : variance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                          <span className="text-[9px] text-neutral-400 font-normal mr-1">{'\u00c9cart'}</span>
+                          {balanced ? 'OK' : `${variance > 0 ? '+' : ''}${formatFCFA(Math.abs(variance))}`}
+                        </span>
+                      ) : <span className="text-[11px] text-neutral-400">—</span>}
                     </div>
                   </div>
                 </button>

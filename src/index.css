@@ -131,6 +131,11 @@ p { line-height: 1.6; }
            focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400
            transition-all text-sm;
   }
+  .bare-input {
+    @apply w-full bg-transparent border-none outline-none shadow-none p-0;
+    -webkit-appearance: none;
+    &:focus, &:focus-visible { outline: none !important; box-shadow: none !important; border: none !important; }
+  }
   .checkout-input {
     @apply w-full h-11 px-3.5 rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder-neutral-400
            focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/15 focus:border-brand-400
@@ -253,7 +258,7 @@ p { line-height: 1.6; }
 
   /* ── Product / cart cards ─────────────────────────────── */
   .product-card {
-    @apply relative bg-white rounded-xl border border-neutral-200 p-2 flex flex-col gap-1.5
+    @apply relative bg-white rounded-md border border-neutral-200 p-2 flex flex-col gap-1.5
            transition-all duration-200 active:scale-[0.97] text-left overflow-hidden;
   }
   .product-card:hover {
@@ -554,9 +559,9 @@ p { line-height: 1.6; }
   top: max(12px, env(safe-area-inset-top));
   left: 10px;
   bottom: max(12px, env(safe-area-inset-bottom));
-  width: 84vw;
-  max-width: 320px;
-  border-radius: 20px;
+  width: 88vw;
+  max-width: 340px;
+  border-radius: 12px;
   animation: floatSidebarIn 350ms cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: pan-y;
   will-change: transform, opacity;
@@ -573,7 +578,7 @@ p { line-height: 1.6; }
   display: flex;
   flex-direction: column;
   height: 100%;
-  border-radius: 20px;
+  border-radius: 12px;
   background: #ffffff;
   border: 1px solid #e5e5e5;
   box-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.05);

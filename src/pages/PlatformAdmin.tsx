@@ -15,7 +15,7 @@ import { Modal, ConfirmDialog } from '../components/Modal';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
 import { LandingConfigSection as LandingConfigSectionNew } from '../components/LandingConfigSection';
-import { LOGIN_ICON_MAP, DEFAULT_LOGIN_MODULES, type LoginModule } from '../lib/loginConfig';
+import { LOGIN_ICON_MAP, DEFAULT_LOGIN_MODULES, type LoginModule, type TextAccent } from '../lib/loginConfig';
 
 type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'landing' | 'releases';
 
@@ -2390,9 +2390,13 @@ function LoginConfigSection() {
   const [subtitle, setSubtitle] = useState('');
   const [loginBgUrl, setLoginBgUrl] = useState<string | null>(null);
   const [modules, setModules] = useState<LoginModule[]>([]);
+  const [eyebrow, setEyebrow] = useState('');
+  const [textAccents, setTextAccents] = useState<TextAccent[]>([]);
+  const [loginTitle, setLoginTitle] = useState('');
+  const [loginSubtitle, setLoginSubtitle] = useState('');
   const [previewSlide, setPreviewSlide] = useState(0);
   const [previewAnim, setPreviewAnim] = useState<'in' | 'out'>('in');
-  const [activeTab, setActiveTab] = useState<'textes' | 'modules'>('textes');
+  const [activeTab, setActiveTab] = useState<'textes' | 'modules' | 'effets'>('textes');
 
   useEffect(() => {
     (async () => {
@@ -2403,6 +2407,10 @@ function LoginConfigSection() {
         setSubtitle(data.subtitle || '');
         setLoginBgUrl(data.login_bg_url || null);
         setModules(data.modules || []);
+        setEyebrow(data.eyebrow || '');
+        setTextAccents(data.text_accents || []);
+        setLoginTitle(data.login_title || '');
+        setLoginSubtitle(data.login_subtitle || '');
       } catch (e: any) { error(e.message); }
       setLoading(false);
     })();
@@ -2411,7 +2419,7 @@ function LoginConfigSection() {
   const save = async () => {
     setSaving(true);
     try {
-      await call('update_login_config', { headline, headline_accent: headlineAccent, subtitle, modules, login_bg_url: loginBgUrl });
+      await call('update_login_config', { headline, headline_accent: headlineAccent, subtitle, modules, login_bg_url: loginBgUrl, eyebrow, text_accents: textAccents, login_title: loginTitle, login_subtitle: loginSubtitle });
       success('Configuration de l\'écran de connexion enregistrée');
     } catch (e: any) { error(e.message); }
     setSaving(false);
@@ -2473,6 +2481,12 @@ function LoginConfigSection() {
               Textes
             </button>
             <button
+              onClick={() => setActiveTab('effets')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'effets' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Effets
+            </button>
+            <button
               onClick={() => setActiveTab('modules')}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'modules' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
@@ -2513,6 +2527,39 @@ function LoginConfigSection() {
                 />
               </div>
               <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Eyebrow (petit texte au-dessus du titre)</label>
+                <input
+                  value={eyebrow}
+                  onChange={e => setEyebrow(e.target.value)}
+                  placeholder="LA PLATEFORME QUI AVANCE AVEC VOUS"
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Texte en petites capitales au-dessus du titre principal</p>
+              </div>
+              <div className="border-t border-slate-100 pt-4 mt-2">
+                <p className="text-xs font-bold text-slate-700 mb-3">Zone de connexion (droite)</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Titre connexion</label>
+                    <input
+                      value={loginTitle}
+                      onChange={e => setLoginTitle(e.target.value)}
+                      placeholder="Accédez à votre espace"
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Sous-titre connexion</label>
+                    <input
+                      value={loginSubtitle}
+                      onChange={e => setLoginSubtitle(e.target.value)}
+                      placeholder="Connectez-vous pour gérer votre activité."
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Image de fond</label>
                 <div className="flex items-center gap-3">
                   {loginBgUrl && (
@@ -2541,6 +2588,154 @@ function LoginConfigSection() {
                   )}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1.5">Affichee en arriere-plan avec transparence. JPG/WebP recommande, max 3 Mo. Si absente, le fond par defaut s'applique.</p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'effets' && (
+            <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-bold text-slate-700">Effets graphiques sur le texte</p>
+                  <button
+                    type="button"
+                    onClick={() => setTextAccents(prev => [...prev, { text: '', effect: 'underline', color: '#0f766e' }])}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-[11px] font-semibold hover:bg-brand-100 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Ajouter un effet
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mb-3">Appliquez des effets visuels (soulignement, surlignage, peinture...) sur des mots ou portions de texte dans le titre ou sous-titre de la page de connexion.</p>
+              </div>
+
+              {textAccents.length === 0 && (
+                <div className="text-center py-8 space-y-2">
+                  <p className="text-xs text-slate-400">Aucun effet configuré.</p>
+                  <p className="text-[10px] text-slate-400">Les titres s'afficheront sans mise en valeur particulière.</p>
+                </div>
+              )}
+
+              <div className="space-y-3 max-h-[400px] overflow-y-auto -mr-1 pr-1">
+                {textAccents.map((accent, idx) => (
+                  <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 space-y-2.5 group">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase w-5 shrink-0">#{idx + 1}</span>
+                      <input
+                        value={accent.text}
+                        onChange={e => setTextAccents(prev => prev.map((a, i) => i === idx ? { ...a, text: e.target.value } : a))}
+                        placeholder="Texte à mettre en valeur"
+                        className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 text-[12px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 min-w-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTextAccents(prev => prev.filter((_, i) => i !== idx))}
+                        className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={accent.effect}
+                        onChange={e => setTextAccents(prev => prev.map((a, i) => i === idx ? { ...a, effect: e.target.value as TextAccent['effect'] } : a))}
+                        className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+                      >
+                        <option value="underline">Soulignement peinture</option>
+                        <option value="wavyUnderline">Soulignement ondule</option>
+                        <option value="shortUnderline">Trait court centre</option>
+                        <option value="paint">Peinture / surlignage peint</option>
+                        <option value="paintStroke">Coup de pinceau</option>
+                        <option value="marker">Marqueur epais</option>
+                        <option value="highlight">Surlignage clair</option>
+                        <option value="brush">Trait solide en bas</option>
+                        <option value="circle">Cercle autour du mot</option>
+                        <option value="starburst">Rayons / etoile</option>
+                        <option value="boxed">Encadre</option>
+                        <option value="glow">Lueur / glow</option>
+                        <option value="splash">Couleur + italique</option>
+                        <option value="strikethrough">Barre / raye</option>
+                      </select>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="color"
+                          value={accent.color}
+                          onChange={e => setTextAccents(prev => prev.map((a, i) => i === idx ? { ...a, color: e.target.value } : a))}
+                          className="w-7 h-7 rounded-lg border border-slate-200 cursor-pointer p-0.5"
+                        />
+                        <span className="text-[10px] text-slate-500 font-mono">{accent.color}</span>
+                      </div>
+                    </div>
+                    {/* Preview */}
+                    {accent.text && (
+                      <div className="pt-1 border-t border-slate-100">
+                        <p className="text-[10px] text-slate-400 mb-1">Aperçu :</p>
+                        <span className="text-sm font-bold text-slate-900 relative inline-block" style={
+                          accent.effect === 'underline' ? {
+                            backgroundImage: `linear-gradient(to right, ${accent.color}60, ${accent.color}60)`,
+                            backgroundSize: '100% 4px',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'bottom',
+                            paddingBottom: '4px',
+                          } : accent.effect === 'paint' ? {
+                            background: `${accent.color}25`,
+                            padding: '1px 5px',
+                            display: 'inline',
+                            borderRadius: '3px',
+                            transform: 'skewX(-2deg)',
+                          } : accent.effect === 'highlight' ? {
+                            background: `${accent.color}22`,
+                            padding: '2px 6px',
+                            borderRadius: '2px',
+                          } : accent.effect === 'brush' ? {
+                            borderBottom: `3px solid ${accent.color}`,
+                            paddingBottom: '2px',
+                          } : accent.effect === 'splash' ? {
+                            color: accent.color,
+                            fontStyle: 'italic',
+                          } : accent.effect === 'marker' ? {
+                            background: `linear-gradient(transparent 40%, ${accent.color}88 40%, ${accent.color}88 85%, transparent 85%)`,
+                            padding: '0 2px',
+                          } : accent.effect === 'wavyUnderline' ? {
+                            textDecoration: 'underline wavy',
+                            textDecorationColor: accent.color,
+                            textUnderlineOffset: '4px',
+                            textDecorationThickness: '2px',
+                          } : accent.effect === 'shortUnderline' ? {
+                            borderBottom: `4px solid ${accent.color}`,
+                            paddingBottom: '3px',
+                            borderImage: `linear-gradient(to right, transparent 25%, ${accent.color} 25%, ${accent.color} 75%, transparent 75%) 1`,
+                          } : accent.effect === 'paintStroke' ? {
+                            background: `linear-gradient(95deg, ${accent.color}55 0%, ${accent.color}35 40%, ${accent.color}55 70%, ${accent.color}30 100%)`,
+                            padding: '2px 4px',
+                            borderRadius: '4px 2px 4px 2px',
+                            transform: 'rotate(-0.5deg)',
+                          } : accent.effect === 'circle' ? {
+                            border: `2.5px dashed ${accent.color}`,
+                            borderRadius: '50%',
+                            padding: '2px 10px',
+                          } : accent.effect === 'starburst' ? {
+                            color: accent.color,
+                            textShadow: `2px 2px 0 ${accent.color}33, -2px -2px 0 ${accent.color}33`,
+                            fontWeight: 900,
+                          } : accent.effect === 'boxed' ? {
+                            border: `2.5px solid ${accent.color}`,
+                            padding: '1px 8px',
+                            borderRadius: '4px',
+                          } : accent.effect === 'glow' ? {
+                            color: accent.color,
+                            textShadow: `0 0 8px ${accent.color}66, 0 0 20px ${accent.color}33`,
+                          } : accent.effect === 'strikethrough' ? {
+                            textDecoration: 'line-through',
+                            textDecorationColor: accent.color,
+                            textDecorationThickness: '3px',
+                          } : {}
+                        }>
+                          {accent.text}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}

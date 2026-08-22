@@ -1,4 +1,4 @@
-import { Plus, Car } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 import type { ShopArticle, Category } from '../../lib/shopTypes';
 import { stockBadge } from '../../lib/shopTypes';
 import { formatFCFA } from '../../lib/format';
@@ -23,108 +23,73 @@ export function ShopProductCard({
   cartQty,
   onDetail,
   onAddToCart,
-  theme,
   showReferences,
   showStock,
   lowStockThreshold,
 }: Props) {
   const badge = stockBadge(article.stock_qty, lowStockThreshold);
   const cat = categories.find((c) => c.id === article.category_id);
-  const inCart = cartQty > 0;
   const outOfStock = article.stock_qty === 0;
   const maxReached = cartQty >= article.stock_qty;
+
   return (
-    <div className={`group relative flex flex-col ${theme.cardClassName}`}>
+    <div className="group flex flex-col bg-white hover:bg-neutral-50/50 transition-colors">
       {/* Image */}
       <button
         onClick={onDetail}
-        className={`relative w-full ${theme.cardImageAspect} rounded-t-2xl overflow-hidden ${theme.cardImageBg} ${theme.cardImagePadding} shrink-0`}
+        className="relative w-full aspect-square overflow-hidden bg-white shrink-0"
         aria-label={`Voir ${article.name}`}
       >
         <ShopLazyImage
           src={article.image_url}
           alt={article.name}
-          className={`w-full h-full object-contain ${theme.cardImagePadding}`}
-          fallbackClassName={`w-full h-full ${theme.cardImagePadding}`}
-          fallbackIconSize={28}
+          className="w-full h-full object-contain p-2"
+          fallbackClassName="w-full h-full p-2"
+          fallbackIconSize={20}
         />
         {showStock && (
-          <div className="absolute top-1.5 left-1.5">
-            <span
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ${badge.cls}`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${badge.dot}`} />
-              {badge.label}
-            </span>
-          </div>
-        )}
-        {inCart && (
-          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-700 text-white text-[9px] font-bold flex items-center justify-center shadow-glow">
-            {cartQty}
+          <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+            <span className="text-[9px] font-medium text-neutral-500">{badge.label}</span>
           </div>
         )}
       </button>
 
       {/* Info */}
-      <div className={`flex-1 flex flex-col min-w-0 ${theme.cardBodyClass}`}>
+      <div className="flex-1 flex flex-col px-2 pt-1.5 pb-2">
         <button onClick={onDetail} className="flex-1 text-left">
-          {cat && (
-            <div className="text-[9px] font-bold uppercase tracking-wider text-brand-600/70 mb-0.5 truncate">
-              {cat.name}
-            </div>
-          )}
-          <div
-            className={`${theme.cardTitleClass} shop-product-name mb-1`}
-          >
+          <div className="text-[11px] font-semibold text-neutral-900 leading-tight line-clamp-2">
             {article.name}
           </div>
           {showReferences && article.internal_ref && (
-            <div className="text-[10px] font-mono text-slate-400 truncate">
+            <div className="text-[9px] text-neutral-400 truncate mt-0.5">
               {article.internal_ref}
             </div>
           )}
-          {showReferences && article.oem_ref && (
-            <div className="text-[10px] font-mono text-slate-400 truncate">
-              OEM: {article.oem_ref}
-            </div>
-          )}
-          {article.compatibilities.length > 0 && (
-            <div className="text-[10px] text-slate-500 truncate flex items-center gap-1 mt-0.5">
-              <Car className="w-2.5 h-2.5 shrink-0 text-slate-400" />
-              {article.compatibilities[0].brand_name}{' '}
-              {article.compatibilities[0].model_name}
-              {article.compatibilities.length > 1 && (
-                <span className="text-slate-400">
-                  +{article.compatibilities.length - 1}
-                </span>
-              )}
-            </div>
-          )}
-          <div className={`${theme.cardPriceClass} num mt-1.5 leading-none`}>
-            {formatFCFA(article.sale_price)}
-          </div>
         </button>
 
-        {/* Add to cart */}
+        <div className="text-[11px] font-bold text-neutral-900 num mt-1">
+          {formatFCFA(article.sale_price)}
+        </div>
+
+        {/* CTA */}
         <button
           onClick={onAddToCart}
           disabled={outOfStock || maxReached}
-          className={`mt-2 w-full h-9 rounded-xl text-xs font-bold transition-all active:scale-95 inline-flex items-center justify-center gap-1 ${
+          className={`mt-1.5 inline-flex items-center justify-center gap-1 px-2 py-0.5 text-[9px] font-bold transition-all ${
             outOfStock || maxReached
-              ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-              : inCart
-                ? 'bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100'
-                : 'bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-sm hover:shadow-glow'
+              ? 'border border-neutral-200 text-neutral-300 cursor-not-allowed'
+              : 'bg-neutral-900 text-white hover:bg-neutral-800 active:scale-95'
           }`}
         >
           {outOfStock ? (
             'Rupture'
           ) : maxReached ? (
-            'Max stock'
+            'Max'
           ) : (
             <>
-              <Plus className="w-3 h-3" />
-              {inCart ? 'Ajouter encore' : 'Ajouter'}
+              <ShoppingCart className="w-2.5 h-2.5" />
+              Ajouter
             </>
           )}
         </button>
@@ -133,18 +98,14 @@ export function ShopProductCard({
   );
 }
 
-// Skeleton card for loading state
 export function ShopProductCardSkeleton({ theme }: { theme: ShopThemeConfig }) {
   return (
-    <div className={`flex flex-col ${theme.cardClassName}`}>
-      <div
-        className={`w-full ${theme.cardImageAspect} rounded-t-2xl shop-skeleton`}
-      />
-      <div className={theme.cardBodyClass}>
-        <div className="h-3 shop-skeleton mb-2 w-3/4" />
-        <div className="h-2.5 shop-skeleton mb-1 w-1/2" />
-        <div className="h-4 shop-skeleton mt-2 w-1/3" />
-        <div className="h-8 shop-skeleton mt-2 w-full rounded-xl" />
+    <div className="flex flex-col bg-white">
+      <div className="w-full aspect-square bg-neutral-50 animate-pulse" />
+      <div className="px-2 pt-1.5 pb-2">
+        <div className="h-2.5 bg-neutral-100 mb-1 w-3/4 animate-pulse" />
+        <div className="h-2.5 bg-neutral-100 mt-1 w-1/3 animate-pulse" />
+        <div className="h-5 bg-neutral-100 mt-1.5 w-12 animate-pulse" />
       </div>
     </div>
   );

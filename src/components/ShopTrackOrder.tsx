@@ -18,19 +18,19 @@ type TrackedOrder = {
 };
 
 const STEPS: { key: string; label: string; icon: any }[] = [
-  { key: 'nouvelle',       label: 'Commande reçue', icon: ShoppingBag },
-  { key: 'confirmee',      label: 'Confirmée',      icon: CheckCircle2 },
-  { key: 'en_preparation', label: 'En préparation', icon: Package },
-  { key: 'prete',          label: 'Prête',          icon: ShoppingBag },
-  { key: 'livree',         label: 'Livrée',         icon: Truck },
+  { key: 'nouvelle',       label: 'Commande recue',  icon: ShoppingBag },
+  { key: 'confirmee',      label: 'Confirmee',       icon: CheckCircle2 },
+  { key: 'en_preparation', label: 'En preparation',  icon: Package },
+  { key: 'prete',          label: 'Prete',           icon: ShoppingBag },
+  { key: 'livree',         label: 'Livree',          icon: Truck },
 ];
 
 const STATUS_LABEL: Record<string, string> = {
-  nouvelle: 'Commande reçue', confirmee: 'Confirmée', en_preparation: 'En préparation',
-  prete: 'Prête', livree: 'Livrée', annulee: 'Annulée',
+  nouvelle: 'Commande recue', confirmee: 'Confirmee', en_preparation: 'En preparation',
+  prete: 'Prete', livree: 'Livree', annulee: 'Annulee',
 };
 const PAY_LABEL: Record<string, string> = {
-  non_paye: 'Non payé', en_attente: 'En attente', paye: 'Payé', rembourse: 'Remboursé',
+  non_paye: 'Non paye', en_attente: 'En attente', paye: 'Paye', rembourse: 'Rembourse',
 };
 
 export function ShopTrackOrder({
@@ -56,7 +56,7 @@ export function ShopTrackOrder({
       });
       if (error) throw error;
       if (!data) {
-        if (!silent) { setResult(null); setErr('Aucune commande trouvée avec ce numéro et ce téléphone.'); }
+        if (!silent) { setResult(null); setErr('Aucune commande trouvee avec ce numero et ce telephone.'); }
       } else {
         setResult(data as TrackedOrder);
         if (!silent) setErr('');
@@ -69,147 +69,143 @@ export function ShopTrackOrder({
   };
 
   const search = async () => {
-    if (!orderNumber.trim() || !phone.trim()) { setErr('Veuillez saisir le numéro de commande et votre téléphone.'); return; }
+    if (!orderNumber.trim() || !phone.trim()) { setErr('Veuillez saisir le numero de commande et votre telephone.'); return; }
     const n = orderNumber.trim(); const p = phone.trim();
     lastArgsRef.current = { n, p };
     setErr(''); setSearched(true);
     await doFetch(n, p, false);
   };
 
-  // Auto-refresh tracked order in realtime when its status changes server-side.
   useEffect(() => {
     if (!result?.id) return;
     const channel = supabase
       .channel(`track-order:${result.id}`)
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: `id=eq.${result.id}` },
-        () => {
-          const a = lastArgsRef.current;
-          if (a) doFetch(a.n, a.p, true);
-        })
+        () => { const a = lastArgsRef.current; if (a) doFetch(a.n, a.p, true); })
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'online_order_status_history', filter: `order_id=eq.${result.id}` },
-        () => {
-          const a = lastArgsRef.current;
-          if (a) doFetch(a.n, a.p, true);
-        })
+        () => { const a = lastArgsRef.current; if (a) doFetch(a.n, a.p, true); })
       .subscribe();
 
-    // Safety net: light poll every 20s while page is open
     const poll = setInterval(() => {
       const a = lastArgsRef.current;
       if (a && !document.hidden) doFetch(a.n, a.p, true);
     }, 20000);
 
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(poll);
-    };
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
   }, [result?.id]);
 
   const isCancelled = result?.status === 'annulee';
   const currentStepIdx = result ? STEPS.findIndex(s => s.key === result.status) : -1;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-white border-b border-neutral-100">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6">
           <div className="flex items-center gap-3 py-3">
-            <button onClick={onBack} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 transition-colors">
+            <button onClick={onBack} className="p-2 -ml-2 text-neutral-500 hover:text-neutral-900 transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              {shopLogo ? (
-                <img src={shopLogo} alt={shopName} className="h-9 max-w-[80px] object-contain shrink-0" />
-              ) : (
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shrink-0 shadow-sm">
-                  <Package className="w-4 h-4 text-white" />
-                </div>
+              {shopLogo && (
+                <img src={shopLogo} alt={shopName} className="h-8 max-w-[80px] object-contain shrink-0" />
               )}
               <div className="min-w-0">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70 leading-none">Suivi de commande</div>
-                <div className="text-base font-bold text-slate-900 truncate leading-tight">{shopName}</div>
+                <div className="text-xs font-bold text-neutral-900 truncate">{shopName}</div>
+                <div className="text-[10px] text-neutral-400">Suivi de commande</div>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center">
-              <Search className="w-4 h-4 text-brand-700" />
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+        {/* Search form */}
+        <div>
+          <h1 className="text-lg font-bold text-neutral-900 mb-1">Suivre ma commande</h1>
+          <p className="text-sm text-neutral-400 mb-6">Saisissez votre numero de commande et votre telephone</p>
+
+          <div className="space-y-5">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-2">Numero de commande</label>
+              <input
+                value={orderNumber}
+                onChange={e => setOrderNumber(e.target.value.toUpperCase())}
+                placeholder="WEB-000123"
+                className="bare-input text-sm font-bold text-neutral-900 tracking-wider pb-2"
+              />
+              <div className="h-px bg-neutral-200" />
             </div>
             <div>
-              <div className="font-bold text-slate-900">Suivre ma commande</div>
-              <div className="text-xs text-slate-500">Saisissez votre numéro de commande et votre téléphone</div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-2">Telephone utilise lors de la commande</label>
+              <input
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                inputMode="tel"
+                placeholder="77 123 45 67"
+                className="bare-input text-sm text-neutral-900 pb-2"
+              />
+              <div className="h-px bg-neutral-200" />
             </div>
-          </div>
-          <div className="space-y-2.5">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Numéro de commande</label>
-              <input value={orderNumber} onChange={e => setOrderNumber(e.target.value.toUpperCase())} placeholder="WEB-000123"
-                className="w-full h-11 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 outline-none transition-all font-semibold tracking-wider" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Téléphone utilisé lors de la commande</label>
-              <input value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" placeholder="77 123 45 67"
-                className="w-full h-11 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 outline-none transition-all" />
-            </div>
-            <button onClick={search} disabled={loading}
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 text-white font-bold inline-flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.98] transition-all shadow-glow disabled:opacity-60">
+            <button
+              onClick={search}
+              disabled={loading}
+              className="h-11 px-8 bg-neutral-900 text-white text-sm font-bold hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50 inline-flex items-center gap-2"
+            >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              {loading ? 'Recherche…' : 'Rechercher ma commande'}
+              {loading ? 'Recherche...' : 'Rechercher ma commande'}
             </button>
             {err && (
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm">
+              <div className="flex items-start gap-2 text-sm text-red-600">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /><span>{err}</span>
               </div>
             )}
           </div>
         </div>
 
+        {/* Results */}
         {result && (
-          <div className="space-y-4 animate-scale-in">
+          <div className="space-y-6 animate-scale-in">
             {isCancelled ? (
-              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-rose-500 flex items-center justify-center shrink-0">
-                  <Ban className="w-5 h-5 text-white" />
-                </div>
+              <div className="border border-red-200 p-5 flex items-center gap-3">
+                <Ban className="w-5 h-5 text-red-500 shrink-0" />
                 <div>
-                  <div className="font-bold text-rose-900">Commande annulée</div>
-                  <div className="text-xs text-rose-700 mt-0.5">Cette commande a été annulée. Contactez-nous pour plus d'informations.</div>
+                  <div className="font-bold text-red-900">Commande annulee</div>
+                  <div className="text-xs text-red-600 mt-0.5">Contactez-nous pour plus d'informations.</div>
                 </div>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-5">
-                <div className="flex items-center justify-between mb-4">
+              <div className="border border-neutral-200 p-5">
+                <div className="flex items-center justify-between mb-5">
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Commande</div>
-                    <div className="font-extrabold text-lg text-slate-900 tracking-wider">{result.order_number}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Commande</div>
+                    <div className="font-bold text-lg text-neutral-900 tracking-wider">{result.order_number}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Statut actuel</div>
-                    <div className="font-bold text-brand-800">{STATUS_LABEL[result.status] || result.status}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Statut</div>
+                    <div className="font-bold text-neutral-900">{STATUS_LABEL[result.status] || result.status}</div>
                   </div>
                 </div>
-                <ol className="relative space-y-3">
+                <ol className="space-y-3">
                   {STEPS.map((step, idx) => {
                     const Icon = step.icon;
                     const done = currentStepIdx >= idx;
                     const current = currentStepIdx === idx;
                     return (
                       <li key={step.key} className="flex items-center gap-3">
-                        <div className={`relative w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all ${done ? 'bg-gradient-to-br from-brand-600 to-brand-800 shadow-glow' : 'bg-slate-100 border border-slate-200'}`}>
-                          <Icon className={`w-4 h-4 ${done ? 'text-white' : 'text-slate-400'}`} />
-                          {current && <span className="absolute inset-0 rounded-full bg-brand-500/30 animate-ping" />}
+                        <div className={`relative w-8 h-8 flex items-center justify-center shrink-0 transition-all ${
+                          done ? 'bg-neutral-900' : 'border border-neutral-200'
+                        }`}>
+                          <Icon className={`w-4 h-4 ${done ? 'text-white' : 'text-neutral-300'}`} />
+                          {current && <span className="absolute inset-0 bg-neutral-400/30 animate-ping" />}
                         </div>
                         <div className="flex-1">
-                          <div className={`text-sm font-semibold ${done ? 'text-slate-900' : 'text-slate-400'}`}>{step.label}</div>
-                          {current && <div className="text-xs text-brand-700 font-medium">Étape actuelle</div>}
+                          <div className={`text-sm ${done ? 'font-bold text-neutral-900' : 'text-neutral-400'}`}>{step.label}</div>
+                          {current && <div className="text-[10px] font-bold text-neutral-500">Etape actuelle</div>}
                         </div>
-                        {done && idx < currentStepIdx && <CheckCircle2 className="w-4 h-4 text-brand-600 shrink-0" />}
+                        {done && idx < currentStepIdx && <CheckCircle2 className="w-4 h-4 text-neutral-400 shrink-0" />}
                       </li>
                     );
                   })}
@@ -217,61 +213,60 @@ export function ShopTrackOrder({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-4">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Paiement</div>
-                <div className="font-bold text-slate-900 text-sm">{PAY_LABEL[result.payment_status] || result.payment_status}</div>
-                <div className="text-xs text-slate-500 mt-0.5 capitalize">{(result.payment_mode || '').replace(/_/g, ' ')}</div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="border border-neutral-200 p-4">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Paiement</div>
+                <div className="font-bold text-neutral-900 text-sm">{PAY_LABEL[result.payment_status] || result.payment_status}</div>
+                <div className="text-xs text-neutral-400 mt-0.5 capitalize">{(result.payment_mode || '').replace(/_/g, ' ')}</div>
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-4">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Total</div>
-                <div className="font-extrabold text-slate-900">{formatFCFA(result.total)}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{formatDateTime(result.created_at)}</div>
+              <div className="border border-neutral-200 p-4">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Total</div>
+                <div className="font-bold text-neutral-900">{formatFCFA(result.total)}</div>
+                <div className="text-xs text-neutral-400 mt-0.5">{formatDateTime(result.created_at)}</div>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Articles commandés</div>
+            {/* Items */}
+            <div className="border border-neutral-200">
+              <div className="px-4 py-3 border-b border-neutral-100">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Articles commandes</div>
               </div>
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-neutral-100">
                 {result.items.map((it, i) => (
                   <div key={i} className="flex items-center justify-between px-4 py-3">
                     <div className="min-w-0 flex-1 mr-3">
-                      <div className="text-sm font-semibold text-slate-900 truncate">{it.article_name}</div>
-                      <div className="text-xs text-slate-500">Qté {it.quantity} × {formatFCFA(it.unit_price)}</div>
+                      <div className="text-sm font-medium text-neutral-900 truncate">{it.article_name}</div>
+                      <div className="text-xs text-neutral-400">Qte {it.quantity} x {formatFCFA(it.unit_price)}</div>
                     </div>
-                    <div className="text-sm font-bold text-slate-900 shrink-0">{formatFCFA(it.line_total)}</div>
+                    <div className="text-sm font-bold text-neutral-900 shrink-0 num">{formatFCFA(it.line_total)}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
-                  {result.delivery_mode === 'livraison' ? <Truck className="w-4 h-4 text-brand-700" /> : <ShoppingBag className="w-4 h-4 text-brand-700" />}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{result.delivery_mode === 'livraison' ? 'Livraison' : 'Retrait'}</div>
-                  <div className="text-sm text-slate-800 font-medium">
-                    {result.delivery_mode === 'livraison' ? (result.delivery_address || '—') : 'Retrait en boutique'}
-                  </div>
+            {/* Delivery */}
+            <div className="border border-neutral-200 p-4 flex items-start gap-3">
+              {result.delivery_mode === 'livraison' ? <Truck className="w-5 h-5 text-neutral-400 shrink-0" /> : <ShoppingBag className="w-5 h-5 text-neutral-400 shrink-0" />}
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">{result.delivery_mode === 'livraison' ? 'Livraison' : 'Retrait'}</div>
+                <div className="text-sm text-neutral-800 font-medium">
+                  {result.delivery_mode === 'livraison' ? (result.delivery_address || '\u2014') : 'Retrait en boutique'}
                 </div>
               </div>
             </div>
 
+            {/* History */}
             {result.history && result.history.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-4">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2.5">
+              <div className="border border-neutral-200 p-4">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
                   <Clock className="w-3.5 h-3.5" /> Historique
                 </div>
                 <div className="space-y-2">
                   {result.history.map((h, i) => (
                     <div key={i} className="flex items-center gap-2.5 text-sm">
-                      <div className="w-2 h-2 rounded-full bg-brand-500 shrink-0" />
-                      <div className="flex-1 text-slate-700">{STATUS_LABEL[h.new_status] || h.new_status}</div>
-                      <div className="text-xs text-slate-400">{formatDateTime(h.created_at)}</div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-neutral-900 shrink-0" />
+                      <div className="flex-1 text-neutral-700">{STATUS_LABEL[h.new_status] || h.new_status}</div>
+                      <div className="text-xs text-neutral-400">{formatDateTime(h.created_at)}</div>
                     </div>
                   ))}
                 </div>
@@ -280,7 +275,7 @@ export function ShopTrackOrder({
 
             {shopPhone && (
               <a href={`tel:${shopPhone}`}
-                className="flex items-center justify-center gap-2 w-full h-12 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm hover:bg-slate-200 active:scale-[0.98] transition-all">
+                className="flex items-center justify-center gap-2 h-11 border border-neutral-200 text-neutral-700 font-medium text-sm hover:bg-neutral-50 active:scale-[0.98] transition-all">
                 <Phone className="w-4 h-4" /> Contacter {shopName}
               </a>
             )}
@@ -288,8 +283,8 @@ export function ShopTrackOrder({
         )}
 
         {!searched && !result && (
-          <div className="text-center text-xs text-slate-500 py-8">
-            <MapPin className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+          <div className="text-center text-sm text-neutral-400 py-12">
+            <MapPin className="w-8 h-8 mx-auto text-neutral-200 mb-3" />
             Saisissez les informations ci-dessus pour suivre votre commande.
           </div>
         )}

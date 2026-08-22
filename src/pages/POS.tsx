@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
-  ChevronRight, ChevronLeft, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
+  ChevronRight, ChevronLeft, ChevronDown, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
   Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin, Network,
   TrendingUp, UserPlus, Store, History
@@ -11,10 +11,11 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
-import { formatFCFA, formatDateTime } from '../lib/format';
+import { formatFCFA, formatDateTime, formatNumber } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { CashModal } from '../components/CashModal';
 import { EmptyState } from '../components/EmptyState';
+import { MarqueeText } from '../components/MarqueeText';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
@@ -251,12 +252,13 @@ function POSLandingOpen({
                     type="number"
                     value={openingAmount || ''}
                     onChange={e => setOpeningAmount(Number(e.target.value))}
-                    className="w-full h-10 px-3 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold text-neutral-900 tabular-nums transition-all"
-                    placeholder="0"
+                    className="bare-input text-lg font-bold text-neutral-900 tabular-nums py-2"
+                    placeholder="0 FCFA"
                     min="0"
                     autoFocus
                     inputMode="numeric"
                   />
+                  <div className="h-px bg-neutral-200 mt-1" />
                 </div>
 
                 {/* Note */}
@@ -265,9 +267,10 @@ function POSLandingOpen({
                   <input
                     value={openingNote}
                     onChange={e => setOpeningNote(e.target.value)}
-                    className="w-full h-10 px-3 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm text-neutral-900 transition-all"
+                    className="bare-input text-sm text-neutral-700 py-2"
                     placeholder="Ex: monnaie disponible..."
                   />
+                  <div className="h-px bg-neutral-200 mt-1" />
                 </div>
 
                 {/* Vendeur */}
@@ -344,12 +347,13 @@ function POSLandingOpen({
               type="number"
               value={openingAmount || ''}
               onChange={e => setOpeningAmount(Number(e.target.value))}
-              className="w-full h-10 px-3 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-sm font-semibold tabular-nums"
-              placeholder="0"
+              className="bare-input text-base font-bold text-neutral-900 tabular-nums py-2"
+              placeholder="0 FCFA"
               min="0"
               autoFocus={desktopAutoFocus}
               inputMode="numeric"
             />
+            <div className="h-px bg-neutral-200 mt-1" />
           </div>
 
           {/* Note */}
@@ -358,9 +362,10 @@ function POSLandingOpen({
             <input
               value={openingNote}
               onChange={e => setOpeningNote(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-200 bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/15 outline-none text-xs"
+              className="bare-input text-xs text-neutral-700 py-2"
               placeholder="Ex: monnaie disponible..."
             />
+            <div className="h-px bg-neutral-200 mt-1" />
           </div>
 
           {/* Vendeur */}
@@ -405,54 +410,30 @@ function POSLandingOpen({
             )}
           </div>
           {/* Desktop table */}
-          <div className="hidden lg:block bg-white rounded-lg border border-neutral-200 overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-neutral-100">
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Date</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Ouverture</th>
-                  <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Fermeture</th>
-                  <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Fond</th>
-                  <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Solde final</th>
-                  <th className="text-center px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Statut</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {sessions.map(s => {
-                  return (
-                    <tr key={s.id} className="hover:bg-neutral-50/50 transition-colors">
-                      <td className="px-5 py-3 text-xs font-semibold text-neutral-900">{fmtDateFull(s.opened_at)}</td>
-                      <td className="px-5 py-3 text-xs tabular-nums text-neutral-600">{fmtTimeLanding(s.opened_at)}</td>
-                      <td className="px-5 py-3 text-xs tabular-nums text-neutral-600">{s.closed_at ? fmtTimeLanding(s.closed_at) : '-'}</td>
-                      <td className="px-5 py-3 text-xs font-semibold text-neutral-800 tabular-nums text-right">{formatFCFA(Number(s.opening_amount))}</td>
-                      <td className="px-5 py-3 text-xs font-bold text-neutral-700 tabular-nums text-right">{s.closing_amount != null ? formatFCFA(Number(s.closing_amount)) : '-'}</td>
-                      <td className="px-5 py-3 text-center">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border border-neutral-200 bg-neutral-50 text-neutral-600">
-                          <Lock className="w-2 h-2" /> Clôturée
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="hidden lg:block">
+            <div className="divide-y divide-neutral-100">
+              {sessions.map(s => (
+                <div key={s.id} className="flex items-center gap-4 py-3 px-1">
+                  <Lock className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span className="text-xs font-semibold text-neutral-900 w-24 shrink-0">{fmtDateFull(s.opened_at)}</span>
+                  <span className="text-xs tabular-nums text-neutral-500">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
+                  <span className="ml-auto text-xs font-bold text-neutral-800 tabular-nums">{s.closing_amount != null ? formatFCFA(Number(s.closing_amount)) : '-'}</span>
+                </div>
+              ))}
+            </div>
           </div>
           {/* Mobile list */}
-          <div className="lg:hidden space-y-1.5">
-            {sessions.slice(0, 3).map(s => {
-              return (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2.5 rounded-md bg-white border border-neutral-200">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-6 h-6 rounded-md bg-neutral-100 flex items-center justify-center shrink-0"><Lock className="w-2.5 h-2.5 text-neutral-500" /></div>
-                    <div className="min-w-0">
-                      <span className="text-[11px] font-bold text-neutral-800">{fmtDateShort(s.opened_at)}</span>
-                      <span className="text-[10px] text-neutral-400 ml-1.5 tabular-nums">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-bold text-neutral-700 tabular-nums shrink-0">{s.closing_amount != null ? formatFCFA(Number(s.closing_amount)) : '-'}</span>
+          <div className="lg:hidden divide-y divide-neutral-100">
+            {sessions.slice(0, 3).map(s => (
+              <div key={s.id} className="flex items-center gap-2.5 px-3 py-3">
+                <Lock className="w-3 h-3 text-neutral-400 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-[11px] font-semibold text-neutral-900">{fmtDateShort(s.opened_at)}</span>
+                  <span className="text-[10px] text-neutral-400 ml-1.5 tabular-nums">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
                 </div>
-              );
-            })}
+                <span className="text-[11px] font-bold text-neutral-800 tabular-nums shrink-0">{s.closing_amount != null ? formatFCFA(Number(s.closing_amount)) : '-'}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -606,7 +587,7 @@ function POSLandingResume({
                 </div>
               </button>
               {actions?.canClose ? (
-                <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-3 px-4 py-3.5 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-900 transition-all active:scale-[0.98] disabled:opacity-40">
+                <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-3 px-4 py-3.5 text-neutral-900 hover:opacity-70 transition-all active:scale-[0.98] disabled:opacity-40">
                   <Lock className="w-4 h-4 shrink-0" />
                   <div className="flex flex-col items-start leading-tight">
                     <span className="text-sm font-bold">Clôturer</span>
@@ -618,14 +599,14 @@ function POSLandingResume({
 
             {/* Raccourcis opérationnels — single row, fine separators */}
             {shortcutBtns.length > 0 && (
-              <div className="flex items-stretch mt-3 border border-neutral-200 rounded-md overflow-hidden bg-white">
+              <div className="flex items-center mt-3">
                 {shortcutBtns.map((btn, i) => (
                   <Fragment key={btn.label}>
-                    <button onClick={btn.onClick} disabled={!isOpen} className="flex-1 flex flex-col items-center justify-center gap-1.5 py-3 hover:bg-neutral-50 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                    <button onClick={btn.onClick} disabled={!isOpen} className="flex-1 flex flex-col items-center justify-center gap-1.5 py-3 hover:opacity-70 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
                       <btn.icon className="w-4 h-4 text-neutral-600" />
                       <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
                     </button>
-                    {i < shortcutBtns.length - 1 && <div className="w-px bg-neutral-100" />}
+                    {i < shortcutBtns.length - 1 && <div className="w-px h-8 bg-neutral-200 shrink-0" />}
                   </Fragment>
                 ))}
               </div>
@@ -704,145 +685,144 @@ function POSLandingResume({
 
       {/* ── Mobile layout ── */}
       <div className="lg:hidden px-0 pt-1">
-        <div className="px-3">
-          {/* Header: title + tenant + status badge */}
-          <div className="flex items-center justify-between py-2.5">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-[15px] font-bold tracking-tight text-neutral-900 leading-tight">Caisse</h2>
-              <p className="text-[10px] text-neutral-400 leading-tight mt-0.5 truncate">{tenantName || currentSite?.name || '-'}</p>
+        <div className="px-4">
+          {/* Header: title + tenant */}
+          <div className="py-3">
+            <h2 className="text-lg font-bold tracking-tight text-neutral-900 leading-tight">Caisse</h2>
+            <p className="text-[12px] text-neutral-500 leading-tight mt-0.5 truncate">{tenantName || currentSite?.name || '-'}</p>
+          </div>
+
+          {/* Session info: 3 columns with fine vertical separators */}
+          <div className="flex items-center py-3 border-t border-neutral-100">
+            <div className="flex-1 flex items-center gap-2 min-w-0">
+              <ClockIcon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Durée</p>
+                <p className="text-[11px] font-bold text-neutral-900 leading-tight truncate">{sessionDuration(session.opened_at)}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-neutral-200 bg-white shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              <span className="text-[10px] font-semibold text-emerald-600">Ouverte</span>
+            <div className="w-px h-7 bg-neutral-200 mx-2 shrink-0" />
+            <div className="flex-1 flex items-center gap-2 min-w-0">
+              <Banknote className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Fond initial</p>
+                <p className="text-[11px] font-bold text-neutral-900 leading-tight truncate tabular-nums">{formatFCFA(Number(session.opening_amount))}</p>
+              </div>
+            </div>
+            <div className="w-px h-7 bg-neutral-200 mx-2 shrink-0" />
+            <div className="flex-1 flex items-center gap-2 min-w-0">
+              <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Vendeur</p>
+                <p className="text-[11px] font-bold text-neutral-900 leading-tight truncate">{cashierName ? cashierName.charAt(0).toUpperCase() + cashierName.slice(1).toLowerCase() : '-'}</p>
+              </div>
             </div>
           </div>
 
-          {/* Session info: 3 columns with vertical separators */}
-          <div className="flex items-stretch border-y border-neutral-100 py-3">
-            <div className="flex-1 flex flex-col items-center text-center px-1">
-              <ClockIcon className="w-3.5 h-3.5 text-neutral-400 mb-1" />
-              <p className="text-[8px] text-neutral-400 uppercase tracking-wide leading-none mb-1">Durée</p>
-              <p className="text-[10px] font-semibold text-neutral-900 leading-tight truncate w-full">{sessionDuration(session.opened_at)}</p>
-            </div>
-            <div className="w-px bg-neutral-100" />
-            <div className="flex-1 flex flex-col items-center text-center px-1">
-              <Banknote className="w-3.5 h-3.5 text-neutral-400 mb-1" />
-              <p className="text-[8px] text-neutral-400 uppercase tracking-wide leading-none mb-1">Fond initial</p>
-              <p className="text-[10px] font-semibold text-neutral-900 leading-tight truncate w-full">{formatFCFA(Number(session.opening_amount))}</p>
-            </div>
-            <div className="w-px bg-neutral-100" />
-            <div className="flex-1 flex flex-col items-center text-center px-1">
-              <User className="w-3.5 h-3.5 text-neutral-400 mb-1" />
-              <p className="text-[8px] text-neutral-400 uppercase tracking-wide leading-none mb-1">Vendeur</p>
-              <p className="text-[10px] font-semibold text-neutral-900 leading-tight truncate w-full">{cashierName ? cashierName.charAt(0).toUpperCase() + cashierName.slice(1).toLowerCase() : '-'}</p>
-            </div>
-          </div>
-
-          {/* Action buttons: Reprendre (dominant) / Clôturer (secondary) */}
-          <div className="grid grid-cols-2 gap-2 pt-3">
-            <button onClick={onResume} className="flex items-center gap-2 py-3 px-3 rounded-lg bg-neutral-900 text-white text-xs font-bold transition-all active:scale-[0.97] shadow-sm">
-              <Play className="w-4 h-4 fill-current text-white shrink-0" />
-              <div className="flex flex-col items-start leading-tight">
-                <span>Reprendre</span>
-                <span className="text-[9px] font-normal text-white/60">Continuer la session</span>
+          {/* Action buttons: Reprendre (dominant) / Clôturer (lightweight) */}
+          <div className="flex items-center gap-4 pt-4 pb-1">
+            <button onClick={onResume} className="flex-[1.6] flex items-center gap-3 py-3.5 px-4 rounded-md bg-neutral-900 text-white transition-all active:scale-[0.97]">
+              <Play className="w-5 h-5 fill-current shrink-0" />
+              <div className="flex flex-col items-start leading-tight min-w-0">
+                <span className="text-[14px] font-bold">Reprendre</span>
+                <span className="text-[11px] text-white/50 whitespace-nowrap">Continuer la session</span>
               </div>
             </button>
             {actions?.canClose ? (
-              <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-2 py-3 px-3 rounded-lg bg-white border border-neutral-200 text-neutral-900 text-xs font-bold transition-all active:scale-[0.97] disabled:opacity-40">
-                <Lock className="w-4 h-4 text-neutral-900 shrink-0" />
+              <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-2 active:opacity-60 transition-all disabled:opacity-30">
+                <Lock className="w-4 h-4 text-neutral-500 shrink-0" />
                 <div className="flex flex-col items-start leading-tight">
-                  <span>Clôturer</span>
-                  <span className="text-[9px] font-normal text-neutral-400">Fermer la caisse</span>
+                  <span className="text-[13px] font-bold text-neutral-900">Clôturer</span>
+                  <span className="text-[10px] text-neutral-400">Fermer la caisse</span>
                 </div>
               </button>
             ) : <div />}
           </div>
 
-          {/* Quick actions: 4 compact actions with vertical separators */}
+          {/* Quick actions: flat row, no container border */}
           {shortcutBtns.length > 0 && (
-            <div className="flex items-stretch mt-3 border border-neutral-200 rounded-lg overflow-hidden bg-white">
+            <div className="flex items-center py-3 border-t border-neutral-100 mt-2">
               {shortcutBtns.map((btn, i) => (
                 <Fragment key={btn.label}>
-                  <button onClick={btn.onClick} disabled={!isOpen} className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 active:bg-neutral-50 transition-all active:scale-[0.96] disabled:opacity-40 disabled:pointer-events-none">
-                    <btn.icon className="w-4 h-4 text-neutral-700" />
-                    <span className="text-[8px] font-medium text-neutral-600 leading-none">{btn.label}</span>
+                  <button onClick={btn.onClick} disabled={!isOpen} className="flex-1 flex flex-col items-center gap-1.5 py-1 active:opacity-70 transition-all disabled:opacity-30 disabled:pointer-events-none">
+                    <btn.icon className="w-4 h-4 text-neutral-600" />
+                    <span className="text-[9px] font-medium text-neutral-500 leading-none">{btn.label}</span>
                   </button>
-                  {i < shortcutBtns.length - 1 && <div className="w-px bg-neutral-100" />}
+                  {i < shortcutBtns.length - 1 && <div className="w-px h-6 bg-neutral-200 shrink-0" />}
                 </Fragment>
               ))}
             </div>
           )}
 
-          {/* Summary: title row + dark total card + sub-indicators */}
+          {/* Summary section */}
           {actions?.canViewSummary !== false && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
+            <div className="mt-3 pt-3 border-t border-neutral-100">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-1.5">
-                  <BarChart2 className="w-3.5 h-3.5 text-neutral-700" />
-                  <h3 className="text-xs font-bold text-neutral-900">Résumé</h3>
+                  <BarChart2 className="w-3.5 h-3.5 text-neutral-500" />
+                  <h3 className="text-[13px] font-bold text-neutral-900">Résumé</h3>
                 </div>
-                <span className="text-[10px] text-neutral-400 px-1.5 py-0.5 rounded bg-neutral-50">Aujourd'hui</span>
+                <span className="text-[11px] text-neutral-400">Aujourd'hui</span>
               </div>
               {loadingSummary ? (
                 <div className="space-y-2 animate-pulse">
-                  <div className="h-16 bg-neutral-100 rounded-lg" />
-                  <div className="h-8 bg-neutral-100 rounded-lg" />
+                  <div className="h-14 bg-neutral-100 rounded-md" />
+                  <div className="h-8 bg-neutral-100 rounded-md" />
                 </div>
               ) : summary ? (
                 <>
-                  {/* Dark total card */}
-                  <div className="rounded-lg bg-neutral-900 px-3 py-3">
-                    <p className="text-[10px] text-white/50 uppercase tracking-wide leading-none mb-1">Total encaissé</p>
-                    <p className="text-lg font-bold text-white tabular-nums leading-tight">{formatFCFA(summary.salesTotal)}</p>
+                  {/* Dark total block */}
+                  <div className="rounded-md bg-neutral-900 px-4 py-3.5">
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider leading-none mb-1.5">Total encaissé</p>
+                    <p className="text-xl font-bold text-white tabular-nums leading-tight">{formatFCFA(summary.salesTotal)}</p>
                   </div>
-                  {/* Sub-indicators */}
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-neutral-200 bg-white">
-                      <span className="text-[10px] text-neutral-500">Ventes</span>
-                      <span className="text-xs font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
+                  {/* Sub-indicators: 2 cols with vertical separator */}
+                  <div className="flex items-center mt-3">
+                    <div className="flex-1 text-center">
+                      <p className="text-[10px] text-neutral-400 leading-none mb-1">Ventes</p>
+                      <p className="text-[14px] font-bold text-neutral-900 tabular-nums">{summary.salesCount}</p>
                     </div>
+                    <div className="w-px h-8 bg-neutral-200 shrink-0" />
                     {(() => {
                       const cash = summary.byMethod.find(m => /esp[èe]ces|cash/i.test(m.method_name));
                       return (
-                        <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-neutral-200 bg-white">
-                          <span className="text-[10px] text-neutral-500">Espèces</span>
-                          <span className="text-xs font-bold text-neutral-900 tabular-nums">{cash ? formatFCFA(cash.amount) : formatFCFA(0)}</span>
+                        <div className="flex-1 text-center">
+                          <p className="text-[10px] text-neutral-400 leading-none mb-1">Espèces</p>
+                          <p className="text-[14px] font-bold text-neutral-900 tabular-nums">{cash ? formatFCFA(cash.amount) : formatFCFA(0)}</p>
                         </div>
                       );
                     })()}
                   </div>
                 </>
               ) : (
-                <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3">
-                  <p className="text-[11px] text-neutral-400 text-center">Aucune donnée</p>
-                </div>
+                <p className="text-[12px] text-neutral-400 text-center py-4">Aucune donnée</p>
               )}
             </div>
           )}
 
-          {/* Access links: Historique / Point de vente */}
-          <div className="mt-3 space-y-0">
+          {/* Access links */}
+          <div className="mt-4 pt-3 border-t border-neutral-100">
             {onSeeAll && (
-              <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg active:bg-neutral-50 transition-colors text-left border-b border-neutral-100">
-                <ClockIcon className="w-4 h-4 text-neutral-700 shrink-0" />
+              <button onClick={onSeeAll} className="w-full flex items-center gap-3 py-3 text-left border-b border-neutral-100 active:opacity-70 transition-colors">
+                <ClockIcon className="w-4 h-4 text-neutral-500 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-semibold text-neutral-900 leading-tight">Historique</p>
-                  <p className="text-[9px] text-neutral-400 leading-tight">Voir les opérations</p>
+                  <p className="text-[13px] font-semibold text-neutral-900 leading-tight">Historique</p>
+                  <p className="text-[10px] text-neutral-400 leading-tight mt-0.5">Voir les opérations</p>
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                <ChevronRight className="w-4 h-4 text-neutral-300 shrink-0" />
               </button>
             )}
-            <button onClick={() => { if (siteCount && siteCount > 1 && onSwitchSite) onSwitchSite(); else if (onResume) onResume(); }} className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg active:bg-neutral-50 transition-colors text-left">
-              <ShoppingCart className="w-4 h-4 text-neutral-700 shrink-0" />
+            <button onClick={() => { if (siteCount && siteCount > 1 && onSwitchSite) onSwitchSite(); else if (onResume) onResume(); }} className="w-full flex items-center gap-3 py-3 text-left active:opacity-70 transition-colors">
+              <ShoppingCart className="w-4 h-4 text-neutral-500 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-semibold text-neutral-900 leading-tight">Point de vente</p>
-                <p className="text-[9px] text-neutral-400 leading-tight">{siteCount && siteCount > 1 ? 'Changer de point de vente' : 'Un seul point de vente'}</p>
+                <p className="text-[13px] font-semibold text-neutral-900 leading-tight">Point de vente</p>
+                <p className="text-[10px] text-neutral-400 leading-tight mt-0.5">{siteCount && siteCount > 1 ? 'Changer de point de vente' : 'Un seul point de vente'}</p>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+              <ChevronRight className="w-4 h-4 text-neutral-300 shrink-0" />
             </button>
           </div>
 
-          <div className="h-2" />
+          <div className="h-4" />
         </div>
       </div>
     </div>
@@ -2771,7 +2751,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* Customer selector — compact */}
       <div className="px-3 py-1.5 border-b border-neutral-200/70 bg-white">
         <div className="flex items-stretch gap-1.5">
-          <div className="flex-1 min-w-0 [&>div>button]:rounded-lg [&>div>button]:py-2.5 [&>div>button]:px-3 [&>div>button]:text-sm">
+          <div className="flex-1 min-w-0 [&>div>button]:rounded-none [&>div>button]:border-0 [&>div>button]:border-b [&>div>button]:border-neutral-200 [&>div>button]:py-2.5 [&>div>button]:px-0 [&>div>button]:text-sm [&>div>button]:shadow-none">
             <SearchableSelect
               options={[{ value: '', label: 'Client comptoir' }, ...customers.map(c => ({ value: c.id, label: c.name }))]}
               value={customer?.id || ''}
@@ -2825,9 +2805,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   </button>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} onClick={e => e.stopPropagation()} className="w-12 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-center font-bold num focus:outline-none focus:border-neutral-900 shrink-0" title="Quantité" />
+                  <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} onClick={e => e.stopPropagation()} className="w-12 bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[10px] text-center font-bold num outline-none pb-0.5 shrink-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" title="Quantité" />
                   <span className="text-[10px] text-neutral-400">x</span>
-                  <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} onClick={e => e.stopPropagation()} className="w-16 px-1.5 py-0.5 rounded border border-neutral-200 bg-white text-[10px] text-right num focus:outline-none focus:border-neutral-900 shrink-0" title="Prix unitaire" />
+                  <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} onClick={e => e.stopPropagation()} className="w-16 bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[10px] text-right num outline-none pb-0.5 shrink-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" title="Prix unitaire" />
                   <span className="text-[10px] text-neutral-400">=</span>
                   <div className="text-[11px] font-bold text-neutral-900 num whitespace-nowrap ml-auto">{formatFCFA(i.quantity * i.unit_price - i.discount)}</div>
                 </div>
@@ -2846,7 +2826,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         {can('apply_discounts') && (
           <div className="flex items-center justify-between text-[11px] gap-2">
             <span className="text-neutral-500 shrink-0">Remise</span>
-            <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="px-2 py-1 rounded-md border border-neutral-200 bg-white text-[11px] text-right num w-24 focus:outline-none focus:border-brand-500" placeholder="0" />
+            <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[11px] text-right num w-24 outline-none pb-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
           </div>
         )}
         {ipmBeneficiaire && total > 0 && (
@@ -2892,7 +2872,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {can('apply_discounts') && (
               <div className="flex items-center justify-between text-[11px] gap-2">
                 <span className="text-neutral-500 shrink-0">Remise globale</span>
-                <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="px-2 py-1 rounded-md border border-neutral-200 bg-white text-[11px] text-right num w-24 focus:outline-none focus:border-brand-500" placeholder="0" />
+                <input type="number" value={discount || ''} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[11px] text-right num w-24 outline-none pb-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" />
               </div>
             )}
             {ipmBeneficiaire && total > 0 && (
@@ -2981,7 +2961,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       <div className="px-2 py-1.5 border-b border-neutral-200/70 glass shrink-0 relative z-20">
         {/* Mobile: single compact row */}
         <div className="flex items-center gap-1 lg:hidden">
-          <button onClick={openStats} className="pos-btn hidden sm:flex" title="Statistiques" data-label="Statistiques"><BarChart2 className="w-4 h-4" /></button>
+          <button onClick={openStats} className="pos-btn" title="Statistiques" data-label="Statistiques"><BarChart2 className="w-4 h-4" /></button>
           <button onClick={openTickets} className="pos-btn" title="Tickets" data-label="Tickets de la session"><List className="w-4 h-4" /></button>
           {can('pos_returns') && <button onClick={openReturn} className="pos-btn" title="Retour" data-label="Retour client"><RotateCcw className="w-4 h-4" /></button>}
           <button onClick={openCustomerPayment} className="pos-btn" title="Encaisser" data-label="Encaisser"><Wallet className="w-4 h-4" /></button>
@@ -3143,7 +3123,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     <button key={a.id} onClick={() => addToCart(a)} disabled={out}
                       className="product-card disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <div className="relative aspect-[4/3] bg-white rounded-lg flex items-center justify-center overflow-hidden border border-neutral-100">
+                      <div className="relative aspect-[4/3] bg-white rounded-md flex items-center justify-center overflow-hidden border border-neutral-100">
                         {a.image_url ? (
                           <img src={a.image_url} alt={a.name} className="w-full h-full object-contain p-1" loading="lazy" />
                         ) : (
@@ -3155,12 +3135,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           </span>
                         )}
                       </div>
-                      <div className="text-[12px] font-semibold text-neutral-900 line-clamp-2 leading-[1.25] article-text">{a.name}</div>
+                      <div className="text-[10px] font-semibold text-neutral-900 line-clamp-3 leading-[1.2] article-text">{a.name}</div>
                       <div className="flex items-center justify-between mt-auto pt-0.5">
                         <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(a.sale_price)}</span>
-                        <span className="w-6 h-6 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                          <Plus className="w-3.5 h-3.5" />
-                        </span>
                       </div>
                     </button>
                   );
@@ -3172,20 +3149,34 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
                   const tracked = tracksStock(a);
                   const out = !allowNeg && tracked && a._stockLoaded && a.stock_available <= 0;
+                  const stockLabel = tracked && can('view_stock_levels') ? (!a._stockLoaded ? '...' : a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup') : `${a.stock_available}`) : '';
                   return (
                     <button
                       key={a.id}
                       onClick={() => addToCart(a)}
                       disabled={out}
-                      className="w-full flex items-center gap-2 px-3 py-2 transition-colors text-left active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50"
+                      className="w-full px-3 py-2 transition-colors text-left active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-50"
                     >
-                      <span className={`text-[11px] font-bold num tabular-nums w-12 shrink-0 text-center ${!a._stockLoaded ? 'text-neutral-300' : a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-700'}`}>
-                        {tracked && can('view_stock_levels') ? (!a._stockLoaded ? '…' : a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup') : `${a.stock_available}`) : ''}
-                      </span>
-                      <span className="w-px h-4 bg-neutral-200 shrink-0" />
-                      <span className="flex-1 min-w-0 text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
-                      <span className="w-px h-4 bg-neutral-200 shrink-0" />
-                      <span className="text-[12px] font-bold text-neutral-900 num shrink-0 tabular-nums">{formatFCFA(a.sale_price)}</span>
+                      {/* Desktop: single row with vertical separators */}
+                      <div className="hidden sm:flex items-center gap-2">
+                        <span className={`text-[11px] font-bold num tabular-nums w-12 shrink-0 text-center ${!a._stockLoaded ? 'text-neutral-300' : a.stock_available <= 0 ? 'text-neutral-400' : 'text-neutral-700'}`}>
+                          {stockLabel}
+                        </span>
+                        <span className="w-px h-4 bg-neutral-200 shrink-0" />
+                        <span className="flex-1 min-w-0 text-[12px] font-semibold text-neutral-900 truncate">{a.name}</span>
+                        <span className="w-px h-4 bg-neutral-200 shrink-0" />
+                        <span className="text-[12px] font-bold text-neutral-900 num shrink-0 tabular-nums">{formatFCFA(a.sale_price)}</span>
+                      </div>
+                      {/* Mobile: name on top line (marquee), stock left + price right on second line */}
+                      <div className="sm:hidden">
+                        <MarqueeText className="text-[12px] font-semibold text-neutral-900">{a.name}</MarqueeText>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <span className={`text-[10px] font-bold num ${!a._stockLoaded ? 'text-neutral-300' : a.stock_available <= 0 ? 'text-red-500' : 'text-neutral-500'}`}>
+                            {stockLabel && `Stock: ${stockLabel}`}
+                          </span>
+                          <span className="text-[12px] font-bold text-neutral-900 num">{formatFCFA(a.sale_price)}</span>
+                        </div>
+                      </div>
                     </button>
                   );
                 })}
@@ -3201,9 +3192,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
         {mobileCartOpen && (
           <div className="fixed inset-0 z-40 lg:hidden animate-fade-in">
-            <div className="scrim" onClick={() => setMobileCartOpen(false)} />
-            <div className="absolute inset-x-0 bottom-0 top-[6vh] bg-white flex flex-col animate-sheet-up rounded-t-3xl shadow-premium overflow-hidden" style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
-              <div className="sheet-handle" />
+            <div className="absolute inset-0 bg-white flex flex-col overflow-hidden" style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100 shrink-0">
+                <span className="text-sm font-bold text-neutral-900">Panier</span>
+                <button onClick={() => setMobileCartOpen(false)} className="p-1.5 text-neutral-500 hover:text-neutral-800"><X className="w-5 h-5" /></button>
+              </div>
               {CartPanel}
             </div>
           </div>
@@ -3342,50 +3335,52 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           footerLeft={
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" checked={mvPrint} onChange={e => setMvPrint(e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-neutral-300 text-neutral-900 focus:ring-0 focus:ring-offset-0 accent-neutral-900" />
-              <Printer className="w-3.5 h-3.5 text-neutral-400" />
-              <span className="text-[12px] font-medium text-neutral-600">Imprimer le reçu</span>
+                className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-0 focus:ring-offset-0 accent-neutral-900" />
+              <Printer className="w-4 h-4 text-neutral-400" />
+              <span className="text-[12px] font-medium text-neutral-600 hidden sm:inline">Imprimer le reçu</span>
+              <span className="text-[12px] font-medium text-neutral-600 sm:hidden">Imprimer</span>
             </label>
           }
           footer={<>
-              <button onClick={() => setMvOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+              <button onClick={() => setMvOpen(false)} className="px-3 sm:px-4 h-8 rounded-[4px] border border-neutral-200 text-[12px] font-semibold text-neutral-900 hover:bg-neutral-50 transition-colors">Annuler</button>
               <button onClick={submitMovement} disabled={mvSubmitting || mvAmount <= 0}
-                className="btn-icon-primary" title="Enregistrer">
-                {mvSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                className="px-3 sm:px-4 h-8 rounded-[4px] bg-neutral-900 text-white text-[12px] font-semibold hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+                {mvSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span className="sm:hidden">Valider</span>
+                <span className="hidden sm:inline">Valider le mouvement</span>
               </button>
           </>}>
           <div>
-            {/* Type */}
-            <div className="pb-4">
-              <div className="text-[13px] font-bold text-neutral-900 mb-2">Type</div>
-              <div className="flex gap-1.5">
+            {/* Type — flat horizontal nav */}
+            <div className="-mx-4 px-4 border-b border-neutral-200">
+              <div className="flex items-stretch w-full">
                 <button type="button" onClick={() => setMvKind('expense')}
-                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'expense' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <ArrowUpRight className={`w-5 h-5 ${mvKind === 'expense' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[11px] font-semibold ${mvKind === 'expense' ? 'text-neutral-900' : 'text-neutral-500'}`}>Dépense</span>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'expense' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <ArrowUpRight className={`w-6 h-6 ${mvKind === 'expense' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'expense' ? 'text-neutral-950' : 'text-neutral-600'}`}>Dépense</span>
                 </button>
                 <button type="button" onClick={() => setMvKind('income')}
-                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'income' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <ArrowDownRight className={`w-5 h-5 ${mvKind === 'income' ? 'text-neutral-700' : 'text-neutral-400'}`} />
-                  <span className={`text-[11px] font-semibold ${mvKind === 'income' ? 'text-neutral-900' : 'text-neutral-500'}`}>Entrée</span>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'income' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <ArrowDownRight className={`w-6 h-6 ${mvKind === 'income' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'income' ? 'text-neutral-950' : 'text-neutral-600'}`}>Entrée</span>
                 </button>
                 <button type="button" onClick={() => setMvKind('customer_prepayment')}
-                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'customer_prepayment' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <Banknote className={`w-5 h-5 ${mvKind === 'customer_prepayment' ? 'text-neutral-700' : 'text-neutral-400'}`} />
-                  <span className={`text-[11px] font-semibold ${mvKind === 'customer_prepayment' ? 'text-neutral-900' : 'text-neutral-500'}`}>Acompte</span>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_prepayment' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <Banknote className={`w-6 h-6 ${mvKind === 'customer_prepayment' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_prepayment' ? 'text-neutral-950' : 'text-neutral-600'}`}>Acompte</span>
                 </button>
                 {can('pos_customer_withdrawal') && !!(tenant as any)?.settings?.enable_customer_withdrawals && (
                 <button type="button" onClick={() => { setMvKind('customer_withdrawal'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'customer_withdrawal' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <ArrowDownToLine className={`w-5 h-5 ${mvKind === 'customer_withdrawal' ? 'text-neutral-700' : 'text-neutral-400'}`} />
-                  <span className={`text-[11px] font-semibold ${mvKind === 'customer_withdrawal' ? 'text-neutral-900' : 'text-neutral-500'}`}>Retrait</span>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_withdrawal' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <ArrowDownToLine className={`w-6 h-6 ${mvKind === 'customer_withdrawal' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_withdrawal' ? 'text-neutral-950' : 'text-neutral-600'}`}>Retrait</span>
                 </button>
                 )}
                 {can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans && (
                 <button type="button" onClick={() => { setMvKind('customer_loan'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-lg border transition-all ${mvKind === 'customer_loan' ? 'border-neutral-900 bg-white' : 'border-neutral-200 bg-white hover:border-neutral-300'}`}>
-                  <HandCoins className={`w-5 h-5 ${mvKind === 'customer_loan' ? 'text-neutral-700' : 'text-neutral-400'}`} />
-                  <span className={`text-[11px] font-semibold ${mvKind === 'customer_loan' ? 'text-neutral-900' : 'text-neutral-500'}`}>Prêt</span>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_loan' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <HandCoins className={`w-6 h-6 ${mvKind === 'customer_loan' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_loan' ? 'text-neutral-950' : 'text-neutral-600'}`}>Prêt</span>
                 </button>
                 )}
               </div>
@@ -3393,10 +3388,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
             {/* Customer section (for prepayment/withdrawal/loan) */}
             {(mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') && (
-              <div className="pb-4 border-t border-neutral-100 pt-4">
-                <div className="text-[13px] font-bold text-neutral-900 mb-2">Client</div>
+              <div className="pt-5 pb-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Client</div>
                 {mvCustomer ? (
-                  <div className="flex items-center gap-2.5 py-2">
+                  <div className="flex items-center gap-2.5 py-1">
                     <User className="w-4 h-4 text-neutral-400 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-semibold text-neutral-900 truncate">{mvCustomer.name}</div>
@@ -3406,12 +3401,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   </div>
                 ) : (
                   <>
-                    <div className="relative">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <div className="relative group">
+                      <Search className="w-4 h-4 absolute left-0 top-1/2 -translate-y-1/2 text-neutral-400" />
                       <input autoFocus value={mvCustSearch} onChange={e => setMvCustSearch(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder="Rechercher un client…" />
+                        className="w-full pl-6 pr-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Rechercher un client…" />
+                      <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                     </div>
-                    <div className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-neutral-200 divide-y divide-neutral-100">
+                    <div className="mt-1 max-h-32 overflow-y-auto divide-y divide-neutral-100">
                       {customers
                         .filter(cu => {
                           const q = mvCustSearch.toLowerCase().trim();
@@ -3434,7 +3430,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                               setMvCustBalance(Math.max(0, Number(cu.balance || 0)));
                             }
                           }}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-neutral-50 text-left transition-colors">
+                            className="w-full flex items-center gap-2.5 py-1.5 hover:bg-neutral-50 text-left transition-colors">
                             <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                             <span className="text-[12px] font-semibold text-neutral-800 truncate">{cu.name}</span>
                             {cu.phone && <span className="text-[11px] text-neutral-500 ml-auto shrink-0">{cu.phone}</span>}
@@ -3447,26 +3443,26 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   const debt = Math.max(0, mvCustBalance);
                   const net = mvCustPrepay - debt;
                   if (mvCustPrepay <= 0) {
-                    return <div className="mt-3 text-[12px] font-semibold text-red-600">Aucun acompte disponible pour ce client</div>;
+                    return <div className="mt-2 text-[12px] font-semibold text-red-600">Aucun acompte disponible pour ce client</div>;
                   }
                   return (
-                    <div className="mt-3 space-y-1">
+                    <div className="mt-2 space-y-0.5">
                       {debt > 0 ? (
                         <>
-                          <div className="flex justify-between text-[12px]"><span className="text-neutral-600">Acompte disponible</span><span className="font-bold num text-emerald-700">{formatFCFA(mvCustPrepay)}</span></div>
-                          <div className="flex justify-between text-[12px]"><span className="text-neutral-600">Dette en cours</span><span className="font-bold num text-red-600">-{formatFCFA(debt)}</span></div>
+                          <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Acompte disponible</span><span className="font-bold num text-neutral-900">{formatFCFA(mvCustPrepay)}</span></div>
+                          <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Dette en cours</span><span className="font-bold num text-red-600">-{formatFCFA(debt)}</span></div>
                           <div className="flex justify-between text-[12px] pt-1 border-t border-neutral-100"><span className="font-semibold text-neutral-900">Retrait maximum</span><span className={`font-bold num ${net > 0 ? 'text-neutral-900' : 'text-red-600'}`}>{formatFCFA(net)}</span></div>
                         </>
                       ) : (
-                        <div className="flex justify-between text-[12px]"><span className="text-neutral-600">Retrait maximum</span><span className="font-bold num text-neutral-900">{formatFCFA(net)}</span></div>
+                        <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Retrait maximum</span><span className="font-bold num text-neutral-900">{formatFCFA(net)}</span></div>
                       )}
                       {net <= 0 && <div className="text-[11px] font-semibold text-red-600 mt-1">La dette couvre l'acompte. Retrait impossible.</div>}
                     </div>
                   );
                 })()}
                 {mvKind === 'customer_loan' && mvCustomer && (
-                  <div className="mt-3 space-y-1">
-                    <div className="flex justify-between text-[12px]"><span className="text-neutral-600">Créance actuelle</span><span className="font-bold num text-neutral-900">{formatFCFA(Math.max(0, mvCustBalance))}</span></div>
+                  <div className="mt-2 space-y-0.5">
+                    <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Créance actuelle</span><span className="font-bold num text-neutral-900">{formatFCFA(Math.max(0, mvCustBalance))}</span></div>
                     <div className="text-[11px] text-neutral-500 mt-1">Le montant du prêt sera ajouté à la créance du client.</div>
                   </div>
                 )}
@@ -3474,35 +3470,40 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             )}
 
             {/* Form fields */}
-            <div className="border-t border-neutral-100 pt-4 pb-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">Montant</div>
+            <div className="pt-5">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
                   <input type="number" value={mvAmount || ''} onChange={e => setMvAmount(Math.max(0, Number(e.target.value)))}
-                    className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-sm font-bold num text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder="0" min={0} />
+                    className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-2xl font-bold num text-neutral-900 placeholder:text-neutral-300" placeholder="0 FCFA" min={0} />
+                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
-                <div>
-                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</div>
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</div>
                   {mvKind === 'expense' && expenseCats.length > 0 ? (
-                    <select value={mvExpenseCat} onChange={e => setMvExpenseCat(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 focus:outline-none focus:border-neutral-400 transition-colors appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%239ca3af%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22/%3E%3C/svg%3E')] bg-no-repeat bg-[right_12px_center]">
-                      <option value="">Sélectionner...</option>
-                      {expenseCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                    <div className="relative">
+                      <select value={mvExpenseCat} onChange={e => setMvExpenseCat(e.target.value)}
+                        className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 appearance-none pr-5">
+                        <option value="">Sélectionner…</option>
+                        {expenseCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-neutral-400 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   ) : (
                     <input value={mvReason} onChange={e => setMvReason(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
+                      className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
                   )}
+                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
               </div>
 
               {(mvKind === 'income' || mvKind === 'customer_prepayment') && (
-                <div className="mt-3">
-                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">Mode de règlement</div>
-                  <div className="flex flex-wrap gap-1.5">
+                <div className="mt-5">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Mode de règlement</div>
+                  <div className="flex flex-wrap gap-3">
                     {methods.map(m => (
                       <button key={m.id} type="button" onClick={() => setMvMethod(m)}
-                        className={`px-3 py-2 rounded-lg text-[12px] font-semibold border transition-all ${mvMethod?.id === m.id ? 'border-neutral-900 text-neutral-900 bg-white' : 'border-neutral-200 text-neutral-500 bg-white hover:border-neutral-300'}`}>
+                        className={`px-0 py-1 text-[12px] font-semibold border-b-2 transition-all ${mvMethod?.id === m.id ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>
                         {m.name}
                       </button>
                     ))}
@@ -3510,16 +3511,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <div>
-                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">Référence (opt.)</div>
+              <div className="grid grid-cols-2 gap-6 mt-5">
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence</div>
                   <input value={mvRef} onChange={e => setMvRef(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder="N° pièce…" />
+                    className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="N° pièce…" />
+                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
-                <div>
-                  <div className="text-[13px] font-bold text-neutral-900 mb-1.5">Note (opt.)</div>
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Note</div>
                   <input value={mvNote} onChange={e => setMvNote(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400 transition-colors" placeholder="Détails…" />
+                    className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Ajouter une note…" />
+                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
               </div>
             </div>
@@ -3536,33 +3539,34 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <input type="checkbox" checked={custPayPrint} onChange={e => setCustPayPrint(e.target.checked)}
                   className="w-3.5 h-3.5 rounded border-neutral-300 text-neutral-900 focus:ring-0 focus:ring-offset-0 accent-neutral-900" />
                 <Printer className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="text-[12px] font-medium text-neutral-600">Imprimer le reçu</span>
+                <span className="text-[12px] font-medium text-neutral-600"><span className="hidden sm:inline">Imprimer le reçu</span><span className="sm:hidden">Imprimer</span></span>
               </label>
             ) : undefined
           }
           footer={<>
-              <button onClick={() => setCustPayOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+              <button onClick={() => setCustPayOpen(false)} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
               {custPayMode === 'direct' ? (
                 <button onClick={submitDirectEncaissement} disabled={custPaySubmitting || !custPayMethod || custPayAmount <= 0}
-                  className="btn-icon-primary" title="Encaisser">
-                  {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  className="px-5 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Valider'}
                 </button>
               ) : (
                 <button onClick={submitCustomerPayment} disabled={custPaySubmitting || !custPayCustomer || !custPayMethod || custPayAmount <= 0}
-                  className="btn-icon-primary" title="Valider">
-                  {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  className="px-5 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Continuer'}
                 </button>
               )}
           </>}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-neutral-100 rounded-md">
+          <div>
+            {/* Flat tab navigation */}
+            <div className="flex border-b border-neutral-200 mb-5">
               <button type="button"
                 onClick={() => {
                   setCustPayMode('invoice');
                   setCustPayLabel('');
                   if (!custPayCustomer) setCustPayAmount(0);
                 }}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${custPayMode === 'invoice' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                className={`px-0 mr-8 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'invoice' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>
                 Client en attente
               </button>
               <button type="button"
@@ -3574,53 +3578,57 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   setCustPayAmount(0);
                   if (!custPayMethod) setCustPayMethod(methods[0] || null);
                 }}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${custPayMode === 'direct' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                className={`px-0 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'direct' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>
                 Encaissement direct
               </button>
             </div>
 
             {custPayMode === 'direct' ? (
-              <>
-                <p className="text-[11px] text-neutral-500">Pour un client divers, sans facture rattachée.</p>
-
-                <div>
-                  <label className="label">Montant</label>
+              <div className="space-y-5">
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
                   <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
-                    autoFocus className="input text-lg font-bold num" placeholder="0" min={0} />
+                    autoFocus className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-lg font-bold num text-neutral-900 placeholder:text-neutral-400" placeholder="0" min={0} />
+                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
 
-                <div>
-                  <label className="label">Libellé (optionnel)</label>
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Libellé (optionnel)</div>
                   <input value={custPayLabel} onChange={e => setCustPayLabel(e.target.value)}
-                    className="input" placeholder="Ex: Acompte travaux, location matériel…" />
+                    className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Ex: Acompte travaux, location matériel…" />
+                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
 
                 <div>
-                  <label className="label">Mode de règlement</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Mode de règlement</div>
+                  <div className="flex flex-wrap gap-3">
                     {methods.map(m => (
                       <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
-                        className={`px-3 py-2.5 rounded-md text-xs font-semibold border transition-all ${custPayMethod?.id === m.id ? 'border-neutral-900 bg-neutral-50 text-neutral-900' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
+                        className={`px-0 py-1 text-[12px] font-semibold border-b-2 transition-all ${custPayMethod?.id === m.id ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>
                         {m.name}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div>
-                  <label className="label">Référence (optionnel)</label>
-                  <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="input" placeholder="N° bordereau, transaction…" />
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence (optionnel)</div>
+                  <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="N° bordereau, transaction…" />
+                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
-              </>
+              </div>
             ) : !custPayCustomer ? (
               <div>
-                <label className="label">Rechercher un client</label>
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                  <input autoFocus value={custPaySearch} onChange={e => setCustPaySearch(e.target.value)}
-                    className="input pl-9" placeholder="Nom, téléphone…" />
+                <div className="text-[13px] font-semibold text-neutral-900 mb-2">Rechercher un client</div>
+                <div className="group">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-0 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <input autoFocus value={custPaySearch} onChange={e => setCustPaySearch(e.target.value)}
+                      className="w-full pl-6 pr-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Nom, téléphone…" />
+                  </div>
+                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
-                <div className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-neutral-200 divide-y divide-neutral-100">
+                <div className="mt-3 max-h-72 overflow-y-auto -mx-1">
                   {customers
                     .filter(c => {
                       const q = custPaySearch.toLowerCase().trim();
@@ -3630,11 +3638,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     .slice(0, 30)
                     .map(c => (
                       <button key={c.id} onClick={() => loadCustomerUnpaid(c)}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-50 active:bg-neutral-100 text-left transition-colors">
-                        <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                        className="w-full flex items-center gap-3 px-1 py-3 text-left transition-colors hover:bg-neutral-50 active:bg-neutral-100 border-b border-neutral-100 last:border-b-0">
+                        <User className="w-4 h-4 text-neutral-400 shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-neutral-900 truncate">{c.name}</div>
-                          {c.phone && <div className="text-[11px] text-neutral-500 truncate">{c.phone}</div>}
+                          <div className="text-[13px] font-semibold text-neutral-900 truncate">{c.name}</div>
+                          {c.phone && <div className="text-[11px] text-neutral-400 truncate">{c.phone}</div>}
                         </div>
                         <ChevronRight className="w-4 h-4 text-neutral-300 shrink-0" />
                       </button>
@@ -3642,76 +3650,77 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               </div>
             ) : (
-              <>
-                <div className="flex items-center gap-2 py-2 border-b border-neutral-100">
-                  <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <div className="space-y-5">
+                <div className="flex items-center gap-3 pb-4 border-b border-neutral-100">
+                  <User className="w-4 h-4 text-neutral-400 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-neutral-900 truncate">{custPayCustomer.name}</div>
+                    <div className="text-[13px] font-bold text-neutral-900 truncate">{custPayCustomer.name}</div>
                     <div className="text-[11px] text-neutral-500">
-                      {custPayUnpaid.filter(s => s.id !== '__balance__').length} facture(s) impayée(s) · Solde total {formatFCFA(Number((custPayCustomer as any).balance || 0))}
+                      {custPayUnpaid.filter(s => s.id !== '__balance__').length} facture(s) impayée(s) · Solde {formatFCFA(Number((custPayCustomer as any).balance || 0))}
                     </div>
                   </div>
-                  <button onClick={() => setCustPayCustomer(null)} className="text-xs font-semibold text-neutral-700 hover:underline shrink-0">Changer</button>
+                  <button onClick={() => setCustPayCustomer(null)} className="text-[11px] font-semibold text-neutral-500 hover:text-neutral-900 transition-colors shrink-0">Changer</button>
                 </div>
 
                 {custPayUnpaid.length === 0 && Number((custPayCustomer as any).balance || 0) <= 0 ? (
-                  <div className="rounded-lg bg-neutral-100 border border-neutral-200 p-4 text-center">
-                    <CheckCircle2 className="w-6 h-6 text-neutral-700 mx-auto mb-1" />
-                    <div className="text-sm font-semibold text-neutral-900">Aucune facture en attente</div>
-                    <div className="text-xs text-neutral-800 mt-0.5">Ce client est à jour.</div>
+                  <div className="py-6 text-center">
+                    <CheckCircle2 className="w-5 h-5 text-neutral-400 mx-auto mb-2" />
+                    <div className="text-[13px] font-semibold text-neutral-900">Aucune facture en attente</div>
+                    <div className="text-[11px] text-neutral-500 mt-0.5">Ce client est à jour.</div>
                   </div>
                 ) : (
                   <>
                     <div>
-                      <label className="label">Imputation</label>
-                      <SearchableSelect
-                        options={[
-                          { value: '', label: 'Repartir automatiquement (plus ancienne d\'abord)' },
-                          ...custPayUnpaid.map(s => ({
-                            value: s.id,
-                            label: `${s.sale_number} · dû ${formatFCFA(s.total - s.paid)}`,
-                            sublabel: s.id === '__balance__' ? 'Solde positionné' : new Date(s.created_at).toLocaleDateString('fr-FR'),
-                          }))
-                        ]}
-                        value={custPaySaleId}
-                        onChange={v => {
-                          setCustPaySaleId(v);
-                          if (v) {
-                            const s = custPayUnpaid.find(x => x.id === v);
-                            if (s) setCustPayAmount(s.total - s.paid);
-                          } else {
-                            setCustPayAmount(custPayUnpaid.reduce((a, s) => a + (s.total - s.paid), 0));
-                          }
-                        }}
-                        placeholder="Repartir automatiquement"
-                      />
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Imputation</div>
+                      <div className="max-h-48 overflow-y-auto -mx-1">
+                        <button type="button" onClick={() => { setCustPaySaleId(''); setCustPayAmount(custPayUnpaid.reduce((a, s) => a + (s.total - s.paid), 0)); }}
+                          className={`w-full flex items-center gap-3 px-1 py-3 text-left transition-colors border-b border-neutral-100 ${!custPaySaleId ? 'bg-neutral-50' : 'hover:bg-neutral-50'}`}>
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-[13px] truncate ${!custPaySaleId ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>Repartir automatiquement</div>
+                            <div className="text-[11px] text-neutral-400">Plus ancienne d'abord</div>
+                          </div>
+                          {!custPaySaleId && <Check className="w-4 h-4 text-neutral-900 shrink-0" />}
+                        </button>
+                        {custPayUnpaid.map(s => (
+                          <button key={s.id} type="button" onClick={() => { setCustPaySaleId(s.id); setCustPayAmount(s.total - s.paid); }}
+                            className={`w-full flex items-center gap-3 px-1 py-3 text-left transition-colors border-b border-neutral-100 last:border-b-0 ${custPaySaleId === s.id ? 'bg-neutral-50' : 'hover:bg-neutral-50'}`}>
+                            <div className="min-w-0 flex-1">
+                              <div className={`text-[13px] truncate ${custPaySaleId === s.id ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>{s.sale_number} · dû {formatFCFA(s.total - s.paid)}</div>
+                              <div className="text-[11px] text-neutral-400">{s.id === '__balance__' ? 'Solde positionné' : new Date(s.created_at).toLocaleDateString('fr-FR')}</div>
+                            </div>
+                            {custPaySaleId === s.id && <Check className="w-4 h-4 text-neutral-900 shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="label">Montant</label>
+                    <div className="group">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
                       <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
-                        className="input text-lg font-bold num" placeholder="0" min={0} />
+                        className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-lg font-bold num text-neutral-900 placeholder:text-neutral-400" placeholder="0" min={0} />
+                      <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                     </div>
 
                     <div>
-                      <label className="label">Mode de règlement</label>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Mode de règlement</div>
+                      <div className="flex flex-wrap gap-3">
                         {methods.map(m => (
                           <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
-                            className={`px-3 py-2.5 rounded-md text-xs font-semibold border transition-all ${custPayMethod?.id === m.id ? 'border-neutral-900 bg-neutral-50 text-neutral-900' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'}`}>
+                            className={`px-0 py-1 text-[12px] font-semibold border-b-2 transition-all ${custPayMethod?.id === m.id ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>
                             {m.name}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="label">Référence (optionnel)</label>
-                      <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="input" placeholder="N° bordereau, transaction…" />
+                    <div className="group">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence (optionnel)</div>
+                      <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="N° bordereau, transaction…" />
+                      <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                     </div>
                   </>
                 )}
-              </>
+              </div>
             )}
           </div>
         </CashModal>
@@ -3809,36 +3818,44 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* Return ticket */}
       <CashModal open={returnOpen} onClose={() => setReturnOpen(false)} title="Ticket de retour"
-        footer={<>
-          <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          {returnSelected && (
-            <button onClick={processReturn} disabled={returnProcessing} className="btn-icon-success" title="Valider le retour">
-              {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+        footer={!returnSelected ? (
+          <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Fermer</button>
+        ) : (
+          <div className="flex items-center justify-end gap-3 w-full">
+            <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
+            <button onClick={processReturn} disabled={returnProcessing || returnLines.filter(l => l.selected).length === 0} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : "Créer l'avoir"}
             </button>
-          )}
-        </>}
+          </div>
+        )}
       >
         {returnLoading ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         ) : !returnSelected ? (
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <input value={returnSearch} onChange={e => setReturnSearch(e.target.value)} placeholder="Rechercher un ticket de la session…" className="input pl-9" autoFocus={desktopAutoFocus} />
+          <div>
+            {/* Search */}
+            <div className="relative group mb-4">
+              <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+              <input value={returnSearch} onChange={e => setReturnSearch(e.target.value)} placeholder="Rechercher un ticket de la session..." className="w-full pl-6 pr-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" autoFocus={desktopAutoFocus} />
+              <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
             </div>
+            {/* List */}
             {filteredReturnSales.length === 0 ? (
               <div className="py-8 text-center text-sm text-neutral-500">Aucun ticket dans cette session.</div>
             ) : (
-              <div className="divide-y divide-neutral-100 max-h-80 overflow-y-auto">
+              <div>
                 {filteredReturnSales.map(s => (
-                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left px-2 py-2.5 flex items-center justify-between gap-2 transition-colors hover:bg-neutral-50 active:bg-neutral-100 ${s.fullyReturned ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left py-2.5 border-b border-neutral-100 last:border-b-0 flex items-center justify-between gap-2 transition-colors ${s.fullyReturned ? 'opacity-40 cursor-not-allowed' : ''}`}>
                     <div className="min-w-0 flex-1">
-                      <span className="doc-number font-semibold text-sm text-brand-700">{s.sale_number}</span>
-                      {s.customer_name && <span className="text-xs text-neutral-500 ml-1.5">· {s.customer_name}</span>}
-                      {s.fullyReturned && <span className="text-[10px] font-bold uppercase text-neutral-500 bg-neutral-200 px-1.5 py-0.5 rounded ml-1.5">Retourne</span>}
+                      <div className="text-[13px] font-bold text-neutral-900 doc-number">{s.sale_number}</div>
+                      <div className="text-[12px] text-neutral-500 mt-0.5">
+                        {s.customer_name || 'Client comptoir'}
+                        {s.fullyReturned && <span className="ml-2 text-[10px] font-bold uppercase text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded">Retourné</span>}
+                      </div>
+                      <div className="text-[10px] text-neutral-400 num mt-0.5">{new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })} - {new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-bold text-sm num">{formatFCFA(s.total)}</span>
+                      <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(s.total)}</span>
                       <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />
                     </div>
                   </button>
@@ -3847,54 +3864,58 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             )}
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between py-2 border-b border-neutral-100 text-sm">
-              <div>
-                <span className="doc-number font-semibold text-brand-700">{returnSelected.sale_number}</span>
-                {returnSelected.customer_name && <span className="text-neutral-500 ml-2">· {returnSelected.customer_name}</span>}
-              </div>
-              <button onClick={() => setReturnSelected(null)} className="text-xs text-neutral-500 hover:text-neutral-700 underline">Changer</button>
+          <div>
+            {/* Selected ticket header */}
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+              <span className="text-[15px] font-bold text-neutral-900 doc-number">{returnSelected.sale_number}</span>
+              <button onClick={() => setReturnSelected(null)} className="text-[13px] text-neutral-600 underline underline-offset-2 hover:text-neutral-900 transition-colors">Changer</button>
             </div>
-            <p className="text-sm text-neutral-600">Sélectionnez les articles à retourner et ajustez les quantités.</p>
-            <div className="space-y-2">
+
+            {/* Instructions */}
+            <p className="text-[13px] text-neutral-600 mt-4 mb-4 leading-relaxed">Sélectionnez les articles à retourner et ajustez les quantités.</p>
+
+            {/* Article list */}
+            <div>
               {returnLines.map((l, i) => {
                 const toggle = (v: boolean) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, selected: v } : x));
                 const setQ = (q: number) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, quantity: Math.min(l.maxQty, Math.max(1, q)) } : x));
                 return (
-                  <div key={i} className={`py-2.5 border-b border-neutral-100 ${l.selected ? 'bg-red-50/30' : ''}`}>
+                  <div key={i} className="py-4 border-b border-neutral-100 last:border-b-0">
                     <div className="flex items-start gap-3">
-                      <button type="button" onClick={() => toggle(!l.selected)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-neutral-300'}`}>
-                        {l.selected && <Check className="w-4 h-4 text-white" />}
+                      <button type="button" onClick={() => toggle(!l.selected)} className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-neutral-300'}`}>
+                        {l.selected && <Check className="w-3 h-3 text-white" />}
                       </button>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold text-neutral-900 break-words">{l.name}</div>
-                        <div className="text-[11px] text-neutral-500 mt-0.5 num">{formatFCFA(l.unit_price)} · max {l.maxQty}</div>
-                      </div>
-                      <div className="num font-bold shrink-0 text-right text-red-600">
-                        {l.selected ? `-${formatFCFA(l.quantity * l.unit_price)}` : <span className="text-neutral-300">—</span>}
+                        <div className="text-[13px] font-bold text-neutral-900 leading-snug break-words uppercase">{l.name}</div>
+                        <div className="text-[12px] text-neutral-500 mt-1 num">{formatFCFA(l.unit_price)} · Qté achetée : {l.maxQty}</div>
+                        {l.selected && (
+                          <div className="text-[12px] text-red-600 font-medium mt-0.5 num">Montant du retour : -{formatFCFA(l.quantity * l.unit_price)}</div>
+                        )}
+                        {l.selected && (
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="text-[12px] text-neutral-600">Quantité à retourner</span>
+                            <div className="flex items-center gap-3">
+                              <button type="button" onClick={() => setQ(l.quantity - 1)} className="w-8 h-8 flex items-center justify-center text-neutral-600 hover:text-neutral-900 transition-colors"><Minus className="w-4 h-4" /></button>
+                              <span className="text-[15px] font-bold num w-6 text-center">{l.quantity}</span>
+                              <button type="button" onClick={() => setQ(l.quantity + 1)} className="w-8 h-8 flex items-center justify-center text-neutral-600 hover:text-neutral-900 transition-colors"><Plus className="w-4 h-4" /></button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {l.selected && (
-                      <div className="mt-3 flex items-center gap-2">
-                        <span className="text-xs font-semibold text-neutral-500">Qté à retourner</span>
-                        <div className="ml-auto flex items-center gap-1">
-                          <button type="button" onClick={() => setQ(l.quantity - 1)} className="w-7 h-7 rounded-lg hover:bg-neutral-100 flex items-center justify-center"><Minus className="w-3.5 h-3.5" /></button>
-                          <input type="number" value={l.quantity} min="1" max={l.maxQty} onChange={e => setQ(Number(e.target.value))} className="w-12 text-center text-sm font-bold num bg-transparent outline-none" />
-                          <button type="button" onClick={() => setQ(l.quantity + 1)} className="w-7 h-7 rounded-lg hover:bg-neutral-100 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
-              <div className="flex items-center justify-between py-2.5 border-t border-neutral-200 mt-1">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-black">Avoir total</div>
-                  <div className="text-[10px] text-neutral-500 mt-0.5">{returnLines.filter(l => l.selected).length} article{returnLines.filter(l => l.selected).length > 1 ? 's' : ''}</div>
-                </div>
-                <div className="text-lg font-bold text-red-600 num">
-                  -{formatFCFA(returnLines.filter(l => l.selected).reduce((s, l) => s + l.quantity * l.unit_price, 0))}
-                </div>
+            </div>
+
+            {/* Total avoir */}
+            <div className="flex items-center justify-between pt-4 mt-2 border-t border-neutral-200">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-900">Avoir total</div>
+                <div className="text-[11px] text-neutral-500 mt-0.5">{returnLines.filter(l => l.selected).length} article{returnLines.filter(l => l.selected).length > 1 ? 's' : ''}</div>
+              </div>
+              <div className="text-xl font-bold text-red-600 num">
+                - {formatFCFA(returnLines.filter(l => l.selected).reduce((s, l) => s + l.quantity * l.unit_price, 0))}
               </div>
             </div>
           </div>
@@ -3913,7 +3934,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* Session tickets list */}
       <CashModal open={ticketsOpen} onClose={() => setTicketsOpen(false)} title="Tickets de la session"
-        footer={<button onClick={() => setTicketsOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}
+        footer={<button onClick={() => setTicketsOpen(false)} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Fermer</button>}
       >
         {loadingTickets ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
@@ -3934,110 +3955,113 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           const pretsTotal = pretsList.reduce((s, m) => s + m.amount, 0);
           return (
           <div>
-            {/* KPI strip (2 columns, matching stats modal style) */}
-            <div className="grid grid-cols-2 border-b border-neutral-200 pb-3 mb-1">
-              <div className="text-center border-r border-neutral-200 pr-2">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Tickets</div>
-                <div className="text-lg font-bold text-neutral-900 num">{sessionSales.filter(x => x.status !== 'return').length}</div>
+            {/* KPI strip */}
+            <div className="flex items-center border-b border-neutral-200 pb-4 mb-4">
+              <div className="flex-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Tickets</div>
+                <div className="text-xl font-bold text-neutral-900 num">{sessionSales.filter(x => x.status !== 'return').length}</div>
               </div>
-              <div className="text-center pl-2">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Total encaissé</div>
-                <div className="text-lg font-bold text-neutral-900 num">{formatFCFA(sessionEncaisse)}</div>
+              <div className="w-px h-8 bg-neutral-200 mx-4 shrink-0" />
+              <div className="flex-1 text-right">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Total encaissé</div>
+                <div className="text-xl font-bold text-neutral-900 num">{formatFCFA(sessionEncaisse)}</div>
               </div>
             </div>
 
-            {/* Collapsible sections */}
-            <div className="mt-1 divide-y divide-neutral-100">
-              {/* Tickets */}
-              <div>
-                <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <List className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                    <span className="text-xs font-semibold text-neutral-800 truncate">Tickets de vente</span>
-                    <span className="text-[10px] text-neutral-400 shrink-0">{sessionSales.length}</span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-bold text-neutral-800 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</span>
-                    <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'tickets' ? 'rotate-90' : ''}`} />
-                  </div>
-                </button>
-                {ticketsExpanded === 'tickets' && (
-                  <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
-                    {sessionSales.length === 0 ? (
-                      <div className="text-center py-3 text-[11px] text-neutral-500">Aucun ticket.</div>
-                    ) : sessionSales.map(s => (
-                      <div key={s.id} className={`flex items-center justify-between py-1.5 pl-6 gap-2 ${s.status === 'return' ? 'bg-red-50/30' : ''}`}>
-                        <div className="min-w-0 flex-1">
-                          <div className={`text-xs font-medium truncate ${s.status === 'return' ? 'text-red-700' : 'text-neutral-800'}`}>
-                            {s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}
-                            {s.status === 'return' && <span className="ml-1.5 text-[10px] font-bold uppercase text-red-600">Retour</span>}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
-                            <span className={`doc-number font-semibold ${s.status === 'return' ? 'text-red-600' : ''}`}>{s.sale_number}</span>
-                            <span>{formatDateTime(s.created_at)}</span>
-                          </div>
+            {/* Tickets de vente section */}
+            <div>
+              <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-full flex items-center justify-between py-2 text-left transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <List className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span className="text-[13px] font-semibold text-neutral-900">Tickets de vente</span>
+                  <span className="text-[11px] text-neutral-400">{sessionSales.length}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</span>
+                  <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'tickets' ? 'rotate-90' : ''}`} />
+                </div>
+              </button>
+              {ticketsExpanded === 'tickets' && (
+                <div className="mt-1">
+                  {sessionSales.length === 0 ? (
+                    <div className="text-center py-4 text-[12px] text-neutral-500">Aucun ticket.</div>
+                  ) : sessionSales.map(s => (
+                    <div key={s.id} className={`py-3 border-b border-neutral-100 last:border-b-0 ${s.status === 'return' ? 'bg-red-50/20' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div className={`text-[13px] font-semibold truncate ${s.status === 'return' ? 'text-red-700' : 'text-neutral-900'}`}>
+                          {s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}
+                          {s.status === 'return' && <span className="ml-1.5 text-[10px] font-bold uppercase text-red-600">Retour</span>}
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {s.status !== 'return' && can('pos_reprint') && (
-                            <>
-                              <button title="Ticket 80mm" onClick={() => {
-                                const fakeSale = {
-                                  sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
-                                  items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                                  payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
-                                  customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
-                                };
-                                printSaleTicket(fakeSale as any, s.doc_header);
-                              }} className="p-1 rounded hover:bg-neutral-100 text-neutral-500">
-                                <Printer className="w-3.5 h-3.5" />
-                              </button>
-                              <button title="Facture A4" onClick={() => {
-                                const fakeSale = {
-                                  sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
-                                  items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                                  payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
-                                  customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
-                                };
-                                printSaleInvoice(fakeSale as any, s.doc_header, (s.user_id && sessionProfileNames[s.user_id]) || 'Utilisateur non renseigné');
-                              }} className="p-1 rounded hover:bg-neutral-100 text-neutral-500">
-                                <FileText className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                          <span className={`text-xs font-semibold num ${s.total < 0 ? 'text-red-600' : 'text-neutral-700'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</span>
-                        </div>
+                        <span className={`text-[13px] font-bold num shrink-0 ml-3 ${s.total < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <div className="flex items-center gap-0 text-[11px] text-neutral-400 num whitespace-nowrap">
+                          <span className={`font-semibold ${s.status === 'return' ? 'text-red-500' : ''}`}>{s.sale_number}</span>
+                          <span className="mx-1.5">·</span>
+                          <span>{formatDateTime(s.created_at)}</span>
+                        </div>
+                        {s.status !== 'return' && can('pos_reprint') && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button title="Ticket 80mm" onClick={() => {
+                              const fakeSale = {
+                                sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
+                                items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
+                                payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                                customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
+                              };
+                              printSaleTicket(fakeSale as any, s.doc_header);
+                            }} className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors">
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                            <button title="Facture A4" onClick={() => {
+                              const fakeSale = {
+                                sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
+                                items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
+                                payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                                customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
+                              };
+                              printSaleInvoice(fakeSale as any, s.doc_header, (s.user_id && sessionProfileNames[s.user_id]) || 'Utilisateur non renseigné');
+                            }} className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors">
+                              <FileText className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-              {/* Encaissements directs */}
+            {/* Other sections */}
+            <div className="border-t border-neutral-200 mt-2 pt-1">
               {encDirectList.length > 0 && (
-                <div>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <div className="border-b border-neutral-100">
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <ArrowDownRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-xs font-semibold text-neutral-800 truncate">Encaissements directs</span>
-                      <span className="text-[10px] text-neutral-400 shrink-0">{encDirectList.length}</span>
+                      <span className="text-[13px] font-semibold text-neutral-900">Encaissements directs</span>
+                      <span className="text-[11px] text-neutral-400">{encDirectList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(encDirectTotal)}</span>
+                      <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(encDirectTotal)}</span>
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'encDirect' && (
-                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2">
                       {encDirectList.map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Encaissement direct'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.reason || 'Encaissement direct'}</div>
+                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">+{formatFCFA(m.amount)}</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <div className="text-[11px] text-neutral-400 num">
                               <span>{m.method_name || 'Espèces'}</span>
+                              <span className="mx-1.5">·</span>
                               <span>{formatDateTime(m.created_at)}</span>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
                             {can('pos_reprint') && <button
                               title="Réimprimer le reçu"
                               onClick={() => {
@@ -4055,11 +4079,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                   });
                                 } catch {}
                               }}
-                              className="p-1 rounded hover:bg-neutral-100 text-neutral-500"
+                              className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors"
                             >
                               <Printer className="w-3.5 h-3.5" />
                             </button>}
-                            <span className="text-xs font-semibold text-neutral-700 num">+{formatFCFA(m.amount)}</span>
                           </div>
                         </div>
                       ))}
@@ -4068,33 +4091,33 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
-              {/* Reglements factures */}
               {sessionInvPayments.length > 0 && (
-                <div>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <div className="border-b border-neutral-100">
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <Wallet className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-xs font-semibold text-neutral-800 truncate">Reglements factures</span>
-                      <span className="text-[10px] text-neutral-400 shrink-0">{sessionInvPayments.length}</span>
+                      <span className="text-[13px] font-semibold text-neutral-900">Reglements factures</span>
+                      <span className="text-[11px] text-neutral-400">{sessionInvPayments.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(sessionInvPayments.reduce((s, p) => s + p.amount, 0))}</span>
+                      <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(sessionInvPayments.reduce((s, p) => s + p.amount, 0))}</span>
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'reglements' && (
-                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2">
                       {sessionInvPayments.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{p.customer_name || 'Client'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
-                              <span className="doc-number font-semibold">{p.sale_number}</span>
-                              {p.method_name && <span>{p.method_name}</span>}
-                              <span>{formatDateTime(p.created_at)}</span>
-                            </div>
+                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{p.customer_name || 'Client'}</div>
+                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">+{formatFCFA(p.amount)}</span>
                           </div>
-                          <span className="text-xs font-semibold text-neutral-700 num shrink-0">+{formatFCFA(p.amount)}</span>
+                          <div className="text-[11px] text-neutral-400 num mt-0.5">
+                            <span className="font-semibold">{p.sale_number}</span>
+                            {p.method_name && <><span className="mx-1.5">·</span><span>{p.method_name}</span></>}
+                            <span className="mx-1.5">·</span>
+                            <span>{formatDateTime(p.created_at)}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -4102,32 +4125,33 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
-              {/* Acomptes */}
               {acomptesList.length > 0 && (
-                <div>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <div className="border-b border-neutral-100">
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <Wallet className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-xs font-semibold text-neutral-800 truncate">Acomptes clients</span>
-                      <span className="text-[10px] text-neutral-400 shrink-0">{acomptesList.length}</span>
+                      <span className="text-[13px] font-semibold text-neutral-900">Acomptes clients</span>
+                      <span className="text-[11px] text-neutral-400">{acomptesList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-neutral-800 num">+{formatFCFA(acomptesTotal)}</span>
+                      <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(acomptesTotal)}</span>
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'acomptes' && (
-                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2">
                       {acomptesList.map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.customer_name || 'Client'}</div>
+                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">+{formatFCFA(m.amount)}</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <div className="text-[11px] text-neutral-400 num">
                               <span>{m.method_name || 'Acompte'}</span>
+                              <span className="mx-1.5">·</span>
                               <span>{formatDateTime(m.created_at)}</span>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
                             {can('pos_reprint') && <button
                               title="Réimprimer le reçu"
                               onClick={() => {
@@ -4145,11 +4169,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                   });
                                 } catch {}
                               }}
-                              className="p-1 rounded hover:bg-neutral-100 text-neutral-500"
+                              className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors"
                             >
                               <Printer className="w-3.5 h-3.5" />
                             </button>}
-                            <span className="text-xs font-semibold text-neutral-700 num">+{formatFCFA(m.amount)}</span>
                           </div>
                         </div>
                       ))}
@@ -4158,32 +4181,33 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
-              {/* Décaissements */}
               {depensesList.length > 0 && (
-                <div>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <div className="border-b border-neutral-100">
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <ArrowUpRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-xs font-semibold text-neutral-800 truncate">Décaissements</span>
-                      <span className="text-[10px] text-neutral-400 shrink-0">{depensesList.length}</span>
+                      <span className="text-[13px] font-semibold text-neutral-900">Décaissements</span>
+                      <span className="text-[11px] text-neutral-400">{depensesList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-neutral-800 num">-{formatFCFA(depensesTotal)}</span>
+                      <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(depensesTotal)}</span>
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'depenses' && (
-                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2">
                       {depensesList.map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Dépense'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
+                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.reason || 'Dépense'}</div>
+                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">-{formatFCFA(m.amount)}</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <div className="text-[11px] text-neutral-400 num">
                               <span>{m.method_name || 'Espèces'}</span>
+                              <span className="mx-1.5">·</span>
                               <span>{formatDateTime(m.created_at)}</span>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
                             {can('pos_reprint') && <button
                               title="Réimprimer le bon"
                               onClick={() => {
@@ -4201,11 +4225,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                                   });
                                 } catch {}
                               }}
-                              className="p-1 rounded hover:bg-neutral-100 text-neutral-500"
+                              className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors"
                             >
                               <Printer className="w-3.5 h-3.5" />
                             </button>}
-                            <span className="text-xs font-semibold text-neutral-700 num">-{formatFCFA(m.amount)}</span>
                           </div>
                         </div>
                       ))}
@@ -4214,32 +4237,32 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
-              {/* Remboursements */}
               {remboursementsList.length > 0 && (
-                <div>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'remboursements' ? null : 'remboursements')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <div className="border-b border-neutral-100">
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'remboursements' ? null : 'remboursements')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <RotateCcw className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-xs font-semibold text-neutral-800 truncate">Remboursements</span>
-                      <span className="text-[10px] text-neutral-400 shrink-0">{remboursementsList.length}</span>
+                      <span className="text-[13px] font-semibold text-neutral-900">Remboursements</span>
+                      <span className="text-[11px] text-neutral-400">{remboursementsList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-neutral-800 num">-{formatFCFA(remboursementsTotal)}</span>
+                      <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(remboursementsTotal)}</span>
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'remboursements' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'remboursements' && (
-                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2">
                       {remboursementsList.map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Remboursement'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
-                              <span>{m.method_name || 'Espèces'}</span>
-                              <span>{formatDateTime(m.created_at)}</span>
-                            </div>
+                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.reason || 'Remboursement'}</div>
+                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">-{formatFCFA(m.amount)}</span>
                           </div>
-                          <span className="text-xs font-semibold text-neutral-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          <div className="text-[11px] text-neutral-400 num mt-0.5">
+                            <span>{m.method_name || 'Espèces'}</span>
+                            <span className="mx-1.5">·</span>
+                            <span>{formatDateTime(m.created_at)}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -4247,32 +4270,32 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
-              {/* Retraits clients */}
               {retraitsList.length > 0 && (
-                <div>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <div className="border-b border-neutral-100">
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <ArrowUpRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-xs font-semibold text-neutral-800 truncate">Retraits clients</span>
-                      <span className="text-[10px] text-neutral-400 shrink-0">{retraitsList.length}</span>
+                      <span className="text-[13px] font-semibold text-neutral-900">Retraits clients</span>
+                      <span className="text-[11px] text-neutral-400">{retraitsList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-neutral-800 num">-{formatFCFA(retraitsTotal)}</span>
+                      <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(retraitsTotal)}</span>
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'retraits' && (
-                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2">
                       {retraitsList.map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
-                              <span>{m.method_name || 'Espèces'}</span>
-                              <span>{formatDateTime(m.created_at)}</span>
-                            </div>
+                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.customer_name || 'Client'}</div>
+                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">-{formatFCFA(m.amount)}</span>
                           </div>
-                          <span className="text-xs font-semibold text-neutral-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          <div className="text-[11px] text-neutral-400 num mt-0.5">
+                            <span>{m.method_name || 'Espèces'}</span>
+                            <span className="mx-1.5">·</span>
+                            <span>{formatDateTime(m.created_at)}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -4280,32 +4303,32 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
-              {/* Prêts clients */}
               {pretsList.length > 0 && (
-                <div>
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg text-left active:bg-neutral-100 transition-colors">
+                <div className="border-b border-neutral-100">
+                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <HandCoins className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-xs font-semibold text-neutral-800 truncate">Prêts clients</span>
-                      <span className="text-[10px] text-neutral-400 shrink-0">{pretsList.length}</span>
+                      <span className="text-[13px] font-semibold text-neutral-900">Prêts clients</span>
+                      <span className="text-[11px] text-neutral-400">{pretsList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-neutral-800 num">-{formatFCFA(pretsTotal)}</span>
+                      <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(pretsTotal)}</span>
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'prets' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {ticketsExpanded === 'prets' && (
-                    <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2">
                       {pretsList.map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 pl-6 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
-                              <span>Prêt</span>
-                              <span>{formatDateTime(m.created_at)}</span>
-                            </div>
+                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.customer_name || 'Client'}</div>
+                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">-{formatFCFA(m.amount)}</span>
                           </div>
-                          <span className="text-xs font-semibold text-neutral-700 num shrink-0">-{formatFCFA(m.amount)}</span>
+                          <div className="text-[11px] text-neutral-400 num mt-0.5">
+                            <span>Prêt</span>
+                            <span className="mx-1.5">·</span>
+                            <span>{formatDateTime(m.created_at)}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -4338,19 +4361,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         ) : statsData ? (
           <div>
-            {/* 3-column KPI strip */}
-            <div className="grid grid-cols-3 border-b border-neutral-200 pb-3 mb-1">
-              <div className="text-center border-r border-neutral-200 pr-2">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Ventes</div>
-                <div className="text-lg font-bold text-neutral-900 num">{statsData.count}</div>
+            {/* KPI strip: ventes + net */}
+            <div className="flex items-end gap-4 border-b border-neutral-200 pb-3 mb-1">
+              <div className="shrink-0 text-center pr-3 border-r border-neutral-200">
+                <div className="text-[8px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Ventes</div>
+                <div className="text-sm font-black text-neutral-900 num">{statsData.count}</div>
               </div>
-              <div className="text-center border-r border-neutral-200 px-2">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Total encaissé</div>
-                <div className="text-lg font-bold text-neutral-900 num">{formatFCFA((statsData.totalPayments || 0) + (statsData.movIncome || 0) + (statsData.movPrepay || 0))}</div>
-              </div>
-              <div className="text-center pl-2">
+              <div className="flex-1 text-left">
                 <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Net</div>
-                <div className="text-lg font-bold text-neutral-900 num">{formatFCFA(statsData.netTotal)}</div>
+                <div className="text-xl font-black text-neutral-900 num leading-none">
+                  {formatNumber(statsData.netTotal)} <span className="text-[11px] font-bold text-neutral-500">FCFA</span>
+                </div>
               </div>
             </div>
 
@@ -4636,12 +4657,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   {statsExpanded === 'articles' && (
                     <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.topArticles.map((a, i) => (
-                        <div key={a.name} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{a.name}</div>
-                            <div className="text-[10px] text-neutral-400 num">Qté: {a.qty}</div>
+                        <div key={a.name} className="py-2 pl-1">
+                          <div className="text-[11px] font-medium text-neutral-800 leading-snug">{a.name}</div>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <span className="text-[10px] text-neutral-400 num">Qté: {a.qty}</span>
+                            <span className="text-[11px] font-semibold text-amber-700 num">{formatFCFA(a.total)}</span>
                           </div>
-                          <span className="text-xs font-semibold text-amber-700 num shrink-0">{formatFCFA(a.total)}</span>
                         </div>
                       ))}
                     </div>
@@ -4663,26 +4684,30 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         </>}
       >
         <div className="space-y-3">
-          <div>
-            <label className="label">Type</label>
-            <select value={regType} onChange={e => setRegType(e.target.value as any)} className="input">
+          <div className="group">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Type</div>
+            <select value={regType} onChange={e => setRegType(e.target.value as any)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 appearance-none">
               <option value="manquant">Manquant (déficit)</option>
               <option value="excedent">Excédent (surplus)</option>
               <option value="depot">Dépôt</option>
               <option value="retrait">Retrait</option>
             </select>
+            <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
           </div>
-          <div>
-            <label className="label">Montant (FCFA)</label>
-            <input type="number" value={regAmount || ''} onChange={e => setRegAmount(Number(e.target.value))} className="input" min="0" />
+          <div className="group">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant (FCFA)</div>
+            <input type="number" value={regAmount || ''} onChange={e => setRegAmount(Number(e.target.value))} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" min="0" />
+            <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
           </div>
-          <div>
-            <label className="label">Motif *</label>
-            <input value={regReason} onChange={e => setRegReason(e.target.value)} className="input" placeholder="Ex: Écart de monnaie, dépôt initial…" />
+          <div className="group">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Motif *</div>
+            <input value={regReason} onChange={e => setRegReason(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Ex: Écart de monnaie, dépôt initial…" />
+            <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
           </div>
-          <div>
-            <label className="label">Note (optionnel)</label>
-            <input value={regNote} onChange={e => setRegNote(e.target.value)} className="input" />
+          <div className="group">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Note (optionnel)</div>
+            <input value={regNote} onChange={e => setRegNote(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" />
+            <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
           </div>
         </div>
       </Modal>
@@ -4824,7 +4849,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </span>
               </div>
             </div>
-            <textarea value={closingNote} onChange={e => setClosingNote(e.target.value)} className="input text-sm resize-none" rows={4} placeholder="Note de clôture (optionnel)" />
+            <div className="group">
+              <textarea value={closingNote} onChange={e => setClosingNote(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm text-neutral-900 placeholder:text-neutral-400 resize-none" rows={4} placeholder="Note de clôture (optionnel)" />
+              <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+            </div>
             <div className="flex items-start gap-2 py-2 text-[11px] text-amber-600">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>Action irréversible. La session sera verrouillée.</span>
@@ -5111,141 +5139,122 @@ function PaymentScreen({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center animate-fade-in">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={paying ? undefined : onClose} />
-      <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-2xl border border-neutral-200 flex flex-col">
+      <div className="absolute inset-0 bg-neutral-900/50" onClick={paying ? undefined : onClose} />
+      <div className="relative w-[calc(100%-32px)] max-w-[420px] bg-white rounded-lg shadow-lg flex flex-col max-h-[88vh]">
 
-        {/* En-tête */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Encaissement</div>
-            <div className="text-2xl font-bold text-neutral-900 num leading-none mt-1">{formatFCFA(total)}</div>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          <div className="flex items-baseline gap-3">
+            <p className="text-[20px] font-bold text-neutral-900 num leading-none tracking-tight">{formatFCFA(total)}</p>
+            {totalPaid > 0 && (
+              <span className="text-[11px] num">
+                {remaining > 0
+                  ? <span className="text-amber-600 font-semibold">reste {formatFCFA(remaining)}</span>
+                  : <span className="text-neutral-500">monnaie {formatFCFA(-remaining)}</span>
+                }
+              </span>
+            )}
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-md bg-neutral-900 text-white flex items-center justify-center hover:bg-neutral-800 transition-colors" disabled={paying}>
+          <button onClick={onClose} className="p-1.5 -mr-1.5 text-neutral-400 hover:text-neutral-700 transition-colors" disabled={paying}>
             <X className="w-4 h-4" />
           </button>
         </div>
+        <div className="h-px bg-neutral-100" />
 
-        {/* Bande résumé */}
-        {(customer || totalPaid > 0) && (
-          <div className="flex items-center gap-3 px-5 py-2.5 border-b border-neutral-100 text-[11px]">
-            {customer && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-medium"><User className="w-3 h-3" /> {customer.name}</span>}
-            {totalPaid > 0 && (
-              <>
-                <span className="text-neutral-500">Reçu <span className="num font-bold text-neutral-900">{formatFCFA(totalPaid)}</span></span>
-                {remaining > 0 ? <span className="text-amber-600 font-semibold">Reste <span className="num">{formatFCFA(remaining)}</span></span>
-                : <span className="text-neutral-700 font-semibold">Monnaie <span className="num">{formatFCFA(-remaining)}</span></span>}
-              </>
-            )}
-          </div>
-        )}
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
 
-        {/* Solde comptable client */}
-        {customer && Number((customer as any).balance || 0) !== 0 && (
-          <div className="flex items-center gap-2 mx-5 mt-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-[11px]">
-            <Wallet className="w-4 h-4 text-amber-600 shrink-0" />
-            <span className="text-amber-700">Solde dû</span>
-            <span className="ml-auto text-amber-900 font-bold num">{formatFCFA(Number((customer as any).balance || 0))}</span>
-          </div>
-        )}
+          {/* Customer + IPM compact banner */}
+          {(customer || ipmInfo) && (
+            <div className="px-4 py-2 flex items-center gap-2 text-[11px] border-b border-neutral-50">
+              {customer && <><User className="w-3 h-3 text-neutral-400" /><span className="font-semibold text-neutral-700">{customer.name}</span>{
+                Number((customer as any).balance || 0) !== 0 && <span className="text-amber-700 font-bold num">({formatFCFA(Number((customer as any).balance || 0))})</span>
+              }</>}
+              {customer && ipmInfo && <span className="text-neutral-200">|</span>}
+              {ipmInfo && <><Shield className="w-3 h-3 text-neutral-400" /><span className="text-neutral-500">{ipmInfo.organisme} {ipmInfo.taux}%</span><span className="font-bold text-neutral-800 num">{formatFCFA(ipmInfo.partIpm)}</span></>}
+            </div>
+          )}
 
-        {/* Bannière IPM */}
-        {ipmInfo && (
-          <div className="flex items-center gap-2 mx-5 mt-3 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-[11px]">
-            <Shield className="w-4 h-4 text-neutral-500 shrink-0" />
-            <span className="text-neutral-600">IPM <span className="font-bold text-neutral-900">{ipmInfo.organisme}</span> ({ipmInfo.taux}%)</span>
-            <span className="ml-auto text-neutral-900 font-bold num">{formatFCFA(ipmInfo.partIpm)} pris en charge</span>
-          </div>
-        )}
-
-        {/* Contenu */}
-        <div className="px-5 py-4 space-y-4">
-          {/* Lignes de paiement ajoutées */}
+          {/* Payment lines */}
           {payments.length > 0 && (
-            <div className="space-y-2">
+            <div className="px-4">
               {payments.map((p, idx) => (
-                <div key={idx} className="flex items-center gap-2.5 p-2.5 rounded-md bg-neutral-50 border border-neutral-200">
+                <div key={idx} className="flex items-center gap-2 py-2 border-b border-neutral-100 last:border-b-0">
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-neutral-500 leading-tight mb-0.5">{p.method_name}</div>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">{p.method_name}</span>
                     <input
                       type="number"
                       inputMode="numeric"
                       value={p.amount || ''}
                       onChange={e => updateAmount(idx, e.target.value)}
-                      className="w-full bg-transparent text-lg font-bold num text-neutral-900 outline-none border-none p-0 leading-tight [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      className="w-full bg-transparent text-[16px] font-bold num text-neutral-900 outline-none border-none p-0 leading-tight [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="0"
                     />
                   </div>
-                  <button onClick={() => setExact(idx)} className="px-2.5 py-1.5 rounded-lg bg-neutral-900 text-white text-[10px] font-bold hover:bg-neutral-800 transition-colors shrink-0">
-                    Exact
-                  </button>
-                  <button onClick={() => removePayment(idx)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 shrink-0">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <button onClick={() => setExact(idx)} className="px-1.5 py-0.5 text-[9px] font-bold text-neutral-600 hover:text-neutral-900 transition-colors">Exact</button>
+                  <button onClick={() => removePayment(idx)} className="p-1 text-neutral-300 hover:text-red-500 transition-colors"><Trash2 className="w-3 h-3" /></button>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Modes de paiement — grille fixe 3 colonnes */}
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2">
-              {payments.length > 0 ? 'Ajouter un autre mode' : 'Mode de paiement'}
-            </div>
-            <div className="grid grid-cols-3 gap-2">
+          {/* Payment methods */}
+          <div className="px-4 py-2.5">
+            {payments.length === 0 && <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-neutral-400 mb-1.5">Mode de paiement</p>}
+            <div>
               {methods.filter(m => !payments.some(p => p.payment_method_id === m.id)).map(m => (
                 <button key={m.id} onClick={() => selectMethod(m)}
-                  className="h-12 flex items-center justify-center rounded-md bg-white border border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50 active:scale-95 transition-all text-[12px] font-semibold text-neutral-800 text-center px-2">
+                  className="w-full text-left py-1.5 border-b border-neutral-100 last:border-b-0 text-[12px] font-semibold text-neutral-700 hover:text-neutral-900 transition-colors">
                   {m.name}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Vente à crédit */}
+          {/* Credit sale option */}
           {customer && totalPaid === 0 && (
-            <div className="pt-3 border-t border-neutral-100">
+            <div className="px-4 py-2 border-t border-neutral-100">
               <button onClick={onValidateCredit} disabled={paying || !ipmDocsValid}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-all text-sm font-bold disabled:opacity-50">
-                {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                Tout à crédit · {customer.name}
+                className="w-full flex items-center justify-center gap-1.5 h-8 text-amber-800 hover:bg-amber-50 transition-colors text-[11px] font-bold disabled:opacity-50">
+                {paying ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
+                Tout à crédit
               </button>
-              <div className="text-[10px] text-neutral-400 mt-1 text-center">Facture impayée dans le compte client</div>
             </div>
           )}
 
-          {/* Champs du document */}
+          {/* Document fields */}
           {hasDocFields && (
-            <div className="pt-3 border-t border-neutral-100 space-y-2.5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Informations document</div>
+            <div className="px-4 py-2 border-t border-neutral-100">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-neutral-400 mb-2">Document</p>
               {docSettings.show_reference && (
-                <div>
-                  <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Référence client</label>
-                  <input value={docFields.reference} onChange={e => setDocFields.setReference(e.target.value)} placeholder="Réf. commande / dossier" className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                <div className="mb-2">
+                  <label className="text-[9px] text-neutral-400 block">Référence client</label>
+                  <input value={docFields.reference} onChange={e => setDocFields.setReference(e.target.value)} placeholder="Réf. commande / dossier" className="w-full bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[12px] text-neutral-900 placeholder:text-neutral-300 outline-none pb-1 transition-colors" />
                 </div>
               )}
               {docSettings.show_delivery_date && (
-                <div>
-                  <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Date de livraison</label>
-                  <input type="date" value={docFields.deliveryDate} onChange={e => setDocFields.setDeliveryDate(e.target.value)} className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                <div className="mb-2">
+                  <label className="text-[9px] text-neutral-400 block">Date de livraison</label>
+                  <input type="date" value={docFields.deliveryDate} onChange={e => setDocFields.setDeliveryDate(e.target.value)} className="w-full bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[12px] text-neutral-900 outline-none pb-1 transition-colors" />
                 </div>
               )}
               {docSettings.show_warranty && (
-                <div>
-                  <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Garantie</label>
-                  <input value={docFields.warranty} onChange={e => setDocFields.setWarranty(e.target.value)} placeholder="Ex : 6 mois, 1 an" className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                <div className="mb-2">
+                  <label className="text-[9px] text-neutral-400 block">Garantie</label>
+                  <input value={docFields.warranty} onChange={e => setDocFields.setWarranty(e.target.value)} placeholder="Ex : 6 mois, 1 an" className="w-full bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[12px] text-neutral-900 placeholder:text-neutral-300 outline-none pb-1 transition-colors" />
                 </div>
               )}
               {docSettings.show_imei && (
-                <div>
-                  <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">IMEI / Téléphone</label>
-                  <input value={docFields.imei} onChange={e => setDocFields.setImei(e.target.value)} placeholder="Numéro IMEI ou série" className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors" />
+                <div className="mb-2">
+                  <label className="text-[9px] text-neutral-400 block">IMEI / Téléphone</label>
+                  <input value={docFields.imei} onChange={e => setDocFields.setImei(e.target.value)} placeholder="Numéro IMEI ou série" className="w-full bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[12px] text-neutral-900 placeholder:text-neutral-300 outline-none pb-1 transition-colors" />
                 </div>
               )}
               {docSettings.show_representative && (
-                <div>
-                  <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Représentant</label>
-                  <select value={docFields.representative} onChange={e => setDocFields.setRepresentative(e.target.value)} className="w-full h-9 rounded-md bg-neutral-50 border border-neutral-200 px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900/10 transition-colors">
-                    <option value="">Aucun représentant</option>
+                <div className="mb-2">
+                  <label className="text-[9px] text-neutral-400 block">Représentant</label>
+                  <select value={docFields.representative} onChange={e => setDocFields.setRepresentative(e.target.value)} className="w-full bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[12px] text-neutral-900 outline-none pb-1 transition-colors cursor-pointer">
+                    <option value="">Aucun</option>
                     {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
                   </select>
                 </div>
@@ -5253,86 +5262,77 @@ function PaymentScreen({
             </div>
           )}
 
-          {/* Documents IPM obligatoires */}
+          {/* IPM mandatory documents */}
           {hasIpmDocFields && setIpmDocuments && (
-            <div className="pt-3 border-t border-neutral-100 space-y-2.5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Documents IPM obligatoires</div>
+            <div className="px-4 py-2 border-t border-neutral-100">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-neutral-400 mb-2">Documents IPM</p>
               {ipmDocRequired?.ordonnance && (
-                <div>
-                  <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">N° Ordonnance *</label>
-                  <input value={ipmDocuments?.numero_ordonnance || ''} onChange={e => setIpmDocuments(d => ({ ...d, numero_ordonnance: e.target.value }))} placeholder="Saisir le numéro d'ordonnance" className={`w-full h-9 rounded-md bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.numero_ordonnance?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
+                <div className="mb-2">
+                  <label className="text-[9px] text-neutral-400 block">N° Ordonnance *</label>
+                  <input value={ipmDocuments?.numero_ordonnance || ''} onChange={e => setIpmDocuments(d => ({ ...d, numero_ordonnance: e.target.value }))} placeholder="Numéro d'ordonnance" className={`w-full bg-transparent border-b text-[12px] text-neutral-900 placeholder:text-neutral-300 outline-none pb-1 transition-colors ${!ipmDocuments?.numero_ordonnance?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
                 </div>
               )}
               {ipmDocRequired?.medecin && (
-                <div>
-                  <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Médecin prescripteur *</label>
-                  <input value={ipmDocuments?.medecin || ''} onChange={e => setIpmDocuments(d => ({ ...d, medecin: e.target.value }))} placeholder="Nom du médecin prescripteur" className={`w-full h-9 rounded-md bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.medecin?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
+                <div className="mb-2">
+                  <label className="text-[9px] text-neutral-400 block">Médecin prescripteur *</label>
+                  <input value={ipmDocuments?.medecin || ''} onChange={e => setIpmDocuments(d => ({ ...d, medecin: e.target.value }))} placeholder="Nom du médecin" className={`w-full bg-transparent border-b text-[12px] text-neutral-900 placeholder:text-neutral-300 outline-none pb-1 transition-colors ${!ipmDocuments?.medecin?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
                 </div>
               )}
               {ipmDocRequired?.bon && (
-                <div>
-                  <label className="text-[10px] font-semibold text-neutral-500 mb-1 block">Numéro bon de prise en charge *</label>
-                  <input value={ipmDocuments?.numero_bon || ''} onChange={e => setIpmDocuments(d => ({ ...d, numero_bon: e.target.value }))} placeholder="Saisir le numéro du bon IPM" className={`w-full h-9 rounded-md bg-neutral-50 border px-3 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors ${!ipmDocuments?.numero_bon?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
+                <div className="mb-2">
+                  <label className="text-[9px] text-neutral-400 block">N° Bon de prise en charge *</label>
+                  <input value={ipmDocuments?.numero_bon || ''} onChange={e => setIpmDocuments(d => ({ ...d, numero_bon: e.target.value }))} placeholder="Numéro du bon IPM" className={`w-full bg-transparent border-b text-[12px] text-neutral-900 placeholder:text-neutral-300 outline-none pb-1 transition-colors ${!ipmDocuments?.numero_bon?.trim() ? 'border-red-300 focus:border-red-500' : 'border-neutral-200 focus:border-neutral-900'}`} />
                 </div>
               )}
               {!ipmDocsValid && (
-                <p className="text-[10px] text-red-500 font-medium">Remplissez tous les champs obligatoires pour valider la vente</p>
+                <p className="text-[10px] text-red-500 font-medium mt-1">Remplissez tous les champs obligatoires</p>
               )}
             </div>
           )}
         </div>
 
-        {/* Préférences d'impression automatique */}
-        <div className="border-t border-neutral-100 px-5 py-3 flex items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={autoPrintTicket}
+        {/* Print toggles */}
+        <div className="border-t border-neutral-100 px-4 py-2 space-y-1.5">
+          <label className="flex items-center justify-between cursor-pointer select-none">
+            <span className="text-[10px] text-neutral-600 flex items-center gap-1"><Printer className="w-3 h-3" /> Ticket auto</span>
+            <button type="button" role="switch" aria-checked={autoPrintTicket}
               onClick={() => { const next = !autoPrintTicket; setAutoPrintTicket(next); if (next) setAutoPrintInvoice(false); }}
-              className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${autoPrintTicket ? 'bg-neutral-900' : 'bg-neutral-200'}`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${autoPrintTicket ? 'translate-x-4' : ''}`} />
+              className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${autoPrintTicket ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+              <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${autoPrintTicket ? 'translate-x-[14px]' : ''}`} />
             </button>
-            <span className="text-[11px] font-semibold text-neutral-700 flex items-center gap-1"><Printer className="w-3 h-3" /> Ticket auto</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={autoPrintInvoice}
+          <label className="flex items-center justify-between cursor-pointer select-none">
+            <span className="text-[10px] text-neutral-600 flex items-center gap-1"><FileText className="w-3 h-3" /> Facture auto</span>
+            <button type="button" role="switch" aria-checked={autoPrintInvoice}
               onClick={() => { const next = !autoPrintInvoice; setAutoPrintInvoice(next); if (next) setAutoPrintTicket(false); }}
-              className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${autoPrintInvoice ? 'bg-neutral-900' : 'bg-neutral-200'}`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${autoPrintInvoice ? 'translate-x-4' : ''}`} />
+              className={`relative w-8 h-[18px] rounded-full transition-colors shrink-0 ${autoPrintInvoice ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+              <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${autoPrintInvoice ? 'translate-x-[14px]' : ''}`} />
             </button>
-            <span className="text-[11px] font-semibold text-neutral-700 flex items-center gap-1"><FileText className="w-3 h-3" /> Facture auto</span>
           </label>
         </div>
 
-        {/* Pied — actions */}
-        <div className="border-t border-neutral-100 px-5 py-4 flex items-center gap-3">
-          <button onClick={onClose} className="h-10 px-4 rounded-md bg-neutral-900 text-white font-semibold text-sm hover:bg-neutral-800 transition-colors" disabled={paying}>
-            Annuler
-          </button>
-          <div className="flex-1" />
+        {/* Footer */}
+        <div className="border-t border-neutral-100 px-4 py-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {enough ? (
             <button onClick={onValidate} disabled={paying || !ipmDocsValid}
-              className="h-10 px-5 rounded-md font-bold text-sm flex items-center gap-2 bg-neutral-900 text-white hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50">
+              className="h-10 px-5 rounded-md bg-neutral-900 text-white text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50 order-1 sm:order-2 sm:ml-auto">
               {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {paying ? 'Traitement...' : `Valider · ${formatFCFA(total)}`}
+              <span>{paying ? 'Traitement...' : `Valider · ${formatFCFA(total)}`}</span>
             </button>
           ) : canPartial ? (
             <button onClick={onValidate} disabled={paying || !ipmDocsValid}
-              className="h-10 px-5 rounded-md font-bold text-sm flex items-center gap-2 bg-neutral-900 text-white hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50">
+              className="h-10 px-5 rounded-md bg-neutral-900 text-white text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50 order-1 sm:order-2 sm:ml-auto">
               {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              {paying ? 'Traitement...' : `Partiel · ${formatFCFA(remaining)} crédit`}
+              <span>{paying ? 'Traitement...' : `Partiel · ${formatFCFA(remaining)} crédit`}</span>
             </button>
           ) : (
-            <div className="h-10 px-5 rounded-md bg-neutral-100 text-neutral-400 font-semibold text-sm flex items-center">
+            <div className="h-10 px-5 rounded-md bg-neutral-50 text-neutral-400 font-semibold text-[13px] flex items-center justify-center border border-neutral-100 order-1 sm:order-2 sm:ml-auto">
               {totalPaid === 0 ? 'Choisir un mode' : `Reste ${formatFCFA(remaining)}`}
             </div>
           )}
+          <button onClick={onClose} className="h-10 px-4 rounded-md border border-neutral-200 text-[13px] font-semibold text-neutral-700 hover:border-neutral-400 transition-colors order-2 sm:order-1" disabled={paying}>
+            Annuler
+          </button>
         </div>
       </div>
     </div>

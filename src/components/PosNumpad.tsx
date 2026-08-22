@@ -68,10 +68,23 @@ export function PosNumpad({
   const fontSize = compact ? 'text-sm' : 'text-base';
   const digitSize = compact ? 'text-base' : 'text-xl';
 
-  const fieldStyle = (f: NumpadField) =>
-    `flex-1 ${compact ? 'h-9' : 'h-10'} rounded-lg flex flex-col items-center justify-center transition-all border-2 ${
-      activeField === f ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 bg-white'
-    }`;
+  const labelSize = compact ? 'text-[8px]' : 'text-[9px]';
+  const valueSize = compact ? 'text-xs' : 'text-sm';
+  const totalSize = compact ? 'text-[10px]' : 'text-[11px]';
+
+  const fieldBtn = (f: NumpadField, label: string, value: string) => (
+    <button
+      onClick={() => switchField(f)}
+      className={`flex-1 flex flex-col items-center justify-center py-1.5 transition-all ${
+        activeField === f
+          ? 'border-b-2 border-neutral-900'
+          : 'border-b border-neutral-200 hover:border-neutral-400'
+      }`}
+    >
+      <span className={`${labelSize} font-bold uppercase tracking-wide ${activeField === f ? 'text-neutral-900' : 'text-neutral-400'}`}>{label}</span>
+      <span className={`${valueSize} font-black num ${activeField === f ? 'text-neutral-900' : 'text-neutral-600'}`}>{value}</span>
+    </button>
+  );
 
   const keys: string[] = canDiscount
     ? ['1','2','3','qty','4','5','6','discount','7','8','9','price','clear','0','ok','backspace']
@@ -79,25 +92,14 @@ export function PosNumpad({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Field selector row */}
-      <div className="flex items-center gap-1.5 px-2 pt-2 pb-1.5 shrink-0">
-        <button onClick={() => switchField('qty')} className={fieldStyle('qty')}>
-          <span className="text-[9px] font-bold uppercase text-neutral-500">Qté</span>
-          <span className={`${compact ? 'text-xs' : 'text-sm'} font-black num text-neutral-900`}>{activeField === 'qty' ? (buffer || '0') : target.qty}</span>
-        </button>
-        <button onClick={() => switchField('price')} className={fieldStyle('price')}>
-          <span className="text-[9px] font-bold uppercase text-neutral-500">Prix</span>
-          <span className={`${compact ? 'text-xs' : 'text-sm'} font-black num text-neutral-900`}>{activeField === 'price' ? (buffer || '0') : target.price}</span>
-        </button>
-        {canDiscount && (
-          <button onClick={() => switchField('discount')} className={fieldStyle('discount')}>
-            <span className="text-[9px] font-bold uppercase text-neutral-500">Remise</span>
-            <span className={`${compact ? 'text-xs' : 'text-sm'} font-black num text-neutral-900`}>{activeField === 'discount' ? (buffer || '0') : target.discount}</span>
-          </button>
-        )}
-        <div className={`${compact ? 'h-9' : 'h-10'} px-2 rounded-lg bg-neutral-50 border-2 border-neutral-200 flex flex-col items-center justify-center`}>
-          <span className="text-[9px] font-bold uppercase text-neutral-500">Total</span>
-          <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-black num text-neutral-900`}>{formatFCFA(target.total)}</span>
+      {/* Field selector row — underline style */}
+      <div className="flex items-end gap-3 px-3 pt-2 pb-1 shrink-0">
+        {fieldBtn('qty', 'Qté', activeField === 'qty' ? (buffer || '0') : String(target.qty))}
+        {fieldBtn('price', 'Prix', activeField === 'price' ? (buffer || '0') : String(target.price))}
+        {canDiscount && fieldBtn('discount', 'Remise', activeField === 'discount' ? (buffer || '0') : String(target.discount))}
+        <div className={`flex-1 flex flex-col items-center justify-center py-1.5 border-b border-neutral-200`}>
+          <span className={`${labelSize} font-bold uppercase tracking-wide text-neutral-400`}>Total</span>
+          <span className={`${totalSize} font-black num text-neutral-900`}>{formatFCFA(target.total)}</span>
         </div>
       </div>
 

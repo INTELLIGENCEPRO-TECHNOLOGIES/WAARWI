@@ -74,11 +74,11 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
             const isEnd = isFrom || isTo;
             return (
               <button key={i} onClick={() => handleDayClick(d)}
-                className={`relative aspect-square flex items-center justify-center text-[11px] font-semibold rounded-lg transition-all
-                  ${isEnd ? 'bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-glow scale-105 z-10' : ''}
-                  ${inRange ? 'bg-brand-50 text-brand-800 rounded-none' : ''}
-                  ${!isEnd && !inRange ? 'text-slate-700 hover:bg-slate-100' : ''}
-                  ${isToday && !isEnd && !inRange ? 'ring-1 ring-brand-300 text-brand-700' : ''}
+                className={`relative aspect-square flex items-center justify-center text-[11px] font-semibold rounded-md transition-all
+                  ${isEnd ? 'bg-black text-white scale-105 z-10' : ''}
+                  ${inRange ? 'bg-slate-100 text-slate-900 rounded-none' : ''}
+                  ${!isEnd && !inRange ? 'text-slate-700 hover:bg-slate-50' : ''}
+                  ${isToday && !isEnd && !inRange ? 'ring-1 ring-slate-300 font-bold' : ''}
                   ${fromD && isEnd && toD && d < toD ? 'rounded-r-none' : ''}
                   ${toD && isEnd && fromD && d > fromD ? 'rounded-l-none' : ''}
                 `}>
@@ -106,60 +106,63 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 animate-fade-in">
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-md" onClick={onClose} />
-      <div className={`relative w-full ${extraFilters ? 'max-w-4xl' : 'max-w-2xl'} bg-white rounded-3xl shadow-premium animate-scale-in flex flex-col max-h-[92vh] overflow-hidden`}>
-        <div className="relative p-4 bg-gradient-to-br from-ink-900 via-slate-800 to-ink-900 text-white overflow-hidden shrink-0">
-          <div className="absolute inset-0 shimmer-bg opacity-20" />
-          <div className="relative flex items-center justify-between gap-3">
+      <div className={`relative w-full ${extraFilters ? 'max-w-4xl' : 'max-w-2xl'} bg-white rounded-xl shadow-premium animate-scale-in flex flex-col max-h-[92vh] overflow-hidden`}>
+        <div className="relative px-4 py-3 bg-black text-white shrink-0">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-brand-400">Sélection de période</div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/60">Sélection de période</div>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <div className={`px-2.5 py-1 rounded-lg text-xs font-bold num transition-all ${localFrom ? 'bg-brand-500/30 ring-1 ring-brand-400/50' : 'bg-white/10'}`}>{fmtLbl(localFrom)}</div>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                <div className={`px-2.5 py-1 rounded-lg text-xs font-bold num transition-all ${localTo ? 'bg-brand-500/30 ring-1 ring-brand-400/50' : 'bg-white/10'}`}>{fmtLbl(localTo)}</div>
+                <div className="text-xs font-bold num">{fmtLbl(localFrom)}</div>
+                <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+                <div className="text-xs font-bold num">{fmtLbl(localTo)}</div>
               </div>
             </div>
-            <button onClick={onClose} className="w-8 h-8 shrink-0 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"><X className="w-4 h-4" /></button>
+            <button onClick={onClose} className="w-8 h-8 shrink-0 rounded-lg hover:bg-white/10 flex items-center justify-center transition-all"><X className="w-4 h-4" /></button>
           </div>
         </div>
 
         <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-y-auto">
-          <div className="lg:w-44 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-100 p-2 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
+          <div className="lg:w-40 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 p-2 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
             {presets.map(p => (
               <button key={p.l} onClick={() => { const r = p.f(); setLocalFrom(r.f); setLocalTo(r.t); const ld = new Date(r.f); const rd = new Date(r.t); setLeftMonth(new Date(ld.getFullYear(), ld.getMonth(), 1)); setRightMonth(ld.getMonth() === rd.getMonth() && ld.getFullYear() === rd.getFullYear() ? new Date(rd.getFullYear(), rd.getMonth() + 1, 1) : new Date(rd.getFullYear(), rd.getMonth(), 1)); }}
-                className="shrink-0 lg:shrink px-3 py-2 rounded-xl text-[11px] font-semibold text-left text-slate-600 hover:bg-brand-50 hover:text-brand-800 transition whitespace-nowrap lg:whitespace-normal">
+                className="shrink-0 lg:shrink px-3 py-2 rounded-lg text-[11px] font-semibold text-left text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition whitespace-nowrap lg:whitespace-normal">
                 {p.l}
               </button>
             ))}
           </div>
 
-          <div className="flex-1 p-3 bg-gradient-to-br from-slate-50 to-white">
-            <div className={`grid gap-3 ${extraFilters ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]' : 'grid-cols-1 sm:grid-cols-2'}`}>
-              <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-elevated hover:shadow-premium transition-shadow">
+          <div className="flex-1 p-4 bg-white">
+            <div className={`grid gap-0 ${extraFilters ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_auto]' : 'grid-cols-1 sm:grid-cols-[1fr_auto_1fr]'}`}>
+              <div className="p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-xl hover:bg-brand-50 hover:text-brand-700 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                  <div className="text-xs font-bold capitalize text-slate-800">{monthLabel(leftMonth)}</div>
-                  <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() + 1, 1))} className="w-7 h-7 rounded-xl hover:bg-brand-50 hover:text-brand-700 flex items-center justify-center text-slate-500 transition"><ChevronRight className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                  <div className="text-xs font-bold capitalize text-slate-900">{monthLabel(leftMonth)}</div>
+                  <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() + 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronRight className="w-3.5 h-3.5" /></button>
                 </div>
                 {renderMonth(leftMonth)}
               </div>
-              <div className="rounded-2xl bg-white border border-slate-200 p-3 shadow-elevated hover:shadow-premium transition-shadow">
+              <div className="h-px sm:h-auto sm:w-px bg-slate-200 mx-3 sm:mx-0 sm:my-2" />
+              <div className="p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <button onClick={() => setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-xl hover:bg-brand-50 hover:text-brand-700 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                  <div className="text-xs font-bold capitalize text-slate-800">{monthLabel(rightMonth)}</div>
-                  <button onClick={() => setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() + 1, 1))} className="w-7 h-7 rounded-xl hover:bg-brand-50 hover:text-brand-700 flex items-center justify-center text-slate-500 transition"><ChevronRight className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                  <div className="text-xs font-bold capitalize text-slate-900">{monthLabel(rightMonth)}</div>
+                  <button onClick={() => setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() + 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronRight className="w-3.5 h-3.5" /></button>
                 </div>
                 {renderMonth(rightMonth)}
               </div>
               {extraFilters && (
-                <div className="sm:col-span-2 lg:col-span-1 rounded-2xl bg-white border border-slate-200 p-3 shadow-elevated space-y-3 lg:w-56 shrink-0">
-                  {extraFilters}
-                </div>
+                <>
+                  <div className="hidden lg:block w-px bg-slate-200 my-2" />
+                  <div className="sm:col-span-full lg:col-span-1 p-3 space-y-3 lg:w-52 shrink-0">
+                    {extraFilters}
+                  </div>
+                </>
               )}
             </div>
           </div>
         </div>
 
-        <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-end gap-2 flex-wrap shrink-0">
+        <div className="px-4 py-3 border-t border-slate-200 bg-white flex items-center justify-end gap-2 flex-wrap shrink-0">
           <button onClick={() => { setLocalFrom(''); setLocalTo(''); if (onReset) onReset(); }} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
           <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button onClick={() => onApply(localFrom, localTo)} disabled={!localFrom} className="btn-icon-primary" title="Appliquer">

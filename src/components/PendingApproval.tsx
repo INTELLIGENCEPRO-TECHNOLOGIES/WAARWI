@@ -57,11 +57,11 @@ export function PendingApproval() {
     <div className="h-screen bg-white flex flex-col overflow-hidden">
 
       {/* TOP HEADER */}
-      <header className="shrink-0 flex flex-col items-center pt-8 pb-4 px-4">
+      <header className="shrink-0 flex flex-col items-center pt-10 pb-4 px-4">
         <img
           src="/newlogo.png"
           alt="Waarwi"
-          className="h-12 md:h-16 object-contain"
+          className="h-8 w-auto object-contain"
           onError={e => {
             (e.target as HTMLImageElement).style.display = 'none';
             const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement | null;
@@ -69,8 +69,8 @@ export function PendingApproval() {
           }}
         />
         <div className="hidden items-end gap-0 select-none" aria-hidden>
-          <span className="text-3xl md:text-4xl font-black tracking-tight text-[#0a1f44]">Waar</span>
-          <span className="text-3xl md:text-4xl font-black tracking-tight text-[#00b4d8]">wi</span>
+          <span className="text-3xl font-black tracking-tight text-neutral-900">Waar</span>
+          <span className="text-3xl font-black tracking-tight text-[#00b4d8]">wi</span>
         </div>
       </header>
 
@@ -79,106 +79,111 @@ export function PendingApproval() {
         <div className="w-full max-w-md md:max-w-lg">
 
           {rejected ? (
-            <div className="bg-white border border-red-100 rounded-2xl shadow-sm p-6 md:p-8 text-center space-y-4">
+            /* ---- REJECTED STATE ---- */
+            <div className="text-center space-y-6">
               <div className="flex justify-center">
-                <div className="w-14 h-14 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
                   <XCircle className="w-7 h-7 text-red-500" />
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest text-red-500 mb-1">Accès refusé</div>
-                <h2 className="text-xl md:text-2xl font-black text-slate-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-500 mb-2">Accès refusé</p>
+                <h2 className="text-xl md:text-2xl font-bold text-neutral-900">
                   {tenant?.name || 'Votre compte'}
                 </h2>
               </div>
-              <p className="text-sm text-slate-600 leading-relaxed">
+              <p className="text-sm text-neutral-500 leading-relaxed max-w-sm mx-auto">
                 Votre inscription n'a pas été validée par l'équipe Waarwi.
               </p>
               {reason && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-left">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="text-left max-w-sm mx-auto border-b border-red-200 pb-4">
+                  <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-red-700">Motif</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">Motif</span>
                   </div>
-                  <p className="text-sm text-red-900">{reason}</p>
+                  <p className="text-sm text-red-800">{reason}</p>
                 </div>
               )}
             </div>
           ) : (
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 md:p-8 text-center space-y-5">
+            /* ---- PENDING STATE ---- */
+            <div className="text-center space-y-6">
+              {/* Company info */}
               <div className="flex flex-col items-center gap-2">
-                <div className="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
-                  <Building2 className="w-7 h-7 text-[#0a1f44]" />
+                <div className="w-12 h-12 rounded-full bg-neutral-50 flex items-center justify-center">
+                  <Building2 className="w-6 h-6 text-neutral-900" />
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mt-1">
                   Votre entreprise
-                </div>
-                <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-wide leading-tight">
-                  {tenant?.name || '—'}
+                </p>
+                <h2 className="text-xl md:text-2xl font-bold text-neutral-900 uppercase tracking-wide leading-tight">
+                  {tenant?.name || '\u2014'}
                 </h2>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-2">
+              {/* Tags — underline-separated, no cards */}
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
                 {activityName && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700">
-                    <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="inline-flex items-center gap-1.5 text-xs text-neutral-600">
+                    <Building2 className="w-3.5 h-3.5 text-neutral-400" />
                     {activityName}
                   </span>
                 )}
                 {planName && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-100 bg-blue-50 text-xs font-medium text-blue-700">
-                    <CreditCard className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center gap-1.5 text-xs text-neutral-600">
+                    <CreditCard className="w-3.5 h-3.5 text-neutral-400" />
                     Plan {planName}
                   </span>
                 )}
                 {whatsapp && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-100 bg-emerald-50 text-xs font-medium text-emerald-700">
-                    <MessageCircle className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center gap-1.5 text-xs text-neutral-600">
+                    <MessageCircle className="w-3.5 h-3.5 text-neutral-400" />
                     {whatsapp}
                   </span>
                 )}
               </div>
 
+              {/* Status badge */}
               <div className="flex flex-col items-center gap-1">
                 <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500" />
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
                   </span>
-                  <span className="text-xs font-black uppercase tracking-widest text-orange-500">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600">
                     Validation en cours
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-neutral-400 mt-1">
                   Notre équipe vous contactera par WhatsApp après vérification.
                 </p>
               </div>
             </div>
           )}
 
-          {/* PROGRESS STEPS */}
-          <div className="mt-6">
-            <div className="relative flex items-start justify-between gap-1">
-              <div className="absolute top-4 left-[12.5%] right-[12.5%] h-px border-t-2 border-dashed border-slate-200 z-0" />
+          {/* PROGRESS STEPS — clean minimal */}
+          <div className="mt-10">
+            <div className="relative flex items-start justify-between">
+              {/* Connecting line */}
+              <div className="absolute top-3.5 left-[12.5%] right-[12.5%] h-px border-t border-dashed border-neutral-200 z-0" />
               {STEPS.map((step, idx) => {
                 const isDone = idx < currentStep;
                 const isCurrent = idx === currentStep;
-                const isPending = idx > currentStep;
                 return (
                   <div key={step.key} className="relative z-10 flex flex-col items-center text-center flex-1 px-0.5">
-                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center mb-1.5 transition-all ${
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center mb-1.5 transition-all ${
                       isDone
-                        ? 'bg-emerald-50 border-emerald-300'
+                        ? 'bg-emerald-50'
                         : isCurrent
-                          ? 'bg-[#0a1f44] border-[#0a1f44] shadow-sm'
-                          : 'bg-white border-slate-200'
+                          ? 'bg-neutral-900'
+                          : 'bg-white border border-neutral-200'
                     }`}>
                       {isDone && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                       {isCurrent && <RefreshCw className="w-3.5 h-3.5 text-white animate-spin" style={{ animationDuration: '2s' }} />}
-                      {isPending && <Clock className="w-3.5 h-3.5 text-slate-300" />}
+                      {!isDone && !isCurrent && <Clock className="w-3.5 h-3.5 text-neutral-300" />}
                     </div>
-                    <div className={`text-[10px] md:text-[11px] font-bold leading-tight ${
-                      isDone ? 'text-emerald-700' : isCurrent ? 'text-slate-900' : 'text-slate-400'
+                    <div className={`text-[10px] md:text-[11px] font-semibold leading-tight ${
+                      isDone ? 'text-emerald-600' : isCurrent ? 'text-neutral-900' : 'text-neutral-400'
                     }`}>
                       {step.label}
                     </div>
@@ -191,23 +196,23 @@ export function PendingApproval() {
       </main>
 
       {/* FOOTER */}
-      <footer className="shrink-0 flex flex-col items-center gap-3 pb-6 pt-4 px-4">
+      <footer className="shrink-0 flex flex-col items-center gap-4 pb-8 pt-4 px-4">
         <button
           onClick={signOut}
-          className="flex items-center gap-2.5 px-8 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-sm font-bold transition-all"
+          className="h-10 px-8 bg-neutral-100 hover:bg-neutral-200 active:scale-[0.98] text-neutral-700 text-[13px] font-semibold transition-all flex items-center gap-2"
         >
           <LogOut className="w-4 h-4" />
           Se déconnecter
         </button>
 
-        <div className="flex items-center gap-3 text-xs text-slate-400 font-medium">
+        <div className="flex items-center gap-3 text-[11px] text-neutral-400">
           <span className="flex items-center gap-1.5">
-            <Headphones className="w-3.5 h-3.5" />
+            <Headphones className="w-3 h-3" />
             Assistance
           </span>
-          <span className="text-slate-200">|</span>
-          <span className="flex items-center gap-1.5 text-slate-600 font-bold">
-            <Phone className="w-3.5 h-3.5" />
+          <span className="text-neutral-200">|</span>
+          <span className="flex items-center gap-1.5 text-neutral-600 font-semibold">
+            <Phone className="w-3 h-3" />
             77 525 41 01
           </span>
         </div>

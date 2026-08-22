@@ -11,7 +11,7 @@ import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
-import { LanguageSwitcher } from './LanguageSwitcher';
+
 
 export type Route =
   | 'dashboard' | 'pos' | 'cash_history' | 'articles' | 'stock' | 'tiers'
@@ -344,6 +344,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const touch = useRef<{ x: number; y: number; active: boolean; dx: number }>({ x: 0, y: 0, active: false, dx: 0 });
   const openTouch = useRef<{ x: number; y: number; active: boolean; moved: boolean }>({ x: 0, y: 0, active: false, moved: false });
+  const lastHeaderTap = useRef<number>(0);
 
   const onMainTouchStart = (e: React.TouchEvent) => {
     if (mobileOpen) return;
@@ -753,7 +754,14 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               className="float-sidebar-content"
               style={sidebarDark ? { background: '#000000', border: '1px solid rgba(255,255,255,0.08)' } : undefined}
             >
-              <div className="flex items-center justify-between px-4 pt-4 pb-3">
+              <div className="flex items-center justify-between px-4 pt-4 pb-3"
+                onTouchEnd={(e) => {
+                  if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('img')) return;
+                  const now = Date.now();
+                  if (now - lastHeaderTap.current < 350) { toggleSidebarTheme(); lastHeaderTap.current = 0; }
+                  else { lastHeaderTap.current = now; }
+                }}
+              >
                 <div className="flex items-center min-w-0">
                   {tenant?.logo_url ? (
                     <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain shrink-0" />
@@ -761,19 +769,10 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     <img src="/newlogo.png" alt="WAARWI" className={`h-7 w-auto max-w-[110px] object-contain shrink-0 ${sidebarDark ? 'brightness-0 invert' : ''}`} />
                   )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={toggleSidebarTheme}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/40 hover:bg-white/10 hover:text-white/70' : 'text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600'}`}
-                    title="Changer le thème"
-                  >
-                    <Palette className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/60 hover:bg-white/10' : 'float-close-btn'}`}>
-                    <Settings className="w-4 h-4" />
-                  </button>
-                  <LanguageSwitcher />
-                </div>
+                <div className="flex-1" />
+                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/60 hover:bg-white/10' : 'float-close-btn'}`}>
+                  <Settings className="w-4 h-4" />
+                </button>
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto px-2.5 pb-1 space-y-1.5 scrollbar-hide">

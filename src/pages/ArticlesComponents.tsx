@@ -65,29 +65,17 @@ export function ArticleCard({ article, category, qty, onEdit, onDelete, selectio
   selectionMode: boolean; selected: boolean; onToggleSelect: () => void;
   showMargin: boolean; showStock: boolean;
 }) {
-  const tracksStock = (article as any).track_stock !== false;
-  const out = tracksStock && qty <= 0;
-  const low = tracksStock && !out && qty <= Number(article.stock_min || 0);
-
   return (
-    <div className={`rounded-2xl bg-white shadow-card border transition-all active:scale-[0.99] h-[72px] flex flex-col justify-between ${selected ? 'border-brand-400 bg-brand-50/40 ring-2 ring-brand-500/20' : 'border-slate-100 hover:shadow-premium'}`}
+    <div className={`border-b border-neutral-100 last:border-b-0 py-2.5 px-1 flex items-end gap-2 transition-colors active:bg-neutral-50 ${selected ? 'bg-brand-50/40' : ''}`}
       onClick={selectionMode ? onToggleSelect : onEdit}>
-      <div className="px-3 pt-2.5 flex items-start gap-2 min-w-0">
-        {selectionMode && (
-          <span className="shrink-0 text-brand-700 mt-0.5">{selected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-400" />}</span>
-        )}
-        <span className="text-[12px] font-semibold text-slate-900 leading-tight line-clamp-2 min-w-0">{article.name}</span>
+      {selectionMode && (
+        <span className="shrink-0 text-brand-700 pb-0.5">{selected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-400" />}</span>
+      )}
+      <div className="min-w-0 flex-1 leading-tight">
+        <div className="text-[11px] font-semibold text-slate-900 line-clamp-2">{article.name}</div>
+        {article.oem_ref && <div className="text-[9px] text-slate-400 font-mono truncate mt-0.5">OEM: {article.oem_ref}</div>}
       </div>
-      <div className="px-3 pb-2.5 flex items-center justify-between gap-2">
-        {tracksStock ? (
-          <span className={`text-[10px] font-bold tabular-nums ${out ? 'text-red-600' : low ? 'text-amber-600' : 'text-slate-700'}`}>
-            {qty}
-          </span>
-        ) : (
-          <span className="text-[9px] font-bold text-purple-600">Service</span>
-        )}
-        <span className="text-[12px] font-bold text-slate-900 tabular-nums">{formatFCFA(article.sale_price)}</span>
-      </div>
+      <span className="shrink-0 text-[11px] font-bold text-slate-900 tabular-nums pb-0.5">{formatFCFA(article.sale_price)}</span>
     </div>
   );
 }

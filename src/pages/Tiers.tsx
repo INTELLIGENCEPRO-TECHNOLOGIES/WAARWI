@@ -1039,38 +1039,37 @@ export function Tiers() {
               {formatFCFA(Number((selectedRow.data as any).balance || 0))}
             </div>
           </div>
-          <div className="flex-1 overflow-auto px-4 py-4">
-            <div className="space-y-2">
-              <button onClick={() => { handleActionInterroger(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
-                <div className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center shrink-0"><Info className="w-4 h-4 text-white" /></div>
+          <div className="flex-1 overflow-auto">
+            <div>
+              <button onClick={() => { handleActionInterroger(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+                <Info className="w-4 h-4 text-brand-700 shrink-0" />
                 <div><div className="text-sm font-semibold text-slate-900">Interroger le compte</div><div className="text-[11px] text-slate-500 mt-0.5">Voir le détail comptable, commercial et statistiques</div></div>
               </button>
-              <button onClick={() => { handleActionBalance(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><Scale className="w-4 h-4 text-brand-700" /></div>
+              <button onClick={() => { handleActionBalance(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+                <Scale className="w-4 h-4 text-brand-700 shrink-0" />
                 <div><div className="text-sm font-semibold text-slate-900">Positionner le solde</div><div className="text-[11px] text-slate-500 mt-0.5">Ajuster manuellement le solde du tiers</div></div>
               </button>
               {selectedRow.type === 'customer' && (
-                <button onClick={() => { handleActionPricing(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><Tag className="w-4 h-4 text-brand-700" /></div>
+                <button onClick={() => { handleActionPricing(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+                  <Tag className="w-4 h-4 text-brand-700 shrink-0" />
                   <div><div className="text-sm font-semibold text-slate-900">Tarifs d'exception</div><div className="text-[11px] text-slate-500 mt-0.5">Gérer les prix spéciaux pour ce client</div></div>
                 </button>
               )}
-              <button onClick={() => { handleActionPayment(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><Wallet className="w-4 h-4 text-brand-700" /></div>
+              <button onClick={() => { handleActionPayment(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+                <Wallet className="w-4 h-4 text-brand-700 shrink-0" />
                 <div><div className="text-sm font-semibold text-slate-900">Saisir un règlement</div><div className="text-[11px] text-slate-500 mt-0.5">Enregistrer un paiement reçu ou versé</div></div>
               </button>
-              <button onClick={() => { handleActionDocs(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><FileText className="w-4 h-4 text-brand-700" /></div>
+              <button onClick={() => { handleActionDocs(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+                <FileText className="w-4 h-4 text-brand-700 shrink-0" />
                 <div><div className="text-sm font-semibold text-slate-900">Documents</div><div className="text-[11px] text-slate-500 mt-0.5">Consulter les factures et bons de commande</div></div>
               </button>
-              <div className="border-t border-slate-100 my-3" />
-              <button onClick={() => { handleActionEdit(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"><Edit2 className="w-4 h-4 text-slate-600" /></div>
+              <button onClick={() => { handleActionEdit(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+                <Edit2 className="w-4 h-4 text-slate-600 shrink-0" />
                 <div><div className="text-sm font-semibold text-slate-900">Modifier la fiche</div><div className="text-[11px] text-slate-500 mt-0.5">Éditer les informations du tiers</div></div>
               </button>
               {can('delete_customers') && (
-                <button onClick={() => { handleActionDeactivate(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg border border-red-100 hover:bg-red-50 active:bg-red-100 transition-colors text-left">
-                  <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0"><Trash2 className="w-4 h-4 text-red-500" /></div>
+                <button onClick={() => { handleActionDeactivate(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-red-50 transition-colors text-left">
+                  <Trash2 className="w-4 h-4 text-red-500 shrink-0" />
                   <div><div className="text-sm font-semibold text-red-600">Supprimer</div><div className="text-[11px] text-red-400 mt-0.5">Désactiver ou supprimer ce tiers</div></div>
                 </button>
               )}

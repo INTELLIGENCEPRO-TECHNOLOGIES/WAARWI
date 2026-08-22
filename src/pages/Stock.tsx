@@ -810,6 +810,11 @@ export function Stock() {
               <div className="text-[8px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">{currentSite?.name || 'Inventaire'}</div>
               <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Inventaire</div>
             </div>
+            {can('manage_stock') && tab === 'stocks' && (
+              <button onClick={printInventoryBook} className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-neutral-900 transition-colors bg-slate-100/60 rounded-lg" title="Livre d'inventaire">
+                <BookOpen className="w-3.5 h-3.5" /><span className="hidden sm:inline">Livre</span>
+              </button>
+            )}
           </div>
           <input
             value={search}
@@ -859,32 +864,29 @@ export function Stock() {
               <PackageOpen className="w-3.5 h-3.5" />
             </button>
           )}
-          {tab === 'stocks' && (
+          <div className="shrink-0 flex items-center gap-0.5">
+            {tab === 'stocks' && (
+              <button
+                onClick={() => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); }}
+                className={`shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'text-neutral-900' : 'text-slate-400 hover:text-neutral-700'}`}
+                aria-label={viewMode === 'cards' ? 'Vue liste éditable' : 'Vue cartes'}
+              >
+                {viewMode === 'cards' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+              </button>
+            )}
+            {can('manage_stock') && tab === 'stocks' && (
+              <button onClick={() => setHelpOpen(true)} className="shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Guide">
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
-              onClick={() => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); }}
-              className={`shrink-0 w-7 h-7 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'text-neutral-900' : 'text-slate-400 hover:text-neutral-700'}`}
-              aria-label={viewMode === 'cards' ? 'Vue liste éditable' : 'Vue cartes'}
+              onClick={() => setTab(t => t === 'stocks' ? 'movements' : 'stocks')}
+              className={`shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors ${tab === 'movements' ? 'text-teal-700' : 'text-slate-400 hover:text-teal-700'}`}
+              aria-label={tab === 'stocks' ? 'Voir les mouvements' : 'Voir l\'inventaire'}
             >
-              {viewMode === 'cards' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+              <History className="w-3.5 h-3.5" />
             </button>
-          )}
-          <button
-            onClick={() => setTab(t => t === 'stocks' ? 'movements' : 'stocks')}
-            className={`shrink-0 w-7 h-7 flex items-center justify-center transition-colors ${tab === 'movements' ? 'text-teal-700' : 'text-slate-400 hover:text-teal-700'}`}
-            aria-label={tab === 'stocks' ? 'Voir les mouvements' : 'Voir l\'inventaire'}
-          >
-            <History className="w-3.5 h-3.5" />
-          </button>
-          {can('manage_stock') && tab === 'stocks' && (
-            <button onClick={() => setHelpOpen(true)} className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Guide">
-              <Info className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {can('manage_stock') && tab === 'stocks' && (
-            <button onClick={printInventoryBook} className="shrink-0 inline-flex items-center gap-1 px-1.5 py-1 text-[11px] font-semibold text-slate-500 hover:text-neutral-900 transition-colors" title="Livre d'inventaire">
-              <BookOpen className="w-3.5 h-3.5" /><span className="hidden lg:inline">Livre</span>
-            </button>
-          )}
+          </div>
         </div>
       </div>
 
@@ -1015,77 +1017,36 @@ export function Stock() {
           />
         ) : (
           <>
-          <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 count-up ${flashKey === 'out' || flashKey === 'low' || flashKey === 'articles' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
+          <div className={`divide-y divide-neutral-100 ${flashKey === 'out' || flashKey === 'low' || flashKey === 'articles' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
             {visibleItems.map(r => {
               const out = r.quantity <= 0;
               const low = !out && r.quantity <= r.stock_min;
               const value = r.quantity * r.purchase_price;
-              const ratio = r.stock_max > 0 ? Math.min(100, Math.round((r.quantity / r.stock_max) * 100)) : 0;
               return (
-                <div key={r.article_id} className="card-premium p-3 flex flex-col gap-2 hover:border-neutral-400 transition-all duration-200 group">
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-semibold text-neutral-900 leading-tight break-words">{r.name}</div>
-                      {r.location && (
-                        <div className="flex items-center gap-0.5 mt-0.5 text-[10px] text-neutral-400">
-                          <MapPin className="w-2.5 h-2.5" />{r.location}
-                        </div>
-                      )}
-                    </div>
-                    <span className={`shrink-0 text-[10px] font-bold num ${
-                      out ? 'text-red-600' : low ? 'text-amber-700' : 'text-neutral-800'
-                    }`}>
-                      {r.quantity}
-                    </span>
-                  </div>
-
-                  {/* stock bar */}
-                  <div className="relative h-1 rounded-full bg-neutral-100 overflow-hidden">
-                    <div
-                      className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
-                        out ? 'bg-red-400' :
-                        low ? 'bg-amber-400' :
-                        'bg-neutral-900'
-                      }`}
-                      style={{ width: `${Math.max(out ? 0 : 4, ratio)}%` }}
-                    />
-                  </div>
-
-                  <div className={`grid gap-1.5 pt-1.5 border-t border-neutral-100 ${can('view_purchase_prices') ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                    <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Min</div>
-                      <div className="text-[11px] font-bold text-neutral-700 num leading-tight mt-0.5">{r.stock_min}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Max</div>
-                      <div className="text-[11px] font-bold text-neutral-700 num leading-tight mt-0.5">{r.stock_max || '—'}</div>
-                    </div>
-                    {can('view_purchase_prices') && (
-                      <div>
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">Valeur</div>
-                        <div className="text-[11px] font-bold text-neutral-800 num leading-tight mt-0.5 truncate">{formatFCFA(value)}</div>
+                <div key={r.article_id} className="py-2.5 px-3 transition-colors hover:bg-neutral-50 group">
+                  {/* Top row: article name only — full width, no truncation on mobile */}
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-semibold text-neutral-900 leading-tight">{r.name}</div>
+                    {r.location && (
+                      <div className="flex items-center gap-0.5 mt-0.5 text-[10px] text-neutral-400">
+                        <MapPin className="w-2.5 h-2.5" />{r.location}
                       </div>
                     )}
                   </div>
-
-                  {can('manage_stock') && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <button onClick={() => openAdj(r, 'in')} className="flex-1 inline-flex items-center justify-center gap-1 py-1 text-[10px] font-bold text-slate-500 hover:text-emerald-700 transition-colors" title="Entrée">
-                      <Plus className="w-3 h-3" />Entrée
-                    </button>
-                    <button onClick={() => openAdj(r, 'out')} className="flex-1 inline-flex items-center justify-center gap-1 py-1 text-[10px] font-bold text-slate-500 hover:text-red-700 transition-colors" title="Sortie">
-                      <Minus className="w-3 h-3" />Sortie
-                    </button>
-                    {canTransfer && (
-                      <button onClick={() => openAdj(r, 'transfer')} className="shrink-0 w-7 h-[22px] inline-flex items-center justify-center text-slate-400 hover:text-amber-700 transition-colors" title="Transfert">
-                        <ArrowRightLeft className="w-3 h-3" />
-                      </button>
+                  {/* Bottom row: quantity + action buttons */}
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className={`text-[14px] font-bold num ${out ? 'text-red-600' : low ? 'text-amber-700' : 'text-neutral-900'}`}>{r.quantity}</span>
+                    {can('view_purchase_prices') && <span className="text-[10px] text-neutral-500 num hidden sm:inline">{formatFCFA(value)}</span>}
+                    <div className="flex-1" />
+                    {can('manage_stock') && (
+                    <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openAdj(r, 'in')} className="p-1.5 rounded-lg hover:bg-emerald-50 text-neutral-500 hover:text-emerald-700 transition-colors" title="Entrée"><Plus className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => openAdj(r, 'out')} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-500 hover:text-red-700 transition-colors" title="Sortie"><Minus className="w-3.5 h-3.5" /></button>
+                      {canTransfer && <button onClick={() => openAdj(r, 'transfer')} className="p-1.5 rounded-lg hover:bg-amber-50 text-neutral-400 hover:text-amber-700 transition-colors" title="Transfert"><ArrowRightLeft className="w-3.5 h-3.5" /></button>}
+                      <button onClick={() => openAdj(r, 'inventory')} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-800 transition-colors" title="Inventaire"><ClipboardList className="w-3.5 h-3.5" /></button>
+                    </div>
                     )}
-                    <button onClick={() => openAdj(r, 'inventory')} className="shrink-0 w-7 h-[22px] inline-flex items-center justify-center text-slate-400 hover:text-neutral-800 transition-colors" title="Inventaire">
-                      <ClipboardList className="w-3 h-3" />
-                    </button>
                   </div>
-                  )}
                 </div>
               );
             })}
@@ -1321,6 +1282,7 @@ export function Stock() {
       <Modal open={adjOpen} onClose={() => { setAdjOpen(false); setAdjDone(false); }}
         title={adjDone ? 'Opération effectuée' : { in: 'Entrée de stock', out: 'Sortie de stock', transfer: 'Transfert de stock', inventory: 'Saisie d\'inventaire' }[adjMode]}
         size="sm"
+        fullscreenMobile
         footer={adjDone ? (
           <div className="flex items-center gap-2 w-full">
             <button onClick={() => { setAdjOpen(false); setAdjDone(false); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
@@ -1376,13 +1338,11 @@ export function Stock() {
             <p className="text-[11px] text-slate-400">Vous pouvez imprimer le bon de mouvement.</p>
           </div>
         ) : adjRow && (
-          <div className="space-y-3">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-200">
-              <div className="text-[12px] font-semibold text-slate-900 truncate">{adjRow.name}</div>
-              <div className="text-[10px] text-slate-500 font-mono mt-0.5">{adjRow.internal_ref}</div>
-              <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-700">
-                Stock actuel : <span className="num">{adjRow.quantity}</span>
-              </div>
+          <div className="space-y-4">
+            <div>
+              <div className="text-sm font-bold text-slate-900">{adjRow.name}</div>
+              <div className="text-[11px] text-slate-400 font-mono mt-0.5">{adjRow.internal_ref}</div>
+              <div className="text-[11px] text-slate-500 mt-1">Stock actuel : <span className="font-bold num text-slate-700">{adjRow.quantity}</span></div>
             </div>
 
             {adjMode !== 'transfer' && depots.filter(d => d.parent_site_id === currentSite?.id).length > 0 && (
@@ -1391,13 +1351,14 @@ export function Stock() {
                 <select
                   value={adjSiteId}
                   onChange={e => setAdjSiteId(e.target.value)}
-                  className="input"
+                  className="bare-input text-sm py-2"
                 >
                   {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
                   {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
                     <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
                   ))}
                 </select>
+                <div className="h-px bg-neutral-200 mt-1" />
               </div>
             )}
 
@@ -1408,13 +1369,16 @@ export function Stock() {
                 value={adjRow?.article_id || ''}
                 onChange={v => { const r = rows.find(x => x.article_id === v); if (r) { setAdjRow(r); setAdjInventoryQty(r.quantity); } }}
                 placeholder="Rechercher un article..."
+                noBorder
               />
+              <div className="h-px bg-neutral-200 mt-1" />
             </div>
 
             {adjMode === 'inventory' ? (
               <div>
                 <label className="label">Quantité réelle comptée</label>
-                <input type="number" min={0} value={adjInventoryQty} onChange={e => setAdjInventoryQty(e.target.value === '' ? '' : Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
+                <input type="number" min={0} value={adjInventoryQty} onChange={e => setAdjInventoryQty(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-lg font-semibold py-2" autoFocus={desktopAutoFocus} />
+                <div className="h-px bg-neutral-200 mt-1" />
                 {adjInventoryQty !== '' && <p className="text-xs mt-1 text-slate-500">Écart : {Number(adjInventoryQty) - adjRow.quantity > 0 ? '+' : ''}{Number(adjInventoryQty) - adjRow.quantity}</p>}
               </div>
             ) : adjMode === 'transfer' ? (
@@ -1427,39 +1391,47 @@ export function Stock() {
                     onChange={v => setAdjTargetSite(v)}
                     placeholder="— Choisir —"
                     searchable={false}
+                    noBorder
                   />
+                  <div className="h-px bg-neutral-200 mt-1" />
                 </div>
                 <div>
                   <label className="label">Quantité à transférer</label>
-                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="input" autoFocus={desktopAutoFocus} />
+                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-sm py-2" autoFocus={desktopAutoFocus} />
+                  <div className="h-px bg-neutral-200 mt-1" />
                 </div>
               </>
             ) : (
               <>
                 <div>
                   <label className="label">Quantité</label>
-                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
+                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-lg font-semibold py-2" autoFocus={desktopAutoFocus} />
+                  <div className="h-px bg-neutral-200 mt-1" />
                 </div>
                 {adjMode === 'in' && stockMethod === 'lot' && (
                   <>
                     <div>
                       <label className="label">N° de lot *</label>
-                      <input value={adjBatchNumber} onChange={e => setAdjBatchNumber(e.target.value)} className="input" placeholder="Ex: LOT-2026-001" />
+                      <input value={adjBatchNumber} onChange={e => setAdjBatchNumber(e.target.value)} className="bare-input text-sm py-2" placeholder="Ex: LOT-2026-001" />
+                      <div className="h-px bg-neutral-200 mt-1" />
                     </div>
                     <div>
                       <label className="label">Date de péremption</label>
-                      <input type="date" value={adjExpiryDate} onChange={e => setAdjExpiryDate(e.target.value)} className="input" />
+                      <input type="date" value={adjExpiryDate} onChange={e => setAdjExpiryDate(e.target.value)} className="bare-input text-sm py-2" />
+                      <div className="h-px bg-neutral-200 mt-1" />
                     </div>
                     <div>
                       <label className="label">Prix d'achat (lot)</label>
-                      <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="input" placeholder="FCFA" />
+                      <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-sm py-2" placeholder="FCFA" />
+                      <div className="h-px bg-neutral-200 mt-1" />
                     </div>
                   </>
                 )}
                 {adjMode === 'in' && stockMethod === 'cmup' && (
                   <div>
                     <label className="label">Prix d'achat (cette entrée)</label>
-                    <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="input" placeholder="FCFA" />
+                    <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-sm py-2" placeholder="FCFA" />
+                    <div className="h-px bg-neutral-200 mt-1" />
                     <p className="text-[10px] text-slate-500 mt-1">Le CMUP sera recalculé automatiquement</p>
                   </div>
                 )}
@@ -1468,7 +1440,8 @@ export function Stock() {
 
             <div>
               <label className="label">Note / motif</label>
-              <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="input" placeholder="Achat, retour, perte, correction…" />
+              <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="bare-input text-sm py-2" placeholder="Achat, retour, perte, correction…" />
+              <div className="h-px bg-neutral-200 mt-1" />
             </div>
           </div>
         )}
@@ -1694,7 +1667,8 @@ export function Stock() {
             </div>
             <div>
               <label className="label">Note du document</label>
-              <input value={docEditNote} onChange={e => setDocEditNote(e.target.value)} className="input" placeholder="Note globale" />
+              <input value={docEditNote} onChange={e => setDocEditNote(e.target.value)} className="bare-input text-sm py-2" placeholder="Note globale" />
+              <div className="h-px bg-neutral-200 mt-1" />
             </div>
             <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
               {docEditEntries.map((entry, idx) => (
@@ -1710,8 +1684,9 @@ export function Stock() {
                       const v = e.target.value === '' ? '' : Number(e.target.value);
                       setDocEditEntries(prev => prev.map((p, i) => i === idx ? { ...p, quantity: v } : p));
                     }}
-                    className="input w-24 text-right num"
+                    className="bare-input w-24 text-right num text-sm py-1"
                   />
+                  <div className="h-px bg-neutral-200" />
                   <button
                     onClick={() => setDocEditEntries(prev => prev.filter((_, i) => i !== idx))}
                     className="w-6 h-6 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 transition-all active:scale-90"
@@ -1762,7 +1737,7 @@ export function Stock() {
       </Modal>
 
       {/* Help/Guide modal */}
-      <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Guide de gestion du stock" size="md">
+      <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Guide de gestion du stock" size="md" fullscreenMobile>
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
           <HelpSection icon={<ArrowDownCircle className="w-4 h-4 text-emerald-600" />} title="Entrée de stock" color="emerald">
             Enregistre une réception de marchandise (achat, retour fournisseur, production). Le stock de l'article augmente de la quantité saisie.
@@ -2275,7 +2250,7 @@ function StockListEditView({
       })()}
 
       {/* Table with sticky header and scrollable body */}
-      <div className="flex-1 min-h-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         <div className="shrink-0 overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -2334,9 +2309,7 @@ function StockListEditView({
                         value={edit?.qty ?? ''}
                         onChange={e => updateEdit(r.article_id, e.target.value === '' ? '' : Number(e.target.value), edit?.note, edit?.lot_number)}
                         onKeyDown={e => handleKeyDown(e, idx)}
-                        className={`w-full text-center text-xs font-bold num px-2 py-1.5 rounded-lg border focus:ring-2 outline-none transition-all bg-white ${
-                          listEditMode === 'transfer' ? 'border-amber-200 focus:border-amber-400 focus:ring-amber-500/20' : 'border-slate-200 focus:border-brand-400 focus:ring-brand-500/20'
-                        }`}
+                        className="w-full text-center text-xs font-bold num bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-900 outline-none pb-1 pt-1 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
                     {lotMode && listEditMode === 'in' && (
@@ -2346,10 +2319,10 @@ function StockListEditView({
                           placeholder="LOT-…"
                           value={edit?.lot_number ?? ''}
                           onChange={e => updateEdit(r.article_id, edit?.qty ?? '', edit?.note, e.target.value)}
-                          className={`w-full text-[10px] px-2 py-1.5 rounded-lg border focus:ring-1 outline-none transition-all bg-white ${
+                          className={`w-full text-[10px] bg-transparent border-0 border-b outline-none pb-1 pt-1 transition-colors ${
                             hasValue && !edit?.lot_number?.trim()
-                              ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20'
-                              : 'border-slate-200 focus:border-brand-400 focus:ring-brand-500/20'
+                              ? 'border-red-400 focus:border-red-500'
+                              : 'border-neutral-200 focus:border-neutral-900'
                           }`}
                         />
                       </td>
@@ -2360,7 +2333,7 @@ function StockListEditView({
                         placeholder="..."
                         value={edit?.note ?? ''}
                         onChange={e => updateEdit(r.article_id, edit?.qty ?? '', e.target.value, edit?.lot_number)}
-                        className="w-full text-[10px] px-2 py-1.5 rounded-lg border border-slate-200 focus:border-brand-400 focus:ring-1 focus:ring-brand-500/20 outline-none transition-all bg-white"
+                        className="w-full text-[10px] bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-900 outline-none pb-1 pt-1 transition-colors"
                       />
                     </td>
                     <td className="px-2 py-1.5 w-[30px]">

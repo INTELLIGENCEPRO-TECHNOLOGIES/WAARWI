@@ -359,7 +359,7 @@ export function MasterCatalog() {
 
   if (!catalog) {
     return (
-      <div className="card-premium">
+      <div>
         <EmptyState
           icon={Package}
           title="Aucun catalogue maître disponible"
@@ -525,12 +525,12 @@ export function MasterCatalog() {
 
       {/* Items grid */}
       {filtered.length === 0 ? (
-        <div className="card-premium"><EmptyState icon={Package} title="Aucun article" description="Ajustez vos filtres ou votre recherche." /></div>
+        <div className="py-12"><EmptyState icon={Package} title="Aucun article" description="Ajustez vos filtres ou votre recherche." /></div>
       ) : (
         <>
         {/* Desktop: thin list with header */}
-        <div className="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-card overflow-hidden">
-          <div className="grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+        <div className="hidden md:block">
+          <div className="grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-neutral-200 sticky top-[52px] z-10 bg-slate-50/95 backdrop-blur-sm">
             <div></div>
             <div>Désignation</div>
             <div>Marque</div>
@@ -545,7 +545,7 @@ export function MasterCatalog() {
             return (
               <div
                 key={i.id}
-                className={`grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-1.5 items-center text-[12px] border-b border-slate-100 transition-colors ${isSelected ? 'bg-brand-50/60' : isImported ? 'bg-emerald-50/20' : 'hover:bg-slate-50/60'}`}
+                className={`grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-2 items-center text-[12px] border-b border-neutral-100 last:border-b-0 transition-colors ${isSelected ? 'bg-brand-50/40' : isImported ? 'bg-emerald-50/20' : 'hover:bg-neutral-50'}`}
               >
                 <div className="flex items-center justify-center">
                   {!isImported ? (
@@ -576,50 +576,38 @@ export function MasterCatalog() {
           })}
         </div>
         {/* Mobile: card grid */}
-        <div className="grid grid-cols-1 md:hidden gap-2.5">
+        <div className="md:hidden">
           {paginated.map(i => {
             const isImported = importedIds.has(i.id);
             const isSelected = selected.has(i.id);
             return (
               <div
                 key={i.id}
-                className={`card-premium p-3 flex flex-col gap-2 transition-all ${isSelected ? 'ring-2 ring-brand-500 border-brand-400' : ''} ${isImported ? 'bg-emerald-50/30 border-emerald-100' : ''}`}
+                className={`flex items-start gap-2 py-2.5 px-1 border-b border-neutral-100 last:border-b-0 transition-colors ${isSelected ? 'bg-brand-50/40' : isImported ? 'bg-emerald-50/20' : ''}`}
               >
-                <div className="flex items-start gap-2">
-                  {!isImported ? (
-                    <button
-                      onClick={() => toggleSelect(i.id)}
-                      className={`shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-black border-black' : 'border-slate-400 hover:border-black'}`}
-                      aria-label="Sélectionner"
-                    >
-                      {isSelected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
-                    </button>
-                  ) : (
-                    <div className="shrink-0 w-4 h-4 mt-0.5 rounded bg-emerald-500 border border-emerald-500 flex items-center justify-center" title="Déjà importé">
-                      <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-bold text-slate-900 leading-tight break-words">{i.designation}</div>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      {i.brand && <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}
-                      {i.manufacturer_ref && <span className="text-[10px] font-mono text-slate-500">{i.manufacturer_ref}</span>}
-                      {isImported && <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5"><CheckCircle2 className="w-2.5 h-2.5" />Déjà importé</span>}
-                    </div>
+                {!isImported ? (
+                  <button
+                    onClick={() => toggleSelect(i.id)}
+                    className={`shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-black border-black' : 'border-slate-400 hover:border-black'}`}
+                    aria-label="Sélectionner"
+                  >
+                    {isSelected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                  </button>
+                ) : (
+                  <div className="shrink-0 w-4 h-4 mt-0.5 rounded bg-emerald-500 border border-emerald-500 flex items-center justify-center" title="Déjà importé">
+                    <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-100">
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Achat</div>
-                    <div className="text-[11px] font-bold text-slate-800 num leading-tight mt-0.5">{formatFCFA(i.purchase_price)}</div>
+                )}
+                <div className="min-w-0 flex-1 leading-tight">
+                  <div className="text-[11px] font-semibold text-slate-900 line-clamp-2">{i.designation}</div>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    {i.brand && <span className="text-[9px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}
+                    {i.manufacturer_ref && <span className="text-[9px] font-mono text-slate-400 truncate">{i.manufacturer_ref}</span>}
+                    {isImported && <span className="text-[9px] font-bold text-emerald-700 inline-flex items-center gap-0.5"><CheckCircle2 className="w-2.5 h-2.5" />Importé</span>}
                   </div>
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vente</div>
-                    <div className="text-[11px] font-bold text-brand-700 num leading-tight mt-0.5">{formatFCFA(i.sale_price)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Unité</div>
-                    <div className="text-[11px] font-semibold text-slate-600 leading-tight mt-0.5 truncate">{i.unit}</div>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Achat <span className="text-slate-700 num">{formatFCFA(i.purchase_price)}</span></span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vente <span className="text-brand-700 num">{formatFCFA(i.sale_price)}</span></span>
                   </div>
                 </div>
               </div>
@@ -627,7 +615,7 @@ export function MasterCatalog() {
           })}
         </div>
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-card mt-3">
+          <div className="flex items-center justify-between px-4 py-3 mt-3">
             <div className="text-xs text-slate-500">
               {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length} articles
             </div>

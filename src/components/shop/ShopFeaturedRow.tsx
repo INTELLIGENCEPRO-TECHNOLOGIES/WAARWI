@@ -13,72 +13,65 @@ type Props = {
   theme: ShopThemeConfig;
 };
 
-export function ShopFeaturedRow({ articles, cart, onDetail, onAddToCart, onSetQty, theme }: Props) {
+export function ShopFeaturedRow({ articles, cart, onDetail, onAddToCart, onSetQty }: Props) {
   if (articles.length === 0) return null;
 
   return (
-    <section className="shop-fluid py-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg sm:text-xl font-bold text-slate-900">Produits populaires</h2>
-      </div>
-      <div className="shop-featured-scroll">
+    <section className="px-4 sm:px-6 py-6 border-b border-neutral-100">
+      <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-400 mb-4">Produits populaires</h2>
+      <div className="flex gap-4 overflow-x-auto scrollbar-none pb-2">
         {articles.slice(0, 8).map((article) => {
           const cartQty = cart.find((i) => i.article.id === article.id)?.qty || 0;
           const inCart = cartQty > 0;
           const outOfStock = article.stock_qty === 0;
 
           return (
-            <div
-              key={article.id}
-              className="shrink-0 w-[200px] sm:w-[220px] flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-            >
+            <div key={article.id} className="shrink-0 w-[180px] flex flex-col border border-neutral-100 bg-white hover:border-neutral-200 transition-colors">
               <button
                 onClick={() => onDetail(article)}
-                className="relative w-full aspect-square overflow-hidden rounded-t-2xl bg-slate-50 shrink-0"
+                className="relative w-full aspect-square overflow-hidden bg-neutral-50 shrink-0"
               >
                 <ShopLazyImage
                   src={article.image_url}
                   alt={article.name}
                   className="w-full h-full object-contain p-3"
                   fallbackClassName="w-full h-full p-3"
-                  fallbackIconSize={28}
+                  fallbackIconSize={24}
                 />
               </button>
-              <div className="p-3 flex-1 flex flex-col">
+              <div className="p-2.5 flex-1 flex flex-col">
                 <button onClick={() => onDetail(article)} className="text-left flex-1">
-                  <div className="text-sm font-semibold text-slate-900 leading-snug shop-product-name line-clamp-2">
+                  <div className="text-[12px] font-medium text-neutral-900 leading-snug line-clamp-2">
                     {article.name}
                   </div>
-                  <div className="mt-1.5 text-base font-bold text-slate-900 num">
+                  <div className="mt-1.5 text-sm font-bold text-neutral-900 num">
                     {formatFCFA(article.sale_price)}
                   </div>
                 </button>
-                <div className="mt-2.5">
+                <div className="mt-2">
                   {outOfStock ? (
-                    <div className="w-full h-9 rounded-lg bg-slate-100 text-slate-400 text-[11px] font-semibold flex items-center justify-center">
-                      Rupture
-                    </div>
+                    <div className="text-[10px] font-medium text-neutral-400">Rupture</div>
                   ) : inCart ? (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       <button
                         onClick={() => onSetQty(article.id, cartQty - 1)}
-                        className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors active:scale-90"
+                        className="w-7 h-7 border border-neutral-200 flex items-center justify-center hover:bg-neutral-50 active:scale-90 transition-all"
                       >
-                        <Minus className="w-3.5 h-3.5 text-slate-700" />
+                        <Minus className="w-3 h-3 text-neutral-600" />
                       </button>
-                      <span className="flex-1 text-center text-sm font-bold num">{cartQty}</span>
+                      <span className="w-7 text-center text-xs font-bold num">{cartQty}</span>
                       <button
                         onClick={() => onAddToCart(article)}
                         disabled={cartQty >= article.stock_qty}
-                        className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors active:scale-90 disabled:opacity-40"
+                        className="w-7 h-7 border border-neutral-200 flex items-center justify-center hover:bg-neutral-50 active:scale-90 transition-all disabled:opacity-30"
                       >
-                        <Plus className="w-3.5 h-3.5 text-slate-700" />
+                        <Plus className="w-3 h-3 text-neutral-600" />
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => onAddToCart(article)}
-                      className={`w-full h-9 rounded-lg text-[11px] font-bold inline-flex items-center justify-center gap-1.5 transition-all active:scale-95 ${theme.cardButtonClass}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-900 text-white text-[10px] font-bold hover:bg-neutral-800 active:scale-95 transition-all"
                     >
                       <ShoppingCart className="w-3 h-3" />
                       Ajouter

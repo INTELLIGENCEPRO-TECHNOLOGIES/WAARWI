@@ -3,13 +3,11 @@ import {
   Search,
   X,
   Package,
-  Store,
   MessageCircle,
   ShoppingCart,
   Loader2,
   ChevronRight,
   ChevronLeft,
-  ClipboardList,
   ArrowLeft,
   AlertCircle,
   CheckCircle2,
@@ -343,47 +341,29 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
   // ── Shop view ──
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 shop-container">
-      {/* Sticky header + promo + search */}
-      <div className="sticky top-0 z-40">
-        <header className={theme.headerBg}>
-          <div className="shop-fluid">
-            <div className="flex items-center gap-3 py-2.5">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                {shopLogo ? (
-                  <img src={shopLogo} alt={shopName} className="w-10 h-10 object-contain shrink-0" />
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-                    <Store className="w-5 h-5 text-white" />
-                  </div>
-                )}
-                <div className="min-w-0 leading-tight">
-                  <div className="text-[15px] font-extrabold text-slate-900 truncate leading-tight">{shopName}</div>
-                </div>
+    <div className="min-h-screen bg-white shop-container">
+      {/* Sticky header + search */}
+      <div className="sticky top-0 z-40 bg-white border-b border-neutral-100">
+        <header className="px-4 sm:px-6">
+          <div className="flex items-center gap-3 py-3">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              {shopLogo && (
+                <img src={shopLogo} alt={shopName} className="h-8 object-contain shrink-0" />
+              )}
+              <div className="min-w-0 leading-tight">
+                <div className="text-sm font-bold text-neutral-900 truncate uppercase tracking-wide">{shopName}</div>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {shopWhatsApp && (
-                  <a href={`https://wa.me/${shopWhatsApp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 active:scale-95 transition-all shadow-sm">
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">WhatsApp</span>
-                  </a>
-                )}
-                <button onClick={() => setView('track')}
-                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 active:scale-95 transition-all">
-                  <ClipboardList className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Suivi</span>
-                </button>
-                {cartCount > 0 && (
-                  <button onClick={() => setCartOpen(true)}
-                    className="hidden sm:inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-lg hover:bg-slate-800 active:scale-95 transition-all">
-                    <ShoppingCart className="w-3.5 h-3.5" />
-                    <span className="shop-cart-pulse">{cartCount}</span>
-                    <span className="text-white/50">·</span>
-                    <span className="num">{formatFCFA(cartTotal)}</span>
-                  </button>
-                )}
-              </div>
+            </div>
+            <div className="flex items-center gap-4 shrink-0">
+              <button onClick={() => setView('track')}
+                className="text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors">
+                Suivi
+              </button>
+              <button onClick={() => setCartOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 transition-colors">
+                <ShoppingCart className="w-4 h-4" />
+                {cartCount > 0 && <span className="font-bold">{cartCount}</span>}
+              </button>
             </div>
           </div>
         </header>
@@ -400,7 +380,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
         )}
 
         {/* Search bar */}
-        <div className="shop-fluid py-2.5 bg-white/95 backdrop-blur-md border-b border-neutral-100">
+        <div className="px-4 sm:px-6 py-3">
           <ShopSearchBar
             value={search}
             onChange={setSearch}
@@ -443,31 +423,31 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
       {/* Active filter chips */}
       {activeFilters > 0 && (
-        <div className="shop-fluid pt-3 flex items-center gap-2 flex-wrap">
+        <div className="px-4 sm:px-6 pt-3 flex items-center gap-2 flex-wrap">
           {filterCat && <FilterChip label={categories.find(c => c.id === filterCat)?.name || 'Catégorie'} onRemove={() => setFilterCat('')} />}
           {autoMode && filterBrand && <FilterChip label={vehicleBrands.find(b => b.id === filterBrand)?.name || 'Constructeur'} onRemove={() => { setFilterBrand(''); setFilterModel(''); }} />}
           {autoMode && filterModel && <FilterChip label={vehicleModels.find(m => m.id === filterModel)?.name || 'Modèle'} onRemove={() => setFilterModel('')} />}
           {filterAvail && <FilterChip label="En stock" onRemove={() => setFilterAvail(false)} />}
-          <button onClick={() => { setFilterCat(''); setFilterBrand(''); setFilterModel(''); setFilterAvail(false); }} className="text-xs text-slate-500 hover:text-red-600 font-medium transition-colors underline underline-offset-2">Effacer</button>
+          <button onClick={() => { setFilterCat(''); setFilterBrand(''); setFilterModel(''); setFilterAvail(false); }} className="text-xs text-neutral-500 hover:text-red-600 font-medium transition-colors">Effacer</button>
         </div>
       )}
 
       {/* Results count */}
-      <div className="shop-fluid pt-4 pb-2">
-        <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+      <div className="px-4 sm:px-6 pt-4 pb-2">
+        <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
           {filtered.length === 0 ? 'Aucun résultat' : `${filtered.length} article${filtered.length > 1 ? 's' : ''}`}
           {search && <span className="normal-case"> pour « {search} »</span>}
         </div>
       </div>
 
       {/* Product grid */}
-      <main className="shop-fluid pb-32 sm:pb-16">
+      <main className="px-4 sm:px-6 pb-32 sm:pb-16">
         {filtered.length === 0 ? (
           <EmptyResults search={search} hasFilters={activeFilters > 0}
             onClear={() => { setSearch(''); setFilterCat(''); setFilterBrand(''); setFilterModel(''); setFilterAvail(false); }} />
         ) : (
           <>
-          <div className={theme.gridClassName}>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-px bg-neutral-100">
             {paginatedArticles.map(art => (
               <ShopProductCard
                 key={art.id}
@@ -476,7 +456,6 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
                 cartQty={cart.find(i => i.article.id === art.id)?.qty || 0}
                 onDetail={() => setDetail(art)}
                 onAddToCart={() => addToCart(art)}
-                onSetQty={(qty) => setCartQty(art.id, qty, art.stock_qty)}
                 theme={theme}
                 showReferences={shopSettings?.show_references ?? true}
                 showStock={shopSettings?.show_stock ?? true}
@@ -487,11 +466,11 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-1.5 pt-6 pb-2">
+            <div className="flex items-center justify-center gap-1 pt-6 pb-2">
               <button
                 onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 disabled={page === 1}
-                className="h-9 px-3 rounded-lg text-sm font-semibold bg-white border border-neutral-200 text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
+                className="w-9 h-9 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -504,15 +483,13 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
                 }, [])
                 .map((p, i) =>
                   p === 'dots' ? (
-                    <span key={`d${i}`} className="w-8 text-center text-slate-400 text-sm">...</span>
+                    <span key={`d${i}`} className="w-8 text-center text-neutral-400 text-sm">...</span>
                   ) : (
                     <button
                       key={p}
                       onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                      className={`w-9 h-9 rounded-lg text-sm font-bold transition-all active:scale-95 ${
-                        p === page
-                          ? 'bg-slate-900 text-white shadow-md'
-                          : 'bg-white border border-neutral-200 text-slate-700 hover:bg-slate-50'
+                      className={`w-9 h-9 text-sm font-bold transition-all ${
+                        p === page ? 'bg-neutral-900 text-white' : 'border border-neutral-200 text-neutral-700 hover:bg-neutral-50'
                       }`}
                     >
                       {p}
@@ -522,7 +499,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
               <button
                 onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 disabled={page === totalPages}
-                className="h-9 px-3 rounded-lg text-sm font-semibold bg-white border border-neutral-200 text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
+                className="w-9 h-9 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -530,7 +507,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
           )}
 
           {/* Results count */}
-          <div className="text-center text-xs text-slate-400 pt-2 pb-4">
+          <div className="text-center text-xs text-neutral-400 pt-2 pb-4">
             {filtered.length} produit{filtered.length > 1 ? 's' : ''}
             {totalPages > 1 && ` · Page ${page}/${totalPages}`}
           </div>
@@ -551,19 +528,16 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
       {/* Mobile sticky cart button */}
       {cartCount > 0 && (
-        <div className="fixed bottom-6 inset-x-4 z-40 sm:hidden">
+        <div className="fixed bottom-4 inset-x-4 z-40 sm:hidden">
           <button
             onClick={() => setCartOpen(true)}
-            className="w-full h-14 rounded-2xl bg-slate-900 text-white shadow-2xl flex items-center justify-between px-5 active:scale-95 transition-all"
+            className="w-full h-12 bg-neutral-900 text-white shadow-lg flex items-center justify-between px-4 active:scale-[0.98] transition-all"
           >
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <ShoppingCart className="w-5 h-5" />
-                <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center">{cartCount}</span>
-              </div>
-              <span className="font-bold text-sm">Mon panier</span>
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4" />
+              <span className="font-bold text-sm">Panier ({cartCount})</span>
             </div>
-            <span className="font-bold text-base num">{formatFCFA(cartTotal)}</span>
+            <span className="font-bold text-sm num">{formatFCFA(cartTotal)}</span>
           </button>
         </div>
       )}
@@ -734,35 +708,33 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
   const stepIdx = steps.findIndex(s => s.k === step);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-100">
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-3">
-          <button onClick={onBack} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors shrink-0">
+    <div className="min-h-screen bg-white">
+      <header className="sticky top-0 z-40 bg-white border-b border-neutral-100">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+          <button onClick={onBack} className="p-2 text-neutral-500 hover:text-neutral-900 transition-colors shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Commander</div>
-            <div className="text-base font-bold text-slate-900 truncate">{shopName}</div>
+            <div className="text-xs font-bold text-neutral-900 truncate">{shopName}</div>
+            <div className="text-[10px] text-neutral-400">Finaliser la commande</div>
           </div>
           <div className="shrink-0 text-right">
-            <div className="text-[10px] text-slate-400 font-semibold">Total</div>
-            <div className="text-base font-bold text-slate-900 num">{formatFCFA(cartTotal)}</div>
+            <div className="text-[10px] text-neutral-400">Total</div>
+            <div className="text-sm font-bold text-neutral-900 num">{formatFCFA(cartTotal)}</div>
           </div>
         </div>
 
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-3">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-3">
             {steps.map((s, i) => {
-              const Icon = s.icon;
               const done = i < stepIdx;
               const active = i === stepIdx;
               return (
-                <div key={s.k} className="flex items-center gap-1 flex-1">
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${active ? 'bg-brand-700 text-white shadow-glow' : done ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-slate-400'}`}>
-                    {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
-                    <span className="hidden sm:inline truncate">{s.label}</span>
-                  </div>
-                  {i < steps.length - 1 && <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />}
+                <div key={s.k} className="flex items-center gap-2">
+                  <span className={`text-xs font-bold transition-all ${
+                    active ? 'text-neutral-900' : done ? 'text-neutral-400' : 'text-neutral-300'
+                  }`}>{s.label}</span>
+                  {i < steps.length - 1 && <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />}
                 </div>
               );
             })}
@@ -770,54 +742,59 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4 pb-24">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-5 pb-24">
         {formError && (
-          <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50 border border-red-100">
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-            <span className="text-sm text-red-700 font-medium">{formError}</span>
+          <div className="flex items-start gap-2 text-sm text-red-600">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{formError}</span>
           </div>
         )}
 
         {step === 'client' && (
-          <div className="space-y-3">
-            <SectionTitle icon={<User className="w-4 h-4" />} title="Vos coordonnées" />
+          <div className="space-y-5">
+            <SectionTitle icon={<User className="w-4 h-4" />} title="Vos coordonnees" />
             <CField label="Nom complet" required>
               <input value={form.customer_name} onChange={e => patch({ customer_name: e.target.value })}
-                placeholder="Mamadou Diallo" autoFocus className="checkout-input" />
+                placeholder="Mamadou Diallo" autoFocus className="bare-input text-sm text-neutral-900 pb-2" />
+              <div className="h-px bg-neutral-200" />
             </CField>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <CField label="Téléphone" required>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <CField label="Telephone" required>
                 <input value={form.customer_phone} onChange={e => patch({ customer_phone: e.target.value })}
-                  type="tel" placeholder="+221 77 123 45 67" inputMode="tel" className="checkout-input" />
+                  type="tel" placeholder="+221 77 123 45 67" inputMode="tel" className="bare-input text-sm text-neutral-900 pb-2" />
+                <div className="h-px bg-neutral-200" />
               </CField>
               <CField label="WhatsApp">
                 <input value={form.customer_whatsapp} onChange={e => patch({ customer_whatsapp: e.target.value })}
-                  type="tel" placeholder="+221 77 123 45 67" inputMode="tel" className="checkout-input" />
+                  type="tel" placeholder="+221 77 123 45 67" inputMode="tel" className="bare-input text-sm text-neutral-900 pb-2" />
+                <div className="h-px bg-neutral-200" />
               </CField>
             </div>
             <CField label="Email">
               <input value={form.customer_email} onChange={e => patch({ customer_email: e.target.value })}
-                type="email" placeholder="email@exemple.com" inputMode="email" className="checkout-input" />
+                type="email" placeholder="email@exemple.com" inputMode="email" className="bare-input text-sm text-neutral-900 pb-2" />
+              <div className="h-px bg-neutral-200" />
             </CField>
             <CField label="Commentaire">
               <textarea value={form.customer_note} onChange={e => patch({ customer_note: e.target.value })}
-                rows={3} placeholder="Précisions, questions…" className="checkout-input resize-none" />
+                rows={3} placeholder="Precisions, questions..." className="bare-input text-sm text-neutral-900 pb-2 resize-none" />
+              <div className="h-px bg-neutral-200" />
             </CField>
           </div>
         )}
 
         {step === 'livraison' && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <SectionTitle icon={<Truck className="w-4 h-4" />} title="Mode de livraison" />
-            <div className="space-y-2">
+            <div className="space-y-1">
               {deliveryModes.map(mode => (
-                <label key={mode} className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${form.delivery_mode === mode ? 'border-brand-500 bg-brand-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                <label key={mode} className={`flex items-center gap-3 px-4 py-3 border cursor-pointer transition-all ${form.delivery_mode === mode ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 hover:border-neutral-300'}`}>
                   <input type="radio" name="delivery" value={mode} checked={form.delivery_mode === mode}
-                    onChange={() => patch({ delivery_mode: mode as any })} className="w-4 h-4 accent-brand-700" />
+                    onChange={() => patch({ delivery_mode: mode as any })} className="w-4 h-4 accent-neutral-900" />
                   <div>
-                    <div className="font-semibold text-sm text-slate-900">{DELIVERY_LABELS[mode] || mode}</div>
-                    {mode === 'retrait' && shopSettings?.address && <div className="text-xs text-slate-500 mt-0.5">{shopSettings.address}</div>}
-                    {mode === 'livraison' && <div className="text-xs text-slate-500 mt-0.5">Contactez-nous pour les frais</div>}
+                    <div className="font-medium text-sm text-neutral-900">{DELIVERY_LABELS[mode] || mode}</div>
+                    {mode === 'retrait' && shopSettings?.address && <div className="text-xs text-neutral-500 mt-0.5">{shopSettings.address}</div>}
+                    {mode === 'livraison' && <div className="text-xs text-neutral-400 mt-0.5">Contactez-nous pour les frais</div>}
                   </div>
                 </label>
               ))}
@@ -826,20 +803,21 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
             {form.delivery_mode === 'livraison' && (
               <CField label="Adresse de livraison" required>
                 <textarea value={form.delivery_address} onChange={e => patch({ delivery_address: e.target.value })}
-                  rows={2} placeholder="Votre adresse complète…" className="checkout-input resize-none" />
+                  rows={2} placeholder="Votre adresse complete..." className="bare-input text-sm text-neutral-900 pb-2 resize-none" />
+                <div className="h-px bg-neutral-200" />
               </CField>
             )}
 
             <SectionTitle icon={<CreditCard className="w-4 h-4" />} title="Mode de paiement" />
-            <div className="space-y-2">
+            <div className="space-y-1">
               {paymentModes.map(mode => (
-                <label key={mode} className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${form.payment_mode === mode ? 'border-brand-500 bg-brand-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                <label key={mode} className={`flex items-center gap-3 px-4 py-3 border cursor-pointer transition-all ${form.payment_mode === mode ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 hover:border-neutral-300'}`}>
                   <input type="radio" name="payment" value={mode} checked={form.payment_mode === mode}
-                    onChange={() => patch({ payment_mode: mode })} className="w-4 h-4 accent-brand-700" />
+                    onChange={() => patch({ payment_mode: mode })} className="w-4 h-4 accent-neutral-900" />
                   <div>
-                    <div className="font-semibold text-sm text-slate-900">{PAYMENT_LABELS[mode] || mode}</div>
+                    <div className="font-medium text-sm text-neutral-900">{PAYMENT_LABELS[mode] || mode}</div>
                     {['wave', 'orange_money', 'free_money'].includes(mode) && (
-                      <div className="text-xs text-amber-600 font-medium mt-0.5">Instructions de paiement envoyées après confirmation</div>
+                      <div className="text-xs text-amber-600 mt-0.5">Instructions de paiement envoyees apres confirmation</div>
                     )}
                   </div>
                 </label>
@@ -849,31 +827,31 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
         )}
 
         {step === 'recap' && (
-          <div className="space-y-4">
-            <SectionTitle icon={<CheckCircle2 className="w-4 h-4" />} title="Récapitulatif" />
+          <div className="space-y-5">
+            <SectionTitle icon={<CheckCircle2 className="w-4 h-4" />} title="Recapitulatif" />
 
-            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
+            <div className="border border-neutral-200 divide-y divide-neutral-100">
               {cart.map(item => (
-                <div key={item.article.id} className="flex items-center gap-3 p-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+                <div key={item.article.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-10 h-10 bg-neutral-50 border border-neutral-100 flex items-center justify-center overflow-hidden shrink-0">
                     <ShopLazyImage src={item.article.image_url} alt={item.article.name} className="w-full h-full object-contain p-0.5" fallbackClassName="w-full h-full" fallbackIconSize={16} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-slate-900 truncate">{item.article.name}</div>
-                    <div className="text-xs text-slate-500">Qté {item.qty} × {formatFCFA(item.unit_price)}</div>
+                    <div className="text-sm font-medium text-neutral-900 truncate">{item.article.name}</div>
+                    <div className="text-xs text-neutral-400">Qte {item.qty} x {formatFCFA(item.unit_price)}</div>
                   </div>
-                  <div className="text-sm font-bold text-slate-900 num shrink-0">{formatFCFA(item.unit_price * item.qty)}</div>
+                  <div className="text-sm font-bold text-neutral-900 num shrink-0">{formatFCFA(item.unit_price * item.qty)}</div>
                 </div>
               ))}
-              <div className="flex items-center justify-between px-4 py-3 bg-slate-50">
-                <span className="font-bold text-sm text-slate-700">Total</span>
-                <span className="text-lg font-bold text-slate-900 num">{formatFCFA(cartTotal)}</span>
+              <div className="flex items-center justify-between px-4 py-3 bg-neutral-50">
+                <span className="font-bold text-sm text-neutral-700">Total</span>
+                <span className="text-lg font-bold text-neutral-900 num">{formatFCFA(cartTotal)}</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2.5">
+            <div className="border border-neutral-200 p-4 space-y-2.5">
               <InfoRow label="Client" value={form.customer_name} />
-              <InfoRow label="Téléphone" value={form.customer_phone} />
+              <InfoRow label="Telephone" value={form.customer_phone} />
               <InfoRow label="Livraison" value={DELIVERY_LABELS[form.delivery_mode] || form.delivery_mode} />
               {form.delivery_mode === 'livraison' && form.delivery_address && (
                 <InfoRow label="Adresse" value={form.delivery_address} />
@@ -885,12 +863,12 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
         )}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-100 px-4 py-3 safe-bottom">
+      <div className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-neutral-100 px-4 py-3 safe-bottom">
         <div className="max-w-2xl mx-auto flex gap-2.5">
           {step !== 'client' && (
             <button
               onClick={() => setStep(step === 'recap' ? 'livraison' : 'client')}
-              className="h-12 px-5 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm hover:bg-slate-200 active:scale-95 transition-all inline-flex items-center gap-2"
+              className="h-11 px-5 border border-neutral-200 text-neutral-700 font-medium text-sm hover:bg-neutral-50 transition-all inline-flex items-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
               Retour
@@ -899,7 +877,7 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
           {step !== 'recap' ? (
             <button
               onClick={handleNext}
-              className="flex-1 h-12 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 text-white font-bold shadow-glow hover:shadow-premium active:scale-95 transition-all inline-flex items-center justify-center gap-2"
+              className="flex-1 h-11 bg-neutral-900 text-white font-bold text-sm hover:bg-neutral-800 active:scale-[0.98] transition-all inline-flex items-center justify-center gap-2"
             >
               Continuer
               <ChevronRight className="w-4 h-4" />
@@ -908,10 +886,10 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex-1 h-12 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 text-white font-bold shadow-glow hover:shadow-premium active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-60"
+              className="flex-1 h-11 bg-neutral-900 text-white font-bold text-sm hover:bg-neutral-800 active:scale-[0.98] transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-              {submitting ? 'Enregistrement…' : 'Confirmer la commande'}
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              {submitting ? 'Enregistrement...' : 'Confirmer la commande'}
             </button>
           )}
         </div>
@@ -935,71 +913,71 @@ function OrderConfirmationView({ confirmation, shopName, shopWhatsApp, onBackToS
   const waUrl = shopWhatsApp && waMsg ? `https://wa.me/${shopWhatsApp.replace(/\D/g, '')}?text=${waMsg}` : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-brand-50/30 flex flex-col items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md space-y-5 animate-scale-in">
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md space-y-6">
         <div className="flex justify-center">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-premium">
-            <PartyPopper className="w-9 h-9 text-white" />
+          <div className="w-16 h-16 bg-neutral-900 flex items-center justify-center">
+            <PartyPopper className="w-7 h-7 text-white" />
           </div>
         </div>
 
         <div className="text-center">
-          <div className="text-2xl font-bold text-slate-900">Commande confirmée !</div>
-          <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
-            Votre commande a bien été enregistrée.<br />Nous vous contacterons pour confirmation.
+          <div className="text-xl font-bold text-neutral-900">Commande confirmee</div>
+          <p className="text-sm text-neutral-500 mt-1.5 leading-relaxed">
+            Votre commande a bien ete enregistree.<br />Nous vous contacterons pour confirmation.
           </p>
         </div>
 
-        <div className="bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl p-5 text-center shadow-premium">
-          <div className="text-brand-200 text-xs font-bold uppercase tracking-widest mb-1">Numéro de commande</div>
+        <div className="bg-neutral-900 p-5 text-center">
+          <div className="text-neutral-400 text-[10px] font-bold uppercase tracking-widest mb-1">Numero de commande</div>
           <div className="text-3xl font-bold text-white tracking-widest num">{confirmation.order_number}</div>
-          <div className="text-brand-200 text-xs mt-1">Conservez ce numéro pour le suivi</div>
+          <div className="text-neutral-400 text-xs mt-1">Conservez ce numero pour le suivi</div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Récapitulatif</div>
+        <div className="border border-neutral-200 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-neutral-100 bg-neutral-50">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Recapitulatif</div>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-neutral-100">
             {confirmation.items.map(item => (
               <div key={item.article.id} className="flex items-center justify-between px-4 py-3">
                 <div className="min-w-0 flex-1 mr-3">
-                  <div className="text-sm font-semibold text-slate-900 truncate">{item.article.name}</div>
-                  <div className="text-xs text-slate-500">Qté {item.qty} × {formatFCFA(item.unit_price)}</div>
+                  <div className="text-sm font-medium text-neutral-900 truncate">{item.article.name}</div>
+                  <div className="text-xs text-neutral-400">Qte {item.qty} x {formatFCFA(item.unit_price)}</div>
                 </div>
-                <div className="text-sm font-bold text-slate-900 num shrink-0">{formatFCFA(item.unit_price * item.qty)}</div>
+                <div className="text-sm font-bold text-neutral-900 num shrink-0">{formatFCFA(item.unit_price * item.qty)}</div>
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between px-4 py-3.5 bg-slate-50 border-t border-slate-100">
-            <span className="font-bold text-sm text-slate-700">Total commande</span>
-            <span className="text-xl font-bold text-slate-900 num">{formatFCFA(confirmation.total)}</span>
+          <div className="flex items-center justify-between px-4 py-3 bg-neutral-50 border-t border-neutral-100">
+            <span className="font-bold text-sm text-neutral-700">Total commande</span>
+            <span className="text-lg font-bold text-neutral-900 num">{formatFCFA(confirmation.total)}</span>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-4 space-y-2.5">
+        <div className="border border-neutral-200 p-4 space-y-2.5">
           <InfoRow label="Client" value={confirmation.customer_name} />
           <InfoRow label="Livraison" value={DELIVERY_LABELS[confirmation.delivery_mode] || confirmation.delivery_mode} />
           <InfoRow label="Paiement" value={PAYMENT_LABELS[confirmation.payment_mode] || confirmation.payment_mode} />
         </div>
 
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           <button onClick={onTrack}
-            className="w-full h-12 rounded-xl bg-gradient-to-r from-brand-600 to-brand-800 text-white font-bold inline-flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.98] transition-all shadow-glow">
+            className="w-full h-11 bg-neutral-900 text-white font-bold text-sm inline-flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all">
             <CheckCircle2 className="w-4 h-4" />
             Suivre ma commande
           </button>
           {waUrl && (
             <a href={waUrl} target="_blank" rel="noopener noreferrer"
-              className="w-full h-13 py-3.5 rounded-xl bg-emerald-500 text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-emerald-600 active:scale-95 transition-all shadow-sm">
-              <MessageCircle className="w-5 h-5" />
+              className="w-full h-11 bg-emerald-600 text-white font-bold text-sm inline-flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-[0.98] transition-all">
+              <MessageCircle className="w-4 h-4" />
               Confirmer via WhatsApp
             </a>
           )}
           <button onClick={onBackToShop}
-            className="w-full h-12 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm hover:bg-slate-200 active:scale-95 transition-all inline-flex items-center justify-center gap-2">
+            className="w-full h-11 border border-neutral-200 text-neutral-700 font-medium text-sm hover:bg-neutral-50 active:scale-[0.98] transition-all inline-flex items-center justify-center gap-2">
             <ArrowLeft className="w-4 h-4" />
-            Retour à la boutique
+            Retour a la boutique
           </button>
         </div>
       </div>
@@ -1011,7 +989,7 @@ function OrderConfirmationView({ confirmation, shopName, shopWhatsApp, onBackToS
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 text-xs font-semibold">
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-neutral-200 text-neutral-700 text-xs font-medium">
       {label}
       <button onClick={onRemove} className="ml-0.5 hover:text-red-500 transition-colors"><X className="w-3 h-3" /></button>
     </span>
@@ -1021,13 +999,11 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 function EmptyResults({ search, hasFilters, onClear }: { search: string; hasFilters: boolean; onClear: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center mb-5 shadow-inner">
-        <Search className="w-8 h-8 text-slate-300" />
-      </div>
-      <h3 className="text-lg font-bold text-slate-700 mb-1">Aucun article trouvé</h3>
-      <p className="text-sm text-slate-400 max-w-xs mb-5">{search ? `Aucun résultat pour « ${search} »` : 'Aucun article ne correspond à vos filtres.'}</p>
+      <Search className="w-8 h-8 text-neutral-300 mb-4" />
+      <h3 className="text-base font-bold text-neutral-700 mb-1">Aucun article trouve</h3>
+      <p className="text-sm text-neutral-400 max-w-xs mb-5">{search ? `Aucun resultat pour \u00ab ${search} \u00bb` : 'Aucun article ne correspond a vos filtres.'}</p>
       {(search || hasFilters) && (
-        <button onClick={onClear} className="px-5 py-2.5 rounded-xl bg-brand-700 text-white text-sm font-bold shadow-glow hover:shadow-premium active:scale-95 transition-all">Effacer</button>
+        <button onClick={onClear} className="px-5 py-2.5 bg-neutral-900 text-white text-sm font-bold hover:bg-neutral-800 active:scale-[0.98] transition-all">Effacer</button>
       )}
     </div>
   );
@@ -1035,17 +1011,17 @@ function EmptyResults({ search, hasFilters, onClear }: { search: string; hasFilt
 
 function ShopLoader() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-50 to-white">
-      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow animate-pulse">
-        <Package className="w-7 h-7 text-white" />
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-white">
+      <div className="w-12 h-12 bg-neutral-900 flex items-center justify-center">
+        <Package className="w-6 h-6 text-white" />
       </div>
       <div className="text-center">
-        <div className="text-base font-bold text-slate-700">Chargement boutique…</div>
-        <div className="text-sm text-slate-400 mt-0.5">Préparation du catalogue</div>
+        <div className="text-sm font-bold text-neutral-700">Chargement...</div>
+        <div className="text-xs text-neutral-400 mt-0.5">Preparation du catalogue</div>
       </div>
       <div className="flex gap-1.5 mt-2">
         {[0, 1, 2].map(i => (
-          <div key={i} className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+          <div key={i} className="w-1.5 h-1.5 bg-neutral-900 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
         ))}
       </div>
     </div>
@@ -1054,16 +1030,14 @@ function ShopLoader() {
 
 function ShopNotFound({ slug }: { slug: string }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-gradient-to-br from-slate-50 to-white p-6 text-center">
-      <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center shadow-inner">
-        <AlertCircle className="w-9 h-9 text-red-400" />
-      </div>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-white p-6 text-center">
+      <AlertCircle className="w-8 h-8 text-neutral-400" />
       <div>
-        <h2 className="text-xl font-bold text-slate-800 mb-1">Boutique introuvable</h2>
-        <p className="text-sm text-slate-500 max-w-xs">La boutique <span className="font-mono text-slate-700">« {slug} »</span> n'existe pas ou n'est pas encore ouverte.</p>
+        <h2 className="text-lg font-bold text-neutral-800 mb-1">Boutique introuvable</h2>
+        <p className="text-sm text-neutral-500 max-w-xs">La boutique <span className="font-mono text-neutral-700">\u00ab {slug} \u00bb</span> n'existe pas ou n'est pas encore ouverte.</p>
       </div>
-      <a href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-700 text-white text-sm font-bold shadow-glow hover:shadow-premium active:scale-95 transition-all">
-        <ArrowLeft className="w-4 h-4" />Retour à l'accueil
+      <a href="/" className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white text-sm font-bold hover:bg-neutral-800 active:scale-[0.98] transition-all">
+        <ArrowLeft className="w-4 h-4" />Retour
       </a>
     </div>
   );
@@ -1072,8 +1046,8 @@ function ShopNotFound({ slug }: { slug: string }) {
 function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2 pb-1">
-      <div className="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center text-brand-700">{icon}</div>
-      <h3 className="font-bold text-slate-800">{title}</h3>
+      <span className="text-neutral-500">{icon}</span>
+      <h3 className="font-bold text-neutral-800 text-sm uppercase tracking-wide">{title}</h3>
     </div>
   );
 }
@@ -1081,7 +1055,7 @@ function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string })
 function CField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 px-0.5">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </div>
       {children}
@@ -1092,8 +1066,8 @@ function CField({ label, required, children }: { label: string; required?: boole
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-3 text-sm">
-      <span className="text-slate-500 font-medium shrink-0">{label}</span>
-      <span className="text-slate-900 font-semibold text-right">{value}</span>
+      <span className="text-neutral-400 font-medium shrink-0">{label}</span>
+      <span className="text-neutral-900 font-medium text-right">{value}</span>
     </div>
   );
 }

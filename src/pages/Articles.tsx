@@ -768,16 +768,16 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
       {/* ── Liste ─────────────────────────────── */}
       {!initialLoaded && loading ? (
-        <div className="py-20 flex items-center justify-center rounded-2xl bg-white shadow-card border border-slate-100 opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+        <div className="py-20 flex items-center justify-center opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl bg-white shadow-card border border-slate-100">
+        <div className="">
           <EmptyState icon={Package} title={search || categoryFilter ? 'Aucun article trouvé' : 'Aucun article'} description={search || categoryFilter ? 'Essayez d\'autres critères.' : 'Créez votre premier article.'}
             action={!search && !categoryFilter ? <button onClick={openCreate} className="btn-icon-primary" title="Nouvel article"><Plus className="w-4 h-4" /></button> : undefined} />
         </div>
       ) : (
         <>
-          {/* Mobile: cartes */}
-          <div className="md:hidden grid grid-cols-1 gap-2">
+          {/* Mobile: lignes */}
+          <div className="md:hidden">
             {paginated.map(a => (
               <ArticleCard key={a.id} article={a} category={categoryMap.get(a.category_id || '')} qty={stockMap[a.id] || 0}
                 onEdit={() => selectionMode ? toggleSelected(a.id) : openEdit(a)} onDelete={() => setToDelete(a)}
@@ -800,29 +800,26 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                 onSort={(col) => { setSortCol(col as any); setSortDir(d => sortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}
               />
             ) : (
-              <div className="rounded-2xl bg-white shadow-card border border-slate-100 overflow-hidden">
+              <div className="overflow-hidden">
                 <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50/70 text-[10px] uppercase text-slate-500 tracking-wider border-b border-slate-100 sticky top-0 z-10">
+                  <thead className="text-[10px] uppercase text-slate-500 tracking-wider border-b border-neutral-200 sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
                     <tr>
-                      {selectionMode && <th className="px-3 py-3 w-10 bg-slate-50"><button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="text-brand-700">{allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}</button></th>}
-                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50 min-w-[480px]" onClick={() => { setSortCol('name'); setSortDir(d => sortCol === 'name' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                      {selectionMode && <th className="px-3 py-3 w-10"><button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="text-brand-700">{allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}</button></th>}
+                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors min-w-[480px]" onClick={() => { setSortCol('name'); setSortDir(d => sortCol === 'name' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
                         <span className="inline-flex items-center gap-1">Article {sortCol === 'name' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
                       </th>
-                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('category'); setSortDir(d => sortCol === 'category' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                      <th className="px-4 py-3 text-left font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => { setSortCol('category'); setSortDir(d => sortCol === 'category' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
                         <span className="inline-flex items-center gap-1">Catégorie {sortCol === 'category' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('price'); setSortDir(d => sortCol === 'price' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
+                      <th className="px-4 py-3 text-right font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => { setSortCol('price'); setSortDir(d => sortCol === 'price' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
                         <span className="inline-flex items-center gap-1 justify-end">Prix vente {sortCol === 'price' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
                       </th>
-                      {can('view_margins') && <th className="px-4 py-3 text-right font-semibold bg-slate-50">Marge</th>}
-                      {can('view_stock_levels') && <th className="px-4 py-3 text-right font-semibold cursor-pointer select-none hover:text-brand-700 transition-colors bg-slate-50" onClick={() => { setSortCol('stock'); setSortDir(d => sortCol === 'stock' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}>
-                        <span className="inline-flex items-center gap-1 justify-end">Stock {sortCol === 'stock' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-brand-600" /> : <ChevronDown className="w-3 h-3 text-brand-600" />) : <ChevronDown className="w-3 h-3 opacity-30" />}</span>
-                      </th>}
-                      <th className="px-4 py-3 text-right font-semibold bg-slate-50"></th>
+                      {can('view_margins') && <th className="px-4 py-3 text-right font-semibold">Marge</th>}
+                      <th className="px-4 py-3 text-right font-semibold"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-neutral-100">
                     {paginated.map(a => {
                       const cat = categoryMap.get(a.category_id || '');
                       const qty = stockMap[a.id] || 0;
@@ -837,7 +834,6 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                           <td className="px-4 py-3 text-slate-600 text-xs truncate max-w-[160px]">{cat?.name || '—'}</td>
                           <td className="px-4 py-3 text-right font-bold text-slate-900 num">{formatFCFA(a.sale_price)}</td>
                           {can('view_margins') && <td className="px-4 py-3 text-right"><span className={`text-[10px] font-bold num ${mgTone}`}>{mg.toFixed(0)}%</span></td>}
-                          {can('view_stock_levels') && <td className="px-4 py-3 text-right"><span className={`text-[10px] font-bold num ${mStatus.badge}`}>{qty}</span></td>}
                           <td className="px-4 py-3 text-right"><div className="inline-flex gap-1 opacity-60 group-hover:opacity-100"><button onClick={(e) => { e.stopPropagation(); openFullScreen(a); }} className="p-1.5 rounded-lg hover:bg-brand-100 text-slate-600 hover:text-brand-700"><Pencil className="w-4 h-4" /></button><button onClick={(e) => { e.stopPropagation(); setToDelete(a); }} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button></div></td>
                         </tr>
                       );
@@ -864,7 +860,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-card mt-3">
+            <div className="flex items-center justify-between px-4 py-3 mt-3">
               <div className="text-xs text-slate-500">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length} articles</div>
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
