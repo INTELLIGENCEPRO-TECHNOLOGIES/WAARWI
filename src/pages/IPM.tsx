@@ -319,12 +319,15 @@ function IpmOrganismes({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1.5 px-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all">
-        <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un organisme..." className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
-        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
-        <button onClick={openNew} className="shrink-0 w-7 h-7 rounded-xl bg-neutral-900 hover:bg-neutral-800 flex items-center justify-center transition-colors" title="Nouvel organisme">
-          <Building2 className="w-3.5 h-3.5 text-white" />
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un organisme..." className="bare-input w-full text-sm py-1.5" />
+          <div className="h-px bg-neutral-200 mt-1" />
+        </div>
+        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
+        <button onClick={openNew} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" title="Nouvel organisme">
+          <Building2 className="w-4 h-4" />
         </button>
       </div>
 
@@ -521,12 +524,15 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1.5 px-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all">
-        <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une convention..." className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
-        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
-        <button onClick={openNew} disabled={organismes.length === 0} className="shrink-0 w-7 h-7 rounded-xl bg-neutral-900 hover:bg-neutral-800 disabled:opacity-40 flex items-center justify-center transition-colors" title="Nouvelle convention">
-          <FileText className="w-3.5 h-3.5 text-white" />
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une convention..." className="bare-input w-full text-sm py-1.5" />
+          <div className="h-px bg-neutral-200 mt-1" />
+        </div>
+        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
+        <button onClick={openNew} disabled={organismes.length === 0} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 disabled:opacity-40 transition-colors" title="Nouvelle convention">
+          <FileText className="w-4 h-4" />
         </button>
       </div>
 
@@ -728,12 +734,15 @@ function IpmBeneficiaires({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1.5 px-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all">
-        <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par nom, matricule..." className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
-        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
-        <button onClick={openNew} disabled={organismes.length === 0} className="shrink-0 w-7 h-7 rounded-xl bg-neutral-900 hover:bg-neutral-800 disabled:opacity-40 flex items-center justify-center transition-colors" title="Nouveau bénéficiaire">
-          <Users className="w-3.5 h-3.5 text-white" />
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par nom, matricule..." className="bare-input w-full text-sm py-1.5" />
+          <div className="h-px bg-neutral-200 mt-1" />
+        </div>
+        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
+        <button onClick={openNew} disabled={organismes.length === 0} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 disabled:opacity-40 transition-colors" title="Nouveau bénéficiaire">
+          <Users className="w-4 h-4" />
         </button>
       </div>
 
@@ -1100,12 +1109,15 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1.5 px-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all">
-        <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un bordereau..." className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
-        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
-        <button onClick={() => setShowCreate(true)} className="shrink-0 w-7 h-7 rounded-xl bg-neutral-900 hover:bg-neutral-800 flex items-center justify-center transition-colors" title="Générer un bordereau">
-          <Receipt className="w-3.5 h-3.5 text-white" />
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un bordereau..." className="bare-input w-full text-sm py-1.5" />
+          <div className="h-px bg-neutral-200 mt-1" />
+        </div>
+        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
+        <button onClick={() => setShowCreate(true)} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" title="Générer un bordereau">
+          <Receipt className="w-4 h-4" />
         </button>
       </div>
 
@@ -1568,12 +1580,15 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1.5 px-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all">
-        <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une facture..." className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
-        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
-        <button onClick={() => setShowCreate(true)} className="shrink-0 w-7 h-7 rounded-xl bg-neutral-900 hover:bg-neutral-800 flex items-center justify-center transition-colors" title="Nouvelle facture IPM">
-          <CreditCard className="w-3.5 h-3.5 text-white" />
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une facture..." className="bare-input w-full text-sm py-1.5" />
+          <div className="h-px bg-neutral-200 mt-1" />
+        </div>
+        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
+        <button onClick={() => setShowCreate(true)} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" title="Nouvelle facture IPM">
+          <CreditCard className="w-4 h-4" />
         </button>
       </div>
 
@@ -1806,12 +1821,15 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1.5 px-2.5 pr-1.5 py-1.5 rounded-2xl bg-white border border-neutral-200 shadow-sm focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all">
-        <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un règlement..." className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
-        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
-        <button onClick={() => setShowCreate(true)} className="shrink-0 w-7 h-7 rounded-xl bg-neutral-900 hover:bg-neutral-800 flex items-center justify-center transition-colors" title="Enregistrer un règlement">
-          <Wallet className="w-3.5 h-3.5 text-white" />
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un règlement..." className="bare-input w-full text-sm py-1.5" />
+          <div className="h-px bg-neutral-200 mt-1" />
+        </div>
+        {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
+        <button onClick={() => setShowCreate(true)} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" title="Enregistrer un règlement">
+          <Wallet className="w-4 h-4" />
         </button>
       </div>
 

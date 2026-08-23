@@ -11,9 +11,10 @@ type Props = {
   layer?: 'base' | 'top';
   fullMobile?: boolean;
   fullscreenMobile?: boolean;
+  variant?: 'default' | 'flat';
 };
 
-export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false }: Props) {
+export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false, variant = 'default' }: Props) {
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -30,7 +31,7 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
   return (
     <div className={`fixed inset-0 ${z} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`}>
       <div className="scrim" onClick={onClose} />
-      <div className={`relative w-full ${w} bg-white ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col`}>
+      <div className={`relative w-full ${w} bg-white ${variant === 'flat' ? 'flat-modal' : ''} ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col`}>
         {!fullMobile && !fullscreenMobile && <div className="sm:hidden sheet-handle" />}
         <div className={`flex items-center justify-between border-b border-neutral-800 bg-black ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : 'px-4 py-3 sm:px-5 sm:py-4 rounded-t-xl'}`}>
           <h3 className={`font-bold text-white tracking-tight ${fullscreenMobile ? 'text-base sm:text-lg' : fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>

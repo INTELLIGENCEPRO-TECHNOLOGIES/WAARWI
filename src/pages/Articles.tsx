@@ -3,7 +3,7 @@ import {
   Plus, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
   Pencil, Filter, ChevronDown, ChevronUp,
   Upload, Camera, CheckSquare, Square,
-  Lightbulb, Download,
+  Lightbulb, Download, Search,
   List, LayoutGrid, Save,
   MoreHorizontal, Check,
 } from 'lucide-react';
@@ -690,40 +690,45 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header premium unifié ────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2 border-b border-neutral-200/70">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
-          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
-            <h1 className="text-sm font-bold tracking-tight text-slate-900">Articles</h1>
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+        <div className="flex items-start justify-between">
+          <h1 className="text-lg font-bold text-neutral-900 leading-tight">Articles</h1>
+          <button onClick={openCreate} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" aria-label="Nouvel article">
+            <Plus className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <input
+              value={searchInput}
+              onChange={e => handleSearchInput(e.target.value)}
+              placeholder="Rechercher par N°, référence, désignation…"
+              className="bare-input w-full text-sm py-1.5"
+            />
+            <div className="h-px bg-neutral-200 mt-1" />
           </div>
-          <input
-            value={searchInput}
-            onChange={e => handleSearchInput(e.target.value)}
-            placeholder="Rechercher par N°, référence, désignation…"
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
-          />
           {search && (
-            <button onClick={() => { setSearch(''); setSearchInput(''); }} className="shrink-0 p-1 text-slate-400 hover:text-slate-600">
-              <X className="w-3.5 h-3.5" />
+            <button onClick={() => { setSearch(''); setSearchInput(''); }} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600">
+              <X className="w-4 h-4" />
             </button>
           )}
-          <button onClick={() => setFilterOpen(true)} className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-all ${categoryFilter ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}>
+        </div>
+        <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
+          <button onClick={() => setFilterOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 transition-colors ${categoryFilter ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
             <Filter className="w-3.5 h-3.5" />
             <span className="max-w-[120px] truncate">{categoryFilter ? selectedCategoryName : 'Catégorie'}</span>
           </button>
-          <button onClick={toggleSelectionMode} className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${selectionMode ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}>
+          <button onClick={toggleSelectionMode} className={`shrink-0 inline-flex items-center gap-1.5 transition-colors ${selectionMode ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
             <CheckSquare className="w-3.5 h-3.5" />
             <span>{selectionMode ? 'Quitter' : 'Sélect.'}</span>
           </button>
-          {/* Desktop view toggle */}
-          <div className="shrink-0 hidden md:inline-flex items-center gap-1">
-            <button onClick={() => setViewMode('list')} className={`p-1.5 transition-colors ${viewMode === 'list' ? 'text-brand-700' : 'text-slate-400 hover:text-slate-700'}`} aria-label="Vue liste"><List className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setViewMode('cards')} className={`p-1.5 transition-colors ${viewMode === 'cards' ? 'text-brand-700' : 'text-slate-400 hover:text-slate-700'}`} aria-label="Vue cartes"><LayoutGrid className="w-3.5 h-3.5" /></button>
-          </div>
-          <button onClick={() => { if (!sharedArticles && currentSite) setImportTargetSite(currentSite.id); setImportExportOpen(true); }} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors">
-            <Download className="w-3.5 h-3.5" /><span>Excel</span>
+          <button onClick={() => setViewMode(viewMode === 'list' ? 'cards' : 'list')} className="shrink-0 inline-flex items-center gap-1.5 text-neutral-500 hover:text-neutral-700 transition-colors">
+            {viewMode === 'list' ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
+            <span>{viewMode === 'list' ? 'Cartes' : 'Liste'}</span>
           </button>
-          <button onClick={openCreate} className="shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all" aria-label="Nouvel article">
-            <Plus className="w-3.5 h-3.5 text-white" />
+          <button onClick={() => { if (!sharedArticles && currentSite) setImportTargetSite(currentSite.id); setImportExportOpen(true); }} className="shrink-0 inline-flex items-center gap-1.5 text-neutral-500 hover:text-neutral-700 transition-colors">
+            <Download className="w-3.5 h-3.5" /><span>Excel</span>
           </button>
         </div>
       </div>
@@ -738,19 +743,19 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
       {/* ── Barre de sélection en masse ────── */}
       {selectionMode && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-gradient-to-r from-brand-50 to-white border border-brand-200 shadow-sm animate-fade-in flex-wrap">
-          <button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-brand-700 hover:bg-brand-100">
+        <div className="flex items-center gap-2 py-2.5 border-y border-neutral-100 animate-fade-in flex-wrap">
+          <button onClick={allFilteredSelected ? clearSelection : selectAllFiltered} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold text-brand-700 hover:text-brand-800 transition-colors">
             {allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
             {allFilteredSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
           </button>
-          <div className="text-[11px] font-semibold text-slate-600 truncate">
+          <div className="text-[11px] font-semibold text-neutral-600 truncate">
             <span className="num font-bold text-brand-700">{selectedIds.size}</span> sélectionné{selectedIds.size > 1 ? 's' : ''}
           </div>
           <div className="flex-1" />
-          <button onClick={() => { setBulkAction(''); setBulkActionValue(''); setBulkActionOpen(true); }} disabled={selectedIds.size === 0} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50">
+          <button onClick={() => { setBulkAction(''); setBulkActionValue(''); setBulkActionOpen(true); }} disabled={selectedIds.size === 0} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-neutral-900 text-white hover:bg-neutral-800 active:scale-95 transition-all disabled:opacity-50">
             <MoreHorizontal className="w-3.5 h-3.5" />Action en masse
           </button>
-          <button onClick={() => setBulkConfirmOpen(true)} disabled={selectedIds.size === 0} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-red-600 text-white shadow-sm hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50">
+          <button onClick={() => setBulkConfirmOpen(true)} disabled={selectedIds.size === 0} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-600 text-white hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50">
             <Trash2 className="w-3.5 h-3.5" />Supprimer
           </button>
         </div>
@@ -963,7 +968,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           )}
           {bulkAction === 'deactivate' && <p className="text-xs text-slate-500">Les {selectedIds.size} articles sélectionnés seront désactivés (mis en sommeil). Ils ne seront plus visibles dans le catalogue.</p>}
           {bulkAction === 'track_stock_on' && <p className="text-xs text-slate-500">Le suivi de stock sera <strong>activé</strong> pour les {selectedIds.size} articles sélectionnés.</p>}
-          {bulkAction === 'track_stock_off' && <p className="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2">Le suivi de stock sera <strong>désactivé</strong> pour les {selectedIds.size} articles sélectionnés. Ils pourront être vendus sans contrainte de quantité (services, prestations).</p>}
+          {bulkAction === 'track_stock_off' && <p className="text-xs text-amber-700 py-2 border-b border-amber-100">Le suivi de stock sera <strong>désactivé</strong> pour les {selectedIds.size} articles sélectionnés. Ils pourront être vendus sans contrainte de quantité (services, prestations).</p>}
         </div>
       </Modal>
 

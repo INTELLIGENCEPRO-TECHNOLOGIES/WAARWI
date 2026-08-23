@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Calculator, Loader2, Printer, Plus, X, Calendar, Filter, Check, Scroll, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { PageSearch } from '../components/PageSearch';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -352,59 +353,52 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
   return (
     <div className="space-y-3 pb-6">
-      {/* ── Unified premium header ───────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-neutral-200 shrink-0">
-            <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Journal des ventes</h1>
-          </div>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher par N°, client, magasin, paiement…"
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
-              <X className="w-3.5 h-3.5" />
+      {/* ── Page Header ───────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+
+        {/* Row 1: Title */}
+        <h1 className="text-lg font-bold text-neutral-900 leading-tight">Journal des ventes</h1>
+
+        {/* Row 2: Stats */}
+        <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
+          <span className="shrink-0 text-neutral-500 num">{filtered.length} / {sales.length}</span>
+          <span className="shrink-0 text-neutral-700 num">Aujourd'hui · {todayCount}</span>
+          <span className="shrink-0 text-neutral-700 num">Total jour · {formatFCFA(todayTotal)}</span>
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="shrink-0 text-neutral-500 hover:text-neutral-700 inline-flex items-center gap-1 transition-colors"
+            >
+              <X className="w-3 h-3" />Réinitialiser
             </button>
           )}
-          <button
-            onClick={() => setFiltersOpen(true)}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-all ${
-              activeFilterCount > 0 ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
-            }`}
-            title="Filtres"
-          >
-            <Filter className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Filtres</span>
-            {activeFilterCount > 0 && <span className="num">· {activeFilterCount}</span>}
-          </button>
         </div>
-      </div>
 
-      {/* ── Inline stats chips ───────────────────────────────────── */}
-      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 text-neutral-500 num">{filtered.length} / {sales.length}</span>
-        <span className="shrink-0 text-neutral-700 num">Aujourd'hui · {todayCount}</span>
-        <span className="shrink-0 text-neutral-700 num">Total jour · {formatFCFA(todayTotal)}</span>
-        {hasFilters && (
-          <button
-            onClick={clearFilters}
-            className="shrink-0 text-neutral-500 hover:text-neutral-700 inline-flex items-center gap-1 transition-all"
-          >
-            <X className="w-3 h-3" />Réinitialiser
-          </button>
-        )}
-      </div>
+        {/* Row 3: Search + Filter button */}
+        <PageSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Rechercher par N°, client, magasin, paiement…"
+          rightSlot={
+            <button
+              onClick={() => setFiltersOpen(true)}
+              className={`shrink-0 inline-flex items-center gap-1.5 pl-2 text-[12px] font-semibold transition-colors ${
+                activeFilterCount > 0 ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+              title="Filtres"
+            >
+              <Filter className="w-4 h-4" />
+              {activeFilterCount > 0 && <span className="num">{activeFilterCount}</span>}
+            </button>
+          }
+        />
       </div>
 
       {/* ── List ─────────────────────────────────────────────────── */}
       {loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : filtered.length === 0 ? (
-        <div className="card-premium">
+        <div>
           {sales.length === 0
             ? <EmptyState icon={Calculator} title="Aucune vente" description="Les ventes apparaîtront ici. Commencez par ouvrir la caisse." action={<button onClick={() => onNavigate?.('pos')} className="btn-icon-primary" title="Aller à la caisse"><Plus className="w-4 h-4" /></button>} />
             : <EmptyState icon={Calculator} title="Aucun résultat" description="Aucune vente ne correspond aux filtres sélectionnés." action={<button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><X className="w-4 h-4" /></button>} />

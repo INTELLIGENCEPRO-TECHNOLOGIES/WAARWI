@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, Monitor, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin } from 'lucide-react';
+import { PageSearch } from '../components/PageSearch';
+import { MoreMenu } from '../components/MoreMenu';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
@@ -800,177 +802,146 @@ export function Stock() {
 
   return (
     <div className="space-y-3 pb-6">
-      {/* ── Unified premium header (title + search + filter) ────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
-            <div className="leading-tight">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Stock</h1>
-              <div className="text-[8px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 hidden sm:block">{currentSite?.name || 'Inventaire'}</div>
-              <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mt-0.5 sm:hidden">Inventaire</div>
+      {/* ── Page Header ────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+
+        {/* Row 1: Title + More menu */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            {tab !== 'stocks' && (
+              <button onClick={() => setTab('stocks')} className="p-1 -ml-1 text-neutral-400 hover:text-neutral-700 transition-colors" aria-label="Retour à l'inventaire">
+                <Boxes className="w-5 h-5" />
+              </button>
+            )}
+            <div>
+              <h1 className="text-lg font-bold text-neutral-900 leading-tight">Stock</h1>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mt-0.5">
+                {tab === 'movements' ? 'Mouvements' : tab === 'lots' ? 'Lots' : (currentSite?.name || 'Inventaire')}
+              </p>
             </div>
-            {can('manage_stock') && tab === 'stocks' && (
-              <button onClick={printInventoryBook} className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-neutral-900 transition-colors bg-slate-100/60 rounded-lg" title="Livre d'inventaire">
-                <BookOpen className="w-3.5 h-3.5" /><span className="hidden sm:inline">Livre</span>
-              </button>
-            )}
           </div>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            placeholder={tab === 'movements' ? "Rechercher un article…" : "Rechercher…"}
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
-          />
-          {/* Valorisation inside search bar - visible when not searching */}
-          {can('view_purchase_prices') && !search && !searchFocused && (
-            <span className="shrink-0 text-base font-extrabold text-slate-800 num tracking-tight pr-1">
-              {formatFCFA(totalValue)}
-            </span>
+          {can('manage_stock') && tab === 'stocks' && (
+            <MoreMenu items={[
+              { icon: <ArrowRightLeft className="w-4 h-4" />, label: 'Transfert', onClick: () => openAdjNew('transfer'), hidden: !canTransfer },
+              { icon: <BookOpen className="w-4 h-4" />, label: "Livre d'inventaire", onClick: printInventoryBook },
+              { icon: viewMode === 'cards' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />, label: viewMode === 'cards' ? 'Vue liste' : 'Vue cartes', onClick: () => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); } },
+              { icon: <Info className="w-4 h-4" />, label: 'Guide', onClick: () => setHelpOpen(true) },
+              { icon: <History className="w-4 h-4" />, label: 'Historique des mouvements', onClick: () => setTab('movements') },
+              { icon: <PackageOpen className="w-4 h-4" />, label: 'Voir les lots', onClick: () => setTab(t => t === 'lots' ? 'stocks' : 'lots'), hidden: stockMethod !== 'lot' },
+            ]} />
           )}
-          {search && (
-            <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors">
-              <X className="w-3.5 h-3.5" />
-            </button>
+          {can('manage_stock') && tab !== 'stocks' && (
+            <MoreMenu items={[
+              { icon: <Boxes className="w-4 h-4" />, label: 'Inventaire', onClick: () => setTab('stocks') },
+              { icon: <History className="w-4 h-4" />, label: 'Mouvements', onClick: () => setTab('movements'), hidden: tab === 'movements' },
+              { icon: <PackageOpen className="w-4 h-4" />, label: 'Lots', onClick: () => setTab('lots'), hidden: stockMethod !== 'lot' || tab === 'lots' },
+              { icon: <BookOpen className="w-4 h-4" />, label: "Livre d'inventaire", onClick: printInventoryBook },
+            ]} />
           )}
-          {tab === 'movements' && (
-            <button
-              onClick={() => setMvPickerOpen(true)}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-semibold transition-colors ${
-                (mvDateFrom || mvDateTo) ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'
-              }`}
-              title="Filtrer par période"
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              {(mvDateFrom || mvDateTo) ? (
-                <span className="hidden md:inline num max-w-[140px] truncate">
-                  {mvDateFrom ? new Date(mvDateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '…'}
-                  {' → '}
-                  {mvDateTo ? new Date(mvDateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '…'}
-                </span>
-              ) : (
-                <span className="hidden md:inline">Période</span>
-              )}
-            </button>
-          )}
-          {stockMethod === 'lot' && (
-            <button
-              onClick={() => setTab(t => t === 'lots' ? 'stocks' : 'lots')}
-              className={`shrink-0 w-7 h-7 flex items-center justify-center transition-colors ${tab === 'lots' ? 'text-orange-600' : 'text-slate-400 hover:text-orange-600'}`}
-              aria-label="Voir les lots"
-            >
-              <PackageOpen className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <div className="shrink-0 flex items-center gap-0.5">
-            {tab === 'stocks' && (
-              <button
-                onClick={() => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); }}
-                className={`shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'text-neutral-900' : 'text-slate-400 hover:text-neutral-700'}`}
-                aria-label={viewMode === 'cards' ? 'Vue liste éditable' : 'Vue cartes'}
-              >
-                {viewMode === 'cards' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-              </button>
-            )}
-            {can('manage_stock') && tab === 'stocks' && (
-              <button onClick={() => setHelpOpen(true)} className="shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Guide">
-                <Info className="w-3.5 h-3.5" />
-              </button>
-            )}
+          {!can('manage_stock') && (
             <button
               onClick={() => setTab(t => t === 'stocks' ? 'movements' : 'stocks')}
-              className={`shrink-0 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors ${tab === 'movements' ? 'text-teal-700' : 'text-slate-400 hover:text-teal-700'}`}
-              aria-label={tab === 'stocks' ? 'Voir les mouvements' : 'Voir l\'inventaire'}
+              className={`w-7 h-7 flex items-center justify-center transition-colors ${tab === 'movements' ? 'text-teal-700' : 'text-neutral-400 hover:text-teal-700'}`}
+              aria-label="Mouvements"
             >
-              <History className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Inline stats chips */}
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 text-slate-500 num">{filtered.length} / {rows.length}</span>
-        <button
-          onClick={() => setFilter('all')}
-          className={`shrink-0 inline-flex items-center gap-1 transition-colors ${
-            filter === 'all' ? 'text-neutral-900 font-bold' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >Tous</button>
-        {inStockCount > 0 && (
-          <button
-            onClick={() => setFilter(f => f === 'instock' ? 'all' : 'instock')}
-            className={`shrink-0 inline-flex items-center gap-1 transition-colors ${
-              filter === 'instock' ? 'text-emerald-700 font-bold' : 'text-slate-500 hover:text-emerald-700'
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{inStockCount} En stock
-          </button>
-        )}
-        <button
-          onClick={() => setFilter(f => f === 'low' ? 'all' : 'low')}
-          disabled={lowCount === 0}
-          className={`shrink-0 inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            filter === 'low' ? 'text-amber-700 font-bold' : 'text-slate-500 hover:text-amber-700'
-          }`}
-        >
-          <TrendingDown className="w-3 h-3" />{lowCount} seuil bas
-        </button>
-        <button
-          onClick={() => setFilter(f => f === 'out' ? 'all' : 'out')}
-          disabled={outCount === 0}
-          className={`shrink-0 inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            filter === 'out' ? 'text-red-600 font-bold' : 'text-slate-500 hover:text-red-600'
-          }`}
-        >
-          <AlertTriangle className="w-3 h-3" />{outCount} rupture{outCount > 1 ? 's' : ''}
-        </button>
-      </div>
-
-      {/* Quick actions row — cards view only */}
-      {can('manage_stock') && tab === 'stocks' && viewMode === 'cards' && (
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
-          <button onClick={() => openAdjNew('in')} className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-emerald-700 transition-colors">
-            <ArrowDownCircle className="w-3.5 h-3.5" />Entrée
-          </button>
-          <button onClick={() => openAdjNew('out')} className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-red-700 transition-colors">
-            <ArrowUpCircle className="w-3.5 h-3.5" />Sortie
-          </button>
-          {canTransfer && (
-            <button onClick={() => openAdjNew('transfer')} className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-amber-700 transition-colors">
-              <ArrowRightLeft className="w-3.5 h-3.5" />Transfert
+              <History className="w-4 h-4" />
             </button>
           )}
-          <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-neutral-800 transition-colors">
-            <ClipboardList className="w-3.5 h-3.5" />Inventaire
+        </div>
+
+        {/* Row 2: KPI */}
+        {tab === 'stocks' && (
+          <div>
+            {can('view_purchase_prices') ? (
+              <>
+                <div className="text-2xl font-extrabold text-neutral-900 num tracking-tight leading-none">{formatFCFA(totalValue)}</div>
+                <p className="text-[11px] text-neutral-500 mt-1">Valeur du stock</p>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-extrabold text-neutral-900 num tracking-tight leading-none">{inStockCount}</div>
+                <p className="text-[11px] text-neutral-500 mt-1">Articles en stock</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Row 3: Stats */}
+        <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
+          <span className="shrink-0 text-neutral-500 num">{filtered.length} / {rows.length}</span>
+          <button
+            onClick={() => setFilter('all')}
+            className={`shrink-0 transition-colors ${filter === 'all' ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
+          >Tous</button>
+          {inStockCount > 0 && (
+            <button
+              onClick={() => setFilter(f => f === 'instock' ? 'all' : 'instock')}
+              className={`shrink-0 inline-flex items-center gap-1 transition-colors ${filter === 'instock' ? 'text-emerald-700 font-bold' : 'text-neutral-500 hover:text-emerald-700'}`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{inStockCount} En stock
+            </button>
+          )}
+          <button
+            onClick={() => setFilter(f => f === 'low' ? 'all' : 'low')}
+            disabled={lowCount === 0}
+            className={`shrink-0 inline-flex items-center gap-1 transition-colors disabled:opacity-30 ${filter === 'low' ? 'text-amber-700 font-bold' : 'text-neutral-500 hover:text-amber-700'}`}
+          >
+            <TrendingDown className="w-3 h-3" />{lowCount} seuil bas
+          </button>
+          <button
+            onClick={() => setFilter(f => f === 'out' ? 'all' : 'out')}
+            disabled={outCount === 0}
+            className={`shrink-0 inline-flex items-center gap-1 transition-colors disabled:opacity-30 ${filter === 'out' ? 'text-red-600 font-bold' : 'text-neutral-500 hover:text-red-600'}`}
+          >
+            <AlertTriangle className="w-3 h-3" />{outCount} rupture{outCount > 1 ? 's' : ''}
           </button>
         </div>
-      )}
 
-      {/* Sort controls — cards view only */}
-      {tab === 'stocks' && viewMode === 'cards' && (
-        <div className="flex items-center gap-2 text-[10px] font-bold">
-          <span className="text-slate-400">Trier:</span>
-          {([['name', 'Nom'], ['stock', 'Qté'], ['min', 'Min'], ['price', 'P.Achat']] as const).map(([col, label]) => (
-            <button key={col} onClick={() => { setStkSortCol(col); setStkSortDir(d => stkSortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}
-              className={`inline-flex items-center gap-0.5 transition-colors ${stkSortCol === col ? 'text-neutral-900' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              {label}
-              {stkSortCol === col && (stkSortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+        {/* Row 4: Search */}
+        <PageSearch
+          value={search}
+          onChange={setSearch}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
+          placeholder={tab === 'movements' ? "Rechercher un article…" : "Rechercher un article..."}
+        />
+
+        {/* Row 5: Primary actions (stocks tab only) */}
+        {can('manage_stock') && tab === 'stocks' && (
+          <div className="flex items-center gap-4 overflow-x-auto no-scrollbar whitespace-nowrap">
+            <button onClick={() => openAdjNew('in')} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-emerald-700 active:scale-95 transition-all">
+              <ArrowDownCircle className="w-4 h-4" />Entrée
             </button>
-          ))}
-        </div>
-      )}
+            <button onClick={() => openAdjNew('out')} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-red-700 active:scale-95 transition-all">
+              <ArrowUpCircle className="w-4 h-4" />Sortie
+            </button>
+            <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-neutral-900 active:scale-95 transition-all">
+              <ClipboardList className="w-4 h-4" />Inventaire
+            </button>
+          </div>
+        )}
 
+        {/* Sort controls — cards view only (desktop shows inline) */}
+        {tab === 'stocks' && viewMode === 'cards' && (
+          <div className="flex items-center gap-2.5 text-[10px] font-bold">
+            <span className="text-neutral-400">Trier:</span>
+            {([['name', 'Nom'], ['stock', 'Qté'], ['min', 'Min'], ['price', 'P.Achat']] as const).map(([col, label]) => (
+              <button key={col} onClick={() => { setStkSortCol(col); setStkSortDir(d => stkSortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}
+                className={`inline-flex items-center gap-0.5 transition-colors ${stkSortCol === col ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
+              >
+                {label}
+                {stkSortCol === col && (stkSortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {tab === 'stocks' ? (
         (!initialLoaded && loading) ? (
           <div className="py-16 flex justify-center opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
         ) : filtered.length === 0 ? (
-          <div className="card-premium"><EmptyState icon={Boxes} title="Aucun article" description="Créez des articles dans le module Articles." /></div>
+          <EmptyState icon={Boxes} title="Aucun article" description="Créez des articles dans le module Articles." />
         ) : viewMode === 'list' ? (
           <StockListEditView
             filtered={filtered}
@@ -1070,26 +1041,45 @@ export function Stock() {
         )
       ) : tab === 'movements' ? (
         <>
-          {/* Sub-tabs: Mouvements / Documents */}
-          <div className="inline-flex items-center gap-3">
+          {/* Sub-tabs: Mouvements / Documents + period filter */}
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setMvSubTab('movements')}
-              className={`text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors ${mvSubTab === 'movements' ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors ${mvSubTab === 'movements' ? 'text-emerald-700' : 'text-neutral-500 hover:text-neutral-700'}`}
             >
               <History className="w-3.5 h-3.5" />Mouvements
             </button>
             <button
               onClick={() => setMvSubTab('documents')}
-              className={`text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors ${mvSubTab === 'documents' ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors ${mvSubTab === 'documents' ? 'text-emerald-700' : 'text-neutral-500 hover:text-neutral-700'}`}
             >
               <ClipboardList className="w-3.5 h-3.5" />Documents
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={() => setMvPickerOpen(true)}
+              className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold transition-colors ${
+                (mvDateFrom || mvDateTo) ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+              title="Filtrer par période"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              {(mvDateFrom || mvDateTo) ? (
+                <span className="num max-w-[120px] truncate">
+                  {mvDateFrom ? new Date(mvDateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '…'}
+                  {' → '}
+                  {mvDateTo ? new Date(mvDateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '…'}
+                </span>
+              ) : (
+                <span>Période</span>
+              )}
             </button>
           </div>
 
           {mvSubTab === 'movements' ? (
           <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-            <span className="shrink-0 text-slate-500 num">{mvTotalCount} mouvement{mvTotalCount > 1 ? 's' : ''}</span>
+            <span className="shrink-0 text-neutral-500 num">{mvTotalCount} mouvement{mvTotalCount > 1 ? 's' : ''}</span>
             {search && tab === 'movements' && (
               <span className="shrink-0 text-blue-600 inline-flex items-center gap-1 normal-case tracking-normal text-[10px]">
                 Filtre: "{search}"
@@ -1109,15 +1099,15 @@ export function Stock() {
           {mvLoading ? (
             <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
           ) : filteredMoves.length === 0 ? (
-            <div className="card-premium"><EmptyState icon={History} title={(mvDateFrom || mvDateTo || search) ? 'Aucun mouvement trouvé' : 'Aucun mouvement'} description={(mvDateFrom || mvDateTo || search) ? 'Essayez une autre période ou un autre article.' : 'Les mouvements de stock apparaîtront ici après chaque opération.'} /></div>
+            <EmptyState icon={History} title={(mvDateFrom || mvDateTo || search) ? 'Aucun mouvement trouvé' : 'Aucun mouvement'} description={(mvDateFrom || mvDateTo || search) ? 'Essayez une autre période ou un autre article.' : 'Les mouvements de stock apparaîtront ici après chaque opération.'} />
           ) : (
           <>
-          <div className={`rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100 count-up ${flashKey === 'stockIn' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
+          <div className={`divide-y divide-neutral-100 ${flashKey === 'stockIn' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
             {filteredMoves.map(m => {
               const qty = Number(m.quantity);
               const positive = qty >= 0;
               return (
-                <div key={m.id} className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50/60 transition-colors">
+                <div key={m.id} className="flex items-center gap-2.5 px-1 py-3 transition-colors">
                   <div className={`shrink-0 ${
                     positive ? 'text-emerald-600' : 'text-red-600'
                   }`}>
@@ -1125,30 +1115,30 @@ export function Stock() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-1.5 flex-wrap">
-                      <span className="text-[12px] font-semibold text-slate-900 break-words min-w-0">{(m.articles as any)?.name}</span>
-                      <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${mvTypeColor[m.movement_type] || 'text-slate-600'}`}>
+                      <span className="text-[12px] font-semibold text-neutral-900 break-words min-w-0">{(m.articles as any)?.name}</span>
+                      <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${mvTypeColor[m.movement_type] || 'text-neutral-600'}`}>
                         {mvTypeLabel[m.movement_type] || m.movement_type}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500">
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-neutral-500">
                       <span className="font-mono truncate">{(m.articles as any)?.internal_ref}</span>
                       <span className="shrink-0">·</span>
                       <span className="shrink-0 num">{formatDateTime(m.created_at)}</span>
                     </div>
-                    {m.note && <div className="text-[10px] text-slate-400 break-words mt-0.5">{m.note}</div>}
+                    {m.note && <div className="text-[10px] text-neutral-400 break-words mt-0.5">{m.note}</div>}
                   </div>
                   <div className="text-right shrink-0 flex items-center gap-2">
                     <div>
                       <div className={`text-[13px] font-bold num ${positive ? 'text-emerald-700' : 'text-red-600'}`}>
                         {positive ? '+' : ''}{qty}
                       </div>
-                      <div className="text-[9px] text-slate-400 num mt-0.5">{m.previous_qty} → {m.new_qty}</div>
+                      <div className="text-[9px] text-neutral-400 num mt-0.5">{m.previous_qty} → {m.new_qty}</div>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <button onClick={() => printMovement(m, 'a4')} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Imprimer A4">
+                      <button onClick={() => printMovement(m, 'a4')} className="w-6 h-6 flex items-center justify-center text-neutral-400 hover:text-neutral-700 transition-colors" title="Imprimer A4">
                         <Printer className="w-3 h-3" />
                       </button>
-                      <button onClick={() => printMovement(m, '80')} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors" title="Imprimer 80mm">
+                      <button onClick={() => printMovement(m, '80')} className="w-6 h-6 flex items-center justify-center text-neutral-400 hover:text-neutral-700 transition-colors" title="Imprimer 80mm">
                         <Scroll className="w-3 h-3" />
                       </button>
                     </div>
@@ -1159,16 +1149,16 @@ export function Stock() {
           </div>
           {/* Movements pagination */}
           {mvTotalPages > 1 && (
-            <div className="flex items-center justify-between px-2 py-3 border-t border-slate-100">
-              <span className="text-[11px] text-slate-500">
+            <div className="flex items-center justify-between py-3 border-t border-neutral-100">
+              <span className="text-[11px] text-neutral-500">
                 {((mvPage - 1) * MV_PAGE_SIZE) + 1}–{Math.min(mvPage * MV_PAGE_SIZE, mvTotalCount)} sur {mvTotalCount}
               </span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setMvPage(1)} disabled={mvPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
-                <button onClick={() => setMvPage(p => Math.max(1, p - 1))} disabled={mvPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
-                <span className="text-[11px] font-medium text-slate-700 px-2">{mvPage} / {mvTotalPages}</span>
-                <button onClick={() => setMvPage(p => Math.min(mvTotalPages, p + 1))} disabled={mvPage === mvTotalPages} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
-                <button onClick={() => setMvPage(mvTotalPages)} disabled={mvPage === mvTotalPages} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+                <button onClick={() => setMvPage(1)} disabled={mvPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setMvPage(p => Math.max(1, p - 1))} disabled={mvPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
+                <span className="text-[11px] font-medium text-neutral-700 px-2">{mvPage} / {mvTotalPages}</span>
+                <button onClick={() => setMvPage(p => Math.min(mvTotalPages, p + 1))} disabled={mvPage === mvTotalPages} className="px-2 py-1 text-[11px] rounded hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
+                <button onClick={() => setMvPage(mvTotalPages)} disabled={mvPage === mvTotalPages} className="px-2 py-1 text-[11px] rounded hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
               </div>
             </div>
           )}
@@ -1179,7 +1169,7 @@ export function Stock() {
           /* ─────────── Documents sub-section ─────────── */
           <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-            <span className="shrink-0 text-slate-500 num">
+            <span className="shrink-0 text-neutral-500 num">
               {(() => { const sq = search.toLowerCase().trim(); return stockDocs.filter(d => { if (docsTypeFilter !== 'all' && d.doc_type !== docsTypeFilter) return false; if (sq) return d.doc_number.toLowerCase().includes(sq) || (d.note || '').toLowerCase().includes(sq); return true; }).length; })() } / {stockDocs.length}
             </span>
             {(['all', 'entry', 'exit', 'transfer', 'inventory'] as const).map(k => {
@@ -1188,7 +1178,7 @@ export function Stock() {
               return (
                 <button key={k}
                   onClick={() => setDocsTypeFilter(k)}
-                  className={`shrink-0 inline-flex items-center gap-1 transition-colors ${active ? 'text-neutral-900 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`shrink-0 inline-flex items-center gap-1 transition-colors ${active ? 'text-neutral-900 font-bold' : 'text-neutral-500 hover:text-neutral-700'}`}
                 >{labels[k]}</button>
               );
             })}
@@ -1202,21 +1192,21 @@ export function Stock() {
               return true;
             });
             if (filtered.length === 0) {
-              return <div className="card-premium"><EmptyState icon={ClipboardList} title="Aucun document" description="Les documents de stock (opérations en masse) apparaîtront ici." /></div>;
+              return <EmptyState icon={ClipboardList} title="Aucun document" description="Les documents de stock (opérations en masse) apparaîtront ici." />;
             }
             return (
-              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100 count-up">
+              <div className="divide-y divide-neutral-100">
                 {filtered.map(d => {
-                  const meta = docTypeMeta[d.doc_type] || { label: d.doc_type, color: 'text-slate-600', mvType: '' };
+                  const meta = docTypeMeta[d.doc_type] || { label: d.doc_type, color: 'text-neutral-600', mvType: '' };
                   const cancelled = d.status === 'cancelled';
                   return (
-                    <div key={d.id} className={`flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50/60 transition-colors ${cancelled ? 'opacity-60' : ''}`}>
+                    <div key={d.id} className={`flex items-center gap-2.5 px-1 py-3 transition-colors ${cancelled ? 'opacity-60' : ''}`}>
                       <div className={`shrink-0 ${meta.color}`}>
                         <ClipboardList className="w-4 h-4" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start gap-1.5 flex-wrap">
-                          <span className="text-[12px] font-semibold text-slate-900 break-words min-w-0 num">{d.doc_number}</span>
+                          <span className="text-[12px] font-semibold text-neutral-900 break-words min-w-0 num">{d.doc_number}</span>
                           <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${meta.color}`}>
                             {meta.label}
                           </span>
@@ -1224,7 +1214,7 @@ export function Stock() {
                             <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-red-600">Annulé</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 flex-wrap">
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-neutral-500 flex-wrap">
                           <span className="num">{d.line_count} ligne{d.line_count > 1 ? 's' : ''}</span>
                           <span>·</span>
                           <span className="num">Total: {Number(d.total_qty).toLocaleString('fr-FR')}</span>
@@ -1232,25 +1222,25 @@ export function Stock() {
                           <span className="num">{formatDateTime(d.created_at)}</span>
                           {d.dest_site_id && (<><span>·</span><span className="truncate">{findSiteName(d.site_id)} → {findSiteName(d.dest_site_id)}</span></>)}
                         </div>
-                        {d.note && <div className="text-[10px] text-slate-400 break-words mt-0.5">{d.note}</div>}
+                        {d.note && <div className="text-[10px] text-neutral-400 break-words mt-0.5">{d.note}</div>}
                       </div>
                       <div className="shrink-0 flex items-center gap-1">
-                        <button onClick={() => openDocDetail(d)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors" title="Détails">
+                        <button onClick={() => openDocDetail(d)} className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-neutral-800 transition-colors" title="Détails">
                           <Info className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => reprintDocFromList(d, 'a4')} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors" title="Imprimer A4">
+                        <button onClick={() => reprintDocFromList(d, 'a4')} className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-neutral-800 transition-colors" title="Imprimer A4">
                           <Printer className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => reprintDocFromList(d, '80')} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors" title="Imprimer 80mm">
+                        <button onClick={() => reprintDocFromList(d, '80')} className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-neutral-800 transition-colors" title="Imprimer 80mm">
                           <Scroll className="w-3.5 h-3.5" />
                         </button>
                         {!cancelled && can('manage_stock') && d.doc_type !== 'transfer' && (
-                          <button onClick={() => openDocEdit(d)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-neutral-800 transition-colors" title="Éditer (régénère le stock)">
+                          <button onClick={() => openDocEdit(d)} className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-neutral-800 transition-colors" title="Éditer (régénère le stock)">
                             <Save className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {!cancelled && can('manage_stock') && (
-                          <button onClick={() => setDocDeleteConfirm(d)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 transition-colors" title="Annuler (régénère le stock)">
+                          <button onClick={() => setDocDeleteConfirm(d)} className="w-7 h-7 flex items-center justify-center text-neutral-400 hover:text-red-600 transition-colors" title="Annuler (régénère le stock)">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -1596,42 +1586,32 @@ export function Stock() {
       >
         {docDetailDoc && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
-                <div className="text-[9px] font-bold uppercase text-slate-400">Type</div>
-                <div className="font-bold text-slate-800 mt-0.5">{docTypeMeta[docDetailDoc.doc_type]?.label || docDetailDoc.doc_type}</div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
-                <div className="text-[9px] font-bold uppercase text-slate-400">Date</div>
-                <div className="font-bold text-slate-800 num mt-0.5">{formatDateTime(docDetailDoc.created_at)}</div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 col-span-2">
-                <div className="text-[9px] font-bold uppercase text-slate-400">{docDetailDoc.dest_site_id ? 'Trajet' : 'Site'}</div>
-                <div className="font-bold text-slate-800 mt-0.5">{findSiteName(docDetailDoc.site_id)}{docDetailDoc.dest_site_id ? ` → ${findSiteName(docDetailDoc.dest_site_id)}` : ''}</div>
-              </div>
-              {docDetailDoc.note && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 col-span-2">
-                  <div className="text-[9px] font-bold uppercase text-slate-400">Note</div>
-                  <div className="text-slate-700 mt-0.5">{docDetailDoc.note}</div>
-                </div>
-              )}
+            <div className="flex items-center gap-3 text-[11px] py-2 border-b border-neutral-100">
+              <span className="font-bold text-neutral-900">{docTypeMeta[docDetailDoc.doc_type]?.label || docDetailDoc.doc_type}</span>
+              <span className="text-neutral-400">·</span>
+              <span className="font-semibold text-neutral-700 num">{formatDateTime(docDetailDoc.created_at)}</span>
+              <span className="text-neutral-400">·</span>
+              <span className="font-semibold text-neutral-700">{findSiteName(docDetailDoc.site_id)}{docDetailDoc.dest_site_id ? ` → ${findSiteName(docDetailDoc.dest_site_id)}` : ''}</span>
             </div>
+            {docDetailDoc.note && (
+              <div className="text-[11px] text-neutral-500 py-1">{docDetailDoc.note}</div>
+            )}
             {docDetailLoading ? (
               <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
             ) : (
-              <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+              <div className="divide-y divide-neutral-100">
                 {docDetailLines
                   .filter(l => docDetailDoc.doc_type !== 'transfer' || l.movement_type === 'transfer_out')
                   .map((l, i) => (
-                  <div key={l.id} className="flex items-center gap-2 px-3 py-2 text-[11px]">
-                    <div className="w-5 h-5 rounded-md bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-600 num shrink-0">{i + 1}</div>
+                  <div key={l.id} className="flex items-center gap-2 py-2.5 text-[11px]">
+                    <div className="w-5 h-5 flex items-center justify-center text-[9px] font-bold text-neutral-400 num shrink-0">{i + 1}</div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-slate-900 truncate">{(l.articles as any)?.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono truncate">{(l.articles as any)?.internal_ref}</div>
+                      <div className="font-semibold text-neutral-900 truncate">{(l.articles as any)?.name}</div>
+                      <div className="text-[10px] text-neutral-500 font-mono truncate">{(l.articles as any)?.internal_ref}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="font-bold text-slate-900 num">{Math.abs(Number(l.quantity))}</div>
-                      <div className="text-[9px] text-slate-400 num">{l.previous_qty} → {l.new_qty}</div>
+                      <div className="font-bold text-neutral-900 num">{Math.abs(Number(l.quantity))}</div>
+                      <div className="text-[9px] text-neutral-400 num">{l.previous_qty} → {l.new_qty}</div>
                     </div>
                   </div>
                 ))}
@@ -1670,12 +1650,12 @@ export function Stock() {
               <input value={docEditNote} onChange={e => setDocEditNote(e.target.value)} className="bare-input text-sm py-2" placeholder="Note globale" />
               <div className="h-px bg-neutral-200 mt-1" />
             </div>
-            <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+            <div className="divide-y divide-neutral-100">
               {docEditEntries.map((entry, idx) => (
-                <div key={entry.article_id} className="flex items-center gap-2 px-3 py-2 text-[11px]">
+                <div key={entry.article_id} className="flex items-center gap-2 py-2.5 text-[11px]">
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-slate-900 truncate">{entry.article_name}</div>
-                    <div className="text-[10px] text-slate-500 font-mono truncate">{entry.article_ref}</div>
+                    <div className="font-semibold text-neutral-900 truncate">{entry.article_name}</div>
+                    <div className="text-[10px] text-neutral-500 font-mono truncate">{entry.article_ref}</div>
                   </div>
                   <input
                     type="number" step="any" inputMode="decimal"
@@ -1686,10 +1666,9 @@ export function Stock() {
                     }}
                     className="bare-input w-24 text-right num text-sm py-1"
                   />
-                  <div className="h-px bg-neutral-200" />
                   <button
                     onClick={() => setDocEditEntries(prev => prev.filter((_, i) => i !== idx))}
-                    className="w-6 h-6 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 transition-all active:scale-90"
+                    className="w-6 h-6 flex items-center justify-center text-red-500 hover:text-red-700 transition-colors"
                     title="Retirer"
                   >
                     <X className="w-3 h-3" />
@@ -1697,7 +1676,7 @@ export function Stock() {
                 </div>
               ))}
               {docEditEntries.length === 0 && (
-                <div className="px-3 py-3 text-[11px] text-slate-500 text-center">Aucune ligne — ajoutez au moins une quantité.</div>
+                <div className="py-3 text-[11px] text-neutral-500 text-center">Aucune ligne -- ajoutez au moins une quantite.</div>
               )}
             </div>
           </div>
@@ -1806,7 +1785,7 @@ function LotsView({ lots, stockMethod }: { lots: LotRow[]; stockMethod: StockMet
 
   if (stockMethod !== 'lot') {
     return (
-      <div className="card-premium py-10 text-center">
+      <div className="py-10 text-center">
         <PackageOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
         <p className="text-sm font-semibold text-slate-600">Suivi par lot non activé</p>
         <p className="text-xs text-slate-400 mt-1">Activez la méthode "Par lot" dans Paramètres &gt; Gestion des stocks.</p>
@@ -1887,7 +1866,7 @@ function LotsView({ lots, stockMethod }: { lots: LotRow[]; stockMethod: StockMet
 
       {/* Lots list */}
       {filtered.length === 0 ? (
-        <div className="card-premium py-8 text-center">
+        <div className="py-8 text-center">
           <PackageOpen className="w-7 h-7 text-slate-300 mx-auto mb-2" />
           <p className="text-sm font-semibold text-slate-600">Aucun lot en stock</p>
           <p className="text-xs text-slate-400 mt-1">Les lots apparaîtront ici après une entrée de stock en mode lot.</p>

@@ -244,7 +244,7 @@ export function QuickCreateCustomerModal({ open, onClose, onCreated, initialName
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Créer un client" size="sm" layer="top"
+    <Modal open={open} onClose={onClose} title="Créer un client" size="sm" layer="top" variant="flat"
       footer={
         <div className="flex items-center gap-2">
           <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
@@ -254,7 +254,7 @@ export function QuickCreateCustomerModal({ open, onClose, onCreated, initialName
           </button>
         </div>
       }>
-      <div className="space-y-3">
+      <div className="space-y-3 flat-form">
         <div>
           <label className="label">Nom <span className="text-red-500">*</span></label>
           <input
@@ -285,7 +285,7 @@ export function QuickCreateButton({ label, onClick }: { label: string; onClick: 
     <button
       type="button"
       onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onClick(); }}
-      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 transition-colors border-t border-slate-100"
+      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-black bg-transparent hover:bg-neutral-100 transition-colors"
     >
       <Plus className="w-3.5 h-3.5" />
       {label}

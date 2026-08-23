@@ -28,9 +28,9 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
   const meta = titles[section];
   return (
     <div className="space-y-5">
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm">
-        <h1 className="text-2xl font-bold text-neutral-900">{meta.t}</h1>
-        <p className="text-sm text-neutral-500 mt-1">{meta.s}</p>
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white border-b border-neutral-100">
+        <h1 className="text-lg font-bold text-neutral-900 leading-tight">{meta.t}</h1>
+        <p className="text-[11px] text-neutral-500 mt-0.5">{meta.s}</p>
       </div>
       {section === 'plan' && <PlanTab />}
       {section === 'journals' && <JournalsTab />}

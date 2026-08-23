@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
-  Filter, RefreshCw, Printer, Download,
+  Filter, RefreshCw, Printer, Download, Search,
   X, Eye, FileText, Copy, Clock, ShieldCheck, Smartphone, Store, User, Calendar,
   CheckCircle, AlertTriangle, XCircle, Minus, Ban, Loader2,
 } from 'lucide-react';
@@ -306,31 +306,33 @@ export function Warranties() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header premium unifié ────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2 border-b border-neutral-200/70">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
-          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
-            <h1 className="text-sm font-bold tracking-tight text-slate-900">Garanties & IMEI</h1>
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+        <h1 className="text-lg font-bold text-neutral-900 leading-tight">Garanties & IMEI</h1>
+        <div className="flex items-center gap-2">
+          <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <input
+              value={globalSearch}
+              onChange={e => setGlobalSearch(e.target.value)}
+              placeholder="Rechercher IMEI, facture, client, téléphone…"
+              className="bare-input w-full text-sm py-1.5"
+            />
+            <div className="h-px bg-neutral-200 mt-1" />
           </div>
-          <input
-            value={globalSearch}
-            onChange={e => setGlobalSearch(e.target.value)}
-            placeholder="Rechercher IMEI, facture, client, téléphone…"
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
-          />
           {globalSearch && (
-            <button onClick={() => setGlobalSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600">
-              <X className="w-3.5 h-3.5" />
+            <button onClick={() => setGlobalSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600">
+              <X className="w-4 h-4" />
             </button>
           )}
-          <button onClick={() => setPickerOpen(true)} className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-all ${filterStatus || filterSite || filterDateFrom || filterDateTo ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}>
-            <Filter className="w-3.5 h-3.5" />
-            <span>Filtres</span>
+          <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-colors ${filterStatus || filterSite || filterDateFrom || filterDateTo ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
+            <Filter className="w-4 h-4" />
+            <span className="hidden md:inline">Filtres</span>
           </button>
-          <button onClick={load} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors" title="Actualiser">
-            <RefreshCw className="w-3.5 h-3.5" />
+          <button onClick={load} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors" title="Actualiser">
+            <RefreshCw className="w-4 h-4" />
           </button>
-          <button onClick={exportCsv} className="shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors" title="Exporter">
-            <Download className="w-3.5 h-3.5" /><span>Excel</span>
+          <button onClick={exportCsv} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors" title="Exporter">
+            <Download className="w-4 h-4" />
           </button>
         </div>
       </div>

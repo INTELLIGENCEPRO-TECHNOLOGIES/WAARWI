@@ -2960,22 +2960,26 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* Action bar */}
       <div className="px-2 py-1.5 border-b border-neutral-200/70 glass shrink-0 relative z-20">
         {/* Mobile: single compact row */}
-        <div className="flex items-center gap-1 lg:hidden">
+        <div className="flex items-center lg:hidden">
           <button onClick={openStats} className="pos-btn" title="Statistiques" data-label="Statistiques"><BarChart2 className="w-4 h-4" /></button>
+          <div className="w-px h-5 bg-neutral-200 shrink-0" />
           <button onClick={openTickets} className="pos-btn" title="Tickets" data-label="Tickets de la session"><List className="w-4 h-4" /></button>
-          {can('pos_returns') && <button onClick={openReturn} className="pos-btn" title="Retour" data-label="Retour client"><RotateCcw className="w-4 h-4" /></button>}
+          {can('pos_returns') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openReturn} className="pos-btn" title="Retour" data-label="Retour client"><RotateCcw className="w-4 h-4" /></button></>}
+          <div className="w-px h-5 bg-neutral-200 shrink-0" />
           <button onClick={openCustomerPayment} className="pos-btn" title="Encaisser" data-label="Encaisser"><Wallet className="w-4 h-4" /></button>
-          {can('pos_cash_movement') && <button onClick={openMovement} className="pos-btn" title="Mouvement" data-label="Mouvement de caisse"><ArrowDownRight className="w-4 h-4" /></button>}
-          {hasModule('online_orders') && <button onClick={openWebOrders} className="pos-btn relative" title="Commandes web" data-label="Commandes web">
+          {can('pos_cash_movement') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openMovement} className="pos-btn" title="Mouvement" data-label="Mouvement de caisse"><ArrowDownRight className="w-4 h-4" /></button></>}
+          {hasModule('online_orders') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openWebOrders} className="pos-btn relative" title="Commandes web" data-label="Commandes web">
             <Globe className="w-4 h-4" />
             {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[8px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}
-          </button>}
+          </button></>}
+          <div className="w-px h-5 bg-neutral-200 shrink-0" />
           <button onClick={holdCart} className="pos-btn" title="Pause" data-label="Mettre en pause"><Pause className="w-4 h-4" /></button>
+          <div className="w-px h-5 bg-neutral-200 shrink-0" />
           <button onClick={leaveSession} className="pos-btn" title="Quitter" data-label="Quitter la session"><LogOut className="w-4 h-4" /></button>
-          {can('pos_close_session') && <button onClick={openCloseWorkflow} className="pos-btn-dark ml-0.5" title="Clôturer" data-label="Clôturer la session"><Lock className="w-4 h-4" /></button>}
+          {can('pos_close_session') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openCloseWorkflow} className="pos-btn" title="Clôturer" data-label="Clôturer la session"><Lock className="w-4 h-4" /></button></>}
         </div>
         {/* Desktop: EN SERVICE indicator + labeled chips */}
-        <div className="hidden lg:flex items-center gap-1.5">
+        <div className="hidden lg:flex items-center">
           <div className="flex items-center gap-1.5 shrink-0">
             <div className="relative w-2 h-2">
               <div className="absolute inset-0 rounded-full bg-neutral-1000 animate-ping opacity-60" />
@@ -2986,19 +2990,23 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
           <div className="flex-1" />
           <button onClick={openStats} className="chip" data-label="Statistiques"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button>
+          <div className="w-px h-5 bg-neutral-200 shrink-0" />
           <button onClick={openTickets} className="chip" data-label="Tickets de la session"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
-          {can('pos_returns') && <button onClick={openReturn} className="chip" data-label="Retour client"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
+          {can('pos_returns') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openReturn} className="chip" data-label="Retour client"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button></>}
+          <div className="w-px h-5 bg-neutral-200 shrink-0" />
           <button onClick={openCustomerPayment} className="chip" data-label="Encaisser un paiement"><Wallet className="w-3.5 h-3.5" /><span className="hidden xl:inline">Encaisser</span></button>
-          {can('pos_cash_movement') && <button onClick={openMovement} className="chip" data-label="Mouvement de caisse"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button>}
-          {hasModule('online_orders') && <button onClick={openWebOrders} className="chip relative" data-label="Commandes web">
+          {can('pos_cash_movement') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openMovement} className="chip" data-label="Mouvement de caisse"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button></>}
+          {hasModule('online_orders') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openWebOrders} className="chip relative" data-label="Commandes web">
             <Globe className="w-3.5 h-3.5" /><span className="hidden xl:inline">Commandes web</span>
             {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border border-white">{webOrdersCounts.a_transformer}</span>}
-          </button>}
+          </button></>}
+          <div className="w-px h-5 bg-neutral-200 shrink-0" />
           <button onClick={holdCart} className="chip" data-label="Mettre le panier en pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
+          <div className="w-px h-5 bg-neutral-200 shrink-0" />
           <button onClick={leaveSession} className="chip" data-label="Quitter la session"><LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Quitter</span></button>
-          {can('pos_close_session') && <button onClick={openCloseWorkflow} className="chip" data-label="Clôturer la session">
+          {can('pos_close_session') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openCloseWorkflow} className="chip" data-label="Clôturer la session">
             <Lock className="w-3.5 h-3.5" /><span>Clôturer</span>
-          </button>}
+          </button></>}
         </div>
       </div>
 
@@ -3026,8 +3034,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   onClick={() => setCategoryPickerOpen(true)}
                   className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold transition-all ${
                     categoryId
-                      ? 'bg-brand-50 text-brand-700 border border-brand-200'
-                      : 'bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800'
+                      ? 'bg-brand-50 text-brand-700'
+                      : 'bg-transparent text-black hover:bg-neutral-100'
                   }`}
                   title="Filtrer par catégorie"
                 >
@@ -3036,20 +3044,23 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     {categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Catégorie') : 'Catégorie'}
                   </span>
                 </button>
+                <div className="w-px h-5 bg-neutral-200 shrink-0" />
                 <button
                   onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')}
-                  className="shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800 transition-all"
+                  className="shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold bg-transparent text-black hover:bg-neutral-100 transition-all"
                   title={sortMode === 'top' ? 'Tri : meilleures ventes' : 'Tri : A → Z'}
                 >
                   {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
                   <span className="hidden md:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
                 </button>
+                <div className="w-px h-5 bg-neutral-200 shrink-0" />
                 <button
                   onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')}
-                  className="shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-all border bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800"
+                  className="shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold bg-transparent text-black hover:bg-neutral-100 transition-all"
                   title={articleView === 'grid' ? 'Vue liste' : 'Vue grille'}
                 >
                   {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+                  <span className="hidden md:inline">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
                 </button>
               </div>
               {autoMode && (

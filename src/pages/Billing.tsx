@@ -1633,42 +1633,17 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header ───────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
-          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
-            <h1 className="text-sm font-bold tracking-tight text-slate-900">Facturation</h1>
-          </div>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="N°, client, vente…"
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="flex items-start justify-between">
+        <h1 className="text-lg font-bold text-neutral-900 leading-tight">Facturation</h1>
+        <div className="relative shrink-0" ref={newMenuRef}>
           <button
-            onClick={() => setFiltersOpen(true)}
-            className={`shrink-0 hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
-              (statusFilter || customerFilter || dateFrom || dateTo || minAmount || maxAmount)
-                ? 'text-brand-700'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
+            onClick={() => setNewMenuOpen(v => !v)}
+            className="p-1.5 text-neutral-500 hover:text-brand-700 transition-colors"
+            aria-label="Nouveau document"
           >
-            <Filter className="w-3.5 h-3.5" />
-            <span>Filtres</span>
+            <Plus className={`w-5 h-5 transition-transform duration-200 ${newMenuOpen ? 'rotate-45' : ''}`} />
           </button>
-          <div className="relative shrink-0" ref={newMenuRef}>
-            <button
-              onClick={() => setNewMenuOpen(v => !v)}
-              className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all"
-              aria-label="Nouveau document"
-            >
-              <Plus className={`w-3.5 h-3.5 text-white transition-transform duration-200 ${newMenuOpen ? 'rotate-45' : ''}`} />
-            </button>
             {newMenuOpen && (
               <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl bg-white border border-slate-200 shadow-lg overflow-hidden z-50 origin-top-right">
                 {newMenuItems.map((item, idx) => {
@@ -1688,6 +1663,33 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             )}
           </div>
         </div>
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="N°, client, vente…"
+            className="bare-input w-full text-sm py-1.5"
+          />
+          <div className="h-px bg-neutral-200 mt-1" />
+        </div>
+        {search && (
+          <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          onClick={() => setFiltersOpen(true)}
+          className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+            (statusFilter || customerFilter || dateFrom || dateTo || minAmount || maxAmount)
+              ? 'text-brand-700'
+              : 'text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          <Filter className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">Filtres</span>
+        </button>
       </div>
 
       {(() => {
@@ -1736,7 +1738,6 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             );
           })}
         </div>
-      </div>
 
       {hasFilters && (
         <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold uppercase tracking-wider">
@@ -1747,6 +1748,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           <button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
         </div>
       )}
+
+      </div>{/* end sticky header */}
 
       {/* ── Content ──────────────────────────────────────────── */}
       {loading ? (
@@ -1762,7 +1765,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   {filteredQuotes.map(q => {
                     const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
                     return (
-                      <div key={q.id} className="card-premium p-3 flex flex-col gap-2 hover:border-brand-400 transition-all">
+                      <div key={q.id} className="py-3 border-b border-neutral-100 flex flex-col gap-2 transition-all">
                         <button onClick={() => openQuoteDetail(q)} className="text-left flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1830,7 +1833,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     const st = invoiceStatus(inv);
                     const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
                     return (
-                      <button key={inv.id} onClick={() => openInvoiceDetail(inv)} className="w-full text-left card-premium p-3 flex flex-col gap-2 hover:border-brand-400 transition-all active:scale-[0.99]">
+                      <button key={inv.id} onClick={() => openInvoiceDetail(inv)} className="w-full text-left py-3 border-b border-neutral-100 flex flex-col gap-2 transition-all active:scale-[0.99]">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1909,7 +1912,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     const used = Number(r.credit_used || 0);
                     const balance = Number(r.total) - used;
                     return (
-                      <button key={r.id} onClick={() => openReturnDetail(r)} className="w-full text-left card-premium p-3 flex flex-col gap-2 hover:border-brand-400 transition-all active:scale-[0.99]">
+                      <button key={r.id} onClick={() => openReturnDetail(r)} className="w-full text-left py-3 border-b border-neutral-100 flex flex-col gap-2 transition-all active:scale-[0.99]">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">

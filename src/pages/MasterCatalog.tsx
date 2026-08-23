@@ -376,41 +376,23 @@ export function MasterCatalog() {
   return (
     <div className="space-y-3 pb-6">
       {/* Header */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2 border-b border-neutral-200/70">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-slate-200 shrink-0">
-            <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">Catalogue maître</h1>
-          </div>
-          <input
-            value={searchInput}
-            onChange={e => handleSearchInput(e.target.value)}
-            placeholder="Désignation, marque, référence…"
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
-          )}
-          <button
-            onClick={() => setFiltersOpen(true)}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1.5 text-[11px] font-semibold transition-colors ${activeFilterCount > 0 ? 'text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Filter className="w-3.5 h-3.5" />
-            {activeFilterCount > 0 && <span className="num">{activeFilterCount}</span>}
-          </button>
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="flex items-start justify-between">
+        <h1 className="text-lg font-bold text-neutral-900 leading-tight">Catalogue maître</h1>
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => refreshImportedIds()}
             disabled={refreshing}
-            className="shrink-0 inline-flex items-center px-1.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50"
+            className="shrink-0 p-1.5 text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-50"
             title="Actualiser le statut des articles importés"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
           {selected.size > 0 ? (
             <button
               disabled={importing}
               onClick={() => setConfirmOpen({ mode: 'selected', label: 'la sélection', count: selected.size })}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-50 ${selected.size > MAX_IMPORT ? 'text-red-600 hover:text-red-700' : 'text-brand-700 hover:text-brand-800'}`}
+              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-50 ${selected.size > MAX_IMPORT ? 'text-red-600 hover:text-red-700' : 'text-brand-700 hover:text-brand-800'}`}
               title={`Importer la sélection (${selected.size})`}
             >
               {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -423,7 +405,7 @@ export function MasterCatalog() {
                 const count = items.filter(i => !importedIds.has(i.id)).length;
                 setConfirmOpen({ mode: 'all', label: 'tout le catalogue', count });
               }}
-              className="shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1.5 text-[11px] font-bold text-slate-700 hover:text-slate-900 transition-colors disabled:opacity-50"
+              className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold text-neutral-700 hover:text-neutral-900 transition-colors disabled:opacity-50"
               title="Importer tout le catalogue"
             >
               {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -431,10 +413,32 @@ export function MasterCatalog() {
           )}
         </div>
       </div>
+      <div className="flex items-center gap-2">
+        <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <input
+            value={searchInput}
+            onChange={e => handleSearchInput(e.target.value)}
+            placeholder="Désignation, marque, référence…"
+            className="bare-input w-full text-sm py-1.5"
+          />
+          <div className="h-px bg-neutral-200 mt-1" />
+        </div>
+        {search && (
+          <button onClick={() => { setSearch(''); setSearchInput(''); }} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>
+        )}
+        <button
+          onClick={() => setFiltersOpen(true)}
+          className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold transition-colors ${activeFilterCount > 0 ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}
+        >
+          <Filter className="w-3.5 h-3.5" />
+          {activeFilterCount > 0 && <span className="num">{activeFilterCount}</span>}
+        </button>
+      </div>
 
       {/* Selection stats */}
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <span className="shrink-0 text-slate-500 num">{filtered.length} / {items.length}</span>
+        <span className="shrink-0 text-neutral-500 num">{filtered.length} / {items.length}</span>
         <span className="shrink-0 text-emerald-600 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{importedIds.size} importé{importedIds.size > 1 ? 's' : ''}</span>
         {selected.size > 0 && (
           <span className={`shrink-0 inline-flex items-center gap-1 font-bold ${selected.size > MAX_IMPORT ? 'text-red-600' : 'text-brand-700'}`}>

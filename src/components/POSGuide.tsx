@@ -124,9 +124,9 @@ export function POSGuideInlineTrigger() {
       onClick={() => dispatchOpen(0)}
       title="Guide caisse"
       aria-label="Ouvrir le guide caisse"
-      className="shrink-0 group inline-flex items-center justify-center gap-1 h-8 px-2.5 rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white text-[11px] font-semibold transition-all active:scale-95"
+      className="shrink-0 group inline-flex items-center justify-center gap-1 h-8 px-2.5 rounded-md bg-transparent hover:bg-neutral-100 text-black text-[11px] font-semibold transition-all active:scale-95"
     >
-      <span className="relative flex items-center justify-center w-4 h-4 text-white">
+      <span className="relative flex items-center justify-center w-4 h-4 text-black">
         <HelpCircle className="w-3.5 h-3.5" />
       </span>
       <span className="hidden sm:inline tracking-wide">Guide</span>

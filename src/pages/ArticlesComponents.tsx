@@ -20,9 +20,10 @@ export function stockStatus(qty: number, min: number) {
 export function Field({ label, children, hint, className = '' }: { label: string; children: ReactNode; hint?: string; className?: string }) {
   return (
     <div className={className}>
-      <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">{label}</label>
+      <label className="block text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-1">{label}</label>
       {children}
-      {hint && <p className="text-[10px] text-slate-400 mt-1">{hint}</p>}
+      <div className="h-px bg-neutral-200 mt-1" />
+      {hint && <p className="text-[10px] text-neutral-400 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -34,11 +35,11 @@ export function PremiumSelect({ value, onChange, options, placeholder }: {
 }) {
   return (
     <div className="relative">
-      <select value={value} onChange={e => onChange(e.target.value)} className="premium-input appearance-none pr-8 text-sm">
+      <select value={value} onChange={e => onChange(e.target.value)} className="bare-input appearance-none pr-8 text-sm py-1.5 w-full">
         {placeholder && <option value="">{placeholder}</option>}
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+      <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
     </div>
   );
 }
@@ -46,14 +47,17 @@ export function PremiumSelect({ value, onChange, options, placeholder }: {
 export function PriceInput({ value, onChange, placeholder }: { value: number | '' | undefined; onChange: (v: number | '') => void; placeholder?: string }) {
   const displayVal = value === 0 || value === undefined ? '' : value;
   return (
+    <>
     <input
       type="number"
       value={displayVal}
       onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
       placeholder={placeholder || '0'}
-      className="premium-input text-sm num"
+      className="bare-input text-sm num w-full py-1.5"
       min="0"
     />
+    <div className="h-px bg-neutral-200 mt-0.5" />
+    </>
   );
 }
 
@@ -88,23 +92,23 @@ export function CategoryFilterSheet({ categories, value, onChange, onClose }: {
   const parents = categories.filter(c => !c.parent_id);
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl shadow-premium max-h-[70vh] flex flex-col animate-sheet-up">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900">Filtrer par catégorie</h3>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500"><X className="w-5 h-5" /></button>
+      <div className="absolute inset-0 bg-neutral-900/40" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white rounded-t-xl sm:rounded-xl shadow-lg max-h-[70vh] flex flex-col animate-sheet-up">
+        <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
+          <h3 className="font-bold text-neutral-900 text-sm">Filtrer par catégorie</h3>
+          <button onClick={onClose} className="p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-5 h-5" /></button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-          <button onClick={() => onChange('')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${!value ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'text-slate-700 hover:bg-slate-50'}`}>
+        <div className="flex-1 overflow-y-auto divide-y divide-neutral-100">
+          <button onClick={() => onChange('')} className={`w-full text-left px-4 py-3 text-sm font-semibold transition-colors ${!value ? 'text-brand-700' : 'text-neutral-700 hover:text-neutral-900'}`}>
             Toutes les catégories
           </button>
           {parents.map(c => (
             <div key={c.id}>
-              <button onClick={() => onChange(c.id)} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${value === c.id ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'text-slate-700 hover:bg-slate-50'}`}>
+              <button onClick={() => onChange(c.id)} className={`w-full text-left px-4 py-3 text-sm font-semibold transition-colors ${value === c.id ? 'text-brand-700' : 'text-neutral-700 hover:text-neutral-900'}`}>
                 {c.name}
               </button>
               {categories.filter(s => s.parent_id === c.id).map(s => (
-                <button key={s.id} onClick={() => onChange(s.id)} className={`w-full text-left pl-8 pr-4 py-2.5 rounded-xl text-sm transition-all ${value === s.id ? 'bg-brand-50 text-brand-700 border border-brand-200 font-semibold' : 'text-slate-600 hover:bg-slate-50'}`}>
+                <button key={s.id} onClick={() => onChange(s.id)} className={`w-full text-left pl-8 pr-4 py-2.5 text-sm transition-colors ${value === s.id ? 'text-brand-700 font-semibold' : 'text-neutral-600 hover:text-neutral-900'}`}>
                   ↳ {s.name}
                 </button>
               ))}
@@ -130,22 +134,22 @@ export function MasterCatalogGuide({ step, articleCount: _articleCount, onStep, 
   const Icon = s.icon;
 
   return (
-    <div className="relative rounded-2xl border border-brand-100 bg-gradient-to-br from-white via-brand-50/30 to-white shadow-card p-4 animate-fade-in">
-      <button onClick={onDismiss} className="absolute top-3 right-3 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"><X className="w-4 h-4" /></button>
+    <div className="relative py-3 border-b border-neutral-100 animate-fade-in">
+      <button onClick={onDismiss} className="absolute top-3 right-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-4 h-4" /></button>
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center shrink-0"><Icon className="w-5 h-5 text-brand-700" /></div>
-        <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-bold text-slate-900">{s.title}</h4>
-          <p className="text-xs text-slate-600 mt-0.5">{s.desc}</p>
+        <Icon className="w-5 h-5 text-brand-700 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0 pr-6">
+          <h4 className="text-sm font-bold text-neutral-900">{s.title}</h4>
+          <p className="text-xs text-neutral-500 mt-0.5">{s.desc}</p>
           <div className="flex items-center gap-2 mt-3">
-            {steps.map((_, i) => <span key={i} className={`w-2 h-2 rounded-full transition-all ${i === step ? 'bg-brand-600 w-5' : 'bg-slate-200'}`} />)}
+            {steps.map((_, i) => <span key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === step ? 'bg-brand-600 w-4' : 'bg-neutral-200'}`} />)}
             <div className="flex-1" />
             {step < steps.length - 1 ? (
-              <button onClick={() => onStep(step + 1)} className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-brand-700 hover:bg-brand-50 rounded-lg">
+              <button onClick={() => onStep(step + 1)} className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-700 hover:text-brand-800 transition-colors">
                 Suivant <ArrowRight className="w-3 h-3" />
               </button>
             ) : (
-              <button onClick={onGo} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold bg-brand-600 text-white rounded-lg shadow-sm">
+              <button onClick={onGo} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-brand-700 hover:text-brand-800 transition-colors">
                 Voir le catalogue maître <ArrowRight className="w-3 h-3" />
               </button>
             )}
@@ -180,12 +184,12 @@ export function InfosTab({ form, setForm, editing, categories, suppliers, onGene
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Désignation *" className="sm:col-span-2">
-          <input value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="premium-input text-sm" placeholder="Nom de l'article" />
+          <input value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bare-input text-sm" placeholder="Nom de l'article" />
         </Field>
         <Field label="Référence interne *">
           <div className="flex gap-2">
-            <input value={form.internal_ref || ''} onChange={e => setForm(f => ({ ...f, internal_ref: e.target.value }))} className="premium-input text-sm flex-1 font-mono" placeholder="REF-0001" />
-            {!editing && <button type="button" onClick={onGenerateRef} className="px-3 rounded-xl bg-slate-100 text-xs font-semibold text-slate-600 hover:bg-slate-200 shrink-0">Auto</button>}
+            <input value={form.internal_ref || ''} onChange={e => setForm(f => ({ ...f, internal_ref: e.target.value }))} className="bare-input text-sm flex-1 font-mono" placeholder="REF-0001" />
+            {!editing && <button type="button" onClick={onGenerateRef} className="px-2 text-xs font-semibold text-brand-700 hover:text-brand-800 transition-colors shrink-0">Auto</button>}
           </div>
         </Field>
         <Field label="Catégorie">
@@ -194,21 +198,21 @@ export function InfosTab({ form, setForm, editing, categories, suppliers, onGene
         </Field>
         {autoMode && (
           <Field label="Marque">
-            <input value={form.brand || ''} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className="premium-input text-sm" placeholder="Marque" />
+            <input value={form.brand || ''} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className="bare-input text-sm" placeholder="Marque" />
           </Field>
         )}
         <Field label="Réf. OEM">
-          <input value={form.oem_ref || ''} onChange={e => setForm(f => ({ ...f, oem_ref: e.target.value }))} className="premium-input text-sm font-mono" placeholder="Référence fabricant" />
+          <input value={form.oem_ref || ''} onChange={e => setForm(f => ({ ...f, oem_ref: e.target.value }))} className="bare-input text-sm font-mono" placeholder="Référence fabricant" />
         </Field>
         <Field label="Code-barres">
-          <input value={form.barcode || ''} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className="premium-input text-sm font-mono" placeholder="EAN / UPC" />
+          <input value={form.barcode || ''} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className="bare-input text-sm font-mono" placeholder="EAN / UPC" />
         </Field>
         <Field label="Unité">
           <PremiumSelect value={form.unit || 'pièce'} onChange={v => setForm(f => ({ ...f, unit: v }))}
             options={[{ value: 'unité', label: 'Unité' }, { value: 'pièce', label: 'Pièce' }, { value: 'paire', label: 'Paire' }, { value: 'lot', label: 'Lot' }, { value: 'kg', label: 'Kilogramme' }, { value: 'litre', label: 'Litre' }, { value: 'mètre', label: 'Mètre' }]} />
         </Field>
         <Field label="Description" className="sm:col-span-2">
-          <textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="premium-input text-sm resize-none" placeholder="Description optionnelle" />
+          <textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="bare-input text-sm resize-none" placeholder="Description optionnelle" />
         </Field>
       </div>
     </div>
@@ -336,17 +340,17 @@ export function StockTab({ form, setForm, editing, currentArticle, stockMap }: {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Stock minimum (alerte)">
-              <input type="number" value={form.stock_min || ''} onChange={e => setForm(f => ({ ...f, stock_min: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
+              <input type="number" value={form.stock_min || ''} onChange={e => setForm(f => ({ ...f, stock_min: Number(e.target.value) }))} className="bare-input text-sm num" min="0" placeholder="0" />
             </Field>
             <Field label="Stock maximum">
-              <input type="number" value={form.stock_max || ''} onChange={e => setForm(f => ({ ...f, stock_max: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
+              <input type="number" value={form.stock_max || ''} onChange={e => setForm(f => ({ ...f, stock_max: Number(e.target.value) }))} className="bare-input text-sm num" min="0" placeholder="0" />
             </Field>
             <Field label="Emplacement">
-              <input value={form.location || ''} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className="premium-input text-sm" placeholder="Rayon / Étagère" />
+              <input value={form.location || ''} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className="bare-input text-sm" placeholder="Rayon / Étagère" />
             </Field>
             {!editing && (
               <Field label="Stock initial">
-                <input type="number" value={form.stock_init || ''} onChange={e => setForm(f => ({ ...f, stock_init: Number(e.target.value) }))} className="premium-input text-sm num" min="0" placeholder="0" />
+                <input type="number" value={form.stock_init || ''} onChange={e => setForm(f => ({ ...f, stock_init: Number(e.target.value) }))} className="bare-input text-sm num" min="0" placeholder="0" />
               </Field>
             )}
           </div>
@@ -390,10 +394,10 @@ export function CompatTab({ compats, brands, models, onAdd, onRemove, onUpdate }
               options={brands.map(b => ({ value: b.id, label: b.name }))} />
             <PremiumSelect value={c.model_id} onChange={v => onUpdate(i, { model_id: v })} placeholder="Modèle"
               options={models.filter(m => m.brand_id === c.brand_id).map(m => ({ value: m.id, label: m.name }))} />
-            <input type="number" value={c.year_start || ''} onChange={e => onUpdate(i, { year_start: Number(e.target.value) })} className="premium-input text-xs num" placeholder="Année début" />
-            <input type="number" value={c.year_end || ''} onChange={e => onUpdate(i, { year_end: Number(e.target.value) })} className="premium-input text-xs num" placeholder="Année fin" />
+            <input type="number" value={c.year_start || ''} onChange={e => onUpdate(i, { year_start: Number(e.target.value) })} className="bare-input text-xs num" placeholder="Année début" />
+            <input type="number" value={c.year_end || ''} onChange={e => onUpdate(i, { year_end: Number(e.target.value) })} className="bare-input text-xs num" placeholder="Année fin" />
           </div>
-          <input value={c.notes || ''} onChange={e => onUpdate(i, { notes: e.target.value })} className="premium-input text-xs" placeholder="Notes (motorisation, variante...)" />
+          <input value={c.notes || ''} onChange={e => onUpdate(i, { notes: e.target.value })} className="bare-input text-xs" placeholder="Notes (motorisation, variante...)" />
         </div>
       ))}
     </div>

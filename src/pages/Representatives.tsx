@@ -315,43 +315,43 @@ export function Representatives() {
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-2 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm space-y-2">
-        <div className="flex items-center gap-2 border-b border-neutral-200/70 pb-2">
-          <div className="flex items-center shrink-0 pr-2.5 mr-1.5 border-r border-slate-200">
-            <h1 className="text-sm font-bold tracking-tight text-slate-900">Représentants</h1>
-          </div>
-          <div className="relative flex-1 min-w-0 flex items-center">
-            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par code, prénom, nom…"
-              className="flex-1 min-w-0 w-0 pl-2 bg-transparent text-xs focus:outline-none placeholder:text-slate-400" />
-            {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>}
-          </div>
-          {tab === 'stats' && can('rep_export') && (
-            <>
-              <button onClick={printReport} className="shrink-0 p-1.5 text-slate-400 hover:text-slate-600 transition" title="Imprimer">
-                <Printer className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={exportExcel} className="shrink-0 p-1.5 text-slate-400 hover:text-slate-600 transition" title="Export Excel">
-                <Download className="w-3.5 h-3.5" />
-              </button>
-            </>
-          )}
-          {tab === 'stats' && (
-            <button onClick={() => setFiltersOpen(true)} className={`shrink-0 p-1.5 transition ${activeFilterCount > 0 ? 'text-brand-700' : 'text-slate-400 hover:text-slate-600'}`} title="Filtres">
-              <Filter className="w-3.5 h-3.5" />
-            </button>
-          )}
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+        <div className="flex items-start justify-between">
+          <h1 className="text-lg font-bold text-neutral-900 leading-tight">Représentants</h1>
           {canManage && (
             <button onClick={openCreate} className="shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-glow hover:shadow-premium active:scale-95 transition-all" title="Nouveau représentant">
               <Plus className="w-3.5 h-3.5 text-white" />
             </button>
           )}
         </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par code, prénom, nom…"
+              className="bare-input w-full text-sm py-1.5" />
+            <div className="h-px bg-neutral-200 mt-1" />
+          </div>
+          {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
+          {tab === 'stats' && can('rep_export') && (
+            <>
+              <button onClick={printReport} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition" title="Imprimer">
+                <Printer className="w-4 h-4" />
+              </button>
+              <button onClick={exportExcel} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition" title="Export Excel">
+                <Download className="w-4 h-4" />
+              </button>
+            </>
+          )}
+          {tab === 'stats' && (
+            <button onClick={() => setFiltersOpen(true)} className={`shrink-0 p-1.5 transition ${activeFilterCount > 0 ? 'text-brand-700' : 'text-neutral-400 hover:text-neutral-600'}`} title="Filtres">
+              <Filter className="w-4 h-4" />
+            </button>
+          )}
+        </div>
         {/* Tabs */}
-        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider">
-          <button onClick={() => setTab('list')} className={`shrink-0 py-1 transition-all ${tab === 'list' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>Liste</button>
+        <div className="flex items-center gap-3 text-[11px] font-semibold">
+          <button onClick={() => setTab('list')} className={`shrink-0 py-1 transition-all ${tab === 'list' ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>Liste</button>
           {can('rep_stats_view') && (
-            <button onClick={() => setTab('stats')} className={`shrink-0 py-1 transition-all ${tab === 'stats' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>Statistiques</button>
+            <button onClick={() => setTab('stats')} className={`shrink-0 py-1 transition-all ${tab === 'stats' ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>Statistiques</button>
           )}
         </div>
       </div>

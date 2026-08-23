@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package, HandCoins, RotateCcw } from 'lucide-react';
+import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package, HandCoins, RotateCcw, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
@@ -227,22 +227,24 @@ export function CashHistory() {
   return (
     <div className="space-y-3">
       {/* Premium unified search bar with embedded title + date picker */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm flex items-center gap-2 border-b border-neutral-200/70">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 transition-all">
-          <div className="flex items-center gap-2 pr-2 border-r border-neutral-200 shrink-0">
-            <h1 className="text-sm font-bold tracking-tight text-neutral-900 leading-none">Caisse</h1>
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+        <h1 className="text-lg font-bold text-neutral-900 leading-tight">Caisse</h1>
+        <div className="flex items-center gap-2">
+          <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="bare-input w-full text-sm py-1.5" />
+            <div className="h-px bg-neutral-200 mt-1" />
           </div>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400" />
-          {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-3.5 h-3.5" /></button>}
-          <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-all ${dateFrom || dateTo ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
-            <Calendar className="w-3.5 h-3.5" />
+          {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-4 h-4" /></button>}
+          <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-colors ${dateFrom || dateTo ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
+            <Calendar className="w-4 h-4" />
             <span className="hidden md:inline max-w-[120px] truncate">{dateLabel}</span>
           </button>
         </div>
       </div>
 
       {/* Inline stats chips */}
-      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+      <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap mt-3">
         <span className="shrink-0 text-neutral-500 num">{filtered.length} / {sessions.length}</span>
         {stats.open > 0 && <span className="shrink-0 text-neutral-700 num">{stats.open} ouverte{stats.open > 1 ? 's' : ''}</span>}
         {stats.closed > 0 && <span className="shrink-0 text-neutral-600 num">{stats.closed} clôturée{stats.closed > 1 ? 's' : ''}</span>}
@@ -256,7 +258,7 @@ export function CashHistory() {
       {loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : filtered.length === 0 ? (
-        <div className="card-premium"><EmptyState icon={Clock} title="Aucune session" description="Les sessions de caisse apparaîtront ici après ouverture." /></div>
+        <EmptyState icon={Clock} title="Aucune session" description="Les sessions de caisse apparaîtront ici après ouverture." />
       ) : (
         <>
           {/* MOBILE: flat list */}

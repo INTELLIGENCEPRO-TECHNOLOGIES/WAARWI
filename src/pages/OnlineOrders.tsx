@@ -307,48 +307,47 @@ export function OnlineOrders() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header unifié : titre intégré + recherche + filtre + refresh ─── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-neutral-50/95 backdrop-blur-sm flex items-center gap-2 border-b border-neutral-200/70">
-        <h1 className="text-sm font-bold tracking-tight text-slate-900 shrink-0 flex items-center gap-1.5 pr-3 border-r border-neutral-200/70">
-          <Globe className="w-4 h-4 text-brand-700" />
-          <span>Commandes</span>
-        </h1>
-        <div className="flex-1 min-w-0 flex items-center gap-1.5">
-          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="N°, nom ou téléphone…"
-            className="flex-1 min-w-0 w-0 bg-transparent text-xs focus:outline-none placeholder:text-neutral-400"
-          />
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+        <h1 className="text-lg font-bold text-neutral-900 leading-tight">Commandes en ligne</h1>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="N°, nom ou téléphone…"
+              className="bare-input w-full text-sm py-1.5"
+            />
+            <div className="h-px bg-neutral-200 mt-1" />
+          </div>
           {query && (
             <button onClick={() => setQuery('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
           <button
             onClick={() => setShowFilters(v => !v)}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-semibold transition-colors ${
+            className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-colors ${
               payFilter !== 'all' || dateFilter !== 'all' || showFilters
                 ? 'text-brand-700'
-                : 'text-slate-500 hover:text-slate-700'
+                : 'text-neutral-500 hover:text-neutral-700'
             }`}
           >
-            <Filter className="w-3.5 h-3.5" />
+            <Filter className="w-4 h-4" />
             <span className="hidden md:inline">Filtres</span>
           </button>
           <button
             onClick={() => load(true)}
-            className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-700 transition-colors active:scale-95"
+            className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors active:scale-95"
             aria-label="Actualiser"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* Filter panel */}
       {showFilters && (
-        <div className="rounded-2xl bg-white border border-neutral-200 shadow-sm p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 animate-slide-down">
+        <div className="py-3 border-b border-neutral-100 grid grid-cols-1 sm:grid-cols-2 gap-2.5 animate-slide-down">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1">Paiement</label>
             <select value={payFilter} onChange={e => setPayFilter(e.target.value as any)} className="input h-9 text-xs">
