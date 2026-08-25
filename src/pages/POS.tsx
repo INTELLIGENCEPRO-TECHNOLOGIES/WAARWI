@@ -27,6 +27,7 @@ import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments } from '../lib/ipm';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
+import { CategoryPickerModal } from './ArticlesComponents';
 import { PosNumpad, type NumpadField } from '../components/PosNumpad';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 
@@ -3216,77 +3217,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
 
-      {/* Category picker sheet */}
-      {categoryPickerOpen && (
-        <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-          <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={() => setCategoryPickerOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-white sm:rounded-lg shadow-premium flex flex-col max-h-[85vh] animate-slide-up">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-neutral-100 shrink-0">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/80">Filtrer</div>
-                <h3 className="text-base font-bold text-neutral-900">Catégorie</h3>
-              </div>
-              <button onClick={() => setCategoryPickerOpen(false)} className="p-2 rounded-md hover:bg-neutral-100 text-neutral-500">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-1">
-              <button
-                onClick={() => { setCategoryId(''); setCategoryPickerOpen(false); }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-semibold transition-all ${
-                  !categoryId ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'hover:bg-neutral-50 text-neutral-700 border border-transparent'
-                }`}
-              >
-                <span className="inline-flex items-center gap-2"><Tag className="w-4 h-4" />Toutes les catégories</span>
-                {!categoryId && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
-              </button>
-              {categories.filter(c => !c.parent_id).map(c => {
-                const children = categories.filter(s => s.parent_id === c.id);
-                const sel = categoryId === c.id;
-                const count = articles.filter(a => a.category_id === c.id || children.some(ch => ch.id === a.category_id)).length;
-                return (
-                  <div key={c.id}>
-                    <button
-                      onClick={() => { setCategoryId(c.id); setCategoryPickerOpen(false); }}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-semibold transition-all ${
-                        sel ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'hover:bg-neutral-50 text-neutral-800 border border-transparent'
-                      }`}
-                    >
-                      <span className="truncate">{c.name}</span>
-                      <span className="inline-flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] font-bold num text-neutral-400">{count}</span>
-                        {sel && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
-                      </span>
-                    </button>
-                    {children.map(s => {
-                      const sSel = categoryId === s.id;
-                      const sCount = articles.filter(a => a.category_id === s.id).length;
-                      return (
-                        <button
-                          key={s.id}
-                          onClick={() => { setCategoryId(s.id); setCategoryPickerOpen(false); }}
-                          className={`w-full flex items-center justify-between pl-8 pr-3 py-2 rounded-md text-sm transition-all ${
-                            sSel ? 'bg-brand-50 text-brand-700 border border-brand-200 font-semibold' : 'hover:bg-neutral-50 text-neutral-600 border border-transparent'
-                          }`}
-                        >
-                          <span className="truncate">{s.name}</span>
-                          <span className="inline-flex items-center gap-1.5 shrink-0">
-                            <span className="text-[10px] font-bold num text-neutral-400">{sCount}</span>
-                            {sSel && <CheckCircle2 className="w-4 h-4 text-brand-600" />}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-              {categories.length === 0 && (
-                <div className="text-center text-xs text-neutral-400 py-6">Aucune catégorie disponible</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Category picker modal */}
+      <CategoryPickerModal open={categoryPickerOpen} onClose={() => setCategoryPickerOpen(false)} categories={categories} onSelect={v => { setCategoryId(v); setCategoryPickerOpen(false); }} />
 
       {/* Vehicle article picker */}
       {autoMode && <VehicleArticlePicker

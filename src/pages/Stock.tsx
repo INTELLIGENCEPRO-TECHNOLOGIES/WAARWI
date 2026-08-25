@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, Monitor, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin } from 'lucide-react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, Monitor, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin, Filter } from 'lucide-react';
+import { CategoryPickerModal } from './ArticlesComponents';
 import { PageSearch } from '../components/PageSearch';
 import { MoreMenu } from '../components/MoreMenu';
 import { supabase } from '../lib/supabase';
@@ -25,6 +26,7 @@ type Row = {
   stock_max: number;
   quantity: number;
   location: string;
+  category_id: string;
 };
 
 type AdjustMode = 'in' | 'out' | 'transfer' | 'inventory';
@@ -45,7 +47,7 @@ type LotRow = {
 };
 
 export function Stock() {
-  const { tenant, currentSite, sites, depots, dataTick, profile } = useApp();
+  const { tenant, currentSite, sites, depots, dataTick, profile, refData } = useApp();
   const { can } = usePermissions();
   const { success, error } = useToast();
   const [rows, setRows] = useState<Row[]>([]);
@@ -54,6 +56,9 @@ export function Stock() {
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [catPickerOpen, setCatPickerOpen] = useState(false);
+  const categories = refData?.categories || [];
   const [stkSortCol, setStkSortCol] = useState<'name' | 'stock' | 'min' | 'price'>('name');
   const [stkSortDir, setStkSortDir] = useState<'asc' | 'desc'>('asc');
   const [tab, setTab] = useState<'stocks' | 'movements' | 'lots'>('stocks');
@@ -66,7 +71,10 @@ export function Stock() {
   const [mvTotalCount, setMvTotalCount] = useState(0);
   const [mvLoading, setMvLoading] = useState(false);
   const MV_PAGE_SIZE = 50;
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    return isMobile ? 'cards' : 'list';
+  });
   const [listEditMode, setListEditMode] = useState<'in' | 'out' | 'inventory' | 'transfer'>('in');
   type ListEditEntry = { article_id: string; qty: number | ''; note: string; lot_number: string; };
   const [listEdits, setListEdits] = useState<Map<string, ListEditEntry>>(new Map());
@@ -224,7 +232,10 @@ export function Stock() {
       article_id: a.id, name: a.name, internal_ref: a.internal_ref,
       purchase_price: Number(a.purchase_price), stock_min: Number(a.stock_min),
       stock_max: Number(a.stock_max), quantity: qmap.get(a.id) ?? 0, location: a.location || '',
+      category_id: a.category_id || '',
     })).sort((a, b) => a.name.localeCompare(b.name)));
+
+
 
     // Fetch stock levels per location (current site + own depots) for bulk operations / inventory book
     const ownDepotIds = depots.filter(d => d.parent_site_id === currentSite.id).map(d => d.id);
@@ -616,12 +627,20 @@ export function Stock() {
     }
   };
 
+  const categoryMatchIds = useMemo(() => {
+    if (!categoryFilter) return null;
+    const ids = new Set<string>([categoryFilter]);
+    for (const c of categories) if (c.parent_id === categoryFilter) ids.add(c.id);
+    return ids;
+  }, [categoryFilter, categories]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     let result = rows.filter(r => {
       if (filter === 'instock' && r.quantity <= 0) return false;
       if (filter === 'low' && !(r.quantity > 0 && r.quantity <= r.stock_min)) return false;
       if (filter === 'out' && r.quantity > 0) return false;
+      if (categoryMatchIds && !categoryMatchIds.has(r.category_id)) return false;
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || r.internal_ref.toLowerCase().includes(q) || (r.location || '').toLowerCase().includes(q);
     });
@@ -636,12 +655,12 @@ export function Stock() {
       return stkSortDir === 'asc' ? cmp : -cmp;
     });
     return result;
-  }, [rows, search, filter, stkSortCol, stkSortDir]);
+  }, [rows, search, filter, categoryMatchIds, stkSortCol, stkSortDir]);
 
   // Paginated rendering
   const PAGE_SIZE = 50;
   const [currentPage, setCurrentPage] = useState(1);
-  useEffect(() => { setCurrentPage(1); }, [search, filter, stkSortCol, stkSortDir]);
+  useEffect(() => { setCurrentPage(1); }, [search, filter, categoryFilter, stkSortCol, stkSortDir]);
   // Sync listSourceSite when currentSite changes (e.g. user switches via header)
   // Only block the sync if user has active edits in the form
   useEffect(() => {
@@ -822,12 +841,12 @@ export function Stock() {
           </div>
           {can('manage_stock') && tab === 'stocks' && (
             <MoreMenu items={[
+              { icon: <History className="w-4 h-4" />, label: 'Historique des mouvements', onClick: () => setTab('movements') },
               { icon: <ArrowRightLeft className="w-4 h-4" />, label: 'Transfert', onClick: () => openAdjNew('transfer'), hidden: !canTransfer },
               { icon: <BookOpen className="w-4 h-4" />, label: "Livre d'inventaire", onClick: printInventoryBook },
               { icon: viewMode === 'cards' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />, label: viewMode === 'cards' ? 'Vue liste' : 'Vue cartes', onClick: () => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); } },
-              { icon: <Info className="w-4 h-4" />, label: 'Guide', onClick: () => setHelpOpen(true) },
-              { icon: <History className="w-4 h-4" />, label: 'Historique des mouvements', onClick: () => setTab('movements') },
               { icon: <PackageOpen className="w-4 h-4" />, label: 'Voir les lots', onClick: () => setTab(t => t === 'lots' ? 'stocks' : 'lots'), hidden: stockMethod !== 'lot' },
+              { icon: <Info className="w-4 h-4" />, label: 'Guide', onClick: () => setHelpOpen(true) },
             ]} />
           )}
           {can('manage_stock') && tab !== 'stocks' && (
@@ -897,14 +916,34 @@ export function Stock() {
           </button>
         </div>
 
-        {/* Row 4: Search */}
-        <PageSearch
-          value={search}
-          onChange={setSearch}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
-          placeholder={tab === 'movements' ? "Rechercher un article…" : "Rechercher un article..."}
-        />
+        {/* Row 4: Search + Category filter */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <PageSearch
+              value={search}
+              onChange={setSearch}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder={tab === 'movements' ? "Rechercher un article…" : "Rechercher un article..."}
+            />
+          </div>
+          {tab === 'stocks' && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => setCatPickerOpen(true)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${categoryFilter ? 'bg-blue-50 text-blue-700' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100'}`}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                {categoryFilter ? (categories.find(c => c.id === categoryFilter)?.name || 'Catégorie') : 'Catégorie'}
+              </button>
+              {categoryFilter && (
+                <button onClick={() => setCategoryFilter('')} className="p-1 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Row 5: Primary actions (stocks tab only) */}
         {can('manage_stock') && tab === 'stocks' && (
@@ -1774,6 +1813,14 @@ export function Stock() {
         }}
         title="Choisir les lots pour la sortie"
         confirmLabel="Confirmer la sortie"
+      />
+
+      <CategoryPickerModal
+        open={catPickerOpen}
+        onClose={() => setCatPickerOpen(false)}
+        categories={categories}
+        selected={categoryFilter}
+        onSelect={(id) => { setCategoryFilter(id); setCatPickerOpen(false); }}
       />
     </div>
   );

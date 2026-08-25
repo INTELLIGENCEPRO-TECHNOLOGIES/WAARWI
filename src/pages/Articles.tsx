@@ -19,7 +19,7 @@ import type { Article, Category, VehicleBrand } from '../lib/types';
 import { isAutoParts, BUSINESS_TYPE_LABELS } from '../lib/types';
 import {
   stockStatus, Field, PremiumSelect,
-  ArticleCard, CategoryFilterSheet, MasterCatalogGuide,
+  ArticleCard, CategoryFilterSheet, CategoryPickerModal, MasterCatalogGuide,
   DesktopListView, FullScreenArticleEdit, MobileArticleEdit,
 } from './ArticlesComponents';
 
@@ -52,7 +52,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [sortCol, setSortCol] = useState<'name' | 'ref' | 'category' | 'price' | 'stock'>('name');
+  const [sortCol, setSortCol] = useState<'name' | 'ref' | 'oem_ref' | 'category' | 'price' | 'purchase_price' | 'stock'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const handleSearchInput = (val: string) => {
@@ -180,7 +180,11 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     let result = articles.filter(a => {
-      if (categoryFilter && a.category_id !== categoryFilter) return false;
+      if (categoryFilter) {
+        const matchIds = new Set<string>([categoryFilter]);
+        for (const c of categories) if (c.parent_id === categoryFilter) matchIds.add(c.id);
+        if (!matchIds.has(a.category_id || '')) return false;
+      }
       if (stockFilter !== 'all') {
         const qty = stockMap[a.id] || 0;
         const min = Number(a.stock_min || 0);
@@ -198,8 +202,10 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       switch (sortCol) {
         case 'name': cmp = a.name.localeCompare(b.name); break;
         case 'ref': cmp = (a.internal_ref || '').localeCompare(b.internal_ref || ''); break;
+        case 'oem_ref': cmp = (a.oem_ref || '').localeCompare(b.oem_ref || ''); break;
         case 'category': cmp = (a.category_id || '').localeCompare(b.category_id || ''); break;
         case 'price': cmp = (a.sale_price || 0) - (b.sale_price || 0); break;
+        case 'purchase_price': cmp = (a.purchase_price || 0) - (b.purchase_price || 0); break;
         case 'stock': cmp = (stockMap[a.id] || 0) - (stockMap[b.id] || 0); break;
       }
       return sortDir === 'asc' ? cmp : -cmp;
@@ -906,8 +912,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         </>
       )}
 
-      {/* ── Category filter sheet ────── */}
-      {filterOpen && <CategoryFilterSheet categories={categories} value={categoryFilter} onChange={v => { setCategoryFilter(v); setFilterOpen(false); }} onClose={() => setFilterOpen(false)} />}
+      {/* ── Category filter modal ────── */}
+      <CategoryPickerModal open={filterOpen} onClose={() => setFilterOpen(false)} categories={categories} selected={categoryFilter} onSelect={v => { setCategoryFilter(v); setFilterOpen(false); }} />
 
       {/* ── Full-screen edit (desktop) ────── */}
       {fullScreenOpen && (
