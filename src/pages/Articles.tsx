@@ -163,6 +163,15 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id, sharedArticles]);
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 300); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
+  // Keep categories/brands/models in sync with refData so new categories appear without page reload
+  useEffect(() => {
+    if (refData) {
+      setCategories(refData.categories || []);
+      setBrands(refData.brands || []);
+      setModels(refData.models || []);
+    }
+  }, [refData]);
+
   useEffect(() => {
     const ctx = consumeNavContext();
     if (ctx?.target === 'newArticle') openCreate();
@@ -230,7 +239,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       wholesale_price: 0, vat_rate: 0, stock_min: 0, stock_max: 0, location: '', stock_init: 0,
     });
     setFormTiers(tierDefinitions.map(t => ({ tier_name: t.tier_name, price: '' })));
-    setDrawerOpen(true);
+    const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
+    if (isDesktop) {
+      setEditingIndex(-1);
+      setFullScreenOpen(true);
+      setDrawerOpen(false);
+    } else {
+      setDrawerOpen(true);
+    }
   };
 
   // Debounced auto-save refs (declared early so openEdit can flag skip)
@@ -272,6 +288,17 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   const addCompat = () => setCompats(c => [...c, { brand_id: '', model_id: '', year_start: 0, year_end: 0, notes: '' }]);
   const removeCompat = (i: number) => setCompats(c => c.filter((_, idx) => idx !== i));
+
+  const createCategory = async (name: string, parentId: string | null): Promise<string | null> => {
+    if (!tenant) return null;
+    const { data, error: e } = await supabase.from('part_categories').insert({
+      tenant_id: tenant.id, name: name.trim(), parent_id: parentId || null, is_active: true,
+    }).select().single();
+    if (e) { error(e.message); return null; }
+    const newCat = data as Category;
+    setCategories(prev => [...prev, newCat]);
+    return newCat.id;
+  };
 
   const save = async (opts?: { silent?: boolean }): Promise<boolean> => {
     const silent = opts?.silent ?? false;
@@ -507,7 +534,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   };
 
   const saveAndClose = async () => {
-    if (editing && form.name?.trim() && form.internal_ref?.trim()) {
+    if (form.name?.trim() && form.internal_ref?.trim()) {
       const ok = await save();
       if (!ok) return;
     }
@@ -889,6 +916,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           TABS={TABS} save={save} saving={saving} compats={compats} setCompats={setCompats}
           categories={categories} suppliers={suppliers} brands={brands} models={models}
           autoMode={autoMode} generateRef={generateRef} addCompat={addCompat} removeCompat={removeCompat}
+          createCategory={createCategory}
           imagePreview={imagePreview} imageUploading={imageUploading}
           onFileSelect={file => { setImageFile(file); setImageDeletePending(false); setImagePreview(URL.createObjectURL(file)); }}
           onDeleteImage={() => { setImageFile(null); setImagePreview(null); setImageDeletePending(true); }}
@@ -914,6 +942,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           brands={brands} models={models}
           autoMode={autoMode} generateRef={generateRef}
           addCompat={addCompat} removeCompat={removeCompat}
+          createCategory={createCategory}
           imagePreview={imagePreview} imageUploading={imageUploading}
           onFileSelect={(f) => { setImageFile(f); setImageDeletePending(false); setImagePreview(URL.createObjectURL(f)); }}
           onDeleteImage={() => { setImageFile(null); setImagePreview(null); setImageDeletePending(true); }}

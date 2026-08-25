@@ -665,6 +665,7 @@ Deno.serve(async (req: Request) => {
         whatsapp_url, phone_display, phone_tel,
         contact_email, contact_hours, testimonials, client_logos,
         legal_mentions, privacy_policy, terms_of_service,
+        global_effects,
       } = body;
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: caller.id };
       if (hero_headline !== undefined) patch.hero_headline = hero_headline;
@@ -696,6 +697,7 @@ Deno.serve(async (req: Request) => {
       if (legal_mentions !== undefined) patch.legal_mentions = legal_mentions;
       if (privacy_policy !== undefined) patch.privacy_policy = privacy_policy;
       if (terms_of_service !== undefined) patch.terms_of_service = terms_of_service;
+      if (global_effects !== undefined) patch.global_effects = global_effects;
       const { data, error } = await admin.from("landing_config").update(patch).eq("id", "default").select().maybeSingle();
       if (error) return json({ error: error.message }, 400);
       await logEvent("landing_config.update", null, patch);

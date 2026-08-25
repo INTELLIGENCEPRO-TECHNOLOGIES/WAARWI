@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Check, Globe, Eye, Loader2, Plus, RotateCcw, Trash2, Shield, Image as ImageIcon, Users, MessageSquare, HelpCircle, Sparkles, ShoppingCart, Package, FileText, Truck, BarChart3, TrendingUp, Zap, Wallet, Layers, Monitor, Receipt, MapPin, Headphones, RefreshCw, Store, Boxes, BookOpen, Shirt, Cpu, HeartPulse, Building2, Gem, Wrench, Upload, Replace, Scale, Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, Link2, Eye as EyeIcon } from 'lucide-react';
+import { ArrowUpRight, Check, Globe, Eye, Loader2, Plus, RotateCcw, Trash2, Shield, Image as ImageIcon, Users, MessageSquare, HelpCircle, Sparkles, ShoppingCart, Package, FileText, Truck, BarChart3, TrendingUp, Zap, Wallet, Layers, Monitor, Receipt, MapPin, Headphones, RefreshCw, Store, Boxes, BookOpen, Shirt, Cpu, HeartPulse, Building2, Gem, Wrench, Upload, Replace, Scale, Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, Link2, Eye as EyeIcon, Palette } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { renderMarkdown } from '../lib/markdown';
@@ -12,6 +12,29 @@ type SectorItem = { id: string; name: string; slug: string; description?: string
 type FaqItem = { q: string; a: string };
 type Testimonial = { quote: string; author: string; role?: string; company?: string };
 type ClientLogo = { name: string; logo_url?: string };
+type GlobalEffects = {
+  enabled: boolean;
+  brightness: number;
+  contrast: number;
+  saturate: number;
+  blur: number;
+  grayscale: number;
+  sepia: number;
+  hueRotate: number;
+};
+const DEFAULT_EFFECTS: GlobalEffects = { enabled: false, brightness: 100, contrast: 100, saturate: 100, blur: 0, grayscale: 0, sepia: 0, hueRotate: 0 };
+function buildFilterString(e: GlobalEffects): string {
+  if (!e.enabled) return 'none';
+  const parts: string[] = [];
+  if (e.brightness !== 100) parts.push(`brightness(${e.brightness}%)`);
+  if (e.contrast !== 100) parts.push(`contrast(${e.contrast}%)`);
+  if (e.saturate !== 100) parts.push(`saturate(${e.saturate}%)`);
+  if (e.blur > 0) parts.push(`blur(${e.blur}px)`);
+  if (e.grayscale > 0) parts.push(`grayscale(${e.grayscale}%)`);
+  if (e.sepia > 0) parts.push(`sepia(${e.sepia}%)`);
+  if (e.hueRotate > 0) parts.push(`hue-rotate(${e.hueRotate}deg)`);
+  return parts.length ? parts.join(' ') : 'none';
+}
 
 const ICON_MAP_ADMIN: Record<string, any> = {
   ShoppingCart, Package, FileText, Users, Truck, Globe,
@@ -256,7 +279,7 @@ function move<T>(arr: T[], idx: number, dir: -1 | 1): T[] {
   const a = [...arr]; [a[idx], a[next]] = [a[next], a[idx]]; return a;
 }
 
-type Tab = 'contenu' | 'modules' | 'secteurs' | 'demo' | 'preuves' | 'whyfaq' | 'legal';
+type Tab = 'contenu' | 'modules' | 'secteurs' | 'demo' | 'preuves' | 'whyfaq' | 'legal' | 'effets';
 
 export function LandingConfigSection() {
   const { success, error } = useToast();
@@ -295,6 +318,7 @@ export function LandingConfigSection() {
   const [legalMentions, setLegalMentions] = useState('');
   const [privacyPolicy, setPrivacyPolicy] = useState('');
   const [termsOfService, setTermsOfService] = useState('');
+  const [globalEffects, setGlobalEffects] = useState<GlobalEffects>(DEFAULT_EFFECTS);
 
   useEffect(() => {
     (async () => {
@@ -328,6 +352,7 @@ export function LandingConfigSection() {
         setLegalMentions(data.legal_mentions || '');
         setPrivacyPolicy(data.privacy_policy || '');
         setTermsOfService(data.terms_of_service || '');
+        setGlobalEffects(data.global_effects ? { ...DEFAULT_EFFECTS, ...data.global_effects } : DEFAULT_EFFECTS);
       } catch (e: any) { error(e.message); }
       setLoading(false);
     })();
@@ -433,6 +458,7 @@ export function LandingConfigSection() {
         contact_email: contactEmail, contact_hours: contactHours,
         testimonials, client_logos: clientLogos,
         legal_mentions: legalMentions, privacy_policy: privacyPolicy, terms_of_service: termsOfService,
+        global_effects: globalEffects,
       });
       success('Landing page enregistrée. Visible sur waarwi.com');
     } catch (e: any) { error(e.message); }
@@ -453,6 +479,20 @@ export function LandingConfigSection() {
       if (kind === 'desktop') setDemoDesktop([...demoDesktop, shot]);
       else setDemoMobile([...demoMobile, shot]);
       success('Capture ajoutée');
+    } catch (e: any) { error(e.message); }
+    setUploadingKey(null);
+  };
+
+  const replaceShot = async (file: File, kind: 'desktop' | 'mobile', idx: number) => {
+    setUploadingKey(`${kind}-${idx}`);
+    try {
+      const items = kind === 'desktop' ? demoDesktop : demoMobile;
+      const oldUrl = items[idx]?.src;
+      const { url } = await uploadLandingMedia(file, `demo-${kind}`);
+      const updated = items.map((s, i) => i === idx ? { ...s, src: url } : s);
+      if (kind === 'desktop') setDemoDesktop(updated); else setDemoMobile(updated);
+      if (oldUrl) await removeLandingMedia(oldUrl);
+      success('Capture remplacée');
     } catch (e: any) { error(e.message); }
     setUploadingKey(null);
   };
@@ -513,6 +553,7 @@ export function LandingConfigSection() {
     { k: 'preuves', label: 'Preuves', count: clientLogos.length + testimonials.length },
     { k: 'whyfaq', label: 'Pourquoi & FAQ', count: whyWaarwi.length + faqItems.length },
     { k: 'legal', label: 'Mentions légales' },
+    { k: 'effets', label: 'Effets' },
   ];
 
   return (
@@ -805,8 +846,8 @@ export function LandingConfigSection() {
           </div>
           <p className="text-xs text-slate-500 mb-4">PNG, JPEG ou WebP (max 5 Mo). Desktop = carrousel horizontal, Mobile = cartes empilées verticales. La navigation dans la lightbox se fait par colonne (desktop seul ou mobile seul).</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <DemoColumn title="Captures desktop" kind="desktop" items={demoDesktop} setItems={setDemoDesktop} onUpload={uploadShot} uploading={uploadingKey === 'desktop'} />
-            <DemoColumn title="Captures mobile" kind="mobile" items={demoMobile} setItems={setDemoMobile} onUpload={uploadShot} uploading={uploadingKey === 'mobile'} />
+            <DemoColumn title="Captures desktop" kind="desktop" items={demoDesktop} setItems={setDemoDesktop} onUpload={uploadShot} onReplace={replaceShot} uploading={uploadingKey === 'desktop'} uploadingKey={uploadingKey} />
+            <DemoColumn title="Captures mobile" kind="mobile" items={demoMobile} setItems={setDemoMobile} onUpload={uploadShot} onReplace={replaceShot} uploading={uploadingKey === 'mobile'} uploadingKey={uploadingKey} />
           </div>
         </div>
       )}
@@ -1001,6 +1042,56 @@ export function LandingConfigSection() {
         </div>
       )}
 
+      {activeTab === 'effets' && (
+        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Palette className="w-4 h-4 text-brand-700" />
+              <h3 className="text-sm font-bold text-slate-900">Effets visuels de la landing</h3>
+            </div>
+            <button onClick={() => setGlobalEffects({ ...globalEffects, enabled: !globalEffects.enabled })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${globalEffects.enabled ? 'bg-brand-700' : 'bg-slate-300'}`}>
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${globalEffects.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">Appliquez des filtres graphiques (luminosité, contraste, saturation, flou, nuances) sur toute la page d'accueil publique. Aperçu en temps réel ci-dessous.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(([
+              { key: 'brightness', label: 'Luminosité', min: 0, max: 200, step: 5, unit: '%' },
+              { key: 'contrast', label: 'Contraste', min: 0, max: 200, step: 5, unit: '%' },
+              { key: 'saturate', label: 'Saturation', min: 0, max: 200, step: 5, unit: '%' },
+              { key: 'blur', label: 'Flou', min: 0, max: 20, step: 1, unit: 'px' },
+              { key: 'grayscale', label: 'Niveaux de gris', min: 0, max: 100, step: 5, unit: '%' },
+              { key: 'sepia', label: 'Sépia', min: 0, max: 100, step: 5, unit: '%' },
+              { key: 'hueRotate', label: 'Teinte (rotation)', min: 0, max: 360, step: 15, unit: '°' },
+            ] as const).map(prop => (
+              <div key={prop.key} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700">{prop.label}</label>
+                  <span className="text-[11px] text-slate-500 font-mono">{globalEffects[prop.key]}{prop.unit}</span>
+                </div>
+                <input type="range" min={prop.min} max={prop.max} step={prop.step} value={globalEffects[prop.key]}
+                  onChange={e => setGlobalEffects({ ...globalEffects, [prop.key]: Number(e.target.value) })}
+                  disabled={!globalEffects.enabled}
+                  className="w-full accent-brand-700 disabled:opacity-40" />
+              </div>
+            )))}
+          </div>
+          <div className="flex justify-end">
+            <button onClick={() => setGlobalEffects(DEFAULT_EFFECTS)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors">
+              <RotateCcw className="w-3.5 h-3.5" /> Réinitialiser les effets
+            </button>
+          </div>
+          <div className="border-t border-slate-100 pt-4">
+            <p className="text-xs font-bold text-slate-700 mb-2">Aperçu</p>
+            <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+              <img src={heroImageUrl || '/desktop.png'} alt="Aperçu effet" className="w-full h-48 object-cover transition-all duration-300"
+                style={{ filter: buildFilterString(globalEffects) }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-end">
         <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-700 text-white text-sm font-semibold hover:bg-brand-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -1011,13 +1102,15 @@ export function LandingConfigSection() {
   );
 }
 
-function DemoColumn({ title, kind, items, setItems, onUpload, uploading }: {
+function DemoColumn({ title, kind, items, setItems, onUpload, onReplace, uploading, uploadingKey }: {
   title: string;
   kind: 'desktop' | 'mobile';
   items: DemoShot[];
   setItems: (i: DemoShot[]) => void;
   onUpload: (f: File, kind: 'desktop' | 'mobile') => void;
+  onReplace: (f: File, kind: 'desktop' | 'mobile', idx: number) => void;
   uploading: boolean;
+  uploadingKey: string | null;
 }) {
   return (
     <div className="space-y-3">
@@ -1049,6 +1142,10 @@ function DemoColumn({ title, kind, items, setItems, onUpload, uploading }: {
                 <button onClick={() => setItems(move(items, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
                 <button onClick={() => setItems(move(items, idx, 1))} disabled={idx === items.length - 1} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-90" /></button>
               </div>
+              <label className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer" title="Remplacer cette image">
+                {uploadingKey === `${kind}-${idx}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Replace className="w-3.5 h-3.5" />}
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onReplace(f, kind, idx); e.currentTarget.value = ''; }} disabled={uploadingKey === `${kind}-${idx}`} />
+              </label>
               <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all sm:opacity-0 sm:group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           ))}

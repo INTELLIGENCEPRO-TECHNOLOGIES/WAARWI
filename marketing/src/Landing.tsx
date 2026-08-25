@@ -57,7 +57,30 @@ type LandingConfig = {
   whatsapp_url?: string;
   phone_display?: string;
   phone_tel?: string;
+  global_effects?: {
+    enabled: boolean;
+    brightness: number;
+    contrast: number;
+    saturate: number;
+    blur: number;
+    grayscale: number;
+    sepia: number;
+    hueRotate: number;
+  };
 };
+
+function buildLandingFilter(e: LandingConfig['global_effects']): string {
+  if (!e || !e.enabled) return 'none';
+  const parts: string[] = [];
+  if (e.brightness !== 100) parts.push(`brightness(${e.brightness}%)`);
+  if (e.contrast !== 100) parts.push(`contrast(${e.contrast}%)`);
+  if (e.saturate !== 100) parts.push(`saturate(${e.saturate}%)`);
+  if (e.blur > 0) parts.push(`blur(${e.blur}px)`);
+  if (e.grayscale > 0) parts.push(`grayscale(${e.grayscale}%)`);
+  if (e.sepia > 0) parts.push(`sepia(${e.sepia}%)`);
+  if (e.hueRotate > 0) parts.push(`hue-rotate(${e.hueRotate}deg)`);
+  return parts.length ? parts.join(' ') : 'none';
+}
 type LandingStats = { active_tenants: number; active_sectors: number; uptime_percent: number };
 
 type BusinessActivityType = {
@@ -635,7 +658,7 @@ export function Landing() {
         )}
       </header>
 
-      <main id="contenu">
+      <main id="contenu" style={{ filter: buildLandingFilter(config.global_effects) }}>
         {/* Hero */}
         <section className="relative overflow-hidden bg-gradient-to-b from-slate-50/60 to-white">
           <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
