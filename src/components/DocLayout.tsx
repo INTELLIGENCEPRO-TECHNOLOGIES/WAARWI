@@ -100,7 +100,7 @@ export function DocSlimHeader({ status, customerName, date, extra, docHeader }: 
     if (expiry) metaPills.push({ icon: Clock, label: 'Expire le', value: expiry, color: 'bg-neutral-50 border-neutral-200 text-neutral-700' });
   }
   if (docHeader?.imei)           metaPills.push({ icon: Smartphone,   label: 'IMEI',          value: docHeader.imei, color: 'bg-neutral-50 border-neutral-200 text-neutral-800' });
-  if (docHeader?.representative) metaPills.push({ icon: User,         label: 'Representant',  value: docHeader.representative, color: 'bg-neutral-50 border-neutral-200 text-neutral-700' });
+  if (docHeader?.representative) metaPills.push({ icon: User,         label: 'Représentant',  value: docHeader.representative, color: 'bg-neutral-50 border-neutral-200 text-neutral-700' });
 
   return (
     <div className="space-y-2">

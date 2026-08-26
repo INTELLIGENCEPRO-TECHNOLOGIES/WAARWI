@@ -26,6 +26,7 @@ import { LotPickerModal, type ArticleLotSelection } from '../components/LotPicke
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
+import { DocumentEditor } from '../components/DocumentEditor';
 
 const tenantForPrint = (t: any, site?: any): PrintTenant => buildPrintTenantForSite(t, site);
 
@@ -141,6 +142,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   // Quote modals
   const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quoteEditorMode, setQuoteEditorMode] = useState<'create' | 'edit' | 'view'>('create');
   const [quoteDetail, setQuoteDetail] = useState<Quote | null>(null);
   const [quoteItemsDetail, setQuoteItemsDetail] = useState<any[]>([]);
   const [quoteForm, setQuoteForm] = useState<{ customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', valid_until: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
@@ -199,6 +201,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnDetail, setReturnDetail] = useState<SaleReturn | null>(null);
   const [returnItemsDetail, setReturnItemsDetail] = useState<any[]>([]);
+  const [returnEditorOpen, setReturnEditorOpen] = useState(false);
   const [returnForm, setReturnForm] = useState({ sale_id: '', reason: '', refund_method: 'cash' as string, restock: true });
   const [returnLines, setReturnLines] = useState<{ item_id: string; article_id: string; name: string; max_qty: number; quantity: number; unit_price: number; purchase_cost: number; selected: boolean }[]>([]);
   const [returnWorkflowBusy, setReturnWorkflowBusy] = useState(false);
@@ -206,13 +209,19 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   // Direct invoice creation
   const [invoiceEditorOpen, setInvoiceEditorOpen] = useState(false);
+  const [invoiceEditorMode, setInvoiceEditorMode] = useState<'create' | 'edit' | 'view'>('create');
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
-  const [invoiceForm, setInvoiceForm] = useState<{ customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+  const [invoiceForm, setInvoiceForm] = useState<{ customer_id: string; doc_date: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+  const [invoicePostCreation, setInvoicePostCreation] = useState<{ saleNumber: string; createdAt: string; createdBy: string } | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Invoice | null>(null);
   const [invoiceEditorItems, setInvoiceEditorItems] = useState<QuoteItem[]>([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
   const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [invoiceIsCredit, setInvoiceIsCredit] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
   const editingInvoicePrevRep = useRef<string | null>(null);
+  const [invoiceNavIdx, setInvoiceNavIdx] = useState(-1);
+  const [invoiceSearchOpen, setInvoiceSearchOpen] = useState(false);
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState('');
 
   // IPM (pharmacy only)
   const isPharmacy = (tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie';
@@ -386,7 +395,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     Promise.all([
       custQuery,
       fetchAllArticles(),
-      supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, customers(name)').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(200),
+      supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
       supabase.from('sales_representatives').select('*').eq('tenant_id', tenant.id).order('code'),
@@ -422,8 +431,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [repById]);
   const creatorName = useCallback((userId?: string | null) => {
     if (!userId) return 'Utilisateur non renseigné';
+    if (profile && userId === profile.id) return profile.full_name || profile.email || 'Utilisateur non renseigné';
     return profileNames[userId] || 'Utilisateur non renseigné';
-  }, [profileNames]);
+  }, [profileNames, profile]);
 
   const computeItemsMargin = async (items: QuoteItem[]): Promise<number> => {
     const ids = items.filter(i => i.article_id).map(i => i.article_id!) as string[];
@@ -679,6 +689,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const closeQuotePanel = () => {
     setQuoteOpen(false);
+    setQuoteEditorMode('create');
     setEditingQuoteId(null);
     setEditingQuote(null);
     setQuoteItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
@@ -689,6 +700,21 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
     setEditingQuoteId(q.id);
     setEditingQuote(q);
+    setQuoteEditorMode('edit');
+    setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '', delivery_date: q.doc_header?.delivery_date || '', reference: q.doc_header?.reference || '', warranty: q.doc_header?.warranty || '', representative: (q as any).representative_id || '', imei: q.doc_header?.imei || '' });
+    setQuoteItems((data || []).map((i: any) => ({
+      article_id: i.article_id, name: i.name,
+      quantity: Number(i.quantity), unit_price: Number(i.unit_price),
+      discount: Number(i.discount || 0), total: Number(i.total),
+    })));
+    setQuoteOpen(true);
+  };
+
+  const openQuoteForView = async (q: Quote) => {
+    const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
+    setEditingQuoteId(q.id);
+    setEditingQuote(q);
+    setQuoteEditorMode('view');
     setQuoteForm({ customer_id: q.customer_id || '', valid_until: q.valid_until || '', note: q.note || '', delivery_date: q.doc_header?.delivery_date || '', reference: q.doc_header?.reference || '', warranty: q.doc_header?.warranty || '', representative: (q as any).representative_id || '', imei: q.doc_header?.imei || '' });
     setQuoteItems((data || []).map((i: any) => ({
       article_id: i.article_id, name: i.name,
@@ -699,10 +725,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
 
   const openQuoteDetail = async (q: Quote) => {
-    if (isDesktop && q.status === 'draft') {
-      openQuoteForEdit(q);
-    } else if (isDesktop) {
-      openQuoteForEdit(q);
+    if (isDesktop) {
+      if (q.status === 'draft' || q.status === 'sent') {
+        openQuoteForEdit(q);
+      } else {
+        openQuoteForView(q);
+      }
     } else {
       setQuoteDetail(q);
       const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref)').eq('quote_id', q.id);
@@ -790,26 +818,32 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const openInvoiceEditor = () => {
     setInvoiceEditorOpen(true);
+    setInvoiceEditorMode('create');
     setEditingInvoiceId(null);
-    setInvoiceForm({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+    setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
     setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setInvoicePayList([]);
     setInvoiceIsCredit(false);
+    setInvoicePostCreation(null);
   };
   const closeInvoiceEditor = () => {
     setInvoiceEditorOpen(false);
+    setInvoiceEditorMode('create');
     setEditingInvoiceId(null);
-    setInvoiceForm({ customer_id: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+    setInvoicePostCreation(null);
+    setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
     setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setInvoicePayList([]);
     setInvoiceIsCredit(false);
+    setInvoicePostCreation(null);
   };
   const openInvoiceForEdit = async (inv: Invoice) => {
     const { data: items } = await supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id);
     setEditingInvoiceId(inv.id);
+    setInvoiceEditorMode('edit');
     setInvoiceForm({
       customer_id: inv.customer_id || '',
-      note: inv.note || '',
+      doc_date: (inv as any).doc_header?.doc_date || new Date(inv.created_at).toISOString().slice(0, 10),
       delivery_date: (inv as any).doc_header?.delivery_date || '',
       reference: (inv as any).doc_header?.reference || '',
       warranty: (inv as any).doc_header?.warranty || '',
@@ -825,7 +859,30 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setInvoicePayList([]);
     setInvoiceIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
     setInvoiceEditorOpen(true);
-    setInvoiceDetail(null);
+  };
+  const openInvoiceForView = async (inv: Invoice) => {
+    const { data: items } = await supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id);
+    setEditingInvoiceId(inv.id);
+    setInvoiceNavIdx(invoices.findIndex(i => i.id === inv.id));
+    setInvoiceEditorMode('view');
+    setInvoiceForm({
+      customer_id: inv.customer_id || '',
+      doc_date: (inv as any).doc_header?.doc_date || new Date(inv.created_at).toISOString().slice(0, 10),
+      delivery_date: (inv as any).doc_header?.delivery_date || '',
+      reference: (inv as any).doc_header?.reference || '',
+      warranty: (inv as any).doc_header?.warranty || '',
+      representative: (inv as any).representative_id || '',
+      imei: (inv as any).doc_header?.imei || '',
+    });
+    setInvoiceEditorItems((items || []).map((i: any) => ({
+      article_id: i.article_id, name: i.name,
+      quantity: Number(i.quantity), unit_price: Number(i.unit_price),
+      discount: Number(i.discount || 0), total: Number(i.total),
+    })));
+    const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', inv.id);
+    setInvoicePayList((pp || []).map((p: any) => ({ method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: '' })));
+    setInvoiceIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
+    setInvoiceEditorOpen(true);
   };
 
   const saveInvoice = async () => {
@@ -839,9 +896,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       setSavingInvoice(true);
       try {
         const invRepLabel = repLabelOf(invoiceForm.representative);
-        const docHeader = (invoiceForm.delivery_date || invoiceForm.reference || invoiceForm.warranty || invRepLabel || invoiceForm.imei)
-          ? { delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invRepLabel, imei: invoiceForm.imei || null }
-          : null;
+        const docHeader = { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invRepLabel, imei: invoiceForm.imei || null };
         const { data: result, error: rpcErr } = await supabase.rpc('update_sale_items_and_totals', {
           p_sale_id: editingInvoiceId,
           p_tenant_id: tenant.id,
@@ -855,11 +910,6 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         });
         if (rpcErr) throw rpcErr;
         if (result && !(result as any).success) throw new Error((result as any).error || 'Erreur');
-
-        // Update note separately (not in RPC)
-        if (invoiceForm.note !== undefined) {
-          await supabase.from('sales').update({ note: invoiceForm.note || null }).eq('id', editingInvoiceId);
-        }
 
         const editSubtotal = valid.reduce((s, i) => s + Number(i.total), 0);
         const editSnapshot = await buildRepSnapshot(invoiceForm.representative || null, valid, editSubtotal);
@@ -895,10 +945,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const subtotal = valid.reduce((s, i) => s + Number(i.total), 0);
     const totalPaid = invoiceIsCredit ? 0 : invoicePayList.reduce((s, p) => s + p.amount, 0);
     const clientDueAmount = (ipmBeneficiaire && ipmPartIpm > 0) ? ipmPartClient : subtotal;
-    if (!invoiceIsCredit && totalPaid > clientDueAmount) { error('Le montant paye depasse la part client'); return; }
+    if (!invoiceIsCredit && totalPaid > clientDueAmount) { error('Le montant payé dépasse la part client'); return; }
 
     if (invoiceIsCredit && !invoiceForm.customer_id) {
-      error('Un client est requis pour une facture a crédit');
+      error('Un client est requis pour une facture à crédit');
       return;
     }
 
@@ -953,13 +1003,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         user_id: profile?.id || null,
         sale_number: invNum, subtotal, discount: 0, total: subtotal,
         paid: effectivePaid, status,
-        source: 'billing', note: invoiceForm.note || (ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : ''),
+        source: 'billing', note: ipmCoverage > 0 ? `IPM: ${ipmBeneficiaire.ipm_organismes?.nom}` : null,
         cash_session_id: sessionId,
         representative_id: invoiceForm.representative || null,
         rep_commission: repSnapshot,
-        doc_header: (invoiceForm.delivery_date || invoiceForm.reference || invoiceForm.warranty || newInvRepLabel || invoiceForm.imei)
-          ? { delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null }
-          : null,
+        doc_header: { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: newInvRepLabel, imei: invoiceForm.imei || null },
       }).select('id').single();
       if (e || !sale) { error(e?.message || 'Erreur'); return; }
 
@@ -1044,7 +1092,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       }
 
       success(`Facture ${invNum} créée${invoiceIsCredit ? ' (à crédit)' : ''}${ipmBeneficiaire && ipmPartIpm > 0 ? ` · Part IPM: ${formatFCFA(ipmPartIpm)}` : ''}`);
-      closeInvoiceEditor();
+      setInvoicePostCreation({ saleNumber: invNum, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
+      setEditingInvoiceId(sale.id);
+      setInvoiceEditorMode('view');
       load();
     } catch (err: any) {
       error(err.message || 'Erreur');
@@ -1257,6 +1307,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       setInvoiceDetail(data as any);
       const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', id);
       setInvoicePays(pp || []);
+      if (invoiceEditorOpen && editingInvoiceId === id) {
+        setInvoicePayList((pp || []).map((p: any) => ({ method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: '' })));
+      }
     }
     load();
   };
@@ -1337,10 +1390,40 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const quickWhatsApp = (inv: Invoice) => sendInvoiceWhatsApp(inv);
   const quickCopy = (inv: Invoice) => copyInvoiceLink(inv);
 
+  const cancelInvoice = async (inv: Invoice) => {
+    setCancelTarget(inv);
+  };
+
+  const confirmCancelInvoice = async () => {
+    if (!cancelTarget) return;
+    const inv = cancelTarget;
+    setCancelTarget(null);
+    await supabase.from('sales').update({ status: 'cancelled' }).eq('id', inv.id);
+    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'cancelled' } : i));
+    success(`Facture ${inv.sale_number} annulée`);
+    closeInvoiceEditor();
+  };
+
+  const comptabiliserFromEditor = async (inv: Invoice) => {
+    if (accountingBusy) return;
+    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de comptabiliser les factures'); return; }
+    setAccountingBusy(true);
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('comptabiliser_vente', { p_sale_id: inv.id });
+      if (rpcErr) throw rpcErr;
+      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Erreur inconnue');
+      success(`Comptabilisé : ${(data as any).piece_number}`);
+      setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, accounting_status: 'accounted' } : i));
+    } catch (e: any) { error(e.message); }
+    finally { setAccountingBusy(false); }
+  };
+
   // ── Register payment ─────────────────────────────────────────
-  const openPay = () => {
-    if (!invoiceDetail) return;
-    const due = Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid));
+  const openPay = (inv?: Invoice | null) => {
+    const target = inv || invoiceDetail;
+    if (!target) return;
+    setInvoiceDetail(target);
+    const due = Math.max(0, Number(target.total) - Number(target.paid));
     setPayAmount(String(due));
     setPayMethod(paymentMethods[0]?.id || '');
     setPayOpen(true);
@@ -1514,7 +1597,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }
 
     setSaving(false);
-    success('Retour enregistre — choisissez le mode de remboursement');
+    success('Retour enregistré — choisissez le mode de remboursement');
     setReturnOpen(false);
     setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true });
     setReturnLines([]);
@@ -1524,6 +1607,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const openReturnDetail = async (r: SaleReturn) => {
     setReturnDetail(r);
+    setReturnEditorOpen(true);
     const { data } = await supabase.from('sale_return_items').select('*, articles(internal_ref, oem_ref)').eq('return_id', r.id);
     setReturnItemsDetail(data || []);
   };
@@ -1601,7 +1685,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const primaryAction = () => {
     if (tab === 'quotes') {
       if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; }
-      setQuoteOpen(true);
+      setQuoteEditorMode('create'); setQuoteOpen(true);
     } else if (tab === 'invoices') {
       if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; }
       openInvoiceEditor();
@@ -1623,7 +1707,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [newMenuOpen]);
   const newMenuItems = [
     { key: 'invoice', label: 'Nouvelle facture', icon: Receipt, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; } openInvoiceEditor(); } },
-    { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } setQuoteOpen(true); } },
+    { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } setQuoteEditorMode('create'); setQuoteOpen(true); } },
     { key: 'return', label: 'Nouveau retour', icon: RotateCcw, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; } setReturnOpen(true); } },
     { key: 'credit', label: 'Nouvel avoir', icon: Wallet, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } setReturnOpen(true); } },
   ];
@@ -1758,7 +1842,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         <>
           {tab === 'quotes' && (
             filteredQuotes.length === 0 ? (
-              <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => setQuoteOpen(true)} className="btn-icon-primary" title="Nouveau devis"><Plus className="w-4 h-4" /></button>} />
+              <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => { setQuoteEditorMode('create'); setQuoteOpen(true); }} className="btn-icon-primary" title="Nouveau devis"><Plus className="w-4 h-4" /></button>} />
             ) : (
               <div className={flashTab === 'quotes' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
                 <div className="md:hidden space-y-2 count-up">
@@ -1833,7 +1917,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     const st = invoiceStatus(inv);
                     const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
                     return (
-                      <button key={inv.id} onClick={() => openInvoiceDetail(inv)} className="w-full text-left py-3 border-b border-neutral-100 flex flex-col gap-2 transition-all active:scale-[0.99]">
+                      <button key={inv.id} onClick={() => openInvoiceForView(inv)} className="w-full text-left py-3 border-b border-neutral-100 flex flex-col gap-2 transition-all active:scale-[0.99]">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1873,7 +1957,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     const st = invoiceStatus(inv);
                     const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
                     return (
-                      <div key={inv.id} onClick={() => openInvoiceDetail(inv)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50">
+                      <div key={inv.id} onClick={() => openInvoiceForView(inv)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50">
                         <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{inv.sale_number}</span>
                         <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-32">{formatDateTime(inv.created_at)}</span>
                         <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{inv.customers?.name || <span className="text-slate-400">Client comptoir</span>}</span>
@@ -1885,7 +1969,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                         <div className="flex items-center gap-0.5 shrink-0 w-16 justify-center" onClick={e => e.stopPropagation()}>
                           {inv.customers && <button onClick={() => quickWhatsApp(inv)} className="p-1 rounded hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>}
                           <button onClick={() => quickCopy(inv)} className="p-1 rounded hover:bg-slate-100 text-slate-500 transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => openInvoiceDetail(inv)} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
+                          <button onClick={() => openInvoiceForView(inv)} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
                         </div>
                       </div>
                     );
@@ -1983,64 +2067,58 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         onApply={(f, t) => { setDateFrom(f); setDateTo(t); setFiltersOpen(false); }}
         onReset={clearFilters}
         extraFilters={
-          <>
-            <div>
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Filter className="w-3.5 h-3.5" />Statut</div>
-              <SearchableSelect
-                searchable={false}
-                noBorder
-                value={statusFilter}
-                onChange={v => setStatusFilter(v)}
-                placeholder="Tous les statuts"
-                options={statusOptions.map(o => ({ value: o.value, label: o.label }))}
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><User className="w-3.5 h-3.5" />Client</div>
-              <SearchableSelect
-                noBorder
-                value={customerFilter}
-                onChange={v => setCustomerFilter(v)}
-                placeholder="Tous les clients"
-                options={customers.map(c => ({ value: c.id, label: c.name }))}
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2"><Coins className="w-3.5 h-3.5" />Montant (FCFA)</div>
-              <div className="space-y-2">
-                <input type="number" placeholder="Minimum" value={minAmount} onChange={e => setMinAmount(e.target.value)} className="input" />
-                <input type="number" placeholder="Maximum" value={maxAmount} onChange={e => setMaxAmount(e.target.value)} className="input" />
-              </div>
-            </div>
-          </>
+          <div>
+            <div className="text-[10px] font-semibold text-slate-500 mb-0.5">Statut</div>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="w-full px-2 py-1 text-[10px] font-medium border border-slate-200 rounded-md bg-white text-slate-700 outline-none focus:border-slate-400"
+            >
+              <option value="">Tous</option>
+              {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
         }
       />
 
       {/* ── Direct invoice full-screen panel ──────────────────────────────── */}
       {invoiceEditorOpen && isDesktop && (
-        <InvoiceFullPanel
+        <DocumentEditor
+          docType="invoice"
+          mode={invoiceEditorMode}
           articles={articles}
           customers={customers}
-          invoiceForm={invoiceForm}
-          setInvoiceForm={setInvoiceForm}
-          invoiceItems={invoiceEditorItems}
-          setInvoiceItems={setInvoiceEditorItems}
-          updateInvoiceItem={updateInvoiceItem}
-          invoiceSubtotal={invoiceEditorSubtotal}
+          headerForm={{ ...invoiceForm, valid_until: '', note: '', doc_date: invoiceForm.doc_date || '' }}
+          setHeaderForm={(fn: any) => setInvoiceForm((prev: any) => {
+            const next = typeof fn === 'function' ? fn(prev) : fn;
+            const { valid_until: _, ...rest } = next;
+            return rest;
+          })}
+          items={invoiceEditorItems}
+          setItems={setInvoiceEditorItems}
+          subtotal={invoiceEditorSubtotal}
+          saving={savingInvoice}
+          onSave={saveInvoice}
+          onClose={closeInvoiceEditor}
+          hasPrev={invoiceNavIdx > 0}
+          hasNext={invoiceNavIdx >= 0 && invoiceNavIdx < invoices.length - 1}
+          onPrev={invoiceNavIdx > 0 ? () => { const prev = invoices[invoiceNavIdx - 1]; if (prev) openInvoiceForView(prev); } : undefined}
+          onNext={invoiceNavIdx >= 0 && invoiceNavIdx < invoices.length - 1 ? () => { const next = invoices[invoiceNavIdx + 1]; if (next) openInvoiceForView(next); } : undefined}
+          onSearchOpen={() => setInvoiceSearchOpen(true)}
+          editingId={editingInvoiceId}
+          documentNumber={editingInvoiceId ? (invoices.find(i => i.id === editingInvoiceId)?.sale_number || undefined) : undefined}
+          documentStatus={editingInvoiceId ? (invoices.find(i => i.id === editingInvoiceId)?.status || undefined) : undefined}
+          accountingStatus={(invoices.find(i => i.id === editingInvoiceId) as any)?.accounting_status || undefined}
+          invoiceDue={editingInvoiceId ? Math.max(0, Number(invoices.find(i => i.id === editingInvoiceId)?.total || 0) - Number(invoices.find(i => i.id === editingInvoiceId)?.paid || 0)) : 0}
+          docSettings={docSettings}
+          autoMode={autoMode}
+          onVehiclePicker={(idx: number | null) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
           paymentMethods={paymentMethods}
           payments={invoicePayList}
           setPayments={setInvoicePayList}
           totalPaid={invoiceIsCredit ? 0 : invoiceEditorPaid}
-          saving={savingInvoice}
-          saveInvoice={saveInvoice}
-          onClose={closeInvoiceEditor}
-          autoMode={autoMode}
           isCredit={invoiceIsCredit}
           setIsCredit={setInvoiceIsCredit}
-          docSettings={docSettings}
-          onVehiclePicker={(idx: number | null) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
           isPharmacy={isPharmacy}
           ipmLoading={ipmLoading}
           ipmBeneficiaire={ipmBeneficiaire}
@@ -2054,8 +2132,117 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           ipmDocValidation={ipmDocValidation}
           onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
           onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
-          editingInvoiceId={editingInvoiceId}
           reps={activeReps}
+          postCreation={invoicePostCreation}
+          docCreatedInfo={editingInvoiceId ? (() => {
+            const inv = invoices.find(i => i.id === editingInvoiceId);
+            return inv ? { createdAt: inv.created_at, createdBy: creatorName(inv.user_id) } : null;
+          })() : null}
+          onNewInvoice={() => {
+            setInvoicePostCreation(null);
+            setEditingInvoiceId(null);
+            setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+            setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
+            setInvoicePayList([]);
+            setInvoiceIsCredit(false);
+          }}
+          onEdit={editingInvoiceId ? () => {
+            setInvoicePostCreation(null);
+            const inv = invoices.find(i => i.id === editingInvoiceId);
+            if (inv) openInvoiceForEdit(inv);
+          } : undefined}
+          onPay={editingInvoiceId ? () => {
+            const inv = invoices.find(i => i.id === editingInvoiceId);
+            if (inv) openPay(inv);
+          } : undefined}
+          onCopyLink={editingInvoiceId ? () => {
+            const inv = invoices.find(i => i.id === editingInvoiceId);
+            if (inv) copyInvoiceLink(inv);
+          } : undefined}
+          onWhatsApp={editingInvoiceId ? (() => {
+            const inv = invoices.find(i => i.id === editingInvoiceId);
+            if (inv?.customers) return () => sendInvoiceWhatsApp(inv);
+            return undefined;
+          })() : undefined}
+          onCancel={editingInvoiceId ? () => {
+            const inv = invoices.find(i => i.id === editingInvoiceId);
+            if (inv) cancelInvoice(inv);
+          } : undefined}
+          onComptabiliser={editingInvoiceId ? () => {
+            const inv = invoices.find(i => i.id === editingInvoiceId);
+            if (inv) comptabiliserFromEditor(inv);
+          } : undefined}
+          onPrint={editingInvoiceId ? () => {
+            const inv = invoices.find(i => i.id === editingInvoiceId);
+            if (!inv || !tenant) return;
+            const pitems = invoiceEditorItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
+            const psubtotal = pitems.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+            printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'FACTURE', docNumber: inv.sale_number || '', docDate: new Date(inv.created_at).toLocaleDateString('fr-FR'), docCreatedAt: inv.created_at, customer: inv.customers ? { name: inv.customers.name, phone: (inv.customers as any).phone || undefined, address: (inv.customers as any).address || undefined } : null, items: pitems, subtotal: psubtotal, total: psubtotal, payments: [], paid: 0, issuedBy: creatorName((inv as any).user_id), docHeader: invoiceForm.reference || invoiceForm.delivery_date || invoiceForm.warranty ? { reference: invoiceForm.reference || null, delivery_date: invoiceForm.delivery_date || null, warranty: invoiceForm.warranty || null, representative: null } : null });
+          } : undefined}
+          transformReturnLines={returnLines}
+          loadReturnLines={async (saleId: string) => { await loadSaleItems(saleId); }}
+          onTransformToReturn={async (config) => {
+            if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
+            if (!can('edit_invoices')) { error('Permission insuffisante'); return; }
+            if (!editingInvoiceId) return;
+            const sel = config.selectedItems.filter(i => i.selected && i.quantity > 0);
+            if (sel.length === 0) { error('Sélectionnez au moins un article'); return; }
+            setSaving(true);
+            const saleId = editingInvoiceId;
+            const localReturnTotal = sel.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
+            const { data: ipmVente } = await supabase.from('ipm_ventes')
+              .select('id, part_ipm, part_client, montant_total, bordereau_id, statut')
+              .eq('sale_id', saleId).limit(1).maybeSingle();
+            let refundTotal = localReturnTotal;
+            if (ipmVente && ipmVente.montant_total > 0) {
+              const ipmRatio = Number(ipmVente.part_client) / Number(ipmVente.montant_total);
+              refundTotal = Math.round(localReturnTotal * ipmRatio);
+            }
+            const { data: numData } = await supabase.rpc('next_doc_number', {
+              p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET',
+            });
+            const rNum = (numData as string) || ('RET-' + Date.now());
+            const sale = sales.find(s => s.id === saleId);
+            const { data: ret, error: e } = await supabase.from('sale_returns').insert({
+              tenant_id: tenant.id, site_id: currentSite.id,
+              sale_id: saleId, customer_id: sale?.customer_id || null,
+              return_number: rNum, total: refundTotal,
+              refund_method: 'pending', reason: config.reason,
+              restock: config.restock, status: 'pending',
+            }).select().single();
+            if (e || !ret) { error(e?.message || 'Erreur'); setSaving(false); return; }
+            await supabase.from('sale_return_items').insert(sel.map(i => ({
+              tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, sale_item_id: i.item_id, name: i.name,
+              quantity: i.quantity, unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, total: i.quantity * i.unit_price,
+            })));
+            if (config.restock) {
+              for (const item of sel) {
+                await supabase.rpc('adjust_stock', {
+                  p_article_id: item.article_id, p_site_id: billSourceSiteId || currentSite.id,
+                  p_quantity: item.quantity, p_movement_type: 'return_customer',
+                  p_note: `Retour ${rNum}`,
+                });
+              }
+            }
+            if (ipmVente) {
+              const saleTotal = Number(ipmVente.montant_total);
+              if (localReturnTotal >= saleTotal) {
+                await supabase.from('ipm_ventes').update({ statut: 'annulee', bordereau_id: null }).eq('id', ipmVente.id);
+              } else {
+                const newTotal = saleTotal - localReturnTotal;
+                const oldRatio = Number(ipmVente.part_ipm) / saleTotal;
+                await supabase.from('ipm_ventes').update({
+                  montant_total: newTotal, part_ipm: Math.round(newTotal * oldRatio),
+                  part_client: newTotal - Math.round(newTotal * oldRatio), bordereau_id: null,
+                }).eq('id', ipmVente.id);
+              }
+            }
+            setSaving(false);
+            success('Retour enregistré — choisissez le mode de remboursement');
+            closeInvoiceEditor();
+            await load();
+            openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
+          }}
         />
       )}
       {invoiceEditorOpen && !isDesktop && (
@@ -2065,11 +2252,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           title={editingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}
           headerFields={[
             { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
-            { key: 'reference', label: 'Référence', type: 'text', placeholder: 'REF-...' },
-            { key: 'delivery_date', label: 'Date de livraison', type: 'date' },
-            { key: 'warranty', label: 'Garantie', type: 'text', placeholder: 'Ex: 6 mois' },
+            { key: 'doc_date', label: 'Date', type: 'date' as const },
+            ...(docSettings.show_reference ? [{ key: 'reference', label: 'Référence', type: 'text' as const, placeholder: 'REF-...' }] : []),
+            ...(docSettings.show_delivery_date ? [{ key: 'delivery_date', label: 'Date de livraison', type: 'date' as const }] : []),
+            ...(docSettings.show_warranty ? [{ key: 'warranty', label: 'Garantie', type: 'text' as const, placeholder: 'Ex: 6 mois' }] : []),
+            ...(docSettings.show_imei ? [{ key: 'imei', label: 'IMEI', type: 'text' as const, placeholder: 'Numéro IMEI' }] : []),
             ...(docSettings.show_representative ? [{ key: 'representative', label: 'Représentant', type: 'select' as const, options: activeReps.map(r => ({ value: r.id, label: repDisplayName(r) })), placeholder: 'Aucun représentant' }] : []),
-            { key: 'note', label: 'Note', type: 'text', placeholder: 'Note optionnelle...' },
           ]}
           headerValues={invoiceForm}
           onHeaderChange={(k, v) => setInvoiceForm(f => ({ ...f, [k]: v }))}
@@ -2122,26 +2310,27 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
       {/* ── Quote create/edit full-screen panel (desktop only) ──────────────────────────────── */}
       {quoteOpen && isDesktop && (
-        <QuoteFullPanel
+        <DocumentEditor
+          docType="quote"
+          mode={quoteEditorMode}
           articles={articles}
           customers={customers}
-          quoteForm={quoteForm}
-          setQuoteForm={setQuoteForm}
-          quoteItems={quoteItems}
-          setQuoteItems={setQuoteItems}
-          updateQuoteItem={updateQuoteItem}
-          quoteSubtotal={quoteSubtotal}
+          headerForm={{ customer_id: quoteForm.customer_id, note: quoteForm.note, delivery_date: quoteForm.delivery_date, reference: quoteForm.reference, warranty: quoteForm.warranty, representative: quoteForm.representative, imei: quoteForm.imei, valid_until: quoteForm.valid_until }}
+          setHeaderForm={(fn: any) => setQuoteForm((prev: any) => typeof fn === 'function' ? fn(prev) : fn)}
+          items={quoteItems}
+          setItems={setQuoteItems}
+          subtotal={quoteSubtotal}
           saving={saving}
-          saveQuote={saveQuote}
-          autoSaveQuote={autoSaveQuote}
+          onSave={() => saveQuote()}
           onClose={closeQuotePanel}
+          editingId={editingQuoteId}
+          documentNumber={editingQuote?.quote_number}
+          documentStatus={editingQuote?.status}
+          docSettings={quoteDocSettings}
           autoMode={autoMode}
           onVehiclePicker={(idx: number | null) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
-          editingQuoteId={editingQuoteId}
-          editingQuote={editingQuote}
           onChangeStatus={(status: string) => { if (editingQuote) { changeQuoteStatus(editingQuote, status); setEditingQuote({ ...editingQuote, status }); } }}
           onConvert={() => { if (editingQuote) openConvert(editingQuote); }}
-          docSettings={quoteDocSettings}
           isPharmacy={isPharmacy}
           ipmBeneficiaire={quoteIpmBeneficiaire}
           ipmTaux={quoteIpmTaux}
@@ -2149,13 +2338,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           ipmPartClient={quoteIpmPartClient}
           onPrint={() => {
             if (!editingQuote || !tenant) return;
-            const items = quoteItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
-            const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-            printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items, subtotal, total: subtotal, payments: [], paid: 0, issuedBy: creatorName((editingQuote as any).user_id), docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || repLabelOf(quoteForm.representative) ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: repLabelOf(quoteForm.representative) } : null });
+            const pitems = quoteItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
+            const psubtotal = pitems.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+            printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items: pitems, subtotal: psubtotal, total: psubtotal, payments: [], paid: 0, issuedBy: creatorName((editingQuote as any).user_id), docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || repLabelOf(quoteForm.representative) ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: repLabelOf(quoteForm.representative) } : null });
           }}
           onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
           onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
           reps={activeReps}
+          onEdit={editingQuote && quoteEditorMode === 'view' ? () => openQuoteForEdit(editingQuote) : undefined}
         />
       )}
 
@@ -2168,9 +2358,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           headerFields={[
             { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
             { key: 'valid_until', label: 'Valide jusqu\'au', type: 'date' },
-            { key: 'reference', label: 'Référence', type: 'text', placeholder: 'REF-...' },
-            { key: 'delivery_date', label: 'Date de livraison', type: 'date' },
-            { key: 'warranty', label: 'Garantie', type: 'text', placeholder: 'Ex: 6 mois' },
+            ...(quoteDocSettings.show_reference ? [{ key: 'reference', label: 'Référence', type: 'text' as const, placeholder: 'REF-...' }] : []),
+            ...(quoteDocSettings.show_delivery_date ? [{ key: 'delivery_date', label: 'Date de livraison', type: 'date' as const }] : []),
+            ...(quoteDocSettings.show_warranty ? [{ key: 'warranty', label: 'Garantie', type: 'text' as const, placeholder: 'Ex: 6 mois' }] : []),
+            ...(quoteDocSettings.show_imei ? [{ key: 'imei', label: 'IMEI', type: 'text' as const, placeholder: 'Numéro IMEI' }] : []),
             ...(quoteDocSettings.show_representative ? [{ key: 'representative', label: 'Représentant', type: 'select' as const, options: activeReps.map(r => ({ value: r.id, label: repDisplayName(r) })), placeholder: 'Aucun représentant' }] : []),
             { key: 'note', label: 'Note', type: 'text', placeholder: 'Note optionnelle...' },
           ]}
@@ -2204,6 +2395,48 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               </div>
             </div>
           ) : undefined}
+        />
+      )}
+
+      {/* ── Return full-screen viewer ──────────────────────────────── */}
+      {returnEditorOpen && returnDetail && (
+        <DocumentEditor
+          docType="return"
+          mode="view"
+          articles={articles}
+          customers={customers}
+          headerForm={{
+            customer_id: returnDetail.customer_id || '',
+            note: returnDetail.reason || '',
+            delivery_date: '',
+            reference: returnDetail.sales?.sale_number ? `Vente ${returnDetail.sales.sale_number}` : '',
+            warranty: '',
+            representative: '',
+            imei: '',
+            valid_until: '',
+          }}
+          setHeaderForm={() => {}}
+          items={returnItemsDetail.map((i: any) => ({
+            id: i.id,
+            article_id: i.article_id,
+            name: i.name,
+            quantity: Number(i.quantity),
+            unit_price: Number(i.unit_price),
+            discount: 0,
+            total: Number(i.quantity) * Number(i.unit_price),
+          }))}
+          setItems={() => {}}
+          subtotal={returnItemsDetail.reduce((s: number, i: any) => s + Number(i.quantity) * Number(i.unit_price), 0)}
+          saving={false}
+          onSave={() => {}}
+          onClose={() => { setReturnEditorOpen(false); setReturnDetail(null); }}
+          editingId={returnDetail.id}
+          documentNumber={returnDetail.return_number}
+          documentStatus={returnDetail.status}
+          docSettings={docSettings}
+          onPrint={printReturn}
+          onRefundCash={returnDetail.status === 'pending' ? () => setReturnCashConfirmOpen(true) : undefined}
+          onApproveAvoir={returnDetail.status === 'pending' ? () => approveAsAvoir(returnDetail) : undefined}
         />
       )}
 
@@ -2259,7 +2492,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       <ConfirmDialog open={!!quoteToCancel} onClose={() => setQuoteToCancel(null)} onConfirm={async () => { if (!quoteToCancel) return; await changeQuoteStatus(quoteToCancel, 'rejected'); setQuoteToCancel(null); }} title="Refuser le devis ?" message={`Le devis "${quoteToCancel?.quote_number}" sera marqué comme refusé.`} danger />
 
       {/* ── Convert quote → sale ─────────────────────────────── */}
-      <Modal open={!!convertFrom} onClose={() => !converting && setConvertFrom(null)} title="Convertir en facture" size="sm"
+      <Modal open={!!convertFrom} onClose={() => !converting && setConvertFrom(null)} title="Convertir en facture" size="sm" layer="top"
         footer={<>
           <button onClick={() => setConvertFrom(null)} className="btn-icon" title="Annuler" disabled={converting}><X className="w-4 h-4" /></button>
           <button onClick={confirmConvert} disabled={converting || (!!convertIpmBeneficiaire && !!convertIpmConvention && !validerDocumentsIpm(parseConvention(convertIpmConvention)!, convertIpmDocs, convertIpmBeneficiaire?.matricule).valide)} className="btn-icon-primary" title="Créer facture">{converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}</button>
@@ -2270,8 +2503,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           const convertDocValid = convertIpmCfg ? validerDocumentsIpm(convertIpmCfg, convertIpmDocs, convertIpmBeneficiaire?.matricule) : { valide: true, champs_manquants: [] };
           return (
           <div className="space-y-4">
-            <div className="p-3 rounded-xl bg-brand-50 border border-brand-200">
-              <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-brand-700/70">Devis source</div>
                   <div className="doc-number text-sm font-bold text-brand-900 mt-0.5">{convertFrom.quote_number}</div>
@@ -2282,7 +2514,6 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   <div className="text-lg font-bold text-brand-900 num">{formatFCFA(convertFrom.total)}</div>
                 </div>
               </div>
-            </div>
 
             {/* IPM Banner */}
             {convertIpmBeneficiaire && convertIpmCalc && (
@@ -2321,9 +2552,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             <label className="flex items-center gap-2 cursor-pointer p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">
               <input type="checkbox" checked={convertPayNow} onChange={e => setConvertPayNow(e.target.checked)} className="w-4 h-4 rounded" />
               <div className="flex-1">
-                <div className="text-sm font-semibold text-slate-800">Encaisser immediatement</div>
+                <div className="text-sm font-semibold text-slate-800">Encaisser immédiatement</div>
                 <div className="text-[11px] text-slate-500">
-                  {convertIpmCalc ? `Part client a encaisser : ${formatFCFA(convertIpmCalc.part_client)}` : 'Sinon, la facture reste a payer plus tard'}
+                  {convertIpmCalc ? `Part client à encaisser : ${formatFCFA(convertIpmCalc.part_client)}` : 'Sinon, la facture reste à payer plus tard'}
                 </div>
               </div>
             </label>
@@ -2331,13 +2562,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             {convertPayNow && (
               <div className="space-y-2">
                 <div>
-                  <label className="label">Mode de reglement</label>
+                  <label className="label">Mode de règlement</label>
                   <select value={convertPayMethod} onChange={e => setConvertPayMethod(e.target.value)} className="input">
                     {paymentMethods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Montant encaisse{convertIpmCalc ? ` (Part client: ${formatFCFA(convertIpmCalc.part_client)})` : ''}</label>
+                  <label className="label">Montant encaissé{convertIpmCalc ? ` (Part client: ${formatFCFA(convertIpmCalc.part_client)})` : ''}</label>
                   <input type="number" value={convertPayAmount} onChange={e => setConvertPayAmount(e.target.value)} className="input num text-lg font-bold" />
                 </div>
               </div>
@@ -2345,7 +2576,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
             <div className="text-[11px] text-slate-500 p-3 rounded-xl bg-slate-50 border border-slate-200/70">
               Le devis sera marqué comme <strong>converti</strong> et une nouvelle facture sera créée avec les mêmes articles.
-              {convertIpmCalc && <span className="block mt-1 text-teal-700 font-medium">La prise en charge IPM ({formatFCFA(convertIpmCalc.part_ipm)}) sera enregistree automatiquement.</span>}
+              {convertIpmCalc && <span className="block mt-1 text-teal-700 font-medium">La prise en charge IPM ({formatFCFA(convertIpmCalc.part_ipm)}) sera enregistrée automatiquement.</span>}
             </div>
           </div>
           );
@@ -2389,7 +2620,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       })()}
 
       {/* ── Invoice detail ───────────────────────────────────── */}
-      <DocPanel open={!!invoiceDetail} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
+      <DocPanel open={!!invoiceDetail && !invoiceEditorOpen} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
         footer={<>
           <div className="flex gap-1.5 mr-auto">
             {invoiceDetail && invoiceDetail.status !== 'cancelled' && invoiceDetail.accounting_status !== 'accounted' && (
@@ -2424,7 +2655,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               <DocSlimHeader
                 status={slimStatus}
                 customerName={invoiceDetail.customers?.name ?? null}
-                date={formatDateTime(invoiceDetail.created_at)}
+                date={(invoiceDetail as any).doc_header?.doc_date || formatDateTime(invoiceDetail.created_at)}
                 docHeader={(invoiceDetail as any).doc_header ? { ...(invoiceDetail as any).doc_header, created_at: invoiceDetail.created_at } : null}
               />
               <div className="space-y-3">
@@ -2568,14 +2799,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </DocPanel>
 
       {/* ── Register payment modal ───────────────────────────── */}
-      <Modal open={payOpen} onClose={() => !paying && setPayOpen(false)} title="Encaisser la facture" size="sm"
+      <Modal open={payOpen} onClose={() => !paying && setPayOpen(false)} title="Encaisser la facture" size="sm" layer="top"
         footer={<>
           <button onClick={() => setPayOpen(false)} className="btn-icon" title="Annuler" disabled={paying}><X className="w-4 h-4" /></button>
           <button onClick={registerPayment} disabled={paying} className="btn-icon-primary" title="Enregistrer">{paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}</button>
         </>}>
         {invoiceDetail && (
           <div className="space-y-3">
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700/70">Solde dû</div>
                 <div className="doc-number text-sm font-bold text-amber-900 mt-0.5">{invoiceDetail.sale_number}</div>
@@ -2661,7 +2892,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
           {returnLines.length > 0 && (
             <div>
-              <label className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">Articles a retourner</label>
+              <label className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">Articles à retourner</label>
               <div className="space-y-1 sm:space-y-2 overflow-y-auto -mx-0.5 px-0.5" style={{ maxHeight: 'calc(100vh - 350px)' }}>
                 {returnLines.map((it, idx) => {
                   const toggle = (v: boolean) => setReturnLines(p => p.map((x, i) => i === idx ? { ...x, selected: v } : x));
@@ -2716,7 +2947,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </Modal>
 
       {/* ── Return detail ─────────────────────────────────────── */}
-      <DocPanel open={!!returnDetail} onClose={() => setReturnDetail(null)} title={returnDetail ? `${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}` : ''}
+      <DocPanel open={!!returnDetail && !returnEditorOpen} onClose={() => setReturnDetail(null)} title={returnDetail ? `${returnDetail.refund_method === 'avoir' ? 'Avoir' : 'Retour'} ${returnDetail.return_number}` : ''}
         footer={<>
           <button onClick={() => setReturnDetail(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
           <button onClick={printReturn} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
@@ -2857,7 +3088,21 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           message={`Le montant de ${formatFCFA(Number(returnDetail.total))} sera enregistré comme sortie caisse. Cette action est irréversible.`}
           confirmLabel="Confirmer le remboursement"
           danger={false}
+          layer="top"
         />
+      )}
+
+      {cancelTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[min(90vw,380px)]">
+            <h3 className="text-sm font-bold text-neutral-900 mb-2">Annuler la facture</h3>
+            <p className="text-xs text-neutral-600 mb-5">Annuler la facture {cancelTarget.sale_number} ? Cette action est irreversible.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setCancelTarget(null)} className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded transition-colors">Non, garder</button>
+              <button onClick={confirmCancelInvoice} className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded transition-colors">Oui, annuler</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {autoMode && tenant && currentSite && (
@@ -2891,6 +3136,52 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         onCreated={(c) => { setCustomers(prev => [c, ...prev]); }}
         initialName={quickCustomerName}
       />
+
+      {/* ── Invoice search modal (Atteindre une facture) ── */}
+      {invoiceSearchOpen && (() => {
+        const q = invoiceSearchQuery.toLowerCase().trim();
+        const filtered = q
+          ? invoices.filter(inv => {
+              const num = (inv.sale_number || '').toLowerCase();
+              const name = (inv.customers?.name || '').toLowerCase();
+              const amt = String(inv.total);
+              return num.includes(q) || name.includes(q) || amt.includes(q);
+            }).slice(0, 30)
+          : invoices.slice(0, 20);
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-[10vh]" onClick={() => { setInvoiceSearchOpen(false); setInvoiceSearchQuery(''); }}>
+            <div className="absolute inset-0 bg-black/40" />
+            <div className="relative bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="px-4 pt-4 pb-2">
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Rechercher une facture (n°, client, montant)…"
+                  className="w-full text-sm outline-none border-0 border-b border-slate-200 focus:border-slate-900 pb-2 bg-transparent placeholder:text-slate-400 transition-colors"
+                  value={invoiceSearchQuery}
+                  onChange={e => setInvoiceSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="overflow-y-auto flex-1 px-2 pb-2">
+                {filtered.map(inv => (
+                  <button
+                    key={inv.id}
+                    onClick={() => { setInvoiceSearchOpen(false); setInvoiceSearchQuery(''); openInvoiceForView(inv); }}
+                    className="w-full text-left px-3 py-2.5 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900 doc-number">{inv.sale_number}</div>
+                      <div className="text-[11px] text-slate-500 truncate">{inv.customers?.name || 'Client comptoir'}</div>
+                    </div>
+                    <div className="text-sm font-bold text-slate-700 num shrink-0">{formatFCFA(inv.total)}</div>
+                  </button>
+                ))}
+                {filtered.length === 0 && <div className="text-center text-sm text-slate-400 py-6">Aucune facture trouvée</div>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -3422,11 +3713,11 @@ function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteIte
   );
 }
 
-// ── Invoice Full Panel ─────────────────────────────────────────
-function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, invoiceItems, setInvoiceItems, updateInvoiceItem, invoiceSubtotal, paymentMethods, payments, setPayments, totalPaid, saving, saveInvoice, onClose, autoMode, onVehiclePicker, isCredit, setIsCredit, docSettings, isPharmacy, ipmLoading, ipmBeneficiaire, ipmTaux, ipmConvention, ipmPartIpm, ipmPartClient, ipmConfig, ipmDocuments, setIpmDocuments, ipmDocValidation, onCreateArticle, onCreateCustomer, editingInvoiceId, reps }: {
+// ── Invoice Full Panel (ERP-style) ─────────────────────────────
+function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, invoiceItems, setInvoiceItems, updateInvoiceItem, invoiceSubtotal, paymentMethods, payments, setPayments, totalPaid, saving, saveInvoice, onClose, autoMode, onVehiclePicker, isCredit, setIsCredit, docSettings, isPharmacy, ipmLoading, ipmBeneficiaire, ipmTaux, ipmConvention, ipmPartIpm, ipmPartClient, ipmConfig, ipmDocuments, setIpmDocuments, ipmDocValidation, onCreateArticle, onCreateCustomer, editingInvoiceId, reps, postCreation, onNewInvoice }: {
   articles: any[];
   customers: any[];
-  invoiceForm: { customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
+  invoiceForm: { customer_id: string; doc_date: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
   setInvoiceForm: (fn: any) => void;
   invoiceItems: QuoteItem[];
   setInvoiceItems: (fn: any) => void;
@@ -3459,46 +3750,69 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
   onCreateCustomer?: (name: string) => void;
   editingInvoiceId?: string | null;
   reps?: SalesRepresentative[];
+  postCreation?: { saleNumber: string; createdAt: string; createdBy: string } | null;
+  onNewInvoice?: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [panelWidth, setPanelWidth] = useState<number | null>(null);
-  const resizing = useRef(false);
   const [payMethodId, setPayMethodId] = useState(paymentMethods[0]?.id || '');
   const [payAmt, setPayAmt] = useState('');
   const [headerValidated, setHeaderValidated] = useState(!docSettings.require_header_lock);
   const repLabel = (id?: string | null) => { const r = (reps || []).find(x => x.id === id); return r ? repDisplayName(r) : ''; };
 
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const emptyInput = { article_id: null as string | null, name: '', quantity: 1, unit_price: 0, discount: 0 };
+  const [inputRow, setInputRow] = useState(emptyInput);
+  const inputNameRef = useRef<HTMLInputElement>(null);
+
+  const validItems = invoiceItems.filter(it => it.name.trim() && (it.unit_price > 0 || it.total > 0));
+
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (editingIdx !== null) { cancelEdit(); } else { onClose(); } } };
     window.addEventListener('keydown', h);
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
-  }, [onClose]);
+  }, [onClose, editingIdx]);
 
-  const startResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    resizing.current = true;
-    const startX = e.clientX;
-    const startWidth = panelRef.current?.offsetWidth || window.innerWidth - 256;
-    const onMove = (ev: MouseEvent) => { if (!resizing.current) return; setPanelWidth(Math.max(600, Math.min(window.innerWidth - 64, startWidth + (startX - ev.clientX)))); };
-    const onUp = () => { resizing.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, []);
+  const calc = (q: number, p: number, d: number) => Math.max(0, (q || 1) * p - (d || 0));
 
-  const handleRowKeyDown = (e: React.KeyboardEvent, idx: number) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const item = invoiceItems[idx];
-      if (item.name.trim() && item.unit_price > 0 && idx === invoiceItems.length - 1) {
-        setInvoiceItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
-        setTimeout(() => {
-          const rows = panelRef.current?.querySelectorAll('[data-row-idx]');
-          const lastRow = rows?.[rows.length - 1];
-          (lastRow?.querySelector('input') as HTMLInputElement)?.focus();
-        }, 50);
-      }
+  const commitRow = () => {
+    if (!inputRow.name.trim() || inputRow.unit_price <= 0) return;
+    const total = calc(inputRow.quantity, inputRow.unit_price, inputRow.discount);
+    const item: QuoteItem = { ...inputRow, quantity: inputRow.quantity || 1, discount: inputRow.discount || 0, total };
+    if (editingIdx !== null) {
+      setInvoiceItems((prev: QuoteItem[]) => prev.map((it: QuoteItem, i: number) => i === editingIdx ? item : it));
+      setEditingIdx(null);
+    } else {
+      setInvoiceItems((prev: QuoteItem[]) => {
+        const kept = prev.filter((it: QuoteItem) => it.name.trim());
+        return [...kept, item];
+      });
     }
+    setInputRow(emptyInput);
+    setTimeout(() => inputNameRef.current?.focus(), 30);
+  };
+
+  const handleInputKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); commitRow(); } };
+
+  const startEdit = (vIdx: number) => {
+    const it = validItems[vIdx];
+    const realIdx = invoiceItems.indexOf(it);
+    setEditingIdx(realIdx);
+    setInputRow({ article_id: it.article_id, name: it.name, quantity: it.quantity, unit_price: it.unit_price, discount: it.discount });
+    setTimeout(() => inputNameRef.current?.focus(), 30);
+  };
+
+  const cancelEdit = () => { setEditingIdx(null); setInputRow(emptyInput); };
+
+  const removeItem = (vIdx: number) => {
+    const it = validItems[vIdx];
+    const realIdx = invoiceItems.indexOf(it);
+    if (editingIdx === realIdx) cancelEdit();
+    setInvoiceItems((p: QuoteItem[]) => p.filter((_: QuoteItem, i: number) => i !== realIdx));
+  };
+
+  const pickArticle = (a: any) => {
+    setInputRow(prev => ({ ...prev, article_id: a.id, name: a.name, unit_price: a.sale_price || prev.unit_price }));
   };
 
   const addPayment = () => {
@@ -3513,129 +3827,111 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
   const clientDue = ipmBeneficiaire && ipmPartIpm > 0 ? ipmPartClient : invoiceSubtotal;
   const balance = clientDue - totalPaid;
 
+  const cols = (docSettings.columns_config.length ? docSettings.columns_config : DEFAULT_COLUMNS).filter(c => c.visible).sort((a, b) => a.order - b.order);
+  const itemsLocked = docSettings.require_header_lock && !headerValidated;
+
+  const inputCls = 'w-full text-xs h-7 px-2 bg-white border border-neutral-300 rounded focus:border-neutral-500 focus:ring-1 focus:ring-neutral-200 outline-none transition-all';
+  const ulInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors';
+
   return (
     <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
-      <div
-        className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-neutral-100 transition-colors group flex-shrink-0 relative z-10"
-        style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
-        onMouseDown={startResize}
-      >
-        <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-neutral-600 transition-colors" />
-      </div>
+      <div className="absolute inset-0 bg-neutral-900/5" onClick={onClose} />
+      <div ref={panelRef} className="relative bg-white h-full flex flex-col w-full z-10">
 
-      <div ref={panelRef} className="bg-white h-full flex flex-col shadow-2xl flex-1 w-full" style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center">
-              <Receipt className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">{editingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}</h2>
-              <p className="text-[11px] text-slate-500">Entrée valide la ligne et ajoute une suivante</p>
-            </div>
+        {/* ── Title bar ── */}
+        <div className="flex items-center justify-between px-5 h-11 border-b border-neutral-200 flex-shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <h2 className="text-sm font-bold text-neutral-900 tracking-tight truncate">
+              {postCreation ? `Facture ${postCreation.saleNumber}` : editingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}
+            </h2>
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400 shrink-0" />}
           </div>
-          <div className="flex items-center gap-2">
-            {saving && <span className="text-[10px] text-neutral-700 font-medium animate-pulse">Sauvegarde...</span>}
-            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-            <button onClick={saveInvoice} disabled={saving || (ipmBeneficiaire && !ipmDocValidation.valide)} className="btn-icon-primary" title={editingInvoiceId ? 'Mettre à jour' : 'Enregistrer'}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {postCreation ? (
+              <>
+                <button onClick={onNewInvoice} className="px-3 py-1 text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors flex items-center gap-1"><Plus className="w-3 h-3" />Nouveau</button>
+                <button onClick={onClose} className="px-3 py-1 text-[11px] font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors">Fermer</button>
+              </>
+            ) : (
+              <>
+                <button onClick={onClose} className="px-3 py-1 text-[11px] font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors">Annuler</button>
+                <button onClick={saveInvoice} disabled={saving || (ipmBeneficiaire && !ipmDocValidation.valide)} className="px-3.5 py-1 text-[11px] font-semibold bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-40 transition-colors">
+                  {editingInvoiceId ? 'Mettre à jour' : 'Enregistrer'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Meta bar — client, note, champs optionnels, verrou */}
+        {/* ── Header fields ── */}
         {headerValidated ? (
-          /* ── En-tête verrouillé ── */
-          <div className="px-5 py-2.5 border-b border-slate-100 bg-emerald-50/60 flex-shrink-0">
+          <div className="px-5 py-1.5 border-b border-neutral-100 bg-neutral-50/50 flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center flex-wrap gap-x-4 gap-y-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <Lock className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span className="text-[11px] font-bold text-emerald-700">En-tête validé</span>
-                </div>
-                {invoiceForm.customer_id && <span className="text-[11px] text-slate-600 font-medium truncate max-w-[140px]"><User className="w-3 h-3 inline mr-0.5 text-slate-400" />{customers.find(c => c.id === invoiceForm.customer_id)?.name || ''}</span>}
-                {invoiceForm.reference && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Réf:</span> {invoiceForm.reference}</span>}
-                {invoiceForm.delivery_date && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Livraison:</span> {invoiceForm.delivery_date}</span>}
-                {invoiceForm.warranty && <span className="text-[11px] text-slate-500 truncate max-w-[120px]"><span className="text-slate-400">Garantie:</span> {invoiceForm.warranty}</span>}
-                {invoiceForm.imei && <span className="text-[11px] text-slate-500 truncate max-w-[140px]"><span className="text-slate-400">IMEI:</span> {invoiceForm.imei}</span>}
-                {invoiceForm.representative && <span className="text-[11px] text-slate-500"><span className="text-slate-400">Rep.:</span> {repLabel(invoiceForm.representative) || invoiceForm.representative}</span>}
-                {invoiceForm.note && <span className="text-[11px] text-slate-400 italic truncate max-w-[160px]">"{invoiceForm.note}"</span>}
+              <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 min-w-0 text-[11px]">
+                <span className="font-semibold text-emerald-700 flex items-center gap-1"><Lock className="w-3 h-3" />Validé</span>
+                {invoiceForm.customer_id && <span className="text-neutral-700 font-medium truncate max-w-[160px]">{customers.find((c: any) => c.id === invoiceForm.customer_id)?.name || ''}</span>}
+                {invoiceForm.doc_date && <span className="text-neutral-500">Date: {invoiceForm.doc_date}</span>}
+                {invoiceForm.reference && <span className="text-neutral-500">Réf: {invoiceForm.reference}</span>}
+                {invoiceForm.delivery_date && <span className="text-neutral-500">Livr: {invoiceForm.delivery_date}</span>}
+                {invoiceForm.warranty && <span className="text-neutral-500 truncate max-w-[120px]">Gar: {invoiceForm.warranty}</span>}
+                {invoiceForm.imei && <span className="text-neutral-500 truncate max-w-[140px]">IMEI: {invoiceForm.imei}</span>}
+                {invoiceForm.representative && <span className="text-neutral-500">Rep: {repLabel(invoiceForm.representative)}</span>}
               </div>
-              <button
-                onClick={() => setHeaderValidated(false)}
-                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-100 border border-slate-200 transition-colors"
-              >
-                <Lock className="w-3 h-3" /> Modifier
-              </button>
+              {!postCreation && <button onClick={() => setHeaderValidated(false)} className="text-[10px] font-medium text-neutral-500 hover:text-neutral-700 underline underline-offset-2 shrink-0">Modifier</button>}
             </div>
           </div>
         ) : (
-          /* ── Formulaire d'en-tête ── */
-          <div className={`px-5 py-3 border-b flex-shrink-0 ${docSettings.require_header_lock ? 'border-neutral-200 bg-neutral-50/40' : 'border-slate-100 bg-white'}`}>
+          <div className={`px-5 py-2.5 border-b flex-shrink-0 ${docSettings.require_header_lock ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100'}`}>
             {docSettings.require_header_lock && (
               <div className="flex items-center gap-1.5 mb-2">
-                <Lock className="w-3 h-3 text-neutral-600" />
-                <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wide">Informations de l'en-tête — à valider avant la saisie</span>
+                <Lock className="w-3 h-3 text-neutral-500" />
+                <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide">Valider l'en-tête avant la saisie</span>
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-2">
-              <CustomerSearchInput
-                customers={customers}
-                value={invoiceForm.customer_id}
-                onSelect={(c) => setInvoiceForm((f: any) => ({ ...f, customer_id: c?.id || '' }))}
-                placeholder="Rechercher client..."
-                onCreateNew={onCreateCustomer}
-              />
-              <div className="flex items-center gap-1.5 min-w-[160px] flex-1 max-w-[220px]">
-                <MessageCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <input value={invoiceForm.note} onChange={e => setInvoiceForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note…" className="input text-xs h-8 flex-1" />
+            <div className="grid grid-cols-[1fr] sm:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2 items-end">
+              <div>
+                <label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Client</label>
+                {postCreation ? (
+                  <span className="text-xs font-medium text-neutral-800 h-8 flex items-center">{customers.find((c: any) => c.id === invoiceForm.customer_id)?.name || '—'}</span>
+                ) : (
+                  <CustomerSearchInput customers={customers} value={invoiceForm.customer_id} onSelect={(c) => setInvoiceForm((f: any) => ({ ...f, customer_id: c?.id || '' }))} placeholder="Rechercher client..." onCreateNew={onCreateCustomer} />
+                )}
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Date</label>
+                {postCreation || totalPaid > 0 ? (
+                  <span className="text-xs font-medium text-neutral-800 h-8 flex items-center">{invoiceForm.doc_date || '—'}</span>
+                ) : (
+                  <input type="date" value={invoiceForm.doc_date} onChange={e => setInvoiceForm((f: any) => ({ ...f, doc_date: e.target.value }))} className={ulInputCls} />
+                )}
               </div>
               {docSettings.show_reference && (
-                <div className="flex items-center gap-1.5 min-w-[130px] flex-1 max-w-[180px]">
-                  <Tag className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <input value={invoiceForm.reference} onChange={e => setInvoiceForm((f: any) => ({ ...f, reference: e.target.value }))} placeholder="Référence…" className="input text-xs h-8 flex-1" />
-                </div>
+                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Référence</label><input value={invoiceForm.reference} onChange={e => setInvoiceForm((f: any) => ({ ...f, reference: e.target.value }))} placeholder="REF-..." className={ulInputCls} disabled={!!postCreation} /></div>
               )}
               {docSettings.show_delivery_date && (
-                <div className="flex items-center gap-1.5 min-w-[130px]">
-                  <Calendar className="w-3.5 h-3.5 text-neutral-600 shrink-0" />
-                  <input type="date" value={invoiceForm.delivery_date} onChange={e => setInvoiceForm((f: any) => ({ ...f, delivery_date: e.target.value }))} className="input text-xs h-8" />
-                </div>
+                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Date de livraison</label><input type="date" value={invoiceForm.delivery_date} onChange={e => setInvoiceForm((f: any) => ({ ...f, delivery_date: e.target.value }))} className={ulInputCls} disabled={!!postCreation} /></div>
               )}
               {docSettings.show_warranty && (
-                <div className="flex items-center gap-1.5 min-w-[140px] flex-1 max-w-[200px]">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <input value={invoiceForm.warranty} onChange={e => setInvoiceForm((f: any) => ({ ...f, warranty: e.target.value }))} placeholder="Garantie…" className="input text-xs h-8 flex-1" />
-                </div>
+                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Garantie</label><input value={invoiceForm.warranty} onChange={e => setInvoiceForm((f: any) => ({ ...f, warranty: e.target.value }))} placeholder="Ex: 6 mois" className={ulInputCls} disabled={!!postCreation} /></div>
               )}
               {docSettings.show_imei && (
-                <div className="flex items-center gap-1.5 min-w-[140px] flex-1 max-w-[200px]">
-                  <Smartphone className="w-3.5 h-3.5 text-neutral-600 shrink-0" />
-                  <input value={invoiceForm.imei} onChange={e => setInvoiceForm((f: any) => ({ ...f, imei: e.target.value }))} placeholder="IMEI / Téléphone…" className="input text-xs h-8 flex-1" />
-                </div>
+                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">IMEI / Téléphone</label><input value={invoiceForm.imei} onChange={e => setInvoiceForm((f: any) => ({ ...f, imei: e.target.value }))} placeholder="Numéro..." className={ulInputCls} disabled={!!postCreation} /></div>
               )}
               {docSettings.show_representative && (
-                <div className="flex items-center gap-1.5 min-w-[220px] flex-1 max-w-[320px]">
-                  <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <select value={invoiceForm.representative} onChange={e => setInvoiceForm((f: any) => ({ ...f, representative: e.target.value }))} className="input text-xs h-8 flex-1 min-w-0 truncate pr-7" title={repLabel(invoiceForm.representative) || 'Représentant'}>
-                    <option value="">Aucun représentant</option>
+                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Représentant</label>
+                  <select value={invoiceForm.representative} onChange={e => setInvoiceForm((f: any) => ({ ...f, representative: e.target.value }))} className={ulInputCls + ' cursor-pointer'} disabled={!!postCreation}>
+                    <option value="">Aucun</option>
                     {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
                   </select>
                 </div>
               )}
-              {autoMode && (
-                <button onClick={() => onVehiclePicker(null)} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:border-neutral-300 hover:bg-neutral-50/50 transition-all shrink-0">
-                  <Car className="w-3 h-3" />Par véhicule
-                </button>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              {autoMode && !postCreation && (
+                <button onClick={() => onVehiclePicker(null)} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"><Car className="w-3 h-3" />Par véhicule</button>
               )}
-              {docSettings.require_header_lock && (
-                <button
-                  onClick={() => setHeaderValidated(true)}
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-neutral-900 text-white hover:bg-neutral-800 transition-colors shadow-sm"
-                >
-                  <Lock className="w-3 h-3" /> Valider l'en-tête
-                </button>
+              {docSettings.require_header_lock && !postCreation && (
+                <button onClick={() => setHeaderValidated(true)} className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold bg-neutral-900 text-white hover:bg-neutral-800 transition-colors ml-auto"><Lock className="w-3 h-3" /> Valider</button>
               )}
             </div>
           </div>
@@ -3643,185 +3939,183 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
 
         {/* IPM Banner */}
         {isPharmacy && invoiceForm.customer_id && (
-          <div className="px-5 py-2 border-b border-slate-100 flex-shrink-0">
+          <div className="px-5 py-1.5 border-b border-neutral-100 flex-shrink-0">
             {ipmLoading ? (
-              <div className="flex items-center gap-2 text-xs text-slate-500"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verification couverture IPM...</div>
+              <div className="flex items-center gap-2 text-[11px] text-neutral-500"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification IPM...</div>
             ) : ipmBeneficiaire ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 p-2.5 rounded-lg bg-teal-50 border border-teal-200">
-                  <div className="w-7 h-7 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
-                    <ShieldCheck className="w-4 h-4 text-teal-600" />
-                  </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-3 px-3 py-2 rounded bg-teal-50 border border-teal-200 text-[11px]">
+                  <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-bold text-teal-800">
-                      Client couvert IPM — {ipmBeneficiaire.ipm_organismes?.nom}
-                      {ipmBeneficiaire.matricule && <span className="text-teal-600 font-normal ml-2">Mat. {ipmBeneficiaire.matricule}</span>}
-                    </p>
-                    <p className="text-[10px] text-teal-600">
-                      Taux : {ipmTaux}%
-                      {ipmConvention?.plafond_facture && ` · Plafond/fact : ${formatFCFA(ipmConvention.plafond_facture)}`}
-                      {ipmConvention?.nom && ` · Conv. ${ipmConvention.nom}`}
-                    </p>
+                    <span className="font-bold text-teal-800">IPM — {ipmBeneficiaire.ipm_organismes?.nom}</span>
+                    {ipmBeneficiaire.matricule && <span className="text-teal-600 ml-2">Mat. {ipmBeneficiaire.matricule}</span>}
+                    <span className="text-teal-600 ml-2">Taux {ipmTaux}%</span>
+                    {ipmConvention?.plafond_facture && <span className="text-teal-600 ml-1">· Plafond {formatFCFA(ipmConvention.plafond_facture)}</span>}
                   </div>
                   {invoiceSubtotal > 0 && (
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] text-teal-600">Part IPM : <span className="font-bold">{formatFCFA(ipmPartIpm)}</span></p>
-                      <p className="text-[10px] text-teal-800 font-bold">Part client : {formatFCFA(ipmPartClient)}</p>
+                    <div className="text-right shrink-0 text-[10px]">
+                      <span className="text-teal-600">IPM: <b>{formatFCFA(ipmPartIpm)}</b></span>
+                      <span className="text-teal-800 font-bold ml-2">Client: {formatFCFA(ipmPartClient)}</span>
                     </div>
                   )}
                 </div>
                 {ipmConfig && (ipmConfig.ordonnance_obligatoire || ipmConfig.numero_ordonnance_obligatoire || ipmConfig.medecin_prescripteur_obligatoire || ipmConfig.bon_prise_en_charge_obligatoire || ipmConfig.numero_bon_obligatoire) && (
-                  <div className="flex items-center gap-2 flex-wrap p-2 rounded-lg bg-teal-50/50 border border-teal-100">
-                    {(ipmConfig.ordonnance_obligatoire || ipmConfig.numero_ordonnance_obligatoire) && (
-                      <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-40" placeholder="N° ordonnance *" value={ipmDocuments.numero_ordonnance} onChange={e => setIpmDocuments((d: any) => ({ ...d, numero_ordonnance: e.target.value }))} />
-                    )}
-                    {ipmConfig.medecin_prescripteur_obligatoire && (
-                      <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-44" placeholder="Médecin prescripteur *" value={ipmDocuments.medecin} onChange={e => setIpmDocuments((d: any) => ({ ...d, medecin: e.target.value }))} />
-                    )}
-                    {(ipmConfig.bon_prise_en_charge_obligatoire || ipmConfig.numero_bon_obligatoire) && (
-                      <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-44" placeholder="N° bon prise en charge *" value={ipmDocuments.numero_bon} onChange={e => setIpmDocuments((d: any) => ({ ...d, numero_bon: e.target.value }))} />
-                    )}
-                    {!ipmDocValidation.valide && (
-                      <span className="text-[10px] text-red-600 font-medium">Manquant : {ipmDocValidation.champs_manquants.join(', ')}</span>
-                    )}
+                  <div className="flex items-center gap-2 flex-wrap px-2 py-1.5 rounded bg-teal-50/50 border border-teal-100">
+                    {(ipmConfig.ordonnance_obligatoire || ipmConfig.numero_ordonnance_obligatoire) && <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-36" placeholder="N° ordonnance *" value={ipmDocuments.numero_ordonnance} onChange={e => setIpmDocuments((d: any) => ({ ...d, numero_ordonnance: e.target.value }))} />}
+                    {ipmConfig.medecin_prescripteur_obligatoire && <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-40" placeholder="Médecin *" value={ipmDocuments.medecin} onChange={e => setIpmDocuments((d: any) => ({ ...d, medecin: e.target.value }))} />}
+                    {(ipmConfig.bon_prise_en_charge_obligatoire || ipmConfig.numero_bon_obligatoire) && <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-40" placeholder="N° bon PEC *" value={ipmDocuments.numero_bon} onChange={e => setIpmDocuments((d: any) => ({ ...d, numero_bon: e.target.value }))} />}
+                    {!ipmDocValidation.valide && <span className="text-[10px] text-red-600 font-medium">Manquant : {ipmDocValidation.champs_manquants.join(', ')}</span>}
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-[10px] text-slate-400 italic">Ce client n'est pas beneficiaire d'un IPM actif</p>
+              <p className="text-[10px] text-neutral-400 italic">Ce client n'est pas bénéficiaire d'un IPM actif</p>
             )}
           </div>
         )}
 
-        {/* Table header — colonnes dynamiques */}
-        {(() => {
-          const cols = (docSettings.columns_config.length ? docSettings.columns_config : DEFAULT_COLUMNS)
-            .filter(c => c.visible).sort((a, b) => a.order - b.order);
-          const gridTemplate = cols.map(c => c.width).join(' ') + ' 40px';
-          const itemsLocked = docSettings.require_header_lock && !headerValidated;
-          return (
-            <>
-              <div className="grid gap-2 px-5 py-2 border-b border-slate-200 bg-slate-50/50 flex-shrink-0" style={{ gridTemplateColumns: gridTemplate }}>
-                {cols.map(col => (
-                  <span key={col.key} className={`text-[10px] font-bold text-slate-500 uppercase tracking-wide ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}>{col.label}</span>
-                ))}
-                <span />
-              </div>
+        {/* ── Table header ── */}
+        <div className="flex-shrink-0 border-b border-neutral-200 bg-neutral-50/70">
+          <div className="flex items-center px-2 h-7">
+            <div className="w-7 shrink-0" />
+            {cols.map(col => (
+              <div key={col.key} className={`px-2 text-[10px] font-bold text-neutral-500 uppercase tracking-wider ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'} ${col.key === 'article' ? 'w-[18%]' : col.key === 'designation' ? 'flex-1 min-w-0' : col.key === 'qty' ? 'w-16' : col.key === 'unit_price' ? 'w-24' : col.key === 'discount' ? 'w-20' : col.key === 'total' ? 'w-24' : ''}`}>{col.label}</div>
+            ))}
+            <div className="w-8 shrink-0" />
+          </div>
+        </div>
 
-              {/* Scrollable rows */}
-              <div className={`flex-1 overflow-y-auto min-h-0 relative ${itemsLocked ? 'pointer-events-none' : ''}`}>
-                {itemsLocked && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/90 backdrop-blur-sm">
-                    <Lock className="w-8 h-8 text-slate-300 mb-3" />
-                    <p className="text-sm font-bold text-slate-500">En-tête non validé</p>
-                    <p className="text-xs text-slate-400 mt-1">Validez les informations d'en-tête pour saisir les articles</p>
-                  </div>
+        {/* ── Input row ── */}
+        <div className={`flex-shrink-0 border-b-2 border-neutral-300 bg-neutral-50/60 ${itemsLocked ? 'pointer-events-none opacity-30' : ''}`}>
+          {itemsLocked ? (
+            <div className="flex items-center justify-center py-3 gap-2"><Lock className="w-4 h-4 text-neutral-300" /><span className="text-xs text-neutral-400">Validez l'en-tête</span></div>
+          ) : (
+            <div className="flex items-center px-2 py-1" onKeyDown={handleInputKey}>
+              <div className="w-7 shrink-0 text-center">
+                {editingIdx !== null ? (
+                  <button onClick={cancelEdit} className="p-0.5 rounded hover:bg-neutral-200 text-neutral-400" title="Annuler"><X className="w-3 h-3" /></button>
+                ) : (
+                  <span className="text-[9px] font-bold text-neutral-300">+</span>
                 )}
-                {invoiceItems.map((it, idx) => (
-                  <div key={idx} data-row-idx={idx}
-                    className={`grid gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === invoiceItems.length - 1 ? 'bg-neutral-50/30' : ''}`}
-                    style={{ gridTemplateColumns: gridTemplate }}
-                    onKeyDown={e => handleRowKeyDown(e, idx)}
-                  >
+              </div>
+              {cols.map(col => {
+                const cls = `${col.key === 'article' ? 'w-[18%]' : col.key === 'designation' ? 'flex-1 min-w-0' : col.key === 'qty' ? 'w-16' : col.key === 'unit_price' ? 'w-24' : col.key === 'discount' ? 'w-20' : col.key === 'total' ? 'w-24' : ''} px-1`;
+                switch (col.key) {
+                  case 'article': return (
+                    <div key="article" className={cls}>
+                      <ArticleSearchInput articles={articles} value={inputRow.article_id ? (articles.find((a: any) => a.id === inputRow.article_id)?.name || '') : ''} onSelect={pickArticle} onNameChange={() => {}} placeholder="Article..." onCreateNew={onCreateArticle} />
+                    </div>
+                  );
+                  case 'designation': return (
+                    <div key="designation" className={cls}>
+                      <input ref={inputNameRef} value={inputRow.name} onChange={e => setInputRow(p => ({ ...p, name: e.target.value }))} placeholder="Désignation" className={inputCls} />
+                    </div>
+                  );
+                  case 'qty': return (
+                    <div key="qty" className={cls}>
+                      <input type="number" value={inputRow.quantity || ''} onChange={e => setInputRow(p => ({ ...p, quantity: Number(e.target.value) || 0 }))} className={inputCls + ' text-center'} min="1" />
+                    </div>
+                  );
+                  case 'unit_price': return (
+                    <div key="unit_price" className={cls}>
+                      <input type="number" value={inputRow.unit_price || ''} onChange={e => setInputRow(p => ({ ...p, unit_price: Number(e.target.value) || 0 }))} className={inputCls + ' text-right num'} />
+                    </div>
+                  );
+                  case 'discount': return (
+                    <div key="discount" className={cls}>
+                      <input type="number" value={inputRow.discount || ''} onChange={e => setInputRow(p => ({ ...p, discount: Number(e.target.value) || 0 }))} className={inputCls + ' text-right num'} />
+                    </div>
+                  );
+                  case 'total': return (
+                    <div key="total" className={cls + ' text-right'}>
+                      <span className="text-xs font-bold text-neutral-800 num leading-7">{formatFCFA(calc(inputRow.quantity, inputRow.unit_price, inputRow.discount))}</span>
+                    </div>
+                  );
+                  default: return null;
+                }
+              })}
+              <div className="w-8 shrink-0 text-center">
+                <button onClick={commitRow} disabled={!inputRow.name.trim() || inputRow.unit_price <= 0} className="p-1 rounded bg-neutral-900 text-white disabled:opacity-20 hover:bg-neutral-700 transition-colors" title="Valider (Entrée)"><Check className="w-3 h-3" /></button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Validated rows (scrollable) ── */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {validItems.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-neutral-300 text-xs select-none">Saisissez un article et appuyez Entrée</div>
+          ) : (
+            <div>
+              {validItems.map((it, vIdx) => {
+                const isEditing = editingIdx !== null && invoiceItems.indexOf(it) === editingIdx;
+                return (
+                  <div key={vIdx} onClick={() => { if (!isEditing) startEdit(vIdx); }}
+                    className={`flex items-center px-2 border-b border-neutral-100 cursor-pointer transition-colors group ${isEditing ? 'bg-amber-50/50' : 'hover:bg-neutral-50'}`} style={{ height: '30px' }}>
+                    <div className="w-7 shrink-0 text-center"><span className="text-[10px] text-neutral-300 group-hover:text-neutral-500 tabular-nums">{vIdx + 1}</span></div>
                     {cols.map(col => {
+                      const cls = `px-2 text-xs truncate ${col.key === 'article' ? 'w-[18%] text-neutral-500' : col.key === 'designation' ? 'flex-1 min-w-0 font-medium text-neutral-800' : col.key === 'qty' ? 'w-16 text-center text-neutral-700 num' : col.key === 'unit_price' ? 'w-24 text-right text-neutral-700 num' : col.key === 'discount' ? 'w-20 text-right text-neutral-400 num' : col.key === 'total' ? 'w-24 text-right font-semibold text-neutral-900 num' : ''}`;
                       switch (col.key) {
-                        case 'article': return (
-                          <div key="article">
-                            <ArticleSearchInput
-                              articles={articles}
-                              value={it.article_id ? (articles.find(a => a.id === it.article_id)?.name || '') : ''}
-                              onSelect={a => updateInvoiceItem(idx, 'article_id', a.id)}
-                              onNameChange={() => {}}
-                              placeholder="Rechercher..."
-                              onCreateNew={onCreateArticle}
-                            />
-                          </div>
-                        );
-                        case 'designation': return (
-                          <div key="designation">
-                            <input value={it.name} onChange={e => updateInvoiceItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
-                            {it.tier_name && <div className="text-[9px] font-medium text-brand-600 mt-0.5">{it.tier_name}</div>}
-                          </div>
-                        );
-                        case 'qty': return (
-                          <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateInvoiceItem(idx, 'quantity', Number(e.target.value))} onBlur={() => finalizeInvoiceItem(idx, 'quantity')} className="input text-xs text-center" /></div>
-                        );
-                        case 'unit_price': return (
-                          <div key="unit_price"><input type="number" value={it.unit_price || ''} onChange={e => updateInvoiceItem(idx, 'unit_price', Number(e.target.value))} onBlur={() => finalizeInvoiceItem(idx, 'unit_price')} className="input text-xs text-right num" /></div>
-                        );
-                        case 'discount': return (
-                          <div key="discount"><input type="number" value={it.discount || ''} onChange={e => updateInvoiceItem(idx, 'discount', Number(e.target.value))} onBlur={() => finalizeInvoiceItem(idx, 'discount')} className="input text-xs text-right num" /></div>
-                        );
-                        case 'total': return (
-                          <div key="total" className="text-right"><span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span></div>
-                        );
+                        case 'article': return <div key="article" className={cls}>{it.article_id ? (articles.find((a: any) => a.id === it.article_id)?.internal_ref || articles.find((a: any) => a.id === it.article_id)?.name?.substring(0, 8) || '') : '—'}</div>;
+                        case 'designation': return <div key="designation" className={cls}>{it.name}{it.tier_name && <span className="text-[9px] text-neutral-400 ml-1">{it.tier_name}</span>}</div>;
+                        case 'qty': return <div key="qty" className={cls}>{it.quantity}</div>;
+                        case 'unit_price': return <div key="unit_price" className={cls}>{formatFCFA(it.unit_price)}</div>;
+                        case 'discount': return <div key="discount" className={cls}>{it.discount > 0 ? formatFCFA(it.discount) : '—'}</div>;
+                        case 'total': return <div key="total" className={cls}>{formatFCFA(it.total)}</div>;
                         default: return null;
                       }
                     })}
-                    <div className="flex justify-center">
-                      <button onClick={() => setInvoiceItems((p: QuoteItem[]) => p.filter((_, i) => i !== idx))} disabled={invoiceItems.length === 1} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <div className="w-8 shrink-0 text-center">
+                      <button onClick={e => { e.stopPropagation(); removeItem(vIdx); }} className="p-0.5 rounded text-neutral-200 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3 h-3" /></button>
                     </div>
                   </div>
-                ))}
-                <div className="px-5 py-2">
-                  <button onClick={() => setInvoiceItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-neutral-800 hover:bg-neutral-50 px-3 py-2 rounded-lg transition-colors">
-                    <Plus className="w-3.5 h-3.5" />Ajouter une ligne
-                  </button>
-                </div>
+                );
+              })}
+            </div>
+          )}
 
-                {/* Payment section - hidden when editing existing invoice */}
-                {!editingInvoiceId && (
-                <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/30">
-                  {ipmBeneficiaire && ipmPartIpm > 0 && (
-                    <div className="flex items-center gap-2 px-3 py-2.5 mb-3 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-800 font-medium">
-                      <ShieldCheck className="w-4 h-4 text-teal-600 flex-shrink-0" />
-                      <div>
-                        <span className="font-bold">Prise en charge IPM : {formatFCFA(ipmPartIpm)}</span>
-                        <span className="text-teal-600 ml-2">(créance {ipmBeneficiaire.ipm_organismes?.nom})</span>
-                        {ipmPartClient > 0 && <span className="block mt-0.5">Reste à charge client : <span className="font-bold">{formatFCFA(ipmPartClient)}</span></span>}
-                        {ipmPartClient === 0 && <span className="block mt-0.5 text-teal-700 font-bold">100% pris en charge — aucun paiement client requis</span>}
-                      </div>
-                    </div>
-                  )}
-                  {ipmPartClient === 0 && ipmBeneficiaire ? (
-                    <div className="text-xs text-teal-600 font-medium text-center py-2">Facture entièrement couverte par l'IPM</div>
-                  ) : (
-                    <>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Reglement{ipmBeneficiaire ? ' (part client)' : ''}</div>
+          {/* Payment section */}
+          {!editingInvoiceId && validItems.length > 0 && (
+            <div className="px-5 py-3 border-t border-neutral-200">
+              {ipmBeneficiaire && ipmPartIpm > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-teal-50 border border-teal-200 rounded text-[11px] text-teal-800 font-medium">
+                  <ShieldCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                  <span>IPM : <b>{formatFCFA(ipmPartIpm)}</b> ({ipmBeneficiaire.ipm_organismes?.nom})</span>
+                  {ipmPartClient > 0 && <span className="ml-auto">Client : <b>{formatFCFA(ipmPartClient)}</b></span>}
+                  {ipmPartClient === 0 && <span className="ml-auto font-bold">100% couvert</span>}
+                </div>
+              )}
+              {ipmPartClient === 0 && ipmBeneficiaire ? (
+                <div className="text-[11px] text-teal-600 font-medium text-center py-1">Entièrement couvert par l'IPM</div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Règlement{ipmBeneficiaire ? ' (part client)' : ''}</span>
                     {!ipmBeneficiaire && (
-                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                      <input type="checkbox" checked={isCredit} onChange={e => setIsCredit(e.target.checked)} className="sr-only peer" />
-                      <div className="relative w-9 h-5 bg-slate-200 peer-checked:bg-amber-500 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4"></div>
-                      <span className={`text-xs font-semibold ${isCredit ? 'text-amber-700' : 'text-slate-500'}`}>A crédit</span>
-                    </label>
+                      <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" checked={isCredit} onChange={e => setIsCredit(e.target.checked)} className="sr-only peer" />
+                        <div className="relative w-8 h-[18px] bg-neutral-200 peer-checked:bg-amber-500 rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-[14px] after:w-[14px] after:transition-transform peer-checked:after:translate-x-[14px]" />
+                        <span className={`text-[11px] font-medium ${isCredit ? 'text-amber-700' : 'text-neutral-500'}`}>À crédit</span>
+                      </label>
                     )}
                   </div>
                   {!isCredit && (
                     <>
                       <div className="flex items-center gap-2 mb-2">
-                        <select value={payMethodId} onChange={e => setPayMethodId(e.target.value)} className="shrink-0 text-sm font-semibold text-slate-800 bg-transparent border-none outline-none cursor-pointer py-1 pr-6 appearance-none">
-                          {paymentMethods.map((m: any) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
+                        <select value={payMethodId} onChange={e => setPayMethodId(e.target.value)} className="text-[11px] font-medium text-neutral-700 bg-transparent border-b border-neutral-300 outline-none py-1 pr-5 cursor-pointer">
+                          {paymentMethods.map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>)}
                         </select>
-                        <input type="number" value={payAmt} onChange={e => setPayAmt(e.target.value)} placeholder={formatFCFA(balance > 0 ? balance : 0)} min="0" className="input text-xs h-8 w-32 text-right num" onFocus={() => { if (!payAmt && balance > 0) setPayAmt(String(balance)); }} />
-                        <button onClick={addPayment} disabled={!payAmt || Number(payAmt) <= 0} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-40 transition-colors whitespace-nowrap">
-                          <Plus className="w-3 h-3 inline" /> Ajouter
-                        </button>
+                        <input type="number" value={payAmt} onChange={e => setPayAmt(e.target.value)} placeholder={formatFCFA(balance > 0 ? balance : 0)} min="0" className="text-xs h-7 w-28 px-2 border-b border-neutral-300 focus:border-neutral-900 outline-none text-right num bg-transparent" onFocus={() => { if (!payAmt && balance > 0) setPayAmt(String(balance)); }} />
+                        <button onClick={addPayment} disabled={!payAmt || Number(payAmt) <= 0} className="px-2.5 py-1 rounded text-[11px] font-semibold bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors"><Plus className="w-3 h-3 inline" /> Ajouter</button>
                       </div>
                       {payments.length > 0 && (
-                        <div className="space-y-1">
+                        <div className="divide-y divide-neutral-100">
                           {payments.map((p, i) => (
-                            <div key={i} className="flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs">
-                              <div className="flex items-center gap-2">
-                                <Coins className="w-3.5 h-3.5 text-emerald-600" />
-                                <span className="font-semibold text-slate-700">{p.method_name}</span>
-                              </div>
+                            <div key={i} className="flex items-center justify-between px-1 py-1.5 text-[11px]">
+                              <span className="text-neutral-600">{p.method_name}</span>
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-emerald-700 num">{formatFCFA(p.amount)}</span>
-                                <button onClick={() => setPayments((prev: any[]) => prev.filter((_: any, j: number) => j !== i))} className="p-1 rounded hover:bg-red-50 text-red-400"><X className="w-3 h-3" /></button>
+                                <button onClick={() => setPayments((prev: any[]) => prev.filter((_: any, j: number) => j !== i))} className="p-0.5 rounded hover:bg-red-50 text-neutral-300 hover:text-red-500"><X className="w-3 h-3" /></button>
                               </div>
                             </div>
                           ))}
@@ -3830,54 +4124,32 @@ function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, in
                     </>
                   )}
                   {isCredit && (
-                    <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 font-medium">
-                      <CreditCard className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                      Cette facture sera enregistrée à crédit. Le client devra régler ultérieurement.
-                    </div>
+                    <div className="flex items-center gap-2 px-2 py-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800"><CreditCard className="w-3.5 h-3.5 text-amber-600 shrink-0" /> À crédit — règlement ultérieur</div>
                   )}
-                    </>
-                  )}
-                </div>
-                )}
-              </div>
-            </>
-          );
-        })()}
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
-        {/* Footer */}
-        <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between flex-shrink-0">
-          <div className="text-xs text-slate-500">
-            {invoiceItems.filter(i => i.name.trim()).length} ligne{invoiceItems.filter(i => i.name.trim()).length > 1 ? 's' : ''}
-            {payments.length > 0 && <span className="ml-2">· {payments.length} reglement{payments.length > 1 ? 's' : ''}</span>}
-          </div>
-          <div className="flex items-center gap-6">
-            {ipmBeneficiaire && ipmPartIpm > 0 && (
-              <div className="text-right">
-                <span className="text-[10px] text-teal-500 uppercase font-bold tracking-wide block">Part IPM</span>
-                <span className="text-sm font-bold text-teal-700 num">{formatFCFA(ipmPartIpm)}</span>
-              </div>
-            )}
-            {ipmBeneficiaire && ipmPartIpm > 0 && (
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">Part Client</span>
-                <span className="text-sm font-bold text-slate-700 num">{formatFCFA(ipmPartClient)}</span>
-              </div>
-            )}
-            {totalPaid > 0 && (
-              <div className="text-right">
-                <span className="text-[10px] text-emerald-500 uppercase font-bold tracking-wide block">Payé</span>
-                <span className="text-sm font-bold text-emerald-700 num">{formatFCFA(totalPaid)}</span>
-              </div>
-            )}
-            {balance > 0 && totalPaid > 0 && (
-              <div className="text-right">
-                <span className="text-[10px] text-amber-500 uppercase font-bold tracking-wide block">Reste</span>
-                <span className="text-sm font-bold text-amber-700 num">{formatFCFA(balance)}</span>
-              </div>
-            )}
-            <div className="text-right">
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">Total</span>
-              <span className="text-lg font-black text-slate-900 num">{formatFCFA(invoiceSubtotal)}</span>
+        {/* ── Footer ── */}
+        <div className="border-t border-neutral-200 bg-white px-5 h-auto py-2 flex flex-col gap-1 flex-shrink-0">
+          {postCreation && (
+            <div className="text-[10px] text-neutral-400">
+              Créée le {new Date(postCreation.createdAt).toLocaleDateString('fr-FR')} à {new Date(postCreation.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} par {postCreation.createdBy}
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-neutral-500 tabular-nums">
+              {validItems.length} ligne{validItems.length !== 1 ? 's' : ''}
+              {payments.length > 0 && ` · ${payments.length} règl.`}
+            </span>
+            <div className="flex items-center gap-5">
+              {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-[10px] text-teal-600">IPM <b className="num">{formatFCFA(ipmPartIpm)}</b></span>}
+              {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-[10px] text-neutral-600">Client <b className="num">{formatFCFA(ipmPartClient)}</b></span>}
+              {totalPaid > 0 && <span className="text-[10px] text-emerald-600">Payé <b className="num">{formatFCFA(totalPaid)}</b></span>}
+              {balance > 0 && totalPaid > 0 && <span className="text-[10px] text-amber-600">Reste <b className="num">{formatFCFA(balance)}</b></span>}
+              <span className="text-sm font-black text-neutral-900 num tracking-tight">TOTAL {formatFCFA(invoiceSubtotal)}</span>
             </div>
           </div>
         </div>

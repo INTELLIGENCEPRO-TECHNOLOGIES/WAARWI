@@ -1115,29 +1115,56 @@ function MobileDashboard({
   }, [stats.webNew]);
 
   return (
-    <div className="space-y-2.5 animate-fade-in pb-16">
+    <div className="space-y-0 animate-fade-in pb-16">
+
+      {/* ── SUBSCRIPTION INFO (discrete) ── */}
+      {subInfo && (
+        <button onClick={() => nav('settings', { target: 'subscription' })} className="w-full text-left px-1 -mb-1">
+          <span className="text-[10px] text-neutral-400">
+            Plan {subInfo.planName}
+            {subInfo.expiresAt && (
+              <>
+                {' · '}
+                <span className={(() => {
+                  const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
+                  return days <= 0 ? 'text-red-500' : '';
+                })()}>
+                  {(() => {
+                    const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
+                    if (days <= 0) return 'Expiré';
+                    return `jusqu'au ${new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+                  })()}
+                </span>
+              </>
+            )}
+            {subInfo.billingCycle === 'lifetime' && ' · À vie'}
+          </span>
+        </button>
+      )}
 
       {/* ── VIEW MODE TABS ── */}
-      <div className="flex items-center gap-0 bg-neutral-100 rounded-xl p-0.5 mx-0">
+      <div className="flex items-center gap-6 px-1">
         <button
           onClick={() => toggleViewMode('period')}
-          className={`flex-1 py-2 rounded-[10px] text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+          className={`relative pb-2 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
             viewMode === 'period'
-              ? 'bg-white text-neutral-900 shadow-sm'
-              : 'text-neutral-400 hover:text-neutral-600'
+              ? 'text-neutral-900'
+              : 'text-neutral-400'
           }`}
         >
           Période
+          {viewMode === 'period' && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-neutral-900 rounded-full" />}
         </button>
         <button
           onClick={() => toggleViewMode('session')}
-          className={`flex-1 py-2 rounded-[10px] text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+          className={`relative pb-2 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
             viewMode === 'session'
-              ? 'bg-white text-neutral-900 shadow-sm'
-              : 'text-neutral-400 hover:text-neutral-600'
+              ? 'text-neutral-900'
+              : 'text-neutral-400'
           }`}
         >
           Session
+          {viewMode === 'session' && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-neutral-900 rounded-full" />}
         </button>
       </div>
 
@@ -1146,13 +1173,13 @@ function MobileDashboard({
         <div className="relative">
           <button
             onClick={() => setShowPeriodMenu(!showPeriodMenu)}
-            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white border border-neutral-200 active:bg-neutral-50"
+            className="w-full flex items-center justify-between px-1 py-2 border-b border-neutral-100 active:bg-neutral-50/50 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Calendar className="w-3.5 h-3.5 text-neutral-500" />
-              <span className="text-[11px] font-bold text-neutral-700">{periodLabel}</span>
+              <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+              <span className="text-[11px] font-semibold text-neutral-700">{periodLabel}</span>
             </div>
-            <ChevronRight className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${showPeriodMenu ? 'rotate-90' : ''}`} />
+            <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform ${showPeriodMenu ? 'rotate-90' : ''}`} />
           </button>
           {showPeriodMenu && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-neutral-200 shadow-lg z-50 py-1 animate-fade-in">
@@ -1173,7 +1200,7 @@ function MobileDashboard({
       )}
 
       {viewMode === 'session' && !stats.sessionInfo ? (
-        <div className="rounded-[18px] bg-white p-6 text-center" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08)' }}>
+        <div className="mt-4 rounded-[18px] bg-white p-6 text-center" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08)' }}>
           <div className="w-14 h-14 mx-auto rounded-full bg-neutral-100 flex items-center justify-center mb-3">
             <Wallet className="w-6 h-6 text-neutral-400" />
           </div>
@@ -1186,46 +1213,40 @@ function MobileDashboard({
       ) : (
       <button
         onClick={() => nav('sales')}
-        className={`w-full text-left relative overflow-hidden rounded-[18px] p-3.5 active:scale-[0.985] transition-transform duration-200 ${heroLight ? '' : ''}`}
+        className={`w-full text-left relative overflow-hidden rounded-xl p-3.5 mt-4 active:scale-[0.985] transition-transform duration-200 ${heroLight ? '' : ''}`}
         style={heroLight
-          ? { background: '#ffffff', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }
-          : { background: '#000000', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
+          ? { background: '#ffffff', boxShadow: '0 1px 4px rgba(15,23,42,0.06), 0 0 0 1px rgba(226,232,240,0.5)' }
+          : { background: '#000000', boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }
         }
       >
         {!heroLight && (
-          <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-white/5 to-transparent blur-3xl animate-pulse-slow" />
-            <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-white/3 to-transparent blur-3xl" />
-          </div>
+          <div className="absolute inset-0 pointer-events-none" />
         )}
 
         <div className="relative">
           {/* Header row */}
           <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${heroLight ? 'bg-neutral-900' : 'bg-white'}`} />
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-neutral-400' : 'text-white/60'}`}>{viewMode === 'session' ? 'Session de caisse' : `Période : ${periodLabel}`}</span>
-            </div>
+            {viewMode === 'session' && (
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-neutral-400' : 'text-white/60'}`}>Session de caisse</span>
+            )}
+            {viewMode !== 'session' && <div />}
             <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold ${heroLight ? 'bg-neutral-100 text-neutral-600 border border-neutral-200' : 'bg-white/10 text-white/80'}`}>
-                <span className={`w-1 h-1 rounded-full animate-pulse ${heroLight ? 'bg-neutral-900' : 'bg-white'}`} />LIVE
-              </span>
               {shopInfo?.isActive && shopUrl && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShareOpen(true); }}
-                  className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-neutral-100 border border-neutral-200' : 'bg-white/10 border border-white/15'}`}
+                  className="active:scale-90 transition-transform"
                   aria-label="Partager la boutique"
                 >
-                  <Share2 className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-500' : 'text-white/70'}`} />
+                  <Share2 className={`w-3 h-3 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />
                 </button>
               )}
               <button
                 onClick={(e) => { e.stopPropagation(); toggleBalanceHidden(); }}
-                className={`w-5 h-5 rounded-full flex items-center justify-center active:scale-90 transition-transform ${heroLight ? 'bg-neutral-100 border border-neutral-200' : 'bg-white/8 border border-white/10'}`}
+                className="active:scale-90 transition-transform"
               >
                 {balanceHidden
-                  ? <Eye className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-500' : 'text-white/60'}`} />
-                  : <EyeOff className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-500' : 'text-white/60'}`} />}
+                  ? <Eye className={`w-3 h-3 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />
+                  : <EyeOff className={`w-3 h-3 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />}
               </button>
               <button
                 onClick={toggleHeroTheme}
@@ -1262,9 +1283,7 @@ function MobileDashboard({
             {/* SESSION: Encaissements */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.08)' : 'rgba(255,255,255,0.12)' }}>
-                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                </div>
+                <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Encaissements</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
@@ -1275,9 +1294,7 @@ function MobileDashboard({
             {canViewMargin && (
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
-                  <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                </div>
+                <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Marge brute</span>
               </div>
               <div className="flex items-center gap-2">
@@ -1292,9 +1309,7 @@ function MobileDashboard({
             {stats.sessionCreditCount > 0 && (
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.15)' }}>
-                  <Users className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
-                </div>
+                <Users className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Ventes à crédit</span>
               </div>
               <div className="flex items-center gap-2">
@@ -1308,9 +1323,7 @@ function MobileDashboard({
             {/* SESSION: Dépenses */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.15)' }}>
-                  <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
-                </div>
+                <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
@@ -1320,9 +1333,7 @@ function MobileDashboard({
             {/* SESSION: Caisse théorique */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.07)' }}>
-                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
-                </div>
+                <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Caisse théorique</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
@@ -1333,9 +1344,7 @@ function MobileDashboard({
             {/* PÉRIODE: CA net */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
-                  <Receipt className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                </div>
+                <Receipt className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>CA net</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/85'}`}>
@@ -1345,9 +1354,7 @@ function MobileDashboard({
             {/* PÉRIODE: Encaissements directs */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.08)' : 'rgba(255,255,255,0.12)' }}>
-                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                </div>
+                <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Encaiss. directs</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
@@ -1357,9 +1364,7 @@ function MobileDashboard({
             {/* PÉRIODE: Dépenses */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.15)' }}>
-                  <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
-                </div>
+                <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
@@ -1369,9 +1374,7 @@ function MobileDashboard({
             {/* PÉRIODE: Solde caisse */}
             <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.07)' }}>
-                  <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
-                </div>
+                <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
                 <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Solde caisse</span>
               </div>
               <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
@@ -1384,9 +1387,7 @@ function MobileDashboard({
             {viewMode !== 'session' && stats.receivables > 0 && (
               <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.15)' }}>
-                    <Users className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
-                  </div>
+                  <Users className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
                   <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Créances</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1402,9 +1403,7 @@ function MobileDashboard({
             {viewMode !== 'session' && !balanceHidden && dayMarginPct > 0 && (
               <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(23,23,23,0.06)' : 'rgba(255,255,255,0.10)' }}>
-                    <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                  </div>
+                  <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
                   <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Marge jour</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1420,9 +1419,7 @@ function MobileDashboard({
             {!balanceHidden && (
               <div className="flex items-center justify-between py-1.5">
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: heroLight ? 'rgba(226,232,240,0.5)' : 'rgba(255,255,255,0.06)' }}>
-                    <BarChart3 className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />
-                  </div>
+                  <BarChart3 className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />
                   <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>CA du mois</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1438,15 +1435,13 @@ function MobileDashboard({
 
       {/* ── MULTI-SITE STRIP (mobile) — compact list ── */}
       {sites.length > 1 && multiSiteStats.length > 0 && (
-        <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
-          <div className="flex items-center justify-between px-3.5 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
-            <div className="flex items-center gap-1.5">
-              <Network className="w-3.5 h-3.5 text-neutral-700" />
-              <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Magasins</span>
-            </div>
-            <span className="text-[9px] font-bold text-neutral-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + (viewMode === 'session' && !x.sessionOpen ? 0 : x.todayCollected), 0))}</span>
+        <div className="pt-4">
+          <div className="flex items-center justify-between px-1 mb-2">
+            <span className="text-[10px] font-bold text-neutral-900 uppercase tracking-wider">Magasins</span>
+            <span className="text-[9px] font-semibold text-neutral-400 num">Total: {formatCompactFCFA(multiSiteStats.reduce((s, x) => s + (viewMode === 'session' && !x.sessionOpen ? 0 : x.todayCollected), 0))}</span>
           </div>
-          <div className="divide-y divide-neutral-50">
+          <div className="border-t border-neutral-100" />
+          <div className="divide-y divide-neutral-100">
             {multiSiteStats.map(site => {
               const isCurrent = site.id === currentSite?.id;
               return (
@@ -1476,82 +1471,66 @@ function MobileDashboard({
       )}
 
       {/* ── FINANCES ── */}
-      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-200/50 bg-gradient-to-r from-neutral-50/80 to-white">
-          <div className="flex items-center gap-1.5">
-            <CreditCard className="w-3.5 h-3.5 text-neutral-600" />
-            <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Finances</span>
-          </div>
-          <button onClick={() => nav('accounting')} className="text-[9px] font-bold text-neutral-400 flex items-center gap-0.5">
+      <div className="pt-4">
+        <div className="flex items-center justify-between px-1 mb-2">
+          <span className="text-[10px] font-bold text-neutral-900 uppercase tracking-wider">Finances</span>
+          <button onClick={() => nav('accounting')} className="text-[9px] font-semibold text-neutral-400 flex items-center gap-0.5">
             Voir tout <ChevronRight className="w-2.5 h-2.5" />
           </button>
         </div>
-        <span className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider px-3 pt-1.5 block">Situation actuelle</span>
-        <div className="grid grid-cols-2 divide-x divide-neutral-100">
-          <button onClick={() => nav('tiers', { target: 'receivables' })} className="px-3 py-2 text-left active:bg-neutral-50 transition-colors">
-            <div className="text-[8px] text-neutral-400 font-semibold mb-0.5">Créances</div>
-            <div className="num text-[14px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.receivables)}</div>
-            <div className="flex items-center justify-between mt-0.5">
-              <div className="text-[8px] text-neutral-400">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''}</div>
-              <ChevronRight className="w-2.5 h-2.5 text-neutral-300" />
-            </div>
+        <div className="border-t border-neutral-100" />
+        <span className="text-[8px] font-semibold text-neutral-400 uppercase tracking-wider px-1 pt-2 block">Situation actuelle</span>
+        <div className="grid grid-cols-2 mt-1">
+          <button onClick={() => nav('tiers', { target: 'receivables' })} className="px-1 py-2.5 text-left active:bg-neutral-50/50 transition-colors border-r border-neutral-100">
+            <div className="text-[9px] text-neutral-400 font-medium mb-0.5">Créances</div>
+            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.receivables)}</div>
+            <div className="text-[9px] text-neutral-400 mt-0.5">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''}</div>
           </button>
-          <button onClick={() => nav('supplier_orders', { target: 'payables' })} className="px-3 py-2 text-left active:bg-neutral-50 transition-colors">
-            <div className="text-[8px] text-neutral-400 font-semibold mb-0.5">Fournisseurs</div>
-            <div className="num text-[14px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.payables)}</div>
-            <div className="flex items-center justify-between mt-0.5">
-              <div className="text-[8px] text-neutral-400">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''}</div>
-              <ChevronRight className="w-2.5 h-2.5 text-neutral-300" />
-            </div>
+          <button onClick={() => nav('supplier_orders', { target: 'payables' })} className="px-3 py-2.5 text-left active:bg-neutral-50/50 transition-colors">
+            <div className="text-[9px] text-neutral-400 font-medium mb-0.5">Fournisseurs</div>
+            <div className="num text-[15px] font-black text-neutral-900 leading-tight">{balanceHidden ? '•••' : formatFCFA(stats.payables)}</div>
+            <div className="text-[9px] text-neutral-400 mt-0.5">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''}</div>
           </button>
         </div>
       </div>
 
       {/* ── ALERTES ── */}
       {(stats.lowStockCount > 0 || stats.outOfStockCount > 0 || stats.pendingQuotes > 0) && (
-        <div className="rounded-xl overflow-hidden" style={{ background: '#fffbf0', border: '1px solid rgba(245,158,11,0.2)', boxShadow: '0 4px 20px rgba(245,158,11,0.1), 0 12px 40px rgba(245,158,11,0.06)' }}>
-          <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'rgba(245,158,11,0.15)' }}>
-            <div className="flex items-center gap-1.5">
-              <Bell className="w-3.5 h-3.5 text-amber-500" />
-              <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Alertes</span>
-            </div>
-            <button onClick={() => nav('stock')} className="text-[9px] font-bold text-amber-600 flex items-center gap-0.5">
+        <div className="pt-4">
+          <div className="flex items-center justify-between px-1 mb-2">
+            <span className="text-[10px] font-bold text-neutral-900 uppercase tracking-wider">Alertes</span>
+            <button onClick={() => nav('stock')} className="text-[9px] font-semibold text-neutral-400 flex items-center gap-0.5">
               Voir tout <ChevronRight className="w-2.5 h-2.5" />
             </button>
           </div>
-          <div className="divide-y" style={{ borderColor: 'rgba(245,158,11,0.1)' }}>
+          <div className="border-t border-neutral-100" />
+          <div className="divide-y divide-neutral-100">
             {stats.outOfStockCount > 0 && (
-              <button onClick={() => nav('stock', { target: 'outOfStock' })} className="w-full px-3 py-2 text-left flex items-center gap-2 active:bg-rose-50 transition-colors">
-                <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                </div>
+              <button onClick={() => nav('stock', { target: 'outOfStock' })} className="w-full px-1 py-2.5 text-left flex items-center gap-2.5 active:bg-neutral-50/50 transition-colors">
+                <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold text-neutral-800">{stats.outOfStockCount} rupture{stats.outOfStockCount > 1 ? 's' : ''} de stock</div>
-                  <div className="text-[8px] text-neutral-500">À commander d'urgence</div>
+                  <div className="text-[11px] font-semibold text-neutral-800">{stats.outOfStockCount} rupture{stats.outOfStockCount > 1 ? 's' : ''} de stock</div>
+                  <div className="text-[9px] text-neutral-400">À commander d'urgence</div>
                 </div>
                 <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
               </button>
             )}
             {stats.lowStockCount > 0 && (
-              <button onClick={() => nav('stock', { target: 'lowStock' })} className="w-full px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
-                <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                </div>
+              <button onClick={() => nav('stock', { target: 'lowStock' })} className="w-full px-1 py-2.5 text-left flex items-center gap-2.5 active:bg-neutral-50/50 transition-colors">
+                <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold text-neutral-800">{stats.lowStockCount} stock{stats.lowStockCount > 1 ? 's' : ''} bas</div>
-                  <div className="text-[8px] text-neutral-500">Seuil minimum atteint</div>
+                  <div className="text-[11px] font-semibold text-neutral-800">{stats.lowStockCount} stock{stats.lowStockCount > 1 ? 's' : ''} bas</div>
+                  <div className="text-[9px] text-neutral-400">Seuil minimum atteint</div>
                 </div>
                 <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
               </button>
             )}
             {stats.pendingQuotes > 0 && (
-              <button onClick={() => nav('billing', { target: 'quotes' })} className="w-full px-3 py-2 text-left flex items-center gap-2 active:bg-amber-50 transition-colors">
-                <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
-                  <FileText className="w-3.5 h-3.5 text-neutral-700" />
-                </div>
+              <button onClick={() => nav('billing', { target: 'quotes' })} className="w-full px-1 py-2.5 text-left flex items-center gap-2.5 active:bg-neutral-50/50 transition-colors">
+                <FileText className="w-3 h-3 text-neutral-600 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold text-neutral-800">{stats.pendingQuotes} devis en attente</div>
-                  <div className="text-[8px] text-neutral-500">À traiter</div>
+                  <div className="text-[11px] font-semibold text-neutral-800">{stats.pendingQuotes} devis en attente</div>
+                  <div className="text-[9px] text-neutral-400">À traiter</div>
                 </div>
                 <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
               </button>
@@ -1562,129 +1541,68 @@ function MobileDashboard({
 
 
       {/* ── SANTÉ BUSINESS ── */}
-      <div className="rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
-          <div className="flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-neutral-700" />
-            <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Santé business</span>
-          </div>
-          <button onClick={() => nav('sales')} className="text-[9px] font-bold text-neutral-500 flex items-center gap-0.5">
+      <div className="pt-4">
+        <div className="flex items-center justify-between px-1 mb-2">
+          <span className="text-[10px] font-bold text-neutral-900 uppercase tracking-wider">Santé business</span>
+          <button onClick={() => nav('sales')} className="text-[9px] font-semibold text-neutral-400 flex items-center gap-0.5">
             Voir le journal <ChevronRight className="w-2.5 h-2.5" />
           </button>
         </div>
-        <div className="grid grid-cols-2 divide-x divide-neutral-100 border-b border-neutral-100">
-          <div className="px-3 py-2">
-            <div className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Ticket moyen</div>
-            <div className="num text-[13px] font-black text-neutral-900 leading-tight">
+        <div className="border-t border-neutral-100" />
+        <div className="grid grid-cols-2 mt-1">
+          <div className="px-1 py-2.5 border-r border-neutral-100">
+            <div className="text-[9px] font-medium text-neutral-400 uppercase tracking-wider mb-0.5">Ticket moyen</div>
+            <div className="num text-[15px] font-black text-neutral-900 leading-tight">
               {balanceHidden ? '•••' : formatFCFA((viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount) > 0 ? Math.round((viewMode === 'session' ? stats.sessionCaNet : stats.todaySales) / (viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount)) : 0)}
             </div>
           </div>
-          <div className="px-3 py-2">
-            <div className="text-[8px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Dernière vente</div>
-            <div className="num text-[13px] font-black text-neutral-900 leading-tight">
+          <div className="px-3 py-2.5">
+            <div className="text-[9px] font-medium text-neutral-400 uppercase tracking-wider mb-0.5">Dernière vente</div>
+            <div className="num text-[15px] font-black text-neutral-900 leading-tight">
               {stats.recentSales.length > 0 ? (balanceHidden ? '•••' : formatFCFA(stats.recentSales[0].total)) : '-'}
             </div>
           </div>
         </div>
+        <div className="border-t border-neutral-100" />
         {stats.recentSales.length > 0 && (
-          <button onClick={() => nav('sales')} className="w-full flex items-center gap-2 px-3 py-2 active:bg-neutral-50 transition-colors text-left border-b border-neutral-100">
-            <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center shrink-0">
-              <CheckCircle className="w-3.5 h-3.5 text-neutral-600" />
-            </div>
+          <button onClick={() => nav('sales')} className="w-full flex items-center gap-2.5 px-1 py-2.5 active:bg-neutral-50/50 transition-colors text-left border-b border-neutral-100">
+            <CheckCircle className="w-3 h-3 text-neutral-500 shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-semibold text-neutral-800 truncate">
+              <div className="text-[11px] font-semibold text-neutral-800 truncate">
                 {(stats.recentSales[0] as any).customers?.name || 'Client comptoir'}
-                <span className="font-mono text-[9px] font-bold text-brand-700 ml-1">· {stats.recentSales[0].sale_number}</span>
+                <span className="font-mono text-[9px] font-bold text-neutral-500 ml-1">· {stats.recentSales[0].sale_number}</span>
               </div>
-              <div className="text-[8px] text-neutral-400 num">{formatDateTime(stats.recentSales[0].created_at)}</div>
+              <div className="text-[9px] text-neutral-400 num">{formatDateTime(stats.recentSales[0].created_at)}</div>
             </div>
             <ChevronRight className="w-3 h-3 text-neutral-300 shrink-0" />
           </button>
         )}
-        <div className="grid grid-cols-3 divide-x divide-neutral-100">
-          <button onClick={() => nav('articles')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-neutral-50 transition-colors">
+        <div className="grid grid-cols-3 border-t border-neutral-100">
+          <button onClick={() => nav('articles')} className="flex items-center gap-1.5 px-1 py-2.5 active:bg-neutral-50/50 transition-colors border-r border-neutral-100">
             <Package className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[12px] font-extrabold text-neutral-900 leading-none">{stats.articlesCount}</div>
-              <div className="text-[8px] text-neutral-400 font-semibold mt-0.5">Articles</div>
+              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.articlesCount}</div>
+              <div className="text-[9px] text-neutral-400 font-medium mt-0.5">Articles</div>
             </div>
           </button>
-          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-neutral-50 transition-colors">
+          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2.5 active:bg-neutral-50/50 transition-colors border-r border-neutral-100">
             <Users className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[12px] font-extrabold text-neutral-900 leading-none">{stats.customersCount}</div>
-              <div className="text-[8px] text-neutral-400 font-semibold mt-0.5">Clients</div>
+              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.customersCount}</div>
+              <div className="text-[9px] text-neutral-400 font-medium mt-0.5">Clients</div>
             </div>
           </button>
-          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2 active:bg-neutral-50 transition-colors">
+          <button onClick={() => nav('tiers')} className="flex items-center gap-1.5 px-2.5 py-2.5 active:bg-neutral-50/50 transition-colors">
             <Truck className="w-3 h-3 text-neutral-400 shrink-0" />
             <div>
-              <div className="num text-[12px] font-extrabold text-neutral-900 leading-none">{stats.suppliersCount}</div>
-              <div className="text-[8px] text-neutral-400 font-semibold mt-0.5">Fourn.</div>
+              <div className="num text-[13px] font-extrabold text-neutral-900 leading-none">{stats.suppliersCount}</div>
+              <div className="text-[9px] text-neutral-400 font-medium mt-0.5">Fourn.</div>
             </div>
           </button>
         </div>
       </div>
 
-      {/* ── ABONNEMENT ── */}
-      {subInfo && (
-        <button
-          onClick={() => nav('settings', { target: 'subscription' })}
-          className="w-full rounded-xl bg-white overflow-hidden text-left active:scale-[0.98] transition-transform"
-          style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 12px 40px rgba(15,23,42,0.05), 0 0 0 1px rgba(226,232,240,0.6)' }}
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100/50 bg-neutral-50/80">
-            <div className="flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-neutral-600" />
-              <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider">Abonnement</span>
-            </div>
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-              subInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600 border border-blue-100'
-                : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                : subInfo.status === 'expired' ? 'bg-red-50 text-red-600 border border-red-100'
-                : 'bg-amber-50 text-amber-600 border border-amber-100'
-            }`}>
-              {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
-            </span>
-          </div>
-          <div className="px-3 py-2.5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-bold text-neutral-900">Plan {subInfo.planName}</div>
-                <div className="text-[9px] text-neutral-400 mt-0.5">
-                  {subInfo.billingCycle === 'lifetime' ? 'À vie' : subInfo.price > 0 ? `${Number(subInfo.price).toLocaleString('fr-FR')} FCFA/${subInfo.billingCycle === 'yearly' ? 'an' : 'mois'}` : 'Gratuit'}
-                </div>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />
-            </div>
-            {(subInfo.startsAt || subInfo.expiresAt) && (
-              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-neutral-100">
-                {subInfo.startsAt && (
-                  <div className="text-[9px] text-neutral-400">
-                    <span className="font-medium">{subInfo.status === 'trial_active' ? 'Essai depuis' : 'Début'} :</span> {new Date(subInfo.startsAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                )}
-                {subInfo.expiresAt && (
-                  <div className="text-[9px]">
-                    <span className="font-medium text-neutral-400">Fin :</span>{' '}
-                    <span className={(() => {
-                      const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
-                      return days <= 0 ? 'text-red-500 font-bold' : days <= 7 ? 'text-amber-600 font-medium' : 'text-neutral-500';
-                    })()}>
-                      {new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      {(() => {
-                        const days = Math.ceil((new Date(subInfo.expiresAt).getTime() - Date.now()) / 86400000);
-                        if (days <= 0) return ' (expiré)';
-                        return ` (${days}j)`;
-                      })()}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </button>
-      )}
+
 
       {/* ── SHARE SHOP MODAL ── */}
       {shareOpen && (

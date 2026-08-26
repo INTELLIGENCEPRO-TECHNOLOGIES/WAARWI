@@ -106,7 +106,7 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 animate-fade-in">
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-md" onClick={onClose} />
-      <div className={`relative w-full ${extraFilters ? 'max-w-4xl' : 'max-w-2xl'} bg-white rounded-xl shadow-premium animate-scale-in flex flex-col max-h-[92vh] overflow-hidden`}>
+      <div className={`relative w-full max-w-2xl bg-white rounded-xl shadow-premium animate-scale-in flex flex-col max-h-[92vh] overflow-hidden`}>
         <div className="relative px-4 py-3 bg-black text-white shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -122,17 +122,25 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
         </div>
 
         <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-y-auto">
-          <div className="lg:w-40 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 p-2 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
+          <div className="lg:w-40 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 p-2 flex lg:flex-col gap-0.5 overflow-x-auto lg:overflow-x-visible lg:overflow-y-auto">
             {presets.map(p => (
               <button key={p.l} onClick={() => { const r = p.f(); setLocalFrom(r.f); setLocalTo(r.t); const ld = new Date(r.f); const rd = new Date(r.t); setLeftMonth(new Date(ld.getFullYear(), ld.getMonth(), 1)); setRightMonth(ld.getMonth() === rd.getMonth() && ld.getFullYear() === rd.getFullYear() ? new Date(rd.getFullYear(), rd.getMonth() + 1, 1) : new Date(rd.getFullYear(), rd.getMonth(), 1)); }}
-                className="shrink-0 lg:shrink px-3 py-2 rounded-lg text-[11px] font-semibold text-left text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition whitespace-nowrap lg:whitespace-normal">
+                className="shrink-0 lg:shrink px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-left text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition whitespace-nowrap lg:whitespace-normal">
                 {p.l}
               </button>
             ))}
+            {extraFilters && (
+              <>
+                <div className="hidden lg:block h-px bg-slate-200 my-1" />
+                <div className="hidden lg:block px-2.5 py-1">
+                  {extraFilters}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex-1 p-4 bg-white">
-            <div className={`grid gap-0 ${extraFilters ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_auto]' : 'grid-cols-1 sm:grid-cols-[1fr_auto_1fr]'}`}>
+            <div className="grid gap-0 grid-cols-1 sm:grid-cols-[1fr_auto_1fr]">
               <div className="p-3">
                 <div className="flex items-center justify-between mb-2">
                   <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
@@ -150,15 +158,12 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
                 </div>
                 {renderMonth(rightMonth)}
               </div>
-              {extraFilters && (
-                <>
-                  <div className="hidden lg:block w-px bg-slate-200 my-2" />
-                  <div className="sm:col-span-full lg:col-span-1 p-3 space-y-3 lg:w-52 shrink-0">
-                    {extraFilters}
-                  </div>
-                </>
-              )}
             </div>
+            {extraFilters && (
+              <div className="lg:hidden border-t border-slate-200 pt-3 mt-3 space-y-3">
+                {extraFilters}
+              </div>
+            )}
           </div>
         </div>
 

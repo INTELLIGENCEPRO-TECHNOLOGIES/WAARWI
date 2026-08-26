@@ -1,9 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, ChevronUp, ChevronDown, Eye, EyeOff, Lock,
-  Save, CalendarDays, Tag, ShieldCheck, User as User2,
-  GripVertical, Check, FileText, ClipboardList, RotateCcw, Truck, LayoutGrid,
-  Pencil, Trash2, Smartphone,
+  Save, Check, GripVertical, Pencil, Trash2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -67,45 +65,19 @@ export function mergeColumns(stored: DocColumn[]): DocColumn[] {
   }).sort((a, b) => a.order - b.order);
 }
 
-const DOC_TYPE_CONFIG: {
-  key: DocType;
-  label: string;
-  sublabel: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bg: string;
-  border: string;
-  activeBg: string;
-  accentBar: string;
-}[] = [
-  { key: 'invoice',        label: 'Facture',      sublabel: 'Vente client',      icon: FileText,       color: 'text-neutral-800',   bg: 'bg-neutral-50',   border: 'border-neutral-200',  activeBg: 'bg-neutral-900',   accentBar: 'bg-neutral-900' },
-  { key: 'quote',          label: 'Devis',         sublabel: 'Proposition prix',  icon: ClipboardList, color: 'text-teal-700',   bg: 'bg-teal-50',   border: 'border-teal-200',  activeBg: 'bg-teal-600',   accentBar: 'bg-teal-500' },
-  { key: 'supplier_order', label: 'Cmd. fourn.',   sublabel: 'Achat fournisseur', icon: Truck,  color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200', activeBg: 'bg-amber-600',  accentBar: 'bg-amber-500' },
-  { key: 'credit_note',    label: 'Avoir',         sublabel: 'Retour / Avoir',    icon: RotateCcw,     color: 'text-rose-700',   bg: 'bg-rose-50',   border: 'border-rose-200',  activeBg: 'bg-rose-600',   accentBar: 'bg-rose-500' },
+const DOC_TYPES: { key: DocType; label: string }[] = [
+  { key: 'invoice',        label: 'Facture' },
+  { key: 'quote',          label: 'Devis' },
+  { key: 'supplier_order', label: 'Cmd. fournisseur' },
+  { key: 'credit_note',    label: 'Avoir' },
 ];
 
-
-function Toggle({ on, onChange, label, sub }: { on: boolean; onChange: (v: boolean) => void; label: string; sub?: string }) {
-  return (
-    <label className="flex items-center justify-between gap-3 cursor-pointer select-none py-2.5 px-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
-      <div className="flex-1 min-w-0">
-        <span className="text-[13px] font-semibold text-slate-700">{label}</span>
-        {sub && <p className="text-[11px] text-slate-400 mt-0.5 leading-tight">{sub}</p>}
-      </div>
-      <div className="shrink-0 relative">
-        <input type="checkbox" checked={on} onChange={e => onChange(e.target.checked)} className="sr-only peer" />
-        <div className="w-10 h-[20px] bg-slate-200 peer-checked:bg-brand-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-[15px] after:w-[15px] after:transition-transform peer-checked:after:translate-x-5" />
-      </div>
-    </label>
-  );
-}
-
 const FIELD_META = [
-  { key: 'show_delivery_date' as const, label: 'Date de livraison', sub: 'Date de livraison prévue',     icon: CalendarDays, iconBg: 'bg-neutral-50 border-neutral-200',       iconColor: 'text-neutral-600' },
-  { key: 'show_reference'     as const, label: 'Reference',         sub: 'Ref. commande / dossier',      icon: Tag,          iconBg: 'bg-amber-50 border-amber-100',     iconColor: 'text-amber-500' },
-  { key: 'show_warranty'      as const, label: 'Garantie',          sub: 'Conditions de garantie',       icon: ShieldCheck,  iconBg: 'bg-emerald-50 border-emerald-100', iconColor: 'text-emerald-500' },
-  { key: 'show_imei'          as const, label: 'IMEI / Téléphone',  sub: 'Numéro IMEI ou série appareil', icon: Smartphone,   iconBg: 'bg-neutral-50 border-neutral-200',   iconColor: 'text-neutral-600' },
-  { key: 'show_representative' as const, label: 'Représentant',     sub: 'Commercial en charge',          icon: User2,        iconBg: 'bg-slate-50 border-slate-200',     iconColor: 'text-slate-500' },
+  { key: 'show_delivery_date' as const, label: 'Date de livraison', sub: 'Date de livraison prévue' },
+  { key: 'show_reference'     as const, label: 'Référence',         sub: 'Réf. commande / dossier' },
+  { key: 'show_warranty'      as const, label: 'Garantie',          sub: 'Conditions de garantie' },
+  { key: 'show_imei'          as const, label: 'IMEI / Téléphone',  sub: 'Numéro IMEI ou série' },
+  { key: 'show_representative' as const, label: 'Représentant',     sub: 'Commercial en charge' },
 ];
 
 const IMEI_ACTIVITY_TYPES = ['électroménager', 'electromenager', 'smartphones et accessoires', 'smartphones'];
@@ -117,7 +89,6 @@ export function DocumentSettingsTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
-  const [saved, setSaved] = useState(false);
 
   const activityName = (tenant?.business_activity_type_name || '').toLowerCase().trim();
   const showImeiFields = IMEI_ACTIVITY_TYPES.some(t => activityName.includes(t));
@@ -176,9 +147,7 @@ export function DocumentSettingsTab() {
       }, { onConflict: 'tenant_id,doc_type' });
     setSaving(false);
     if (e) { error(e.message); return; }
-    setSaved(true);
     success('Paramètres enregistrés');
-    setTimeout(() => setSaved(false), 2000);
   }, [tenant?.id, docType]);
 
   const set = (patch: Partial<DocSettings>) => setSettings(prev => ({ ...prev, ...patch }));
@@ -203,247 +172,167 @@ export function DocumentSettingsTab() {
     });
   };
 
-  const currentType = DOC_TYPE_CONFIG.find(d => d.key === docType)!;
   const sortedCols = [...settings.columns_config].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="space-y-4">
-
-      {/* ── Doc type selector — horizontal pill row ── */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-0.5 px-0.5 scrollbar-hide">
-        {DOC_TYPE_CONFIG.map(dt => {
-          const Icon = dt.icon;
+    <div className="space-y-0">
+      {/* Doc type tabs */}
+      <div className="flex gap-0 border-b border-neutral-200 -mx-1 overflow-x-auto scrollbar-hide">
+        {DOC_TYPES.map(dt => {
           const active = docType === dt.key;
           return (
             <button
               key={dt.key}
-              onClick={() => { if (!active) { setSaved(false); setDocType(dt.key); } }}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all shrink-0 ${
-                active
-                  ? `${dt.bg} ${dt.border} shadow-sm`
-                  : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
+              onClick={() => { if (!active) setDocType(dt.key); }}
+              className={`px-4 py-2.5 text-xs font-medium whitespace-nowrap transition-colors relative ${active ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'}`}
             >
-              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                active ? `${dt.activeBg} shadow-sm` : 'bg-slate-100'
-              }`}>
-                <Icon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-slate-500'}`} />
-              </div>
-              <div className="text-left">
-                <div className={`text-[12px] font-bold leading-tight ${active ? dt.color : 'text-slate-700'}`}>{dt.label}</div>
-                <div className={`text-[10px] leading-tight ${active ? dt.color + ' opacity-70' : 'text-slate-400'}`}>{dt.sublabel}</div>
-              </div>
+              {dt.label}
+              {active && <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-neutral-900 rounded-full" />}
             </button>
           );
         })}
       </div>
 
-      {/* ── Content ── */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
-        </div>
+        <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-neutral-300" /></div>
       ) : (
-        <div className="space-y-3">
-
-          {/* Active type banner */}
-          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${currentType.bg} ${currentType.border}`}>
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${currentType.activeBg} shadow-sm`}>
-              {(() => { const Icon = currentType.icon; return <Icon className="w-4.5 h-4.5 text-white" />; })()}
-            </div>
-            <div>
-              <div className={`text-[14px] font-bold ${currentType.color}`}>{currentType.label}</div>
-              <div className={`text-[11px] ${currentType.color} opacity-60`}>Paramètres indépendants par type de document</div>
-            </div>
-          </div>
-
-          {/* Optional header fields */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-              <div className={`w-0.5 h-4 rounded-full ${currentType.accentBar}`} />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Champs d'en-tête</span>
-            </div>
-            <p className="text-[11px] text-slate-400 px-4 pb-2 leading-relaxed">Champs proposés à la saisie et visibles sur le document imprimé.</p>
-            <div className="divide-y divide-slate-50 px-2">
+        <div className="space-y-0 flat-form">
+          {/* Header fields */}
+          <div className="py-4 border-b border-neutral-200">
+            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Champs d'en-tête</h3>
+            <p className="text-[10px] text-neutral-500 mb-3">Champs proposés à la saisie et visibles sur le document.</p>
+            <div className="divide-y divide-neutral-100">
               {FIELD_META.filter(f => {
                 if ((f.key === 'show_imei' || f.key === 'show_warranty') && !showImeiFields) return false;
                 return true;
               }).map(f => (
                 <div key={f.key}>
-                  <div className="flex items-center gap-2.5 py-1">
-                    <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${f.iconBg} ml-1`}>
-                      <f.icon className={`w-3.5 h-3.5 ${f.iconColor}`} />
+                  <div className="flex items-center justify-between py-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-neutral-800">{f.label}</div>
+                      <div className="text-[10px] text-neutral-500">{f.sub}</div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <Toggle
-                        on={settings[f.key]}
-                        onChange={v => set({ [f.key]: v })}
-                        label={f.label}
-                        sub={f.sub}
-                      />
-                    </div>
+                    <button onClick={() => set({ [f.key]: !settings[f.key] })} className="shrink-0 ml-3">
+                      <div className={`w-9 h-5 rounded-full transition-colors relative ${settings[f.key] ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+                        <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${settings[f.key] ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                      </div>
+                    </button>
                   </div>
                   {f.key === 'show_representative' && settings.show_representative && (
-                    <div className="pl-12 pb-3 pr-4">
+                    <div className="pb-3 pl-0">
                       <input
                         value={settings.default_representative}
                         onChange={e => set({ default_representative: e.target.value })}
                         placeholder="Nom par défaut (optionnel)"
-                        className="input text-sm h-9 w-full max-w-xs"
+                        className="input text-sm w-full max-w-xs"
                       />
                     </div>
                   )}
                   {f.key === 'show_warranty' && settings.show_warranty && showImeiFields && (
-                    <div className="pl-12 pb-3 pr-4">
-                      <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Mentions de garantie (affichees sur la fiche garantie)</label>
+                    <div className="pb-3 pl-0">
+                      <label className="text-[10px] font-medium text-neutral-500 mb-1 block">Mentions de garantie</label>
                       <textarea
                         value={settings.warranty_terms}
                         onChange={e => set({ warranty_terms: e.target.value })}
-                        placeholder="Ex: La garantie couvre les defauts de fabrication. Exclut les dommages lies a une mauvaise utilisation, l'eau, les chocs..."
+                        placeholder="Ex: La garantie couvre les défauts de fabrication..."
                         rows={3}
-                        className="w-full rounded-xl border border-slate-200 bg-white text-[12px] text-slate-800 px-3 py-2 outline-none focus:border-slate-400 transition-colors resize-y"
+                        className="input resize-y"
                       />
                     </div>
                   )}
                 </div>
               ))}
             </div>
-            <div className="pb-2" />
           </div>
 
           {/* Header lock */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-              <div className="w-0.5 h-4 rounded-full bg-rose-400" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Validation en-tete</span>
+          <div className="py-4 border-b border-neutral-200">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-neutral-800 flex items-center gap-1.5">
+                  <Lock className="w-3 h-3 text-neutral-400" />Exiger la validation d'en-tête
+                </div>
+                <div className="text-[10px] text-neutral-500">L'en-tête doit être validé avant la saisie des articles</div>
+              </div>
+              <button onClick={() => set({ require_header_lock: !settings.require_header_lock })} className="shrink-0 ml-3">
+                <div className={`w-9 h-5 rounded-full transition-colors relative ${settings.require_header_lock ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+                  <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${settings.require_header_lock ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                </div>
+              </button>
             </div>
-            <div className="flex items-center gap-2.5 px-3 pb-2">
-              <div className="w-7 h-7 rounded-lg border border-rose-100 bg-rose-50 flex items-center justify-center shrink-0 ml-1">
-                <Lock className="w-3.5 h-3.5 text-rose-500" />
-              </div>
-              <div className="flex-1">
-                <Toggle
-                  on={settings.require_header_lock}
-                  onChange={v => set({ require_header_lock: v })}
-                  label="Exiger la validation"
-                  sub="L'en-tete doit etre valide avant la saisie des articles"
-                />
-              </div>
-            </div>
-            {settings.require_header_lock && (
-              <div className="mx-4 mb-4 flex items-start gap-2 text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2.5">
-                <Lock className="w-3 h-3 shrink-0 mt-0.5 text-amber-600" />
-                <span>Un bouton <strong>Valider l'en-tete</strong> sera affiche lors de la creation.</span>
-              </div>
-            )}
-            {!settings.require_header_lock && <div className="pb-2" />}
           </div>
 
           {/* Edition & Suppression */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-              <div className="w-0.5 h-4 rounded-full bg-orange-400" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Edition & Suppression</span>
+          <div className="py-4 border-b border-neutral-200">
+            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">Édition & Suppression</h3>
+            <div className="divide-y divide-neutral-100">
+              <div className="flex items-center justify-between py-3">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-neutral-800 flex items-center gap-1.5"><Pencil className="w-3 h-3 text-neutral-400" />Autoriser la modification</div>
+                  <div className="text-[10px] text-neutral-500">Modifier les articles et montants</div>
+                </div>
+                <button onClick={() => set({ allow_edit: !settings.allow_edit })} className="shrink-0 ml-3">
+                  <div className={`w-9 h-5 rounded-full transition-colors relative ${settings.allow_edit ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+                    <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${settings.allow_edit ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                  </div>
+                </button>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-neutral-800 flex items-center gap-1.5"><Trash2 className="w-3 h-3 text-neutral-400" />Autoriser la suppression</div>
+                  <div className="text-[10px] text-neutral-500">Supprimer le document et restaurer le stock</div>
+                </div>
+                <button onClick={() => set({ allow_delete: !settings.allow_delete })} className="shrink-0 ml-3">
+                  <div className={`w-9 h-5 rounded-full transition-colors relative ${settings.allow_delete ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+                    <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${settings.allow_delete ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                  </div>
+                </button>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-400 px-4 pb-2 leading-relaxed">Autoriser la modification ou suppression des documents (hors documents comptabilises).</p>
-            <div className="divide-y divide-slate-50 px-2">
-              <div className="flex items-center gap-2.5 py-1">
-                <div className="w-7 h-7 rounded-lg border border-neutral-200 bg-neutral-50 flex items-center justify-center shrink-0 ml-1">
-                  <Pencil className="w-3.5 h-3.5 text-neutral-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <Toggle on={settings.allow_edit} onChange={v => set({ allow_edit: v })} label="Autoriser la modification" sub="Modifier les articles et montants du document" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 py-1">
-                <div className="w-7 h-7 rounded-lg border border-red-100 bg-red-50 flex items-center justify-center shrink-0 ml-1">
-                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <Toggle on={settings.allow_delete} onChange={v => set({ allow_delete: v })} label="Autoriser la suppression" sub="Supprimer le document et restaurer le stock" />
-                </div>
-              </div>
-            </div>
-            {(settings.allow_edit || settings.allow_delete) && (
-              <div className="mx-4 mb-4 mt-2 flex items-start gap-2 text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2.5">
-                <Pencil className="w-3 h-3 shrink-0 mt-0.5 text-amber-600" />
-                <span>Les documents deja <strong>comptabilises</strong> ne pourront pas etre modifies ou supprimes.</span>
-              </div>
-            )}
-            {!settings.allow_edit && !settings.allow_delete && <div className="pb-2" />}
           </div>
 
           {/* Columns config */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-              <div className="w-0.5 h-4 rounded-full bg-teal-400" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Colonnes du document</span>
-            </div>
-            <p className="text-[11px] text-slate-400 px-4 pb-3 leading-relaxed">Colonnes affichées et leur ordre dans l'interface de saisie.</p>
-
-            <div className="space-y-1 px-3 mb-3">
+          <div className="py-4 border-b border-neutral-200">
+            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Colonnes du document</h3>
+            <p className="text-[10px] text-neutral-500 mb-3">Ordre et visibilité dans l'interface de saisie.</p>
+            <div className="space-y-0 divide-y divide-neutral-100">
               {sortedCols.map((col, idx) => (
-                <div
-                  key={col.key}
-                  className={`flex items-center gap-2.5 px-3 py-3 rounded-xl border transition-colors ${
-                    col.visible ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-100 opacity-50'
-                  }`}
-                >
-                  <GripVertical className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className={`text-[13px] font-semibold ${col.visible ? 'text-slate-800' : 'text-slate-400'}`}>{col.label}</span>
-                    {col.required && <span className="ml-2 text-[9px] font-bold text-slate-300 uppercase tracking-wide">requis</span>}
-                  </div>
+                <div key={col.key} className={`flex items-center gap-2.5 py-2.5 ${!col.visible ? 'opacity-40' : ''}`}>
+                  <GripVertical className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                  <span className={`flex-1 text-xs font-medium ${col.visible ? 'text-neutral-800' : 'text-neutral-400'}`}>
+                    {col.label}
+                    {col.required && <span className="ml-1.5 text-[9px] text-neutral-300 uppercase">requis</span>}
+                  </span>
                   <button
                     onClick={() => !col.required && toggleCol(col.key)}
                     disabled={!!col.required}
-                    title={col.required ? 'Obligatoire' : col.visible ? 'Masquer' : 'Afficher'}
-                    className={`p-1.5 rounded-lg transition-colors ${col.required ? 'opacity-20 cursor-default' : 'hover:bg-slate-100 active:bg-slate-200 cursor-pointer'}`}
+                    className={`p-1 transition-colors ${col.required ? 'opacity-20 cursor-default' : 'hover:bg-neutral-100 rounded'}`}
                   >
-                    {col.visible
-                      ? <Eye className="w-4 h-4 text-teal-500" />
-                      : <EyeOff className="w-4 h-4 text-slate-400" />}
+                    {col.visible ? <Eye className="w-3.5 h-3.5 text-neutral-600" /> : <EyeOff className="w-3.5 h-3.5 text-neutral-400" />}
                   </button>
-                  <div className="flex flex-col gap-0.5">
-                    <button onClick={() => moveCol(col.key, -1)} disabled={idx === 0}
-                      className="p-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 disabled:opacity-20 transition-colors">
-                      <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-                    <button onClick={() => moveCol(col.key, 1)} disabled={idx === sortedCols.length - 1}
-                      className="p-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 disabled:opacity-20 transition-colors">
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
+                  <div className="flex flex-col">
+                    <button onClick={() => moveCol(col.key, -1)} disabled={idx === 0} className="p-0.5 disabled:opacity-20"><ChevronUp className="w-3 h-3 text-neutral-400" /></button>
+                    <button onClick={() => moveCol(col.key, 1)} disabled={idx === sortedCols.length - 1} className="p-0.5 disabled:opacity-20"><ChevronDown className="w-3 h-3 text-neutral-400" /></button>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Column preview */}
-            <div className="mx-3 mb-3 rounded-xl border border-slate-100 overflow-hidden">
-              <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 flex items-center gap-1.5">
-                <LayoutGrid className="w-3 h-3 text-slate-400" />
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Aperçu colonnes</span>
-              </div>
-              <div className="flex items-center divide-x divide-slate-100 overflow-x-auto">
-                {sortedCols.filter(c => c.visible).map(col => (
-                  <div key={col.key} className="px-3 py-2 text-[11px] font-semibold text-slate-600 whitespace-nowrap bg-white">
-                    {col.label}
-                  </div>
-                ))}
-                <div className="px-3 py-2 text-[11px] text-slate-300 bg-white whitespace-nowrap">Actions</div>
-              </div>
+            {/* Preview */}
+            <div className="mt-3 flex items-center gap-0 border-t border-neutral-100 pt-2 overflow-x-auto">
+              {sortedCols.filter(c => c.visible).map(col => (
+                <span key={col.key} className="px-2.5 py-1.5 text-[10px] font-medium text-neutral-500 whitespace-nowrap border-r border-neutral-100 last:border-r-0">{col.label}</span>
+              ))}
             </div>
           </div>
 
-          {/* Save button */}
-          <button
-            onClick={() => save(settings)}
-            disabled={saving}
-            className="w-full btn-icon-primary"
-            title={saving ? 'Enregistrement…' : saved ? 'Enregistré !' : 'Enregistrer les paramètres'}
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          </button>
+          {/* Save */}
+          <div className="flex justify-end pt-4">
+            <button onClick={() => save(settings)} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Enregistrer
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -119,12 +119,12 @@ export function DocPanel({ open, onClose, title, children, footer }: {
   );
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'Confirmer', danger = false }: {
+export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = 'Confirmer', danger = false, layer }: {
   open: boolean; onClose: () => void; onConfirm: () => void;
-  title: string; message: string; confirmLabel?: string; danger?: boolean;
+  title: string; message: string; confirmLabel?: string; danger?: boolean; layer?: 'top';
 }) {
   return (
-    <Modal open={open} onClose={onClose} title={title} size="sm"
+    <Modal open={open} onClose={onClose} title={title} size="sm" layer={layer}
       footer={<>
         <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
         <button onClick={() => { onConfirm(); onClose(); }} className={danger ? 'btn-icon-danger-solid' : 'btn-icon-primary'} title={confirmLabel}>

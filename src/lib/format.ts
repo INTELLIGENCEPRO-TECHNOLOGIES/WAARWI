@@ -12,6 +12,11 @@ export function formatFCFA(amount: number | null | undefined): string {
   return new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 0 }).format(v) + ' FCFA';
 }
 
+export function formatNum(amount: number | null | undefined): string {
+  const v = Number(amount || 0);
+  return new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 0 }).format(v);
+}
+
 export function formatCompactFCFA(amount: number | null | undefined): string {
   const v = Math.round(Number(amount || 0));
   const abs = Math.abs(v);

@@ -86,7 +86,7 @@ export function PermissionsTab() {
         .eq('role', role);
 
       if (err) throw err;
-      success(`Permissions du rôle "${ROLE_LABELS[role]}" enregistrées`);
+      success(`Permissions du role "${ROLE_LABELS[role]}" enregistrees`);
     } catch (e: any) {
       error(e.message || 'Erreur lors de la sauvegarde');
     }
@@ -102,7 +102,7 @@ export function PermissionsTab() {
       });
       if (err) throw err;
       await load();
-      success('Permissions réinitialisées aux valeurs par défaut');
+      success('Permissions reinitialisees aux valeurs par defaut');
     } catch (e: any) {
       error(e.message || 'Erreur');
     }
@@ -111,9 +111,9 @@ export function PermissionsTab() {
 
   if (!isAdmin) {
     return (
-      <div className="card p-8 text-center">
-        <Shield className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-        <p className="text-sm text-slate-600 font-semibold">Accès réservé aux administrateurs</p>
+      <div className="py-12 text-center">
+        <Shield className="w-6 h-6 text-neutral-300 mx-auto mb-2" />
+        <p className="text-sm text-neutral-600 font-medium">Acces reserve aux administrateurs</p>
       </div>
     );
   }
@@ -121,7 +121,7 @@ export function PermissionsTab() {
   if (loading) {
     return (
       <div className="py-16 flex justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-700" />
+        <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
       </div>
     );
   }
@@ -129,34 +129,32 @@ export function PermissionsTab() {
   const currentPerms = data[selectedRole];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 max-w-none">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-500">
-            Définissez les autorisations de chaque rôle. Les administrateurs ont toujours un accès complet.
-          </p>
-        </div>
+        <p className="text-sm text-neutral-500">
+          Definissez les autorisations de chaque role. Les administrateurs ont toujours un acces complet.
+        </p>
         <button
           onClick={resetDefaults}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          Réinitialiser par défaut
+          Reinitialiser
         </button>
       </div>
 
       {/* Role Tabs */}
-      <div className="flex bg-slate-100/80 rounded-xl p-1 gap-1">
+      <div className="flex border-b border-neutral-200 gap-6">
         {ROLES.map(role => (
           <button
             key={role}
             onClick={() => setSelectedRole(role)}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+            className={`pb-2.5 text-sm font-medium transition-all border-b-2 -mb-px ${
               selectedRole === role
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'border-neutral-900 text-neutral-900'
+                : 'border-transparent text-neutral-400 hover:text-neutral-600'
             }`}
           >
             {ROLE_LABELS[role]}
@@ -165,16 +163,17 @@ export function PermissionsTab() {
       </div>
 
       {/* Quick actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <button
           onClick={() => toggleAll(selectedRole, true)}
-          className="text-xs font-medium text-brand-700 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors"
+          className="text-xs font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
         >
           Tout autoriser
         </button>
+        <span className="text-neutral-300">|</span>
         <button
           onClick={() => toggleAll(selectedRole, false)}
-          className="text-xs font-medium text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors"
+          className="text-xs font-medium text-neutral-600 hover:text-red-600 transition-colors"
         >
           Tout refuser
         </button>
@@ -182,13 +181,11 @@ export function PermissionsTab() {
 
       {/* Permission Categories */}
       {currentPerms && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {PERMISSION_CATEGORIES.map(cat => (
-            <div key={cat.label} className="bg-white border border-slate-200/70 rounded-2xl shadow-card overflow-hidden">
-              <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100">
-                <h3 className="text-sm font-bold text-slate-700">{cat.label}</h3>
-              </div>
-              <div className="divide-y divide-slate-100">
+            <div key={cat.label}>
+              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">{cat.label}</h3>
+              <div className="divide-y divide-neutral-100">
                 {cat.keys.map(key => (
                   <PermissionRow
                     key={key}
@@ -204,14 +201,14 @@ export function PermissionsTab() {
       )}
 
       {/* Save Button */}
-      <div className="sticky bottom-0 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent pt-4 pb-2">
+      <div className="flex justify-end pt-4 border-t border-neutral-100">
         <button
           onClick={save}
           disabled={saving}
-          className="w-full sm:w-auto btn-icon-primary"
-          title="Enregistrer les permissions"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white text-sm font-medium rounded-md hover:bg-neutral-800 transition-all active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          Enregistrer
         </button>
       </div>
     </div>
@@ -223,18 +220,18 @@ function PermissionRow({ permKey, enabled, onToggle }: { permKey: PermissionKey;
     <button
       type="button"
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50/60 transition-colors text-left"
+      className="w-full flex items-center justify-between py-2.5 px-1 hover:bg-neutral-50/60 transition-colors text-left"
     >
-      <span className="text-sm text-slate-700">{PERMISSION_LABELS[permKey]}</span>
+      <span className="text-sm text-neutral-700">{PERMISSION_LABELS[permKey]}</span>
       <div className={`w-9 h-5 rounded-full relative transition-colors duration-200 ${
-        enabled ? 'bg-brand-600' : 'bg-slate-300'
+        enabled ? 'bg-neutral-900' : 'bg-neutral-200'
       }`}>
         <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 flex items-center justify-center ${
           enabled ? 'translate-x-4' : 'translate-x-0.5'
         }`}>
           {enabled
-            ? <Check className="w-2.5 h-2.5 text-brand-600" />
-            : <X className="w-2.5 h-2.5 text-slate-400" />
+            ? <Check className="w-2.5 h-2.5 text-neutral-900" />
+            : <X className="w-2.5 h-2.5 text-neutral-400" />
           }
         </div>
       </div>

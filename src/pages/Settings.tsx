@@ -179,81 +179,67 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Colonne gauche : identité + légal */}
-      <div className="space-y-3">
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-slate-400" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Identité visuelle</span>
+    <div className="flat-form space-y-8 max-w-none">
+      {/* Logo */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Identite visuelle</h2>
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 shrink-0 flex items-center justify-center overflow-hidden">
+            {form.logo_url ? <img src={form.logo_url} alt="Logo" className="w-full h-full object-contain" /> : <ImageIcon className="w-6 h-6 text-neutral-300" />}
           </div>
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
-              {form.logo_url ? <img src={form.logo_url} alt="Logo" className="w-full h-full object-contain" /> : <ImageIcon className="w-5 h-5 text-slate-300" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] text-slate-500 mb-1.5">PNG, JPG, WebP ou SVG — max 2 Mo</p>
-              <div className="flex items-center gap-2">
-                <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }} />
-                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-icon" title={form.logo_url ? 'Remplacer' : 'Téléverser'}>
-                  {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                </button>
-                {form.logo_url && (
-                  <button onClick={removeLogo} className="text-[11px] text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg flex items-center gap-1 transition">
-                    <Trash2 className="w-3 h-3" />Retirer
-                  </button>
-                )}
-              </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-neutral-500 mb-2">PNG, JPG, WebP ou SVG — max 2 Mo</p>
+            <div className="flex items-center gap-3">
+              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ''; }} />
+              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs font-medium text-neutral-700 hover:text-neutral-900 transition">
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Telecharger'}
+              </button>
+              {form.logo_url && (
+                <button onClick={removeLogo} className="text-xs text-red-600 hover:text-red-800 transition">Retirer</button>
+              )}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Identification */}
+      <section className="space-y-4">
+        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Identification</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
           <div><label className="label">Nom commercial *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
-          <div><label className="label">Slogan</label><input value={form.slogan || ''} onChange={e => setForm({ ...form, slogan: e.target.value })} className="input" placeholder="Ex : Pièces auto de qualité, livrées rapidement." /></div>
+          <div><label className="label">Slogan</label><input value={form.slogan || ''} onChange={e => setForm({ ...form, slogan: e.target.value })} className="input" placeholder="Ex : Pieces auto de qualite" /></div>
+          <div><label className="label">Raison sociale</label><input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="input" /></div>
+          <div><label className="label">NINEA</label><input value={form.ninea || ''} onChange={e => setForm({ ...form, ninea: e.target.value })} className="input" /></div>
+          <div><label className="label">RCCM</label><input value={form.rccm || ''} onChange={e => setForm({ ...form, rccm: e.target.value })} className="input" /></div>
         </div>
+      </section>
 
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-slate-400" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Informations légales</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="label">Raison sociale</label><input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="input" /></div>
-            <div><label className="label">NINEA</label><input value={form.ninea || ''} onChange={e => setForm({ ...form, ninea: e.target.value })} className="input" /></div>
-            <div><label className="label">RCCM</label><input value={form.rccm || ''} onChange={e => setForm({ ...form, rccm: e.target.value })} className="input" /></div>
-          </div>
+      {/* Coordonnees */}
+      <section className="space-y-4">
+        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Coordonnees</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+          <div><label className="label">Telephone</label><input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
+          <div><label className="label">Email</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="input" /></div>
+          <div><label className="label">Site web</label><input value={form.website || ''} onChange={e => setForm({ ...form, website: e.target.value })} className="input" placeholder="https://..." /></div>
+          <div className="sm:col-span-2 lg:col-span-3"><label className="label">Adresse</label><textarea value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} className="input resize-none" rows={2} /></div>
         </div>
-      </div>
+      </section>
 
-      {/* Colonne droite : contact + préférences */}
-      <div className="space-y-3">
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-brand-500" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Coordonnées</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="label">Téléphone</label><input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
-            <div><label className="label">Email</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="input" /></div>
-            <div className="col-span-2"><label className="label">Site web</label><input value={form.website || ''} onChange={e => setForm({ ...form, website: e.target.value })} className="input" placeholder="https://…" /></div>
-            <div className="col-span-2"><label className="label">Adresse</label><textarea value={form.address || ''} onChange={e => setForm({ ...form, address: e.target.value })} className="input resize-none" rows={2} /></div>
-          </div>
-        </div>
-
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-slate-400" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Langue & préférences</span>
-          </div>
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+      {/* Preferences */}
+      <section className="space-y-4">
+        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Preferences</h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between py-2 border-b border-neutral-100">
             <div className="flex-1 min-w-0 mr-3">
-              <div className="text-xs font-semibold text-slate-700">Langue de l'interface</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Choisissez la langue d'affichage de l'application</div>
+              <div className="text-sm font-medium text-neutral-800">Langue de l'interface</div>
+              <div className="text-xs text-neutral-500 mt-0.5">Choisissez la langue d'affichage</div>
             </div>
             <LanguageSwitcher />
           </div>
           <SettingsToggle
             label="Afficher les marges dans les rapports"
-            desc="Inclut la marge brute et le taux de marge dans les états de ventes"
+            desc="Inclut la marge brute et le taux de marge dans les etats de ventes"
             active={!!(tenant as any)?.settings?.show_margin_in_reports}
             onToggle={async () => {
               if (!tenant) return;
@@ -264,12 +250,14 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
             }}
           />
         </div>
+      </section>
 
-        <div className="flex justify-end">
-          <button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          </button>
-        </div>
+      {/* Save */}
+      <div className="flex justify-end pt-4 border-t border-neutral-100">
+        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white text-sm font-medium rounded-md hover:bg-neutral-800 transition-all active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          Enregistrer
+        </button>
       </div>
     </div>
   );
@@ -278,15 +266,15 @@ function CompanyTab({ onRefresh }: { onRefresh: () => void }) {
 /* ===================== TOGGLE COMPONENT ===================== */
 function SettingsToggle({ label, desc, active, onToggle }: { label: string; desc: string; active: boolean; onToggle: () => void }) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+    <div className="flex items-center justify-between py-2 border-b border-neutral-100">
       <div className="flex-1 min-w-0 mr-3">
-        <div className="text-xs font-semibold text-slate-700">{label}</div>
-        <div className="text-[11px] text-slate-500 mt-0.5">{desc}</div>
+        <div className="text-sm font-medium text-neutral-800">{label}</div>
+        <div className="text-xs text-neutral-500 mt-0.5">{desc}</div>
       </div>
       <button type="button" onClick={onToggle} className="shrink-0">
         {active
-          ? <ToggleRight className="w-8 h-8 text-brand-600" />
-          : <ToggleLeft className="w-8 h-8 text-slate-300" />}
+          ? <ToggleRight className="w-7 h-7 text-neutral-900" />
+          : <ToggleLeft className="w-7 h-7 text-neutral-300" />}
       </button>
     </div>
   );
@@ -384,120 +372,85 @@ function BoutiqueTab() {
 
   const openShop = () => window.open(shopUrl, '_blank');
 
-  if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>;
 
   if (!settings) return (
-    <div className="card p-6 text-center text-slate-500">
-      <AlertCircle className="w-7 h-7 mx-auto mb-2 text-amber-400" />
-      <p className="font-medium text-sm">Paramètres boutique introuvables.</p>
+    <div className="py-12 text-center">
+      <AlertCircle className="w-6 h-6 mx-auto mb-2 text-neutral-300" />
+      <p className="text-sm text-neutral-500">Paramètres boutique introuvables.</p>
     </div>
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Colonne gauche : statut + URL */}
-      <div className="space-y-3">
-        {/* Statut */}
-        <div className={`card p-4 border-l-4 ${settings.is_active ? 'border-l-emerald-500' : 'border-l-amber-400'}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${settings.is_active ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-                <Globe className={`w-4 h-4 ${settings.is_active ? 'text-emerald-600' : 'text-amber-600'}`} />
-              </div>
-              <div>
-                <span className={`text-xs font-bold ${settings.is_active ? 'text-emerald-800' : 'text-amber-800'}`}>
-                  Boutique {settings.is_active ? 'active' : 'inactive'}
-                </span>
-                <p className={`text-[11px] mt-0.5 ${settings.is_active ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {settings.is_active ? 'Visible par vos clients en ligne.' : 'Activez pour la rendre publique.'}
-                </p>
-              </div>
-            </div>
-            <button onClick={toggleActive} disabled={saving}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition ${
-                settings.is_active ? 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
-              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : settings.is_active ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
-              {settings.is_active ? 'Désactiver' : 'Activer'}
-            </button>
-          </div>
+    <div className="space-y-0">
+      {/* Statut + toggle */}
+      <div className="flex items-center justify-between py-4 border-b border-neutral-200">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-2 h-2 rounded-full ${settings.is_active ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+          <span className="text-sm font-medium text-neutral-900">Boutique {settings.is_active ? 'active' : 'inactive'}</span>
+          <span className="text-[11px] text-neutral-500">{settings.is_active ? 'Visible au public' : 'Non visible'}</span>
         </div>
-
-        {/* URL publique */}
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-brand-500" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Adresse publique</span>
+        <button onClick={toggleActive} disabled={saving} className="shrink-0 relative">
+          <div className={`w-9 h-5 rounded-full transition-colors relative ${settings.is_active ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+            <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${settings.is_active ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
           </div>
-          <div>
-            <label className="label">Slug URL</label>
-            {editingSlug ? (
-              <div className="flex gap-2">
-                <div className="flex-1 flex items-center border border-brand-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/30">
-                  <span className="px-2.5 py-2 text-[11px] text-slate-400 bg-slate-50 border-r border-slate-200">/shop/</span>
-                  <input value={slugInput} onChange={e => setSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
-                    className="flex-1 px-2.5 py-2 text-sm outline-none font-mono" placeholder="mon-entreprise" autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') saveSlug(); if (e.key === 'Escape') setEditingSlug(false); }} />
-                </div>
-                <button onClick={saveSlug} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
-                <button onClick={() => setEditingSlug(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              </div>
-            ) : (
-              <div className="flex gap-2 items-center">
-                <div className="flex-1 flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
-                  <span className="px-2.5 py-2 text-[11px] text-slate-400 border-r border-slate-200">/shop/</span>
-                  <span className="flex-1 px-2.5 py-2 text-sm font-mono text-slate-800">{slug || '—'}</span>
-                </div>
-                <button onClick={() => { setSlugInput(slug); setEditingSlug(true); }} className="btn-icon" title="Modifier">
-                  <Edit2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Slug URL */}
+      <div className="py-4 border-b border-neutral-200">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Adresse publique</span>
+          {!editingSlug && <button onClick={() => { setSlugInput(slug); setEditingSlug(true); }} className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900 transition">Modifier</button>}
+        </div>
+        {editingSlug ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-neutral-400 font-mono">/shop/</span>
+            <input value={slugInput} onChange={e => setSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+              className="flex-1 border-0 border-b border-neutral-300 bg-transparent px-0 py-1 text-sm font-mono text-neutral-900 outline-none focus:border-neutral-900 transition" placeholder="mon-entreprise" autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') saveSlug(); if (e.key === 'Escape') setEditingSlug(false); }} />
+            <button onClick={saveSlug} disabled={saving} className="text-xs font-medium text-neutral-900 hover:text-neutral-700 transition">OK</button>
+            <button onClick={() => setEditingSlug(false)} className="text-xs text-neutral-400 hover:text-neutral-600 transition">Annuler</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <code className="text-sm font-mono text-neutral-800 flex-1 truncate">{slug ? shopUrl : 'Non défini'}</code>
+            {slug && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={copyLink} className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900 transition">
+                  {copied ? 'Copié' : 'Copier'}
+                </button>
+                <button onClick={openShop} className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900 transition">
+                  Ouvrir
                 </button>
               </div>
             )}
           </div>
-          {slug && (
-            <div className="bg-slate-50 rounded-lg p-3 space-y-2">
-              <code className="text-xs text-brand-800 font-mono break-all block">{shopUrl}</code>
-              <div className="flex gap-2">
-                <button onClick={copyLink} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-[11px] font-semibold transition">
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? 'Copié !' : 'Copier le lien'}
-                </button>
-                <button onClick={openShop}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition ${
-                    settings.is_active ? 'bg-brand-700 hover:bg-brand-800 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-600'}`}>
-                  <ExternalLink className="w-3.5 h-3.5" />Voir la boutique
-                </button>
-              </div>
-            </div>
-          )}
+        )}
+      </div>
+
+      {/* Informations boutique */}
+      <div className="py-6 border-b border-neutral-200 flat-form">
+        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-4">Informations</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+          <div className="sm:col-span-2"><label className="label">Nom affiché</label><input value={settings.shop_name || ''} onChange={e => setSettings({ ...settings, shop_name: e.target.value })} className="input" /></div>
+          <div className="sm:col-span-2"><label className="label">Accroche</label><input value={settings.tagline || ''} onChange={e => setSettings({ ...settings, tagline: e.target.value })} className="input" placeholder="Ex : Pièces auto de qualité" /></div>
+          <div><label className="label">Téléphone</label><input value={settings.phone || ''} onChange={e => setSettings({ ...settings, phone: e.target.value })} className="input" /></div>
+          <div><label className="label">WhatsApp</label><input value={settings.whatsapp || ''} onChange={e => setSettings({ ...settings, whatsapp: e.target.value })} className="input" /></div>
+          <div className="sm:col-span-2"><label className="label">Adresse</label><input value={settings.address || ''} onChange={e => setSettings({ ...settings, address: e.target.value })} className="input" /></div>
+          <div className="sm:col-span-2"><label className="label">Message d'accueil</label><textarea value={settings.welcome_msg || ''} onChange={e => setSettings({ ...settings, welcome_msg: e.target.value })} className="input resize-none" rows={2} /></div>
+          <div className="sm:col-span-2"><label className="label">Pied de page</label><input value={settings.footer_text || ''} onChange={e => setSettings({ ...settings, footer_text: e.target.value })} className="input" /></div>
+        </div>
+        <div className="flex justify-end pt-4">
+          <button onClick={saveSettings} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Enregistrer
+          </button>
         </div>
       </div>
 
-      {/* Colonne droite : infos boutique */}
-      <div className="space-y-3">
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-pink-500" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Informations boutique</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2"><label className="label">Nom affiché</label><input value={settings.shop_name || ''} onChange={e => setSettings({ ...settings, shop_name: e.target.value })} className="input" /></div>
-            <div className="col-span-2"><label className="label">Accroche</label><input value={settings.tagline || ''} onChange={e => setSettings({ ...settings, tagline: e.target.value })} className="input" placeholder="Ex : Pièces auto de qualité" /></div>
-            <div><label className="label">Téléphone</label><input value={settings.phone || ''} onChange={e => setSettings({ ...settings, phone: e.target.value })} className="input" /></div>
-            <div><label className="label">WhatsApp</label><input value={settings.whatsapp || ''} onChange={e => setSettings({ ...settings, whatsapp: e.target.value })} className="input" /></div>
-            <div className="col-span-2"><label className="label">Adresse</label><input value={settings.address || ''} onChange={e => setSettings({ ...settings, address: e.target.value })} className="input" /></div>
-            <div className="col-span-2"><label className="label">Message d'accueil</label><textarea value={settings.welcome_msg || ''} onChange={e => setSettings({ ...settings, welcome_msg: e.target.value })} className="input resize-none" rows={2} /></div>
-            <div className="col-span-2"><label className="label">Pied de page</label><input value={settings.footer_text || ''} onChange={e => setSettings({ ...settings, footer_text: e.target.value })} className="input" /></div>
-          </div>
-          <div className="flex justify-end pt-1">
-            <button onClick={saveSettings} disabled={saving} className="btn-icon-primary" title="Enregistrer">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Apparence — full width below the two-column layout */}
-      <div className="lg:col-span-2">
+      {/* Apparence */}
+      <div className="pt-6">
         <ShopAppearanceSettings
           settings={settings as ShopSettings}
           onSettingsChange={(s) => setSettings(s)}
@@ -587,67 +540,67 @@ function SitesTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8 max-w-none">
       {/* Magasins section */}
-      <div className="space-y-2">
+      <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Magasins</h3>
-          <button onClick={openCreateStore} className="btn-icon-primary" title="Nouveau magasin"><Plus className="w-4 h-4" /></button>
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Magasins</h2>
+          <button onClick={openCreateStore} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>
         </div>
-        <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-              <tr><th className="px-3 py-2.5 text-left">Nom</th><th className="px-3 py-2.5 text-left">Code</th><th className="px-3 py-2.5 text-left hidden sm:table-cell">Téléphone</th><th className="px-3 py-2.5 text-center">Statut</th><th className="px-3 py-2.5"></th></tr>
+            <thead className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold border-b border-neutral-200">
+              <tr><th className="px-3 py-2 text-left">Nom</th><th className="px-3 py-2 text-left">Code</th><th className="px-3 py-2 text-left hidden sm:table-cell">Telephone</th><th className="px-3 py-2 text-center">Statut</th><th className="px-3 py-2"></th></tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-neutral-100">
               {stores.map(s => (
-                <tr key={s.id} className="hover:bg-slate-50/60">
-                  <td className="px-3 py-2.5 font-medium text-sm">{s.name}</td>
-                  <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500">{s.code || '—'}</td>
-                  <td className="px-3 py-2.5 hidden sm:table-cell text-xs text-slate-500">{s.phone || '—'}</td>
-                  <td className="px-3 py-2.5 text-center"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{s.is_active ? 'Actif' : 'Inactif'}</span></td>
-                  <td className="px-3 py-2.5 text-right"><button onClick={() => openEdit(s)} className="p-1 rounded hover:bg-slate-100"><Edit2 className="w-3.5 h-3.5 text-slate-400" /></button></td>
+                <tr key={s.id} className="hover:bg-neutral-50/60 transition-colors">
+                  <td className="px-3 py-2.5 font-medium text-sm text-neutral-900">{s.name}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-neutral-500">{s.code || '—'}</td>
+                  <td className="px-3 py-2.5 hidden sm:table-cell text-xs text-neutral-500">{s.phone || '—'}</td>
+                  <td className="px-3 py-2.5 text-center"><span className={`text-[10px] font-bold ${s.is_active ? 'text-emerald-600' : 'text-red-600'}`}>{s.is_active ? 'Actif' : 'Inactif'}</span></td>
+                  <td className="px-3 py-2.5 text-right"><button onClick={() => openEdit(s)} className="p-1.5 rounded-md hover:bg-neutral-100 transition"><Edit2 className="w-3.5 h-3.5 text-neutral-500" /></button></td>
                 </tr>
               ))}
-              {stores.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-center text-xs text-slate-400">Aucun magasin</td></tr>}
+              {stores.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-xs text-neutral-400">Aucun magasin</td></tr>}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
       {/* Depots section */}
-      <div className="space-y-2">
+      <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Dépôts / Entrepôts</h3>
-          <button onClick={openCreateDepot} className="btn-icon-primary" title="Nouveau dépôt"><Plus className="w-4 h-4" /></button>
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Depots / Entrepots</h2>
+          <button onClick={openCreateDepot} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>
         </div>
-        <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-              <tr><th className="px-3 py-2.5 text-left">Nom</th><th className="px-3 py-2.5 text-left">Code</th><th className="px-3 py-2.5 text-left">Magasin rattaché</th><th className="px-3 py-2.5 text-center">Statut</th><th className="px-3 py-2.5"></th></tr>
+            <thead className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold border-b border-neutral-200">
+              <tr><th className="px-3 py-2 text-left">Nom</th><th className="px-3 py-2 text-left">Code</th><th className="px-3 py-2 text-left">Magasin rattache</th><th className="px-3 py-2 text-center">Statut</th><th className="px-3 py-2"></th></tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-neutral-100">
               {depots.map(d => {
                 const parentStore = stores.find(s => s.id === d.parent_site_id);
                 return (
-                  <tr key={d.id} className="hover:bg-slate-50/60">
-                    <td className="px-3 py-2.5 font-medium text-sm">{d.name}</td>
-                    <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500">{d.code || '—'}</td>
-                    <td className="px-3 py-2.5 text-xs text-slate-600">{parentStore?.name || <span className="text-amber-600 italic">Non rattaché</span>}</td>
-                    <td className="px-3 py-2.5 text-center"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${d.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{d.is_active ? 'Actif' : 'Inactif'}</span></td>
-                    <td className="px-3 py-2.5 text-right"><button onClick={() => openEdit(d)} className="p-1 rounded hover:bg-slate-100"><Edit2 className="w-3.5 h-3.5 text-slate-400" /></button></td>
+                  <tr key={d.id} className="hover:bg-neutral-50/60 transition-colors">
+                    <td className="px-3 py-2.5 font-medium text-sm text-neutral-900">{d.name}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-neutral-500">{d.code || '—'}</td>
+                    <td className="px-3 py-2.5 text-xs text-neutral-600">{parentStore?.name || <span className="text-amber-600 italic">Non rattache</span>}</td>
+                    <td className="px-3 py-2.5 text-center"><span className={`text-[10px] font-bold ${d.is_active ? 'text-emerald-600' : 'text-red-600'}`}>{d.is_active ? 'Actif' : 'Inactif'}</span></td>
+                    <td className="px-3 py-2.5 text-right"><button onClick={() => openEdit(d)} className="p-1.5 rounded-md hover:bg-neutral-100 transition"><Edit2 className="w-3.5 h-3.5 text-neutral-500" /></button></td>
                   </tr>
                 );
               })}
-              {depots.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-center text-xs text-slate-400">Aucun dépôt créé</td></tr>}
+              {depots.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-xs text-neutral-400">Aucun depot cree</td></tr>}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? (form.is_warehouse ? 'Modifier le dépôt' : 'Modifier le magasin') : (form.is_warehouse ? 'Nouveau dépôt' : 'Nouveau magasin')} size="md"
-        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? (form.is_warehouse ? 'Modifier le dépôt' : 'Modifier le magasin') : (form.is_warehouse ? 'Nouveau dépôt' : 'Nouveau magasin')} size="md" fullscreenMobile
+        footer={<><button onClick={() => setOpen(false)} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}</button></>}>
+        <div className="flat-form space-y-4">
           <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div><label className="label">Code court</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="input" placeholder="EX: DEP-01" /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -668,39 +621,37 @@ function SitesTab() {
 
           {/* Document header section (only for stores) */}
           {!form.is_warehouse && editing && (
-            <div className="pt-2 border-t border-slate-100 space-y-3">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Entête documents (propre à ce magasin)</p>
-              <p className="text-[10px] text-slate-400">Laisser vide pour utiliser les infos générales de l'entreprise.</p>
+            <div className="pt-3 border-t border-neutral-100 space-y-3">
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Entete documents (propre a ce magasin)</p>
+              <p className="text-[10px] text-neutral-400">Laisser vide pour utiliser les infos generales de l'entreprise.</p>
 
               {/* Logo upload */}
               <div>
                 <label className="label">Logo du magasin</label>
                 <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                  <div className="w-14 h-14 shrink-0 flex items-center justify-center overflow-hidden">
                     {form.logo_url ? (
                       <img src={form.logo_url} alt="Logo" className="w-full h-full object-contain" />
                     ) : tenant?.logo_url ? (
                       <img src={tenant.logo_url} alt="Logo tenant" className="w-full h-full object-contain opacity-40" />
                     ) : (
-                      <ImageIcon className="w-5 h-5 text-slate-300" />
+                      <ImageIcon className="w-5 h-5 text-neutral-300" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     {!form.logo_url && tenant?.logo_url && (
-                      <p className="text-[10px] text-slate-400 mb-1">Logo actuel : celui de l'entreprise (par défaut)</p>
+                      <p className="text-[10px] text-neutral-400 mb-1">Logo actuel : celui de l'entreprise (par defaut)</p>
                     )}
-                    <p className="text-[10px] text-slate-500 mb-1.5">PNG, JPG, WebP ou SVG — max 2 Mo</p>
+                    <p className="text-[10px] text-neutral-500 mb-1.5">PNG, JPG, WebP ou SVG — max 2 Mo</p>
                     <div className="flex items-center gap-2">
                       <input ref={siteLogoRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" className="hidden"
                         onChange={e => { const f = e.target.files?.[0]; if (f) uploadSiteLogo(f); e.target.value = ''; }} />
                       <button type="button" onClick={() => siteLogoRef.current?.click()} disabled={uploadingLogo}
-                        className="btn-icon" title={form.logo_url ? 'Changer' : 'Charger un logo'}>
-                        {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        className="text-xs font-medium text-neutral-700 hover:text-neutral-900 transition">
+                        {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Telecharger'}
                       </button>
                       {form.logo_url && (
-                        <button type="button" onClick={removeSiteLogo} className="btn-icon-danger" title="Retirer">
-                          <X className="w-4 h-4" />
-                        </button>
+                        <button type="button" onClick={removeSiteLogo} className="text-xs text-red-600 hover:text-red-800 transition">Retirer</button>
                       )}
                     </div>
                   </div>
@@ -759,34 +710,34 @@ function PaymentsTab() {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <button onClick={() => { setEditing(null); setForm({ payment_type: 'cash', is_active: true, sort_order: list.length + 1 }); setOpen(true); }} className="btn-icon-primary" title="Nouveau mode"><Plus className="w-4 h-4" /></button>
+        <button onClick={() => { setEditing(null); setForm({ payment_type: 'cash', is_active: true, sort_order: list.length + 1 }); setOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]" title="Nouveau mode"><Plus className="w-3.5 h-3.5" />Nouveau</button>
       </div>
-      <div className="card overflow-hidden">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-            <tr><th className="px-3 py-2.5 text-left">Nom</th><th className="px-3 py-2.5 text-left hidden sm:table-cell">Code</th><th className="px-3 py-2.5 text-left hidden md:table-cell">Type</th><th className="px-3 py-2.5 text-left hidden lg:table-cell">Compte</th><th className="px-3 py-2.5 text-center">Statut</th><th className="px-3 py-2.5"></th></tr>
+          <thead className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold border-b border-neutral-200">
+            <tr><th className="px-3 py-2 text-left">Nom</th><th className="px-3 py-2 text-left hidden sm:table-cell">Code</th><th className="px-3 py-2 text-left hidden md:table-cell">Type</th><th className="px-3 py-2 text-left hidden lg:table-cell">Compte</th><th className="px-3 py-2 text-center">Statut</th><th className="px-3 py-2"></th></tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-neutral-100">
             {list.map(m => (
-              <tr key={m.id} className="hover:bg-slate-50/60">
-                <td className="px-3 py-2.5 font-medium">{m.name}</td>
-                <td className="px-3 py-2.5 hidden sm:table-cell font-mono text-[11px] text-slate-500">{m.code}</td>
-                <td className="px-3 py-2.5 hidden md:table-cell capitalize text-xs text-slate-500">{m.payment_type}</td>
-                <td className="px-3 py-2.5 hidden lg:table-cell font-mono text-[11px] text-slate-400">{m.account_code}</td>
+              <tr key={m.id} className="hover:bg-neutral-50/60 transition-colors">
+                <td className="px-3 py-2.5 font-medium text-sm text-neutral-900">{m.name}</td>
+                <td className="px-3 py-2.5 hidden sm:table-cell font-mono text-xs text-neutral-500">{m.code}</td>
+                <td className="px-3 py-2.5 hidden md:table-cell capitalize text-xs text-neutral-500">{m.payment_type}</td>
+                <td className="px-3 py-2.5 hidden lg:table-cell font-mono text-xs text-neutral-400">{m.account_code}</td>
                 <td className="px-3 py-2.5 text-center">
-                  <button onClick={() => toggleActive(m)} className={`relative inline-flex items-center w-9 h-5 rounded-full transition-all ${m.is_active ? 'bg-brand-500' : 'bg-slate-200'}`}>
+                  <button onClick={() => toggleActive(m)} className={`relative inline-flex items-center w-9 h-5 rounded-full transition-all ${m.is_active ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
                     <span className={`inline-block w-4 h-4 rounded-full bg-white shadow transform transition-all ${m.is_active ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
                   </button>
                 </td>
-                <td className="px-3 py-2.5 text-right"><button onClick={() => { setEditing(m); setForm({ ...m }); setOpen(true); }} className="p-1 rounded hover:bg-slate-100"><Edit2 className="w-3.5 h-3.5 text-slate-400" /></button></td>
+                <td className="px-3 py-2.5 text-right"><button onClick={() => { setEditing(m); setForm({ ...m }); setOpen(true); }} className="p-1.5 rounded-md hover:bg-neutral-100 transition"><Edit2 className="w-3.5 h-3.5 text-neutral-500" /></button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le mode' : 'Nouveau mode de règlement'} size="sm"
-        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le mode' : 'Nouveau mode de règlement'} size="sm" fullscreenMobile
+        footer={<><button onClick={() => setOpen(false)} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}</button></>}>
+        <div className="flat-form space-y-3">
           <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div><label className="label">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="input" placeholder="EX: WAVE" /></div>
           <div><label className="label">Type</label>
@@ -858,38 +809,38 @@ function CategoriesTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end"><button onClick={() => openCreate()} className="btn-icon-primary" title="Nouvelle catégorie"><Plus className="w-4 h-4" /></button></div>
-      <div className="card overflow-hidden">
+      <div className="flex justify-end"><button onClick={() => openCreate()} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]" title="Nouvelle catégorie"><Plus className="w-3.5 h-3.5" />Nouvelle</button></div>
+      <div className="overflow-x-auto">
         <div className="max-h-[520px] overflow-y-auto">
-          {roots.length === 0 ? <div className="py-8 text-center text-sm text-slate-500">Aucune catégorie</div> : (
+          {roots.length === 0 ? <div className="py-8 text-center text-sm text-neutral-400">Aucune catégorie</div> : (
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-bold sticky top-0">
-                <tr><th className="px-3 py-2.5 text-left">Catégorie</th><th className="px-3 py-2.5 text-left hidden sm:table-cell">Code</th><th className="px-3 py-2.5 text-center">Statut</th><th className="px-3 py-2.5 text-right">Actions</th></tr>
+              <thead className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold border-b border-neutral-200 sticky top-0 bg-white">
+                <tr><th className="px-3 py-2 text-left">Catégorie</th><th className="px-3 py-2 text-left hidden sm:table-cell">Code</th><th className="px-3 py-2 text-center">Statut</th><th className="px-3 py-2 text-right">Actions</th></tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-neutral-100">
                 {roots.map(cat => (
                   <>{/* Fragment per root */}
-                    <tr key={cat.id} className="bg-slate-50/60 hover:bg-slate-100/60">
-                      <td className="px-3 py-2 font-semibold text-slate-800 text-sm">{cat.name}</td>
-                      <td className="px-3 py-2 font-mono text-[11px] hidden sm:table-cell text-slate-500">{cat.code}</td>
-                      <td className="px-3 py-2 text-center"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{cat.is_active ? 'Active' : 'Inactive'}</span></td>
+                    <tr key={cat.id} className="bg-neutral-50/60 hover:bg-neutral-100/60">
+                      <td className="px-3 py-2 font-semibold text-neutral-900 text-sm">{cat.name}</td>
+                      <td className="px-3 py-2 font-mono text-xs hidden sm:table-cell text-neutral-500">{cat.code}</td>
+                      <td className="px-3 py-2 text-center"><span className={`text-[10px] font-bold ${cat.is_active ? 'text-emerald-600' : 'text-neutral-400'}`}>{cat.is_active ? 'Active' : 'Inactive'}</span></td>
                       <td className="px-3 py-2 text-right">
                         <div className="inline-flex gap-0.5">
-                          <button onClick={() => openCreate(cat.id)} className="p-1 rounded hover:bg-brand-50 text-brand-700" title="Sous-catégorie"><Plus className="w-3 h-3" /></button>
-                          <button onClick={() => openEdit(cat)} className="p-1 rounded hover:bg-slate-200"><Edit2 className="w-3 h-3" /></button>
-                          <button onClick={() => setToDelete(cat)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3 h-3" /></button>
+                          <button onClick={() => openCreate(cat.id)} className="p-1 rounded hover:bg-neutral-200 text-neutral-700" title="Sous-catégorie"><Plus className="w-3 h-3" /></button>
+                          <button onClick={() => openEdit(cat)} className="p-1 rounded hover:bg-neutral-200"><Edit2 className="w-3 h-3 text-neutral-500" /></button>
+                          <button onClick={() => setToDelete(cat)} className="p-1 rounded hover:bg-red-50 text-red-600"><Trash2 className="w-3 h-3" /></button>
                         </div>
                       </td>
                     </tr>
                     {children(cat.id).map(sub => (
-                      <tr key={sub.id} className="hover:bg-slate-50/60">
-                        <td className="px-3 py-2 pl-7 text-slate-600 text-sm">↳ {sub.name}</td>
-                        <td className="px-3 py-2 font-mono text-[11px] hidden sm:table-cell text-slate-400">{sub.code}</td>
-                        <td className="px-3 py-2 text-center"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sub.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{sub.is_active ? 'Active' : 'Inactive'}</span></td>
+                      <tr key={sub.id} className="hover:bg-neutral-50/60">
+                        <td className="px-3 py-2 pl-7 text-neutral-600 text-sm">↳ {sub.name}</td>
+                        <td className="px-3 py-2 font-mono text-xs hidden sm:table-cell text-neutral-400">{sub.code}</td>
+                        <td className="px-3 py-2 text-center"><span className={`text-[10px] font-bold ${sub.is_active ? 'text-emerald-600' : 'text-neutral-400'}`}>{sub.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td className="px-3 py-2 text-right">
                           <div className="inline-flex gap-0.5">
-                            <button onClick={() => openEdit(sub)} className="p-1 rounded hover:bg-slate-200"><Edit2 className="w-3 h-3" /></button>
-                            <button onClick={() => setToDelete(sub)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3 h-3" /></button>
+                            <button onClick={() => openEdit(sub)} className="p-1 rounded hover:bg-neutral-200"><Edit2 className="w-3 h-3 text-neutral-500" /></button>
+                            <button onClick={() => setToDelete(sub)} className="p-1 rounded hover:bg-red-50 text-red-600"><Trash2 className="w-3 h-3" /></button>
                           </div>
                         </td>
                       </tr>
@@ -902,9 +853,9 @@ function CategoriesTab() {
         </div>
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier la catégorie' : (form.parent_id ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie')} size="sm"
-        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier la catégorie' : (form.parent_id ? 'Nouvelle sous-catégorie' : 'Nouvelle catégorie')} size="sm" fullscreenMobile
+        footer={<><button onClick={() => setOpen(false)} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}</button></>}>
+        <div className="flat-form space-y-3">
           <div><label className="label">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div><label className="label">Code</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="input" placeholder="EX: FIL-HUI" /></div>
           <div><label className="label">Catégorie parente</label>
@@ -914,7 +865,7 @@ function CategoriesTab() {
             </select>
           </div>
           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Active</span></label>
-          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.track_stock !== false} onChange={e => setForm({ ...form, track_stock: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Suivi de stock</span><span className="text-[10px] text-slate-400">(appliqué à tous les articles de cette catégorie)</span></label>
+          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.track_stock !== false} onChange={e => setForm({ ...form, track_stock: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Suivi de stock</span><span className="text-[10px] text-neutral-400">(appliqué à tous les articles de cette catégorie)</span></label>
         </div>
       </Modal>
 
@@ -1028,27 +979,27 @@ function BrandsTab() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Marques */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900">Marques ({brands.length})</h3>
-          <button onClick={() => openBrandModal()} className="btn-icon-primary" title="Ajouter une marque"><Plus className="w-4 h-4" /></button>
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Marques ({brands.length})</h2>
+          <button onClick={() => openBrandModal()} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]" title="Ajouter une marque"><Plus className="w-3.5 h-3.5" />Ajouter</button>
         </div>
-        <div className="card overflow-hidden max-h-[480px] overflow-y-auto">
-          {brands.length === 0 ? <div className="py-6 text-center text-xs text-slate-500">Aucune marque</div> : (
-            <div className="divide-y divide-slate-100">
+        <div className="max-h-[480px] overflow-y-auto">
+          {brands.length === 0 ? <div className="py-6 text-center text-xs text-neutral-400">Aucune marque</div> : (
+            <div className="divide-y divide-neutral-100">
               {brands.map(b => (
                 <div key={b.id} onClick={() => setSelectedBrand(b.id)}
-                  className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${selectedBrand === b.id ? 'bg-brand-50' : 'hover:bg-slate-50'}`}>
+                  className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${selectedBrand === b.id ? 'bg-neutral-50' : 'hover:bg-neutral-50'}`}>
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-7 flex items-center justify-center overflow-hidden shrink-0">
-                      {(() => { const logo = getBrandLogo(b.name); return logo ? <div className="w-full h-full">{logo}</div> : <Car className="w-4 h-4 text-slate-300" />; })()}
+                      {(() => { const logo = getBrandLogo(b.name); return logo ? <div className="w-full h-full">{logo}</div> : <Car className="w-4 h-4 text-neutral-300" />; })()}
                     </div>
                     <div>
-                      <span className={`text-xs font-medium block ${selectedBrand === b.id ? 'text-brand-800' : 'text-slate-800'}`}>{b.name}</span>
-                      <span className={`text-[10px] ${b.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>{b.is_active ? 'Active' : 'Inactive'}</span>
+                      <span className={`text-xs font-medium block ${selectedBrand === b.id ? 'text-neutral-900' : 'text-neutral-800'}`}>{b.name}</span>
+                      <span className={`text-[10px] ${b.is_active ? 'text-emerald-600' : 'text-neutral-400'}`}>{b.is_active ? 'Active' : 'Inactive'}</span>
                     </div>
                   </div>
-                  <button onClick={ev => { ev.stopPropagation(); openBrandModal(b); }} className="p-1 rounded hover:bg-slate-200 text-slate-400"><Edit2 className="w-3 h-3" /></button>
+                  <button onClick={ev => { ev.stopPropagation(); openBrandModal(b); }} className="p-1 rounded hover:bg-neutral-200 text-neutral-400"><Edit2 className="w-3 h-3" /></button>
                 </div>
               ))}
             </div>
@@ -1057,21 +1008,21 @@ function BrandsTab() {
       </div>
 
       {/* Modèles */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900">Modèles {brandName ? `— ${brandName}` : ''} ({filteredModels.length})</h3>
-          <button onClick={() => { setEditingModel(null); setModelForm({ brand_id: selectedBrand, fuel: 'essence' }); setOpenModel(true); }} disabled={!selectedBrand} className="btn-icon-primary" title="Ajouter un modèle"><Plus className="w-4 h-4" /></button>
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Modèles {brandName ? `— ${brandName}` : ''} ({filteredModels.length})</h2>
+          <button onClick={() => { setEditingModel(null); setModelForm({ brand_id: selectedBrand, fuel: 'essence' }); setOpenModel(true); }} disabled={!selectedBrand} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50" title="Ajouter un modèle"><Plus className="w-3.5 h-3.5" />Ajouter</button>
         </div>
-        <div className="card overflow-hidden max-h-[480px] overflow-y-auto">
-          {filteredModels.length === 0 ? <div className="py-6 text-center text-xs text-slate-500">Sélectionnez une marque</div> : (
-            <div className="divide-y divide-slate-100">
+        <div className="max-h-[480px] overflow-y-auto">
+          {filteredModels.length === 0 ? <div className="py-6 text-center text-xs text-neutral-400">Sélectionnez une marque</div> : (
+            <div className="divide-y divide-neutral-100">
               {filteredModels.map(m => (
-                <div key={m.id} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50">
+                <div key={m.id} className="flex items-center justify-between px-3 py-2 hover:bg-neutral-50">
                   <div>
-                    <div className="text-xs font-medium">{m.name}</div>
-                    <div className="text-[10px] text-slate-500">{m.year_start > 0 ? `${m.year_start}–${m.year_end || '…'}` : ''} {m.engine} {m.fuel}</div>
+                    <div className="text-xs font-medium text-neutral-900">{m.name}</div>
+                    <div className="text-[10px] text-neutral-500">{m.year_start > 0 ? `${m.year_start}–${m.year_end || '…'}` : ''} {m.engine} {m.fuel}</div>
                   </div>
-                  <button onClick={() => { setEditingModel(m); setModelForm({ ...m }); setOpenModel(true); }} className="p-1 rounded hover:bg-slate-200 text-slate-400"><Edit2 className="w-3 h-3" /></button>
+                  <button onClick={() => { setEditingModel(m); setModelForm({ ...m }); setOpenModel(true); }} className="p-1 rounded hover:bg-neutral-200 text-neutral-400"><Edit2 className="w-3 h-3" /></button>
                 </div>
               ))}
             </div>
@@ -1080,26 +1031,26 @@ function BrandsTab() {
       </div>
 
       {/* Modal marque */}
-      <Modal open={openBrand} onClose={() => setOpenBrand(false)} title={editingBrand ? 'Modifier la marque' : 'Nouvelle marque'} size="sm"
-        footer={<><button onClick={() => setOpenBrand(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveBrand} disabled={saving || uploadingLogo} className="btn-icon-primary" title="Enregistrer">{(saving || uploadingLogo) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
+      <Modal open={openBrand} onClose={() => setOpenBrand(false)} title={editingBrand ? 'Modifier la marque' : 'Nouvelle marque'} size="sm" fullscreenMobile
+        footer={<><button onClick={() => setOpenBrand(false)} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={saveBrand} disabled={saving || uploadingLogo} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{(saving || uploadingLogo) ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}</button></>}>
+        <div className="flat-form space-y-3">
           <div><label className="label">Nom de la marque *</label><input value={brandForm.name || ''} onChange={e => setBrandForm({ ...brandForm, name: e.target.value })} className="input" autoFocus={desktopAutoFocus} /></div>
           <div>
             <label className="label">Logo</label>
             <div className="flex items-start gap-3">
-              <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 relative group">
+              <div className="w-16 h-16 rounded-md border-2 border-dashed border-neutral-200 bg-neutral-50 flex items-center justify-center overflow-hidden shrink-0 relative group">
                 {logoPreview ? (
                   <>
                     <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-1.5" />
-                    <button onClick={removeLogo} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-xl"><X className="w-4 h-4 text-white" /></button>
+                    <button onClick={removeLogo} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-md"><X className="w-4 h-4 text-white" /></button>
                   </>
-                ) : (() => { const inlineLogo = getBrandLogo(brandForm.name || ''); return inlineLogo ? <div className="w-full h-full p-1.5">{inlineLogo}</div> : <ImageOff className="w-5 h-5 text-slate-300" />; })()}
+                ) : (() => { const inlineLogo = getBrandLogo(brandForm.name || ''); return inlineLogo ? <div className="w-full h-full p-1.5">{inlineLogo}</div> : <ImageOff className="w-5 h-5 text-neutral-300" />; })()}
               </div>
               <div className="flex-1 space-y-1.5">
                 <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={handleLogoChange} className="hidden" id="brand-logo-upload" />
-                <label htmlFor="brand-logo-upload" className="btn-icon cursor-pointer w-full" title={logoPreview ? 'Changer' : 'Choisir'}><Upload className="w-4 h-4" /></label>
-                <p className="text-[10px] text-slate-400">JPG, PNG, WebP, SVG — max 2 Mo</p>
-                {logoPreview && <button onClick={removeLogo} className="btn-icon-danger" title="Supprimer"><Trash2 className="w-4 h-4" /></button>}
+                <label htmlFor="brand-logo-upload" className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition cursor-pointer w-full inline-flex items-center gap-1.5" title={logoPreview ? 'Changer' : 'Choisir'}><Upload className="w-4 h-4" />{logoPreview ? 'Changer' : 'Choisir'}</label>
+                <p className="text-[10px] text-neutral-400">JPG, PNG, WebP, SVG — max 2 Mo</p>
+                {logoPreview && <button onClick={removeLogo} className="text-xs text-red-600 hover:text-red-800 transition" title="Supprimer"><Trash2 className="w-4 h-4" /></button>}
               </div>
             </div>
           </div>
@@ -1108,9 +1059,9 @@ function BrandsTab() {
       </Modal>
 
       {/* Modal modèle */}
-      <Modal open={openModel} onClose={() => setOpenModel(false)} title={editingModel ? 'Modifier le modèle' : 'Nouveau modèle'} size="sm"
-        footer={<><button onClick={() => setOpenModel(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveModel} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
+      <Modal open={openModel} onClose={() => setOpenModel(false)} title={editingModel ? 'Modifier le modèle' : 'Nouveau modèle'} size="sm" fullscreenMobile
+        footer={<><button onClick={() => setOpenModel(false)} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={saveModel} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}</button></>}>
+        <div className="flat-form space-y-3">
           <div><label className="label">Marque *</label>
             <SearchableSelect options={brands.map(b => ({ value: b.id, label: b.name }))} value={modelForm.brand_id || ''} onChange={v => setModelForm({ ...modelForm, brand_id: v })} placeholder="— Choisir —" />
           </div>
@@ -1168,25 +1119,25 @@ function AccountingTab() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">{list.length} compte{list.length > 1 ? 's' : ''} — SYSCOHADA révisé</p>
-        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-icon-primary" title="Nouveau compte"><Plus className="w-4 h-4" /></button>
+        <p className="text-xs text-neutral-500">{list.length} compte{list.length > 1 ? 's' : ''} — SYSCOHADA révisé</p>
+        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]" title="Nouveau compte"><Plus className="w-3.5 h-3.5" />Nouveau</button>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-6">
         {byClass.map(({ cl, label, items }) => (
-          <div key={cl} className="card overflow-hidden">
-            <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-brand-100 text-brand-800 text-[10px] font-bold flex items-center justify-center">{cl}</span>
-              <span className="text-xs font-semibold text-slate-800">Classe {cl} — {label}</span>
-              <span className="ml-auto text-[10px] text-slate-400">{items.length}</span>
+          <div key={cl}>
+            <div className="px-3 py-2 border-b border-neutral-200 flex items-center gap-2">
+              <span className="w-5 h-5 rounded bg-neutral-900 text-white text-[10px] font-bold flex items-center justify-center">{cl}</span>
+              <span className="text-xs font-semibold text-neutral-800">Classe {cl} — {label}</span>
+              <span className="ml-auto text-[10px] text-neutral-400">{items.length}</span>
             </div>
             <table className="w-full text-sm">
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-neutral-100">
                 {items.map(a => (
-                  <tr key={a.id} className="hover:bg-slate-50/60">
-                    <td className="px-3 py-2 font-mono text-[11px] w-20 text-slate-600">{a.code}</td>
-                    <td className="px-3 py-2 text-xs font-medium">{a.name}</td>
-                    <td className="px-3 py-2 text-right"><button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1 rounded hover:bg-slate-100"><Edit2 className="w-3 h-3 text-slate-400" /></button></td>
+                  <tr key={a.id} className="hover:bg-neutral-50/60 transition-colors">
+                    <td className="px-3 py-2 font-mono text-xs w-20 text-neutral-600">{a.code}</td>
+                    <td className="px-3 py-2 text-xs font-medium text-neutral-900">{a.name}</td>
+                    <td className="px-3 py-2 text-right"><button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1.5 rounded-md hover:bg-neutral-100 transition"><Edit2 className="w-3.5 h-3.5 text-neutral-500" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1195,13 +1146,13 @@ function AccountingTab() {
         ))}
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le compte' : 'Nouveau compte'} size="sm"
-        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title="Enregistrer">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier le compte' : 'Nouveau compte'} size="sm" fullscreenMobile
+        footer={<><button onClick={() => setOpen(false)} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}</button></>}>
+        <div className="flat-form space-y-3">
           <div>
             <label className="label">Code comptable (7 chiffres) *</label>
             <input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="input font-mono" placeholder="5710000" maxLength={7} disabled={!!editing} />
-            {form.code?.length === 7 && <p className="text-[10px] text-slate-500 mt-0.5">Classe {form.code.charAt(0)}</p>}
+            {form.code?.length === 7 && <p className="text-[10px] text-neutral-500 mt-0.5">Classe {form.code.charAt(0)}</p>}
           </div>
           <div><label className="label">Intitulé *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="input" /></div>
         </div>
@@ -1318,46 +1269,46 @@ function UsersTab() {
   };
 
   if (!isAdmin) return (
-    <div className="card p-6 text-center">
-      <Shield className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-      <p className="text-xs text-slate-600 font-semibold">Accès réservé aux administrateurs</p>
+    <div className="py-12 text-center">
+      <Shield className="w-6 h-6 text-neutral-300 mx-auto mb-2" />
+      <p className="text-sm text-neutral-600 font-medium">Acces reserve aux administrateurs</p>
     </div>
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 max-w-none">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">{list.length} utilisateur{list.length > 1 ? 's' : ''}</p>
-        <button onClick={() => { setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier', assigned_site_ids: [] }); setOpen(true); }} className="btn-icon-primary" title="Nouvel utilisateur"><Plus className="w-4 h-4" /></button>
+        <p className="text-xs text-neutral-500">{list.length} utilisateur{list.length > 1 ? 's' : ''}</p>
+        <button onClick={() => { setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier', assigned_site_ids: [] }); setOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>
       </div>
 
       {loading ? (
-        <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
+        <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="divide-y divide-neutral-100">
           {list.map(u => (
-            <div key={u.id} className="bg-white border border-slate-200/70 rounded-xl p-2.5 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-600 to-brand-800 text-white flex items-center justify-center text-xs font-bold shrink-0">
+            <div key={u.id} className="flex items-center gap-3 py-3">
+              <div className="w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
                 {(u.full_name || u.email).charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-slate-900 truncate">{u.full_name || u.email}</span>
-                  {!u.is_active && <span className="text-[9px] bg-red-50 text-red-700 px-1 py-0.5 rounded">Inactif</span>}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-neutral-900 truncate">{u.full_name || u.email}</span>
+                  {!u.is_active && <span className="text-[10px] text-red-600 font-medium">Inactif</span>}
                 </div>
-                <div className="text-[10px] text-slate-500 truncate">{u.email}</div>
+                <div className="text-xs text-neutral-500 truncate">{u.email}</div>
               </div>
-              <span className="shrink-0 text-[9px] uppercase tracking-wider font-bold text-brand-700 bg-brand-50 border border-brand-100 px-1.5 py-0.5 rounded-full">
+              <span className="shrink-0 text-[10px] uppercase tracking-wider font-bold text-neutral-500">
                 {ROLE_LABELS[u.role] || u.role}
               </span>
-              <div className="flex items-center gap-0.5 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 <button onClick={async () => {
                   const { data: prof } = await supabase.from('profiles').select('assigned_site_ids').eq('id', u.id).maybeSingle();
                   setEditing(u); setForm({ ...u, assigned_site_ids: (prof as any)?.assigned_site_ids || [] }); setOpen(true);
-                }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500" title="Modifier"><Edit2 className="w-3 h-3" /></button>
-                <button onClick={() => { setResetFor(u); setNewPass(''); }} className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600" title="Mot de passe"><KeyRound className="w-3 h-3" /></button>
+                }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Modifier"><Edit2 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => { setResetFor(u); setNewPass(''); }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Mot de passe"><KeyRound className="w-3.5 h-3.5" /></button>
                 {u.id !== profile?.id && (
-                  <button onClick={() => setToDelete(u)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500" title="Supprimer"><Trash2 className="w-3 h-3" /></button>
+                  <button onClick={() => setToDelete(u)} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
                 )}
               </div>
             </div>
@@ -1365,9 +1316,9 @@ function UsersTab() {
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'} size="md"
-        footer={<><button onClick={() => setOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={save} disabled={saving} className="btn-icon-primary" title={editing ? 'Enregistrer' : 'Créer'}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'} size="md" fullscreenMobile
+        footer={<><button onClick={() => setOpen(false)} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (editing ? 'Enregistrer' : 'Créer')}</button></>}>
+        <div className="flat-form space-y-3">
           <div><label className="label">Email *</label><input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} disabled={!!editing} className="input" placeholder="utilisateur@exemple.com" /></div>
           <div><label className="label">Nom complet</label><input value={form.full_name || ''} onChange={e => setForm({ ...form, full_name: e.target.value })} className="input" /></div>
           {!editing && (
@@ -1412,7 +1363,7 @@ function UsersTab() {
       </Modal>
 
       <Modal open={!!resetFor} onClose={() => { setResetFor(null); setNewPass(''); }} title="Réinitialiser le mot de passe" size="sm"
-        footer={<><button onClick={() => { setResetFor(null); setNewPass(''); }} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={doReset} className="btn-icon-primary" title="Réinitialiser"><KeyRound className="w-4 h-4" /></button></>}>
+        footer={<><button onClick={() => { setResetFor(null); setNewPass(''); }} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={doReset} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]">Réinitialiser</button></>}>
         <div className="space-y-3">
           <p className="text-xs text-slate-600">Nouveau mot de passe pour <strong>{resetFor?.full_name || resetFor?.email}</strong>.</p>
           <div><label className="label">Nouveau mot de passe *</label><input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="input" placeholder="Min. 6 caractères" /></div>
@@ -1456,12 +1407,9 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Colonne gauche : contrôle + méthode */}
-      <div className="space-y-3">
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-orange-500" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Contrôle du stock</span>
-          </div>
+      <div className="space-y-8">
+        <section className="space-y-3">
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Contrôle du stock</h2>
           <SettingsToggle
             label="Autoriser les stocks négatifs"
             desc="Permet de vendre des articles même si le stock est à zéro ou insuffisant."
@@ -1472,33 +1420,27 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
             }}
           />
           {allowNegative && (
-            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-amber-800">Les ventes ne seront plus bloquées par le stock. Régularisez les entrées pour éviter les écarts.</p>
-            </div>
+            <p className="text-[11px] text-neutral-600 flex items-center gap-1.5"><AlertCircle className="w-3 h-3 text-neutral-400 shrink-0" />Les ventes ne seront plus bloquées par le stock. Régularisez les entrées pour éviter les écarts.</p>
           )}
-        </div>
+        </section>
 
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="w-1 h-4 rounded-full bg-orange-500" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Méthode de valorisation</span>
-          </div>
-          <p className="text-[11px] text-slate-500">Définit comment calculer la valeur du stock et les marges.</p>
-          <div className="space-y-2">
+        <section className="space-y-3">
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Méthode de valorisation</h2>
+          <p className="text-[11px] text-neutral-500">Définit comment calculer la valeur du stock et les marges.</p>
+          <div className="divide-y divide-neutral-200">
             {STOCK_METHODS.map(m => {
               const active = stockMethod === m.value;
               return (
                 <button key={m.value}
                   onClick={() => { updateSetting('stock_method', m.value); success('Méthode mise à jour'); }}
-                  className={`w-full text-left p-2.5 rounded-xl border-2 transition-all ${active ? 'border-brand-500 bg-brand-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                  className="w-full text-left py-3 transition-all hover:bg-neutral-50">
                   <div className="flex items-center gap-2.5">
-                    <div className={`w-3 h-3 rounded-full border-2 shrink-0 flex items-center justify-center ${active ? 'border-brand-600' : 'border-slate-300'}`}>
-                      {active && <div className="w-1.5 h-1.5 rounded-full bg-brand-600" />}
+                    <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${active ? 'border-neutral-900' : 'border-neutral-300'}`}>
+                      {active && <div className="w-1.5 h-1.5 rounded-full bg-neutral-900" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className={`text-xs font-semibold ${active ? 'text-brand-800' : 'text-slate-700'}`}>{m.label}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">{m.desc}</div>
+                      <div className={`text-xs font-medium ${active ? 'text-neutral-900' : 'text-neutral-600'}`}>{m.label}</div>
+                      <div className="text-[10px] text-neutral-500 mt-0.5 leading-tight">{m.desc}</div>
                     </div>
                   </div>
                 </button>
@@ -1506,31 +1448,24 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
             })}
           </div>
           {stockMethod === 'lot' && (
-            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-neutral-50 border border-neutral-200">
-              <AlertCircle className="w-3.5 h-3.5 text-neutral-700 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-neutral-800">Suivi par lot actif — dates de péremption et alertes disponibles.</p>
-            </div>
+            <p className="text-[11px] text-neutral-600 pt-2 flex items-center gap-1.5"><AlertCircle className="w-3 h-3 text-neutral-400 shrink-0" />Suivi par lot actif — dates de péremption et alertes disponibles.</p>
           )}
           {stockMethod === 'cmup' && (
-            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-teal-50 border border-teal-200">
-              <AlertCircle className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-teal-800">CMUP actif — le prix moyen est recalculé automatiquement à chaque entrée.</p>
-            </div>
+            <p className="text-[11px] text-neutral-600 pt-2 flex items-center gap-1.5"><AlertCircle className="w-3 h-3 text-neutral-400 shrink-0" />CMUP actif — le prix moyen est recalculé automatiquement à chaque entrée.</p>
           )}
-        </div>
+        </section>
       </div>
 
       {/* Colonne droite : catalogue multi-magasins */}
-      <div className="space-y-3">
+      <div className="space-y-8">
         {isMultiSite ? (
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <div className="w-1 h-4 rounded-full bg-brand-500" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Catalogue articles</span>
-              <span className="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{sites.length} magasins</span>
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Catalogue articles</h2>
+              <span className="ml-auto text-[10px] font-semibold text-neutral-400">{sites.length} magasins</span>
             </div>
-            <p className="text-[11px] text-slate-500">Partagé entre tous les magasins ou catalogue indépendant par site.</p>
-            <div className="space-y-2">
+            <p className="text-[11px] text-neutral-500">Partagé entre tous les magasins ou catalogue indépendant par site.</p>
+            <div className="divide-y divide-neutral-200">
               {[
                 { val: true, label: 'Catalogue partagé', desc: 'Même catalogue pour tous. Transfert de stock possible.' },
                 { val: false, label: 'Catalogues indépendants', desc: 'Chaque magasin gère ses propres articles. Pas de transfert.' },
@@ -1539,45 +1474,47 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
                 return (
                   <button key={String(opt.val)}
                     onClick={() => { updateSetting('shared_articles', opt.val); success(opt.val ? 'Catalogue partagé activé' : 'Catalogues indépendants activés'); }}
-                    className={`w-full text-left p-2.5 rounded-xl border-2 transition-all ${active ? 'border-brand-500 bg-brand-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                    className="w-full text-left py-3 transition-all hover:bg-neutral-50">
                     <div className="flex items-center gap-2.5">
-                      <div className={`w-3 h-3 rounded-full border-2 shrink-0 flex items-center justify-center ${active ? 'border-brand-600' : 'border-slate-300'}`}>
-                        {active && <div className="w-1.5 h-1.5 rounded-full bg-brand-600" />}
+                      <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${active ? 'border-neutral-900' : 'border-neutral-300'}`}>
+                        {active && <div className="w-1.5 h-1.5 rounded-full bg-neutral-900" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className={`text-xs font-semibold ${active ? 'text-brand-800' : 'text-slate-700'}`}>{opt.label}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{opt.desc}</div>
+                        <div className={`text-xs font-medium ${active ? 'text-neutral-900' : 'text-neutral-600'}`}>{opt.label}</div>
+                        <div className="text-[10px] text-neutral-500 mt-0.5">{opt.desc}</div>
                       </div>
                     </div>
                   </button>
                 );
               })}
             </div>
-            <div className={`flex items-start gap-2 p-2.5 rounded-lg ${sharedArticles ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
-              <Share2 className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedArticles ? 'text-emerald-600' : 'text-slate-400'}`} />
-              <p className={`text-[11px] ${sharedArticles ? 'text-emerald-800' : 'text-slate-600'}`}>
+            <div className="flex items-start gap-2 pt-2">
+              <Share2 className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedArticles ? 'text-neutral-700' : 'text-neutral-400'}`} />
+              <p className={`text-[11px] ${sharedArticles ? 'text-neutral-700' : 'text-neutral-500'}`}>
                 {sharedArticles
                   ? `Transferts de stock activés entre vos ${sites.length} magasins (page Stock).`
                   : 'Articles isolés par magasin. Créés dans un site, invisibles dans les autres.'}
               </p>
             </div>
-          </div>
+          </section>
         ) : (
-          <div className="card p-4 flex items-start gap-3 bg-slate-50/50">
-            <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-semibold text-slate-600">Options multi-magasins</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Disponibles dès que vous ajoutez un deuxième magasin dans Paramètres → Magasins.</p>
+          <section className="space-y-3">
+            <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Options multi-magasins</h2>
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-neutral-600">Options multi-magasins</p>
+                <p className="text-[11px] text-neutral-400 mt-0.5">Disponibles dès que vous ajoutez un deuxième magasin dans Paramètres → Magasins.</p>
+              </div>
             </div>
-          </div>
+          </section>
         )}
 
         {hasDepots && (
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <div className="w-1 h-4 rounded-full bg-amber-500" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Dépôts</span>
-              <span className="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{depots.length} dépôt{depots.length > 1 ? 's' : ''}</span>
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Dépôts</h2>
+              <span className="ml-auto text-[10px] font-semibold text-neutral-400">{depots.length} dépôt{depots.length > 1 ? 's' : ''}</span>
             </div>
             <SettingsToggle
               label="Transferts inter-dépôts"
@@ -1589,12 +1526,9 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
               }}
             />
             {interDepotTransfer && (
-              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-amber-800">Tous les magasins peuvent accéder à tous les dépôts. Désactivez pour limiter l'accès au magasin rattaché uniquement.</p>
-              </div>
+              <p className="text-[11px] text-neutral-600 flex items-center gap-1.5"><AlertCircle className="w-3 h-3 text-neutral-400 shrink-0" />Tous les magasins peuvent accéder à tous les dépôts. Désactivez pour limiter l'accès au magasin rattaché uniquement.</p>
             )}
-          </div>
+          </section>
         )}
 
         {/* RAZ Stock */}
@@ -1655,17 +1589,14 @@ function StockResetCard() {
 
   return (
     <>
-      <div className="card p-4 space-y-3 border-red-100">
-        <div className="flex items-center gap-2 pb-2 border-b border-red-100">
-          <div className="w-1 h-4 rounded-full bg-red-500" />
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Remise à zéro du stock</span>
-        </div>
-        <p className="text-[11px] text-slate-500 leading-relaxed">
+      <div className="space-y-3">
+        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Remise à zéro du stock</h2>
+        <p className="text-[11px] text-neutral-500 leading-relaxed">
           Remet toutes les quantités en stock à zéro pour un point de vente. Un document de sortie de stock est automatiquement généré comme justificatif. Cette action est irréversible.
         </p>
         <button
           onClick={() => { setOpen(true); setErrMsg(''); setPassword(''); setConfirmText(''); setSelectedSite(currentSite?.id || ''); }}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-semibold hover:bg-red-100 hover:border-red-300 transition-all active:scale-95"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition active:scale-[0.97]"
         >
           <TrendingDown className="w-3.5 h-3.5" />
           Remettre à zéro le stock
@@ -1674,12 +1605,12 @@ function StockResetCard() {
 
       <Modal open={open} onClose={() => !saving && setOpen(false)} title="Remise à zéro du stock" size="sm">
         <div className="space-y-4">
-          <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+          <div className="p-3 rounded-md bg-neutral-50 border border-neutral-200">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div>
-                <div className="text-sm font-bold text-red-800">Action irréversible</div>
-                <div className="text-xs text-red-700 mt-1 leading-relaxed">
+                <div className="text-sm font-bold text-neutral-900">Action irréversible</div>
+                <div className="text-xs text-neutral-700 mt-1 leading-relaxed">
                   Cette opération va remettre à zéro <strong>tout le stock</strong> du point de vente sélectionné.
                   Un document de sortie de stock sera généré comme justificatif. Les quantités ne pourront pas être restaurées automatiquement.
                 </div>
@@ -1690,29 +1621,29 @@ function StockResetCard() {
           <div className="space-y-3">
             {allSites.length > 1 && (
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Point de vente</label>
+                <label className="label">Point de vente</label>
                 <select
                   value={selectedSite}
                   onChange={e => setSelectedSite(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-200 outline-none transition-all"
+                  className="input"
                 >
                   {allSites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
             )}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Mot de passe administrateur</label>
+              <label className="label">Mot de passe administrateur</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => { setPassword(e.target.value); setErrMsg(''); }}
                 placeholder="Saisissez votre mot de passe"
-                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-200 outline-none transition-all"
+                className="input"
                 autoComplete="current-password"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="label">
                 Tapez <span className="font-mono text-red-600 bg-red-50 px-1 rounded">CONFIRMER</span> pour valider
               </label>
               <input
@@ -1720,14 +1651,14 @@ function StockResetCard() {
                 value={confirmText}
                 onChange={e => { setConfirmText(e.target.value); setErrMsg(''); }}
                 placeholder="CONFIRMER"
-                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm font-mono tracking-wider focus:border-red-400 focus:ring-2 focus:ring-red-200 outline-none transition-all"
+                className="input font-mono tracking-wider"
                 autoComplete="off"
               />
             </div>
           </div>
 
           {errMsg && (
-            <div className="text-xs text-red-600 font-medium bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+            <div className="text-xs text-red-600 font-medium bg-red-50 px-3 py-2 rounded-md border border-red-100">
               {errMsg}
             </div>
           )}
@@ -1736,12 +1667,12 @@ function StockResetCard() {
             <button
               onClick={() => setOpen(false)}
               disabled={saving}
-              className="btn-icon" title="Annuler"
+              className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition" title="Annuler"
             ><X className="w-4 h-4" /></button>
             <button
               onClick={handleReset}
               disabled={saving || confirmText !== 'CONFIRMER' || !password}
-              className="btn-icon-danger-solid" title="Remettre à zéro"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-xs font-medium rounded-md hover:bg-red-700 transition active:scale-[0.97]" title="Remettre à zéro"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
@@ -1772,25 +1703,22 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
   const RadioBlock = ({ value, selected, label, desc, onSelect }: { value: boolean; selected: boolean; label: string; desc: string; onSelect: () => void }) => (
     <button
       onClick={onSelect}
-      className={`w-full text-left p-2.5 rounded-xl border-2 transition-all ${selected ? 'border-brand-500 bg-brand-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+      className="w-full text-left py-3 transition-all hover:bg-neutral-50">
       <div className="flex items-center gap-2.5">
-        <div className={`w-3 h-3 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? 'border-brand-600' : 'border-slate-300'}`}>
-          {selected && <div className="w-1.5 h-1.5 rounded-full bg-brand-600" />}
+        <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? 'border-neutral-900' : 'border-neutral-300'}`}>
+          {selected && <div className="w-1.5 h-1.5 rounded-full bg-neutral-900" />}
         </div>
         <div className="flex-1 min-w-0">
-          <div className={`text-xs font-semibold ${selected ? 'text-brand-800' : 'text-slate-700'}`}>{label}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">{desc}</div>
+          <div className={`text-xs font-medium ${selected ? 'text-neutral-900' : 'text-neutral-600'}`}>{label}</div>
+          <div className="text-[10px] text-neutral-500 mt-0.5 leading-tight">{desc}</div>
         </div>
       </div>
     </button>
   );
 
   const loanWithdrawalCard = (
-    <div className="card p-4 space-y-3">
-      <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-        <div className="w-1 h-4 rounded-full bg-blue-500" />
-        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Prêts & retraits clients</span>
-      </div>
+    <section className="space-y-3">
+      <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Prêts & retraits clients</h2>
       <SettingsToggle
         label="Activer les prêts clients"
         desc="Permet d'accorder un prêt à un client depuis la caisse. Le montant est ajouté à sa créance (remboursable comme une vente à crédit)."
@@ -1801,12 +1729,9 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
         }}
       />
       {!!settings.enable_customer_loans && (
-        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200">
-          <AlertCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-blue-800">Le bouton « Prêt » apparaîtra dans les mouvements de caisse. Le plafond crédit du client est respecté. La créance apparaît dans la fiche client.</p>
-        </div>
+        <p className="text-[11px] text-neutral-600 flex items-center gap-1.5"><AlertCircle className="w-3 h-3 text-neutral-400 shrink-0" />Le bouton « Prêt » apparaîtra dans les mouvements de caisse. Le plafond crédit du client est respecté.</p>
       )}
-      <div className="pt-2 border-t border-slate-100">
+      <div className="pt-2 border-t border-neutral-100">
         <SettingsToggle
           label="Activer les retraits clients"
           desc="Permet à un client de retirer de l'argent depuis son acompte disponible à la caisse. Le retrait est enregistré comme une sortie de caisse."
@@ -1817,25 +1742,25 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
           }}
         />
         {!!settings.enable_customer_withdrawals && (
-          <div className="flex items-start gap-2 p-2.5 mt-3 rounded-lg bg-amber-50 border border-amber-200">
-            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-amber-800">Le bouton « Retrait » apparaîtra dans les mouvements de caisse. Le montant est limité à l'acompte disponible du client, déduction faite de sa dette éventuelle.</p>
-          </div>
+          <p className="text-[11px] text-neutral-600 mt-2 flex items-center gap-1.5"><AlertCircle className="w-3 h-3 text-neutral-400 shrink-0" />Le bouton « Retrait » apparaîtra dans les mouvements de caisse. Le montant est limité à l'acompte disponible du client.</p>
         )}
       </div>
-    </div>
+    </section>
   );
 
   if (!isMultiSite) {
     return (
-      <div className="space-y-4 max-w-2xl">
-        <div className="card p-5 flex items-start gap-3">
-          <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs font-semibold text-slate-600">Options multi-magasins</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Ces paramètres deviennent disponibles dès que vous ajoutez un deuxième magasin dans <strong>Paramètres → Magasins</strong>.</p>
+      <div className="space-y-8 max-w-2xl">
+        <section className="space-y-3">
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Options multi-magasins</h2>
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-neutral-600">Options multi-magasins</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">Ces paramètres deviennent disponibles dès que vous ajoutez un deuxième magasin dans <strong>Paramètres → Magasins</strong>.</p>
+            </div>
           </div>
-        </div>
+        </section>
         {loanWithdrawalCard}
       </div>
     );
@@ -1844,14 +1769,13 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Clients */}
-      <div className="card p-4 space-y-3">
-        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-          <div className="w-1 h-4 rounded-full bg-neutral-500" />
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Clients</span>
-          <span className="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{sites.length} magasins</span>
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Clients</h2>
+          <span className="ml-auto text-[10px] font-semibold text-neutral-400">{sites.length} magasins</span>
         </div>
-        <p className="text-[11px] text-slate-500">Définissez si les clients sont partagés entre tous les magasins ou gérés séparément.</p>
-        <div className="space-y-2">
+        <p className="text-[11px] text-neutral-500">Définissez si les clients sont partagés entre tous les magasins ou gérés séparément.</p>
+        <div className="divide-y divide-neutral-200">
           <RadioBlock
             value={true} selected={sharedCustomers}
             label="Clients partagés"
@@ -1865,25 +1789,24 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
             onSelect={() => { updateSetting('shared_customers', false); success('Clients indépendants activés'); }}
           />
         </div>
-        <div className={`flex items-start gap-2 p-2.5 rounded-lg ${sharedCustomers ? 'bg-neutral-50 border border-neutral-200' : 'bg-slate-50 border border-slate-200'}`}>
-          <Users className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedCustomers ? 'text-neutral-700' : 'text-slate-400'}`} />
-          <p className={`text-[11px] ${sharedCustomers ? 'text-neutral-800' : 'text-slate-600'}`}>
+        <div className="flex items-start gap-2 pt-2">
+          <Users className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedCustomers ? 'text-neutral-700' : 'text-neutral-400'}`} />
+          <p className={`text-[11px] ${sharedCustomers ? 'text-neutral-700' : 'text-neutral-500'}`}>
             {sharedCustomers
               ? 'Base clients commune — un client créé dans un magasin est visible partout.'
               : 'Clients isolés — un client créé dans un magasin reste invisible dans les autres.'}
           </p>
         </div>
-      </div>
+      </section>
 
       {/* Fournisseurs */}
-      <div className="card p-4 space-y-3">
-        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-          <div className="w-1 h-4 rounded-full bg-orange-500" />
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Fournisseurs</span>
-          <span className="ml-auto text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{sites.length} magasins</span>
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Fournisseurs</h2>
+          <span className="ml-auto text-[10px] font-semibold text-neutral-400">{sites.length} magasins</span>
         </div>
-        <p className="text-[11px] text-slate-500">Définissez si les fournisseurs et commandes sont partagés ou gérés par site.</p>
-        <div className="space-y-2">
+        <p className="text-[11px] text-neutral-500">Définissez si les fournisseurs et commandes sont partagés ou gérés par site.</p>
+        <div className="divide-y divide-neutral-200">
           <RadioBlock
             value={true} selected={sharedSuppliers}
             label="Fournisseurs partagés"
@@ -1897,15 +1820,15 @@ function TiersSettingsTab({ onRefresh }: { onRefresh: () => void }) {
             onSelect={() => { updateSetting('shared_suppliers', false); success('Fournisseurs indépendants activés'); }}
           />
         </div>
-        <div className={`flex items-start gap-2 p-2.5 rounded-lg ${sharedSuppliers ? 'bg-orange-50 border border-orange-200' : 'bg-slate-50 border border-slate-200'}`}>
-          <Package className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedSuppliers ? 'text-orange-600' : 'text-slate-400'}`} />
-          <p className={`text-[11px] ${sharedSuppliers ? 'text-orange-800' : 'text-slate-600'}`}>
+        <div className="flex items-start gap-2 pt-2">
+          <Package className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${sharedSuppliers ? 'text-neutral-700' : 'text-neutral-400'}`} />
+          <p className={`text-[11px] ${sharedSuppliers ? 'text-neutral-700' : 'text-neutral-500'}`}>
             {sharedSuppliers
               ? 'Fournisseurs communs — lors de la réception, vous pouvez dispatcher le stock entre vos magasins.'
               : 'Fournisseurs isolés par magasin — commandes et stocks indépendants.'}
           </p>
         </div>
-      </div>
+      </section>
       {loanWithdrawalCard}
     </div>
   );
@@ -1963,36 +1886,36 @@ function PricingTiersTab() {
     await load();
   };
 
-  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-neutral-400" /></div>;
 
   return (
-    <div className="space-y-5 max-w-xl">
-      <div className="rounded-2xl bg-white shadow-card border border-slate-100 p-5 space-y-4">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900">Catégories tarifaires</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Définissez vos grilles tarifaires (ex : Détail, Semi-gros, Grossiste). Pour chaque article, vous pourrez ensuite attribuer un prix par catégorie. Lors d'une vente, si un article a plusieurs tarifs, le vendeur choisira lequel appliquer.
-          </p>
+    <div className="space-y-8 max-w-xl">
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Catégories tarifaires</h2>
         </div>
+        <p className="text-xs text-neutral-500">
+          Définissez vos grilles tarifaires (ex : Détail, Semi-gros, Grossiste). Pour chaque article, vous pourrez ensuite attribuer un prix par catégorie.
+        </p>
 
         {tiers.length === 0 ? (
-          <div className="text-center py-6 text-xs text-slate-400">
+          <div className="text-center py-6 text-xs text-neutral-400">
             Aucune catégorie tarifaire définie. Ajoutez-en une pour commencer.
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="divide-y divide-neutral-200">
             {tiers.map(t => (
-              <div key={t.id} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50">
+              <div key={t.id} className="flex items-center gap-3 py-3">
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm font-semibold text-slate-900">{t.tier_name}</span>
-                  {t.is_default && <span className="ml-2 text-[9px] font-bold uppercase tracking-wider text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded-full border border-brand-200">Par défaut</span>}
+                  <span className="text-sm font-medium text-neutral-900">{t.tier_name}</span>
+                  {t.is_default && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Par défaut</span>}
                 </div>
                 {!t.is_default && (
-                  <button onClick={() => setDefault(t.id)} className="text-[10px] font-semibold text-slate-500 hover:text-brand-700 px-2 py-1 rounded-lg hover:bg-brand-50">
+                  <button onClick={() => setDefault(t.id)} className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900 transition">
                     Définir par défaut
                   </button>
                 )}
-                <button onClick={() => setToDelete(t.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50">
+                <button onClick={() => setToDelete(t.id)} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -2000,30 +1923,30 @@ function PricingTiersTab() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+        <div className="flat-form flex items-center gap-3 pt-4 border-t border-neutral-200">
           <input
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') addTier(); }}
             placeholder="Nom du tarif (ex : Grossiste)"
-            className="premium-input text-sm flex-1"
+            className="input flex-1"
           />
-          <button onClick={addTier} disabled={adding || !newName.trim()} className="px-4 py-2.5 rounded-xl bg-brand-600 text-white text-xs font-bold shadow-glow hover:bg-brand-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+          <button onClick={addTier} disabled={adding || !newName.trim()} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50 shrink-0">
             {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
             Ajouter
           </button>
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-xl bg-neutral-50 border border-neutral-200 p-4">
-        <h4 className="text-xs font-bold text-neutral-800 mb-1">Comment utiliser les catégories tarifaires</h4>
-        <ol className="text-[11px] text-neutral-800 space-y-1 list-decimal list-inside">
+      <section className="pt-6 border-t border-neutral-200">
+        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">Comment utiliser les catégories tarifaires</h3>
+        <ol className="text-[11px] text-neutral-600 space-y-1 list-decimal list-inside">
           <li>Ajoutez vos catégories ici (ex : Détail, Semi-gros, Grossiste)</li>
           <li>Dans la fiche article, onglet "Prix et tarifs", renseignez un prix par catégorie</li>
           <li>Lors de la vente (POS ou Facturation), si l'article a plusieurs tarifs, un sélecteur s'affiche</li>
           <li>Si un seul tarif est défini, il s'applique automatiquement sans sélecteur</li>
         </ol>
-      </div>
+      </section>
 
       <ConfirmDialog open={!!toDelete} onClose={() => setToDelete(null)} onConfirm={() => toDelete && deleteTier(toDelete)} title="Supprimer cette catégorie tarifaire ?" message="Les prix associés à cette catégorie seront supprimés pour tous les articles." confirmLabel="Supprimer" danger />
     </div>
@@ -2080,8 +2003,7 @@ function SubscriptionTab() {
 
   const daysRemaining = trialEnd && subStatus === 'trial_active' ? Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
-  const statusLabel = subStatus === 'trial_active' ? 'Essai gratuit' : subStatus === 'active' ? 'Actif' : subStatus === 'expired' ? 'Expiré' : subStatus === 'pending_review' ? 'En attente' : subStatus;
-  const statusColor = subStatus === 'expired' ? 'bg-red-100 text-red-700' : subStatus === 'trial_active' ? 'bg-blue-100 text-blue-700' : subStatus === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
+  const statusLabel = subStatus === 'trial_active' ? 'Essai gratuit' : subStatus === 'active' ? 'Actif' : subStatus === 'expired' ? 'Expire' : subStatus === 'pending_review' ? 'En attente' : subStatus;
 
   const price = billingCycle === 'lifetime' ? (plan?.price_lifetime || 0) : billingCycle === 'yearly' ? (plan?.price_yearly || 0) : (plan?.price_monthly || 0);
   const priceLabel = billingCycle === 'lifetime' ? (price > 0 ? `${Number(price).toLocaleString('fr-FR')} FCFA (à vie)` : 'À vie') : price > 0 ? `${Number(price).toLocaleString('fr-FR')} FCFA/${billingCycle === 'yearly' ? 'an' : 'mois'}` : 'Gratuit';
@@ -2106,109 +2028,114 @@ function SubscriptionTab() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8 max-w-none">
       {/* Expired banner */}
       {subStatus === 'expired' && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+        <div className="flex items-start gap-3 py-3 border-b border-red-200">
           <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold text-red-800">Votre abonnement a expiré.</p>
-            <p className="text-xs text-red-600 mt-0.5">Veuillez contacter l'équipe Waarwi pour renouveler votre abonnement.</p>
+            <p className="text-sm font-bold text-red-800">Votre abonnement a expire.</p>
+            <p className="text-xs text-red-600 mt-0.5">Veuillez contacter l'equipe Waarwi pour renouveler votre abonnement.</p>
           </div>
         </div>
       )}
 
-      {/* Plan header with status */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <div className="flex items-center justify-between mb-4">
+      {/* Plan header */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Plan {plan?.name || t.plan || 'Non défini'}</h3>
-            <p className="text-xs text-slate-500 mt-0.5">{priceLabel}</p>
+            <h3 className="text-lg font-bold text-neutral-900">Plan {plan?.name || t.plan || 'Non defini'}</h3>
+            <p className="text-sm text-neutral-500 mt-0.5">{priceLabel}</p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusColor}`}>{statusLabel}</span>
+          <span className={`text-xs font-bold ${subStatus === 'expired' ? 'text-red-600' : subStatus === 'trial_active' ? 'text-blue-600' : subStatus === 'active' ? 'text-emerald-600' : 'text-amber-600'}`}>{statusLabel}</span>
         </div>
 
         {/* Subscription details */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Cycle</div>
-            <div className="text-sm font-bold text-slate-900">{billingCycle === 'lifetime' ? 'À vie' : billingCycle === 'yearly' ? 'Annuel' : 'Mensuel'}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Cycle</div>
+            <div className="text-sm font-semibold text-neutral-900">{billingCycle === 'lifetime' ? 'A vie' : billingCycle === 'yearly' ? 'Annuel' : 'Mensuel'}</div>
           </div>
-          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Renouvellement</div>
-            <div className="text-sm font-bold text-slate-900">{autoRenew ? 'Auto' : 'Manuel'}</div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Renouvellement</div>
+            <div className="text-sm font-semibold text-neutral-900">{autoRenew ? 'Auto' : 'Manuel'}</div>
           </div>
           {(subStart || (subStatus !== 'trial_active' && trialEnd)) && (
-            <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Début</div>
-              <div className="text-sm font-bold text-slate-900">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Debut</div>
+              <div className="text-sm font-semibold text-neutral-900">
                 {(subStart || trialEnd)?.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
               </div>
             </div>
           )}
           {planExpires && (
-            <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Expiration</div>
-              <div className={`text-sm font-bold ${subStatus === 'expired' ? 'text-red-600' : 'text-slate-900'}`}>
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Expiration</div>
+              <div className={`text-sm font-semibold ${subStatus === 'expired' ? 'text-red-600' : 'text-neutral-900'}`}>
                 {planExpires.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
               </div>
             </div>
           )}
         </div>
+      </section>
 
-        {/* Trial info */}
-        {subStatus === 'trial_active' && trialEnd && (
-          <div className="mb-4 rounded-xl bg-blue-50 border border-blue-100 p-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-blue-800">Période d'essai en cours</p>
-              <p className="text-[11px] text-blue-600 mt-0.5">
-                Fin de l'essai : {trialEnd.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="text-xl font-extrabold text-blue-900">{daysRemaining}</div>
-              <div className="text-[10px] text-blue-600 font-medium">jour{daysRemaining > 1 ? 's' : ''} restant{daysRemaining > 1 ? 's' : ''}</div>
-            </div>
+      {/* Trial info */}
+      {subStatus === 'trial_active' && trialEnd && (
+        <section className="flex items-center justify-between py-3 border-t border-neutral-100">
+          <div>
+            <p className="text-sm font-medium text-neutral-800">Periode d'essai en cours</p>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Fin de l'essai : {trialEnd.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           </div>
-        )}
+          <div className="text-right">
+            <div className="text-xl font-extrabold text-neutral-900">{daysRemaining}</div>
+            <div className="text-[10px] text-neutral-500 font-medium">jour{daysRemaining > 1 ? 's' : ''} restant{daysRemaining > 1 ? 's' : ''}</div>
+          </div>
+        </section>
+      )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {/* Usage limits */}
+      <section className="space-y-4">
+        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Utilisation</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
           {numericLimits.map(({ key, label, current }) => {
             const limit = limits?.[key];
             const unlimited = limit === -1 || limit === undefined;
             const pct = unlimited ? 15 : (current != null ? Math.min(100, (current / Math.max(1, limit)) * 100) : 0);
             const reached = !unlimited && current != null && current >= limit;
             return (
-              <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
-                  <span className={`text-xs font-bold ${reached ? 'text-red-600' : 'text-slate-800'}`}>
+              <div key={key}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-neutral-600">{label}</span>
+                  <span className={`text-xs font-bold ${reached ? 'text-red-600' : 'text-neutral-800'}`}>
                     {current != null ? current : '—'} / {unlimited ? '∞' : limit}
                   </span>
                 </div>
-                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                  <div className={`h-full rounded-full ${reached ? 'bg-red-500' : 'bg-emerald-500'} transition-all`} style={{ width: `${pct}%` }} />
+                <div className="h-1 rounded-full bg-neutral-200 overflow-hidden">
+                  <div className={`h-full rounded-full ${reached ? 'bg-red-500' : 'bg-neutral-900'} transition-all`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h4 className="text-sm font-bold text-slate-700 mb-3">Modules inclus dans votre plan</h4>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {/* Modules */}
+      <section className="space-y-4">
+        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Modules inclus</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
           {modules.map(({ key, label }) => {
             const enabled = !!limits?.[key];
             return (
-              <div key={key} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium ${enabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-                {enabled ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                {label}
+              <div key={key} className="flex items-center gap-2 py-1.5">
+                {enabled ? <Check className="w-4 h-4 text-neutral-900" /> : <X className="w-4 h-4 text-neutral-300" />}
+                <span className={`text-sm ${enabled ? 'text-neutral-800 font-medium' : 'text-neutral-400'}`}>{label}</span>
               </div>
             );
           })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

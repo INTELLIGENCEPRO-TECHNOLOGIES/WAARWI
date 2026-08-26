@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Plus, ShoppingBag, Loader2, Search, RefreshCw,
   CheckCircle, Check, Truck, Trash2, X, Car, Package, Calendar,
-  User, Minus, ChevronRight, FileText, Printer, MessageCircle, Pencil, Link2, GripVertical,
+  User, Minus, ChevronRight, FileText, Printer, MessageCircle, Pencil, Link2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -1290,9 +1290,8 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
   onPrint: () => void;
   onChangeStatus: (status: string) => void;
 }) {
-  const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const resizing = useRef(false);
+  const inputRefRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -1300,21 +1299,6 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
     window.addEventListener('keydown', h);
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
   }, [onClose]);
-
-  const startResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    resizing.current = true;
-    const startX = e.clientX;
-    const startWidth = panelRef.current?.offsetWidth || window.innerWidth - 256;
-    const onMove = (ev: MouseEvent) => {
-      if (!resizing.current) return;
-      const diff = startX - ev.clientX;
-      setPanelWidth(Math.max(600, Math.min(window.innerWidth - 64, startWidth + diff)));
-    };
-    const onUp = () => { resizing.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, []);
 
   const handleRowKeyDown = (e: React.KeyboardEvent, idx: number) => {
     if (e.key === 'Enter') {
@@ -1334,160 +1318,164 @@ function SupplierOrderFullPanel({ suppliers, articles, form, setForm, orderItems
     }
   };
 
+  const title = editingOrderId
+    ? `Commande ${editingOrder?.order_number || ''}`
+    : 'Nouvelle commande fournisseur';
+
+  const statusLabel = editingOrder ? (STATUS_MAP[editingOrder.status]?.label || editingOrder.status) : null;
+
+  const inputCls = 'w-full text-xs h-7 px-2 bg-white border border-neutral-300 rounded focus:border-neutral-500 focus:ring-1 focus:ring-neutral-200 outline-none transition-all';
+  const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors';
+
   return (
-    <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
-      <div
-        className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-teal-100 transition-colors group flex-shrink-0 relative z-10"
-        style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
-        onMouseDown={startResize}
-      >
-        <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors" />
-      </div>
+    <div className="fixed inset-0 z-[60] flex flex-col bg-white animate-fade-in">
 
-      <div
-        ref={panelRef}
-        className="bg-white h-full flex flex-col shadow-2xl flex-1 w-full"
-        style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center">
-              <ShoppingBag className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">{editingOrderId ? `Commande ${editingOrder?.order_number || ''}` : 'Nouvelle commande fournisseur'}</h2>
-              <p className="text-[11px] text-slate-500">
-                {editingOrderId ? 'Sauvegarde automatique à chaque modification' : 'Entrée valide la ligne et ajoute une suivante'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {saving && <span className="text-[10px] text-teal-600 font-medium animate-pulse">Sauvegarde...</span>}
-            {editingOrder && (
-              <>
-                {editingOrder.status === 'draft' && <button onClick={() => onChangeStatus('sent')} className="btn-icon" title="Marquer envoyée"><CheckCircle className="w-4 h-4" /></button>}
-                <button onClick={onPrint} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title="Imprimer"><Printer className="w-4 h-4" /></button>
-              </>
-            )}
-            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-            <button onClick={save} disabled={saving} className="btn-icon-primary" title={editingOrderId ? 'Enregistrer' : 'Créer'}>
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {!saving && (editingOrderId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />)}
-            </button>
-          </div>
+      {/* ═══ Title bar (matches DocumentEditor) ═══ */}
+      <div className="flex items-center justify-between px-4 h-11 border-b border-neutral-200 flex-shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <h2 className="text-sm font-bold text-neutral-900 tracking-tight truncate">{title}</h2>
+          {statusLabel && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 uppercase tracking-wider">{statusLabel}</span>
+          )}
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400 shrink-0" />}
         </div>
-
-        {/* Meta bar */}
-        <div className="flex items-center gap-4 px-5 py-3 border-b border-slate-100 bg-white flex-shrink-0">
-          <SupplierSearchInput
-            suppliers={suppliers}
-            value={form.supplier_id}
-            onSelect={(s) => setForm((f: any) => ({ ...f, supplier_id: s.id }))}
-            placeholder="Rechercher fournisseur..."
-          />
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <input type="date" value={form.expected_date} onChange={e => setForm((f: any) => ({ ...f, expected_date: e.target.value }))} className="input text-xs h-8 w-36" />
-          </div>
-          <div className="flex items-center gap-2 flex-1 max-w-[240px]">
-            <MessageCircle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <input value={form.note} onChange={e => setForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note..." className="input text-xs h-8" />
-          </div>
+        <div className="flex items-center gap-1">
+          {editingOrder && (
+            <>
+              {editingOrder.status === 'draft' && (
+                <button onClick={() => onChangeStatus('sent')} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors" title="Marquer envoyée">
+                  <CheckCircle className="w-4 h-4" />
+                </button>
+              )}
+              <button onClick={onPrint} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors" title="Imprimer">
+                <Printer className="w-4 h-4" />
+              </button>
+            </>
+          )}
           {autoMode && (
-            <button onClick={onVehiclePicker} className="btn-icon" title="Par véhicule">
+            <button onClick={onVehiclePicker} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors" title="Par véhicule">
               <Car className="w-4 h-4" />
             </button>
           )}
+          <button onClick={save} disabled={saving} className="ml-1 h-7 px-3 rounded-lg bg-neutral-900 text-white text-xs font-semibold hover:bg-neutral-800 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            {editingOrderId ? 'Enregistrer' : 'Créer'}
+          </button>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500 transition-colors" title="Fermer">
+            <X className="w-4 h-4" />
+          </button>
         </div>
+      </div>
 
-        {/* Table header */}
-        <div className="grid grid-cols-[1fr_1.2fr_80px_120px_80px_40px] gap-2 px-5 py-2 border-b border-slate-200 bg-slate-50/50 flex-shrink-0">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Article</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Désignation</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Qte</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Prix achat</span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-right">Total</span>
-          <span></span>
+      {/* ═══ Header fields ═══ */}
+      <div className="px-4 py-3 border-b border-neutral-100 flex-shrink-0">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="w-56">
+            <SupplierSearchInput
+              suppliers={suppliers}
+              value={form.supplier_id}
+              onSelect={(s) => setForm((f: any) => ({ ...f, supplier_id: s.id }))}
+              placeholder="Fournisseur..."
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Truck className="w-3.5 h-3.5 text-neutral-400" />
+            <input type="date" value={form.expected_date} onChange={e => setForm((f: any) => ({ ...f, expected_date: e.target.value }))} className={`${headerInputCls} w-36`} placeholder="Date livraison" />
+          </div>
+          <div className="flex items-center gap-1.5 flex-1 max-w-[260px]">
+            <FileText className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+            <input value={form.note} onChange={e => setForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note interne..." className={headerInputCls} />
+          </div>
         </div>
+      </div>
 
-        {/* Scrollable rows */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {orderItems.map((it: any, idx: number) => (
-            <div
-              key={idx}
-              data-row-idx={idx}
-              className={`grid grid-cols-[1fr_1.2fr_80px_120px_80px_40px] gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === orderItems.length - 1 ? 'bg-neutral-50/30' : ''}`}
-              onKeyDown={e => handleRowKeyDown(e, idx)}
-            >
-              <div>
-                <SOArticleSearchInput
-                  articles={articles}
-                  value={it.article_id ? (articles.find((a: any) => a.id === it.article_id)?.name || '') : ''}
-                  onSelect={a => updateItem(idx, 'article_id', a.id)}
-                  placeholder="Rechercher..."
-                />
-              </div>
-              <div>
-                <input
-                  value={it.name}
-                  onChange={e => updateItem(idx, 'name', e.target.value)}
-                  placeholder="Désignation"
-                  className="input text-xs"
-                />
-              </div>
-              <div>
-                <input
-                  type="number"
-                  value={it.quantity_ordered || ''}
-                  onChange={e => updateItem(idx, 'quantity_ordered', Number(e.target.value))}
-                  onBlur={() => { if (!Number(orderItems[idx]?.quantity_ordered) || Number(orderItems[idx]?.quantity_ordered) < 1) updateItem(idx, 'quantity_ordered', 1); }}
-                  className="input text-xs text-center"
-                />
-              </div>
-              <div>
-                <input
-                  type="number"
-                  value={it.unit_price || ''}
-                  onChange={e => updateItem(idx, 'unit_price', Number(e.target.value))}
-                  onBlur={() => { if (Number(orderItems[idx]?.unit_price) < 0) updateItem(idx, 'unit_price', 0); }}
-                  className="input text-xs text-right num"
-                />
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span>
-              </div>
-              <div className="flex justify-center">
-                <button
-                  onClick={() => setOrderItems((p: any[]) => p.filter((_: any, i: number) => i !== idx))}
-                  disabled={orderItems.length === 1}
-                  className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+      {/* ═══ Table header ═══ */}
+      <div className="grid grid-cols-[minmax(140px,1fr)_minmax(160px,1.4fr)_72px_110px_110px_36px] gap-1 px-4 py-1.5 border-b border-neutral-200 bg-neutral-50/60 flex-shrink-0">
+        <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Article</span>
+        <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Désignation</span>
+        <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider text-center">Qté</span>
+        <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider text-right">P.U. Achat</span>
+        <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider text-right">Total</span>
+        <span></span>
+      </div>
+
+      {/* ═══ Scrollable rows ═══ */}
+      <div ref={panelRef} className="flex-1 overflow-y-auto min-h-0">
+        {orderItems.map((it: any, idx: number) => (
+          <div
+            key={idx}
+            data-row-idx={idx}
+            className="grid grid-cols-[minmax(140px,1fr)_minmax(160px,1.4fr)_72px_110px_110px_36px] gap-1 px-4 py-1 items-center border-b border-neutral-100 hover:bg-neutral-50/40 transition-colors"
+            onKeyDown={e => handleRowKeyDown(e, idx)}
+          >
+            <div>
+              <SOArticleSearchInput
+                articles={articles}
+                value={it.article_id ? (articles.find((a: any) => a.id === it.article_id)?.name || '') : ''}
+                onSelect={a => updateItem(idx, 'article_id', a.id)}
+                placeholder="Rechercher..."
+              />
             </div>
-          ))}
-
-          <div className="px-5 py-2">
-            <button
-              onClick={() => setOrderItems((p: any[]) => [...p, { article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }])}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-neutral-800 hover:bg-neutral-50 px-3 py-2 rounded-lg transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />Ajouter une ligne
-            </button>
+            <div>
+              <input
+                ref={idx === orderItems.length - 1 ? inputRefRef : undefined}
+                value={it.name}
+                onChange={e => updateItem(idx, 'name', e.target.value)}
+                placeholder="Désignation"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <input
+                type="number"
+                value={it.quantity_ordered || ''}
+                onChange={e => updateItem(idx, 'quantity_ordered', Number(e.target.value))}
+                onBlur={() => { if (!Number(orderItems[idx]?.quantity_ordered) || Number(orderItems[idx]?.quantity_ordered) < 1) updateItem(idx, 'quantity_ordered', 1); }}
+                className={`${inputCls} text-center`}
+              />
+            </div>
+            <div>
+              <input
+                type="number"
+                value={it.unit_price || ''}
+                onChange={e => updateItem(idx, 'unit_price', Number(e.target.value))}
+                onBlur={() => { if (Number(orderItems[idx]?.unit_price) < 0) updateItem(idx, 'unit_price', 0); }}
+                className={`${inputCls} text-right num`}
+              />
+            </div>
+            <div className="text-right pr-1">
+              <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(it.total)}</span>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={() => setOrderItems((p: any[]) => p.filter((_: any, i: number) => i !== idx))}
+                disabled={orderItems.length === 1}
+                className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
+        ))}
+
+        <div className="px-4 py-2">
+          <button
+            onClick={() => setOrderItems((p: any[]) => [...p, { article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }])}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 px-3 py-2 rounded-lg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />Ajouter une ligne
+          </button>
         </div>
+      </div>
 
-        {/* Footer totals */}
-        <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between flex-shrink-0">
-          <div className="text-xs text-slate-500">
-            {totalItems} article{totalItems > 1 ? 's' : ''}
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">Total commande</span>
-            <span className="text-lg font-black text-slate-900 num">{formatFCFA(subtotal)}</span>
-          </div>
+      {/* ═══ Footer totals ═══ */}
+      <div className="border-t border-neutral-200 px-4 py-3 flex items-center justify-between flex-shrink-0 bg-white">
+        <div className="text-xs text-neutral-500">
+          {totalItems} article{totalItems > 1 ? 's' : ''}
+        </div>
+        <div className="text-right">
+          <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider block">Total commande</span>
+          <span className="text-lg font-black text-neutral-900 num">{formatFCFA(subtotal)}</span>
         </div>
       </div>
     </div>

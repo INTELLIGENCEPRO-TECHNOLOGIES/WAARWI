@@ -3703,7 +3703,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* Post-sale: print choice */}
       {lastSale && (
         <Modal open={!!lastSale} onClose={() => setLastSale(null)} title="Vente enregistrée" size="sm"
-          footer={<div className="w-full grid grid-cols-3 gap-2">
+          footer={<div className="w-full flex items-center justify-end gap-2">
             <button onClick={() => setLastSale(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
             <button onClick={() => {
               printSaleTicket(lastSale);
