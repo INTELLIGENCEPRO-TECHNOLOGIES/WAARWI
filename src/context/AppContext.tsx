@@ -80,7 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const allSites = s || [];
       const assignedIds: string[] | null = (prof as any).assigned_site_ids;
       const filtered = (assignedIds && assignedIds.length > 0)
-        ? allSites.filter(x => assignedIds.includes(x.id))
+        ? allSites.filter(x => assignedIds.includes(x.id) || (x.is_warehouse && x.parent_site_id && assignedIds.includes(x.parent_site_id)))
         : allSites;
       const storeList = filtered.filter(x => !x.is_warehouse);
       const depotList = filtered.filter(x => x.is_warehouse);
@@ -187,7 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (s && prof) {
         const assignedIds: string[] | null = (prof as any).assigned_site_ids;
         const filtered = (assignedIds && assignedIds.length > 0)
-          ? s.filter(x => assignedIds.includes(x.id))
+          ? s.filter(x => assignedIds.includes(x.id) || (x.is_warehouse && x.parent_site_id && assignedIds.includes(x.parent_site_id)))
           : s;
         const storeList = filtered.filter(x => !x.is_warehouse);
         const depotList = filtered.filter(x => x.is_warehouse);

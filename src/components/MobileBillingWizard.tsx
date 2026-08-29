@@ -47,6 +47,7 @@ type Props = {
   banner?: ReactNode;
   onCreateArticle?: (name: string) => void;
   onCreateCustomer?: (name: string) => void;
+  brandMode?: boolean; // deprecated — kept for call-site compat, ignored
 };
 
 export function MobileBillingWizard({
@@ -108,22 +109,20 @@ export function MobileBillingWizard({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-50 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex flex-col animate-fade-in bg-white">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-slate-200 shadow-sm flex-shrink-0">
-        <button onClick={onClose} className="p-2 -ml-2 rounded-md hover:bg-slate-100 text-slate-600 active:scale-95 transition-all">
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-neutral-200 flex-shrink-0">
+        <button onClick={onClose} className="p-2 -ml-2 rounded-md hover:bg-neutral-100 text-neutral-600 active:scale-95 transition-all">
           <X className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-[14px] font-bold text-slate-900 tracking-tight truncate">{title}</h2>
+          <h2 className="text-[14px] font-bold text-neutral-900 tracking-tight truncate">{title}</h2>
           <StepIndicator step={step} />
         </div>
       </div>
 
-      {/* Optional banner (e.g. IPM) */}
       {banner && <div className="flex-shrink-0">{banner}</div>}
 
-      {/* Step content */}
       <div className="flex-1 overflow-y-auto">
         {step === 1 && (
           <Step1Header
@@ -143,13 +142,13 @@ export function MobileBillingWizard({
       </div>
 
       {/* Fixed footer */}
-      <div className="flex-shrink-0 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] pb-safe">
+      <div className="flex-shrink-0 bg-white border-t border-neutral-200 pb-safe">
         {step === 1 && (
           <div className="flex items-center justify-between px-4 py-2.5">
-            <button onClick={onClose} className="btn-icon !h-11 !w-11" title="Annuler"><X className="w-4 h-4" /></button>
+            <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
             <button
               onClick={() => setStep(2)}
-              className="h-11 px-6 rounded-lg bg-teal-700 text-white font-bold text-sm flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-teal-700/20"
+              className="h-11 flex-1 ml-3 rounded-lg bg-neutral-900 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               Articles <ChevronRight className="w-4 h-4" />
             </button>
@@ -158,25 +157,25 @@ export function MobileBillingWizard({
         {step === 2 && (
           <div className="px-4 py-2.5 space-y-2">
             <div className="flex items-center justify-between">
-              <button onClick={() => setStep(1)} className="h-9 px-3 rounded-md text-slate-600 font-semibold text-sm flex items-center gap-1 active:scale-95 transition-all">
+              <button onClick={() => setStep(1)} className="h-9 px-3 rounded-md text-neutral-600 font-semibold text-sm flex items-center gap-1 active:scale-95 transition-all">
                 <ChevronLeft className="w-4 h-4" /> Infos
               </button>
               <div className="text-right">
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Total</div>
-                <div className="text-lg font-black text-slate-900 num">{formatFCFA(total)}</div>
+                <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold">Total</div>
+                <div className="text-lg font-black text-neutral-900 num">{formatFCFA(total)}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => { setSearchQuery(''); setSearchOpen(true); }}
-                className="h-12 w-12 rounded-lg border-2 border-teal-600 text-teal-700 flex items-center justify-center active:scale-90 transition-all flex-shrink-0"
+                className="h-12 w-12 rounded-lg border border-neutral-200 bg-neutral-900 text-white flex items-center justify-center active:scale-90 transition-all flex-shrink-0"
               >
                 <Plus className="w-5 h-5" />
               </button>
               <button
                 onClick={onSave}
                 disabled={saving || itemCount === 0}
-                className="flex-1 h-12 rounded-lg bg-teal-700 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-teal-700/20 disabled:opacity-50 disabled:shadow-none"
+                className="flex-1 h-12 rounded-lg bg-neutral-900 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
               >
                 {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
                 {saveLabel}
@@ -189,41 +188,41 @@ export function MobileBillingWizard({
       {/* Bottom sheet - article search */}
       {searchOpen && (
         <div className="fixed inset-0 z-[70] flex flex-col bg-white animate-sheet-up">
-          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 flex-shrink-0">
-            <button onClick={() => setSearchOpen(false)} className="p-2 -ml-2 rounded-md hover:bg-slate-100 text-slate-600 active:scale-95 transition-all">
+          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-neutral-200 flex-shrink-0">
+            <button onClick={() => setSearchOpen(false)} className="p-2 -ml-2 rounded-md hover:bg-neutral-100 text-neutral-600 active:scale-95 transition-all">
               <X className="w-5 h-5" />
             </button>
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
               <input
                 ref={searchRef}
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Rechercher un article..."
-                className="w-full h-11 pl-10 pr-4 rounded-lg bg-slate-100 border-0 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                className="w-full h-11 pl-6 pr-4 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none bg-transparent border-b border-neutral-300 focus:border-neutral-500 transition-colors"
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-3">
+          <div className="flex-1 overflow-y-auto">
             {filteredArticles.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+              <div className="flex flex-col items-center justify-center py-16 text-neutral-400">
                 <p className="text-sm">Aucun article trouvé</p>
               </div>
             )}
-            <div className="flex flex-col gap-1">
+            <div className="divide-y divide-neutral-100">
               {filteredArticles.map(a => (
                 <button
                   key={a.id}
                   onClick={() => { onAddItem(a.id); setSearchOpen(false); }}
-                  className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border border-slate-200 bg-white hover:border-teal-300 hover:bg-teal-50/40 hover:shadow-sm transition-all text-left active:scale-[0.98]"
+                  className="w-full flex items-start gap-2.5 text-left active:scale-[0.98] transition-all px-4 py-2.5 hover:bg-neutral-50"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-semibold text-slate-900 leading-snug">{a.name}</div>
-                    {a.internal_ref && <div className="text-[10px] font-mono text-slate-400 mt-0.5">{a.internal_ref}</div>}
+                    <div className="text-[12px] font-semibold text-neutral-900 leading-snug">{a.name}</div>
+                    {a.internal_ref && <div className="text-[10px] font-mono text-neutral-400 mt-0.5">{a.internal_ref}</div>}
                   </div>
                   <div className="shrink-0 flex flex-col items-end">
-                    <span className="text-[13px] font-bold text-slate-900 num">
+                    <span className="text-[13px] font-bold text-neutral-900 num">
                       {a[itemPriceField] ? formatFCFA(a[itemPriceField]) : ''}
                     </span>
                   </div>
@@ -256,9 +255,9 @@ export function MobileBillingWizard({
 function StepIndicator({ step }: { step: 1 | 2 }) {
   return (
     <div className="flex items-center gap-1.5 mt-0.5">
-      <div className={`h-1 rounded-full transition-all duration-300 ${step === 1 ? 'w-5 bg-teal-600' : 'w-2.5 bg-slate-300'}`} />
-      <div className={`h-1 rounded-full transition-all duration-300 ${step === 2 ? 'w-5 bg-teal-600' : 'w-2.5 bg-slate-300'}`} />
-      <span className="text-[10px] text-slate-500 font-medium ml-1">
+      <div className={`h-1 rounded-full transition-all duration-300 ${step === 1 ? 'w-5 bg-neutral-900' : 'w-2.5 bg-neutral-300'}`} />
+      <div className={`h-1 rounded-full transition-all duration-300 ${step === 2 ? 'w-5 bg-neutral-900' : 'w-2.5 bg-neutral-300'}`} />
+      <span className="text-[10px] text-neutral-500 font-medium ml-1">
         {step === 1 ? 'Informations' : 'Articles'}
       </span>
     </div>
@@ -271,11 +270,12 @@ function Step1Header({ fields, values, onChange, onCreateCustomer }: {
   onChange: (key: string, val: string) => void;
   onCreateCustomer?: (name: string) => void;
 }) {
+  const inputCls = 'w-full h-11 px-1 bg-transparent border-b border-neutral-300 focus:border-neutral-500 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none transition-colors';
   return (
     <div className="px-4 py-4 space-y-2.5">
       {fields.map(f => (
         <div key={f.key}>
-          <label className="text-[11px] font-semibold text-slate-600 mb-1 block">
+          <label className="text-[11px] font-semibold text-neutral-600 mb-1 block">
             {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
           {f.type === 'select' && f.options ? (
@@ -285,7 +285,7 @@ function Step1Header({ fields, values, onChange, onCreateCustomer }: {
                 value={values[f.key] || ''}
                 onChange={v => onChange(f.key, v)}
                 placeholder={f.placeholder || '— Choisir —'}
-                className="!h-11 !rounded-md !text-sm"
+                variant="underline"
               />
               {f.key === 'customer_id' && onCreateCustomer && (
                 <div className="mt-1">
@@ -298,7 +298,7 @@ function Step1Header({ fields, values, onChange, onCreateCustomer }: {
               type="date"
               value={values[f.key] || ''}
               onChange={e => onChange(f.key, e.target.value)}
-              className="w-full h-11 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all"
+              className={inputCls}
             />
           ) : (
             <input
@@ -306,7 +306,7 @@ function Step1Header({ fields, values, onChange, onCreateCustomer }: {
               value={values[f.key] || ''}
               onChange={e => onChange(f.key, e.target.value)}
               placeholder={f.placeholder}
-              className="w-full h-11 px-3 rounded-md border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all"
+              className={inputCls}
             />
           )}
         </div>
@@ -323,17 +323,17 @@ function Step2Articles({ items, allItems, onEdit }: {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-        <ShoppingCart className="w-10 h-10 text-slate-300 mb-3" />
-        <p className="text-sm font-semibold text-slate-600">Aucun article</p>
-        <p className="text-xs text-slate-400 mt-1">Appuyez sur + pour ajouter</p>
+        <ShoppingCart className="w-10 h-10 text-neutral-300 mb-3" />
+        <p className="text-sm font-semibold text-neutral-600">Aucun article</p>
+        <p className="text-xs text-neutral-400 mt-1">Appuyez sur + pour ajouter</p>
       </div>
     );
   }
 
   return (
-    <div className="px-3 py-3 space-y-1.5">
-      <div className="flex items-center gap-2 px-1 mb-1">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+    <div className="divide-y divide-neutral-100">
+      <div className="flex items-center gap-2 px-4 py-2">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
           {items.length} article{items.length > 1 ? 's' : ''}
         </span>
       </div>
@@ -343,15 +343,15 @@ function Step2Articles({ items, allItems, onEdit }: {
           <button
             key={realIdx}
             onClick={() => onEdit(realIdx)}
-            className="w-full text-left bg-white rounded-md px-3 py-2.5 border border-slate-200/80 active:scale-[0.98] transition-all flex flex-col gap-1"
+            className="w-full text-left px-4 py-2.5 active:scale-[0.98] transition-all flex flex-col gap-1"
           >
-            <p className="text-[13px] font-semibold text-slate-900 leading-snug w-full">{item.name}</p>
+            <p className="text-[13px] font-semibold text-neutral-900 leading-snug w-full">{item.name}</p>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                <span>{item.quantity} x <span className="font-bold text-slate-700 num">{formatFCFA(item.unit_price)}</span></span>
+              <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+                <span>{item.quantity} x <span className="font-bold text-neutral-700 num">{formatFCFA(item.unit_price)}</span></span>
                 {item.discount > 0 && <span className="text-amber-600 font-medium">-{formatFCFA(item.discount)}</span>}
               </div>
-              <span className="text-[12px] font-black text-slate-900 num">{formatFCFA(item.total)}</span>
+              <span className="text-[12px] font-black text-neutral-900 num">{formatFCFA(item.total)}</span>
             </div>
           </button>
         );
@@ -408,65 +408,62 @@ function EditArticlePanel({ item, idx, onUpdate, onRemove, onClose }: {
   };
 
   const fieldStyle = (f: NumField) =>
-    `flex-1 h-10 rounded-lg flex flex-col items-center justify-center transition-all border-2 ${
-      activeField === f ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white'
+    `flex-1 py-2 flex flex-col items-center justify-center transition-all border-b-2 ${
+      activeField === f ? 'border-neutral-900' : 'border-neutral-200'
     }`;
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col animate-fade-in">
       <div className="flex-1 bg-black/30" onClick={onClose} />
       <div className="bg-white rounded-t-2xl shadow-2xl animate-sheet-up pb-safe flex flex-col">
-        {/* Article info + field display */}
         <div className="px-4 pt-3 pb-2">
           <div className="flex items-start justify-between mb-2">
-            <p className="text-[13px] font-bold text-slate-900 leading-snug line-clamp-2 flex-1 pr-2">{item.name}</p>
+            <p className="text-[13px] font-bold text-neutral-900 leading-snug line-clamp-2 flex-1 pr-2">{item.name}</p>
             <div className="flex items-center gap-1 flex-shrink-0">
               <button onClick={onRemove} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 active:scale-90 transition-all">
                 <Trash2 className="w-4 h-4" />
               </button>
-              <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 active:scale-90 transition-all">
+              <button onClick={onClose} className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100 active:scale-90 transition-all">
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Field selector row */}
-          <div className="flex items-center gap-1.5 mb-2">
+          <div className="flex items-center gap-3 mb-2">
             <button onClick={() => switchField('qty')} className={fieldStyle('qty')}>
-              <span className="text-[9px] font-bold uppercase text-slate-500">Qté</span>
-              <span className="text-sm font-black num text-slate-900">{activeField === 'qty' ? (buffer || '0') : item.quantity}</span>
+              <span className="text-[9px] font-bold uppercase text-neutral-500">Qté</span>
+              <span className="text-sm font-black num text-neutral-900">{activeField === 'qty' ? (buffer || '0') : item.quantity}</span>
             </button>
             <button onClick={() => switchField('price')} className={fieldStyle('price')}>
-              <span className="text-[9px] font-bold uppercase text-slate-500">Prix</span>
-              <span className="text-sm font-black num text-slate-900">{activeField === 'price' ? (buffer || '0') : item.unit_price}</span>
+              <span className="text-[9px] font-bold uppercase text-neutral-500">Prix</span>
+              <span className="text-sm font-black num text-neutral-900">{activeField === 'price' ? (buffer || '0') : item.unit_price}</span>
             </button>
             <button onClick={() => switchField('discount')} className={fieldStyle('discount')}>
-              <span className="text-[9px] font-bold uppercase text-slate-500">Remise</span>
-              <span className="text-sm font-black num text-slate-900">{activeField === 'discount' ? (buffer || '0') : item.discount}</span>
+              <span className="text-[9px] font-bold uppercase text-neutral-500">Remise</span>
+              <span className="text-sm font-black num text-neutral-900">{activeField === 'discount' ? (buffer || '0') : item.discount}</span>
             </button>
-            <div className="h-10 px-2 rounded-lg bg-slate-50 border-2 border-slate-200 flex flex-col items-center justify-center">
-              <span className="text-[9px] font-bold uppercase text-slate-500">Total</span>
-              <span className="text-[11px] font-black num text-teal-700">{formatFCFA(item.total)}</span>
+            <div className="py-2 px-2 flex flex-col items-center justify-center border-b-2 border-neutral-200">
+              <span className="text-[9px] font-bold uppercase text-neutral-500">Total</span>
+              <span className="text-[11px] font-black num text-neutral-900">{formatFCFA(item.total)}</span>
             </div>
           </div>
         </div>
 
-        {/* Numeric keypad */}
-        <div className="grid grid-cols-4 gap-px bg-slate-200 border-t border-slate-200">
+        <div className="grid grid-cols-4 gap-px bg-neutral-200 border-t border-neutral-200">
           {['1','2','3','qty','4','5','6','discount','7','8','9','price','clear','0','ok','backspace'].map(key => {
             if (key === 'qty') return (
               <button key={key} onClick={() => switchField('qty')}
-                className={`h-[52px] flex items-center justify-center text-base font-bold transition-all active:scale-95 ${activeField === 'qty' ? 'bg-teal-100 text-teal-800' : 'bg-slate-50 text-slate-600'}`}
+                className={`h-[52px] flex items-center justify-center text-base font-bold transition-all active:scale-95 ${activeField === 'qty' ? 'bg-neutral-200 text-neutral-900' : 'bg-neutral-50 text-neutral-600'}`}
               >Qté</button>
             );
             if (key === 'price') return (
               <button key={key} onClick={() => switchField('price')}
-                className={`h-[52px] flex items-center justify-center text-base font-bold transition-all active:scale-95 ${activeField === 'price' ? 'bg-teal-100 text-teal-800' : 'bg-slate-50 text-slate-600'}`}
+                className={`h-[52px] flex items-center justify-center text-base font-bold transition-all active:scale-95 ${activeField === 'price' ? 'bg-neutral-200 text-neutral-900' : 'bg-neutral-50 text-neutral-600'}`}
               >Prix</button>
             );
             if (key === 'discount') return (
               <button key={key} onClick={() => switchField('discount')}
-                className={`h-[52px] flex items-center justify-center text-base font-bold transition-all active:scale-95 ${activeField === 'discount' ? 'bg-amber-100 text-amber-800' : 'bg-slate-50 text-slate-600'}`}
+                className={`h-[52px] flex items-center justify-center text-base font-bold transition-all active:scale-95 ${activeField === 'discount' ? 'bg-amber-100 text-amber-800' : 'bg-neutral-50 text-neutral-600'}`}
               >%</button>
             );
             if (key === 'clear') return (
@@ -476,7 +473,7 @@ function EditArticlePanel({ item, idx, onUpdate, onRemove, onClose }: {
             );
             if (key === 'ok') return (
               <button key={key} onClick={onClose}
-                className="h-[52px] flex items-center justify-center bg-teal-600 text-white transition-all active:scale-95"
+                className="h-[52px] flex items-center justify-center bg-neutral-900 text-white transition-all active:scale-95"
               ><Check className="w-5 h-5" /></button>
             );
             if (key === 'backspace') return (
@@ -486,7 +483,7 @@ function EditArticlePanel({ item, idx, onUpdate, onRemove, onClose }: {
             );
             return (
               <button key={key} onClick={() => pressKey(key)}
-                className="h-[52px] flex items-center justify-center text-xl font-semibold bg-white text-slate-900 transition-all active:scale-95 active:bg-slate-100"
+                className="h-[52px] flex items-center justify-center text-xl font-semibold bg-white text-neutral-900 transition-all active:scale-95 active:bg-neutral-100"
               >{key}</button>
             );
           })}

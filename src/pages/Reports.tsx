@@ -365,14 +365,16 @@ async function fetchCustomerStats(
   return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
 }
 
-async function fetchSupplierStats(tenantId: string, from: string, to: string) {
-  const { data, error } = await supabase
+async function fetchSupplierStats(tenantId: string, siteId: string | undefined, from: string, to: string) {
+  let q = supabase
     .from('supplier_orders')
     .select('id, supplier_id, suppliers(name), total, status, created_at, supplier_payments(amount)')
     .eq('tenant_id', tenantId)
     .neq('status', 'cancelled')
     .gte('created_at', `${from}T00:00:00`)
     .lte('created_at', `${to}T23:59:59`);
+  if (siteId) q = q.eq('site_id', siteId);
+  const { data, error } = await q;
   if (error) throw error;
 
   const map = new Map<string, { name: string; orderCount: number; totalOrdered: number; totalPaid: number }>();
@@ -1110,6 +1112,14 @@ export function Reports() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [siteDropOpen, setSiteDropOpen] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string | 'all'>('all');
+
+  // Default to the user's current site — only users with multiple assigned sites
+  // can switch or view "all sites". Single-site users are locked to their site.
+  useEffect(() => {
+    if (currentSite && selectedSiteId === 'all' && sites.length <= 1) {
+      setSelectedSiteId(currentSite.id);
+    }
+  }, [currentSite?.id, sites.length]);
   const [savingMargin, setSavingMargin] = useState(false);
   const [hideZeroBalances, setHideZeroBalances] = useState(false);
 
@@ -1204,7 +1214,7 @@ export function Reports() {
         const stats = await fetchTiersBalanceStats(tenant.id, from, to, selectedSiteId === 'all' ? null : selectedSiteId);
         html = buildTiersBalanceReport(tenantMeta, range, stats, siteName, hideZeroBalances);
       } else {
-        const rows = await fetchSupplierStats(tenant.id, from, to);
+        const rows = await fetchSupplierStats(tenant.id, siteIdParam, from, to);
         html = buildSupplierReport(tenantMeta, range, rows, siteName);
       }
 
@@ -1287,7 +1297,7 @@ export function Reports() {
             />
           </div>
 
-          {/* Site selector */}
+          {/* Site selector — only for users with multiple assigned sites */}
           {sites.length > 1 && (
             <div className="relative">
               <button

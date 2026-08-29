@@ -2111,10 +2111,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       }).then(() => {}, () => {});
       (window as any).__pendingWebOrderId = undefined;
     }
-    // Auto-apply available avoirs for this customer
-    if (customer?.id && saleId) {
-      await supabase.rpc('auto_apply_customer_avoirs', { p_sale_id: saleId });
-    }
+
     // Create IPM vente record if client is IPM beneficiary
     if (ipmBeneficiaire && ipmPartIpm > 0 && saleId && tenant) {
       await supabase.from('ipm_ventes').insert({

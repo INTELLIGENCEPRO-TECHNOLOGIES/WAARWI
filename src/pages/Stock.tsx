@@ -2213,36 +2213,31 @@ function StockListEditView({
         const showSourcePicker = ownDepots.length > 0;
         const isTransfer = listEditMode === 'transfer';
         if (!showSourcePicker && !isTransfer) return null;
-        const wrapperColor = isTransfer ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200';
-        const labelColor = isTransfer ? 'text-amber-800' : 'text-slate-700';
-        const iconColor = isTransfer ? 'text-amber-600' : 'text-slate-600';
-        const selectColor = isTransfer ? 'border-amber-200 focus:ring-amber-400/30' : 'border-slate-200 focus:ring-brand-500/20';
         return (
           <div className={`shrink-0 mb-2 grid ${isTransfer && showSourcePicker ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-2`}>
             {showSourcePicker && (
-              <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${wrapperColor}`}>
-                <MapPin className={`w-4 h-4 shrink-0 ${iconColor}`} />
-                <span className={`text-[11px] font-semibold shrink-0 ${labelColor}`}>{isTransfer ? 'Source :' : 'Emplacement :'}</span>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] font-semibold text-slate-700">{isTransfer ? 'Source' : 'Emplacement'}</span>
                 <select
                   value={listSourceSite || currentSite?.id || ''}
                   onChange={e => setListSourceSite(e.target.value)}
-                  className={`flex-1 min-w-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg border bg-white focus:outline-none focus:ring-2 ${selectColor}`}
+                  className="bare-input text-xs font-semibold py-1.5"
                 >
                   {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
                   {ownDepots.map((d: any) => (
                     <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
                   ))}
                 </select>
+                <div className="h-px bg-neutral-200" />
               </div>
             )}
             {isTransfer && (
-              <div className={`flex items-center gap-2 p-2.5 rounded-xl border ${wrapperColor}`}>
-                <ArrowRightLeft className={`w-4 h-4 shrink-0 ${iconColor}`} />
-                <span className={`text-[11px] font-semibold shrink-0 ${labelColor}`}>Destination :</span>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] font-semibold text-slate-700">Destination</span>
                 <select
                   value={listTransferTarget}
                   onChange={e => setListTransferTarget(e.target.value)}
-                  className={`flex-1 min-w-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg border bg-white focus:outline-none focus:ring-2 ${selectColor}`}
+                  className="bare-input text-xs font-semibold py-1.5"
                 >
                   <option value="">-- Choisir la destination --</option>
                   {sites.map((s: any) => {
@@ -2254,6 +2249,7 @@ function StockListEditView({
                     return <option key={s.id} value={s.id}>{label}</option>;
                   })}
                 </select>
+                <div className="h-px bg-neutral-200" />
               </div>
             )}
           </div>

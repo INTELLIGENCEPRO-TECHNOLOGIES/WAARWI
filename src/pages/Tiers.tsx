@@ -18,8 +18,11 @@ import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
 import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
-import { DocItems, DocTotals, DocPayments, DocSlimHeader } from '../components/DocLayout';
-import type { DocItem, DocPayment } from '../components/DocLayout';
+
+import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
+import { DocumentEditor, type DocLineItem, type DocHeaderForm, type DocMode } from '../components/DocumentEditor';
+import { DEFAULT_DOC_SETTINGS } from '../components/DocumentSettingsTab';
+import { SupplierOrderEditor, type SOLineItem, type SOHeaderForm, type SOMode } from '../components/SupplierOrderEditor';
 import type { Customer } from '../lib/types';
 import { CollapsibleSection, FormField, ValidatedInput } from '../components/FormPrimitives';
 import { useTranslation } from 'react-i18next';
@@ -680,21 +683,31 @@ export function Tiers() {
   const saveBalance = async () => {
     if (!balanceTarget || !tenant) return;
     setSavingBalance(true);
-    const table = balanceTarget.type === 'customer' ? 'customers' : 'suppliers';
     const newBalance = Number(balanceAmount || 0);
-    const adjustment = newBalance - balanceTarget.currentBalance;
-    const { error: e } = await supabase.from(table).update({ balance: newBalance }).eq('id', balanceTarget.id);
-    if (!e) {
-      await supabase.from('balance_adjustments').insert({
-        tenant_id: tenant.id,
-        entity_type: balanceTarget.type,
-        entity_id: balanceTarget.id,
-        previous_balance: balanceTarget.currentBalance,
-        new_balance: newBalance,
-        amount: adjustment,
-        note: balanceNote || 'Report de solde',
-        user_id: profile?.id || null,
+    let e: any = null;
+    if (balanceTarget.type === 'customer') {
+      const { error: rpcErr } = await supabase.rpc('set_customer_balance', {
+        p_customer_id: balanceTarget.id,
+        p_target_balance: newBalance,
+        p_note: balanceNote || 'Report de solde',
       });
+      e = rpcErr;
+    } else {
+      const adjustment = newBalance - balanceTarget.currentBalance;
+      const { error: updErr } = await supabase.from('suppliers').update({ balance: newBalance }).eq('id', balanceTarget.id);
+      if (!updErr) {
+        await supabase.from('balance_adjustments').insert({
+          tenant_id: tenant.id,
+          entity_type: 'supplier',
+          entity_id: balanceTarget.id,
+          previous_balance: balanceTarget.currentBalance,
+          new_balance: newBalance,
+          amount: adjustment,
+          note: balanceNote || 'Report de solde',
+          user_id: profile?.id || null,
+        });
+      }
+      e = updErr;
     }
     setSavingBalance(false);
     if (e) error(e.message);
@@ -711,12 +724,7 @@ export function Tiers() {
     const rows: Row[] = [];
     if (tab !== 'suppliers') {
       for (const c of filteredCustomers) {
-        const rawBal = Number((c as any).balance || 0);
-        const prepay = prepayMap[c.id] || 0;
-        const avoir = avoirMap[c.id] || 0;
-        const applied = Math.min(prepay, Math.max(0, rawBal));
-        const avoirApp = Math.min(avoir, Math.max(0, rawBal - applied));
-        const netBal = rawBal - applied - avoirApp;
+        const netBal = Math.max(0, Number((c as any).balance || 0));
         rows.push({ id: c.id, type: 'customer', accountCode: (c as any).account_code || '', name: c.name, phone: c.phone || '', balance: netBal, isActive: (c as any).is_active !== false, raw: c });
       }
     }
@@ -1679,6 +1687,14 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const [pickerOpen, setPickerOpen] = useState(false);
   const [invoiceView, setInvoiceView] = useState<any | null>(null);
 
+  const [desktopEditorOpen, setDesktopEditorOpen] = useState(false);
+  const [desktopEditorMode, setDesktopEditorMode] = useState<DocMode>('view');
+  const [desktopEditorItems, setDesktopEditorItems] = useState<DocLineItem[]>([]);
+  const [desktopEditorForm, setDesktopEditorForm] = useState<DocHeaderForm>({ customer_id: '', note: '', doc_date: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '', valid_until: '' });
+  const [desktopEditorInvoiceId, setDesktopEditorInvoiceId] = useState<string | null>(null);
+
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+
   const [creditMethodIds, setCreditMethodIds] = useState<Set<string>>(new Set());
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -1720,7 +1736,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     const [{ data: prepays }, { data: avoirRows }, { data: adjRows }, { data: withdrawalRows }, { data: loanRows }] = await Promise.all([
       supabase.from('customer_prepayments').select('id, amount, amount_used, method_name, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }),
       supabase.from('sale_returns').select('id, return_number, total, credit_used, created_at, refunded_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('status', 'approved').eq('refund_method', 'avoir').order('created_at', { ascending: false }),
-      supabase.from('balance_adjustments').select('id, amount, note, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'customer').eq('entity_id', c.id).order('created_at', { ascending: false }),
+      supabase.from('balance_adjustments').select('id, amount, note, kind, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'customer').eq('entity_id', c.id).order('created_at', { ascending: false }),
       supabase.from('cash_movements').select('id, amount, reason, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('kind', 'customer_withdrawal').order('created_at', { ascending: false }),
       supabase.from('cash_movements').select('id, amount, reason, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('kind', 'customer_loan').order('created_at', { ascending: false }),
     ]);
@@ -1732,7 +1748,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
 
     if (salesIds.length) {
       const [{ data: pays }, { data: items }] = await Promise.all([
-        supabase.from('sale_payments').select('id, sale_id, payment_method_id, method_name, amount, reference, created_at').in('sale_id', salesIds).order('created_at', { ascending: false }),
+        supabase.from('sale_payments').select('id, sale_id, payment_method_id, method_name, amount, reference, created_at, affects_balance').in('sale_id', salesIds).order('created_at', { ascending: false }),
         supabase.from('sale_items').select('sale_id, name, quantity, unit_price, discount, total, purchase_cost').in('sale_id', salesIds),
       ]);
       setPayments(pays || []);
@@ -1783,43 +1799,55 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   }, [sales, realPayments, c]);
 
   const ledger = useMemo(() => {
-    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' | 'adjustment' | 'withdrawal' | 'loan' };
+    type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'sale' | 'payment' | 'cancel' | 'adjustment' | 'withdrawal' | 'loan' | 'avoir' | 'allocation'; affectsBalance: boolean };
     const rows: Row[] = [];
     balanceAdjs.forEach(adj => {
       const amt = Number(adj.amount);
+      const isReconciliation = adj.kind === 'reconciliation';
       if (amt > 0) {
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: amt, credit: 0, kind: 'adjustment' });
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: amt, credit: 0, kind: isReconciliation ? 'allocation' : 'adjustment', affectsBalance: !isReconciliation });
       } else if (amt < 0) {
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Règlement solde', ref: '', debit: 0, credit: Math.abs(amt), kind: 'payment' });
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Règlement solde', ref: '', debit: 0, credit: Math.abs(amt), kind: isReconciliation ? 'allocation' : 'payment', affectsBalance: !isReconciliation });
       }
     });
     sales.forEach(s => {
       if (s.status === 'cancelled') {
-        rows.push({ id: 'c-' + s.id, ts: s.created_at, label: 'Facture annulée', ref: s.sale_number, debit: 0, credit: 0, kind: 'cancel' });
+        rows.push({ id: 'c-' + s.id, ts: s.created_at, label: 'Facture annulée', ref: s.sale_number, debit: 0, credit: 0, kind: 'cancel', affectsBalance: true });
         return;
       }
-      rows.push({ id: 's-' + s.id, ts: s.created_at, label: 'Vente', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'sale' });
+      rows.push({ id: 's-' + s.id, ts: s.created_at, label: 'Vente', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'sale', affectsBalance: true });
     });
     realPayments.forEach(p => {
-      if (p.method_name && p.method_name.startsWith('Acompte ·')) return;
-      const s = sales.find(x => x.id === p.sale_id);
-      rows.push({ id: 'p-' + p.id, ts: p.created_at, label: `Règlement${p.method_name ? ' · ' + p.method_name : ''}`, ref: s?.sale_number || '', debit: 0, credit: Number(p.amount), kind: 'payment' });
+      const isAllocation = p.affects_balance === false;
+      if (!isAllocation && p.method_name && p.method_name.startsWith('Acompte ·')) return;
+      if (!isAllocation && p.method_name && p.method_name.startsWith('Avoir ')) return;
+      if (isAllocation) {
+        const s = sales.find(x => x.id === p.sale_id);
+        rows.push({ id: 'p-' + p.id, ts: p.created_at, label: p.method_name || 'Règlement par crédit', ref: s?.sale_number || '', debit: 0, credit: Number(p.amount), kind: 'allocation', affectsBalance: false });
+      } else {
+        const s = sales.find(x => x.id === p.sale_id);
+        rows.push({ id: 'p-' + p.id, ts: p.created_at, label: `Règlement${p.method_name ? ' · ' + p.method_name : ''}`, ref: s?.sale_number || '', debit: 0, credit: Number(p.amount), kind: 'payment', affectsBalance: true });
+      }
     });
     prepayments.forEach(pp => {
       const credit = Number(pp.amount);
       if (credit > 0) {
-        rows.push({ id: 'pp-' + pp.id, ts: pp.created_at, label: `Acompte${pp.method_name ? ' · ' + pp.method_name : ''}`, ref: pp.reference || '', debit: 0, credit, kind: 'payment' });
+        rows.push({ id: 'pp-' + pp.id, ts: pp.created_at, label: `Acompte${pp.method_name ? ' · ' + pp.method_name : ''}`, ref: pp.reference || '', debit: 0, credit, kind: 'payment', affectsBalance: true });
       }
     });
+    avoirs.forEach(av => {
+      const ts = av.refunded_at || av.created_at;
+      rows.push({ id: 'av-' + av.id, ts, label: 'Avoir', ref: av.return_number, debit: 0, credit: Number(av.total), kind: 'avoir', affectsBalance: true });
+    });
     withdrawals.forEach(w => {
-      rows.push({ id: 'wd-' + w.id, ts: w.created_at, label: 'Retrait caisse' + (w.reason ? ' · ' + w.reason : ''), ref: w.reference || '', debit: Number(w.amount), credit: 0, kind: 'withdrawal' });
+      rows.push({ id: 'wd-' + w.id, ts: w.created_at, label: 'Retrait caisse' + (w.reason ? ' · ' + w.reason : ''), ref: w.reference || '', debit: Number(w.amount), credit: 0, kind: 'withdrawal', affectsBalance: true });
     });
     loans.forEach(l => {
-      rows.push({ id: 'ln-' + l.id, ts: l.created_at, label: 'Prêt client' + (l.reason ? ' · ' + l.reason : ''), ref: l.reference || '', debit: Number(l.amount), credit: 0, kind: 'loan' });
+      rows.push({ id: 'ln-' + l.id, ts: l.created_at, label: 'Prêt client' + (l.reason ? ' · ' + l.reason : ''), ref: l.reference || '', debit: Number(l.amount), credit: 0, kind: 'loan', affectsBalance: true });
     });
     rows.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
     let running = 0;
-    return rows.map(r => { running += r.debit - r.credit; return { ...r, running }; });
+    return rows.map(r => { if (r.affectsBalance) running += r.debit - r.credit; return { ...r, running }; });
   }, [sales, realPayments, prepayments, avoirs, balanceAdjs, withdrawals, loans]);
 
   const filteredDocs = useMemo(() => sales.filter(s => {
@@ -1901,12 +1929,24 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     reload();
   };
 
-  const openInvoice = (saleId: string) => {
+  const openInvoice = async (saleId: string) => {
     const sale = sales.find(s => s.id === saleId);
     if (!sale) return;
     const items = saleItems.filter(it => it.sale_id === saleId);
     const pays = payments.filter(p => p.sale_id === saleId);
-    setInvoiceView({ sale, items, pays });
+
+    if (isDesktop) {
+      setDesktopEditorInvoiceId(sale.id);
+      setDesktopEditorMode('view');
+      setDesktopEditorForm({ customer_id: sale.customer_id || '', note: '', doc_date: sale.created_at?.slice(0, 10) || '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '', valid_until: '' });
+      setDesktopEditorItems(items.map((it: any) => ({
+        article_id: it.article_id, name: it.name, quantity: Number(it.quantity),
+        unit_price: Number(it.unit_price), discount: Number(it.discount || 0), total: Number(it.total),
+      })));
+      setDesktopEditorOpen(true);
+    } else {
+      setInvoiceView({ sale, items, pays });
+    }
   };
 
   const printInvoice = (data: { sale: any; items: any[]; pays: any[] }) => {
@@ -1932,12 +1972,10 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   };
 
   const ledgerNetBalance = ledger.length > 0 ? ledger[ledger.length - 1].running : 0;
-  const effectiveBalance = customerBalance;
-  const prepayApplied = Math.min(totals.unusedPrepay, Math.max(0, effectiveBalance));
-  const avoirApplied = Math.min(totals.unusedAvoir, Math.max(0, effectiveBalance - prepayApplied));
-  const netDebt = Math.max(0, effectiveBalance - prepayApplied - avoirApplied);
-  const excessPrepay = totals.unusedPrepay - prepayApplied;
-  const excessAvoir = totals.unusedAvoir - avoirApplied;
+  const netDebt = Math.max(0, customerBalance);
+  const creditAvailable = Math.max(0, -customerBalance);
+  const excessPrepay = Math.min(totals.unusedPrepay, creditAvailable);
+  const excessAvoir = Math.min(totals.unusedAvoir, creditAvailable);
 
   const modalTitle = key === 'info' ? 'Interrogation client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
   const [infoTab, setInfoTab] = useState<'commerciale' | 'comptable' | 'statistiques'>('comptable');
@@ -2043,7 +2081,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
               ) : (
                 <>
                   {infoTab === 'comptable' && (
-                    <LedgerView customerName={c.name} ledger={ledger} totalDebit={totals.total} totalCredit={totals.paid} balance={totals.due} unusedAvoir={totals.unusedAvoir}
+                    <LedgerView customerName={c.name} ledger={ledger} totalDebit={totals.total} totalCredit={totals.paid} balance={totals.due} netDebt={netDebt} excessAvoir={excessAvoir} excessPrepay={excessPrepay}
                       dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} />
                   )}
 
@@ -2175,7 +2213,13 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
 
       {invoiceView && (
-        <InvoiceViewModal data={invoiceView} customerName={c.name} onClose={() => setInvoiceView(null)} onPrint={() => printInvoice(invoiceView)} />
+        <MobileInvoiceDetail
+          invoice={{ ...invoiceView.sale, total: Number(invoiceView.sale.total), paid: Number(invoiceView.sale.paid || 0), customers: { name: c.name } }}
+          items={invoiceView.items.map((it: any) => ({ article_id: it.article_id, name: it.name, quantity: Number(it.quantity), unit_price: Number(it.unit_price), discount: Number(it.discount || 0), total: Number(it.total) }))}
+          payments={invoiceView.pays.map((p: any) => ({ method_name: p.method_name, amount: Number(p.amount) }))}
+          onClose={() => setInvoiceView(null)}
+          onPrint={() => printInvoice(invoiceView)}
+        />
       )}
       </>
     );
@@ -2183,7 +2227,17 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
 
   return (
     <Modal open onClose={onClose} title={modalTitle} size="sm" layer="top" fullscreenMobile
-      footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
+      panelClassName={key === 'payment' || key === 'docs' ? 'sm:!h-[500px]' : ''}
+      footer={
+        key === 'payment' ? (
+          <div className="flex items-center gap-2">
+            <button onClick={submitPayment} disabled={paying || !paySale || (Number(payAmount) || 0) <= 0} className="btn-icon" title="Valider">
+              {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            </button>
+            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          </div>
+        ) : <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+      }>
 
       <div className="pb-3 border-b border-neutral-100">
         <div className="flex items-center justify-between">
@@ -2232,8 +2286,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
               payAmount={payAmount} setPayAmount={setPayAmount}
               payMethod={payMethod} setPayMethod={setPayMethod}
               payRef={payRef} setPayRef={setPayRef}
-              paying={paying} onSubmit={submitPayment}
-              onSelectSale={(id: string) => { const s = unpaidSales.find((x: any) => x.id === id); if (s) setPayAmount(String(Math.max(0, Number(s.total) - Number(s.paid)))); }}
+              paying={paying} onSelectSale={(id: string) => { const s = unpaidSales.find((x: any) => x.id === id); if (s) setPayAmount(String(Math.max(0, Number(s.total) - Number(s.paid)))); }}
               recentPayments={payments.slice(0, 8).map(p => ({ ...p, sale_number: sales.find(x => x.id === p.sale_id)?.sale_number }))}
             />
           )}
@@ -2257,20 +2310,50 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
 
       {invoiceView && (
-        <InvoiceViewModal data={invoiceView} customerName={c.name} onClose={() => setInvoiceView(null)} onPrint={() => printInvoice(invoiceView)} />
+        <MobileInvoiceDetail
+          invoice={{ ...invoiceView.sale, total: Number(invoiceView.sale.total), paid: Number(invoiceView.sale.paid || 0), customers: { name: c.name } }}
+          items={invoiceView.items.map((it: any) => ({ article_id: it.article_id, name: it.name, quantity: Number(it.quantity), unit_price: Number(it.unit_price), discount: Number(it.discount || 0), total: Number(it.total) }))}
+          payments={invoiceView.pays.map((p: any) => ({ method_name: p.method_name, amount: Number(p.amount) }))}
+          onClose={() => setInvoiceView(null)}
+          onPrint={() => printInvoice(invoiceView)}
+        />
       )}
+
+      {desktopEditorOpen && isDesktop && (() => {
+        const inv = sales.find(x => x.id === desktopEditorInvoiceId);
+        return inv ? (
+          <DocumentEditor
+            docType="invoice"
+            mode={desktopEditorMode}
+            articles={[]}
+            customers={[{ id: c.id, name: c.name }] as any}
+            headerForm={desktopEditorForm}
+            setHeaderForm={setDesktopEditorForm as any}
+            items={desktopEditorItems}
+            setItems={setDesktopEditorItems as any}
+            subtotal={desktopEditorItems.reduce((s, i) => s + Number(i.total), 0)}
+            saving={false}
+            onClose={() => { setDesktopEditorOpen(false); setInvoiceView(null); }}
+            editingId={desktopEditorInvoiceId}
+            documentNumber={inv.sale_number}
+            documentStatus={inv.status}
+            docSettings={DEFAULT_DOC_SETTINGS}
+            onPrint={() => printInvoice({ sale: inv, items: saleItems.filter(it => it.sale_id === inv.id), pays: payments.filter(p => p.sale_id === inv.id) })}
+          />
+        ) : null;
+      })()}
     </Modal>
   );
 }
 
 /* ───────────────────────── Ledger view (bank-style) ───────────────────────── */
-function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, unusedAvoir, dateFrom, dateTo, onOpenPicker, onClearDates }: {
+function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, netDebt, excessAvoir, excessPrepay, dateFrom, dateTo, onOpenPicker, onClearDates }: {
   customerName: string;
-  ledger: { id: string; ts: string; label: string; ref: string; debit: number; credit: number; running: number; kind: string }[];
-  totalDebit: number; totalCredit: number; balance: number; unusedAvoir: number;
+  ledger: { id: string; ts: string; label: string; ref: string; debit: number; credit: number; running: number; kind: string; affectsBalance: boolean }[];
+  totalDebit: number; totalCredit: number; balance: number; netDebt: number; excessAvoir: number; excessPrepay: number;
   dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void;
 }) {
-  const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment' | 'loan'>('');
+  const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment' | 'loan' | 'avoir' | 'allocation'>('');
 
   const filteredLedger = useMemo(() => {
     let r = ledger;
@@ -2287,8 +2370,8 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
   }, [ledger, dateFrom, dateTo, kindFilter]);
 
   const sortedLedger = useMemo(() => [...filteredLedger].reverse(), [filteredLedger]);
-  const filteredDebit = useMemo(() => filteredLedger.reduce((s, r) => s + r.debit, 0), [filteredLedger]);
-  const filteredCredit = useMemo(() => filteredLedger.reduce((s, r) => s + r.credit, 0), [filteredLedger]);
+  const filteredDebit = useMemo(() => filteredLedger.filter(r => r.affectsBalance).reduce((s, r) => s + r.debit, 0), [filteredLedger]);
+  const filteredCredit = useMemo(() => filteredLedger.filter(r => r.affectsBalance).reduce((s, r) => s + r.credit, 0), [filteredLedger]);
   const filteredBalance = filteredDebit - filteredCredit;
 
   if (ledger.length === 0) {
@@ -2313,7 +2396,7 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
           <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5" title="Effacer"><X className="w-3.5 h-3.5" /></button>
         )}
         <div className="flex items-center gap-0.5 ml-auto">
-          {[{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }, { v: 'loan' as const, l: 'Prêts' }].map(o => (
+          {[{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }, { v: 'avoir' as const, l: 'Avoirs' }, { v: 'allocation' as const, l: 'Imputations' }, { v: 'loan' as const, l: 'Prêts' }].map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
               className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-slate-900 border-b-2 border-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
               {o.l}
@@ -2339,12 +2422,12 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
             </thead>
             <tbody>
               {sortedLedger.map(r => (
-                <tr key={r.id} className="border-b border-neutral-100 hover:bg-neutral-50/50">
+                <tr key={r.id} className={`border-b border-neutral-100 hover:bg-neutral-50/50${!r.affectsBalance ? ' bg-slate-50/60' : ''}`}>
                   <td className="px-3 py-1.5 text-black whitespace-nowrap">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                   <td className="px-3 py-1.5 font-mono text-black hidden sm:table-cell">{r.ref || '—'}</td>
-                  <td className="px-3 py-1.5 text-black font-medium truncate max-w-[200px]">{r.label}</td>
-                  <td className="px-3 py-1.5 text-right num font-medium text-black whitespace-nowrap">{r.debit > 0 ? formatFCFA(r.debit) : ''}</td>
-                  <td className="px-3 py-1.5 text-right num font-medium text-black whitespace-nowrap">{r.credit > 0 ? formatFCFA(r.credit) : ''}</td>
+                  <td className={`px-3 py-1.5 font-medium truncate max-w-[200px]${!r.affectsBalance ? ' text-slate-500 italic' : ' text-black'}`}>{r.label}</td>
+                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affectsBalance ? ' text-slate-400' : ' text-black'}`}>{r.debit > 0 ? formatFCFA(r.debit) : ''}</td>
+                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affectsBalance ? ' text-slate-400' : ' text-black'}`}>{r.credit > 0 ? formatFCFA(r.credit) : ''}</td>
                   <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(r.running)}</td>
                 </tr>
               ))}
@@ -2363,11 +2446,30 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
 
       {/* Balance summary line */}
       <div className="mt-2 flex items-center gap-4 text-[11px] text-black px-1">
-        {filteredBalance > 0 && <span>Solde dû : <span className="font-bold text-black num">{formatFCFA(filteredBalance)}</span></span>}
-        {filteredBalance < 0 && <span>Solde créditeur : <span className="font-bold text-black num">{formatFCFA(Math.abs(filteredBalance))}</span></span>}
-        {filteredBalance === 0 && <span>Solde : <span className="font-bold text-black num">0 FCFA</span></span>}
-        {unusedAvoir > 0 && <span className="ml-auto">Avoirs disponibles : <span className="font-bold text-black num">{formatFCFA(unusedAvoir)}</span></span>}
+        {netDebt > 0 && <span>Solde dû : <span className="font-bold text-black num">{formatFCFA(netDebt)}</span></span>}
+        {netDebt === 0 && excessPrepay === 0 && excessAvoir === 0 && <span>Solde : <span className="font-bold text-black num">0 FCFA</span></span>}
+        {excessPrepay > 0 && <span className="ml-auto">Acompte disponible : <span className="font-bold text-black num">{formatFCFA(excessPrepay)}</span></span>}
+        {excessAvoir > 0 && <span className="ml-auto">Avoir disponible : <span className="font-bold text-black num">{formatFCFA(excessAvoir)}</span></span>}
       </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Recent payments accordion ───────────────────────── */
+function RecentPaymentsAccordion({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-4">
+      <button type="button" onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1 text-[10px] uppercase font-semibold text-slate-500 tracking-wide hover:text-slate-700 transition-colors">
+        <ChevronRight className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
+        {label}
+      </button>
+      {open && (
+        <div className="mt-1.5 max-h-[160px] overflow-y-auto">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -2375,96 +2477,105 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, un
 /* ───────────────────────── Payment form ───────────────────────── */
 function PaymentForm({
   unpaid, methods, paySale, setPaySale, payAmount, setPayAmount, payMethod, setPayMethod,
-  payRef, setPayRef, paying, onSubmit, onSelectSale, recentPayments,
+  payRef, setPayRef, paying, onSelectSale, recentPayments,
 }: any) {
   const selected = unpaid.find((s: any) => s.id === paySale);
+  const isBalance = selected?.id === '__balance__';
   const due = selected ? Math.max(0, Number(selected.total) - Number(selected.paid)) : 0;
   const amt = Number(payAmount) || 0;
   const remaining = Math.max(0, due - amt);
 
   return (
-    <div className="space-y-3">
-      {/* Compact form */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">Imputer sur</label>
-          <SearchableSelect
-            options={[
-              { value: '', label: '— Sélectionner une créance —' },
-              ...unpaid.map((s: any) => {
-                const d = Math.max(0, Number(s.total) - Number(s.paid));
-                return { value: s.id, label: `${s.sale_number} · dû ${formatFCFA(d)}` };
-              })
-            ]}
-            value={paySale}
-            onChange={v => { setPaySale(v); onSelectSale(v); }}
-            placeholder="— Sélectionner une créance —"
-          />
-          {unpaid.length === 0 && <div className="text-[11px] text-emerald-600 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Aucune créance en attente.</div>}
+    <div className="pt-1">
+      {/* Montant à régler | Dû — deux colonnes, trait vertical fin */}
+      <div className="grid grid-cols-2 py-1">
+        <div className="pr-4">
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Montant à régler</label>
+          <div className="mt-1 flex items-baseline gap-1">
+            <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+              className="text-lg font-bold text-slate-900 focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
+            <span className="text-xs text-slate-500 font-medium">FCFA</span>
+          </div>
         </div>
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">Montant (FCFA)</label>
-          <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-            className="input" placeholder="0" min={0} />
-          {selected && amt > 0 && (
-            <div className="text-[10px] text-slate-500 mt-0.5">
-              Dû : <span className="num font-semibold">{formatFCFA(due)}</span>
-              {remaining > 0 && <> — Reste : <span className="num font-semibold text-amber-600">{formatFCFA(remaining)}</span></>}
-              {remaining === 0 && amt > 0 && <> — <span className="text-emerald-600 font-semibold">Soldé</span></>}
-            </div>
+        <div className="pl-4 border-l border-neutral-200">
+          {selected ? (
+            <>
+              <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">{isBalance ? 'Report de solde' : 'Dû'}</div>
+              <div className="mt-1 text-sm font-bold text-slate-800 num">{formatFCFA(due)}</div>
+              {amt > 0 && <div className="text-[11px] text-slate-500 mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
+            </>
+          ) : (
+            <>
+              <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Imputation</div>
+              <div className="mt-1 text-xs text-slate-400">Aucune facture</div>
+            </>
           )}
         </div>
       </div>
 
-      <div>
-        <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">Mode de règlement</label>
-        <div className="flex flex-wrap gap-1.5">
+      {/* Imputer sur — champ underline */}
+      <div className="mt-3">
+        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Imputer sur</label>
+        <SearchableSelect
+          variant="underline"
+          options={[
+            { value: '', label: 'Acompte libre (sans facture)' },
+            ...unpaid.filter((s: any) => s.id !== '__balance__').map((s: any) => {
+              const d = Math.max(0, Number(s.total) - Number(s.paid));
+              return { value: s.id, label: `${s.sale_number} · dû ${formatFCFA(d)}` };
+            })
+          ]}
+          value={paySale}
+          onChange={v => { setPaySale(v); onSelectSale(v); }}
+          placeholder="Acompte libre (sans facture)"
+        />
+        {unpaid.some((s: any) => s.id === '__balance__') && (
+          <button type="button" onClick={() => { setPaySale('__balance__'); onSelectSale('__balance__'); }}
+            className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-700'}`}>
+            Report de solde · {formatFCFA(unpaid.find((s: any) => s.id === '__balance__')?.total || 0)}
+          </button>
+        )}
+        {unpaid.length === 0 && <div className="text-[11px] text-emerald-700 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Aucune créance en attente</div>}
+      </div>
+
+      {/* Modes de règlement — une seule ligne, soulignement du mode actif */}
+      <div className="mt-3">
+        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Mode</label>
+        <div className="flex items-center gap-4">
           {methods.map((m: any) => (
             <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`px-3 py-1.5 rounded text-[11px] font-semibold border transition-colors ${payMethod === m.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
               {m.name}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">Référence (optionnel)</label>
-          <input value={payRef} onChange={e => setPayRef(e.target.value)} className="input text-xs" placeholder="N° bordereau, transaction…" />
-        </div>
-        <button onClick={onSubmit} disabled={paying || !paySale || amt <= 0} className="h-[38px] px-5 rounded bg-slate-900 text-white text-xs font-semibold hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1.5">
-          {paying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-          Valider
-        </button>
+      {/* Référence — bare-input */}
+      <div className="mt-3">
+        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Référence (optionnel)</label>
+        <input value={payRef} onChange={e => setPayRef(e.target.value)}
+          className="bare-input text-sm py-1.5"
+          placeholder="N° bordereau, transaction…" />
+      </div>
+
+      {/* Imputé sur la caisse du jour */}
+      <div className="mt-3 text-[11px] text-slate-500">
+        Imputé sur la caisse du jour
       </div>
 
       {recentPayments.length > 0 && (
-        <div className="mt-2 pt-3 border-t border-slate-200">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Derniers encaissements</div>
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-2.5 py-1.5 text-left font-semibold text-slate-600">Date</th>
-                  <th className="px-2.5 py-1.5 text-left font-semibold text-slate-600">Facture</th>
-                  <th className="px-2.5 py-1.5 text-left font-semibold text-slate-600 hidden sm:table-cell">Mode</th>
-                  <th className="px-2.5 py-1.5 text-right font-semibold text-slate-600">Montant</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentPayments.map((p: any) => (
-                  <tr key={p.id} className="border-b border-slate-100">
-                    <td className="px-2.5 py-1.5 text-slate-500">{formatDateTime(p.created_at)}</td>
-                    <td className="px-2.5 py-1.5 font-mono text-slate-600">{p.sale_number || '—'}</td>
-                    <td className="px-2.5 py-1.5 text-slate-500 hidden sm:table-cell">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</td>
-                    <td className="px-2.5 py-1.5 text-right num font-semibold text-emerald-700">{formatFCFA(p.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <RecentPaymentsAccordion label="Derniers encaissements">
+          {recentPayments.map((p: any) => (
+            <div key={p.id} className="py-1.5 border-b border-neutral-100 last:border-0">
+              <div className="text-xs text-slate-600 line-clamp-2 leading-snug">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
+              <div className="flex items-center justify-between mt-0.5">
+                <div className="text-xs text-slate-400">{p.sale_number || 'Acompte'}</div>
+                <div className="text-xs font-bold text-emerald-700 num">{formatFCFA(p.amount)}</div>
+              </div>
+            </div>
+          ))}
+        </RecentPaymentsAccordion>
       )}
     </div>
   );
@@ -2474,7 +2585,6 @@ function PaymentForm({
 function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPicker, onClearDates, onOpenInvoice }: any) {
   return (
     <div>
-      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-black hover:underline">
           <Calendar className="w-3 h-3 text-black" />
@@ -2483,40 +2593,29 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
         {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5"><X className="w-3.5 h-3.5" /></button>}
         <span className="ml-auto text-[10px] text-slate-400 num">{kpis.count} factures | CA {formatFCFA(kpis.ca)} | Marge {formatFCFA(kpis.marge)} ({kpis.margePct.toFixed(1)}%)</span>
       </div>
-
-      {/* Documents table */}
       {docs.length === 0 ? (
         <div className="text-sm text-slate-500 py-10 text-center">Aucun document sur cette période.</div>
       ) : (
-        <div className="">
+        <div>
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-[2] bg-white border-b border-neutral-200">
                 <tr>
+                  <th className="px-2.5 py-2 text-left font-semibold text-black">Date</th>
                   <th className="px-2.5 py-2 text-left font-semibold text-black">N° document</th>
-                  <th className="px-2.5 py-2 text-left font-semibold text-black hidden sm:table-cell">Date</th>
                   <th className="px-2.5 py-2 text-left font-semibold text-black">Statut</th>
-                  <th className="px-2.5 py-2 text-right font-semibold text-black">Qté</th>
-                  <th className="px-2.5 py-2 text-right font-semibold text-black hidden sm:table-cell">PU moyen</th>
                   <th className="px-2.5 py-2 text-right font-semibold text-black">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {docs.map((s: any) => {
-                  const items = (saleItems || []).filter((it: any) => it.sale_id === s.id);
-                  const qty = items.reduce((a: number, it: any) => a + Number(it.quantity || 0), 0);
-                  const avgPU = qty > 0 ? items.reduce((a: number, it: any) => a + Number(it.unit_price || 0) * Number(it.quantity || 0), 0) / qty : 0;
-                  return (
-                    <tr key={s.id} onClick={() => onOpenInvoice(s.id)} className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer">
-                      <td className="px-2.5 py-1.5 font-mono font-semibold text-black">{s.sale_number}</td>
-                      <td className="px-2.5 py-1.5 text-black hidden sm:table-cell">{new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-                      <td className="px-2.5 py-1.5"><StatusBadgeSale sale={s} /></td>
-                      <td className="px-2.5 py-1.5 text-right num text-black">{qty.toLocaleString('fr-FR')}</td>
-                      <td className="px-2.5 py-1.5 text-right num text-black hidden sm:table-cell">{formatFCFA(avgPU)}</td>
-                      <td className="px-2.5 py-1.5 text-right num font-semibold text-black">{formatFCFA(s.total)}</td>
-                    </tr>
-                  );
-                })}
+                {docs.map((s: any) => (
+                  <tr key={s.id} onClick={() => onOpenInvoice(s.id)} className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer">
+                    <td className="px-2.5 py-1.5 text-black whitespace-nowrap">{new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                    <td className="px-2.5 py-1.5 font-mono font-semibold text-black">{s.sale_number}</td>
+                    <td className="px-2.5 py-1.5"><StatusBadgeSale sale={s} /></td>
+                    <td className="px-2.5 py-1.5 text-right num font-semibold text-black">{formatFCFA(s.total)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -2531,85 +2630,98 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
   );
 }
 
-/* ───────────────────────── Invoice viewer modal ───────────────────────── */
-function InvoiceViewModal({ data, customerName, onClose, onPrint }: { data: { sale: any; items: any[]; pays: any[] }; customerName: string; onClose: () => void; onPrint: () => void }) {
-  const { sale, items, pays } = data;
+/* ───────────────────────── Mobile full-screen supplier order detail ───────────────────────── */
+function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName, onClose, onPrint }: {
+  order: any; items: any[]; payments: any[]; supplierName: string; onClose: () => void; onPrint: () => void;
+}) {
   const paidTotal = pays.reduce((s: number, p: any) => s + Number(p.amount), 0);
-  const due = Math.max(0, Number(sale.total) - paidTotal);
-  const subtotal = items.reduce((s: number, it: any) => s + Number(it.total), 0);
-
-  const docItems: DocItem[] = items.map((it: any) => ({
-    name: it.name,
-    quantity: Number(it.quantity),
-    unit_price: Number(it.unit_price),
-    discount: Number(it.discount ?? 0),
-    total: Number(it.total),
-  }));
-
-  const docPayments: DocPayment[] = pays.map((p: any) => ({
-    method_name: p.method_name,
-    amount: Number(p.amount),
-    paid_at: p.created_at,
-  }));
-
-  const statusColor = sale.status === 'paid' ? 'emerald' : sale.status === 'cancelled' ? 'rose' : sale.status === 'validated' ? 'blue' : 'amber';
-  const statusLabel = sale.status === 'paid' ? 'Payée' : sale.status === 'cancelled' ? 'Annulée' : sale.status === 'validated' ? 'Crédit' : 'Partielle';
+  const due = Math.max(0, Number(order.total) - paidTotal);
+  const validItems = items.filter((i: any) => (i.name || '').trim());
+  const subtotal = validItems.reduce((s: number, i: any) => s + Number(i.total), 0);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-      <div className="scrim" onClick={onClose} />
-      <div className="relative w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-premium animate-sheet-up sm:animate-scale-in max-h-[92vh] flex flex-col">
-        <div className="sm:hidden sheet-handle" />
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Facture</div>
-            <div className="text-base font-bold text-slate-900 font-mono">{sale.sale_number}</div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button onClick={onPrint} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
-            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          </div>
+    <div className="fixed inset-0 z-[55] bg-white flex flex-col">
+      <div className="flex items-center justify-between px-4 h-12 border-b border-neutral-200 shrink-0">
+        <button onClick={onClose} className="p-1"><X className="w-5 h-5 text-neutral-700" /></button>
+        <div className="text-center flex-1 min-w-0">
+          <div className="text-sm font-bold text-neutral-900 truncate">{order.order_number}</div>
+        </div>
+        <StatusBadgeOrder order={order} />
+      </div>
+
+      <div className="px-4 py-3 border-b border-neutral-100 space-y-1">
+        <div className="flex items-center gap-2 text-xs text-neutral-700">
+          <Truck className="w-3.5 h-3.5 text-neutral-400" />
+          <span className="font-medium">{supplierName}</span>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-neutral-500">
+          <Calendar className="w-3 h-3" />
+          {formatDate(order.created_at)}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="divide-y divide-neutral-100">
+          {validItems.map((item: any, idx: number) => (
+            <div key={idx} className="px-4 py-2.5">
+              <div className="text-sm font-medium text-neutral-800">{item.name}</div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-neutral-500">{Number(item.quantity_ordered)} x {formatFCFA(item.unit_price)}</span>
+                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(item.total)}</span>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          <DocSlimHeader
-            status={{ label: statusLabel, color: statusColor as any }}
-            customerName={customerName}
-            date={formatDateTime(sale.created_at)}
-          />
-
-          {/* Articles via DocItems */}
-          <DocItems items={docItems} />
-
-          {/* Totaux */}
-          <DocTotals
-            subtotal={subtotal}
-            total={Number(sale.total)}
-            paid={paidTotal > 0 ? paidTotal : undefined}
-            remaining={due > 0 ? due : undefined}
-          />
-
-          {/* Paiements */}
-          {docPayments.length > 0 && (
-            <DocPayments payments={docPayments} formatDate={formatDateTime} />
+        <div className="px-4 py-3 border-t border-neutral-100 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-neutral-500">
+            <span>Sous-total</span><span className="num font-semibold">{formatFCFA(subtotal)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm font-bold text-neutral-900">
+            <span>Total</span><span className="num">{formatFCFA(order.total)}</span>
+          </div>
+          {paidTotal > 0 && (
+            <div className="flex items-center justify-between text-xs text-emerald-600 font-medium">
+              <span>Payé</span><span className="num">{formatFCFA(paidTotal)}</span>
+            </div>
           )}
+          {due > 0 && (
+            <div className="flex items-center justify-between text-xs text-amber-600 font-bold">
+              <span>Dette</span><span className="num">{formatFCFA(due)}</span>
+            </div>
+          )}
+        </div>
+
+        {pays.length > 0 && (
+          <div className="px-4 py-2.5 border-t border-neutral-100">
+            <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-1.5">Règlements</div>
+            <div className="space-y-1">
+              {pays.map((p: any, i: number) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-600">{p.method_name}</span>
+                  <span className="text-neutral-900 font-semibold num">{formatFCFA(p.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-neutral-200 px-4 py-3 shrink-0 bg-white">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-neutral-500">{validItems.length} article{validItems.length > 1 ? 's' : ''}</span>
+          <span className="text-base font-extrabold text-neutral-900 num">{formatFCFA(order.total)}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="flex-1" />
+          <button onClick={onPrint} className="btn-icon-primary" title="Imprimer"><Printer className="w-4 h-4" /></button>
         </div>
       </div>
     </div>
   );
 }
 
-function Line({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: 'emerald' | 'amber' }) {
-  const cls = tone === 'emerald' ? 'text-emerald-300' : tone === 'amber' ? 'text-amber-300' : 'text-white';
-  return (
-    <div className={`flex items-center justify-between ${strong ? 'text-base font-bold' : 'text-sm'}`}>
-      <span className="text-white/70">{label}</span>
-      <span className={`tabular-nums ${cls}`}>{value}</span>
-    </div>
-  );
-}
+
 
 /* ───────────────────────── Supplier detail modal ───────────────────────── */
 function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: SupplierOptionKey }; siteId: string | null; onClose: () => void }) {
@@ -2633,6 +2745,14 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const [dateTo, setDateTo] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [orderView, setOrderView] = useState<any | null>(null);
+
+  const [soEditorOpen, setSoEditorOpen] = useState(false);
+  const [soEditorMode, setSoEditorMode] = useState<SOMode>('view');
+  const [soEditorItems, setSoEditorItems] = useState<SOLineItem[]>([]);
+  const [soEditorForm, setSoEditorForm] = useState<SOHeaderForm>({ supplier_id: '', expected_date: '', note: '' });
+  const [soEditorOrderId, setSoEditorOrderId] = useState<string | null>(null);
+
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
   const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
   const [supplierBalance, setSupplierBalance] = useState<number>(Number((s as any).balance || 0));
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
@@ -2654,7 +2774,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       supabase.from('supplier_payments').select('*').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('paid_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).neq('payment_type', 'credit').order('sort_order'),
       supabase.from('articles').select('id, name, internal_ref, supplier_ref, sale_price, is_active').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('name').limit(300),
-      supabase.from('balance_adjustments').select('id, amount, note, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'supplier').eq('entity_id', s.id).order('created_at', { ascending: false }),
+      supabase.from('balance_adjustments').select('id, amount, note, kind, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'supplier').eq('entity_id', s.id).order('created_at', { ascending: false }),
       supabase.from('suppliers').select('balance').eq('id', s.id).maybeSingle(),
     ]);
     const oo = oRes.data || [];
@@ -2782,7 +2902,19 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     if (!order) return;
     const items = orderItems.filter(it => it.order_id === orderId);
     const pays = payments.filter(p => p.order_id === orderId);
-    setOrderView({ order, items, pays });
+
+    if (isDesktop) {
+      setSoEditorOrderId(order.id);
+      setSoEditorMode('view');
+      setSoEditorForm({ supplier_id: order.supplier_id || s.id, expected_date: order.expected_date || '', note: '' });
+      setSoEditorItems(items.map((it: any) => ({
+        article_id: it.article_id, name: it.name, supplier_ref: it.supplier_ref || '',
+        quantity_ordered: Number(it.quantity_ordered), unit_price: Number(it.unit_price), total: Number(it.total),
+      })));
+      setSoEditorOpen(true);
+    } else {
+      setOrderView({ order, items, pays });
+    }
   };
 
   const printOrder = (data: { order: any; items: any[]; pays: any[] }) => {
@@ -3018,7 +3150,14 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
 
       {orderView && (
-        <OrderViewModal data={orderView} supplierName={s.name} onClose={() => setOrderView(null)} onPrint={() => printOrder(orderView)} />
+        <MobileSupplierOrderDetail
+          order={orderView.order}
+          items={orderView.items}
+          payments={orderView.pays}
+          supplierName={s.name}
+          onClose={() => setOrderView(null)}
+          onPrint={() => printOrder(orderView)}
+        />
       )}
       </>
     );
@@ -3026,7 +3165,17 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 
   return (
     <Modal open onClose={onClose} title={modalTitle} size="sm" layer="top" fullscreenMobile
-      footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
+      panelClassName={key === 'payment' || key === 'docs' ? 'sm:!h-[500px]' : ''}
+      footer={
+        key === 'payment' ? (
+          <div className="flex items-center gap-2">
+            <button onClick={submitPayment} disabled={paying || (Number(payAmount) || 0) <= 0} className="btn-icon" title="Valider">
+              {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            </button>
+            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+          </div>
+        ) : <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+      }>
 
       <div className="pb-3 border-b border-neutral-100">
         <div className="flex items-center justify-between">
@@ -3054,8 +3203,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
               payAmount={payAmount} setPayAmount={setPayAmount}
               payMethod={payMethod} setPayMethod={setPayMethod}
               payRef={payRef} setPayRef={setPayRef}
-              paying={paying} onSubmit={submitPayment}
-              onSelectOrder={(id: string) => { const o = unpaidOrders.find(x => x.id === id); if (o) setPayAmount(String(Math.max(0, Number(o.total) - Number(o.paid || 0)))); }}
+              paying={paying} onSelectOrder={(id: string) => { const o = unpaidOrders.find(x => x.id === id); if (o) setPayAmount(String(Math.max(0, Number(o.total) - Number(o.paid || 0)))); }}
               recentPayments={payments.slice(0, 8).map(p => ({ ...p, order_number: orders.find(x => x.id === p.order_id)?.order_number }))}
             />
           )}
@@ -3100,8 +3248,37 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
 
       {orderView && (
-        <OrderViewModal data={orderView} supplierName={s.name} onClose={() => setOrderView(null)} onPrint={() => printOrder(orderView)} />
+        <MobileSupplierOrderDetail
+          order={orderView.order}
+          items={orderView.items}
+          payments={orderView.pays}
+          supplierName={s.name}
+          onClose={() => setOrderView(null)}
+          onPrint={() => printOrder(orderView)}
+        />
       )}
+
+      {soEditorOpen && isDesktop && (() => {
+        const ord = orders.find(x => x.id === soEditorOrderId);
+        return ord ? (
+          <SupplierOrderEditor
+            mode={soEditorMode}
+            articles={[]}
+            suppliers={[{ id: s.id, name: s.name }] as any}
+            headerForm={soEditorForm}
+            setHeaderForm={setSoEditorForm as any}
+            items={soEditorItems}
+            setItems={setSoEditorItems as any}
+            subtotal={soEditorItems.reduce((sum, i) => sum + Number(i.total), 0)}
+            saving={false}
+            onClose={() => { setSoEditorOpen(false); setOrderView(null); }}
+            editingId={soEditorOrderId}
+            documentNumber={ord.order_number}
+            documentStatus={ord.status}
+            onPrint={() => printOrder({ order: ord, items: orderItems.filter(it => it.order_id === ord.id), pays: payments.filter(p => p.order_id === ord.id) })}
+          />
+        ) : null;
+      })()}
     </Modal>
   );
 }
@@ -3201,7 +3378,7 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
 /* ───────────────────────── Supplier payment form ───────────────────────── */
 function SupplierPaymentForm({
   unpaid, methods, payOrder, setPayOrder, payAmount, setPayAmount, payMethod, setPayMethod,
-  payRef, setPayRef, paying, onSubmit, onSelectOrder, recentPayments,
+  payRef, setPayRef, paying, onSelectOrder, recentPayments,
 }: any) {
   const selected = unpaid.find((o: any) => o.id === payOrder);
   const isBalance = selected?.id === '__balance__';
@@ -3210,99 +3387,94 @@ function SupplierPaymentForm({
   const remaining = Math.max(0, due - amt);
 
   return (
-    <div>
-      <div className="border border-slate-200 rounded-lg overflow-hidden mb-3">
-        <div className="grid grid-cols-2 gap-px bg-slate-200">
-          <div className="bg-white p-3">
-            <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Montant à régler</label>
-            <div className="mt-1 flex items-baseline gap-1">
-              <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                className="text-lg font-bold text-slate-900 focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
-              <span className="text-xs text-slate-500 font-medium">FCFA</span>
-            </div>
-          </div>
-          <div className="bg-white p-3">
-            {selected ? (
-              <>
-                <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">{isBalance ? 'Solde positionné' : 'Dû'}</div>
-                <div className="mt-1 text-sm font-bold text-slate-800 num">{formatFCFA(due)}</div>
-                {amt > 0 && <div className="text-[11px] text-slate-500 mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
-              </>
-            ) : (
-              <>
-                <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Imputation</div>
-                <div className="mt-1 text-xs text-slate-400">Aucune commande</div>
-              </>
-            )}
+    <div className="pt-1">
+      {/* Montant à régler | Imputation — deux colonnes, trait vertical fin, pas de carte */}
+      <div className="grid grid-cols-2 py-1">
+        <div className="pr-4">
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Montant à régler</label>
+          <div className="mt-1 flex items-baseline gap-1">
+            <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+              className="text-lg font-bold text-slate-900 focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
+            <span className="text-xs text-slate-500 font-medium">FCFA</span>
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <div>
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Imputer sur</label>
-          <SearchableSelect
-            options={[
-              { value: '', label: 'Acompte libre (sans commande)' },
-              ...unpaid.filter((o: any) => o.id !== '__balance__').map((o: any) => {
-                const d = Math.max(0, Number(o.total) - Number(o.paid || 0));
-                return { value: o.id, label: `${o.order_number} · dû ${formatFCFA(d)}` };
-              })
-            ]}
-            value={payOrder}
-            onChange={v => { setPayOrder(v); onSelectOrder(v); }}
-            placeholder="Acompte libre (sans commande)"
-          />
-          {unpaid.some((o: any) => o.id === '__balance__') && (
-            <button type="button" onClick={() => { setPayOrder('__balance__'); onSelectOrder('__balance__'); }}
-              className={`mt-1.5 w-full px-2.5 py-1.5 rounded text-[11px] font-medium border transition-colors ${isBalance ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-              Solde positionné · {formatFCFA(unpaid.find((o: any) => o.id === '__balance__')?.total || 0)}
-            </button>
+        <div className="pl-4 border-l border-neutral-200">
+          {selected ? (
+            <>
+              <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">{isBalance ? 'Solde positionné' : 'Dû'}</div>
+              <div className="mt-1 text-sm font-bold text-slate-800 num">{formatFCFA(due)}</div>
+              {amt > 0 && <div className="text-[11px] text-slate-500 mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
+            </>
+          ) : (
+            <>
+              <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Imputation</div>
+              <div className="mt-1 text-xs text-slate-400">Aucune commande</div>
+            </>
           )}
-          {unpaid.length === 0 && <div className="text-[11px] text-emerald-700 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Tout soldé</div>}
-        </div>
-        <div>
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Mode</label>
-          <div className="grid grid-cols-2 gap-1">
-            {methods.map((m: any) => (
-              <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-                className={`px-2 py-1.5 rounded text-[11px] font-medium border transition-colors ${payMethod === m.id ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                {m.name}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
-      <div className="mb-3">
+      {/* Imputer sur — champ underline */}
+      <div className="mt-3">
+        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Imputer sur</label>
+        <SearchableSelect
+          variant="underline"
+          options={[
+            { value: '', label: 'Acompte libre (sans commande)' },
+            ...unpaid.filter((o: any) => o.id !== '__balance__').map((o: any) => {
+              const d = Math.max(0, Number(o.total) - Number(o.paid || 0));
+              return { value: o.id, label: `${o.order_number} · dû ${formatFCFA(d)}` };
+            })
+          ]}
+          value={payOrder}
+          onChange={v => { setPayOrder(v); onSelectOrder(v); }}
+          placeholder="Acompte libre (sans commande)"
+        />
+        {unpaid.some((o: any) => o.id === '__balance__') && (
+          <button type="button" onClick={() => { setPayOrder('__balance__'); onSelectOrder('__balance__'); }}
+            className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-700'}`}>
+            Solde positionné · {formatFCFA(unpaid.find((o: any) => o.id === '__balance__')?.total || 0)}
+          </button>
+        )}
+        {unpaid.length === 0 && <div className="text-[11px] text-emerald-700 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Tout soldé</div>}
+      </div>
+
+      {/* Modes de règlement — une seule ligne, texte compact, soulignement du mode actif */}
+      <div className="mt-3">
+        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Mode</label>
+        <div className="flex items-center gap-4">
+          {methods.map((m: any) => (
+            <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              {m.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Référence — input underline */}
+      <div className="mt-3">
         <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Référence (optionnel)</label>
-        <input value={payRef} onChange={e => setPayRef(e.target.value)} className="input" placeholder="N° chèque, virement…" />
+        <input value={payRef} onChange={e => setPayRef(e.target.value)}
+          className="bare-input text-sm py-1.5"
+          placeholder="N° chèque, virement…" />
       </div>
 
-      <div className="flex items-center gap-2 mb-3 text-[11px] text-slate-500">
-        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+      {/* Imputé sur la caisse du jour — texte seul, pas de point vert */}
+      <div className="mt-3 text-[11px] text-slate-500">
         Imputé sur la caisse du jour
       </div>
 
-      <button onClick={onSubmit} disabled={paying || amt <= 0} className="btn-icon-primary w-full justify-center py-2.5" title="Valider le règlement">
-        {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-      </button>
-
       {recentPayments.length > 0 && (
-        <div className="mt-4 border border-slate-200 rounded-lg overflow-hidden">
-          <div className="bg-slate-50 border-b border-slate-200 px-2.5 py-1.5 text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Derniers règlements</div>
-          <table className="w-full text-xs">
-            <tbody>
-              {recentPayments.map((p: any) => (
-                <tr key={p.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-2.5 py-1.5 text-slate-600">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</td>
-                  <td className="px-2.5 py-1.5 text-slate-400 text-[11px]">{p.order_number || 'Acompte'} · {formatDateTime(p.paid_at || p.created_at)}</td>
-                  <td className="px-2.5 py-1.5 text-right font-bold text-emerald-700 num">{formatFCFA(p.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <RecentPaymentsAccordion label="Derniers règlements">
+          {recentPayments.map((p: any) => (
+            <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-neutral-100 last:border-0">
+              <div className="text-xs text-slate-600">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
+              <div className="text-xs text-slate-400">{p.order_number || 'Acompte'}</div>
+              <div className="text-xs font-bold text-emerald-700 num">{formatFCFA(p.amount)}</div>
+            </div>
+          ))}
+        </RecentPaymentsAccordion>
       )}
     </div>
   );
@@ -3316,12 +3488,6 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
 
   return (
     <div>
-      <div className="flex items-center gap-4 text-xs mb-3 px-1 text-black">
-        <span>Commandes : <span className="font-bold num">{kpis.count}</span></span>
-        <span>Achats : <span className="font-bold num">{formatFCFA(kpis.achats)}</span></span>
-        <span>Dette : <span className="font-bold num">{formatFCFA(kpis.due)}</span></span>
-      </div>
-
       <div className="mb-3">
         <button onClick={() => setStatsOpen(v => !v)} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 hover:text-slate-800">
           <ChevronRight className={`w-3 h-3 transition-transform ${statsOpen ? 'rotate-90' : ''}`} />
@@ -3359,109 +3525,55 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
         )}
       </div>
 
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
         <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-black hover:underline">
           <Calendar className="w-3 h-3 text-black" />
           {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
         </button>
         {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5"><X className="w-3.5 h-3.5" /></button>}
-        <span className="ml-auto text-[10px] text-slate-400">{docs.length} document{docs.length > 1 ? 's' : ''}</span>
+        <span className="ml-auto text-[10px] text-slate-400 num">{kpis.count} commandes | Achats {formatFCFA(kpis.achats)} | Dette {formatFCFA(kpis.due)}</span>
       </div>
 
-      {docs.length === 0 ? <div className="text-xs text-slate-500 py-6 text-center">Aucune commande sur cette période.</div> : (
-        <div className="">
-          <table className="w-full text-xs">
-            <thead className="border-b border-neutral-200">
-              <tr>
-                <th className="px-2.5 py-2 text-left font-semibold text-black">N°</th>
-                <th className="px-2.5 py-2 text-left font-semibold text-black">Désignation</th>
-                <th className="px-2.5 py-2 text-left font-semibold text-black hidden sm:table-cell">Date</th>
-                <th className="px-2.5 py-2 text-right font-semibold text-black">Total</th>
-                <th className="px-2.5 py-2 text-center font-semibold text-black w-16">Statut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.map((o: any) => {
-                const items = (orderItems || []).filter((it: any) => it.order_id === o.id);
-                const designation = items.length === 0
-                  ? o.order_number
-                  : items.length === 1
-                    ? items[0].name
-                    : `${items[0].name} + ${items.length - 1} autre${items.length - 1 > 1 ? 's' : ''}`;
-                return (
+      {docs.length === 0 ? (
+        <div className="text-sm text-slate-500 py-10 text-center">Aucun document sur cette période.</div>
+      ) : (
+        <div>
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 z-[2] bg-white border-b border-neutral-200">
+                <tr>
+                  <th className="px-2.5 py-2 text-left font-semibold text-black">Date</th>
+                  <th className="px-2.5 py-2 text-left font-semibold text-black">N° document</th>
+                  <th className="px-2.5 py-2 text-left font-semibold text-black">Statut</th>
+                  <th className="px-2.5 py-2 text-right font-semibold text-black">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {docs.map((o: any) => (
                   <tr key={o.id} onClick={() => onOpenOrder(o.id)} className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer">
-                    <td className="px-2.5 py-1.5 font-mono text-black whitespace-nowrap">{o.order_number}</td>
-                    <td className="px-2.5 py-1.5 text-black font-medium truncate max-w-[160px]">{designation}</td>
-                    <td className="px-2.5 py-1.5 text-black hidden sm:table-cell whitespace-nowrap">{formatDateTime(o.created_at)}</td>
-                    <td className="px-2.5 py-1.5 text-right num font-bold text-black">{formatFCFA(o.total)}</td>
-                    <td className="px-2.5 py-1.5 text-center"><StatusBadgeOrder order={o} /></td>
+                    <td className="px-2.5 py-1.5 text-black whitespace-nowrap">{new Date(o.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                    <td className="px-2.5 py-1.5 font-mono font-semibold text-black">{o.order_number}</td>
+                    <td className="px-2.5 py-1.5"><StatusBadgeOrder order={o} /></td>
+                    <td className="px-2.5 py-1.5 text-right num font-semibold text-black">{formatFCFA(o.total)}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-neutral-300 px-2.5 py-1.5 flex items-center text-xs">
+            <span className="font-semibold text-black">TOTAL</span>
+            <span className="flex-1" />
+            <span className="num font-bold text-black">{formatFCFA(kpis.achats)}</span>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-/* ───────────────────────── Supplier order viewer modal ───────────────────────── */
-function OrderViewModal({ data, supplierName, onClose, onPrint }: { data: { order: any; items: any[]; pays: any[] }; supplierName: string; onClose: () => void; onPrint: () => void }) {
-  const { order, items, pays } = data;
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-      <div className="scrim" onClick={onClose} />
-      <div className="relative w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-premium animate-sheet-up sm:animate-scale-in max-h-[92vh] flex flex-col">
-        <div className="sm:hidden sheet-handle" />
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Commande</div>
-            <div className="text-base font-bold text-slate-900 font-mono">{order.order_number}</div>
-          </div>
-          <div className="flex items-center gap-1">
-            <button onClick={onPrint} className="btn-icon" title="Imprimer"><FileText className="w-4 h-4" /></button>
-            <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500"><X className="w-5 h-5" /></button>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          <div className="flex flex-wrap gap-3 text-sm">
-            <div><div className="text-[10px] uppercase text-slate-400 font-bold">Fournisseur</div><div className="font-semibold">{supplierName}</div></div>
-            <div><div className="text-[10px] uppercase text-slate-400 font-bold">Date</div><div className="font-semibold">{formatDateTime(order.created_at)}</div></div>
-            <div className="ml-auto"><div className="text-[10px] uppercase text-slate-400 font-bold">Statut</div><StatusBadgeOrder order={order} /></div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr><th className="px-3 py-2 text-left">Article</th><th className="px-3 py-2 text-right">Qté</th><th className="px-3 py-2 text-right">PU</th><th className="px-3 py-2 text-right">Total</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {items.map((it: any, i: number) => (
-                  <tr key={i}><td className="px-3 py-2">{it.name}</td><td className="px-3 py-2 text-right tabular-nums">{Number(it.quantity_ordered).toLocaleString('fr-FR')}</td><td className="px-3 py-2 text-right tabular-nums">{formatFCFA(it.unit_price)}</td><td className="px-3 py-2 text-right font-semibold tabular-nums">{formatFCFA(it.total)}</td></tr>
-                ))}
-                {items.length === 0 && <tr><td colSpan={4} className="px-3 py-4 text-center text-slate-400 text-xs">Aucune ligne.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex justify-end">
-            <div className="w-full sm:w-80 border border-slate-200 rounded-lg p-3 space-y-1.5">
-              <Line label="Sous-total" value={formatFCFA(items.reduce((a: number, it: any) => a + Number(it.total), 0))} />
-              <Line label="Total" value={formatFCFA(order.total)} strong />
-              <div className="pt-2 mt-2 border-t border-slate-200 space-y-1">
-                {pays.map((p: any) => (
-                  <div key={p.id} className="flex items-center justify-between text-[12px] text-slate-600"><span>{p.method_name}</span><span className="tabular-nums">{formatFCFA(p.amount)}</span></div>
-                ))}
-                {pays.length === 0 && <div className="text-[12px] text-slate-400 text-center py-1">Aucun règlement</div>}
-              </div>
-              <Line label="Payé" value={formatFCFA(order.paid || 0)} tone="emerald" />
-              <Line label="Dette" value={formatFCFA(Math.max(0, Number(order.total) - Number(order.paid || 0)))} tone="amber" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+/* (OrderViewModal removed — replaced by MobileSupplierOrderDetail + SupplierOrderEditor) */
+/* kept for reference deletion marker */
+
 function StatusBadgeSale({ sale }: { sale: any }) {
   if (sale.status === 'cancelled') return <Badge tone="slate">Annulée</Badge>;
   if (Number(sale.paid) >= Number(sale.total)) return <Badge tone="emerald">Payée</Badge>;

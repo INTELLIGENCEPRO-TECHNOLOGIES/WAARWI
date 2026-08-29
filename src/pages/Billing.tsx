@@ -22,6 +22,7 @@ import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments as IpmDocsType } from '../lib/ipm';
 import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
 import { MobileBillingWizard, type WizardHeaderField } from '../components/MobileBillingWizard';
+import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS, mergeColumns } from '../components/DocumentSettingsTab';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
@@ -831,6 +832,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setInvoiceEditorMode('create');
     setEditingInvoiceId(null);
     setInvoicePostCreation(null);
+    setInvoiceDetail(null);
     setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
     setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
     setInvoicePayList([]);
@@ -1061,10 +1063,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         });
       }
 
-      // Auto-apply available avoirs for this customer
-      if (invoiceForm.customer_id) {
-        await supabase.rpc('auto_apply_customer_avoirs', { p_sale_id: sale.id });
-      }
+
 
       // Create IPM vente record if client is IPM beneficiary
       if (ipmBeneficiaire && ipmPartIpm > 0) {
@@ -1234,10 +1233,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       }
     }
 
-    // Auto-apply available avoirs for this customer
-    if (convertFrom.customer_id && (data as any)?.sale_id) {
-      await supabase.rpc('auto_apply_customer_avoirs', { p_sale_id: (data as any).sale_id });
-    }
+
 
     // Carry representative + commission snapshot onto the new sale
     const convRepId = (convertFrom as any).representative_id || null;
@@ -1802,7 +1798,29 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       })()}
 
       {/* ── Tabs ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+      {/* Mobile: centered, dividers, active top border + bg */}
+      <div className="md:hidden flex items-stretch text-[13px] font-bold overflow-x-auto no-scrollbar">
+          {TABS.map((t, i) => {
+            const active = tab === t.key;
+            return (
+              <div key={t.key} className="flex items-stretch shrink-0 min-w-[80px]">
+                {i > 0 && <div className="w-px bg-neutral-200 shrink-0" />}
+                <button
+                  onClick={() => { setTab(t.key); setStatusFilter(''); }}
+                  className={`flex-1 flex items-center justify-center py-2 px-3 transition-all ${
+                    active
+                      ? 'text-neutral-900 bg-neutral-100/80 border-b-2 border-neutral-900 font-bold'
+                      : 'text-neutral-400 hover:text-neutral-600 border-b-2 border-transparent'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      {/* Desktop: original tab bar */}
+      <div className="hidden md:flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
           {TABS.map(t => {
             const active = tab === t.key;
             const count = counts[t.key];
@@ -1845,33 +1863,35 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => { setQuoteEditorMode('create'); setQuoteOpen(true); }} className="btn-icon-primary" title="Nouveau devis"><Plus className="w-4 h-4" /></button>} />
             ) : (
               <div className={flashTab === 'quotes' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
-                <div className="md:hidden space-y-2 count-up">
+                <div className="md:hidden count-up">
                   {filteredQuotes.map(q => {
                     const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
                     return (
-                      <div key={q.id} className="py-3 border-b border-neutral-100 flex flex-col gap-2 transition-all">
-                        <button onClick={() => openQuoteDetail(q)} className="text-left flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="doc-number text-[13px] font-bold text-slate-700">{q.quote_number}</span>
-                              <span className={`text-[9px] font-bold uppercase ${st.pill}`}>{st.label}</span>
-                            </div>
-                            <div className="text-[10px] text-slate-400 mt-0.5 num">{formatDate(q.created_at)}{q.valid_until ? ` · Valide ${formatDate(q.valid_until)}` : ''}</div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-sm font-bold text-slate-900 num">{formatFCFA(q.total)}</div>
-                          </div>
-                        </button>
-                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 gap-2">
-                          <div className="min-w-0 flex items-center gap-1.5 text-[11px] text-slate-600 truncate">
-                            <User className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{q.customers?.name || 'Client comptoir'}</span>
-                          </div>
-                          {q.status === 'accepted' && (
-                            <button onClick={() => openConvert(q)} className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-brand-600 text-white text-[10px] font-bold hover:bg-brand-700"><ArrowRight className="w-3 h-3" />Facturer</button>
-                          )}
+                      <button
+                        key={q.id}
+                        onClick={() => openQuoteDetail(q)}
+                        className="w-full text-left px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                      >
+                        {/* Line 1: customer only */}
+                        <div className="text-xs font-medium text-neutral-700 truncate">{q.customers?.name || 'Client comptoir'}</div>
+                        {/* Line 2: quote#, status, date */}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{q.quote_number}</span>
+                          <span className={`text-[10px] font-semibold ${st.pill} shrink-0`}>{st.label}</span>
+                          <span className="text-xs text-neutral-400 shrink-0 num">{formatDate(q.created_at)}{q.valid_until ? ` · Valide ${formatDate(q.valid_until)}` : ''}</span>
                         </div>
-                      </div>
+                        {/* Line 3: actions + amount */}
+                        <div className="flex items-center gap-1 mt-1.5">
+                          {q.status === 'accepted' && (
+                            <button onClick={e => { e.stopPropagation(); openConvert(q); }} className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-brand-600 text-white text-[10px] font-bold hover:bg-brand-700"><ArrowRight className="w-3 h-3" />Facturer</button>
+                          )}
+                          {q.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeQuoteStatus(q, 'sent'); }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Marquer envoyé"><CheckCircle className="w-4 h-4" /></button>}
+                          {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={e => { e.stopPropagation(); setQuoteToCancel(q); }} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition" title="Refuser"><X className="w-4 h-4" /></button>}
+                          <div className="flex-1" />
+                          <div className="w-px h-5 bg-neutral-200 mx-1" />
+                          <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(q.total)}</span>
+                        </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -1912,31 +1932,33 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               <EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="btn-icon-primary" title="Nouvelle facture"><Plus className="w-4 h-4" /></button>} />
             ) : (
               <>
-                <div className="md:hidden space-y-2 count-up">
+                <div className="md:hidden count-up">
                   {filteredInvoices.map(inv => {
                     const st = invoiceStatus(inv);
                     const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
                     return (
-                      <button key={inv.id} onClick={() => openInvoiceForView(inv)} className="w-full text-left py-3 border-b border-neutral-100 flex flex-col gap-2 transition-all active:scale-[0.99]">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="doc-number text-[13px] font-bold text-slate-700">{inv.sale_number}</span>
-                              <span className={`text-[9px] font-bold uppercase ${st.pill}`}>{st.label}</span>
-                            </div>
-                            <div className="text-[10px] text-slate-400 mt-0.5 num">{formatDateTime(inv.created_at)}</div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-sm font-bold text-slate-900 num">{formatFCFA(inv.total)}</div>
-                            {solde > 0 && <div className="text-[10px] font-bold text-amber-700 num mt-0.5">Solde {formatFCFA(solde)}</div>}
-                          </div>
+                      <button
+                        key={inv.id}
+                        onClick={() => openInvoiceForView(inv)}
+                        className="w-full text-left px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                      >
+                        {/* Line 1: customer only */}
+                        <div className="text-xs font-medium text-neutral-700 truncate">{inv.customers?.name || 'Client comptoir'}</div>
+                        {/* Line 2: invoice#, status, date */}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{inv.sale_number}</span>
+                          <span className={`text-[10px] font-semibold ${st.pill} shrink-0`}>{st.label}</span>
+                          {inv.accounting_status === 'accounted' && <span className="text-[9px] font-bold text-neutral-500 shrink-0">C</span>}
+                          <span className="text-xs text-neutral-400 shrink-0 num">{formatDateTime(inv.created_at)}</span>
                         </div>
-                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
-                          <div className="min-w-0 flex items-center gap-1.5 text-[11px] text-slate-600 truncate">
-                            <User className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{inv.customers?.name || 'Client comptoir'}</span>
-                          </div>
-                          <div className="text-[10px] text-emerald-700 font-bold num">Payé {formatFCFA(inv.paid)}</div>
+                        {/* Line 3: icons + paid + amount */}
+                        <div className="flex items-center gap-1 mt-1.5">
+                          {inv.customers && <button onClick={e => { e.stopPropagation(); quickWhatsApp(inv); }} className="p-1.5 rounded-md hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>}
+                          <button onClick={e => { e.stopPropagation(); quickCopy(inv); }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
+                          {solde > 0 && <span className="text-[10px] text-amber-700 font-bold num shrink-0">Solde {formatFCFA(solde)}</span>}
+                          <div className="flex-1" />
+                          <div className="w-px h-5 bg-neutral-200 mx-1" />
+                          <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(inv.total)}</span>
                         </div>
                       </button>
                     );
@@ -1989,33 +2011,35 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               />
             ) : (
               <div className={flashTab === 'returns' && tab === 'returns' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
-                <div className="md:hidden space-y-2 count-up">
+                <div className="md:hidden count-up">
                   {(tab === 'returns' ? filteredReturns : filteredCredits).map(r => {
                     const st = tab === 'credits' ? creditStatus(r) : (RETURN_STATUS[r.status] || RETURN_STATUS.pending);
                     const isCredit = tab === 'credits';
                     const used = Number(r.credit_used || 0);
                     const balance = Number(r.total) - used;
                     return (
-                      <button key={r.id} onClick={() => openReturnDetail(r)} className="w-full text-left py-3 border-b border-neutral-100 flex flex-col gap-2 transition-all active:scale-[0.99]">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="doc-number text-[13px] font-bold text-slate-700">{r.return_number}</span>
-                              <span className={`text-[9px] font-bold uppercase ${st.pill}`}>{st.label}</span>
-                              {r.restock && <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">Stock</span>}
-                            </div>
-                            <div className="text-[10px] text-slate-400 mt-0.5 num">{formatDateTime(r.created_at)}{r.sales?.sale_number && <> · Vente {r.sales.sale_number}</>}</div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className={`text-sm font-bold num ${isCredit ? 'text-neutral-800' : 'text-red-700'}`}>{isCredit ? '' : '-'}{formatFCFA(r.total)}</div>
-                            {isCredit && used > 0 && <div className="text-[10px] text-slate-500 num mt-0.5">Solde {formatFCFA(balance)}</div>}
-                          </div>
+                      <button
+                        key={r.id}
+                        onClick={() => openReturnDetail(r)}
+                        className="w-full text-left px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                      >
+                        {/* Line 1: customer only */}
+                        <div className="text-xs font-medium text-neutral-700 truncate">{r.customers?.name || 'Client comptoir'}</div>
+                        {/* Line 2: doc# + status */}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{r.return_number}</span>
+                          <span className={`text-[10px] font-semibold ${st.pill} shrink-0`}>{st.label}</span>
                         </div>
-                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
-                          <div className="min-w-0 flex items-center gap-1.5 text-[11px] text-slate-600 truncate">
-                            <User className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{r.customers?.name || 'Client comptoir'}</span>
-                          </div>
+                        {/* Line 3: date + sale ref */}
+                        <div className="text-xs text-neutral-400 num mt-0.5 truncate">
+                          {formatDateTime(r.created_at)}{r.sales?.sale_number && <> · Vente {r.sales.sale_number}</>}
+                        </div>
+                        {/* Line 4: balance + amount */}
+                        <div className="flex items-center gap-1 mt-1.5">
+                          {isCredit && used > 0 && <span className="text-[10px] text-neutral-500 font-bold num shrink-0">Solde {formatFCFA(balance)}</span>}
+                          <div className="flex-1" />
+                          <div className="w-px h-5 bg-neutral-200 mx-1" />
+                          <span className={`text-sm font-extrabold num whitespace-nowrap shrink-0 ${isCredit ? 'text-neutral-900' : 'text-red-700'}`}>{isCredit ? '' : '-'}{formatFCFA(r.total)}</span>
                         </div>
                       </button>
                     );
@@ -2245,7 +2269,70 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           }}
         />
       )}
-      {invoiceEditorOpen && !isDesktop && (
+      {invoiceEditorOpen && !isDesktop && invoiceEditorMode === 'view' && (() => {
+        const viewInv = invoices[invoiceNavIdx] || null;
+        if (!viewInv) return null;
+        const invDue = Math.max(0, Number(viewInv.total) - Number(viewInv.paid));
+        const isCancelled = viewInv.status === 'cancelled';
+        const isAccounted = viewInv.accounting_status === 'accounted';
+        return (
+          <MobileInvoiceDetail
+            invoice={viewInv}
+            items={invoiceEditorItems}
+            payments={invoicePayList}
+            docHeader={{
+              doc_date: invoiceForm.doc_date || null,
+              reference: invoiceForm.reference || null,
+              delivery_date: invoiceForm.delivery_date || null,
+              warranty: invoiceForm.warranty || null,
+              representative: repLabelOf(invoiceForm.representative) || null,
+              imei: invoiceForm.imei || null,
+            }}
+            onClose={closeInvoiceEditor}
+            onEdit={!isCancelled && !isAccounted ? () => openInvoiceForEdit(viewInv) : undefined}
+            onPay={invDue > 0 && !isCancelled ? () => openPay(viewInv) : undefined}
+            onPrint={() => {
+              const pitems = invoiceEditorItems.filter(i => i.name.trim()).map(i => ({
+                name: i.name, supplier_ref: null, oem_ref: null,
+                quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0),
+              }));
+              const psubtotal = pitems.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
+              printDocumentA4({
+                tenant: tenantForPrint(tenant, currentSite),
+                docLabel: 'FACTURE',
+                docNumber: viewInv.sale_number,
+                docDate: invoiceForm.doc_date || new Date(viewInv.created_at).toLocaleDateString('fr-FR'),
+                customer: viewInv.customers ? { name: viewInv.customers.name } : null,
+                items: pitems, subtotal: psubtotal, total: Number(viewInv.total),
+                payments: invoicePayList.map(p => ({ method_name: p.method_name, amount: p.amount })),
+                paid: Number(viewInv.paid),
+                issuedBy: creatorName((viewInv as any).user_id),
+                docHeader: invoiceForm.reference || invoiceForm.delivery_date || invoiceForm.warranty || invoiceForm.imei || repLabelOf(invoiceForm.representative) ? {
+                  reference: invoiceForm.reference || null, delivery_date: invoiceForm.delivery_date || null,
+                  warranty: invoiceForm.warranty || null, representative: repLabelOf(invoiceForm.representative),
+                  imei: invoiceForm.imei || null,
+                } : null,
+              });
+            }}
+            onCopyLink={() => copyInvoiceLink(viewInv)}
+            onWhatsApp={viewInv.customers ? () => sendInvoiceWhatsApp(viewInv) : undefined}
+            onComptabiliser={can('edit_invoices') && !isAccounted && !isCancelled ? async () => {
+              if (accountingBusy) return;
+              setAccountingBusy(true);
+              const { error: rpcErr } = await supabase.rpc('comptabiliser_vente', { p_sale_id: viewInv.id });
+              setAccountingBusy(false);
+              if (rpcErr) { error(rpcErr.message); return; }
+              success('Facture comptabilisée');
+              setInvoices(prev => prev.map(inv => inv.id === viewInv.id ? { ...inv, accounting_status: 'accounted' } : inv));
+              closeInvoiceEditor();
+              load();
+            } : undefined}
+            accountingBusy={accountingBusy}
+            onCancel={!isCancelled && !isAccounted ? () => setCancelTarget(viewInv) : undefined}
+          />
+        );
+      })()}
+      {invoiceEditorOpen && !isDesktop && invoiceEditorMode !== 'view' && (
         <MobileBillingWizard
           open={true}
           onClose={closeInvoiceEditor}
@@ -2307,8 +2394,6 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           ) : undefined}
         />
       )}
-
-      {/* ── Quote create/edit full-screen panel (desktop only) ──────────────────────────────── */}
       {quoteOpen && isDesktop && (
         <DocumentEditor
           docType="quote"

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Calculator, Loader2, Printer, Plus, X, Calendar, Filter, Check, Scroll, CreditCard, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Calculator, Loader2, Printer, Plus, X, Calendar, Filter, Check, BookOpen, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { PageSearch } from '../components/PageSearch';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -11,8 +11,10 @@ import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printTicket80, printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
-import { DocItems, DocTotals, DocPayments, DocSectionTitle, DocSlimHeader } from '../components/DocLayout';
-import type { DocItem, DocPayment, DocStatusConfig } from '../components/DocLayout';
+import { DocSectionTitle } from '../components/DocLayout';
+import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
+import { DocumentEditor, type DocLineItem, type DocHeaderForm, type DocPaymentLine } from '../components/DocumentEditor';
+import { DEFAULT_DOC_SETTINGS, mergeColumns, type DocSettings } from '../components/DocumentSettingsTab';
 
 type Sale = {
   id: string; sale_number: string; total: number; paid: number;
@@ -63,6 +65,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [debouncedTick, setDebouncedTick] = useState(0);
   const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { if (dataTick === 0) return; if (tickRef.current) clearTimeout(tickRef.current); tickRef.current = setTimeout(() => setDebouncedTick(dataTick), 400); return () => { if (tickRef.current) clearTimeout(tickRef.current); }; }, [dataTick]);
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Sale | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -71,7 +74,14 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const [accounting, setAccounting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [docSettings, setDocSettings] = useState<{ allow_edit: boolean; allow_delete: boolean; loaded: boolean }>({ allow_edit: false, allow_delete: false, loaded: false });
+  const [editorItems, setEditorItems] = useState<DocLineItem[]>([]);
+  const [editorPayments, setEditorPayments] = useState<DocPaymentLine[]>([]);
+  const [editorHeader, setEditorHeader] = useState<DocHeaderForm>({ customer_id: '', note: '', doc_date: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '', valid_until: '' });
+  const [docSettings, setDocSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
+  const [articles, setArticles] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [editDataLoaded, setEditDataLoaded] = useState(false);
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,15 +138,25 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     if (!tenant) return;
     supabase
       .from('document_settings')
-      .select('allow_edit, allow_delete')
+      .select('*')
       .eq('tenant_id', tenant.id)
       .eq('doc_type', 'invoice')
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
-          setDocSettings({ allow_edit: data.allow_edit ?? false, allow_delete: data.allow_delete ?? false, loaded: true });
-        } else {
-          setDocSettings({ allow_edit: true, allow_delete: true, loaded: true });
+          setDocSettings({
+            show_delivery_date: data.show_delivery_date ?? false,
+            show_reference: data.show_reference ?? false,
+            show_warranty: data.show_warranty ?? false,
+            show_imei: data.show_imei ?? false,
+            show_representative: data.show_representative ?? false,
+            default_representative: data.default_representative ?? '',
+            warranty_terms: data.warranty_terms ?? '',
+            require_header_lock: data.require_header_lock ?? false,
+            allow_edit: data.allow_edit ?? false,
+            allow_delete: data.allow_delete ?? false,
+            columns_config: mergeColumns(data.columns_config ?? []),
+          });
         }
       });
   }, [tenant?.id, debouncedTick]);
@@ -199,7 +219,45 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       supabase.from('sale_payments').select('*').eq('sale_id', s.id),
     ]);
     setItems(it || []); setPays(pp || []);
+    setEditorItems((it || []).map((i: any) => ({ article_id: i.article_id, name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0), total: Number(i.total) })));
+    setEditorPayments((pp || []).map((p: any) => ({ method_id: p.method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: p.reference || '' })));
+    const dh = (s as any).doc_header;
+    setEditorHeader({ customer_id: (s as any).customer_id || '', note: '', doc_date: dh?.doc_date || s.created_at.slice(0, 10), delivery_date: dh?.delivery_date || '', reference: dh?.reference || '', warranty: dh?.warranty || '', representative: dh?.representative || '', imei: dh?.imei || '', valid_until: '' });
     setItemsLoading(false);
+  };
+
+  const closeDetail = () => { setOpen(false); setEditing(false); setSelected(null); };
+
+  const currentIdx = selected ? filtered.findIndex(s => s.id === selected.id) : -1;
+  const goPrev = () => { if (currentIdx > 0) openDetail(filtered[currentIdx - 1]); };
+  const goNext = () => { if (currentIdx >= 0 && currentIdx < filtered.length - 1) openDetail(filtered[currentIdx + 1]); };
+
+  const copyInvoiceLink = async (s: Sale) => {
+    if (!s) return;
+    const { data } = await supabase.from('sales').select('public_token').eq('id', s.id).maybeSingle();
+    const token = (data as any)?.public_token;
+    if (token) {
+      const url = `${window.location.origin}/invoice/${token}`;
+      navigator.clipboard?.writeText(url);
+      toastSuccess('Lien copié');
+    } else {
+      toastError('Lien non disponible');
+    }
+  };
+
+  const sendWhatsApp = (s: Sale) => {
+    if (!s.customers) return;
+    const msg = `Facture ${s.sale_number} - Total: ${formatFCFA(Number(s.total))}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  const cancelInvoice = async (s: Sale) => {
+    if (!tenant || !s) return;
+    const { error: e } = await supabase.rpc('cancel_sale', { p_sale_id: s.id, p_tenant_id: tenant.id });
+    if (e) { toastError(e.message); return; }
+    toastSuccess('Vente annulée');
+    setSales(prev => prev.map(x => x.id === s.id ? { ...x, status: 'cancelled' } : x));
+    closeDetail();
   };
 
   const tenantForPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
@@ -267,16 +325,31 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   const activeFilterCount = (statusFilter ? 1 : 0) + (dateRange !== 'all' ? 1 : 0);
   const clearFilters = () => { setSearch(''); setStatusFilter(''); setDateRange('all'); setCustomFrom(''); setCustomTo(''); setFiltersOpen(false); };
 
-  const canEditSale = can('edit_invoices') && (docSettings.allow_edit || !docSettings.loaded);
-  const canDeleteSale = can('delete_invoices') && (docSettings.allow_delete || !docSettings.loaded);
+  const canEditSale = can('edit_invoices') && docSettings.allow_edit;
+  const canDeleteSale = can('delete_invoices') && docSettings.allow_delete;
   const [editing, setEditing] = useState(false);
   const [editItems, setEditItems] = useState<any[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const startEdit = () => {
-    if (!selected || !canEditSale) return;
-    setEditItems(items.map(i => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0) })));
-    setEditing(true);
+  const startEdit = async () => {
+    if (!selected || !canEditSale || !tenant || !currentSite) return;
+    if (isDesktop) {
+      if (!editDataLoaded) {
+        const [{ data: arts }, { data: custs }, { data: pms }] = await Promise.all([
+          supabase.from('articles').select('id, name, internal_ref, oem_ref, sale_price').eq('tenant_id', tenant.id).eq('site_id', currentSite.id),
+          supabase.from('customers').select('id, name').eq('tenant_id', tenant.id),
+          supabase.from('payment_methods').select('id, name').eq('tenant_id', tenant.id),
+        ]);
+        setArticles(arts || []);
+        setCustomers(custs || []);
+        setPaymentMethods(pms || []);
+        setEditDataLoaded(true);
+      }
+      setEditing(true);
+    } else {
+      setEditItems(items.map(i => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0) })));
+      setEditing(true);
+    }
   };
 
   const saveEdit = async () => {
@@ -284,7 +357,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     if (!can('edit_invoices')) { toastError('Vous n\'avez pas la permission de modifier les ventes'); return; }
     setSavingEdit(true);
     try {
-      const payload = editItems.map(i => ({
+      const sourceItems = isDesktop ? editorItems : editItems;
+      const payload = sourceItems.filter(i => i.name && i.name.trim()).map(i => ({
         article_id: i.article_id,
         name: i.name,
         quantity: Number(i.quantity),
@@ -304,7 +378,9 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       toastSuccess('Vente modifiee');
       setSelected({ ...selected, total: newTotal });
       setSales(prev => prev.map(s => s.id === selected.id ? { ...s, total: newTotal } : s));
-      setItems(editItems.map(i => ({ ...i, total: i.quantity * i.unit_price - (i.discount || 0) })));
+      const updatedItems = sourceItems.map(i => ({ ...i, total: i.quantity * i.unit_price - (i.discount || 0) }));
+      setItems(updatedItems);
+      if (isDesktop) setEditorItems(updatedItems.map(i => ({ article_id: i.article_id, name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0), total: Number(i.total) })));
       setEditing(false);
     } catch (e: any) { toastError(e.message); }
     finally { setSavingEdit(false); }
@@ -416,23 +492,23 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
                   key={s.id}
                   data-row-id={s.id}
                   onClick={() => openDetail(s)}
-                  className="w-full text-left py-3 flex items-center gap-2 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors group active:scale-[0.995]"
+                  className="w-full text-left px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors group active:scale-[0.995]"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-[12px] font-semibold text-neutral-900">
-                      <span className="doc-number font-bold text-neutral-700 shrink-0">{s.sale_number}</span>
-                      <span className="text-neutral-300">·</span>
-                      <span className="truncate">{s.customers?.name || 'Client comptoir'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[9px] font-bold uppercase tracking-wider ${st.textColor}`}>{st.label}</span>
-                      {s.accounting_status === 'accounted' && <span className="text-[9px] font-bold text-neutral-500">C</span>}
-                      <span className="text-[10px] text-neutral-400 num">{formatDateTime(s.created_at)}</span>
-                    </div>
+                  {/* Line 1: customer only */}
+                  <div className="text-xs font-medium text-neutral-700 truncate">{s.customers?.name || 'Client comptoir'}</div>
+                  {/* Line 2: invoice#, status, date */}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[13px] font-semibold text-neutral-900 shrink-0">{s.sale_number}</span>
+                    <span className={`text-[10px] font-semibold ${st.textColor} shrink-0`}>{st.label}</span>
+                    {s.accounting_status === 'accounted' && <span className="text-[9px] font-bold text-neutral-500 shrink-0">C</span>}
+                    <span className="text-xs text-neutral-400 shrink-0 num">{formatDateTime(s.created_at)}</span>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-sm font-bold text-neutral-900 num leading-tight">{formatFCFA(s.total)}</div>
-                    {payMethods && <div className="text-[10px] text-neutral-400 truncate max-w-[100px]">{payMethods}</div>}
+                  {/* Line 3: payment methods + amount */}
+                  <div className="flex items-center gap-1 mt-1.5">
+                    {payMethods && <span className="text-[10px] text-neutral-400 truncate max-w-[120px] shrink-0">{payMethods}</span>}
+                    <div className="flex-1" />
+                    <div className="w-px h-5 bg-neutral-200 mx-1" />
+                    <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(s.total)}</span>
                   </div>
                 </button>
               );
@@ -558,148 +634,128 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={customFrom} to={customTo}
         onApply={(f, t) => { setCustomFrom(f); setCustomTo(t); setDateRange('custom'); setPickerOpen(false); }} />
 
-      {/* ── Detail Modal ─────────────────────────────────────────── */}
-      <DocPanel open={open} onClose={() => { setOpen(false); setEditing(false); }} title={selected ? `Vente ${selected.sale_number}` : ''}
+      {/* ── Mobile: Full-screen invoice detail ─────────────────────── */}
+      {open && !isDesktop && !editing && selected && (() => {
+        const due = Math.max(0, Number(selected.total) - pays.reduce((s, p) => s + Number(p.amount), 0));
+        const isCancelled = selected.status === 'cancelled';
+        const isAccounted = selected.accounting_status === 'accounted';
+        const dh = (selected as any).doc_header;
+        return (
+          <MobileInvoiceDetail
+            invoice={selected}
+            items={items.map(i => ({ article_id: i.article_id, name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount ?? 0), total: Number(i.total) }))}
+            payments={pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) }))}
+            docHeader={dh ? { doc_date: dh.doc_date || null, reference: dh.reference || null, delivery_date: dh.delivery_date || null, warranty: dh.warranty || null, representative: dh.representative || null, imei: dh.imei || null } : { doc_date: selected.created_at.slice(0, 10) }}
+            onClose={closeDetail}
+            onEdit={canEditSale && !isAccounted ? startEdit : undefined}
+            onPay={due > 0 && !isCancelled ? () => onNavigate?.('billing') : undefined}
+            onPrint={printInvoice}
+            onCopyLink={() => copyInvoiceLink(selected)}
+            onWhatsApp={selected.customers ? () => sendWhatsApp(selected) : undefined}
+            onComptabiliser={!isAccounted && !isCancelled ? comptabiliserVente : undefined}
+            accountingBusy={accounting}
+            onCancel={!isCancelled && !isAccounted ? () => cancelInvoice(selected) : undefined}
+          />
+        );
+      })()}
+
+      {/* ── Desktop: Full-screen DocumentEditor (view + edit mode) ─── */}
+      {open && isDesktop && selected && (
+        <DocumentEditor
+          docType="invoice"
+          mode={editing ? 'edit' : 'view'}
+          articles={articles}
+          customers={customers}
+          headerForm={editorHeader}
+          setHeaderForm={editing ? setEditorHeader : () => {}}
+          items={editorItems}
+          setItems={editing ? setEditorItems : () => {}}
+          subtotal={editorItems.filter(i => i.name && i.name.trim()).reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0)}
+          saving={savingEdit}
+          onSave={saveEdit}
+          onClose={editing ? () => setEditing(false) : closeDetail}
+          editingId={selected.id}
+          documentNumber={selected.sale_number}
+          documentStatus={selected.status}
+          accountingStatus={selected.accounting_status}
+          invoiceDue={Math.max(0, Number(selected.total) - pays.reduce((s, p) => s + Number(p.amount), 0))}
+          docSettings={docSettings}
+          paymentMethods={paymentMethods}
+          payments={editorPayments}
+          setPayments={editing ? setEditorPayments : undefined}
+          totalPaid={pays.reduce((s, p) => s + Number(p.amount), 0)}
+          hasPrev={currentIdx > 0}
+          hasNext={currentIdx >= 0 && currentIdx < filtered.length - 1}
+          onPrev={currentIdx > 0 ? goPrev : undefined}
+          onNext={currentIdx >= 0 && currentIdx < filtered.length - 1 ? goNext : undefined}
+          onEdit={canEditSale && selected.accounting_status !== 'accounted' ? startEdit : undefined}
+          onPay={Math.max(0, Number(selected.total) - pays.reduce((s, p) => s + Number(p.amount), 0)) > 0 && selected.status !== 'cancelled' ? () => onNavigate?.('billing') : undefined}
+          onPrint={printInvoice}
+          onCopyLink={() => copyInvoiceLink(selected)}
+          onWhatsApp={selected.customers ? () => sendWhatsApp(selected) : undefined}
+          onComptabiliser={selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' ? comptabiliserVente : undefined}
+          onCancel={selected.status !== 'cancelled' && selected.accounting_status !== 'accounted' ? () => cancelInvoice(selected) : undefined}
+          docCreatedInfo={{ createdAt: selected.created_at, createdBy: creatorName(selected.user_id) }}
+        />
+      )}
+
+      {/* ── Mobile Edit Panel (shown when editing on mobile) ────────── */}
+      <DocPanel open={open && editing && !isDesktop} onClose={closeDetail} title={selected ? `Vente ${selected.sale_number}` : ''}
         footer={<>
-          <button onClick={() => { setOpen(false); setEditing(false); }} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          {selected && canDeleteSale && selected.accounting_status !== 'accounted' && !editing && (
-            <button onClick={() => setConfirmDelete(true)} className="btn-icon text-red-600 hover:bg-red-50" title="Supprimer">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-          {selected && canEditSale && selected.accounting_status !== 'accounted' && !editing && (
-            <button onClick={startEdit} className="btn-icon text-neutral-700 hover:bg-neutral-50" title="Modifier">
-              <Pencil className="w-4 h-4" />
-            </button>
-          )}
-          {editing && (
-            <>
-              <button onClick={() => setEditing(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={saveEdit} disabled={savingEdit} className="btn-icon-primary" title="Enregistrer">
-                {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-            </>
-          )}
-          {!editing && selected && selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' && (
-            <button onClick={comptabiliserVente} disabled={accounting} className="btn-icon text-neutral-700 hover:bg-neutral-100" title="Comptabiliser">
-              {accounting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-            </button>
-          )}
-          {!editing && selected && selected.accounting_status === 'accounted' && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200"><BookOpen className="w-3 h-3" />Comptabilise</span>
-          )}
-          {!editing && <button onClick={printTicket} className="btn-icon" title="Ticket 80mm"><Scroll className="w-4 h-4" /></button>}
-          {!editing && <button onClick={printInvoice} className="btn-icon-primary" title="Facture A4"><Printer className="w-4 h-4" /></button>}
+          <button onClick={() => setEditing(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <button onClick={saveEdit} disabled={savingEdit} className="btn-icon-primary" title="Enregistrer">
+            {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          </button>
         </>}
       >
         {selected && (() => {
-          const st = statusStyles(selected.status, selected);
-          const hasIpm = selected.ipm_ventes && selected.ipm_ventes.length > 0;
-          const slimStatus: DocStatusConfig = {
-            label: st.label,
-            color: selected.status === 'paid' ? (hasIpm ? 'teal' : 'emerald') : selected.status === 'cancelled' ? 'rose' : selected.status === 'validated' ? 'slate' : 'amber',
-          };
           return (
-            <div className="space-y-4">
-              <DocSlimHeader
-                status={slimStatus}
-                customerName={selected.customers?.name ?? null}
-                date={formatDateTime(selected.created_at)}
-                docHeader={(selected as any).doc_header ? { ...(selected as any).doc_header, created_at: selected.created_at } : null}
-              />
-
-              {itemsLoading ? (
-                <div className="py-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
-              ) : editing ? (
-                /* ── EDIT MODE ── */
-                <div className="space-y-3">
-                  <DocSectionTitle title="Modifier les articles" count={editItems.length} />
-                  <div className="space-y-2">
-                    {editItems.map((item, idx) => (
-                      <div key={idx} className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold text-neutral-800 truncate flex-1">{item.name}</span>
-                          <button onClick={() => removeEditItem(idx)} className="p-1 rounded-lg hover:bg-red-50 text-red-500" title="Retirer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-[9px] font-bold text-neutral-400 uppercase">Qte</label>
-                            <input type="number" min="1" value={item.quantity}
-                              onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
-                              className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-center focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-neutral-400 uppercase">Prix unit.</label>
-                            <input type="number" min="0" value={item.unit_price}
-                              onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
-                              className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-neutral-400 uppercase">Remise</label>
-                            <input type="number" min="0" value={item.discount}
-                              onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
-                              className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
-                            />
-                          </div>
-                        </div>
-                        <div className="text-right text-[11px] font-bold text-neutral-700">
-                          Sous-total : {formatFCFA(item.quantity * item.unit_price - (item.discount || 0))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="bg-neutral-50 rounded-xl p-3 text-right">
-                    <span className="text-xs text-neutral-500">Nouveau total : </span>
-                    <span className="text-sm font-bold text-neutral-900">
-                      {formatFCFA(editItems.reduce((s, i) => s + (i.quantity * i.unit_price - (i.discount || 0)), 0))}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Articles */}
-                  <div className="space-y-2">
-                    <DocSectionTitle title="Articles" count={items.length} />
-                    <DocItems items={items.map(i => ({
-                      id: i.id,
-                      name: i.name,
-                      internal_ref: i.articles?.internal_ref || i.internal_ref || null,
-                      oem_ref: i.articles?.oem_ref || null,
-                      quantity: Number(i.quantity),
-                      unit_price: Number(i.unit_price),
-                      discount: Number(i.discount ?? 0),
-                      total: Number(i.total),
-                    }) satisfies DocItem)} />
-                  </div>
-
-                  {/* Totaux */}
-                  {(() => {
-                    const subtotal = items.reduce((s, i) => s + Number(i.total), 0);
-                    const paidTotal = pays.reduce((s, p) => s + Number(p.amount), 0);
-                    const due = Math.max(0, Number(selected.total) - paidTotal);
-                    return (
-                      <DocTotals
-                        subtotal={subtotal}
-                        total={Number(selected.total)}
-                        paid={paidTotal > 0 ? paidTotal : undefined}
-                        remaining={due > 0 ? due : undefined}
-                      />
-                    );
-                  })()}
-
-                  {/* Paiements */}
-                  {pays.length > 0 && (
-                    <div className="space-y-2">
-                      <DocSectionTitle title="Paiements" count={pays.length} />
-                      <DocPayments payments={pays.map(p => ({ method_name: p.method_name, amount: Number(p.amount) }) satisfies DocPayment)} />
+            <div className="space-y-3">
+              <DocSectionTitle title="Modifier les articles" count={editItems.length} />
+              <div className="space-y-2">
+                {editItems.map((item, idx) => (
+                  <div key={idx} className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-neutral-800 truncate flex-1">{item.name}</span>
+                      <button onClick={() => removeEditItem(idx)} className="p-1 rounded-lg hover:bg-red-50 text-red-500" title="Retirer">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  )}
-                </>
-              )}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-neutral-400 uppercase">Qte</label>
+                        <input type="number" min="1" value={item.quantity}
+                          onChange={e => updateEditItem(idx, 'quantity', Number(e.target.value) || 1)}
+                          className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-center focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-neutral-400 uppercase">Prix unit.</label>
+                        <input type="number" min="0" value={item.unit_price}
+                          onChange={e => updateEditItem(idx, 'unit_price', Number(e.target.value) || 0)}
+                          className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-neutral-400 uppercase">Remise</label>
+                        <input type="number" min="0" value={item.discount}
+                          onChange={e => updateEditItem(idx, 'discount', Number(e.target.value) || 0)}
+                          className="w-full border border-neutral-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-right focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-right text-[11px] font-bold text-neutral-700">
+                      Sous-total : {formatFCFA(item.quantity * item.unit_price - (item.discount || 0))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-neutral-50 rounded-xl p-3 text-right">
+                <span className="text-xs text-neutral-500">Nouveau total : </span>
+                <span className="text-sm font-bold text-neutral-900">
+                  {formatFCFA(editItems.reduce((s, i) => s + (i.quantity * i.unit_price - (i.discount || 0)), 0))}
+                </span>
+              </div>
             </div>
           );
         })()}
