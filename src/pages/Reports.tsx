@@ -1284,17 +1284,6 @@ export function Reports() {
               <span>{labelRange(range)}</span>
               <ChevronDown className={`w-3 h-3 text-slate-400 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
             </button>
-            <PremiumDateRangePicker
-              open={pickerOpen}
-              onClose={() => setPickerOpen(false)}
-              from={isoDate(range.from)}
-              to={isoDate(range.to)}
-              onApply={(from, to) => {
-                setRange({ from: new Date(from), to: new Date(to) });
-                setPickerOpen(false);
-                setPreviewHtml(null);
-              }}
-            />
           </div>
 
           {/* Site selector — only for users with multiple assigned sites */}
@@ -1439,6 +1428,18 @@ export function Reports() {
           </div>
         )}
       </div>
+
+      <PremiumDateRangePicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        from={isoDate(range.from)}
+        to={isoDate(range.to)}
+        onApply={(from, to) => {
+          setRange({ from: new Date(from), to: new Date(to) });
+          setPickerOpen(false);
+          setPreviewHtml(null);
+        }}
+      />
     </div>
   );
 }

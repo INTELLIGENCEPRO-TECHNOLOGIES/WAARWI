@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, Monitor, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin, Filter } from 'lucide-react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin, Filter } from 'lucide-react';
 import { CategoryPickerModal } from './ArticlesComponents';
 import { PageSearch } from '../components/PageSearch';
 import { MoreMenu } from '../components/MoreMenu';
@@ -71,6 +71,8 @@ export function Stock() {
   const [mvTotalCount, setMvTotalCount] = useState(0);
   const [mvLoading, setMvLoading] = useState(false);
   const MV_PAGE_SIZE = 50;
+  const [mvSiteId, setMvSiteId] = useState<string>('');
+  const [pendingSiteChange, setPendingSiteChange] = useState<{ newSiteId: string; newSiteName: string; isDepot: boolean } | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     return isMobile ? 'cards' : 'list';
@@ -80,6 +82,7 @@ export function Stock() {
   const [listEdits, setListEdits] = useState<Map<string, ListEditEntry>>(new Map());
   const [listSaving, setListSaving] = useState(false);
   const listInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const saveBulkRef = useRef<(() => void) | null>(null);
   const [listTransferTarget, setListTransferTarget] = useState('');
   const [listSourceSite, setListSourceSite] = useState('');
   const listSourceInitialized = useRef(false);
@@ -115,6 +118,11 @@ export function Stock() {
     for (const d of depots) {
       if (d.parent_site_id === currentSite?.id) targets.push(d);
     }
+    // Main store is always reachable as a destination (for transfers from depots back to store)
+    if (currentSite) {
+      const storeObj: typeof sites[0] = { ...currentSite };
+      targets.push(storeObj);
+    }
     if (sharedArticles) {
       // Other stores
       for (const s of sites) {
@@ -127,7 +135,9 @@ export function Stock() {
         }
       }
     }
-    return targets;
+    // Deduplicate by id
+    const seen = new Set<string>();
+    return targets.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
   })();
   const canTransfer = allTransferTargets.length > 0;
 
@@ -295,6 +305,7 @@ export function Stock() {
     setMvLoading(true);
     const from = (page - 1) * MV_PAGE_SIZE;
     const to = from + MV_PAGE_SIZE - 1;
+    const siteId = mvSiteId || currentSite.id;
 
     // If search is active, we need to find matching article IDs first
     let articleFilter: string[] | null = null;
@@ -316,7 +327,7 @@ export function Stock() {
       .from('stock_movements')
       .select('id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, articles(name, internal_ref)', { count: 'exact' })
       .eq('tenant_id', tenant.id)
-      .eq('site_id', currentSite.id);
+      .eq('site_id', siteId);
 
     if (articleFilter && articleFilter.length <= 200) {
       query = query.in('article_id', articleFilter);
@@ -341,7 +352,7 @@ export function Stock() {
   useEffect(() => {
     if (tab === 'movements' && mvSubTab === 'movements') loadMovements(mvPage);
     /* eslint-disable-next-line */
-  }, [tab, mvSubTab, mvPage, mvDateFrom, mvDateTo, tenant?.id, currentSite?.id]);
+  }, [tab, mvSubTab, mvPage, mvDateFrom, mvDateTo, tenant?.id, currentSite?.id, mvSiteId]);
 
   // Reset movements page when search or date changes
   useEffect(() => {
@@ -355,19 +366,22 @@ export function Stock() {
   // ── Load stock documents when entering documents sub-tab ────────────────────
   const loadStockDocs = async () => {
     if (!tenant) return;
-    const { data, error: e } = await supabase
+    let query = supabase
       .from('stock_documents')
       .select('id, doc_number, doc_type, site_id, dest_site_id, user_id, note, status, total_qty, line_count, created_at')
       .eq('tenant_id', tenant.id)
-      .order('created_at', { ascending: false })
-      .limit(200);
+      .order('created_at', { ascending: false });
+    if (mvSiteId) {
+      query = query.eq('site_id', mvSiteId);
+    }
+    const { data, error: e } = await query.limit(200);
     if (e) { setStockDocs([]); return; }
     setStockDocs((data || []) as StockDocRow[]);
   };
   useEffect(() => {
     if (tab === 'movements' && mvSubTab === 'documents') loadStockDocs();
     /* eslint-disable-next-line */
-  }, [tab, mvSubTab, tenant?.id, dataTick]);
+  }, [tab, mvSubTab, tenant?.id, dataTick, mvSiteId]);
 
   const [flashKey, setFlashKey] = useState<string | null>(null);
   useEffect(() => {
@@ -437,6 +451,11 @@ export function Stock() {
 
   const printMovement = (m: any, format: 'a4' | '80') => {
     if (!tenant || !currentSite) return;
+    const mvSiteName = mvSiteId
+      ? (mvSiteId === currentSite.id
+          ? currentSite.name
+          : (depots.find(d => d.id === mvSiteId)?.name || currentSite.name))
+      : currentSite.name;
     const opts = {
       tenant: tenantPrint,
       movementType: m.movement_type,
@@ -444,7 +463,7 @@ export function Stock() {
       reference: `MVT-${String(m.id).substring(0, 8).toUpperCase()}`,
       date: new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       user: profile?.full_name || profile?.email || '',
-      siteName: currentSite.name,
+      siteName: mvSiteName,
       items: [{ ref: (m.articles as any)?.internal_ref || '', name: (m.articles as any)?.name || '', quantity: Number(m.quantity) }],
       observation: m.note || undefined,
     };
@@ -822,30 +841,56 @@ export function Stock() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Page Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-2 pt-3 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-1.5 border-b border-neutral-100">
 
-        {/* Row 1: Title + More menu */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            {tab !== 'stocks' && (
-              <button onClick={() => setTab('stocks')} className="p-1 -ml-1 text-neutral-400 hover:text-neutral-700 transition-colors" aria-label="Retour à l'inventaire">
-                <Boxes className="w-5 h-5" />
-              </button>
-            )}
-            <div>
-              <h1 className="text-lg font-bold text-neutral-900 leading-tight">Stock</h1>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mt-0.5">
-                {tab === 'movements' ? 'Mouvements' : tab === 'lots' ? 'Lots' : (currentSite?.name || 'Inventaire')}
-              </p>
-            </div>
+        {/* Row 1: Title + stock value + view toggle + More menu */}
+        <div className="flex items-center gap-2">
+          {tab !== 'stocks' && (
+            <button onClick={() => setTab('stocks')} className="p-1 -ml-1 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0" aria-label="Retour à l'inventaire">
+              <Boxes className="w-5 h-5" />
+            </button>
+          )}
+          <div className="shrink-0">
+            <h1 className="text-lg font-bold text-neutral-900 leading-tight">Stock</h1>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mt-0.5">
+              {tab === 'movements' ? 'Mouvements' : tab === 'lots' ? 'Lots' : (currentSite?.name || 'Inventaire')}
+            </p>
           </div>
+          {tab === 'stocks' && (
+            <>
+              <div className="hidden sm:block w-px h-8 bg-neutral-200 shrink-0" />
+              <div className="hidden sm:block flex-1 min-w-0">
+                {can('view_purchase_prices') ? (
+                  <>
+                    <div className="text-xl font-extrabold text-neutral-900 num tracking-tight leading-none truncate">{formatFCFA(totalValue)}</div>
+                    <p className="text-[10px] text-neutral-500 mt-0.5">Valeur du stock</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xl font-extrabold text-neutral-900 num tracking-tight leading-none">{inStockCount}</div>
+                    <p className="text-[10px] text-neutral-500 mt-0.5">Articles en stock</p>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+          {tab !== 'stocks' && <div className="flex-1" />}
+          {tab === 'stocks' && <div className="flex-1 sm:hidden" />}
+          {can('manage_stock') && tab === 'stocks' && (
+            <button
+              onClick={() => { if (viewMode === 'list') saveBulkRef.current?.(); setViewMode(v => v === 'cards' ? 'list' : 'cards'); }}
+              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
+              aria-label={viewMode === 'cards' ? 'Vue liste' : 'Vue cartes'}
+              title={viewMode === 'cards' ? 'Vue liste' : 'Vue cartes'}
+            >
+              {viewMode === 'cards' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+            </button>
+          )}
           {can('manage_stock') && tab === 'stocks' && (
             <MoreMenu items={[
-              { icon: <History className="w-4 h-4" />, label: 'Historique des mouvements', onClick: () => setTab('movements') },
-              { icon: <ArrowRightLeft className="w-4 h-4" />, label: 'Transfert', onClick: () => openAdjNew('transfer'), hidden: !canTransfer },
-              { icon: <BookOpen className="w-4 h-4" />, label: "Livre d'inventaire", onClick: printInventoryBook },
-              { icon: viewMode === 'cards' ? <List className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />, label: viewMode === 'cards' ? 'Vue liste' : 'Vue cartes', onClick: () => { setViewMode(v => v === 'cards' ? 'list' : 'cards'); setListEdits(new Map()); } },
-              { icon: <PackageOpen className="w-4 h-4" />, label: 'Voir les lots', onClick: () => setTab(t => t === 'lots' ? 'stocks' : 'lots'), hidden: stockMethod !== 'lot' },
+              { icon: <History className="w-4 h-4" />, label: 'Historique des mouvements', onClick: () => { if (viewMode === 'list') saveBulkRef.current?.(); setTab('movements'); } },
+              { icon: <BookOpen className="w-4 h-4" />, label: "Livre d'inventaire", onClick: () => { if (viewMode === 'list') saveBulkRef.current?.(); printInventoryBook(); } },
+              { icon: <PackageOpen className="w-4 h-4" />, label: 'Voir les lots', onClick: () => { if (viewMode === 'list') saveBulkRef.current?.(); setTab(t => t === 'lots' ? 'stocks' : 'lots'); }, hidden: stockMethod !== 'lot' },
               { icon: <Info className="w-4 h-4" />, label: 'Guide', onClick: () => setHelpOpen(true) },
             ]} />
           )}
@@ -860,7 +905,7 @@ export function Stock() {
           {!can('manage_stock') && (
             <button
               onClick={() => setTab(t => t === 'stocks' ? 'movements' : 'stocks')}
-              className={`w-7 h-7 flex items-center justify-center transition-colors ${tab === 'movements' ? 'text-teal-700' : 'text-neutral-400 hover:text-teal-700'}`}
+              className={`shrink-0 w-7 h-7 flex items-center justify-center transition-colors ${tab === 'movements' ? 'text-teal-700' : 'text-neutral-400 hover:text-teal-700'}`}
               aria-label="Mouvements"
             >
               <History className="w-4 h-4" />
@@ -868,25 +913,25 @@ export function Stock() {
           )}
         </div>
 
-        {/* Row 2: KPI */}
+        {/* Mobile-only: Stock value on its own line */}
         {tab === 'stocks' && (
-          <div>
+          <div className="sm:hidden">
             {can('view_purchase_prices') ? (
               <>
-                <div className="text-2xl font-extrabold text-neutral-900 num tracking-tight leading-none">{formatFCFA(totalValue)}</div>
-                <p className="text-[11px] text-neutral-500 mt-1">Valeur du stock</p>
+                <div className="text-xl font-extrabold text-neutral-900 num tracking-tight leading-none">{formatFCFA(totalValue)}</div>
+                <p className="text-[10px] text-neutral-500 mt-0.5">Valeur du stock</p>
               </>
             ) : (
               <>
-                <div className="text-2xl font-extrabold text-neutral-900 num tracking-tight leading-none">{inStockCount}</div>
-                <p className="text-[11px] text-neutral-500 mt-1">Articles en stock</p>
+                <div className="text-xl font-extrabold text-neutral-900 num tracking-tight leading-none">{inStockCount}</div>
+                <p className="text-[10px] text-neutral-500 mt-0.5">Articles en stock</p>
               </>
             )}
           </div>
         )}
 
-        {/* Row 3: Stats */}
-        <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
+        {/* Row 2: Stats badges */}
+        <div className="flex items-center gap-2 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
           <span className="shrink-0 text-neutral-500 num">{filtered.length} / {rows.length}</span>
           <button
             onClick={() => setFilter('all')}
@@ -945,16 +990,33 @@ export function Stock() {
           )}
         </div>
 
-        {/* Row 5: Primary actions (stocks tab only) */}
+        {/* Row 4: Unified operation buttons (stocks tab only) */}
         {can('manage_stock') && tab === 'stocks' && (
-          <div className="flex items-center gap-4 overflow-x-auto no-scrollbar whitespace-nowrap">
-            <button onClick={() => openAdjNew('in')} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-emerald-700 active:scale-95 transition-all">
+          <div className="flex items-center gap-3 overflow-x-auto no-scrollbar whitespace-nowrap">
+            <button
+              onClick={() => { if (viewMode === 'list') { saveBulkRef.current?.(); setListEditMode('in'); setListEdits(new Map()); } else openAdjNew('in'); }}
+              className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-all active:scale-95 ${viewMode === 'list' && listEditMode === 'in' ? 'text-emerald-700' : 'text-neutral-700 hover:text-emerald-700'}`}
+            >
               <ArrowDownCircle className="w-4 h-4" />Entrée
             </button>
-            <button onClick={() => openAdjNew('out')} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-red-700 active:scale-95 transition-all">
+            <button
+              onClick={() => { if (viewMode === 'list') { saveBulkRef.current?.(); setListEditMode('out'); setListEdits(new Map()); } else openAdjNew('out'); }}
+              className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-all active:scale-95 ${viewMode === 'list' && listEditMode === 'out' ? 'text-red-700' : 'text-neutral-700 hover:text-red-700'}`}
+            >
               <ArrowUpCircle className="w-4 h-4" />Sortie
             </button>
-            <button onClick={() => openAdjNew('inventory')} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-neutral-900 active:scale-95 transition-all">
+            {canTransfer && (
+              <button
+                onClick={() => { if (viewMode === 'list') { saveBulkRef.current?.(); setListEditMode('transfer'); setListEdits(new Map()); } else openAdjNew('transfer'); }}
+                className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-all active:scale-95 ${viewMode === 'list' && listEditMode === 'transfer' ? 'text-amber-700' : 'text-neutral-700 hover:text-amber-700'}`}
+              >
+                <ArrowRightLeft className="w-4 h-4" />Transfert
+              </button>
+            )}
+            <button
+              onClick={() => { if (viewMode === 'list') { saveBulkRef.current?.(); setListEditMode('inventory'); setListEdits(new Map()); } else openAdjNew('inventory'); }}
+              className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-all active:scale-95 ${viewMode === 'list' && listEditMode === 'inventory' ? 'text-neutral-900' : 'text-neutral-700 hover:text-neutral-900'}`}
+            >
               <ClipboardList className="w-4 h-4" />Inventaire
             </button>
           </div>
@@ -991,6 +1053,7 @@ export function Stock() {
             listSaving={listSaving}
             setListSaving={setListSaving}
             listInputRefs={listInputRefs}
+            saveBulkRef={saveBulkRef}
             currentSite={currentSite}
             canViewPrices={can('view_purchase_prices')}
             canManageStock={can('manage_stock')}
@@ -1014,8 +1077,13 @@ export function Stock() {
             setListSourceSite={(v: string) => {
               const hasEdits = Array.from(listEdits.values()).some(e => e.qty !== '' && Number(e.qty) !== 0);
               if (hasEdits && v !== listSourceSite) {
-                if (!window.confirm('Changer le magasin source reinitialise le formulaire. Continuer?')) return;
-                setListEdits(new Map());
+                const ownDepots = depots.filter(d => d.parent_site_id === currentSite?.id);
+                const newSiteName = v === currentSite?.id
+                  ? `${currentSite.name} (Magasin)`
+                  : `${ownDepots.find(d => d.id === v)?.name || ''} (Dépôt)`;
+                const isDepot = v !== currentSite?.id;
+                setPendingSiteChange({ newSiteId: v, newSiteName, isDepot });
+                return;
               }
               setListSourceSite(v);
             }}
@@ -1114,6 +1182,35 @@ export function Stock() {
               )}
             </button>
           </div>
+
+          {/* Shared site selector for movements & documents */}
+          {(() => {
+            const ownDepots = depots.filter(d => d.parent_site_id === currentSite?.id);
+            if (ownDepots.length === 0) return null;
+            return (
+              <div className="flex items-center gap-2 pb-1">
+                <MapPin className="w-3 h-3 text-neutral-400 shrink-0" />
+                <div className="relative flex-1 min-w-0">
+                  <select
+                    value={mvSiteId}
+                    onChange={e => {
+                      const newId = e.target.value;
+                      setMvSiteId(newId);
+                      setMvPage(1);
+                    }}
+                    className="bare-input text-[11px] font-semibold py-1 w-full pr-5"
+                  >
+                    <option value="">Tous les emplacements</option>
+                    {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                    {ownDepots.map(d => (
+                      <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+            );
+          })()}
 
           {mvSubTab === 'movements' ? (
           <>
@@ -1377,16 +1474,19 @@ export function Stock() {
             {adjMode !== 'transfer' && depots.filter(d => d.parent_site_id === currentSite?.id).length > 0 && (
               <div>
                 <label className="label">Emplacement</label>
-                <select
-                  value={adjSiteId}
-                  onChange={e => setAdjSiteId(e.target.value)}
-                  className="bare-input text-sm py-2"
-                >
-                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
-                  {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
-                    <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={adjSiteId}
+                    onChange={e => setAdjSiteId(e.target.value)}
+                    className="bare-input text-sm py-2 w-full pr-6"
+                  >
+                    {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                    {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
+                      <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
                 <div className="h-px bg-neutral-200 mt-1" />
               </div>
             )}
@@ -1413,9 +1513,28 @@ export function Stock() {
             ) : adjMode === 'transfer' ? (
               <>
                 <div>
+                  <label className="label">Source</label>
+                  <div className="relative">
+                    <select
+                      value={adjSiteId}
+                      onChange={e => setAdjSiteId(e.target.value)}
+                      className="bare-input text-sm py-2 w-full pr-6"
+                    >
+                      {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                      {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
+                        <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  <div className="h-px bg-neutral-200 mt-1" />
+                </div>
+                <div>
                   <label className="label">Destination</label>
                   <SearchableSelect
-                    options={allTransferTargets.map(s => ({ value: s.id, label: `${s.name}${s.is_warehouse ? ' (Dépôt)' : ''}` }))}
+                    options={allTransferTargets
+                      .filter(s => s.id !== adjSiteId)
+                      .map(s => ({ value: s.id, label: `${s.name}${s.is_warehouse ? ' (Dépôt)' : ' (Magasin)'}` }))}
                     value={adjTargetSite}
                     onChange={v => setAdjTargetSite(v)}
                     placeholder="— Choisir —"
@@ -1822,6 +1941,55 @@ export function Stock() {
         selected={categoryFilter}
         onSelect={(id) => { setCategoryFilter(id); setCatPickerOpen(false); }}
       />
+
+      {/* Site change confirmation modal — Waarwi style (white, no card, no border, separator lines) */}
+      <Modal
+        open={!!pendingSiteChange}
+        onClose={() => setPendingSiteChange(null)}
+        title="Changement d'emplacement"
+        size="sm"
+        footer={
+          <>
+            <button onClick={() => setPendingSiteChange(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+            <div className="flex-1" />
+            <button
+              onClick={() => {
+                if (!pendingSiteChange) return;
+                setListSourceSite(pendingSiteChange.newSiteId);
+                setListEdits(new Map());
+                setPendingSiteChange(null);
+              }}
+              className="btn-icon-primary"
+              title="Confirmer"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+          </>
+        }
+      >
+        {pendingSiteChange && (
+          <div className="py-3">
+            <div className="text-center">
+              <p className="text-sm font-semibold text-neutral-900">
+                Cette operation sera effectuee dans :
+              </p>
+            </div>
+            <div className="h-px bg-neutral-200 my-3" />
+            <div className="text-center">
+              <p className="text-base font-bold text-neutral-900">{pendingSiteChange.newSiteName}</p>
+              {pendingSiteChange.isDepot && currentSite && (
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  et non dans le magasin principal : <span className="font-semibold">{currentSite.name}</span>
+                </p>
+              )}
+            </div>
+            <div className="h-px bg-neutral-200 my-3" />
+            <p className="text-[11px] text-neutral-500 text-center">
+              Les saisies en cours seront reinitialisees.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -1965,7 +2133,7 @@ type ListEditEntry = { article_id: string; qty: number | ''; note: string; lot_n
 
 function StockListEditView({
   filtered, listEditMode, setListEditMode, listEdits, setListEdits,
-  listSaving, setListSaving, listInputRefs, currentSite,
+  listSaving, setListSaving, listInputRefs, saveBulkRef, currentSite,
   canViewPrices, canManageStock, onSaved, successToast, errorToast, stockMethod,
   sites, depots, listTransferTarget, setListTransferTarget,
   listSourceSite, setListSourceSite, stockByLocation, tenantId,
@@ -1979,6 +2147,7 @@ function StockListEditView({
   listSaving: boolean;
   setListSaving: (s: boolean) => void;
   listInputRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
+  saveBulkRef: React.MutableRefObject<(() => void) | null>;
   currentSite: any;
   canViewPrices: boolean;
   canManageStock: boolean;
@@ -2045,7 +2214,7 @@ function StockListEditView({
     if (!currentSite) return;
     if (!canManageStock) { errorToast('Vous n\'avez pas la permission de gerer le stock'); return; }
     const entries = Array.from(listEdits.values()).filter(e => e.qty !== '' && Number(e.qty) !== 0);
-    if (entries.length === 0) { errorToast('Aucune modification à enregistrer'); return; }
+    if (entries.length === 0) { return; }
     if (lotMode && listEditMode === 'in') {
       const missing = entries.find(e => !e.lot_number?.trim());
       if (missing) { errorToast('Numéro de lot requis pour toutes les entrées'); return; }
@@ -2172,138 +2341,108 @@ function StockListEditView({
       setListSaving(false);
     }
   };
+  saveBulkRef.current = saveBulk;
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 220px)', minHeight: '400px' }}>
-      {/* Mode selector - sticky top */}
-      <div className="shrink-0 flex items-center justify-between gap-2 flex-wrap pb-2">
-        <div className="inline-flex items-center gap-3">
-          <button
-            onClick={() => { setListEditMode('in'); setListEdits(new Map()); }}
-            className={`inline-flex items-center gap-1 text-[11px] font-bold transition-colors ${listEditMode === 'in' ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <ArrowDownCircle className="w-3.5 h-3.5" />Entrée
-          </button>
-          <button
-            onClick={() => { setListEditMode('out'); setListEdits(new Map()); }}
-            className={`inline-flex items-center gap-1 text-[11px] font-bold transition-colors ${listEditMode === 'out' ? 'text-red-600' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <ArrowUpCircle className="w-3.5 h-3.5" />Sortie
-          </button>
-          {sites.length > 0 && (
-            <button
-              onClick={() => { setListEditMode('transfer'); setListEdits(new Map()); }}
-              className={`inline-flex items-center gap-1 text-[11px] font-bold transition-colors ${listEditMode === 'transfer' ? 'text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5" />Transfert
-            </button>
-          )}
-          <button
-            onClick={() => { setListEditMode('inventory'); setListEdits(new Map()); }}
-            className={`inline-flex items-center gap-1 text-[11px] font-bold transition-colors ${listEditMode === 'inventory' ? 'text-neutral-900' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <ClipboardList className="w-3.5 h-3.5" />Inventaire
-          </button>
-        </div>
-      </div>
-
-      {/* Source / Destination pickers */}
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 180px)', minHeight: '400px' }}>
+      {/* Source / Destination pickers + save button */}
       {(() => {
         const ownDepots = depots.filter((d: any) => d.parent_site_id === currentSite?.id);
         const showSourcePicker = ownDepots.length > 0;
         const isTransfer = listEditMode === 'transfer';
-        if (!showSourcePicker && !isTransfer) return null;
+        if (!showSourcePicker && !isTransfer) {
+          return (
+            <div className="shrink-0 mb-2 flex items-center justify-end">
+              <button onClick={saveBulk} disabled={editCount === 0 || listSaving} className="btn-icon-primary" title={`Enregistrer${editCount > 0 ? ` (${editCount})` : ''}`}>
+                {listSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              </button>
+            </div>
+          );
+        }
         return (
-          <div className={`shrink-0 mb-2 grid ${isTransfer && showSourcePicker ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-2`}>
+          <div className="shrink-0 mb-2 flex items-center gap-2">
             {showSourcePicker && (
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] font-semibold text-slate-700">{isTransfer ? 'Source' : 'Emplacement'}</span>
-                <select
-                  value={listSourceSite || currentSite?.id || ''}
-                  onChange={e => setListSourceSite(e.target.value)}
-                  className="bare-input text-xs font-semibold py-1.5"
-                >
-                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
-                  {ownDepots.map((d: any) => (
-                    <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
-                  ))}
-                </select>
-                <div className="h-px bg-neutral-200" />
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <span className="text-[11px] font-semibold text-slate-700 shrink-0">{isTransfer ? 'Source' : 'Empl.'}</span>
+                <div className="relative flex-1 min-w-0">
+                  <select
+                    value={listSourceSite || currentSite?.id || ''}
+                    onChange={e => setListSourceSite(e.target.value)}
+                    className="bare-input text-xs font-semibold py-1 w-full pr-5"
+                  >
+                    {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                    {ownDepots.map((d: any) => (
+                      <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                <div className="h-px bg-neutral-200 flex-1" />
               </div>
             )}
             {isTransfer && (
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] font-semibold text-slate-700">Destination</span>
-                <select
-                  value={listTransferTarget}
-                  onChange={e => setListTransferTarget(e.target.value)}
-                  className="bare-input text-xs font-semibold py-1.5"
-                >
-                  <option value="">-- Choisir la destination --</option>
-                  {sites.map((s: any) => {
-                    const isDepot = !!s.parent_site_id;
-                    const ownDepot = isDepot && s.parent_site_id === currentSite?.id;
-                    const label = isDepot
-                      ? `${s.name} (Dépôt${ownDepot ? '' : ' externe'})`
-                      : `${s.name} (Magasin)`;
-                    return <option key={s.id} value={s.id}>{label}</option>;
-                  })}
-                </select>
-                <div className="h-px bg-neutral-200" />
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <span className="text-[11px] font-semibold text-slate-700 shrink-0">Dest.</span>
+                <div className="relative flex-1 min-w-0">
+                  <select
+                    value={listTransferTarget}
+                    onChange={e => setListTransferTarget(e.target.value)}
+                    className="bare-input text-xs font-semibold py-1 w-full pr-5"
+                  >
+                    <option value="">-- Choisir --</option>
+                    {(() => {
+                      const sourceId = listSourceSite || currentSite?.id || '';
+                      const allTargets = [...(currentSite ? [currentSite] : []), ...sites];
+                      const seen = new Set<string>();
+                      return allTargets.filter((s: any) => {
+                        if (s.id === sourceId) return false;
+                        if (seen.has(s.id)) return false;
+                        seen.add(s.id);
+                        return true;
+                      }).map((s: any) => {
+                        const isDepot = !!s.is_warehouse || !!s.parent_site_id;
+                        const ownDepot = isDepot && s.parent_site_id === currentSite?.id;
+                        const label = isDepot
+                          ? `${s.name} (Dépôt${ownDepot ? '' : ' ext.'})`
+                          : `${s.name} (Magasin)`;
+                        return <option key={s.id} value={s.id}>{label}</option>;
+                      });
+                    })()}
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                <div className="h-px bg-neutral-200 flex-1" />
               </div>
             )}
-          </div>
-        );
-      })()}
-
-      {/* Active site badge - always visible */}
-      {(() => {
-        const sourceSiteId = listSourceSite || currentSite?.id || '';
-        const allSites = [currentSite, ...(sites || []), ...(depots || [])].filter(Boolean);
-        const sourceSiteObj = allSites.find((s: any) => s.id === sourceSiteId);
-        const mismatch = currentSite && sourceSiteId && sourceSiteId !== currentSite.id;
-        return (
-          <div className={`shrink-0 mb-2 text-xs flex items-center gap-2 text-neutral-600`}>
-            <Monitor className="w-3 h-3 text-neutral-400" />
-            <span className="font-medium text-[10px]">Document cible : <strong className="text-neutral-900 text-[11px]">{sourceSiteObj?.name || 'N/A'}</strong></span>
-            {mismatch && <span className="text-[9px] text-neutral-400">(diff. du site actif)</span>}
+            <button onClick={saveBulk} disabled={editCount === 0 || listSaving} className="btn-icon-primary shrink-0" title={`Enregistrer${editCount > 0 ? ` (${editCount})` : ''}`}>
+              {listSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            </button>
           </div>
         );
       })()}
 
       {/* Table with sticky header and scrollable body */}
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-        <div className="shrink-0 overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/80">
-                <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[30%] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('name')}>
-                  <span className="inline-flex items-center gap-0.5">Article {sortCol === 'name' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
-                </th>
-                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[80px] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('stock')}>
-                  <span className="inline-flex items-center gap-0.5 justify-center">Stock {sortCol === 'stock' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
-                </th>
-                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[60px] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('min')}>
-                  <span className="inline-flex items-center gap-0.5 justify-center">Min {sortCol === 'min' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
-                </th>
-                {canViewPrices && <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right w-[100px] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('price')}>
-                  <span className="inline-flex items-center gap-0.5 justify-end">P.Achat {sortCol === 'price' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
-                </th>}
-                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[100px]">
-                  {listEditMode === 'in' ? 'Qté entrée' : listEditMode === 'out' ? 'Qté sortie' : listEditMode === 'transfer' ? 'Qté transf.' : 'Nvelle qté'}
-                </th>
-                {lotMode && listEditMode === 'in' && (
-                  <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[110px]">N° Lot *</th>
-                )}
-                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[120px] hidden md:table-cell">Note</th>
-                <th className="px-2 py-2 w-[30px]"></th>
-              </tr>
-            </thead>
-          </table>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
-          <table className="w-full text-left">
-            <tbody>
+      <div className="flex-1 min-h-0 overflow-auto">
+        <table className="w-full text-left">
+          <thead className="sticky top-0 z-[5]">
+            <tr className="border-b border-slate-100 bg-slate-50">
+              <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[30%] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('name')}>
+                <span className="inline-flex items-center gap-0.5">Article {sortCol === 'name' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
+              </th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[80px] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('stock')}>
+                <span className="inline-flex items-center gap-0.5 justify-center">Stock {sortCol === 'stock' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
+              </th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center w-[100px]">
+                {listEditMode === 'in' ? 'Qté entrée' : listEditMode === 'out' ? 'Qté sortie' : listEditMode === 'transfer' ? 'Qté transf.' : 'Nvelle qté'}
+              </th>
+              {lotMode && listEditMode === 'in' && (
+                <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[110px]">N° Lot *</th>
+              )}
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[120px] hidden md:table-cell">Note</th>
+              <th className="px-2 py-2 w-[30px]"></th>
+            </tr>
+          </thead>
+          <tbody>
               {tableVisibleRows.map((r, idx) => {
                 const edit = listEdits.get(r.article_id);
                 const hasValue = edit && edit.qty !== '' && Number(edit.qty) !== 0;
@@ -2320,8 +2459,6 @@ function StockListEditView({
                         {displayQty}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5 text-center text-[11px] text-slate-500 num w-[60px]">{r.stock_min}</td>
-                    {canViewPrices && <td className="px-2 py-1.5 text-right text-[11px] text-slate-600 num w-[100px]">{formatFCFA(r.purchase_price)}</td>}
                     <td className="px-2 py-1.5 w-[100px]">
                       <input
                         ref={el => { if (el) listInputRefs.current.set(r.article_id, el); }}
@@ -2372,29 +2509,15 @@ function StockListEditView({
                 {((tablePage - 1) * TABLE_PAGE) + 1}–{Math.min(tablePage * TABLE_PAGE, filtered.length)} / {filtered.length}
               </span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setTablePage(1)} disabled={tablePage === 1} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
-                <button onClick={() => setTablePage(p => Math.max(1, p - 1))} disabled={tablePage === 1} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
+                <button onClick={() => { saveBulk(); setTablePage(1); }} disabled={tablePage === 1} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => { saveBulk(); setTablePage(p => Math.max(1, p - 1)); }} disabled={tablePage === 1} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
                 <span className="text-[10px] font-medium text-slate-700 px-1">{tablePage}/{tableTotalPages}</span>
-                <button onClick={() => setTablePage(p => Math.min(tableTotalPages, p + 1))} disabled={tablePage === tableTotalPages} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
-                <button onClick={() => setTablePage(tableTotalPages)} disabled={tablePage === tableTotalPages} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+                <button onClick={() => { saveBulk(); setTablePage(p => Math.min(tableTotalPages, p + 1)); }} disabled={tablePage === tableTotalPages} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
+                <button onClick={() => { saveBulk(); setTablePage(tableTotalPages); }} disabled={tablePage === tableTotalPages} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
               </div>
             </div>
           )}
         </div>
-      </div>
-
-      {/* Sticky save button at bottom */}
-      <div className="shrink-0 pt-2 flex items-center justify-between border-t border-slate-100 mt-2 bg-slate-50">
-        <span className="text-[11px] text-slate-500">{editCount > 0 ? `${editCount} article${editCount > 1 ? 's' : ''} modifié${editCount > 1 ? 's' : ''}` : 'Saisissez les quantités puis enregistrez'}</span>
-        <button
-          onClick={saveBulk}
-          disabled={editCount === 0 || listSaving}
-          className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow hover:shadow-premium disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
-        >
-          {listSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          Enregistrer{editCount > 0 && ` (${editCount})`}
-        </button>
-      </div>
     </div>
   );
 }

@@ -575,57 +575,81 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       {/* ── Filters Modal ────────────────────────────────────────── */}
       <Modal open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtres" size="sm"
         footer={<>
-          <button onClick={clearFilters} className="btn-icon" title="Réinitialiser"><X className="w-4 h-4" /></button>
-          <button onClick={() => setFiltersOpen(false)} className="btn-icon-primary" title="Appliquer"><Check className="w-4 h-4" /></button>
+          <button onClick={clearFilters} className="text-sm font-semibold text-neutral-500 hover:text-neutral-900 transition-colors px-2 py-1.5">Annuler</button>
+          <button onClick={() => setFiltersOpen(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-800 transition-colors active:scale-95">Appliquer</button>
         </>}
       >
-        <div className="space-y-5">
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500 mb-2">
-              <Calendar className="w-3.5 h-3.5" />Période
+        <div className="divide-y divide-neutral-100">
+          {/* Période */}
+          <div className="pb-5">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
+              <Calendar className="w-3.5 h-3.5 text-neutral-900" />Période
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {DATE_OPTIONS.map(o => (
-                <button
-                  key={o.value}
-                  onClick={() => { setDateRange(o.value); if (o.value === 'custom') setPickerOpen(true); }}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
-                    dateRange === o.value
-                      ? 'bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-glow border-transparent'
-                      : 'bg-white text-neutral-700 border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/50'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {DATE_OPTIONS.map(o => {
+                const active = dateRange === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    onClick={() => { setDateRange(o.value); if (o.value === 'custom') setPickerOpen(true); }}
+                    className={`relative py-2 text-sm font-semibold text-left transition-colors ${
+                      active ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-700'
+                    }`}
+                  >
+                    {o.label}
+                    {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900 rounded-full" />}
+                  </button>
+                );
+              })}
             </div>
             {dateRange === 'custom' && (customFrom || customTo) && (
-              <div className="mt-2 text-[11px] text-brand-700 font-medium px-1">
-                {customFrom && new Date(customFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                {customFrom && customTo && ' — '}
-                {customTo && new Date(customTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                <button onClick={() => setPickerOpen(true)} className="btn-icon" title="Modifier"><Pencil className="w-4 h-4" /></button>
+              <div className="mt-4 flex items-end gap-3">
+                <div className="flex-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Du</div>
+                  <div className="relative">
+                    <span className="block text-sm font-semibold text-neutral-900 pb-1.5">
+                      {customFrom ? new Date(customFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    </span>
+                    <span className="absolute bottom-0 left-0 right-0 h-px bg-neutral-200" />
+                  </div>
+                </div>
+                <span className="text-neutral-300 text-sm pb-1.5">—</span>
+                <div className="flex-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Au</div>
+                  <div className="relative">
+                    <span className="block text-sm font-semibold text-neutral-900 pb-1.5">
+                      {customTo ? new Date(customTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    </span>
+                    <span className="absolute bottom-0 left-0 right-0 h-px bg-neutral-200" />
+                  </div>
+                </div>
+                <button onClick={() => setPickerOpen(true)} className="p-1.5 -mb-1 text-neutral-400 hover:text-neutral-900 transition-colors" title="Modifier">
+                  <Pencil className="w-4 h-4" />
+                </button>
               </div>
             )}
           </div>
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500 mb-2">
-              <Filter className="w-3.5 h-3.5" />Statut
+          {/* Statut */}
+          <div className="pt-5">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-3">
+              <Filter className="w-3.5 h-3.5 text-neutral-900" />Statut
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {STATUS_OPTIONS.map(o => (
-                <button
-                  key={o.value}
-                  onClick={() => setStatusFilter(o.value)}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
-                    statusFilter === o.value
-                      ? 'bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-glow border-transparent'
-                      : 'bg-white text-neutral-700 border border-neutral-200 hover:border-brand-300 hover:bg-brand-50/50'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {STATUS_OPTIONS.map(o => {
+                const active = statusFilter === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    onClick={() => setStatusFilter(o.value)}
+                    className={`relative py-2 text-sm font-semibold text-left transition-colors ${
+                      active ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-700'
+                    }`}
+                  >
+                    {o.label}
+                    {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900 rounded-full" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

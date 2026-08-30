@@ -515,6 +515,9 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         if (patch.wholesale_price !== undefined) clean.wholesale_price = Number(patch.wholesale_price || 0);
         if (patch.stock_min !== undefined) clean.stock_min = Number(patch.stock_min || 0);
         if (patch.unit !== undefined) clean.unit = patch.unit;
+        if (patch.brand !== undefined) clean.brand = patch.brand;
+        if (patch.barcode !== undefined) clean.barcode = patch.barcode;
+        if (patch.purchase_price !== undefined) clean.purchase_price = Number(patch.purchase_price || 0);
         if (patch.supplier_id !== undefined) clean.supplier_id = patch.supplier_id || null;
         if ((patch as any).is_active !== undefined) clean.is_active = (patch as any).is_active;
         if ((patch as any).track_stock !== undefined) clean.track_stock = (patch as any).track_stock;
@@ -719,6 +722,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   };
 
   const listEditCount = listEdits.size;
+
+  const saveListEditsRef = useRef(saveListEdits);
+  saveListEditsRef.current = saveListEdits;
+
+  useEffect(() => {
+    return () => { saveListEditsRef.current(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-3 pb-6">

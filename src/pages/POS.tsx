@@ -3946,7 +3946,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                               const fakeSale = {
                                 sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
                                 items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                                payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                                payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.paid, reference: '' }],
                                 customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
                               };
                               printSaleTicket(fakeSale as any, s.doc_header);
@@ -3957,7 +3957,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                               const fakeSale = {
                                 sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
                                 items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                                payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.total, reference: '' }],
+                                payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.paid, reference: '' }],
                                 customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
                               };
                               printSaleInvoice(fakeSale as any, s.doc_header, (s.user_id && sessionProfileNames[s.user_id]) || 'Utilisateur non renseigné');

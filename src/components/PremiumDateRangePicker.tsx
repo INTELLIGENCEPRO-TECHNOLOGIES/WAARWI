@@ -104,9 +104,9 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
   const fmtLbl = (iso: string) => iso ? new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 animate-fade-in">
+    <div className="fixed inset-0 z-[60] flex items-start sm:items-center justify-center p-2 sm:p-3 animate-fade-in overflow-y-auto">
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-md" onClick={onClose} />
-      <div className={`relative w-full max-w-2xl bg-white rounded-xl shadow-premium animate-scale-in flex flex-col max-h-[92vh] overflow-hidden`}>
+      <div className={`relative w-full max-w-2xl bg-white rounded-xl shadow-premium animate-scale-in flex flex-col max-h-[94vh] sm:max-h-[92vh] overflow-hidden my-auto`}>
         <div className="relative px-4 py-3 bg-black text-white shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -139,9 +139,9 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
             )}
           </div>
 
-          <div className="flex-1 p-4 bg-white">
+          <div className="flex-1 p-3 sm:p-4 bg-white">
             <div className="grid gap-0 grid-cols-1 sm:grid-cols-[1fr_auto_1fr]">
-              <div className="p-3">
+              <div className="p-2 sm:p-3">
                 <div className="flex items-center justify-between mb-2">
                   <button onClick={() => setLeftMonth(new Date(leftMonth.getFullYear(), leftMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
                   <div className="text-xs font-bold capitalize text-slate-900">{monthLabel(leftMonth)}</div>
@@ -150,7 +150,7 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
                 {renderMonth(leftMonth)}
               </div>
               <div className="h-px sm:h-auto sm:w-px bg-slate-200 mx-3 sm:mx-0 sm:my-2" />
-              <div className="p-3">
+              <div className="p-2 sm:p-3">
                 <div className="flex items-center justify-between mb-2">
                   <button onClick={() => setRightMonth(new Date(rightMonth.getFullYear(), rightMonth.getMonth() - 1, 1))} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition"><ChevronLeft className="w-3.5 h-3.5" /></button>
                   <div className="text-xs font-bold capitalize text-slate-900">{monthLabel(rightMonth)}</div>
@@ -170,7 +170,7 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
         <div className="px-4 py-3 border-t border-slate-200 bg-white flex items-center justify-end gap-2 flex-wrap shrink-0">
           <button onClick={() => { setLocalFrom(''); setLocalTo(''); if (onReset) onReset(); }} className="btn-icon" title="Réinitialiser"><RotateCcw className="w-4 h-4" /></button>
           <button onClick={onClose} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={() => onApply(localFrom, localTo)} disabled={!localFrom} className="btn-icon-primary" title="Appliquer">
+          <button onClick={() => onApply(localFrom, localTo || localFrom)} disabled={!localFrom} className="btn-icon-primary" title="Appliquer">
             <Check className="w-4 h-4" />
           </button>
         </div>
