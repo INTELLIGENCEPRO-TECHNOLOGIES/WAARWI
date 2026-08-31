@@ -335,13 +335,13 @@ export function DocumentEditor(props: DocumentEditorProps) {
       : editingId ? labels.edit : labels.create;
 
   const inputCls = 'w-full text-xs h-7 px-2 bg-white border border-neutral-300 rounded focus:border-neutral-500 focus:ring-1 focus:ring-neutral-200 outline-none transition-all';
-  const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors';
+  const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-[#C9C9C9] focus:border-black outline-none transition-colors';
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-white animate-fade-in">
 
       {/* ═══ Title bar ═══ */}
-      <div className="flex items-center justify-between px-4 h-11 border-b border-neutral-200 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 h-11 border-b border-[#D4D4D4] flex-shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Navigation arrows */}
           {(onPrev || onNext) && (
@@ -455,11 +455,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
       )}
 
       {/* ═══ Column headers ═══ */}
-      <div className="flex-shrink-0 border-b border-neutral-200 bg-neutral-50/70">
+      <div className="flex-shrink-0 border-b border-[#D4D4D4] bg-[#F8F8F8]">
         <div className="flex items-center px-2 h-7">
           <div className="w-8 shrink-0" />
           {cols.map(col => (
-            <div key={col.key} className={`px-2 text-[10px] font-bold text-neutral-500 uppercase tracking-wider ${colClass(col.key)}`}>
+            <div key={col.key} className={`px-2 text-[10px] font-bold text-[#444444] uppercase tracking-wider ${colClass(col.key)}`}>
               {col.label}
             </div>
           ))}
@@ -469,7 +469,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
       {/* ═══ Input row (create/edit only) ═══ */}
       {canEdit && (
-        <div className={`flex-shrink-0 border-b-2 border-neutral-300 bg-neutral-50/40 ${itemsLocked ? 'pointer-events-none opacity-30' : ''}`}>
+        <div className={`flex-shrink-0 border-b-2 border-[#D4D4D4] bg-neutral-50/40 ${itemsLocked ? 'pointer-events-none opacity-30' : ''}`}>
           {itemsLocked ? (
             <div className="flex items-center justify-center py-3 gap-2">
               <Lock className="w-4 h-4 text-neutral-300" />
@@ -583,9 +583,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 <div
                   key={vIdx}
                   onClick={() => { if (canEdit && !isEditingThis) startEdit(vIdx); }}
-                  className={`flex items-center px-2 border-b border-neutral-100 transition-colors group ${
+                  className={`flex items-center px-2 border-b border-[#D4D4D4] transition-colors group ${
                     canEdit ? 'cursor-pointer' : ''
-                  } ${isEditingThis ? 'bg-amber-50/50' : canEdit ? 'hover:bg-neutral-50' : ''}`}
+                  } ${isEditingThis ? 'bg-amber-50/50' : vIdx % 2 === 1 ? 'bg-[#FAFAFA]' : ''} ${canEdit && !isEditingThis ? 'hover:bg-neutral-50' : ''}`}
                   style={{ height: '28px' }}
                 >
                   <div className="w-8 shrink-0 text-center">
@@ -645,7 +645,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
       </div>
 
       {/* ═══ Footer ═══ */}
-      <div className="border-t border-neutral-200 bg-white px-4 py-2 flex flex-col gap-1 flex-shrink-0">
+      <div className="border-t border-[#D4D4D4] bg-white px-4 py-2 flex flex-col gap-1 flex-shrink-0">
         {(postCreation || docCreatedInfo) && (() => {
           const info = postCreation || docCreatedInfo!;
           return (
@@ -1022,7 +1022,7 @@ function EditableHeader({ headerForm, setHeaderForm, customers, docSettings, doc
       )}
       <div className="grid grid-cols-[1fr] sm:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2 items-end">
         <div>
-          <label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Client</label>
+          <label className="text-[10px] font-medium text-[#444444] mb-0.5 block">Client</label>
           {isLocked ? (
             <span className="text-xs font-medium text-neutral-800 h-8 flex items-center">{customers.find((c: any) => c.id === headerForm.customer_id)?.name || '—'}</span>
           ) : (
@@ -1035,7 +1035,7 @@ function EditableHeader({ headerForm, setHeaderForm, customers, docSettings, doc
           )}
         </div>
         <div>
-          <label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Date</label>
+          <label className="text-[10px] font-medium text-[#444444] mb-0.5 block">Date</label>
           {dateLocked ? (
             <span className="text-xs font-medium text-neutral-800 h-8 flex items-center">{headerForm.doc_date || '—'}</span>
           ) : (
@@ -1044,30 +1044,30 @@ function EditableHeader({ headerForm, setHeaderForm, customers, docSettings, doc
         </div>
         {docType === 'quote' && (
           <div>
-            <label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Note</label>
+            <label className="text-[10px] font-medium text-[#444444] mb-0.5 block">Note</label>
             <input value={headerForm.note} onChange={e => setHeaderForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note optionnelle..." className={headerInputCls} disabled={isLocked} />
           </div>
         )}
         {docType === 'quote' && (
           <div>
-            <label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Valide jusqu'au</label>
+            <label className="text-[10px] font-medium text-[#444444] mb-0.5 block">Valide jusqu'au</label>
             <input type="date" value={headerForm.valid_until} onChange={e => setHeaderForm((f: any) => ({ ...f, valid_until: e.target.value }))} className={headerInputCls} disabled={isLocked} />
           </div>
         )}
         {docSettings.show_reference && (
-          <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Référence</label><input value={headerForm.reference} onChange={e => setHeaderForm((f: any) => ({ ...f, reference: e.target.value }))} placeholder="REF-..." className={headerInputCls} disabled={isLocked} /></div>
+          <div><label className="text-[10px] font-medium text-[#444444] mb-0.5 block">Référence</label><input value={headerForm.reference} onChange={e => setHeaderForm((f: any) => ({ ...f, reference: e.target.value }))} placeholder="REF-..." className={headerInputCls} disabled={isLocked} /></div>
         )}
         {docSettings.show_delivery_date && (
-          <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Date de livraison</label><input type="date" value={headerForm.delivery_date} onChange={e => setHeaderForm((f: any) => ({ ...f, delivery_date: e.target.value }))} className={headerInputCls} disabled={isLocked} /></div>
+          <div><label className="text-[10px] font-medium text-[#444444] mb-0.5 block">Date de livraison</label><input type="date" value={headerForm.delivery_date} onChange={e => setHeaderForm((f: any) => ({ ...f, delivery_date: e.target.value }))} className={headerInputCls} disabled={isLocked} /></div>
         )}
         {docSettings.show_warranty && (
-          <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Garantie</label><input value={headerForm.warranty} onChange={e => setHeaderForm((f: any) => ({ ...f, warranty: e.target.value }))} placeholder="Ex: 6 mois" className={headerInputCls} disabled={isLocked} /></div>
+          <div><label className="text-[10px] font-medium text-[#444444] mb-0.5 block">Garantie</label><input value={headerForm.warranty} onChange={e => setHeaderForm((f: any) => ({ ...f, warranty: e.target.value }))} placeholder="Ex: 6 mois" className={headerInputCls} disabled={isLocked} /></div>
         )}
         {docSettings.show_imei && (
-          <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">IMEI / Téléphone</label><input value={headerForm.imei} onChange={e => setHeaderForm((f: any) => ({ ...f, imei: e.target.value }))} placeholder="Numéro..." className={headerInputCls} disabled={isLocked} /></div>
+          <div><label className="text-[10px] font-medium text-[#444444] mb-0.5 block">IMEI / Téléphone</label><input value={headerForm.imei} onChange={e => setHeaderForm((f: any) => ({ ...f, imei: e.target.value }))} placeholder="Numéro..." className={headerInputCls} disabled={isLocked} /></div>
         )}
         {docSettings.show_representative && (
-          <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Représentant</label>
+          <div><label className="text-[10px] font-medium text-[#444444] mb-0.5 block">Représentant</label>
             <select value={headerForm.representative} onChange={e => setHeaderForm((f: any) => ({ ...f, representative: e.target.value }))} className={headerInputCls + ' cursor-pointer'}>
               <option value="">Aucun</option>
               {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
@@ -1140,7 +1140,7 @@ function CustomerSearchInline({ customers, value, onSelect, onCreateNew }: {
         onFocus={() => setOpen(true)}
         onKeyDown={handleKey}
         placeholder="Rechercher client..."
-        className="w-full text-xs h-8 px-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors"
+        className="w-full text-xs h-8 px-2 bg-transparent border-b border-[#C9C9C9] focus:border-black outline-none transition-colors"
         autoComplete="off"
       />
       {open && (
@@ -1248,7 +1248,7 @@ function PaymentSection({ ipmBeneficiaire, ipmPartIpm, ipmPartClient, isCredit, 
   addPayment: () => void;
 }) {
   return (
-    <div className="px-4 py-3 border-t border-neutral-200">
+    <div className="px-4 py-3 border-t border-[#D4D4D4]">
       {ipmBeneficiaire && (ipmPartIpm || 0) > 0 && (
         <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-teal-50 border border-teal-200 rounded text-[11px] text-teal-800 font-medium">
           <ShieldCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />

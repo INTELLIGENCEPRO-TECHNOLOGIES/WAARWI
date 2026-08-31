@@ -3101,7 +3101,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <select
                     value={saleSourceSiteId}
                     onChange={e => { setSaleSourceSiteId(e.target.value); }}
-                    className="text-[11px] font-semibold bg-white border border-neutral-200 rounded-lg px-2 py-1 text-neutral-700 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400/30"
+                    className="text-[11px] font-semibold bg-transparent border-b border-neutral-300 px-0 py-1 text-neutral-700 focus:outline-none focus:border-brand-400"
                   >
                     {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
                     {availableDepots.map(d => (

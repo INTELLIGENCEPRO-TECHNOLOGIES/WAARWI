@@ -419,7 +419,7 @@ export function InfosTab({ form, setForm, editing, categories, suppliers, onGene
         </Field>
         <Field label="Catégorie">
           <button type="button" onClick={() => setCatPickerOpen(true)}
-            className="w-full text-left bg-transparent border-0 border-b border-neutral-200 hover:border-brand-400 px-0 py-1 text-sm text-neutral-800 outline-none transition cursor-pointer flex items-center justify-between">
+            className="w-full text-left bg-transparent border-0 hover:border-brand-400 px-0 py-1 text-sm text-neutral-800 outline-none transition cursor-pointer flex items-center justify-between">
             <span className={selectedCatLabel ? 'text-neutral-800' : 'text-neutral-400'}>{selectedCatLabel || 'Choisir une catégorie'}</span>
             <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
           </button>

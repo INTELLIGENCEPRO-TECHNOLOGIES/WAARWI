@@ -90,7 +90,6 @@ export function BackupTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Run due auto-backup on mount so schedule ticks while the user is online
   useEffect(() => {
     if (!tenant) return;
     (async () => {
@@ -199,7 +198,7 @@ export function BackupTab() {
       const text = await f.text();
       const json = JSON.parse(text);
       setConfirmImport({ name: f.name, payload: json });
-    } catch (err: any) {
+    } catch {
       error('Fichier JSON invalide');
     }
   };
@@ -220,7 +219,6 @@ export function BackupTab() {
   const runNow = async () => {
     setBusy('runNow');
     const { error: e } = await supabase.rpc('tenant_run_due_auto_backup');
-    // Force a backup even if schedule not due by creating a manual one with 'auto' label
     if (!e) {
       await supabase.rpc('tenant_create_backup', {
         p_label: `Auto ${new Date().toLocaleString('fr-FR')}`,
@@ -234,32 +232,25 @@ export function BackupTab() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-0">
       {/* Header */}
-      <div className="card p-5">
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
-            <Database className="w-5 h-5 text-brand-700" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Sauvegarde & restauration</h3>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Créez des points de restauration de votre entreprise. Seules vos données sont sauvegardées.
-              La restauration et la réinitialisation n'affectent aucun autre tenant.
-            </p>
-          </div>
-        </div>
+      <div className="py-4 border-b border-neutral-200">
+        <h3 className="text-[14px] font-bold text-neutral-900">Sauvegarde & restauration</h3>
+        <p className="text-[11px] text-neutral-500 mt-0.5">
+          Créez des points de restauration de votre entreprise. Seules vos données sont sauvegardées.
+          La restauration et la réinitialisation n'affectent aucun autre tenant.
+        </p>
       </div>
 
-      {/* Create */}
-      <div className="card p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <h4 className="font-semibold text-slate-900">Créer une sauvegarde manuelle</h4>
+      {/* Create manual backup */}
+      <div className="py-4 border-b border-neutral-200">
+        <div className="flex items-center gap-2 mb-3">
+          <ShieldCheck className="w-4 h-4 text-neutral-400" />
+          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Créer une sauvegarde manuelle</h4>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex items-center gap-2">
           <input
-            className="input flex-1"
+            className="bare-input text-sm py-1.5 flex-1"
             placeholder="Libellé (optionnel) — ex: Avant mise à jour tarifs"
             value={label}
             onChange={e => setLabel(e.target.value)}
@@ -267,70 +258,64 @@ export function BackupTab() {
           <button
             onClick={createBackup}
             disabled={busy === 'create'}
-            className="btn-icon-primary shrink-0"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-neutral-900 text-white hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50 shrink-0"
             title="Créer la sauvegarde"
           >
-            {busy === 'create' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+            {busy === 'create' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>
 
       {/* Import from file */}
-      <div className="card p-5">
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl bg-neutral-50 flex items-center justify-center shrink-0">
-            <Upload className="w-5 h-5 text-neutral-700" />
-          </div>
-          <div className="flex-1">
-            <h4 className="font-semibold text-slate-900">Importer une sauvegarde depuis un fichier</h4>
-            <p className="text-sm text-slate-600 mt-0.5 leading-relaxed">
-              Sélectionnez un fichier <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">.json</code>
-              {' '}précédemment téléchargé pour restaurer l'état de votre entreprise. Une sauvegarde de sécurité sera créée automatiquement avant la restauration.
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json,.json"
-              onChange={onFileChosen}
-              className="hidden"
-            />
-            <button
-              onClick={onPickFile}
-              disabled={busy === 'import'}
-              className="btn-icon mt-3"
-              title="Choisir un fichier…"
-            >
-              {busy === 'import' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            </button>
-          </div>
+      <div className="py-4 border-b border-neutral-200">
+        <div className="flex items-center gap-2 mb-2">
+          <Upload className="w-4 h-4 text-neutral-400" />
+          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Importer une sauvegarde depuis un fichier</h4>
         </div>
+        <p className="text-[11px] text-neutral-500 leading-relaxed mb-3">
+          Sélectionnez un fichier <code className="text-xs">.json</code> précédemment téléchargé pour restaurer l'état de votre entreprise.
+          Une sauvegarde de sécurité sera créée automatiquement avant la restauration.
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          onChange={onFileChosen}
+          className="hidden"
+        />
+        <button
+          onClick={onPickFile}
+          disabled={busy === 'import'}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 transition"
+        >
+          {busy === 'import' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+          Choisir un fichier…
+        </button>
       </div>
 
       {/* Schedule */}
       {schedule && (
-        <div className="card p-5 space-y-4">
+        <div className="py-4 border-b border-neutral-200 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-brand-700" />
-              <h4 className="font-semibold text-slate-900">Sauvegarde automatique planifiée</h4>
+              <Clock className="w-4 h-4 text-neutral-400" />
+              <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Sauvegarde automatique planifiée</h4>
             </div>
             <button
               onClick={() => saveSchedule({ auto_enabled: !schedule.auto_enabled })}
-              className={`h-9 px-3 rounded-xl text-sm font-semibold transition-colors ${
-                schedule.auto_enabled
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                  : 'bg-slate-100 text-slate-600 border border-slate-200'
-              }`}
+              className="shrink-0 relative"
             >
-              {schedule.auto_enabled ? 'Activée' : 'Désactivée'}
+              <div className={`w-9 h-5 rounded-full transition-colors relative ${schedule.auto_enabled ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
+                <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${schedule.auto_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+              </div>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 ${schedule.auto_enabled ? '' : 'opacity-50 pointer-events-none'}`}>
             <div>
-              <label className="label">Fréquence</label>
+              <label className="block text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-1">Fréquence</label>
               <select
-                className="input"
+                className="bare-input text-sm py-1.5 w-full"
                 disabled={!schedule.auto_enabled}
                 value={schedule.frequency_hours}
                 onChange={e => saveSchedule({ frequency_hours: Number(e.target.value) })}
@@ -339,12 +324,12 @@ export function BackupTab() {
               </select>
             </div>
             <div>
-              <label className="label">Nombre à conserver</label>
+              <label className="block text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-1">Nombre à conserver</label>
               <input
                 type="number"
                 min={1}
                 max={50}
-                className="input"
+                className="bare-input text-sm py-1.5 w-full num"
                 disabled={!schedule.auto_enabled}
                 value={schedule.keep_count}
                 onChange={e => saveSchedule({ keep_count: Math.max(1, Number(e.target.value) || 1) })}
@@ -352,71 +337,63 @@ export function BackupTab() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-4 text-xs text-slate-600">
-            <div><span className="text-slate-400">Dernière :</span> {fmtDate(schedule.last_run_at)}</div>
-            <div><span className="text-slate-400">Prochaine :</span> {fmtDate(schedule.next_run_at)}</div>
+          <div className="flex flex-wrap gap-4 text-[11px] text-neutral-500">
+            <div><span className="text-neutral-400">Dernière :</span> {fmtDate(schedule.last_run_at)}</div>
+            <div><span className="text-neutral-400">Prochaine :</span> {fmtDate(schedule.next_run_at)}</div>
           </div>
 
           <button
             onClick={runNow}
             disabled={busy === 'runNow'}
-            className="btn-icon"
-            title="Exécuter maintenant"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 transition"
           >
-            {busy === 'runNow' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            {busy === 'runNow' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+            Exécuter maintenant
           </button>
         </div>
       )}
 
-      {/* List */}
-      <div className="card p-5">
+      {/* History */}
+      <div className="py-4 border-b border-neutral-200">
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold text-slate-900">Historique ({backups.length})</h4>
-          <button onClick={load} className="btn-icon text-xs" title="Actualiser">
-            <RefreshCw className="w-4 h-4" />
+          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Historique ({backups.length})</h4>
+          <button onClick={load} className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500 hover:text-neutral-900 transition">
+            <RefreshCw className="w-3.5 h-3.5" />Actualiser
           </button>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-10 text-slate-400">
+          <div className="flex items-center justify-center py-8 text-neutral-400">
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>
         ) : backups.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-500">
+          <div className="text-center py-8 text-xs text-neutral-500">
             Aucune sauvegarde pour l'instant. Créez la première ci-dessus.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-neutral-100">
             {backups.map(b => (
               <div key={b.id} className="py-3 flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`badge ${b.is_auto ? 'bg-neutral-50 text-neutral-700' : 'bg-brand-50 text-brand-700'}`}>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
                       {b.is_auto ? 'AUTO' : 'MANUEL'}
                     </span>
-                    <div className="font-semibold text-sm text-slate-900 truncate">{b.label}</div>
+                    <div className="font-medium text-sm text-neutral-900 truncate">{b.label}</div>
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-3">
+                  <div className="text-[11px] text-neutral-500 mt-0.5 flex items-center gap-3">
                     <span>{fmtDate(b.created_at)}</span>
                     <span>{fmtBytes(b.size_bytes)}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => doDownload(b)} className="btn-icon text-xs" title="Télécharger">
-                    <Download className="w-4 h-4" />
+                  <button onClick={() => doDownload(b)} className="p-1.5 rounded-md hover:bg-neutral-100 transition-colors" title="Télécharger">
+                    <Download className="w-4 h-4 text-neutral-500" />
                   </button>
-                  <button
-                    onClick={() => setConfirmRestore(b)}
-                    className="btn-icon-success text-xs"
-                    title="Restaurer"
-                  >
-                    <RotateCcw className="w-4 h-4" />
+                  <button onClick={() => setConfirmRestore(b)} className="p-1.5 rounded-md hover:bg-neutral-100 transition-colors" title="Restaurer">
+                    <RotateCcw className="w-4 h-4 text-neutral-500" />
                   </button>
-                  <button
-                    onClick={() => setConfirmDelete(b)}
-                    className="h-9 w-9 rounded-xl hover:bg-red-50 text-red-500 inline-flex items-center justify-center"
-                    title="Supprimer"
-                  >
+                  <button onClick={() => setConfirmDelete(b)} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition-colors" title="Supprimer">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -427,25 +404,23 @@ export function BackupTab() {
       </div>
 
       {/* Reset operations */}
-      <div className="card p-5 border-amber-200 bg-amber-50/40">
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-            <AlertTriangle className="w-5 h-5 text-amber-700" />
-          </div>
-          <div className="flex-1">
-            <h4 className="font-semibold text-slate-900">Réinitialiser les opérations</h4>
-            <p className="text-sm text-slate-600 mt-0.5 leading-relaxed">
-              Supprime toutes les ventes, commandes, sessions de caisse, mouvements, écritures comptables et notifications.
-              <strong className="text-slate-800"> Vos articles, clients, fournisseurs et paramètres sont conservés.</strong>
-            </p>
-            <button
-              onClick={() => setConfirmReset(true)}
-              className="btn-icon-danger mt-3"
-              title="Réinitialiser les opérations"
-            >
-              <AlertTriangle className="w-4 h-4" />
-            </button>
-          </div>
+      <div className="py-4 border-b border-neutral-200">
+        <div className="flex items-center gap-2 mb-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600" />
+          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Réinitialiser les opérations</h4>
+        </div>
+        <div className="border-l-2 border-amber-400 pl-3">
+          <p className="text-[11px] text-neutral-600 leading-relaxed">
+            Supprime toutes les ventes, commandes, sessions de caisse, mouvements, écritures comptables et notifications.
+            <strong className="text-neutral-800"> Vos articles, clients, fournisseurs et paramètres sont conservés.</strong>
+          </p>
+          <button
+            onClick={() => setConfirmReset(true)}
+            className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-800 transition"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Réinitialiser les opérations
+          </button>
         </div>
       </div>
 

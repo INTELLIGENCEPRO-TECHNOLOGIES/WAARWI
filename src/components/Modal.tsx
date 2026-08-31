@@ -47,12 +47,14 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
   );
 }
 
-export function DocPanel({ open, onClose, title, children, footer }: {
+export function DocPanel({ open, onClose, title, children, footer, fullscreen = false, fullscreenMobile = false }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  fullscreen?: boolean;
+  fullscreenMobile?: boolean;
 }) {
   const [panelWidth, setPanelWidth] = useState<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -86,14 +88,14 @@ export function DocPanel({ open, onClose, title, children, footer }: {
 
   if (!isDesktop) {
     return (
-      <Modal open={open} onClose={onClose} title={title} size="lg" footer={footer}>
+      <Modal open={open} onClose={onClose} title={title} size={fullscreenMobile ? 'xl' : 'lg'} footer={footer} fullscreenMobile={fullscreenMobile}>
         {children}
       </Modal>
     );
   }
 
   return (
-    <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
+    <div className={`fixed inset-0 ${fullscreen ? '' : 'lg:left-64'} z-50 flex animate-fade-in`}>
       <div
         className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-teal-100 transition-colors group flex-shrink-0 relative z-10"
         style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}

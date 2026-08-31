@@ -200,6 +200,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   // Return modals
   const [returnOpen, setReturnOpen] = useState(false);
+  const [returnMode, setReturnMode] = useState<'return' | 'avoir'>('return');
   const [returnDetail, setReturnDetail] = useState<SaleReturn | null>(null);
   const [returnItemsDetail, setReturnItemsDetail] = useState<any[]>([]);
   const [returnEditorOpen, setReturnEditorOpen] = useState(false);
@@ -207,6 +208,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [returnLines, setReturnLines] = useState<{ item_id: string; article_id: string; name: string; max_qty: number; quantity: number; unit_price: number; purchase_cost: number; selected: boolean }[]>([]);
   const [returnWorkflowBusy, setReturnWorkflowBusy] = useState(false);
   const [returnCashConfirmOpen, setReturnCashConfirmOpen] = useState(false);
+  const [returnedQtys, setReturnedQtys] = useState<Record<string, number>>({});
 
   // Direct invoice creation
   const [invoiceEditorOpen, setInvoiceEditorOpen] = useState(false);
@@ -328,10 +330,47 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setQuotes((q.data as any) || []);
     setInvoices((s.data as any) || []);
     setReturns((r.data as any) || []);
+    // Refresh sales dropdown from the same invoice query so new invoices appear immediately
+    setSales((s.data as any) || []);
+    // Fetch returned quantities per sale to detect fully-returned invoices
+    const saleIds = ((s.data as any) || []).map((inv: any) => inv.id);
+    if (saleIds.length > 0) {
+      const [retItemsRes, saleItemsRes] = await Promise.all([
+        supabase.from('sale_return_items').select('return_id, article_id, quantity').in('return_id',
+          ((r.data as any) || []).map((ret: any) => ret.id)),
+        supabase.from('sale_items').select('sale_id, article_id, quantity').in('sale_id', saleIds),
+      ]);
+      const retByReturn: Record<string, { article_id: string; quantity: number }[]> = {};
+      (retItemsRes.data || []).forEach((ri: any) => {
+        if (!retByReturn[ri.return_id]) retByReturn[ri.return_id] = [];
+        retByReturn[ri.return_id].push({ article_id: ri.article_id, quantity: Number(ri.quantity) });
+      });
+      const retBySale: Record<string, number> = {};
+      ((r.data as any) || []).forEach((ret: any) => {
+        if (ret.status !== 'approved') return;
+        const items = retByReturn[ret.id] || [];
+        items.forEach((it: { article_id: string; quantity: number }) => {
+          retBySale[ret.sale_id] = (retBySale[ret.sale_id] || 0) + it.quantity;
+        });
+      });
+      const saleTotalQty: Record<string, number> = {};
+      (saleItemsRes.data || []).forEach((si: any) => {
+        saleTotalQty[si.sale_id] = (saleTotalQty[si.sale_id] || 0) + Number(si.quantity);
+      });
+      const fullyReturned: Record<string, number> = {};
+      for (const sid of saleIds) {
+        if (saleTotalQty[sid] && retBySale[sid] && retBySale[sid] >= saleTotalQty[sid]) {
+          fullyReturned[sid] = 1;
+        }
+      }
+      setReturnedQtys(fullyReturned);
+    } else {
+      setReturnedQtys({});
+    }
     if (!silent) setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id, billSourceSiteId]);
   useEffect(() => { if (currentSite && !billSourceSiteId) setBillSourceSiteId(currentSite.id); }, [currentSite?.id]);
 
   // Load document settings (per doc type)
@@ -424,6 +463,35 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     });
   }, [tenant?.id, currentSite?.id]);
 
+  // Reload stock levels when the source site ("Stock depuis") changes
+  useEffect(() => {
+    if (!tenant || !currentSite) return;
+    const stockSiteId = billSourceSiteId || currentSite.id;
+    let cancelled = false;
+    const fetchStock = async () => {
+      let all: any[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error: e } = await supabase.from('stock_levels')
+          .select('article_id, quantity')
+          .eq('tenant_id', tenant.id).eq('site_id', stockSiteId)
+          .range(from, from + 999);
+        if (e || !data) break;
+        all = all.concat(data);
+        if (data.length < 1000) break;
+        from += 1000;
+      }
+      if (cancelled) return;
+      const stockMap = new Map(all.map((r: any) => [r.article_id, Number(r.quantity)]));
+      setArticles(prev => prev.map(art => ({
+        ...art,
+        stock_quantity: stockMap.get(art.id) ?? 0,
+      })));
+    };
+    fetchStock();
+    return () => { cancelled = true; };
+  }, [tenant?.id, billSourceSiteId, currentSite?.id]);
+
   const activeReps = useMemo(() => salesReps.filter(r => r.status === 'actif'), [salesReps]);
   const repById = useCallback((id?: string | null) => salesReps.find(r => r.id === id) || null, [salesReps]);
   const repLabelOf = useCallback((id?: string | null) => {
@@ -483,7 +551,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [quotes, search, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount]);
 
   const filteredInvoices = useMemo(() => {
-    let r = invoices;
+    let r = invoices.filter(i => !returnedQtys[i.id]);
     if (statusFilter) {
       r = r.filter(i => {
         if (statusFilter === 'paid') return i.status !== 'cancelled' && i.paid >= i.total;
@@ -496,7 +564,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const q = search.toLowerCase().trim();
     if (q) r = r.filter(x => x.sale_number.toLowerCase().includes(q) || (x.customers?.name || '').toLowerCase().includes(q));
     return r.filter(x => matchesCommon(x.created_at, x.customer_id, Number(x.total)));
-  }, [invoices, search, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount]);
+  }, [invoices, returnedQtys, search, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount]);
 
   const filteredReturns = useMemo(() => {
     let r = returns.filter(x => x.refund_method !== 'avoir');
@@ -841,6 +909,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
   const openInvoiceForEdit = async (inv: Invoice) => {
     const { data: items } = await supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id);
+    setInvoicePostCreation(null);
     setEditingInvoiceId(inv.id);
     setInvoiceEditorMode('edit');
     setInvoiceForm({
@@ -1593,17 +1662,23 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }
 
     setSaving(false);
-    success('Retour enregistré — choisissez le mode de remboursement');
+    success(returnMode === 'avoir' ? 'Avoir enregistré — disponible sur le compte client' : 'Retour enregistré — choisissez le mode de remboursement');
     setReturnOpen(false);
     setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true });
     setReturnLines([]);
     await load();
+    if (returnMode === 'avoir') {
+      const { error: avErr } = await supabase.rpc('approve_return_as_avoir', { p_return_id: ret.id });
+      if (avErr) { error(avErr.message); return; }
+      success('Avoir créé — disponible sur le compte client');
+      await load();
+    }
     openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
   };
 
   const openReturnDetail = async (r: SaleReturn) => {
     setReturnDetail(r);
-    setReturnEditorOpen(true);
+    if (isDesktop) setReturnEditorOpen(true);
     const { data } = await supabase.from('sale_return_items').select('*, articles(internal_ref, oem_ref)').eq('return_id', r.id);
     setReturnItemsDetail(data || []);
   };
@@ -1655,7 +1730,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const counts = {
     quotes: quotes.length,
-    invoices: invoices.length,
+    invoices: invoices.filter(i => !returnedQtys[i.id]).length,
     returns: returns.filter(r => r.refund_method !== 'avoir').length,
     credits: returns.filter(r => r.refund_method === 'avoir').length,
   };
@@ -1685,11 +1760,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     } else if (tab === 'invoices') {
       if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; }
       openInvoiceEditor();
+    } else if (tab === 'returns') {
+      setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true);
     } else {
-      setReturnOpen(true);
+      setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true);
     }
   };
-  const primaryLabel = tab === 'quotes' ? 'Nouveau devis' : tab === 'invoices' ? 'Nouvelle facture' : 'Nouveau retour';
+  const primaryLabel = tab === 'quotes' ? 'Nouveau devis' : tab === 'invoices' ? 'Nouvelle facture' : tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir';
 
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
@@ -1704,8 +1781,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const newMenuItems = [
     { key: 'invoice', label: 'Nouvelle facture', icon: Receipt, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; } openInvoiceEditor(); } },
     { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } setQuoteEditorMode('create'); setQuoteOpen(true); } },
-    { key: 'return', label: 'Nouveau retour', icon: RotateCcw, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; } setReturnOpen(true); } },
-    { key: 'credit', label: 'Nouvel avoir', icon: Wallet, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } setReturnOpen(true); } },
+    { key: 'return', label: 'Nouveau retour', icon: RotateCcw, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; } setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); } },
+    { key: 'credit', label: 'Nouvel avoir', icon: Wallet, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); } },
   ];
 
   const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
@@ -1786,7 +1863,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             <select
               value={billSourceSiteId}
               onChange={e => setBillSourceSiteId(e.target.value)}
-              className="text-[11px] font-semibold bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400/30"
+              className="text-[11px] font-semibold bg-transparent border-b border-slate-300 px-0 py-1 text-slate-700 focus:outline-none focus:border-brand-400"
             >
               {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
               {availableDepots.map(d => (
@@ -2007,7 +2084,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                 icon={tab === 'returns' ? RotateCcw : Wallet}
                 title={tab === 'returns' ? 'Aucun retour' : 'Aucun avoir'}
                 description={tab === 'returns' ? 'Les retours clients apparaîtront ici.' : 'Les avoirs clients apparaîtront ici.'}
-                action={<button onClick={() => setReturnOpen(true)} className="btn-icon-primary" title={tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}><Plus className="w-4 h-4" /></button>}
+                action={<button onClick={() => { if (tab === 'returns') { setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); } else { setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); } setReturnLines([]); setReturnOpen(true); }} className="btn-icon-primary" title={tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}><Plus className="w-4 h-4" /></button>}
               />
             ) : (
               <div className={flashTab === 'returns' && tab === 'returns' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
@@ -2955,20 +3032,23 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </Modal>
 
       {/* ── Return create modal ─────────────────────────────── */}
-      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title="Nouveau retour client" size="lg" fullMobile
+      <Modal open={returnOpen} onClose={() => setReturnOpen(false)} title={returnMode === 'avoir' ? 'Nouvel avoir client' : 'Nouveau retour client'} size="lg" fullMobile
         footer={<>
           <button onClick={() => setReturnOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={() => saveReturn()} disabled={saving || returnLines.filter(i => i.selected && i.quantity > 0).length === 0} className="btn-icon-primary" title="Enregistrer le retour">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+          <button onClick={() => saveReturn()} disabled={saving || returnLines.filter(i => i.selected && i.quantity > 0).length === 0} className="btn-icon-primary" title="Enregistrer">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (returnMode === 'avoir' ? <Wallet className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />)}
           </button>
         </>}>
         <div className="space-y-2 sm:space-y-4">
           <div>
             <label className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Vente d'origine *</label>
-            <select value={returnForm.sale_id} onChange={e => handleSaleChange(e.target.value)} className="input text-xs sm:text-sm h-[34px] sm:h-auto">
-              <option value="">-- Sélectionnez une vente --</option>
-              {sales.map(s => <option key={s.id} value={s.id}>{s.sale_number}{s.customers ? ` - ${s.customers.name}` : ''} ({formatFCFA(s.total || 0)})</option>)}
-            </select>
+            <div className="relative">
+              <select value={returnForm.sale_id} onChange={e => handleSaleChange(e.target.value)} className="bare-input w-full text-xs sm:text-sm py-1.5 pr-6">
+                <option value="">-- Sélectionnez une vente --</option>
+                {sales.map(s => <option key={s.id} value={s.id}>{s.sale_number}{s.customers ? ` - ${s.customers.name}` : ''} ({formatFCFA(s.total || 0)})</option>)}
+              </select>
+              <div className="h-px bg-neutral-300 mt-0.5" />
+            </div>
           </div>
 
           {returnLines.length === 0 && returnForm.sale_id && (
@@ -2978,14 +3058,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           {returnLines.length > 0 && (
             <div>
               <label className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">Articles à retourner</label>
-              <div className="space-y-1 sm:space-y-2 overflow-y-auto -mx-0.5 px-0.5" style={{ maxHeight: 'calc(100vh - 350px)' }}>
+              <div className="space-y-0 overflow-y-auto -mx-0.5 px-0.5" style={{ maxHeight: 'calc(100vh - 350px)' }}>
                 {returnLines.map((it, idx) => {
                   const toggle = (v: boolean) => setReturnLines(p => p.map((x, i) => i === idx ? { ...x, selected: v } : x));
                   const setQty = (q: number) => setReturnLines(p => p.map((x, i) => i === idx ? { ...x, quantity: Math.min(it.max_qty, Math.max(1, q)) } : x));
                   return (
-                    <div key={idx} className={`rounded-xl border p-2 sm:p-3 transition-all ${it.selected ? 'border-brand-300 bg-brand-50/30' : 'border-slate-200 bg-white'}`}>
+                    <div key={idx} className={`py-2.5 transition-all border-b border-neutral-100 ${it.selected ? 'opacity-100' : 'opacity-60'}`}>
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => toggle(!it.selected)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${it.selected ? 'bg-brand-600 border-brand-600' : 'bg-white border-slate-300'}`}>
+                        <button type="button" onClick={() => toggle(!it.selected)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${it.selected ? 'bg-neutral-900 border-neutral-900' : 'bg-white border-neutral-300'}`}>
                           {it.selected && <CheckCircle className="w-3 h-3 text-white" />}
                         </button>
                         <div className="min-w-0 flex-1">
@@ -2994,9 +3074,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                         </div>
                         {it.selected && (
                           <div className="flex items-center gap-1 shrink-0">
-                            <button type="button" onClick={() => setQty(it.quantity - 1)} className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center"><Minus className="w-3 h-3" /></button>
-                            <input type="number" value={it.quantity} onChange={e => setQty(Number(e.target.value))} min="1" max={it.max_qty} className="w-8 text-center text-[11px] font-bold num bg-transparent outline-none" />
-                            <button type="button" onClick={() => setQty(it.quantity + 1)} className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center"><Plus className="w-3 h-3" /></button>
+                            <button type="button" onClick={() => setQty(it.quantity - 1)} className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-900"><Minus className="w-3 h-3" /></button>
+                            <input type="number" value={it.quantity} onChange={e => setQty(Number(e.target.value))} min="1" max={it.max_qty} className="w-8 text-center text-[11px] font-bold num bg-transparent outline-none border-b border-neutral-300" />
+                            <button type="button" onClick={() => setQty(it.quantity + 1)} className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-900"><Plus className="w-3 h-3" /></button>
                           </div>
                         )}
                         <span className="num text-[11px] font-bold text-slate-800 shrink-0 w-16 text-right">
@@ -3008,12 +3088,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                 })}
               </div>
               {returnLines.filter(i => i.selected).length > 0 && (
-                <div className="mt-2 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white p-3 flex items-center justify-between">
+                <div className="mt-2 flex items-center justify-between py-2 border-b-2 border-neutral-900">
                   <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-white/50">Total retour</div>
-                    <div className="text-[10px] text-white/70">{returnLines.filter(i => i.selected).length} article{returnLines.filter(i => i.selected).length > 1 ? 's' : ''}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total {returnMode === 'avoir' ? 'avoir' : 'retour'}</div>
+                    <div className="text-[10px] text-slate-500">{returnLines.filter(i => i.selected).length} article{returnLines.filter(i => i.selected).length > 1 ? 's' : ''}</div>
                   </div>
-                  <div className="num text-lg font-bold">{formatFCFA(returnTotal)}</div>
+                  <div className="num text-lg font-bold text-neutral-900">{formatFCFA(returnTotal)}</div>
                 </div>
               )}
             </div>
@@ -3021,10 +3101,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
           <div>
             <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-0.5 block">Motif</label>
-            <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="input text-xs h-[34px]" placeholder="Motif du retour..." />
+            <input value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className="bare-input w-full text-xs py-1.5" placeholder="Motif du retour..." />
+            <div className="h-px bg-neutral-300 mt-0.5" />
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/70">
+          <label className="flex items-center gap-2 cursor-pointer py-1.5">
             <input type="checkbox" checked={returnForm.restock} onChange={e => setReturnForm(f => ({ ...f, restock: e.target.checked }))} className="w-3.5 h-3.5 rounded" />
             <span className="text-[11px] font-medium text-slate-700">Remettre en stock automatiquement</span>
           </label>
@@ -3042,11 +3123,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           const st = isCredit ? creditStatus(returnDetail) : (RETURN_STATUS[returnDetail.status] || RETURN_STATUS.pending);
           const used = Number(returnDetail.credit_used || 0);
           const balance = Number(returnDetail.total) - used;
-          const slimStatusColor = returnDetail.status === 'approved' ? (isCredit ? 'blue' : 'emerald') : returnDetail.status === 'rejected' ? 'rose' : 'amber';
           return (
             <div className="space-y-4">
               <DocSlimHeader
-                status={{ label: st.label, color: slimStatusColor as any }}
+                status={{ label: st.label, color: 'slate' as any }}
                 customerName={returnDetail.customers?.name ?? null}
                 date={formatDateTime(returnDetail.created_at)}
                 extra={returnDetail.sales?.sale_number ? `Vente ${returnDetail.sales.sale_number}` : undefined}
@@ -3054,36 +3134,30 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
               {/* Workflow: pending return → choose action */}
               {returnDetail.status === 'pending' && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+                <div className="py-3 space-y-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                      <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
-                    </div>
+                    <RotateCcw className="w-4 h-4 text-amber-600 shrink-0" />
                     <div>
-                      <div className="text-xs font-bold text-amber-900">Traitement du retour</div>
-                      <div className="text-[10px] text-amber-700">Choisissez comment rembourser le client</div>
+                      <div className="text-xs font-bold text-neutral-900">Traitement du retour</div>
+                      <div className="text-[10px] text-slate-500">Choisissez comment rembourser le client</div>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setReturnCashConfirmOpen(true)}
                       disabled={returnWorkflowBusy}
-                      className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-white border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 transition-all active:scale-[0.97] disabled:opacity-50"
+                      className="flex flex-col items-center gap-1.5 px-3 py-3 transition-all active:scale-[0.97] disabled:opacity-50"
                     >
-                      <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
-                        <Coins className="w-4.5 h-4.5 text-emerald-700" />
-                      </div>
+                      <Coins className="w-5 h-5 text-emerald-600" />
                       <div className="text-[11px] font-bold text-slate-800">Rembourser en caisse</div>
                       <div className="text-[9px] text-slate-500 text-center">Sortie caisse immédiate</div>
                     </button>
                     <button
                       onClick={() => approveAsAvoir(returnDetail)}
                       disabled={returnWorkflowBusy}
-                      className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-white border-2 border-slate-200 hover:border-neutral-400 hover:bg-neutral-50 transition-all active:scale-[0.97] disabled:opacity-50"
+                      className="flex flex-col items-center gap-1.5 px-3 py-3 transition-all active:scale-[0.97] disabled:opacity-50"
                     >
-                      <div className="w-9 h-9 rounded-full bg-neutral-100 flex items-center justify-center">
-                        <Wallet className="w-4.5 h-4.5 text-neutral-800" />
-                      </div>
+                      <Wallet className="w-5 h-5 text-neutral-700" />
                       <div className="text-[11px] font-bold text-slate-800">Créer un avoir</div>
                       <div className="text-[9px] text-slate-500 text-center">Imputer sur prochaine facture</div>
                     </button>
@@ -3091,7 +3165,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   {returnWorkflowBusy && (
                     <div className="flex items-center justify-center gap-2 py-1">
                       <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-                      <span className="text-xs text-amber-700">Traitement...</span>
+                      <span className="text-xs text-amber-600">Traitement...</span>
                     </div>
                   )}
                 </div>
@@ -3099,22 +3173,22 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
               {/* Avoir: show credit balance and usage */}
               {isCredit && returnDetail.status === 'approved' && (
-                <div className="rounded-xl bg-neutral-50 border border-neutral-200 p-3 space-y-2">
+                <div className="py-2 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Wallet className="w-3.5 h-3.5 text-neutral-700" />
+                      <Wallet className="w-3.5 h-3.5 text-slate-600" />
                       <span className="text-[11px] font-bold text-neutral-900">Solde avoir</span>
                     </div>
-                    <span className="text-sm font-bold text-neutral-800 num">{formatFCFA(balance)}</span>
+                    <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(balance)}</span>
                   </div>
                   {used > 0 && (
-                    <div className="flex items-center justify-between text-[10px] text-neutral-700 border-t border-neutral-200/70 pt-1.5">
+                    <div className="flex items-center justify-between text-[10px] text-slate-600 border-t border-neutral-100 pt-1.5">
                       <span>Montant initial</span>
                       <span className="num">{formatFCFA(Number(returnDetail.total))}</span>
                     </div>
                   )}
                   {used > 0 && (
-                    <div className="flex items-center justify-between text-[10px] text-neutral-700">
+                    <div className="flex items-center justify-between text-[10px] text-slate-600">
                       <span>Déjà utilisé</span>
                       <span className="num">-{formatFCFA(used)}</span>
                     </div>
@@ -3127,35 +3201,34 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
               {/* Cash refund: show approved status */}
               {!isCredit && returnDetail.status === 'approved' && (
-                <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 flex items-center gap-2">
+                <div className="flex items-center gap-2 py-2">
                   <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                   <div>
-                    <div className="text-[11px] font-bold text-emerald-900">Remboursé en caisse</div>
+                    <div className="text-[11px] font-bold text-emerald-800">Remboursé en caisse</div>
                     <div className="text-[10px] text-emerald-700 num">{formatFCFA(Number(returnDetail.total))}</div>
                   </div>
                 </div>
               )}
 
-              {returnDetail.reason && <div className="p-3 bg-slate-50 rounded-xl text-sm border border-slate-200/70"><span className="font-semibold">Motif :</span> {returnDetail.reason}</div>}
+              {returnDetail.reason && <div className="py-2 text-sm border-b border-neutral-100"><span className="font-semibold">Motif :</span> {returnDetail.reason}</div>}
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Articles retournés</div>
-                <div className="space-y-1.5">
+                <div className="space-y-0">
                   {returnItemsDetail.map(i => (
-                    <div key={i.id} className="p-3 rounded-xl bg-white border border-slate-200/70 shadow-sm flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0"><Package className="w-4 h-4 text-slate-500" /></div>
+                    <div key={i.id} className="py-2.5 flex items-start gap-3 border-b border-neutral-100">
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold text-slate-900 line-clamp-2">{i.name}</div>
                         {i.articles?.internal_ref && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{i.articles.internal_ref}</div>}
                         {i.articles?.oem_ref && <div className="text-[10px] text-slate-400 font-mono">OEM: {i.articles.oem_ref}</div>}
                         <div className="text-[11px] text-slate-500 num mt-0.5">Qté {i.quantity} · {formatFCFA(i.unit_price)}</div>
                       </div>
-                      <div className={`num font-bold shrink-0 ${isCredit ? 'text-neutral-800' : 'text-red-700'}`}>{formatFCFA(i.total)}</div>
+                      <div className={`num font-bold shrink-0 ${isCredit ? 'text-neutral-900' : 'text-red-700'}`}>{formatFCFA(i.total)}</div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-900 text-white">
-                  <span className="text-[11px] font-bold text-white/60 uppercase tracking-wider">Total</span>
-                  <span className="text-base font-bold num">{formatFCFA(Number(returnDetail.total))}</span>
+                <div className="mt-3 flex items-center justify-between py-2.5 border-b-2 border-neutral-900">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                  <span className="text-base font-bold num text-neutral-900">{formatFCFA(Number(returnDetail.total))}</span>
                 </div>
               </div>
             </div>

@@ -239,7 +239,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
         : 'Nouvelle commande fournisseur';
 
   const inputCls = 'w-full text-xs h-7 px-2 bg-white border border-neutral-300 rounded focus:border-neutral-500 focus:ring-1 focus:ring-neutral-200 outline-none transition-all';
-  const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors';
+  const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-[#C9C9C9] focus:border-black outline-none transition-colors';
 
   const selectedSupplier = suppliers.find(s => s.id === headerForm.supplier_id);
 
@@ -247,7 +247,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
     <div className="fixed inset-0 z-[60] flex flex-col bg-white animate-fade-in">
 
       {/* ═══ Title bar ═══ */}
-      <div className="flex items-center justify-between px-4 h-11 border-b border-neutral-200 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 h-11 border-b border-[#D4D4D4] flex-shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           {(onPrev || onNext) && (
             <div className="flex items-center gap-0.5 mr-1">
@@ -344,11 +344,11 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
       {/* ═══ Column headers ═══ */}
       {!isReceive && (
-        <div className="flex-shrink-0 border-b border-neutral-200 bg-neutral-50/70">
+        <div className="flex-shrink-0 border-b border-[#D4D4D4] bg-[#F8F8F8]">
           <div className="flex items-center px-2 h-7">
             <div className="w-8 shrink-0" />
             {COLS.map(col => (
-              <div key={col.key} className={`px-2 text-[10px] font-bold text-neutral-500 uppercase tracking-wider ${colClass(col.key)}`}>
+              <div key={col.key} className={`px-2 text-[10px] font-bold text-[#444444] uppercase tracking-wider ${colClass(col.key)}`}>
                 {col.label}
               </div>
             ))}
@@ -359,7 +359,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
       {/* ═══ Input row (create/edit only) ═══ */}
       {canEdit && (
-        <div className="flex-shrink-0 border-b-2 border-neutral-300 bg-neutral-50/40">
+        <div className="flex-shrink-0 border-b-2 border-[#D4D4D4] bg-neutral-50/40">
           <div className="flex items-center px-2 py-1">
             <div className="w-8 shrink-0 text-center">
               {editingIdx !== null ? (
@@ -476,9 +476,9 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
                 <div
                   key={vIdx}
                   onClick={() => { if (canEdit && !isEditingThis) startEdit(vIdx); }}
-                  className={`flex items-center px-2 border-b border-neutral-100 transition-colors group ${
+                  className={`flex items-center px-2 border-b border-[#D4D4D4] transition-colors group ${
                     canEdit ? 'cursor-pointer' : ''
-                  } ${isEditingThis ? 'bg-amber-50/50' : canEdit ? 'hover:bg-neutral-50' : ''}`}
+                  } ${isEditingThis ? 'bg-amber-50/50' : vIdx % 2 === 1 ? 'bg-[#FAFAFA]' : ''} ${canEdit && !isEditingThis ? 'hover:bg-neutral-50' : ''}`}
                   style={{ height: '28px' }}
                 >
                   <div className="w-8 shrink-0 text-center">
@@ -519,7 +519,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
       </div>
 
       {/* ═══ Footer ═══ */}
-      <div className="border-t border-neutral-200 bg-white px-4 py-2 flex flex-col gap-1 flex-shrink-0">
+      <div className="border-t border-[#D4D4D4] bg-white px-4 py-2 flex flex-col gap-1 flex-shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-neutral-500 tabular-nums">
             {validItems.length} ligne{validItems.length !== 1 ? 's' : ''}
@@ -956,7 +956,7 @@ function SupplierSearchDropdown({ suppliers, value, onSelect }: {
           onFocus={() => { setQuery(''); setOpen(true); }}
           onKeyDown={handleKeyDown}
           placeholder="Rechercher fournisseur..."
-          className="w-full text-xs h-8 pl-8 pr-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors"
+          className="w-full text-xs h-8 pl-8 pr-2 bg-transparent border-b border-[#C9C9C9] focus:border-black outline-none transition-colors"
           autoComplete="off"
         />
       </div>

@@ -224,7 +224,7 @@ export function DocumentSettingsTab() {
                         value={settings.default_representative}
                         onChange={e => set({ default_representative: e.target.value })}
                         placeholder="Nom par défaut (optionnel)"
-                        className="input text-sm w-full max-w-xs"
+                        className="w-full max-w-xs bg-transparent border-0 border-b border-neutral-300 px-0 py-1.5 text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-neutral-900 transition"
                       />
                     </div>
                   )}

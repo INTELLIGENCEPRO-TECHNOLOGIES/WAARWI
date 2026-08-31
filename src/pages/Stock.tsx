@@ -71,7 +71,13 @@ export function Stock() {
   const [mvTotalCount, setMvTotalCount] = useState(0);
   const [mvLoading, setMvLoading] = useState(false);
   const MV_PAGE_SIZE = 50;
-  const [mvSiteId, setMvSiteId] = useState<string>('');
+  const [mvSiteId, setMvSiteId] = useState<string>(() => {
+    if (!tenant?.id || !profile?.id) return '';
+    try {
+      const stored = localStorage.getItem(`mvSiteId:${tenant.id}:${profile.id}`);
+      return stored || '';
+    } catch { return ''; }
+  });
   const [pendingSiteChange, setPendingSiteChange] = useState<{ newSiteId: string; newSiteName: string; isDepot: boolean } | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -300,12 +306,24 @@ export function Stock() {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id]);
 
   // ── Load movements paginated with search/date filters ──────────────────────
+  const accessibleSiteIds = useMemo(() => {
+    if (!currentSite) return [] as string[];
+    const ownDepotIds = depots.filter(d => d.parent_site_id === currentSite.id).map(d => d.id);
+    return [currentSite.id, ...ownDepotIds];
+  }, [currentSite?.id, depots]);
+
+  useEffect(() => {
+    if (mvSiteId && accessibleSiteIds.length > 0 && !accessibleSiteIds.includes(mvSiteId)) {
+      setMvSiteId('');
+      try { if (tenant?.id && profile?.id) localStorage.setItem(`mvSiteId:${tenant.id}:${profile.id}`, ''); } catch {}
+    }
+  }, [mvSiteId, accessibleSiteIds]);
+
   const loadMovements = async (page = 1) => {
     if (!tenant || !currentSite) return;
     setMvLoading(true);
     const from = (page - 1) * MV_PAGE_SIZE;
     const to = from + MV_PAGE_SIZE - 1;
-    const siteId = mvSiteId || currentSite.id;
 
     // If search is active, we need to find matching article IDs first
     let articleFilter: string[] | null = null;
@@ -325,9 +343,14 @@ export function Stock() {
 
     let query = supabase
       .from('stock_movements')
-      .select('id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, articles(name, internal_ref)', { count: 'exact' })
-      .eq('tenant_id', tenant.id)
-      .eq('site_id', siteId);
+      .select('id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, site_id, stock_document_id, articles(name, internal_ref), stock_documents(site_id, dest_site_id, doc_number)', { count: 'exact' })
+      .eq('tenant_id', tenant.id);
+
+    if (mvSiteId) {
+      query = query.eq('site_id', mvSiteId);
+    } else {
+      query = query.in('site_id', accessibleSiteIds);
+    }
 
     if (articleFilter && articleFilter.length <= 200) {
       query = query.in('article_id', articleFilter);
@@ -845,7 +868,7 @@ export function Stock() {
 
         {/* Row 1: Title + stock value + view toggle + More menu */}
         <div className="flex items-center gap-2">
-          {tab !== 'stocks' && (
+          {tab === 'lots' && (
             <button onClick={() => setTab('stocks')} className="p-1 -ml-1 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0" aria-label="Retour à l'inventaire">
               <Boxes className="w-5 h-5" />
             </button>
@@ -1197,6 +1220,11 @@ export function Stock() {
                       const newId = e.target.value;
                       setMvSiteId(newId);
                       setMvPage(1);
+                      try {
+                        if (tenant?.id && profile?.id) {
+                          localStorage.setItem(`mvSiteId:${tenant.id}:${profile.id}`, newId);
+                        }
+                      } catch {}
                     }}
                     className="bare-input text-[11px] font-semibold py-1 w-full pr-5"
                   >
@@ -1242,6 +1270,13 @@ export function Stock() {
             {filteredMoves.map(m => {
               const qty = Number(m.quantity);
               const positive = qty >= 0;
+              const isTransfer = m.movement_type === 'transfer_out' || m.movement_type === 'transfer_in';
+              const doc = m.stock_documents as any;
+              const transferFrom = isTransfer ? findSiteName(doc?.site_id) : '';
+              const transferTo = isTransfer ? findSiteName(doc?.dest_site_id) : '';
+              const mvSiteName = mvSiteId
+                ? findSiteName(m.site_id)
+                : findSiteName(m.site_id);
               return (
                 <div key={m.id} className="flex items-center gap-2.5 px-1 py-3 transition-colors">
                   <div className={`shrink-0 ${
@@ -1253,7 +1288,9 @@ export function Stock() {
                     <div className="flex items-start gap-1.5 flex-wrap">
                       <span className="text-[12px] font-semibold text-neutral-900 break-words min-w-0">{(m.articles as any)?.name}</span>
                       <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${mvTypeColor[m.movement_type] || 'text-neutral-600'}`}>
-                        {mvTypeLabel[m.movement_type] || m.movement_type}
+                        {isTransfer
+                          ? (m.movement_type === 'transfer_out' ? 'Transfert sortant' : 'Transfert entrant')
+                          : (mvTypeLabel[m.movement_type] || m.movement_type)}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-neutral-500">
@@ -1261,6 +1298,16 @@ export function Stock() {
                       <span className="shrink-0">·</span>
                       <span className="shrink-0 num">{formatDateTime(m.created_at)}</span>
                     </div>
+                    {isTransfer ? (
+                      <div className="text-[10px] text-neutral-500 mt-0.5 break-words">
+                        <span className="truncate">{transferFrom}</span>
+                        <span className="shrink-0"> → </span>
+                        <span className="truncate">{transferTo}</span>
+                        {doc?.doc_number && <span className="shrink-0 font-mono ml-1">{doc.doc_number}</span>}
+                      </div>
+                    ) : mvSiteName ? (
+                      <div className="text-[10px] text-neutral-500 mt-0.5 break-words">{mvSiteName}</div>
+                    ) : null}
                     {m.note && <div className="text-[10px] text-neutral-400 break-words mt-0.5">{m.note}</div>}
                   </div>
                   <div className="text-right shrink-0 flex items-center gap-2">
@@ -1971,7 +2018,7 @@ export function Stock() {
           <div className="py-3">
             <div className="text-center">
               <p className="text-sm font-semibold text-neutral-900">
-                Cette operation sera effectuee dans :
+                Cette opération sera effectuée dans :
               </p>
             </div>
             <div className="h-px bg-neutral-200 my-3" />
@@ -1985,7 +2032,7 @@ export function Stock() {
             </div>
             <div className="h-px bg-neutral-200 my-3" />
             <p className="text-[11px] text-neutral-500 text-center">
-              Les saisies en cours seront reinitialisees.
+              Les saisies en cours seront réinitialisées.
             </p>
           </div>
         )}

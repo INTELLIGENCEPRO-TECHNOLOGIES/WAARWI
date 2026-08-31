@@ -214,7 +214,7 @@ export function ShopAppearanceSettings({ settings, onSettingsChange }: Props) {
                 )}
               </div>
 
-              <div><label className="label">Texte alternatif</label><input value={settings.cover_image_alt} onChange={(e) => update({ cover_image_alt: e.target.value })} className="input" placeholder="Description (accessibilité)" /></div>
+              <div><label className="label">Texte alternatif</label><input value={settings.cover_image_alt} onChange={(e) => update({ cover_image_alt: e.target.value })} className="bare-input text-sm py-1.5 w-full" placeholder="Description (accessibilité)" /></div>
 
               <div className="flex gap-3">
                 <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs font-medium text-neutral-500 hover:text-neutral-900 transition">
@@ -289,9 +289,9 @@ export function ShopAppearanceSettings({ settings, onSettingsChange }: Props) {
       {/* Commercial content */}
       <div className="py-4 border-t border-neutral-200 space-y-4">
         <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Contenu commercial</span>
-        <div><label className="label">Titre de couverture</label><input value={settings.hero_title} onChange={(e) => update({ hero_title: e.target.value })} placeholder="Titre accrocheur" className="input" /></div>
-        <div><label className="label">Sous-titre</label><input value={settings.hero_subtitle} onChange={(e) => update({ hero_subtitle: e.target.value })} placeholder="Description courte" className="input" /></div>
-        <div><label className="label">Bouton d'action</label><input value={settings.hero_cta_label} onChange={(e) => update({ hero_cta_label: e.target.value })} placeholder="Découvrir les produits" className="input" /></div>
+        <div><label className="label">Titre de couverture</label><input value={settings.hero_title} onChange={(e) => update({ hero_title: e.target.value })} placeholder="Titre accrocheur" className="bare-input text-sm py-1.5 w-full" /></div>
+        <div><label className="label">Sous-titre</label><input value={settings.hero_subtitle} onChange={(e) => update({ hero_subtitle: e.target.value })} placeholder="Description courte" className="bare-input text-sm py-1.5 w-full" /></div>
+        <div><label className="label">Bouton d'action</label><input value={settings.hero_cta_label} onChange={(e) => update({ hero_cta_label: e.target.value })} placeholder="Découvrir les produits" className="bare-input text-sm py-1.5 w-full" /></div>
       </div>
 
       {/* Promo banner */}
@@ -299,7 +299,7 @@ export function ShopAppearanceSettings({ settings, onSettingsChange }: Props) {
         <SettingRow label="Bandeau promotionnel" desc="Bandeau défilant en haut" active={settings.promo_banner_active} onToggle={() => update({ promo_banner_active: !settings.promo_banner_active })} />
         {settings.promo_banner_active && (
           <div className="space-y-3 pt-2">
-            <div><label className="label">Texte</label><input value={settings.promo_banner_text} onChange={(e) => update({ promo_banner_text: e.target.value })} placeholder="Ex: Livraison gratuite dès 50 000 FCFA" className="input" /></div>
+            <div><label className="label">Texte</label><input value={settings.promo_banner_text} onChange={(e) => update({ promo_banner_text: e.target.value })} placeholder="Ex: Livraison gratuite dès 50 000 FCFA" className="bare-input text-sm py-1.5 w-full" /></div>
             <div>
               <label className="label">Couleur</label>
               <div className="flex items-center gap-2">
@@ -315,7 +315,7 @@ export function ShopAppearanceSettings({ settings, onSettingsChange }: Props) {
       <div className="py-4 border-t border-neutral-200 space-y-3">
         <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Réseaux sociaux</span>
         {(['facebook', 'instagram', 'tiktok'] as const).map(network => (
-          <div key={network}><label className="label capitalize">{network}</label><input value={(settings.social_links || {})[network] || ''} onChange={(e) => update({ social_links: { ...settings.social_links, [network]: e.target.value } })} placeholder={`URL ${network}`} className="input" /></div>
+          <div key={network}><label className="label capitalize">{network}</label><input value={(settings.social_links || {})[network] || ''} onChange={(e) => update({ social_links: { ...settings.social_links, [network]: e.target.value } })} placeholder={`URL ${network}`} className="bare-input text-sm py-1.5 w-full" /></div>
         ))}
       </div>
 

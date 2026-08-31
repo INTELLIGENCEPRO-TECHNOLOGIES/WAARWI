@@ -603,15 +603,15 @@ export function MasterCatalog() {
                   </div>
                 )}
                 <div className="min-w-0 flex-1 leading-tight">
-                  <div className="text-[11px] font-semibold text-slate-900 line-clamp-2">{i.designation}</div>
+                  <div className="text-[13px] font-semibold text-slate-900 line-clamp-2">{i.designation}</div>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    {i.brand && <span className="text-[9px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}
-                    {i.manufacturer_ref && <span className="text-[9px] font-mono text-slate-400 truncate">{i.manufacturer_ref}</span>}
-                    {isImported && <span className="text-[9px] font-bold text-emerald-700 inline-flex items-center gap-0.5"><CheckCircle2 className="w-2.5 h-2.5" />Importé</span>}
+                    {i.brand && <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">{i.brand}</span>}
+                    {i.manufacturer_ref && <span className="text-[11px] font-mono text-slate-400 truncate">{i.manufacturer_ref}</span>}
+                    {isImported && <span className="text-[11px] font-bold text-emerald-700 inline-flex items-center gap-0.5"><CheckCircle2 className="w-3 h-3" />Importé</span>}
                   </div>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Achat <span className="text-slate-700 num">{formatFCFA(i.purchase_price)}</span></span>
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vente <span className="text-brand-700 num">{formatFCFA(i.sale_price)}</span></span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Achat <span className="text-slate-700 num">{formatFCFA(i.purchase_price)}</span></span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vente <span className="text-brand-700 num">{formatFCFA(i.sale_price)}</span></span>
                   </div>
                 </div>
               </div>
