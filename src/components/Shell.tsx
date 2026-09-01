@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
-  BookOpen, Settings, LogOut, Menu, Store, ChevronDown, Calculator,
+  BookOpen, Settings, LogOut, Menu, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library, Truck,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft, UserCheck,
@@ -188,8 +188,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     if (key === 'warranties' && !isImeiActivity) return false;
     const mod = ROUTE_MODULE[key];
     if (mod && !enabledModules.includes(mod)) return false;
-    if (permsLoading) return true;
     const perm = ROUTE_PERMISSION[key];
+    if (perm && permsLoading) return false;
     if (perm && !can(perm)) return false;
     return true;
   };
@@ -219,6 +219,24 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     setSidebarDark(prev => {
       const next = !prev;
       try { localStorage.setItem('sidebar_dark', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
+
+  const sectionStorageKey = tenant?.id && profile?.id ? `sidebar_sections_${tenant.id}_${profile.id}` : null;
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!sectionStorageKey) return;
+    try {
+      const raw = localStorage.getItem(sectionStorageKey);
+      setOpenSections(raw ? JSON.parse(raw) : {});
+    } catch { setOpenSections({}); }
+  }, [sectionStorageKey]);
+  const isSectionOpen = (titleKey: string) => openSections[titleKey] !== false;
+  const toggleSection = (titleKey: string) => {
+    setOpenSections(prev => {
+      const next = { ...prev, [titleKey]: prev[titleKey] === false };
+      if (sectionStorageKey) { try { localStorage.setItem(sectionStorageKey, JSON.stringify(next)); } catch {} }
       return next;
     });
   };
@@ -323,7 +341,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       const aliases = NAV_ALIASES[item.key] || [];
       return label.includes(q) || item.key.toLowerCase().includes(q) || aliases.some(a => a.includes(q) || q.includes(a));
     }).slice(0, 8);
-  }, [navSearch, usageTick]);
+  }, [navSearch, usageTick, permsLoading]);
 
   // Sort nav groups items by usage (most used first) — only when not searching
   const sortedNav = useMemo(() => {
@@ -338,7 +356,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         return 0;
       }),
     }));
-  }, [navSearch, usageTick]);
+  }, [navSearch, usageTick, permsLoading]);
 
   const panelRef = useRef<HTMLElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -414,16 +432,16 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   }, [mobileOpen]);
 
   const navList = (
-    <nav className={`flex-1 overflow-y-auto py-4 space-y-4 ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
+    <nav className={`flex-1 overflow-y-auto py-4 space-y-4 side-scroll ${sidebarDark ? 'side-scroll-dark' : ''} ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
       {isSuperAdmin ? (
         <div>
           {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Plateforme</div>}
           <button
             onClick={() => { onRoute('platform_admin'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'platform_admin' ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item ${route === 'platform_admin' ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarCollapsed ? t('nav.platform') : undefined}
           >
-            <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+            <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
             {!sidebarCollapsed && <span>{t('nav.platform')}</span>}
           </button>
         </div>
@@ -466,6 +484,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           )}
         </div>
       )}
+      {!sidebarCollapsed && !navSearch.trim() && (
+        <div className={`border-b ${sidebarDark ? 'border-white/8' : 'border-neutral-100'}`} />
+      )}
       {navSearch.trim() && searchResults.length > 0 && (
         <div className="space-y-0.5 px-1">
           {!sidebarCollapsed && <div className={`px-2 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.searchResults')}</div>}
@@ -476,9 +497,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               <button
                 key={item.key}
                 onClick={() => { onRoute(item.key); setNavSearch(''); setMobileOpen(false); }}
-                className={`nav-item ${active ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
+                className={`nav-item ${active ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
               >
-                <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+                <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
                 {!sidebarCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
               </button>
             );
@@ -488,14 +509,26 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       {navSearch.trim() && searchResults.length === 0 && !sidebarCollapsed && (
         <div className={`px-3 py-4 text-center text-[13px] ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.noResults')}</div>
       )}
-      {!navSearch.trim() && sortedNav.map(group => (
+      {!navSearch.trim() && sortedNav.map(group => {
+        const sectionOpen = sidebarCollapsed || isSectionOpen(group.titleKey);
+        const sectionId = `nav-section-${group.titleKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        return (
         <div key={group.titleKey}>
           {!sidebarCollapsed && (
-            <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>
-              {t(group.titleKey)}
-            </div>
+            <button
+              type="button"
+              onClick={() => toggleSection(group.titleKey)}
+              aria-expanded={sectionOpen}
+              aria-controls={sectionId}
+              className={`w-full flex items-center gap-1.5 px-3 mb-1 py-1 rounded text-[11px] font-semibold tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-0 ${sidebarDark ? 'text-white/40 hover:text-white/70 focus-visible:ring-white/40' : 'text-neutral-400 hover:text-neutral-600 focus-visible:ring-neutral-400'}`}
+            >
+              {sectionOpen
+                ? <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                : <ChevronRight className="w-4 h-4 flex-shrink-0" />}
+              <span>{t(group.titleKey)}</span>
+            </button>
           )}
-          <div className="space-y-0.5">
+          <div id={sectionId} className="space-y-0.5" style={{ display: sectionOpen ? undefined : 'none' }}>
             {group.items.map(item => {
               const Icon = item.icon;
               const active = route === item.key;
@@ -509,10 +542,10 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       if (hasChildren) { setDesktopAcctOpen(o => !o); }
                       else { onRoute(item.key); setMobileOpen(false); }
                     }}
-                    className={`nav-item ${(active || childActive) ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                    className={`nav-item ${(active || childActive) ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
                     title={sidebarCollapsed ? t(item.labelKey) : undefined}
                   >
-                    <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+                    <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
                     {!sidebarCollapsed && <span className="whitespace-normal break-words">{t(item.labelKey)}</span>}
                     {!sidebarCollapsed && hasChildren && (
                       <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${desktopAcctOpen ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
@@ -533,9 +566,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                           <button
                             key={child.key}
                             onClick={() => { onRoute(child.key); setMobileOpen(false); }}
-                            className={`nav-item text-[13px] ${childActive2 ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/60 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
+                            className={`nav-item text-[13px] ${childActive2 ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/60 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
                           >
-                            <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? 'text-white' : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
+                            <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
                             <span className="whitespace-normal break-words">{t(child.labelKey)}</span>
                           </button>
                         );
@@ -547,16 +580,17 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
       {routeVisible('settings') && (
         <div>
           {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.system')}</div>}
           <button
             onClick={() => { onRoute('settings'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'settings' ? (sidebarDark ? 'bg-white/15 text-white' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item ${route === 'settings' ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarCollapsed ? t('nav.settings') : undefined}
           >
-            <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+            <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
             {!sidebarCollapsed && <span className="whitespace-normal break-words">{t('nav.settings')}</span>}
           </button>
         </div>
@@ -571,7 +605,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       <header
         className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b border-neutral-200 bg-white sticky top-0 z-30 flex-shrink-0`}
       >
-        <div className={`flex items-center gap-2.5 px-4 h-full transition-all duration-200 ${sidebarCollapsed ? 'w-[64px]' : ''}`}>
+        <div className={`flex items-center gap-2.5 px-4 h-full transition-all duration-200 ${sidebarCollapsed ? 'w-[72px]' : ''}`}>
           {tenant?.logo_url ? (
             <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain flex-shrink-0" />
           ) : (
@@ -705,7 +739,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop sidebar */}
       <aside
-        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[64px]' : 'w-[240px]'} ${sidebarDark ? 'border-white/10' : 'border-neutral-200'}`}
+        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[72px]' : 'w-[288px]'} ${sidebarDark ? 'border-white/10' : 'border-neutral-200'}`}
         style={sidebarDark
           ? { background: '#000000' }
           : { background: '#ffffff' }
@@ -754,7 +788,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               className="float-sidebar-content"
               style={sidebarDark ? { background: '#000000', border: '1px solid rgba(255,255,255,0.08)' } : undefined}
             >
-              <div className="flex items-center justify-between px-4 pt-4 pb-3"
+              <div className={`flex items-center justify-between px-4 pt-4 pb-3 border-b ${sidebarDark ? 'border-white/8' : 'border-neutral-100'}`}
                 onTouchEnd={(e) => {
                   if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('img')) return;
                   const now = Date.now();
@@ -770,7 +804,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   )}
                 </div>
                 <div className="flex-1" />
-                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/60 hover:bg-white/10' : 'float-close-btn'}`}>
+                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/60 hover:bg-white/10' : 'text-neutral-500 hover:bg-neutral-100'}`}>
                   <Settings className="w-4 h-4" />
                 </button>
               </div>
@@ -781,9 +815,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Plateforme</div>
                     <button
                       onClick={() => { onRoute('platform_admin'); closeDrawer(); }}
-                      className={`float-nav-item-compact ${route === 'platform_admin' ? 'float-nav-item-active' : ''} ${sidebarDark && route !== 'platform_admin' ? 'float-nav-dark' : ''}`}
+                      className={`float-nav-item-compact ${route === 'platform_admin' ? (sidebarDark ? 'float-nav-item-active-dark' : 'float-nav-item-active') : (sidebarDark ? 'float-nav-dark' : '')}`}
                     >
-                      <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+                      <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
                       <span className="truncate">{t('nav.platform')}</span>
                     </button>
                   </div>
@@ -834,9 +868,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                         <button
                           key={item.key}
                           onClick={() => { onRoute(item.key); setNavSearch(''); closeDrawer(); }}
-                          className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''} ${sidebarDark && !active ? 'float-nav-dark' : ''}`}
+                          className={`float-nav-item-compact ${active ? (sidebarDark ? 'float-nav-item-active-dark' : 'float-nav-item-active') : (sidebarDark ? 'float-nav-dark' : '')}`}
                         >
-                          <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
+                          <Icon className={`w-4 h-4 shrink-0 ${active ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
                           <span className="truncate">{t(item.labelKey)}</span>
                         </button>
                       );
@@ -846,12 +880,24 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 {navSearch.trim() && searchResults.length === 0 && (
                   <div className={`px-3 py-4 text-center text-[13px] ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.noResults')}</div>
                 )}
-                {!isSuperAdmin && !navSearch.trim() && sortedNav.map(group => (
+                {!isSuperAdmin && !navSearch.trim() && sortedNav.map(group => {
+                  const sectionOpen = isSectionOpen(group.titleKey);
+                  const sectionId = `mnav-section-${group.titleKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                  return (
                   <div key={group.titleKey}>
-                    <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>
-                      {t(group.titleKey)}
-                    </div>
-                    <div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(group.titleKey)}
+                      aria-expanded={sectionOpen}
+                      aria-controls={sectionId}
+                      className={`w-full flex items-center gap-1.5 px-2.5 mb-0.5 py-1 rounded text-[9px] font-semibold tracking-widest uppercase transition-colors focus:outline-none focus-visible:ring-1 ${sidebarDark ? 'text-white/40 focus-visible:ring-white/40' : 'text-neutral-400 focus-visible:ring-neutral-400'}`}
+                    >
+                      {sectionOpen
+                        ? <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
+                        : <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />}
+                      <span>{t(group.titleKey)}</span>
+                    </button>
+                    <div id={sectionId} style={{ display: sectionOpen ? undefined : 'none' }}>
                       {group.items.map(item => {
                         const Icon = item.icon;
                         const active = route === item.key;
@@ -865,9 +911,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                                 if (hasChildren) { setMobileAcctOpen(o => o === item.key ? null : item.key); }
                                 else { onRoute(item.key); closeDrawer(); }
                               }}
-                              className={`float-nav-item-compact ${(active || childActive) ? 'float-nav-item-active' : ''} ${sidebarDark && !active && !childActive ? 'float-nav-dark' : ''}`}
+                              className={`float-nav-item-compact ${(active || childActive) ? (sidebarDark ? 'float-nav-item-active-dark' : 'float-nav-item-active') : (sidebarDark ? 'float-nav-dark' : '')}`}
                             >
-                              <Icon className={`w-4 h-4 shrink-0 ${(active || childActive) ? 'text-white' : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
+                              <Icon className={`w-4 h-4 shrink-0 ${(active || childActive) ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
                               <span className="truncate">{t(item.labelKey)}</span>
                               {hasChildren && (
                                 <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${mobileAcctOpen === item.key ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
@@ -885,9 +931,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                                     <button
                                       key={child.key}
                                       onClick={() => { onRoute(child.key); closeDrawer(); }}
-                                      className={`float-nav-item-compact text-[13px] ${childActive2 ? 'float-nav-item-active' : ''} ${sidebarDark && !childActive2 ? 'float-nav-dark' : ''}`}
+                                      className={`float-nav-item-compact text-[13px] ${childActive2 ? (sidebarDark ? 'float-nav-item-active-dark' : 'float-nav-item-active') : (sidebarDark ? 'float-nav-dark' : '')}`}
                                     >
-                                      <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? 'text-white' : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
+                                      <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
                                       <span className="truncate">{t(child.labelKey)}</span>
                                     </button>
                                   );
@@ -899,7 +945,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className={`px-3 pt-2 pb-2.5 border-t space-y-1.5 ${sidebarDark ? 'border-white/10' : 'border-neutral-100'}`} style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
@@ -910,12 +957,11 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       {sites.map(s => {
                         const isDefault = (profile as any)?.default_site_id === s.id;
                         return (
-                          <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'bg-white/10' : 'bg-neutral-100') : (sidebarDark ? 'hover:bg-white/6' : 'hover:bg-neutral-50')}`}>
+                          <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors ${sidebarDark ? 'hover:bg-white/6' : 'hover:bg-neutral-50'}`}>
                             <button
                               onClick={() => { if (s.id === currentSite?.id) { closeDrawer(); return; } setSiteConfirmPending(s); closeDrawer(); }}
-                              className={`flex-1 flex items-center gap-2 px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'text-white font-semibold' : 'text-neutral-900 font-semibold') : (sidebarDark ? 'text-white/70' : 'text-neutral-600')}`}
+                              className={`flex-1 flex items-center px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'text-white font-semibold' : 'text-neutral-900 font-semibold') : (sidebarDark ? 'text-white/70' : 'text-neutral-600')}`}
                             >
-                              <Store className={`w-3.5 h-3.5 ${currentSite?.id === s.id ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
                               <span className="truncate flex-1 text-left">{s.name}</span>
                             </button>
                             <button

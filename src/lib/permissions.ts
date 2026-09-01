@@ -53,6 +53,7 @@ export const PERMISSION_KEYS = [
   'pos_view_x_report',
   'pos_view_z_report',
   'pos_view_session_summary',
+  'pos_view_session_stats',
   // Orders & Customers
   'manage_online_orders',
   'manage_supplier_orders',
@@ -146,6 +147,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   pos_view_x_report: 'Voir le rapport X (en cours)',
   pos_view_z_report: 'Voir le rapport Z (clôture)',
   pos_view_session_summary: 'Voir le résumé de session (écran de reprise)',
+  pos_view_session_stats: 'Voir les statistiques de session (caisse & tickets)',
   manage_online_orders: 'Gérer les commandes en ligne',
   manage_supplier_orders: 'Gérer les achats',
   manage_customers: 'Gérer les clients et fournisseurs',
@@ -207,7 +209,7 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
   },
   {
     label: 'Caisse (POS)',
-    keys: ['manage_cash_sessions', 'pos_open_session', 'pos_close_session', 'pos_returns', 'pos_cancel_sale', 'pos_reprint', 'pos_cash_movement', 'pos_customer_withdrawal', 'pos_customer_loan', 'pos_view_x_report', 'pos_view_z_report', 'pos_view_session_summary'],
+    keys: ['manage_cash_sessions', 'pos_open_session', 'pos_close_session', 'pos_returns', 'pos_cancel_sale', 'pos_reprint', 'pos_cash_movement', 'pos_customer_withdrawal', 'pos_customer_loan', 'pos_view_x_report', 'pos_view_z_report', 'pos_view_session_summary', 'pos_view_session_stats'],
   },
   {
     label: 'Commandes & Tiers',

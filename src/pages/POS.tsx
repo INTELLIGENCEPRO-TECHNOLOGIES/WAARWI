@@ -2959,8 +2959,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       <div className="px-2 py-1.5 border-b border-neutral-200/70 glass shrink-0 relative z-20">
         {/* Mobile: single compact row */}
         <div className="flex items-center lg:hidden">
-          <button onClick={openStats} className="pos-btn" title="Statistiques" data-label="Statistiques"><BarChart2 className="w-4 h-4" /></button>
-          <div className="w-px h-5 bg-neutral-200 shrink-0" />
+          {can('pos_view_session_stats') && <><button onClick={openStats} className="pos-btn" title="Statistiques" data-label="Statistiques"><BarChart2 className="w-4 h-4" /></button><div className="w-px h-5 bg-neutral-200 shrink-0" /></>}
           <button onClick={openTickets} className="pos-btn" title="Tickets" data-label="Tickets de la session"><List className="w-4 h-4" /></button>
           {can('pos_returns') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openReturn} className="pos-btn" title="Retour" data-label="Retour client"><RotateCcw className="w-4 h-4" /></button></>}
           <div className="w-px h-5 bg-neutral-200 shrink-0" />
@@ -2987,8 +2986,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {session && <span className="text-[10px] text-neutral-400 ml-1">· Fond&nbsp;<span className="font-bold text-neutral-600 num">{formatFCFA(Number(session.opening_amount))}</span></span>}
           </div>
           <div className="flex-1" />
-          <button onClick={openStats} className="chip" data-label="Statistiques"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button>
-          <div className="w-px h-5 bg-neutral-200 shrink-0" />
+          {can('pos_view_session_stats') && <><button onClick={openStats} className="chip" data-label="Statistiques"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button><div className="w-px h-5 bg-neutral-200 shrink-0" /></>}
           <button onClick={openTickets} className="chip" data-label="Tickets de la session"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
           {can('pos_returns') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openReturn} className="chip" data-label="Retour client"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button></>}
           <div className="w-px h-5 bg-neutral-200 shrink-0" />
@@ -3896,6 +3894,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           return (
           <div>
             {/* KPI strip */}
+            {can('pos_view_session_stats') && (
             <div className="flex items-center border-b border-neutral-200 pb-4 mb-4">
               <div className="flex-1">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Tickets</div>
@@ -3907,6 +3906,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="text-xl font-bold text-neutral-900 num">{formatFCFA(sessionEncaisse)}</div>
               </div>
             </div>
+            )}
 
             {/* Tickets de vente section */}
             <div>
@@ -3917,7 +3917,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <span className="text-[11px] text-neutral-400">{sessionSales.length}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</span>
+                  {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</span>}
                   <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'tickets' ? 'rotate-90' : ''}`} />
                 </div>
               </button>
@@ -3984,7 +3984,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <span className="text-[11px] text-neutral-400">{encDirectList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(encDirectTotal)}</span>
+                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(encDirectTotal)}</span>}
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
@@ -4040,7 +4040,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <span className="text-[11px] text-neutral-400">{sessionInvPayments.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(sessionInvPayments.reduce((s, p) => s + p.amount, 0))}</span>
+                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(sessionInvPayments.reduce((s, p) => s + p.amount, 0))}</span>}
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
@@ -4074,7 +4074,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <span className="text-[11px] text-neutral-400">{acomptesList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(acomptesTotal)}</span>
+                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(acomptesTotal)}</span>}
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
@@ -4130,7 +4130,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <span className="text-[11px] text-neutral-400">{depensesList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(depensesTotal)}</span>
+                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(depensesTotal)}</span>}
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
@@ -4186,7 +4186,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <span className="text-[11px] text-neutral-400">{remboursementsList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(remboursementsTotal)}</span>
+                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(remboursementsTotal)}</span>}
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'remboursements' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
@@ -4219,7 +4219,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <span className="text-[11px] text-neutral-400">{retraitsList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(retraitsTotal)}</span>
+                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(retraitsTotal)}</span>}
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
@@ -4252,7 +4252,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       <span className="text-[11px] text-neutral-400">{pretsList.length}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(pretsTotal)}</span>
+                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(pretsTotal)}</span>}
                       <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'prets' ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
