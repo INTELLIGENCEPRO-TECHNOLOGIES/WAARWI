@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus, FileText, Loader2, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, CalendarDays, User,
@@ -961,6 +962,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; }
     const valid = invoiceEditorItems.filter(i => i.name.trim());
     if (valid.length === 0) { error('Ajoutez au moins un article'); return; }
+    const nonCatalog = valid.filter(i => !i.article_id);
+    if (nonCatalog.length > 0) { error(`Chaque ligne doit correspondre à un article du catalogue : ${nonCatalog.map(i => i.name).join(', ')}`); return; }
 
     // Edit existing invoice via RPC (handles stock + balance recalculation)
     if (editingInvoiceId) {
@@ -1082,12 +1085,19 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       }).select('id').single();
       if (e || !sale) { error(e?.message || 'Erreur'); return; }
 
-      await supabase.from('sale_items').insert(valid.map(i => ({
-        tenant_id: tenant.id, sale_id: sale.id,
-        article_id: i.article_id, name: i.name,
-        quantity: i.quantity, unit_price: i.unit_price,
-        discount: i.discount, total: i.total,
-      })));
+      const { error: itemsErr } = await supabase.rpc('insert_billing_sale_items', {
+        p_sale_id: sale.id,
+        p_items: valid.map(i => ({
+          article_id: i.article_id, name: i.name,
+          quantity: i.quantity, unit_price: i.unit_price,
+          discount: i.discount, total: i.total,
+        })),
+      });
+      if (itemsErr) {
+        await supabase.from('sales').delete().eq('id', sale.id);
+        error(itemsErr.message || 'Erreur lors de l\'enregistrement des lignes de facture');
+        return;
+      }
 
       // Insert payments (skip if credit)
       if (!invoiceIsCredit) {
@@ -1459,11 +1469,18 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setCancelTarget(inv);
   };
 
+  const [cancelling, setCancelling] = useState(false);
   const confirmCancelInvoice = async () => {
     if (!cancelTarget) return;
+    if (!can('edit_invoices')) { error("Vous n'avez pas la permission d'annuler une facture"); return; }
     const inv = cancelTarget;
+    if (!tenant) { error('Aucun établissement sélectionné'); return; }
+    setCancelling(true);
+    const { data, error: e } = await supabase.rpc('cancel_sale', { p_sale_id: inv.id, p_tenant_id: tenant.id });
+    setCancelling(false);
+    if (e) { error(e.message); return; }
+    if (!(data as any)?.success) { error((data as any)?.error || "Échec de l'annulation"); return; }
     setCancelTarget(null);
-    await supabase.from('sales').update({ status: 'cancelled' }).eq('id', inv.id);
     setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'cancelled' } : i));
     success(`Facture ${inv.sale_number} annulée`);
     closeInvoiceEditor();
@@ -3250,17 +3267,18 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         />
       )}
 
-      {cancelTarget && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40">
+      {cancelTarget && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !cancelling) setCancelTarget(null); }}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-[min(90vw,380px)]">
             <h3 className="text-sm font-bold text-neutral-900 mb-2">Annuler la facture</h3>
             <p className="text-xs text-neutral-600 mb-5">Annuler la facture {cancelTarget.sale_number} ? Cette action est irreversible.</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setCancelTarget(null)} className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded transition-colors">Non, garder</button>
-              <button onClick={confirmCancelInvoice} className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded transition-colors">Oui, annuler</button>
+              <button disabled={cancelling} onClick={() => setCancelTarget(null)} className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded transition-colors disabled:opacity-50">Non, garder</button>
+              <button disabled={cancelling} onClick={confirmCancelInvoice} className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">{cancelling && <Loader2 className="w-3 h-3 animate-spin" />}Oui, annuler</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {autoMode && tenant && currentSite && (

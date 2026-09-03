@@ -1,6 +1,6 @@
 import {
   X, Printer, Link2, MessageCircle, Pencil,
-  Coins, BookOpen, Loader2, Ban, User, Calendar,
+  Coins, BookOpen, Loader2, Ban, Trash2, User, Calendar,
 } from 'lucide-react';
 import { formatFCFA, formatDate } from '../lib/format';
 
@@ -57,6 +57,7 @@ type Props = {
   onWhatsApp?: () => void;
   onComptabiliser?: () => void;
   onCancel?: () => void;
+  onDelete?: () => void;
   accountingBusy?: boolean;
 };
 
@@ -73,6 +74,7 @@ export function MobileInvoiceDetail({
   onWhatsApp,
   onComptabiliser,
   onCancel,
+  onDelete,
   accountingBusy,
 }: Props) {
   const stLabel = STATUS_LABELS[invoice.status] || invoice.status;
@@ -212,6 +214,9 @@ export function MobileInvoiceDetail({
           )}
           {onCancel && !isCancelled && !isAccounted && (
             <button onClick={onCancel} className="btn-icon-danger" title="Annuler"><Ban className="w-4 h-4" /></button>
+          )}
+          {onDelete && !isAccounted && (
+            <button onClick={onDelete} className="btn-icon-danger" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
           )}
           <span className="flex-1" />
           {onPrint && (

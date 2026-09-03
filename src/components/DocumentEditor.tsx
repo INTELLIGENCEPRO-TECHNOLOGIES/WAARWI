@@ -100,6 +100,7 @@ export type DocumentEditorProps = {
   onCopyLink?: () => void;
   onWhatsApp?: () => void;
   onCancel?: () => void;
+  onDelete?: () => void;
   onComptabiliser?: () => void;
   accountingStatus?: string;
   invoiceDue?: number;
@@ -190,7 +191,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     onTransformToReturn, onTransformToAvoir,
     transformReturnLines, loadReturnLines,
     onRefundCash, onApproveAvoir,
-    onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onComptabiliser,
+    onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser,
     accountingStatus, invoiceDue = 0,
   } = props;
   const { onPrev, onNext, hasPrev, hasNext, onSearchOpen, postCreation, onNewInvoice, docCreatedInfo } = props;
@@ -383,6 +384,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           onCopyLink={onCopyLink}
           onWhatsApp={onWhatsApp}
           onCancel={onCancel}
+          onDelete={onDelete}
           onComptabiliser={onComptabiliser}
           accountingStatus={accountingStatus}
           invoiceDue={invoiceDue}
@@ -685,7 +687,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
 // ─── Toolbar ─────────────────────────────────────────────────────
 
-function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onComptabiliser, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
+function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
   docType: DocType;
   mode: DocMode;
   saving: boolean;
@@ -708,6 +710,7 @@ function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onCo
   onCopyLink?: () => void;
   onWhatsApp?: () => void;
   onCancel?: () => void;
+  onDelete?: () => void;
   onComptabiliser?: () => void;
   accountingStatus?: string;
   invoiceDue?: number;
@@ -777,6 +780,9 @@ function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onCo
           )}
           {onCancel && notCancelled && notAccounted && (
             <button onClick={onCancel} className={`${btnCls} text-rose-600 hover:bg-rose-50`}><Ban className="w-3 h-3" /> Annuler</button>
+          )}
+          {onDelete && notAccounted && (
+            <button onClick={onDelete} className={`${btnCls} text-red-600 hover:bg-red-50`}><Trash2 className="w-3 h-3" /> Supprimer</button>
           )}
         </>
       )}

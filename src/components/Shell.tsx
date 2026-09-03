@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 
 export type Route =
-  | 'dashboard' | 'pos' | 'cash_history' | 'articles' | 'stock' | 'tiers'
+  | 'dashboard' | 'pos' | 'cash_history' | 'coffre' | 'articles' | 'stock' | 'tiers'
   | 'sales' | 'billing' | 'supplier_orders' | 'online_orders' | 'master_catalog'
   | 'acc_plan' | 'acc_journals' | 'acc_balance' | 'acc_grandlivre' | 'acc_tiers' | 'acc_search' | 'acc_cloture'
   | 'ipm' | 'warranties' | 'money_transfer' | 'representatives'
@@ -31,6 +31,7 @@ const NAV_ALIASES: Partial<Record<Route, string[]>> = {
   tiers: ['client', 'clients', 'fournisseur', 'fournisseurs', 'customer', 'supplier'],
   sales: ['journal', 'historique', 'historique des ventes'],
   cash_history: ['caisse', 'session', 'sessions', 'cash'],
+  coffre: ['coffre', 'coffre-fort', 'safe', 'vault', 'reserve'],
   supplier_orders: ['commande', 'commandes', 'achat', 'achats', 'purchase', 'orders'],
   online_orders: ['commande en ligne', 'commandes en ligne', 'online'],
   warranties: ['garantie', 'garanties', 'warranty', 'warranties'],
@@ -50,6 +51,7 @@ const NAV_GROUPS: NavGroup[] = [
     { key: 'pos', labelKey: 'nav.pos', icon: ShoppingCart },
     { key: 'sales', labelKey: 'nav.sales', icon: Calculator },
     { key: 'cash_history', labelKey: 'nav.cashHistory', icon: History },
+    { key: 'coffre', labelKey: 'nav.coffre', icon: Lock },
   ]},
   { titleKey: 'nav.catalogStock', items: [
     { key: 'articles', labelKey: 'nav.articles', icon: Package },
@@ -86,6 +88,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 const ROUTE_MODULE: Record<string, string> = {
   dashboard: 'dashboard', pos: 'pos', sales: 'sales', cash_history: 'cash_history',
+  coffre: 'vault',
   articles: 'articles', master_catalog: 'articles', stock: 'stock',
   billing: 'billing', online_orders: 'online_orders', warranties: 'billing', representatives: 'billing',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
@@ -104,6 +107,7 @@ const ROUTE_PERMISSION: Partial<Record<Route, PermissionKey>> = {
   reports: 'access_reports',
   sales: 'view_sales_history',
   cash_history: 'view_cash_sessions',
+  coffre: 'access_vault',
   stock: 'view_stock_levels',
   supplier_orders: 'manage_supplier_orders',
   online_orders: 'manage_online_orders',
@@ -124,6 +128,7 @@ const BREADCRUMB_MAP: Record<string, { group: string; labelKey: string }> = {
   pos: { group: 'nav.pos', labelKey: 'nav.pos' },
   sales: { group: 'nav.pos', labelKey: 'nav.sales' },
   cash_history: { group: 'nav.pos', labelKey: 'nav.cashHistory' },
+  coffre: { group: 'nav.pos', labelKey: 'nav.coffre' },
   articles: { group: 'nav.catalogStock', labelKey: 'nav.articles' },
   master_catalog: { group: 'nav.catalogStock', labelKey: 'nav.masterCatalog' },
   stock: { group: 'nav.catalogStock', labelKey: 'nav.stock' },
@@ -739,7 +744,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop sidebar */}
       <aside
-        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[72px]' : 'w-[288px]'} ${sidebarDark ? 'border-white/10' : 'border-neutral-200'}`}
+        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[72px]' : 'w-[240px]'} ${sidebarDark ? 'border-white/10' : 'border-neutral-200'}`}
         style={sidebarDark
           ? { background: '#000000' }
           : { background: '#ffffff' }

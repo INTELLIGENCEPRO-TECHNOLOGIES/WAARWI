@@ -125,6 +125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       'customers','suppliers','supplier_orders','supplier_order_items','supplier_payments',
       'online_orders','online_order_items','shop_settings','tenants','sites','profiles','tenant_messages',
       'journal_entries',
+      'vaults','vault_movements',
     ];
     const dispatch = (table: string) => {
       setDataTick(t => t + 1);

@@ -2728,6 +2728,8 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const { s, key } = view;
   const { tenant, currentSite } = useApp();
   const { success, error } = useToast();
+  const { can } = usePermissions();
+  const vaultEnabled = (tenant?.enabled_modules || []).includes('vault') && can('vault_pay_supplier');
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [orderItems, setOrderItems] = useState<any[]>([]);
@@ -2739,6 +2741,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const [payAmount, setPayAmount] = useState<string>('');
   const [payMethod, setPayMethod] = useState<string>('');
   const [payRef, setPayRef] = useState('');
+  const [payFunding, setPayFunding] = useState<'cash' | 'vault'>('cash');
   const [paying, setPaying] = useState(false);
 
   const [dateFrom, setDateFrom] = useState('');
@@ -2876,6 +2879,21 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     const dup = payments.find(p => Number(p.amount) === amt && Math.abs(now - new Date(p.created_at || p.paid_at).getTime()) < 60000);
     if (dup) { toast(`Règlement de ${formatFCFA(amt)} effectué il y a moins d'une minute — vérifiez qu'il ne s'agit pas d'un doublon.`, 'info'); }
     setPaying(true);
+    const isBalance = payOrder === '__balance__';
+    if (payFunding === 'vault') {
+      const { error: e } = await supabase.rpc('register_supplier_payment_from_vault', {
+        p_supplier_id: s.id, p_payment_method_id: pm.id, p_method_name: pm.name,
+        p_amount: amt, p_reference: payRef || (isBalance ? `Règlement solde · ${s.name}` : ''),
+        p_site_id: currentSite.id, p_order_id: isBalance ? null : (payOrder || null),
+        p_idempotency_key: (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`),
+      });
+      setPaying(false);
+      if (e) { error(e.message); return; }
+      success('Règlement enregistré · imputé sur le coffre');
+      setPayOrder(''); setPayAmount(''); setPayRef('');
+      reload();
+      return;
+    }
     const { data: sess } = await supabase.from('cash_sessions')
       .select('id, opening_amount, theoretical_amount')
       .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
@@ -2883,7 +2901,6 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     if (!sess) { setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
     const available = Number(sess.opening_amount || 0) + Number(sess.theoretical_amount || 0);
     if (available < amt) { setPaying(false); error('Solde caisse insuffisant'); return; }
-    const isBalance = payOrder === '__balance__';
     const { error: e } = await supabase.rpc('register_supplier_payment', {
       p_supplier_id: s.id, p_payment_method_id: pm.id, p_method_name: pm.name,
       p_amount: amt, p_reference: payRef || (isBalance ? `Règlement solde · ${s.name}` : ''),
@@ -3203,6 +3220,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
               payAmount={payAmount} setPayAmount={setPayAmount}
               payMethod={payMethod} setPayMethod={setPayMethod}
               payRef={payRef} setPayRef={setPayRef}
+              payFunding={payFunding} setPayFunding={setPayFunding} vaultEnabled={vaultEnabled}
               paying={paying} onSelectOrder={(id: string) => { const o = unpaidOrders.find(x => x.id === id); if (o) setPayAmount(String(Math.max(0, Number(o.total) - Number(o.paid || 0)))); }}
               recentPayments={payments.slice(0, 8).map(p => ({ ...p, order_number: orders.find(x => x.id === p.order_id)?.order_number }))}
             />
@@ -3378,7 +3396,7 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
 /* ───────────────────────── Supplier payment form ───────────────────────── */
 function SupplierPaymentForm({
   unpaid, methods, payOrder, setPayOrder, payAmount, setPayAmount, payMethod, setPayMethod,
-  payRef, setPayRef, paying, onSelectOrder, recentPayments,
+  payRef, setPayRef, payFunding, setPayFunding, vaultEnabled, paying, onSelectOrder, recentPayments,
 }: any) {
   const selected = unpaid.find((o: any) => o.id === payOrder);
   const isBalance = selected?.id === '__balance__';
@@ -3460,9 +3478,25 @@ function SupplierPaymentForm({
           placeholder="N° chèque, virement…" />
       </div>
 
-      {/* Imputé sur la caisse du jour — texte seul, pas de point vert */}
+      {vaultEnabled && (
+        <div className="mt-3">
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Source des fonds</label>
+          <div className="flex items-center gap-4">
+            <button type="button" onClick={() => setPayFunding('cash')}
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'cash' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              Caisse
+            </button>
+            <button type="button" onClick={() => setPayFunding('vault')}
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'vault' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              Coffre
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Imputation — texte seul, pas de point vert */}
       <div className="mt-3 text-[11px] text-slate-500">
-        Imputé sur la caisse du jour
+        {payFunding === 'vault' ? 'Imputé sur le coffre' : 'Imputé sur la caisse du jour'}
       </div>
 
       {recentPayments.length > 0 && (

@@ -69,6 +69,7 @@ const Settings = lazyWithRetry(() => import('./pages/Settings').then(m => ({ def
 const Billing = lazyWithRetry(() => import('./pages/Billing').then(m => ({ default: m.Billing })));
 const SupplierOrders = lazyWithRetry(() => import('./pages/SupplierOrders').then(m => ({ default: m.SupplierOrders })));
 const CashHistory = lazyWithRetry(() => import('./pages/CashHistory').then(m => ({ default: m.CashHistory })));
+const Coffre = lazyWithRetry(() => import('./pages/Coffre').then(m => ({ default: m.Coffre })));
 const Shop = lazyWithRetry(() => import('./pages/Shop').then(m => ({ default: m.Shop })));
 const OnlineOrders = lazyWithRetry(() => import('./pages/OnlineOrders').then(m => ({ default: m.OnlineOrders })));
 const MasterCatalog = lazyWithRetry(() => import('./pages/MasterCatalog').then(m => ({ default: m.MasterCatalog })));
@@ -265,6 +266,7 @@ const PublicInvoice = lazyWithRetry(() => import('./pages/PublicInvoice').then(m
 const ROUTE_MODULE: Record<string, string> = {
   dashboard: 'dashboard', pos: 'pos', sales: 'sales', cash_history: 'cash_history',
   articles: 'articles', master_catalog: 'articles', stock: 'stock', billing: 'billing', online_orders: 'online_orders',
+  coffre: 'vault',
   tiers: 'tiers', supplier_orders: 'supplier_orders',
   acc_plan: 'accounting', acc_journals: 'accounting', acc_balance: 'accounting', acc_grandlivre: 'accounting', acc_tiers: 'accounting', acc_search: 'accounting', acc_cloture: 'accounting',
   ipm: 'ipm', money_transfer: 'money_transfer', settings: 'settings', reports: 'reports',
@@ -281,6 +283,7 @@ const ROUTE_PERMISSION: Partial<Record<string, PermissionKey>> = {
   reports: 'access_reports',
   sales: 'view_sales_history',
   cash_history: 'view_cash_sessions',
+  coffre: 'access_vault',
   stock: 'view_stock_levels',
   supplier_orders: 'manage_supplier_orders',
   online_orders: 'manage_online_orders',
@@ -360,6 +363,7 @@ function Inner() {
         {route === 'supplier_orders' && <SupplierOrders />}
         {route === 'online_orders' && <OnlineOrders />}
         {route === 'cash_history' && <CashHistory />}
+        {route === 'coffre' && <Coffre />}
         {route === 'acc_plan' && <Accounting section="plan" />}
         {route === 'acc_journals' && <Accounting section="journals" />}
         {route === 'acc_balance' && <Accounting section="balance" />}

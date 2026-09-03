@@ -18,6 +18,13 @@ export const PERMISSION_KEYS = [
   'access_accounting',
   'access_cash_history',
   'access_money_transfer',
+  // Coffre
+  'access_vault',
+  'view_vault',
+  'vault_receive_from_cash',
+  'vault_transfer_to_cash',
+  'vault_pay_supplier',
+  'vault_adjust',
   // Financial visibility
   'view_purchase_prices',
   'view_margins',
@@ -116,6 +123,12 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   access_accounting: 'Accéder à la comptabilité',
   access_cash_history: 'Accéder à l\'historique de caisse',
   access_money_transfer: 'Accéder au module Transfert d\'argent',
+  access_vault: 'Accéder au coffre',
+  view_vault: 'Voir le solde et les mouvements du coffre',
+  vault_receive_from_cash: 'Verser des espèces de la caisse au coffre',
+  vault_transfer_to_cash: 'Transférer du coffre vers la caisse',
+  vault_pay_supplier: 'Régler un fournisseur depuis le coffre',
+  vault_adjust: 'Initialiser et ajuster le coffre',
   view_purchase_prices: 'Voir les prix d\'achat',
   view_margins: 'Voir les marges',
   view_stock_levels: 'Voir les niveaux de stock',
@@ -210,6 +223,10 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
   {
     label: 'Caisse (POS)',
     keys: ['manage_cash_sessions', 'pos_open_session', 'pos_close_session', 'pos_returns', 'pos_cancel_sale', 'pos_reprint', 'pos_cash_movement', 'pos_customer_withdrawal', 'pos_customer_loan', 'pos_view_x_report', 'pos_view_z_report', 'pos_view_session_summary', 'pos_view_session_stats'],
+  },
+  {
+    label: 'Coffre',
+    keys: ['access_vault', 'view_vault', 'vault_receive_from_cash', 'vault_transfer_to_cash', 'vault_pay_supplier', 'vault_adjust'],
   },
   {
     label: 'Commandes & Tiers',

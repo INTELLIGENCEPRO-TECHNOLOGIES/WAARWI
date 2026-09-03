@@ -367,6 +367,8 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         vat_rate: Number(i.vat_rate ?? 0),
         imei: i.imei || null,
       }));
+      const nonCatalog = payload.filter(i => !i.article_id);
+      if (nonCatalog.length > 0) { toastError(`Chaque ligne doit correspondre à un article du catalogue : ${nonCatalog.map(i => i.name).join(', ')}`); setSavingEdit(false); return; }
       const { data, error } = await supabase.rpc('update_sale_items_and_totals', {
         p_sale_id: selected.id,
         p_tenant_id: tenant.id,
@@ -672,6 +674,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             docHeader={dh ? { doc_date: dh.doc_date || null, reference: dh.reference || null, delivery_date: dh.delivery_date || null, warranty: dh.warranty || null, representative: dh.representative || null, imei: dh.imei || null } : { doc_date: selected.created_at.slice(0, 10) }}
             onClose={closeDetail}
             onEdit={canEditSale && !isAccounted ? startEdit : undefined}
+            onDelete={canDeleteSale && !isAccounted ? () => setConfirmDelete(true) : undefined}
             onPay={due > 0 && !isCancelled ? () => onNavigate?.('billing') : undefined}
             onPrint={printInvoice}
             onCopyLink={() => copyInvoiceLink(selected)}
@@ -713,6 +716,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           onPrev={currentIdx > 0 ? goPrev : undefined}
           onNext={currentIdx >= 0 && currentIdx < filtered.length - 1 ? goNext : undefined}
           onEdit={canEditSale && selected.accounting_status !== 'accounted' ? startEdit : undefined}
+          onDelete={canDeleteSale && selected.accounting_status !== 'accounted' ? () => setConfirmDelete(true) : undefined}
           onPay={Math.max(0, Number(selected.total) - pays.reduce((s, p) => s + Number(p.amount), 0)) > 0 && selected.status !== 'cancelled' ? () => onNavigate?.('billing') : undefined}
           onPrint={printInvoice}
           onCopyLink={() => copyInvoiceLink(selected)}
@@ -786,7 +790,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       </DocPanel>
 
       {/* Delete confirmation */}
-      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Confirmer la suppression" size="sm"
+      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Confirmer la suppression" size="sm" layer="top"
         footer={<>
           <button onClick={() => setConfirmDelete(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button onClick={deleteSale} disabled={deleting} className="btn-icon-danger-solid" title="Supprimer">

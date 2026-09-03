@@ -5,7 +5,7 @@ import {
   ChevronRight, ChevronLeft, ChevronDown, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
   Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin, Network,
-  TrendingUp, UserPlus, Store, History
+  TrendingUp, UserPlus, Store, History, Menu as MenuIcon
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -204,6 +204,42 @@ function useRecentSessions(tenantId?: string, siteId?: string, excludeId?: strin
   return { sessions, loading };
 }
 
+type RecentSessionSale = {
+  id: string;
+  sale_number: string;
+  total: number;
+  created_at: string;
+  customer_name: string | null;
+};
+
+function useRecentSessionSales(tenantId?: string, sessionId?: string) {
+  const [sales, setSales] = useState<RecentSessionSale[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!tenantId || !sessionId) return;
+    setLoading(true);
+    (async () => {
+      const { data } = await supabase
+        .from('sales')
+        .select('id, sale_number, total, created_at, customers(name)')
+        .eq('tenant_id', tenantId)
+        .eq('cash_session_id', sessionId)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      setSales((data || []).map((s: any) => ({
+        id: s.id,
+        sale_number: s.sale_number,
+        total: Number(s.total),
+        created_at: s.created_at,
+        customer_name: s.customers?.name || null,
+      })));
+      setLoading(false);
+    })();
+  }, [tenantId, sessionId]);
+  return { sales, loading };
+}
+
 const fmtDateShort = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 const fmtTimeLanding = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const fmtDateFull = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -214,232 +250,6 @@ function sessionDuration(opened: string) {
   const m = Math.floor((ms % 3600000) / 60000);
   if (h > 0) return `${h}h ${m}min`;
   return `${m} min`;
-}
-
-function POSLandingOpen({
-  currentSite, openingAmount, setOpeningAmount, openingNote, setOpeningNote,
-  openingSubmitting, openSessionSubmit, tenantId, onSeeAll, cashierName,
-}: {
-  currentSite: LandingSite;
-  openingAmount: number; setOpeningAmount: (v: number) => void;
-  openingNote: string; setOpeningNote: (v: string) => void;
-  openingSubmitting: boolean; openSessionSubmit: () => void;
-  tenantId?: string; onSeeAll?: () => void; cashierName: string;
-}) {
-  const { sessions, loading: loadingSessions } = useRecentSessions(tenantId, currentSite?.id);
-
-  return (
-    <div className="pb-2">
-      {/* ── Header (desktop only — mobile has its own) ── */}
-      <div className="hidden lg:block">
-        <div className="flex items-end px-8 pt-6 pb-5 border-b border-neutral-100">
-          <div className="leading-tight">
-            <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Caisse</h1>
-            <p className="text-sm text-neutral-500 mt-0.5">{currentSite?.name || '-'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Desktop grid (mirrors resume — no cards, border separators) ── */}
-      <div className="hidden lg:block px-8 pt-6">
-        <div className="grid lg:grid-cols-[1fr_300px]">
-          {/* Left: Ouvrir la caisse */}
-          <div className="pr-8">
-              <div className="space-y-0">
-                {/* Fond de caisse */}
-                <div className="py-5 border-b border-neutral-100">
-                  <label className="text-[10px] text-neutral-400 leading-none mb-2 block">Fond de caisse initial (FCFA)</label>
-                  <input
-                    type="number"
-                    value={openingAmount || ''}
-                    onChange={e => setOpeningAmount(Number(e.target.value))}
-                    className="bare-input text-lg font-bold text-neutral-900 tabular-nums py-2"
-                    placeholder="0 FCFA"
-                    min="0"
-                    autoFocus
-                    inputMode="numeric"
-                  />
-                  <div className="h-px bg-neutral-200 mt-1" />
-                </div>
-
-                {/* Note */}
-                <div className="py-5 border-b border-neutral-100">
-                  <label className="text-[10px] text-neutral-400 leading-none mb-2 block">Note (optionnel)</label>
-                  <input
-                    value={openingNote}
-                    onChange={e => setOpeningNote(e.target.value)}
-                    className="bare-input text-sm text-neutral-700 py-2"
-                    placeholder="Ex: monnaie disponible..."
-                  />
-                  <div className="h-px bg-neutral-200 mt-1" />
-                </div>
-
-                {/* Vendeur */}
-                {cashierName && (
-                  <div className="flex items-center gap-3 py-5 border-b border-neutral-100">
-                    <User className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-[10px] text-neutral-400">Vendeur :</span>
-                      <span className="text-[13px] font-bold text-neutral-900 uppercase">{cashierName}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Point de vente */}
-                {currentSite && (
-                  <div className="flex items-center gap-3 py-5">
-                    <Network className="w-4.5 h-4.5 text-neutral-400 shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Point de vente</p>
-                      <p className="text-[13px] font-bold text-neutral-900">{currentSite.name}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Submit button */}
-              <div className="mt-6 pt-5 border-t border-neutral-100">
-                <button
-                  onClick={openSessionSubmit}
-                  disabled={openingSubmitting}
-                  className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-[0.98]"
-                >
-                  {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-                  Ouverture de caisse
-                </button>
-              </div>
-            </div>
-
-            {/* Vertical divider + Right column */}
-            <div className="lg:border-l border-neutral-100 pl-8 flex flex-col">
-              {/* Rappel */}
-              <div>
-                <div className="flex items-center gap-2.5 mb-4">
-                  <AlertCircle className="w-4.5 h-4.5 text-neutral-700" />
-                  <h3 className="text-sm font-bold text-neutral-900">Rappel</h3>
-                </div>
-                <ul className="space-y-2.5 text-xs text-neutral-600 leading-relaxed">
-                  <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Comptez les espèces dans votre tiroir-caisse avant d'ouvrir.</li>
-                  <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Le fond de caisse initial sera vérifié à la clôture.</li>
-                  <li className="flex items-start gap-2"><span className="w-1 h-1 rounded-full bg-neutral-300 mt-1.5 shrink-0" />Vous pouvez quitter la caisse et y revenir sans la fermer.</li>
-                </ul>
-              </div>
-            </div>
-        </div>
-      </div>
-
-      {/* ── Mobile layout (mirrors resume — no cards, border separators) ── */}
-      <div className="lg:hidden px-0 pt-2">
-        <div>
-          {/* Header */}
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="leading-tight">
-              <h2 className="text-xs font-bold tracking-tight text-neutral-900 leading-none">Caisse</h2>
-              {currentSite && (
-                <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 leading-none mt-0.5">{currentSite.name}</div>
-              )}
-            </div>
-          </div>
-
-          {/* Fond de caisse */}
-          <div className="px-3 py-3 border-t border-neutral-100">
-            <label className="text-[10px] text-neutral-400 mb-1.5 block">Fond de caisse (FCFA)</label>
-            <input
-              type="number"
-              value={openingAmount || ''}
-              onChange={e => setOpeningAmount(Number(e.target.value))}
-              className="bare-input text-base font-bold text-neutral-900 tabular-nums py-2"
-              placeholder="0 FCFA"
-              min="0"
-              autoFocus={desktopAutoFocus}
-              inputMode="numeric"
-            />
-            <div className="h-px bg-neutral-200 mt-1" />
-          </div>
-
-          {/* Note */}
-          <div className="px-3 py-3 border-t border-neutral-100">
-            <label className="text-[10px] text-neutral-400 mb-1.5 block">Note (optionnel)</label>
-            <input
-              value={openingNote}
-              onChange={e => setOpeningNote(e.target.value)}
-              className="bare-input text-xs text-neutral-700 py-2"
-              placeholder="Ex: monnaie disponible..."
-            />
-            <div className="h-px bg-neutral-200 mt-1" />
-          </div>
-
-          {/* Vendeur */}
-          {cashierName && (
-            <div className="flex items-center gap-2 px-3 py-3 border-t border-neutral-100">
-              <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-              <div><p className="text-[10px] text-neutral-400">Vendeur</p><p className="text-[11px] font-bold text-neutral-900 uppercase">{cashierName}</p></div>
-            </div>
-          )}
-
-          {/* Point de vente */}
-          {currentSite && (
-            <div className="flex items-center gap-2 px-3 py-3 border-t border-neutral-100">
-              <Network className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-              <div><p className="text-[10px] text-neutral-400">Point de vente</p><p className="text-[11px] font-bold text-neutral-900">{currentSite.name}</p></div>
-            </div>
-          )}
-
-          {/* Submit */}
-          <div className="px-3 py-3 border-t border-neutral-100">
-            <button
-              onClick={openSessionSubmit}
-              disabled={openingSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-60 text-white text-xs font-semibold transition-colors active:scale-[0.98]"
-            >
-              {openingSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-              Ouverture de caisse
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Recent sessions (cleaner, aligned with the rest) ── */}
-      {!loadingSessions && sessions.length > 0 && (
-        <div className="mt-3 px-0 lg:px-6">
-          <div className="flex items-center justify-between mb-2 px-1">
-            <h3 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Dernières sessions</h3>
-            {onSeeAll && (
-              <button onClick={onSeeAll} className="text-[11px] font-semibold text-neutral-500 hover:text-neutral-900 inline-flex items-center gap-0.5 transition-colors">
-                Voir tout <ChevronRight className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-          {/* Desktop table */}
-          <div className="hidden lg:block">
-            <div className="divide-y divide-neutral-100">
-              {sessions.map(s => (
-                <div key={s.id} className="flex items-center gap-4 py-3 px-1">
-                  <Lock className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                  <span className="text-xs font-semibold text-neutral-900 w-24 shrink-0">{fmtDateFull(s.opened_at)}</span>
-                  <span className="text-xs tabular-nums text-neutral-500">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
-                  <span className="ml-auto text-xs font-bold text-neutral-800 tabular-nums">{s.closing_amount != null ? formatFCFA(Number(s.closing_amount)) : '-'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Mobile list */}
-          <div className="lg:hidden divide-y divide-neutral-100">
-            {sessions.slice(0, 3).map(s => (
-              <div key={s.id} className="flex items-center gap-2.5 px-3 py-3">
-                <Lock className="w-3 h-3 text-neutral-400 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <span className="text-[11px] font-semibold text-neutral-900">{fmtDateShort(s.opened_at)}</span>
-                  <span className="text-[10px] text-neutral-400 ml-1.5 tabular-nums">{fmtTimeLanding(s.opened_at)}{s.closed_at ? ` - ${fmtTimeLanding(s.closed_at)}` : ''}</span>
-                </div>
-                <span className="text-[11px] font-bold text-neutral-800 tabular-nums shrink-0">{s.closing_amount != null ? formatFCFA(Number(s.closing_amount)) : '-'}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 function LandingActionBtn({ icon: Icon, label, onClick, disabled, variant, badge }: {
@@ -481,6 +291,259 @@ function ActionIconBtn({ icon: Icon, label, onClick, disabled }: {
   );
 }
 
+function POSLandingOpenMinimal({
+  tenantName, tenantLogo, fundModalOpen, setFundModalOpen,
+  openingAmount, setOpeningAmount, openingSubmitting, openSessionSubmit,
+  siteName, cashierName, onMenu,
+}: {
+  tenantName?: string;
+  tenantLogo?: string | null;
+  fundModalOpen: boolean;
+  setFundModalOpen: (v: boolean) => void;
+  openingAmount: number;
+  setOpeningAmount: (v: number) => void;
+  openingSubmitting: boolean;
+  openSessionSubmit: () => void;
+  siteName?: string;
+  cashierName?: string;
+  onMenu: () => void;
+}) {
+  const [now, setNow] = useState(() => new Date());
+  const fundInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => { if (!document.hidden) setNow(new Date()); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', onVis); };
+  }, []);
+
+  useEffect(() => {
+    if (fundModalOpen) {
+      setTimeout(() => fundInputRef.current?.focus(), 50);
+    } else {
+      setOpeningAmount(0);
+    }
+  }, [fundModalOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dayStr = now.toLocaleDateString('fr-FR', { weekday: 'long' });
+  const dateStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const submitFund = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (openingSubmitting) return;
+    openSessionSubmit();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-gradient-to-br from-white via-neutral-50 to-neutral-200 overflow-hidden">
+      {/* Top bar: clock left, logo right — aligned on all sizes */}
+      <div className="flex items-center justify-between px-4 sm:px-10 pt-4 sm:pt-8">
+        {/* Clock: time on left, day+date stacked on right at same height */}
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
+          <span className="text-2xl sm:text-5xl font-bold tabular-nums text-neutral-900 leading-none tracking-tight">{timeStr}</span>
+          <div className="flex flex-col justify-center gap-0.5">
+            <span className="text-[10px] sm:text-sm font-medium text-neutral-500 capitalize leading-none">{dayStr}</span>
+            <span className="text-[9px] sm:text-xs text-neutral-400 capitalize leading-none">{dateStr}</span>
+          </div>
+        </div>
+        {/* Logo zone: gradient fading to pure white */}
+        <div className="max-w-[30vw] sm:max-w-[220px] flex items-center justify-end rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-br from-white to-white">
+          {tenantLogo ? (
+            <img src={tenantLogo} alt={tenantName || ''} className="max-h-8 sm:max-h-16 max-w-full object-contain" />
+          ) : (
+            <span className="text-xs sm:text-lg font-bold text-neutral-700 tracking-tight">{tenantName || 'Waarwi'}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Center: site + cashier info, then Ouvrir la caisse */}
+      <div className="flex-1 flex flex-col items-center justify-center px-4 gap-3">
+        {/* Site name + cashier on two small lines */}
+        <div className="flex flex-col items-center gap-0.5 text-center">
+          {siteName && <div className="text-[11px] leading-tight"><span className="text-neutral-400">Point de vente : </span><span className="font-semibold text-neutral-700">{siteName}</span></div>}
+          {cashierName && <div className="text-[11px] leading-tight"><span className="text-neutral-400">Vendeur : </span><span className="font-semibold text-neutral-700">{cashierName}</span></div>}
+        </div>
+        <button
+          onClick={() => setFundModalOpen(true)}
+          className="group flex flex-col items-center gap-3 px-8 py-7 rounded-xl bg-white shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
+        >
+          <ShoppingCart className="w-7 h-7 text-neutral-900 group-hover:text-brand-700 transition-colors" />
+          <span className="text-sm font-bold text-neutral-900 group-hover:text-brand-700 transition-colors">Ouvrir la caisse</span>
+        </button>
+      </div>
+
+      {/* Bottom: Menu button */}
+      <div className="flex justify-center pb-4 sm:pb-8">
+        <button
+          onClick={onMenu}
+          className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-bold shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
+        >
+          <MenuIcon className="w-5 h-5" />
+          Menu
+        </button>
+      </div>
+
+      {/* Fund modal */}
+      {fundModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 animate-fade-in">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !openingSubmitting && setFundModalOpen(false)} />
+          <form onSubmit={submitFund} className="relative w-full max-w-[340px] bg-white rounded-xl shadow-premium flex flex-col animate-scale-in">
+            <div className="px-5 py-3.5 border-b border-neutral-100">
+              <h3 className="text-sm font-bold text-neutral-900">Fond de caisse</h3>
+            </div>
+            <div className="px-5 py-4 flex-1">
+              <label className="text-[10px] text-neutral-400 leading-none mb-2 block">Montant initial — facultatif</label>
+              <div className="flex items-baseline gap-1">
+                <input
+                  ref={fundInputRef}
+                  type="number"
+                  value={openingAmount || ''}
+                  onChange={e => setOpeningAmount(Math.max(0, Number(e.target.value)))}
+                  className="flex-1 min-w-0 text-lg font-bold text-neutral-900 tabular-nums bg-transparent border-0 border-b border-neutral-200 focus:border-brand-500 focus:outline-none py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  placeholder="0"
+                  min="0"
+                  inputMode="numeric"
+                  disabled={openingSubmitting}
+                />
+                <span className="text-sm font-medium text-neutral-400 shrink-0">FCFA</span>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-neutral-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setFundModalOpen(false)}
+                disabled={openingSubmitting}
+                className="px-3 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-40"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={openingSubmitting}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                {openingSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                Ouvrir la caisse
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function POSLandingOpenInline({
+  tenantName, tenantLogo, fundModalOpen, setFundModalOpen,
+  openingAmount, setOpeningAmount, openingSubmitting, openSessionSubmit,
+  siteName, cashierName, onBack,
+}: {
+  tenantName?: string;
+  tenantLogo?: string | null;
+  fundModalOpen: boolean;
+  setFundModalOpen: (v: boolean) => void;
+  openingAmount: number;
+  setOpeningAmount: (v: number) => void;
+  openingSubmitting: boolean;
+  openSessionSubmit: () => void;
+  siteName?: string;
+  cashierName?: string;
+  onBack: () => void;
+}) {
+  const fundInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (fundModalOpen) {
+      setTimeout(() => fundInputRef.current?.focus(), 50);
+    } else {
+      setOpeningAmount(0);
+    }
+  }, [fundModalOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submitFund = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (openingSubmitting) return;
+    openSessionSubmit();
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <button
+        onClick={onBack}
+        className="absolute top-2 left-2 px-3 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
+      >
+        Plein écran
+      </button>
+
+      <div className="flex flex-col items-center gap-1 text-center">
+        {siteName && <div className="text-[11px] leading-tight"><span className="text-neutral-400">Point de vente : </span><span className="font-semibold text-neutral-700">{siteName}</span></div>}
+        {cashierName && <div className="text-[11px] leading-tight"><span className="text-neutral-400">Vendeur : </span><span className="font-semibold text-neutral-700">{cashierName}</span></div>}
+      </div>
+
+      <button
+        onClick={() => setFundModalOpen(true)}
+        className="group flex flex-col items-center gap-3 px-8 py-7 rounded-xl bg-white shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
+      >
+        <ShoppingCart className="w-7 h-7 text-neutral-900 group-hover:text-brand-700 transition-colors" />
+        <span className="text-sm font-bold text-neutral-900 group-hover:text-brand-700 transition-colors">Ouvrir la caisse</span>
+      </button>
+
+      {fundModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 animate-fade-in">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !openingSubmitting && setFundModalOpen(false)} />
+          <form onSubmit={submitFund} className="relative w-full max-w-[340px] bg-white rounded-xl shadow-premium flex flex-col animate-scale-in">
+            <div className="px-5 py-3.5 border-b border-neutral-100">
+              <h3 className="text-sm font-bold text-neutral-900">Fond de caisse</h3>
+            </div>
+            <div className="px-5 py-4 flex-1">
+              <label className="text-[10px] text-neutral-400 leading-none mb-2 block">Montant initial — facultatif</label>
+              <div className="flex items-baseline gap-1">
+                <input
+                  ref={fundInputRef}
+                  type="number"
+                  value={openingAmount || ''}
+                  onChange={e => setOpeningAmount(Math.max(0, Number(e.target.value)))}
+                  className="flex-1 min-w-0 text-lg font-bold text-neutral-900 tabular-nums bg-transparent border-0 border-b border-neutral-200 focus:border-brand-500 focus:outline-none py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  placeholder="0"
+                  min="0"
+                  inputMode="numeric"
+                  disabled={openingSubmitting}
+                />
+                <span className="text-sm font-medium text-neutral-400 shrink-0">FCFA</span>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-neutral-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setFundModalOpen(false)}
+                disabled={openingSubmitting}
+                className="px-3 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-40"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={openingSubmitting}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                {openingSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                Ouvrir la caisse
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function POSLandingResume({
   session, currentSite, onResume, tenantId, onSeeAll, cashierName, tenantName, onSwitchSite, siteCount,
   actions,
@@ -505,6 +568,7 @@ function POSLandingResume({
   };
 }) {
   const { summary, loading: loadingSummary } = useDaySummary(tenantId, currentSite?.id, session.id);
+  const { sales: recentSales, loading: loadingRecentSales } = useRecentSessionSales(tenantId, session.id);
   const isOpen = actions?.sessionOpen !== false;
 
   const shortcutBtns = actions ? [
@@ -526,155 +590,157 @@ function POSLandingResume({
           </div>
         </div>
 
-        {/* Two-column body */}
-        <div className="grid lg:grid-cols-[1fr_300px] px-8 pt-6">
-          {/* ── Left: session info + actions + shortcuts ── */}
-          <div className="pr-8">
-            {/* Session info — 2 rows × 3 cols, fine separators */}
-            <div className="grid grid-cols-3">
-              {/* Row 1 */}
-              <div className="flex items-start gap-2.5 py-4 pr-4 border-b border-neutral-100">
-                <Network className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Point de vente</p>
+        {/* Two-row body: row 1 = session info + résumé, row 2 = tickets + accès rapide */}
+        <div className="px-8 pt-6">
+          {/* ── Row 1: Informations + Résumé ── */}
+          <div className="grid lg:grid-cols-[1fr_300px]">
+            {/* Left: session info */}
+            <div className="pr-8">
+              <h3 className="text-sm font-bold text-neutral-900 mb-4">Informations de la session</h3>
+              <div className="grid grid-cols-3">
+                {/* Row 1 */}
+                <div className="py-4 pr-4 border-b border-neutral-100">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Point de vente</p>
                   <p className="text-[13px] font-bold text-neutral-900 truncate">{currentSite?.name || '-'}</p>
                 </div>
-              </div>
-              <div className="flex items-start gap-2.5 py-4 px-4 border-l border-b border-neutral-100">
-                <ClockIcon className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Ouverte le</p>
+                <div className="py-4 px-4 border-l border-b border-neutral-100">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Ouverte le</p>
                   <p className="text-[13px] font-bold text-neutral-900 leading-tight">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })} · {fmtTimeLanding(session.opened_at)}</p>
                 </div>
-              </div>
-              <div className="flex items-start gap-2.5 py-4 pl-4 border-l border-b border-neutral-100">
-                <ClockIcon className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Durée</p>
+                <div className="py-4 pl-4 border-l border-b border-neutral-100">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Durée</p>
                   <p className="text-[13px] font-bold text-neutral-900">{sessionDuration(session.opened_at)}</p>
                 </div>
-              </div>
-              {/* Row 2 */}
-              <div className="flex items-start gap-2.5 py-4 pr-4">
-                <Banknote className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Fond initial</p>
+                {/* Row 2 */}
+                <div className="py-4 pr-4">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Fond initial</p>
                   <p className="text-[13px] font-bold text-neutral-900 tabular-nums">{formatFCFA(Number(session.opening_amount))}</p>
                 </div>
-              </div>
-              <div className="flex items-start gap-2.5 py-4 px-4 border-l border-neutral-100">
-                <User className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Vendeur</p>
+                <div className="py-4 px-4 border-l border-neutral-100">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Vendeur</p>
                   <p className="text-[13px] font-bold text-neutral-900 uppercase truncate">{cashierName || '-'}</p>
                 </div>
-              </div>
-              <div className="flex items-start gap-2.5 py-4 pl-4 border-l border-neutral-100">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] text-neutral-400 leading-none mb-1">Statut</p>
+                <div className="py-4 pl-4 border-l border-neutral-100">
+                  <p className="text-[10px] text-neutral-400 leading-none mb-1.5">Statut</p>
                   <p className="text-[13px] font-bold text-emerald-600">Ouverte</p>
                 </div>
               </div>
             </div>
 
-            {/* Actions principales — Reprendre (dominant) / Clôturer (secondary) */}
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              <button onClick={onResume} className="flex items-center gap-3 px-4 py-3.5 rounded-md bg-neutral-900 hover:bg-neutral-800 text-white transition-all active:scale-[0.98]">
-                <Play className="w-4 h-4 fill-current shrink-0" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="text-sm font-bold">Reprendre</span>
-                  <span className="text-[11px] text-white/60">Continuer la session</span>
+            {/* Right: résumé */}
+            <div className="lg:border-l border-neutral-100 pl-8">
+              {actions?.canViewSummary !== false && (
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900 mb-3">Résumé de session</h3>
+                  {loadingSummary ? (
+                    <div className="space-y-2.5 animate-pulse">
+                      <div className="h-10 bg-neutral-100 rounded" />
+                      <div className="h-10 bg-neutral-100 rounded" />
+                    </div>
+                  ) : summary ? (
+                    <div>
+                      <div className="flex items-center justify-between py-2.5 border-b border-neutral-100">
+                        <span className="text-[13px] text-neutral-600">Total encaissé</span>
+                        <span className="text-[14px] font-bold text-neutral-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2.5 border-b border-neutral-100">
+                        <span className="text-[13px] text-neutral-600">Nombre de ventes</span>
+                        <span className="text-[14px] font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
+                      </div>
+                      {summary.byMethod.length > 0 && (
+                        <div className="pt-2.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5">Par mode de paiement</p>
+                          {summary.byMethod.map(m => (
+                            <div key={m.method_name} className="flex items-center justify-between py-1.5">
+                              <span className="text-[12px] text-neutral-500">{m.method_name}</span>
+                              <span className="text-[13px] font-bold text-neutral-800 tabular-nums">{formatFCFA(m.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[13px] text-neutral-400 text-center py-3">Aucune donnée</p>
+                  )}
                 </div>
-              </button>
-              {actions?.canClose ? (
-                <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-3 px-4 py-3.5 text-neutral-900 hover:opacity-70 transition-all active:scale-[0.98] disabled:opacity-40">
-                  <Lock className="w-4 h-4 shrink-0" />
-                  <div className="flex flex-col items-start leading-tight">
-                    <span className="text-sm font-bold">Clôturer</span>
-                    <span className="text-[11px] text-neutral-400">Fermer la caisse</span>
-                  </div>
-                </button>
-              ) : <div />}
+              )}
             </div>
-
-            {/* Raccourcis opérationnels — single row, fine separators */}
-            {shortcutBtns.length > 0 && (
-              <div className="flex items-center mt-3">
-                {shortcutBtns.map((btn, i) => (
-                  <Fragment key={btn.label}>
-                    <button onClick={btn.onClick} disabled={!isOpen} className="flex-1 flex flex-col items-center justify-center gap-1.5 py-3 hover:opacity-70 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
-                      <btn.icon className="w-4 h-4 text-neutral-600" />
-                      <span className="text-[11px] font-medium text-neutral-600">{btn.label}</span>
-                    </button>
-                    {i < shortcutBtns.length - 1 && <div className="w-px h-8 bg-neutral-200 shrink-0" />}
-                  </Fragment>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* ── Right: résumé + accès rapides ── */}
-          <div className="lg:border-l border-neutral-100 pl-8 flex flex-col">
-            {/* Résumé de session */}
-            {actions?.canViewSummary !== false && (
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 mb-3">Résumé de session</h3>
-                {loadingSummary ? (
-                  <div className="space-y-2.5 animate-pulse">
-                    <div className="h-10 bg-neutral-100 rounded" />
-                    <div className="h-10 bg-neutral-100 rounded" />
-                  </div>
-                ) : summary ? (
-                  <div>
-                    <div className="flex items-center justify-between py-2.5 border-b border-neutral-100">
-                      <span className="text-[13px] text-neutral-600">Total encaissé</span>
-                      <span className="text-[14px] font-bold text-neutral-900 tabular-nums">{formatFCFA(summary.salesTotal)}</span>
+          {/* Separator between rows */}
+          <div className="h-px bg-neutral-100 mt-6 mb-6" />
+
+          {/* ── Row 2: Tickets récents + Accès rapide ── */}
+          <div className="grid lg:grid-cols-[1fr_300px]">
+            {/* Left: tickets récents */}
+            <div className="pr-8">
+              <h3 className="text-sm font-bold text-neutral-900 mb-3">Tickets récents</h3>
+              {loadingRecentSales ? (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-8 bg-neutral-100 rounded" />
+                  <div className="h-8 bg-neutral-100 rounded" />
+                </div>
+              ) : recentSales.length > 0 ? (
+                <div className="divide-y divide-neutral-100">
+                  {recentSales.map(s => (
+                    <div key={s.id} className="flex items-center gap-3 py-2.5">
+                      <span className="text-[12px] tabular-nums text-neutral-500 shrink-0 w-16">{fmtDateShort(s.created_at)}</span>
+                      <span className="text-[12px] font-medium text-neutral-700 shrink-0">{s.sale_number}</span>
+                      <span className="text-[12px] text-neutral-500 truncate flex-1 min-w-0">{s.customer_name || '-'}</span>
+                      <span className="text-[12px] font-bold text-neutral-900 tabular-nums shrink-0">{formatFCFA(s.total)}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2.5 border-b border-neutral-100">
-                      <span className="text-[13px] text-neutral-600">Nombre de ventes</span>
-                      <span className="text-[14px] font-bold text-neutral-900 tabular-nums">{summary.salesCount}</span>
-                    </div>
-                    {summary.byMethod.length > 0 && (
-                      <div className="pt-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5">Par mode de paiement</p>
-                        {summary.byMethod.map(m => (
-                          <div key={m.method_name} className="flex items-center justify-between py-1.5">
-                            <span className="text-[12px] text-neutral-500">{m.method_name}</span>
-                            <span className="text-[13px] font-bold text-neutral-800 tabular-nums">{formatFCFA(m.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-[13px] text-neutral-400 text-center py-3">Aucune donnée</p>
-                )}
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[12px] text-neutral-400 py-3">Aucun ticket</p>
+              )}
+            </div>
+
+            {/* Right: accès rapide */}
+            <div className="lg:border-l border-neutral-100 pl-8 flex flex-col">
+              <h3 className="text-sm font-bold text-neutral-900 mb-3">Accès rapide</h3>
+
+              {/* Main actions: Reprendre / Clôturer */}
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <button onClick={onResume} className="flex items-center gap-2.5 px-3 py-3 rounded-md bg-neutral-50 hover:bg-neutral-100 text-neutral-900 transition-all active:scale-[0.98]">
+                  <Play className="w-4 h-4 fill-current shrink-0 text-neutral-700" />
+                  <span className="text-[13px] font-bold">Reprendre</span>
+                </button>
+                {actions?.canClose ? (
+                  <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-2.5 px-3 py-3 rounded-md bg-neutral-50 hover:bg-neutral-100 text-neutral-900 transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none">
+                    <Lock className="w-4 h-4 shrink-0 text-neutral-600" />
+                    <span className="text-[13px] font-bold">Clôturer</span>
+                  </button>
+                ) : <div />}
               </div>
-            )}
 
-            {/* Separator */}
-            <div className="h-px bg-neutral-100 my-5" />
+              {/* Shortcut buttons */}
+              {shortcutBtns.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {shortcutBtns.map(btn => (
+                    <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex items-center gap-2.5 px-3 py-2.5 rounded-md bg-neutral-50 hover:bg-neutral-100 text-neutral-700 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                      <btn.icon className="w-4 h-4 shrink-0 text-neutral-600" />
+                      <span className="text-[12px] font-medium">{btn.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            {/* Accès rapides */}
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-neutral-900 mb-3">Accès rapides</h3>
-              <div className="space-y-0.5">
+              {/* Links without titles */}
+              <div className="space-y-0.5 mt-auto">
                 {onSeeAll && (
-                  <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-1 py-2.5 rounded-md hover:bg-neutral-50 text-left transition-colors group">
+                  <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-md hover:bg-neutral-50 text-left transition-colors group">
                     <History className="w-4 h-4 text-neutral-500 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-neutral-800 leading-tight">Historique des sessions</p>
-                      <p className="text-[11px] text-neutral-400 leading-tight">Consulter les sessions précédentes</p>
+                      <p className="text-[13px] font-medium text-neutral-700 leading-tight">Historique des sessions</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
                   </button>
                 )}
-                <button onClick={onResume} className="w-full flex items-center gap-2.5 px-1 py-2.5 rounded-md hover:bg-neutral-50 text-left transition-colors group">
+                <button onClick={() => { if (siteCount && siteCount > 1 && onSwitchSite) onSwitchSite(); else if (onResume) onResume(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-md hover:bg-neutral-50 text-left transition-colors group">
                   <Store className="w-4 h-4 text-neutral-500 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-neutral-800 leading-tight">Point de vente</p>
-                    <p className="text-[11px] text-neutral-400 leading-tight">Accéder à la caisse</p>
+                    <p className="text-[13px] font-medium text-neutral-700 leading-tight">Point de vente</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
                 </button>
@@ -686,83 +752,50 @@ function POSLandingResume({
 
       {/* ── Mobile layout ── */}
       <div className="lg:hidden px-0 pt-1">
-        <div className="px-4">
+        <div className="px-2">
           {/* Header: title + tenant */}
           <div className="py-3">
             <h2 className="text-lg font-bold tracking-tight text-neutral-900 leading-tight">Caisse</h2>
             <p className="text-[12px] text-neutral-500 leading-tight mt-0.5 truncate">{tenantName || currentSite?.name || '-'}</p>
           </div>
 
-          {/* Session info: 3 columns with fine vertical separators */}
-          <div className="flex items-center py-3 border-t border-neutral-100">
-            <div className="flex-1 flex items-center gap-2 min-w-0">
-              <ClockIcon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-              <div className="min-w-0">
+          {/* Informations de la session */}
+          <div className="py-3 border-t border-neutral-100">
+            <h3 className="text-[13px] font-bold text-neutral-900 mb-2">Informations de la session</h3>
+            <div className="grid grid-cols-2 gap-y-2.5 gap-x-1">
+              <div>
+                <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Point de vente</p>
+                <p className="text-[11px] font-bold text-neutral-900 truncate">{currentSite?.name || '-'}</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Ouverte le</p>
+                <p className="text-[11px] font-bold text-neutral-900 leading-tight">{fmtTimeLanding(session.opened_at)}</p>
+                <p className="text-[10px] text-neutral-500 leading-tight">{new Date(session.opened_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</p>
+              </div>
+              <div>
                 <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Durée</p>
-                <p className="text-[11px] font-bold text-neutral-900 leading-tight truncate">{sessionDuration(session.opened_at)}</p>
+                <p className="text-[11px] font-bold text-neutral-900 truncate">{sessionDuration(session.opened_at)}</p>
               </div>
-            </div>
-            <div className="w-px h-7 bg-neutral-200 mx-2 shrink-0" />
-            <div className="flex-1 flex items-center gap-2 min-w-0">
-              <Banknote className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-              <div className="min-w-0">
+              <div>
                 <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Fond initial</p>
-                <p className="text-[11px] font-bold text-neutral-900 leading-tight truncate tabular-nums">{formatFCFA(Number(session.opening_amount))}</p>
+                <p className="text-[11px] font-bold text-neutral-900 truncate tabular-nums">{formatFCFA(Number(session.opening_amount))}</p>
               </div>
-            </div>
-            <div className="w-px h-7 bg-neutral-200 mx-2 shrink-0" />
-            <div className="flex-1 flex items-center gap-2 min-w-0">
-              <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-              <div className="min-w-0">
+              <div>
                 <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Vendeur</p>
-                <p className="text-[11px] font-bold text-neutral-900 leading-tight truncate">{cashierName ? cashierName.charAt(0).toUpperCase() + cashierName.slice(1).toLowerCase() : '-'}</p>
+                <p className="text-[11px] font-bold text-neutral-900 truncate">{cashierName ? cashierName.charAt(0).toUpperCase() + cashierName.slice(1).toLowerCase() : '-'}</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-neutral-400 leading-none mb-0.5">Statut</p>
+                <p className="text-[11px] font-bold text-emerald-600">Ouverte</p>
               </div>
             </div>
           </div>
 
-          {/* Action buttons: Reprendre (dominant) / Clôturer (lightweight) */}
-          <div className="flex items-center gap-4 pt-4 pb-1">
-            <button onClick={onResume} className="flex-[1.6] flex items-center gap-3 py-3.5 px-4 rounded-md bg-neutral-900 text-white transition-all active:scale-[0.97]">
-              <Play className="w-5 h-5 fill-current shrink-0" />
-              <div className="flex flex-col items-start leading-tight min-w-0">
-                <span className="text-[14px] font-bold">Reprendre</span>
-                <span className="text-[11px] text-white/50 whitespace-nowrap">Continuer la session</span>
-              </div>
-            </button>
-            {actions?.canClose ? (
-              <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-2 active:opacity-60 transition-all disabled:opacity-30">
-                <Lock className="w-4 h-4 text-neutral-500 shrink-0" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="text-[13px] font-bold text-neutral-900">Clôturer</span>
-                  <span className="text-[10px] text-neutral-400">Fermer la caisse</span>
-                </div>
-              </button>
-            ) : <div />}
-          </div>
-
-          {/* Quick actions: flat row, no container border */}
-          {shortcutBtns.length > 0 && (
-            <div className="flex items-center py-3 border-t border-neutral-100 mt-2">
-              {shortcutBtns.map((btn, i) => (
-                <Fragment key={btn.label}>
-                  <button onClick={btn.onClick} disabled={!isOpen} className="flex-1 flex flex-col items-center gap-1.5 py-1 active:opacity-70 transition-all disabled:opacity-30 disabled:pointer-events-none">
-                    <btn.icon className="w-4 h-4 text-neutral-600" />
-                    <span className="text-[9px] font-medium text-neutral-500 leading-none">{btn.label}</span>
-                  </button>
-                  {i < shortcutBtns.length - 1 && <div className="w-px h-6 bg-neutral-200 shrink-0" />}
-                </Fragment>
-              ))}
-            </div>
-          )}
-
-          {/* Summary section */}
+          {/* Résumé */}
           {actions?.canViewSummary !== false && (
-            <div className="mt-3 pt-3 border-t border-neutral-100">
+            <div className="mt-2 pt-3 border-t border-neutral-100">
               <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-1.5">
-                  <BarChart2 className="w-3.5 h-3.5 text-neutral-500" />
-                  <h3 className="text-[13px] font-bold text-neutral-900">Résumé</h3>
-                </div>
+                <h3 className="text-[13px] font-bold text-neutral-900">Résumé de session</h3>
                 <span className="text-[11px] text-neutral-400">Aujourd'hui</span>
               </div>
               {loadingSummary ? (
@@ -772,12 +805,10 @@ function POSLandingResume({
                 </div>
               ) : summary ? (
                 <>
-                  {/* Dark total block */}
                   <div className="rounded-md bg-neutral-900 px-4 py-3.5">
                     <p className="text-[9px] text-white/40 uppercase tracking-wider leading-none mb-1.5">Total encaissé</p>
                     <p className="text-xl font-bold text-white tabular-nums leading-tight">{formatFCFA(summary.salesTotal)}</p>
                   </div>
-                  {/* Sub-indicators: 2 cols with vertical separator */}
                   <div className="flex items-center mt-3">
                     <div className="flex-1 text-center">
                       <p className="text-[10px] text-neutral-400 leading-none mb-1">Ventes</p>
@@ -801,26 +832,51 @@ function POSLandingResume({
             </div>
           )}
 
-          {/* Access links */}
+          {/* Accès rapide — buttons + links in same zone */}
           <div className="mt-4 pt-3 border-t border-neutral-100">
-            {onSeeAll && (
-              <button onClick={onSeeAll} className="w-full flex items-center gap-3 py-3 text-left border-b border-neutral-100 active:opacity-70 transition-colors">
-                <ClockIcon className="w-4 h-4 text-neutral-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-neutral-900 leading-tight">Historique</p>
-                  <p className="text-[10px] text-neutral-400 leading-tight mt-0.5">Voir les opérations</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-neutral-300 shrink-0" />
+            <h3 className="text-[13px] font-bold text-neutral-900 mb-3">Accès rapide</h3>
+
+            {/* Main actions */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button onClick={onResume} className="flex items-center gap-2 px-3 py-3 rounded-md bg-neutral-50 hover:bg-neutral-100 text-neutral-900 transition-all active:scale-[0.97]">
+                <Play className="w-4 h-4 fill-current shrink-0 text-neutral-700" />
+                <span className="text-[13px] font-bold">Reprendre</span>
               </button>
-            )}
-            <button onClick={() => { if (siteCount && siteCount > 1 && onSwitchSite) onSwitchSite(); else if (onResume) onResume(); }} className="w-full flex items-center gap-3 py-3 text-left active:opacity-70 transition-colors">
-              <ShoppingCart className="w-4 h-4 text-neutral-500 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-neutral-900 leading-tight">Point de vente</p>
-                <p className="text-[10px] text-neutral-400 leading-tight mt-0.5">{siteCount && siteCount > 1 ? 'Changer de point de vente' : 'Un seul point de vente'}</p>
+              {actions?.canClose ? (
+                <button onClick={actions.onClose} disabled={!isOpen} className="flex items-center gap-2 px-3 py-3 rounded-md bg-neutral-50 hover:bg-neutral-100 text-neutral-900 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                  <Lock className="w-4 h-4 shrink-0 text-neutral-600" />
+                  <span className="text-[13px] font-bold">Clôturer</span>
+                </button>
+              ) : <div />}
+            </div>
+
+            {/* Shortcut buttons */}
+            {shortcutBtns.length > 0 && (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {shortcutBtns.map(btn => (
+                  <button key={btn.label} onClick={btn.onClick} disabled={!isOpen} className="flex items-center gap-2 px-3 py-2.5 rounded-md bg-neutral-50 hover:bg-neutral-100 text-neutral-700 transition-all active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none">
+                    <btn.icon className="w-4 h-4 shrink-0 text-neutral-600" />
+                    <span className="text-[12px] font-medium">{btn.label}</span>
+                  </button>
+                ))}
               </div>
-              <ChevronRight className="w-4 h-4 text-neutral-300 shrink-0" />
-            </button>
+            )}
+
+            {/* Links without titles */}
+            <div className="space-y-0.5">
+              {onSeeAll && (
+                <button onClick={onSeeAll} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-md hover:bg-neutral-50 text-left transition-colors group">
+                  <History className="w-4 h-4 text-neutral-500 shrink-0" />
+                  <p className="flex-1 text-[13px] font-medium text-neutral-700 leading-tight">Historique des sessions</p>
+                  <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+                </button>
+              )}
+              <button onClick={() => { if (siteCount && siteCount > 1 && onSwitchSite) onSwitchSite(); else if (onResume) onResume(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-md hover:bg-neutral-50 text-left transition-colors group">
+                <Store className="w-4 h-4 text-neutral-500 shrink-0" />
+                <p className="flex-1 text-[13px] font-medium text-neutral-700 leading-tight">Point de vente</p>
+                <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+              </button>
+            </div>
           </div>
 
           <div className="h-4" />
@@ -917,6 +973,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [openingAmount, setOpeningAmount] = useState(0);
   const [openingNote, setOpeningNote] = useState('');
   const [openingSubmitting, setOpeningSubmitting] = useState(false);
+  const [fundModalOpen, setFundModalOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Catalog filters
   const [categories, setCategories] = useState<CategoryLite[]>(hasPosCache ? posCache.categories : []);
@@ -2694,23 +2752,40 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     );
   }
 
-  // Screen: open form (no active session)
-  if (screen === 'open-form') {
+  // Screen: open form (no active session) — minimal full-screen view
+  if (screen === 'open-form' && !menuOpen) {
+    return <POSLandingOpenMinimal
+      tenantName={tenant?.name}
+      tenantLogo={tenant?.logo_url}
+      fundModalOpen={fundModalOpen}
+      setFundModalOpen={setFundModalOpen}
+      openingAmount={openingAmount}
+      setOpeningAmount={setOpeningAmount}
+      openingSubmitting={openingSubmitting}
+      openSessionSubmit={openSessionSubmit}
+      siteName={currentSite?.name}
+      cashierName={cashierName}
+      onMenu={() => setMenuOpen(true)}
+    />;
+  }
+
+  // Screen: open form — inline (after Menu click, sidebar visible)
+  if (screen === 'open-form' && menuOpen) {
     return (
       <div className="flex-1 overflow-y-auto lg:overflow-y-auto">
         <div className="w-full max-w-[1600px] mx-auto px-1.5 sm:px-5 lg:px-8 pt-2 sm:pt-4 lg:pt-6 pb-2 lg:pb-8">
-          <POSGuide tenantId={tenant?.id} hasSession={false} businessType={(tenant as any)?.business_type} />
-          <POSLandingOpen
-            currentSite={currentSite}
+          <POSLandingOpenInline
+            tenantName={tenant?.name}
+            tenantLogo={tenant?.logo_url}
+            fundModalOpen={fundModalOpen}
+            setFundModalOpen={setFundModalOpen}
             openingAmount={openingAmount}
             setOpeningAmount={setOpeningAmount}
-            openingNote={openingNote}
-            setOpeningNote={setOpeningNote}
             openingSubmitting={openingSubmitting}
             openSessionSubmit={openSessionSubmit}
-            tenantId={tenant?.id}
-            onSeeAll={onNavigate ? () => onNavigate('cash_history') : undefined}
+            siteName={currentSite?.name}
             cashierName={cashierName}
+            onBack={() => setMenuOpen(false)}
           />
         </div>
       </div>
@@ -4676,18 +4751,16 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           )
         }
       >
-        {/* Minimal stepper */}
-        <div className="flex items-center gap-1.5 mb-4">
+        {/* Minimal stepper — flat, bottom-border only */}
+        <div className="flex items-center mb-4">
           {(['control', 'regularize', 'confirm'] as CloseStep[]).map((s, i) => {
             const labels = ['Contrôle', 'Régul.', 'Confirm.'];
             const active = closeStep === s;
             const done = (['control', 'regularize', 'confirm'] as CloseStep[]).indexOf(closeStep) > i;
             return (
-              <div key={s} className="flex items-center gap-1.5 flex-1">
-                <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-all flex-1 justify-center ${active ? 'bg-neutral-900 text-white' : done ? 'bg-neutral-100 text-neutral-700 border border-neutral-200' : 'bg-neutral-50 text-neutral-400 border border-neutral-100'}`}>
-                  {done ? <Check className="w-3 h-3" /> : <span className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[9px] ${active ? 'bg-white/20' : 'bg-neutral-200 text-neutral-500'}`}>{i + 1}</span>}
-                  <span>{labels[i]}</span>
-                </div>
+              <div key={s} className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-2 flex-1 justify-center border-b-2 transition-colors ${active ? 'border-neutral-900 text-neutral-900' : done ? 'border-neutral-300 text-neutral-500' : 'border-neutral-100 text-neutral-400'}`}>
+                {done ? <Check className="w-3 h-3" /> : <span className="text-[9px]">{i + 1}</span>}
+                <span>{labels[i]}</span>
               </div>
             );
           })}

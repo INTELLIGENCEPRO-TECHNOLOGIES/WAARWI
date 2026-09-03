@@ -7,7 +7,7 @@ import {
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
   ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse, Bell, ArrowRightLeft,
-  Rocket, Sparkles, Bug, RefreshCw,
+  Rocket, Sparkles, Bug, RefreshCw, Lock,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -752,6 +752,7 @@ const MODULE_DEFS: { key: string; name: string; desc: string; icon: any; color: 
   { key: 'dashboard', name: 'Tableau de bord', desc: 'KPIs et vue d\'ensemble', icon: Gauge, color: 'sky' },
   { key: 'pos', name: 'Caisse (POS)', desc: 'Encaissement, ventes', icon: CreditCard_, color: 'emerald' },
   { key: 'cash_history', name: 'Historique caisse', desc: 'Sessions, ouvertures/clôtures', icon: Clock, color: 'slate' },
+  { key: 'vault', name: 'Coffre', desc: 'Coffre physique par point de vente', icon: Lock, color: 'slate' },
   { key: 'sales', name: 'Journal des ventes', desc: 'Liste et rapports ventes', icon: LineChart, color: 'sky' },
   { key: 'articles', name: 'Articles', desc: 'Catalogue produits', icon: Package_, color: 'amber' },
   { key: 'stock', name: 'Stock', desc: 'Inventaire, mouvements', icon: Boxes_, color: 'amber' },

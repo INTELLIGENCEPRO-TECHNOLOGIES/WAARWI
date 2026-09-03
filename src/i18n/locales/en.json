@@ -30,6 +30,7 @@
     "dashboard": "Dashboard",
     "sales": "Sales journal",
     "cashHistory": "Cash history",
+    "coffre": "Vault",
     "pos": "POS",
     "billing": "Billing",
     "onlineOrders": "Web Orders",
