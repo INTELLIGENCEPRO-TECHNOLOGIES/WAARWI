@@ -24,6 +24,7 @@ import { desktopAutoFocus } from '../lib/device';
 import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, printDecaissementTicket80, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from '../lib/types';
 import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
+import { isSaleSettlementIncome, type CashMovementKind } from '../lib/cashMovements';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments } from '../lib/ipm';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
@@ -84,7 +85,7 @@ function printXReport(
     count: number; total: number; totalPayments?: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
-    movements?: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movements?: { kind: CashMovementKind; amount: number; reason: string; method_name: string; customer_name: string | null }[];
     movExpense?: number; movIncome?: number; movPrepay?: number; netTotal?: number;
   },
   regularizations: { reg_type: string; amount: number; reason: string }[],
@@ -1244,18 +1245,23 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [loadingControl, setLoadingControl] = useState(false);
   const [closingNote, setClosingNote] = useState('');
   const [closing, setClosing] = useState(false);
+  const [vaultAvailable, setVaultAvailable] = useState(false);
+  const [depositMode, setDepositMode] = useState<'none' | 'full' | 'partial'>('none');
+  const [depositPartial, setDepositPartial] = useState('');
+  const closeIdemRef = useRef<string>('');
   const [statsData, setStatsData] = useState<{
     count: number; total: number; totalPayments: number;
     byMethod: { method_name: string; amount: number }[];
     topArticles: { name: string; qty: number; total: number }[];
-    movements: { kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'; amount: number; reason: string; method_name: string; customer_name: string | null }[];
+    movements: { kind: CashMovementKind; amount: number; reason: string; method_name: string; customer_name: string | null }[];
     invoicePayments: { sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string; user_name: string | null }[];
     movExpense: number; movIncome: number; movPrepay: number; movWithdrawal: number; movLoan: number; movRefund: number;
+    movVaultIn: number; movVaultOut: number;
     netTotal: number;
   } | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | null>(null);
+  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | 'vaultIn' | 'vaultOut' | null>(null);
 
   // Vehicle picker
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
@@ -2503,10 +2509,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const salesList = sales || [];
     const pmtList = pmtRows || [];
     const movs = (mvRows || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund',
+      kind: m.kind as CashMovementKind,
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
+    })).filter(m => !isSaleSettlementIncome(m.kind, m.reason));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movs.forEach(m => {
@@ -2540,6 +2546,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const movLoan = movs.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
     const movIncome = movs.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movs.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
+    const movVaultIn = movs.filter(m => m.kind === 'vault_withdrawal').reduce((s, m) => s + m.amount, 0);
+    const movVaultOut = movs.filter(m => m.kind === 'vault_deposit').reduce((s, m) => s + m.amount, 0);
     const totalPayments = pmtList.reduce((s: number, p: any) => s + Number(p.amount), 0);
     setStatsData({
       count: salesList.length,
@@ -2550,7 +2558,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       movements: movs,
       invoicePayments,
       movExpense, movIncome, movPrepay, movWithdrawal, movLoan, movRefund,
-      netTotal: totalPayments + movIncome + movPrepay - movExpense - movRefund - movWithdrawal - movLoan,
+      movVaultIn, movVaultOut,
+      netTotal: totalPayments + movIncome + movPrepay + movVaultIn - movExpense - movRefund - movWithdrawal - movLoan - movVaultOut,
     });
     setLoadingStats(false);
   };
@@ -2567,6 +2576,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setCloseStep('control');
     setLoadingControl(true);
     setCloseOpen(true);
+    setDepositMode('none');
+    setDepositPartial('');
+    closeIdemRef.current = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+    // Le coffre est-il disponible pour ce site (module activé + coffre initialisé) ?
+    if (hasModule('vault') && can('vault_receive_from_cash')) {
+      const { data: v } = await supabase.from('vaults').select('id')
+        .eq('tenant_id', tenant.id).eq('site_id', session.site_id).eq('is_active', true).maybeSingle();
+      setVaultAvailable(!!v?.id);
+    } else {
+      setVaultAvailable(false);
+    }
 
     const [{ data: pmts }, { data: regs }, salesResult, { data: mvs }] = await Promise.all([
       supabase.from('sale_payments').select('payment_method_id, method_name, amount, created_at, reference, sales(sale_number, cash_session_id, customers(name))').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
@@ -2584,10 +2605,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       theoretical[key].amount += Number(p.amount);
     });
     (mvs || []).forEach((m: any) => {
-      if (m.kind === 'income' && m.reason && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')) return;
-      const key = m.method_name || (m.kind === 'expense' || m.kind === 'refund' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' ? 'Espèces' : '—');
+      if (isSaleSettlementIncome(m.kind, m.reason)) return;
+      const outflow = m.kind === 'expense' || m.kind === 'refund' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' || m.kind === 'vault_deposit';
+      const key = m.method_name || (outflow || m.kind === 'vault_withdrawal' ? 'Espèces' : '—');
       if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
-      if (m.kind === 'expense' || m.kind === 'refund' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan') {
+      if (outflow) {
         theoretical[key].amount -= Number(m.amount);
       } else {
         theoretical[key].amount += Number(m.amount);
@@ -2615,10 +2637,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     // Build stats for X report
     const salesList = salesResult.data || [];
     const movList = (mvs || []).map((m: any) => ({
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund',
+      kind: m.kind as CashMovementKind,
       amount: Number(m.amount), reason: m.reason || '',
       method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
+    })).filter(m => !isSaleSettlementIncome(m.kind, m.reason));
     const byMethod: Record<string, number> = {};
     pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
     movList.forEach(m => {
@@ -2650,6 +2672,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const movLoan = movList.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
     const movIncome = movList.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
     const movPrepay = movList.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
+    const movVaultIn = movList.filter(m => m.kind === 'vault_withdrawal').reduce((s, m) => s + m.amount, 0);
+    const movVaultOut = movList.filter(m => m.kind === 'vault_deposit').reduce((s, m) => s + m.amount, 0);
     const totalSales = salesList.reduce((s: number, r: any) => s + Number(r.total), 0);
     const totalPayments = pmtList.reduce((s: number, p: any) => s + Number(p.amount), 0);
     setStatsData({
@@ -2661,7 +2685,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       movements: movList,
       invoicePayments,
       movExpense, movIncome, movPrepay, movWithdrawal, movLoan, movRefund,
-      netTotal: totalPayments + movIncome + movPrepay - movExpense - movRefund - movWithdrawal - movLoan,
+      movVaultIn, movVaultOut,
+      netTotal: totalPayments + movIncome + movPrepay + movVaultIn - movExpense - movRefund - movWithdrawal - movLoan - movVaultOut,
     });
 
     setControlLines(lines);
@@ -2670,6 +2695,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const totalVariance = controlLines.reduce((s, c) => s + (c.counted_amount - c.theoretical_amount), 0);
+
+  const vaultCloseEnabled = hasModule('vault') && vaultAvailable && can('vault_receive_from_cash');
+  const countedCash = controlLines.reduce((s, c) => {
+    const m = methods.find(mm => mm.id === c.payment_method_id);
+    const norm = c.method_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const isCash = (m?.payment_type === 'cash') || norm.includes('espece') || norm.includes('liquide') || norm.includes('cash');
+    return isCash ? s + c.counted_amount : s;
+  }, 0);
+  const depositAmount = depositMode === 'full'
+    ? countedCash
+    : depositMode === 'partial'
+      ? Math.min(Math.max(Number(depositPartial) || 0, 0), countedCash)
+      : 0;
+  const retainedCash = Math.max(0, countedCash - depositAmount);
 
   const saveRegularization = async () => {
     if (!session || !tenant || !profile) return;
@@ -2701,22 +2740,43 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (!session || !tenant) return;
     if (!can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
     setClosing(true);
-    const ctrlRows = controlLines.map(c => ({
-      tenant_id: tenant.id, cash_session_id: session.id,
-      payment_method_id: c.payment_method_id, method_name: c.method_name,
-      theoretical_amount: c.theoretical_amount, counted_amount: c.counted_amount,
-    }));
-    await supabase.from('cash_control_lines').insert(ctrlRows);
-    const countedTotal = controlLines.reduce((s, c) => s + c.counted_amount, 0);
-    const theoreticalTotal = controlLines.reduce((s, c) => s + c.theoretical_amount, 0);
-    const { error: e } = await supabase.from('cash_sessions').update({
-      status: 'closed', closed_at: new Date().toISOString(),
-      closing_amount: countedTotal, counted_cash: countedTotal,
-      theoretical_amount: theoreticalTotal,
-      variance: totalVariance, closing_note: closingNote, updated_at: new Date().toISOString(),
-    }).eq('id', session.id);
-    setClosing(false);
-    if (e) { error(e.message); return; }
+
+    if (vaultCloseEnabled) {
+      // Clôture atomique via RPC : lignes de contrôle + versement éventuel au coffre.
+      const { error: e } = await supabase.rpc('close_cash_session_v2', {
+        p_session_id: session.id,
+        p_control_lines: controlLines.map(c => ({
+          payment_method_id: c.payment_method_id,
+          method_name: c.method_name,
+          theoretical_amount: c.theoretical_amount,
+          counted_amount: c.counted_amount,
+        })),
+        p_closing_note: closingNote,
+        p_vault_deposit_amount: depositAmount,
+        p_idempotency_key: closeIdemRef.current,
+      });
+      setClosing(false);
+      if (e) { error(e.message); return; }
+    } else {
+      // Comportement de clôture inchangé (module Coffre indisponible).
+      const ctrlRows = controlLines.map(c => ({
+        tenant_id: tenant.id, cash_session_id: session.id,
+        payment_method_id: c.payment_method_id, method_name: c.method_name,
+        theoretical_amount: c.theoretical_amount, counted_amount: c.counted_amount,
+      }));
+      await supabase.from('cash_control_lines').insert(ctrlRows);
+      const countedTotal = controlLines.reduce((s, c) => s + c.counted_amount, 0);
+      const theoreticalTotal = controlLines.reduce((s, c) => s + c.theoretical_amount, 0);
+      const { error: e } = await supabase.from('cash_sessions').update({
+        status: 'closed', closed_at: new Date().toISOString(),
+        closing_amount: countedTotal, counted_cash: countedTotal,
+        theoretical_amount: theoreticalTotal,
+        variance: totalVariance, closing_note: closingNote, updated_at: new Date().toISOString(),
+      }).eq('id', session.id);
+      setClosing(false);
+      if (e) { error(e.message); return; }
+    }
+
     if (statsData) {
       printXReport(
         { ...session, closing_note: closingNote } as any, controlLines, statsData, sessionRegs,
@@ -2729,6 +2789,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setCart([]); setDiscount(0); setCustomer(null);
     setOpeningAmount(0); setOpeningNote('');
     setControlLines([]); setSessionRegs([]); setStatsData(null);
+    setDepositMode('none'); setDepositPartial(''); setVaultAvailable(false);
     load();
   };
 
@@ -4653,6 +4714,70 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </div>
               )}
 
+              {/* Transfert reçu du coffre */}
+              {(statsData.movVaultIn || 0) > 0 && (
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'vaultIn' ? null : 'vaultIn')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ArrowDownRight className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Transfert reçu du coffre</div>
+                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'vault_withdrawal').length} transfert{statsData.movements.filter(m => m.kind === 'vault_withdrawal').length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-emerald-700 num">+{formatFCFA(statsData.movVaultIn || 0)}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'vaultIn' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'vaultIn' && (
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.movements.filter(m => m.kind === 'vault_withdrawal').map((m, i) => (
+                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Transfert reçu du coffre'}</div>
+                            {m.method_name && <div className="text-[10px] text-neutral-400">{m.method_name}</div>}
+                          </div>
+                          <span className="text-xs font-semibold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Versement au coffre */}
+              {(statsData.movVaultOut || 0) > 0 && (
+                <div>
+                  <button onClick={() => setStatsExpanded(statsExpanded === 'vaultOut' ? null : 'vaultOut')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-neutral-900">Versement au coffre</div>
+                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'vault_deposit').length} versement{statsData.movements.filter(m => m.kind === 'vault_deposit').length > 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[13px] font-bold text-red-600 num">-{formatFCFA(statsData.movVaultOut || 0)}</span>
+                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'vaultOut' ? 'rotate-90' : ''}`} />
+                    </div>
+                  </button>
+                  {statsExpanded === 'vaultOut' && (
+                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {statsData.movements.filter(m => m.kind === 'vault_deposit').map((m, i) => (
+                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Versement au coffre'}</div>
+                            {m.method_name && <div className="text-[10px] text-neutral-400">{m.method_name}</div>}
+                          </div>
+                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Top articles */}
               {statsData.topArticles.length > 0 && (
                 <div>
@@ -4862,6 +4987,46 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </span>
               </div>
             </div>
+
+            {vaultCloseEnabled && (
+              <div className="border border-neutral-200 rounded-md p-3 space-y-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                  <Lock className="w-3 h-3" /> Versement au coffre
+                </div>
+                {([
+                  { k: 'none', label: 'Ne rien verser' },
+                  { k: 'full', label: 'Verser la totalité des espèces comptées' },
+                  { k: 'partial', label: 'Verser un montant partiel' },
+                ] as const).map(opt => (
+                  <label key={opt.k} className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="deposit-mode" checked={depositMode === opt.k}
+                      onChange={() => setDepositMode(opt.k)} className="accent-neutral-900" />
+                    <span className="text-xs text-neutral-800">{opt.label}</span>
+                  </label>
+                ))}
+                {depositMode === 'partial' && (
+                  <input type="number" min={0} max={countedCash} value={depositPartial}
+                    onChange={e => setDepositPartial(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm text-right font-bold num border border-neutral-200 rounded focus:outline-none focus:border-neutral-900"
+                    placeholder="Montant à verser" />
+                )}
+                <div className="divide-y divide-neutral-100 pt-1">
+                  <div className="flex items-center justify-between py-1.5">
+                    <span className="text-[10px] text-neutral-500">Espèces comptées</span>
+                    <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(countedCash)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5">
+                    <span className="text-[10px] text-neutral-500">Versé au coffre</span>
+                    <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(depositAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5">
+                    <span className="text-[10px] text-neutral-500">Conservé en caisse</span>
+                    <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(retainedCash)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="group">
               <textarea value={closingNote} onChange={e => setClosingNote(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm text-neutral-900 placeholder:text-neutral-400 resize-none" rows={4} placeholder="Note de clôture (optionnel)" />
               <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />

@@ -601,7 +601,7 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
             <button
               onClick={onConfirmReceive}
               disabled={saving}
-              className="ml-1 h-7 px-3 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
+              className="ml-1 h-7 px-2 text-xs font-bold text-neutral-900 hover:bg-neutral-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
               Confirmer réception

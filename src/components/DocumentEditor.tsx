@@ -1019,7 +1019,10 @@ function EditableHeader({ headerForm, setHeaderForm, customers, docSettings, doc
   const isLocked = !!postCreation;
   const dateLocked = isLocked || (totalPaid || 0) > 0;
   return (
-    <div className={`px-4 py-2 border-b flex-shrink-0 ${onValidate ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100'}`}>
+    <div
+      className={`px-4 py-2 border-b flex-shrink-0 ${onValidate ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100'}`}
+      onKeyDown={e => { if (e.key === 'Enter' && onValidate && !isLocked) { e.preventDefault(); onValidate(); } }}
+    >
       {onValidate && (
         <div className="flex items-center gap-1.5 mb-2">
           <Lock className="w-3 h-3 text-neutral-500" />
@@ -1132,6 +1135,7 @@ function CustomerSearchInline({ customers, value, onSelect, onCreateNew }: {
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
     else if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       if (highlighted === 0) { onSelect(null); setOpen(false); }
       else if (filtered[highlighted - 1]) { onSelect(filtered[highlighted - 1]); setOpen(false); }
     }
@@ -1302,7 +1306,7 @@ function PaymentSection({ ipmBeneficiaire, ipmPartIpm, ipmPartClient, isCredit, 
             </>
           )}
           {isCredit && (
-            <div className="flex items-center gap-2 px-2 py-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800"><CreditCard className="w-3.5 h-3.5 text-amber-600 shrink-0" /> À crédit — règlement ultérieur</div>
+            <div className="flex items-center gap-2 px-2 py-2 rounded text-[11px] text-amber-800"><CreditCard className="w-3.5 h-3.5 text-amber-600 shrink-0" /> À crédit — règlement ultérieur</div>
           )}
         </>
       )}

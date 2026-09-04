@@ -17,6 +17,7 @@ export type Tenant = {
   business_activity_type_id?: string | null;
   business_activity_type_name?: string | null;
   ticket_header_config?: TicketHeaderItem[] | null;
+  a4_header_config?: A4HeaderConfig | null;
   enabled_modules?: string[];
   approval_status?: string;
   slogan?: string;
@@ -85,6 +86,29 @@ export function mergeTicketHeaderConfig(stored: TicketHeaderItem[] | null | unde
   return ordered;
 }
 
+// ── A4 header layout config (separate from 80mm ticket config) ───────────────
+export type A4LogoPosition = 'above' | 'left' | 'right';
+
+export type A4HeaderConfig = {
+  logo_position: A4LogoPosition;
+  logo_size: TicketHeaderSize;
+};
+
+export const DEFAULT_A4_HEADER_CONFIG: A4HeaderConfig = {
+  logo_position: 'above',
+  logo_size: 'md',
+};
+
+export function mergeA4HeaderConfig(stored: A4HeaderConfig | null | undefined): A4HeaderConfig {
+  if (!stored) return { ...DEFAULT_A4_HEADER_CONFIG };
+  const positions: A4LogoPosition[] = ['above', 'left', 'right'];
+  const sizes: TicketHeaderSize[] = ['xs', 'sm', 'md', 'lg', 'xl'];
+  return {
+    logo_position: positions.includes(stored.logo_position) ? stored.logo_position : 'above',
+    logo_size: sizes.includes(stored.logo_size) ? stored.logo_size : 'md',
+  };
+}
+
 export const BUSINESS_TYPE_LABELS: Record<string, string> = {
   auto_parts: 'Pièces automobiles',
   fashion: 'Mode & Textile',
@@ -118,6 +142,8 @@ export type Site = {
   is_warehouse: boolean;
   is_active: boolean;
   parent_site_id: string | null;
+  ticket_header_config?: TicketHeaderItem[] | null;
+  a4_header_config?: A4HeaderConfig | null;
 };
 
 export type Category = {

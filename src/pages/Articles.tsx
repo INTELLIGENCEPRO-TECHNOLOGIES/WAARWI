@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Plus, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
   Pencil, Filter, ChevronDown, ChevronUp,
   Upload, Camera, CheckSquare, Square,
   Lightbulb, Download, Search,
   List, LayoutGrid, Save,
-  MoreHorizontal, Check,
+  MoreHorizontal, Check, ChevronLeft, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -43,22 +43,28 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [serverStats, setServerStats] = useState({ in_stock: 0, low_stock: 0, out_stock: 0, total_articles: 0 });
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'low' | 'out'>('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [cursors, setCursors] = useState<{ val: string | null; id: string | null }[]>([]);
   const PAGE_SIZE = 50;
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reqIdRef = useRef(0);
   const [sortCol, setSortCol] = useState<'name' | 'ref' | 'oem_ref' | 'category' | 'price' | 'purchase_price' | 'stock'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const handleSearchInput = (val: string) => {
     setSearchInput(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => setSearch(val), 200);
+    searchTimer.current = setTimeout(() => { setSearch(val); setPage(0); setCursors([]); }, 250);
   };
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Article | null>(null);
@@ -105,63 +111,88 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
   const sharedArticles = (tenant as any)?.settings?.shared_articles !== false;
 
-  const load = async (silent = false) => {
+  // Server-paginated fetch
+  const loadPage = useCallback(async (pageNum: number, isRefresh = false) => {
     if (!tenant) return;
-    if (!silent) setLoading(true);
+    const myReqId = ++reqIdRef.current;
+    if (isRefresh) setRefreshing(true);
+    else if (pageNum === 0) setLoading(true);
+    else setRefreshing(true);
 
-    // Fetch all articles in batches (Supabase default limit is 1000)
-    let allArts: any[] = [];
-    let from = 0;
-    const batchSize = 1000;
-    while (true) {
-      let query = supabase
-        .from('articles')
-        .select('id, tenant_id, internal_ref, name, description, category_id, brand, oem_ref, supplier_ref, barcode, supplier_id, condition, unit, purchase_price, sale_price, min_price, wholesale_price, vat_rate, stock_min, stock_max, location, image_url, is_active, ipm_eligible, track_stock')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .order('name')
-        .range(from, from + batchSize - 1);
-      if (!sharedArticles && currentSite) {
-        query = query.eq('site_id', currentSite.id);
-      }
-      const { data, error: e } = await query;
-      if (e || !data) break;
-      allArts = allArts.concat(data);
-      if (data.length < batchSize) break;
-      from += batchSize;
+    const cursor = pageNum > 0 && cursors[pageNum - 1] ? cursors[pageNum - 1] : { val: null, id: null };
+    const stockSiteId = currentSite?.id || null;
+
+    const params: Record<string, any> = {
+      p_tenant_id: tenant.id,
+      p_site_id: (!sharedArticles && currentSite) ? currentSite.id : null,
+      p_stock_site_id: stockSiteId,
+      p_page_size: PAGE_SIZE,
+      p_search: search || null,
+      p_category_id: categoryFilter || null,
+      p_stock_filter: stockFilter !== 'all' ? stockFilter : null,
+      p_sort_col: sortCol,
+      p_sort_dir: sortDir,
+      p_is_active: true,
+      p_include_stock: true,
+    };
+    if (cursor.val && cursor.id) {
+      params.p_cursor_val = cursor.val;
+      params.p_cursor_id = cursor.id;
     }
 
-    const [{ data: stk }, { data: sup }, { data: tierDefs }] = await Promise.all([
-      (async () => {
-        let all: any[] = [];
-        let f = 0;
-        while (true) {
-          const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).range(f, f + 999);
-          if (e || !data) break;
-          all = all.concat(data);
-          if (data.length < 1000) break;
-          f += 1000;
-        }
-        return { data: all };
-      })(),
-      supabase.from('suppliers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name'),
-      supabase.from('pricing_tier_definitions').select('id, tier_name, sort_order, is_default, tenant_id').eq('tenant_id', tenant.id).order('sort_order'),
-    ]);
-    setArticles(allArts);
-    setCategories(refData?.categories || []);
-    setBrands(refData?.brands || []);
-    setModels(refData?.models || []);
-    setSuppliers(sup || []);
-    setTierDefinitions(tierDefs || []);
-    const map: Record<string, number> = {};
-    (stk || []).forEach((r: any) => { map[r.article_id] = (map[r.article_id] || 0) + Number(r.quantity); });
-    setStockMap(map);
-    if (!silent) setLoading(false);
-    setInitialLoaded(true);
-  };
+    const { data, error } = await supabase.rpc('rpc_paginated_articles', params);
+    if (myReqId !== reqIdRef.current) return;
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id, sharedArticles]);
-  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 300); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
+    if (error || !data) {
+      setLoading(false); setRefreshing(false);
+      return;
+    }
+
+    const rows = (data.rows || []) as Article[];
+    const newStockMap: Record<string, number> = {};
+    rows.forEach((r: any) => { newStockMap[r.id] = Number(r.stock_quantity || 0); });
+
+    setArticles(rows);
+    setStockMap(newStockMap);
+    setTotalCount(data.total_count || 0);
+    setServerStats(data.totals || {});
+    setHasMore(rows.length >= PAGE_SIZE);
+
+    if (rows.length > 0) {
+      const lastRow = rows[rows.length - 1] as any;
+      const cursorVal = sortCol === 'name' ? lastRow.name :
+        sortCol === 'ref' ? lastRow.internal_ref :
+        sortCol === 'oem_ref' ? (lastRow.oem_ref || '') :
+        sortCol === 'price' ? String(lastRow.sale_price ?? '') :
+        sortCol === 'purchase_price' ? String(lastRow.purchase_price ?? '') :
+        sortCol === 'stock' ? String(lastRow.stock_quantity ?? '') :
+        sortCol === 'category' ? (lastRow.category_id || '') :
+        lastRow.name || '';
+      setCursors(prev => {
+        const next = [...prev];
+        next[pageNum] = { val: cursorVal, id: lastRow.id };
+        return next;
+      });
+    }
+
+    setLoading(false);
+    setRefreshing(false);
+    setInitialLoaded(true);
+  }, [tenant, currentSite, sharedArticles, search, categoryFilter, stockFilter, sortCol, sortDir, cursors]);
+
+  // Load suppliers and tier defs separately (not page-dependent)
+  useEffect(() => {
+    if (!tenant) return;
+    supabase.from('suppliers').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name').then(({ data }) => setSuppliers(data || []));
+    supabase.from('pricing_tier_definitions').select('id, tier_name, sort_order, is_default, tenant_id').eq('tenant_id', tenant.id).order('sort_order').then(({ data }) => setTierDefinitions(data || []));
+  }, [tenant?.id]);
+
+  useEffect(() => { loadPage(page); /* eslint-disable-next-line */ }, [page, search, categoryFilter, stockFilter, sortCol, sortDir, tenant?.id, currentSite?.id, sharedArticles]);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); setCursors([]); }, [search, categoryFilter, stockFilter, sortCol, sortDir, tenant?.id, currentSite?.id]);
+
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => loadPage(page, true), 300); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   // Keep categories/brands/models in sync with refData so new categories appear without page reload
   useEffect(() => {
@@ -177,60 +208,18 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     if (ctx?.target === 'newArticle') openCreate();
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    let result = articles.filter(a => {
-      if (categoryFilter) {
-        const matchIds = new Set<string>([categoryFilter]);
-        for (const c of categories) if (c.parent_id === categoryFilter) matchIds.add(c.id);
-        if (!matchIds.has(a.category_id || '')) return false;
-      }
-      if (stockFilter !== 'all') {
-        const qty = stockMap[a.id] || 0;
-        const min = Number(a.stock_min || 0);
-        if (stockFilter === 'out' && qty > 0) return false;
-        if (stockFilter === 'low' && (qty <= 0 || qty > min)) return false;
-        if (stockFilter === 'in' && (qty <= 0 || qty <= min)) return false;
-      }
-      if (!q) return true;
-      return a.name.toLowerCase().includes(q) || a.internal_ref.toLowerCase().includes(q)
-        || (a.oem_ref || '').toLowerCase().includes(q) || (a.supplier_ref || '').toLowerCase().includes(q)
-        || (a.barcode || '').toLowerCase().includes(q);
-    });
-    result.sort((a, b) => {
-      let cmp = 0;
-      switch (sortCol) {
-        case 'name': cmp = a.name.localeCompare(b.name); break;
-        case 'ref': cmp = (a.internal_ref || '').localeCompare(b.internal_ref || ''); break;
-        case 'oem_ref': cmp = (a.oem_ref || '').localeCompare(b.oem_ref || ''); break;
-        case 'category': cmp = (a.category_id || '').localeCompare(b.category_id || ''); break;
-        case 'price': cmp = (a.sale_price || 0) - (b.sale_price || 0); break;
-        case 'purchase_price': cmp = (a.purchase_price || 0) - (b.purchase_price || 0); break;
-        case 'stock': cmp = (stockMap[a.id] || 0) - (stockMap[b.id] || 0); break;
-      }
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return result;
-  }, [articles, search, categoryFilter, stockFilter, stockMap, sortCol, sortDir]);
-
-  // Reset page when filters change
-  useEffect(() => { setPage(0); }, [search, categoryFilter, stockFilter, sortCol, sortDir]);
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
+  // Articles are already filtered/sorted/paginated server-side
+  const filtered = articles;
+  const paginated = articles;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
 
-  const stats = useMemo(() => {
-    let inStock = 0, low = 0, out = 0;
-    for (const a of articles) {
-      const q = stockMap[a.id] || 0;
-      if (q === 0) out++;
-      else if (q <= Number(a.stock_min || 0)) low++;
-      else inStock++;
-    }
-    return { inStock, low, out };
-  }, [articles, stockMap]);
+  const stats = useMemo(() => ({
+    inStock: serverStats.in_stock || 0,
+    low: serverStats.low_stock || 0,
+    out: serverStats.out_stock || 0,
+  }), [serverStats]);
 
   const openCreate = () => {
     setEditing(null);
@@ -288,7 +277,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const generateRef = () => {
     const cat = categories.find(c => c.id === form.category_id);
     const prefix = cat?.code || 'ART';
-    const num = String(articles.length + 1).padStart(4, '0');
+    const num = String(totalCount + 1).padStart(4, '0');
     setForm(f => ({ ...f, internal_ref: `${prefix}-${num}` }));
   };
 
@@ -418,7 +407,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
       if (!silent) success(editing ? 'Article modifié' : 'Article créé');
       if (!silent) setDrawerOpen(false);
-      if (!silent) await load();
+      if (!silent) await loadPage(page, true);
       return true;
     } catch (e: any) {
       const msg = e.message || '';
@@ -441,10 +430,10 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     if (!toDelete) return;
     if (!can('manage_articles')) { error('Vous n\'avez pas la permission de supprimer les articles'); return; }
     const { error: hardErr } = await supabase.rpc('tenant_delete_article_safe', { p_id: toDelete.id });
-    if (!hardErr) { success('Article supprimé définitivement'); load(); return; }
+    if (!hardErr) { success('Article supprimé définitivement'); loadPage(page, true); return; }
     const { error: softErr } = await supabase.from('articles').update({ is_active: false }).eq('id', toDelete.id);
     if (softErr) error(softErr.message);
-    else { success('Article désactivé (opérations associées conservées)'); load(); }
+    else { success('Article désactivé (opérations associées conservées)'); loadPage(page, true); }
   };
 
   const toggleSelectionMode = () => {
@@ -453,7 +442,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const toggleSelected = (id: string) => {
     setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   };
-  const selectAllFiltered = () => setSelectedIds(new Set(filtered.map(a => a.id)));
+  const selectAllFiltered = () => setSelectedIds(new Set(paginated.map(a => a.id)));
   const clearSelection = () => setSelectedIds(new Set());
 
   const bulkDelete = async () => {
@@ -470,7 +459,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       }
       if (deleted + deactivated > 0) success(`${deleted} supprimé(s), ${deactivated} désactivé(s)`);
       setBulkConfirmOpen(false); setSelectedIds(new Set()); setSelectionMode(false);
-      await load();
+      await loadPage(0, true); setPage(0);
     } catch (e: any) { error(e.message || 'Erreur'); }
     finally { setBulkDeleting(false); }
   };
@@ -495,7 +484,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       success(`${ids.length} article(s) modifié(s)`);
       setBulkActionOpen(false); setSelectedIds(new Set()); setSelectionMode(false);
       setBulkAction(''); setBulkActionValue('');
-      await load();
+      await loadPage(0, true); setPage(0);
     } catch (e: any) { error(e.message || 'Erreur'); }
     finally { setBulkDeleting(false); }
   };
@@ -528,14 +517,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       }
       success(`${count} article(s) modifié(s)`);
       setListEdits(new Map());
-      await load(true);
+      await loadPage(page, true);
     } catch (e: any) { error(e.message || 'Erreur'); }
     finally { setListSaving(false); }
   };
 
   const openFullScreen = (a: Article) => {
     skipAutoSaveRef.current = true;
-    const idx = filtered.findIndex(x => x.id === a.id);
+    const idx = paginated.findIndex(x => x.id === a.id);
     setEditingIndex(idx >= 0 ? idx : 0);
     openEdit(a);
     setFullScreenOpen(true);
@@ -555,9 +544,9 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       await save();
     }
     const newIdx = editingIndex + dir;
-    if (newIdx < 0 || newIdx >= filtered.length) return;
+    if (newIdx < 0 || newIdx >= paginated.length) return;
     setEditingIndex(newIdx);
-    const a = filtered[newIdx];
+    const a = paginated[newIdx];
     await openEdit(a);
     setDrawerOpen(false);
   };
@@ -566,7 +555,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     if (editing && form.name?.trim() && form.internal_ref?.trim()) {
       await save();
     }
-    const idx = filtered.indexOf(a);
+    const idx = paginated.indexOf(a);
     if (idx >= 0) { setEditingIndex(idx); await openEdit(a); setDrawerOpen(false); }
   };
 
@@ -579,7 +568,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, compats, formTiers, fullScreenOpen, editing]);
 
-  const allFilteredSelected = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
+  const allFilteredSelected = paginated.length > 0 && paginated.every(a => selectedIds.has(a.id));
 
   // ── Import / Export ──
   const TENANT_IMPORT_HEADERS = [
@@ -683,7 +672,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       if (rpcErr) throw rpcErr;
       setImportResult(data as any);
       success('Import terminé');
-      await load();
+      await loadPage(0, true); setPage(0);
     } catch (e: any) { error(e.message); }
     finally { setImportingArticles(false); }
   };
@@ -778,7 +767,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       </div>
 
       {/* ── Guide interactif ─────────────────────── */}
-      {!guideDismissed && <MasterCatalogGuide step={guideStep} articleCount={articles.length} onStep={setGuideStep} onDismiss={dismissGuide} onGo={goToMasterCatalog} />}
+      {!guideDismissed && <MasterCatalogGuide step={guideStep} articleCount={totalCount} onStep={setGuideStep} onDismiss={dismissGuide} onGo={goToMasterCatalog} />}
       {guideDismissed && (
         <button onClick={reopenGuide} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-brand-700 transition-colors px-1">
           <Lightbulb className="w-3.5 h-3.5" />Revoir le guide d'ajout depuis le catalogue maître
@@ -807,7 +796,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
 
       {/* Stats chips */}
       <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
-        <button onClick={() => setStockFilter('all')} className={`shrink-0 py-1 num transition-all ${stockFilter === 'all' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>{filtered.length} / {articles.length}</button>
+        <button onClick={() => setStockFilter('all')} className={`shrink-0 py-1 num transition-all ${stockFilter === 'all' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>{totalCount} article{totalCount > 1 ? 's' : ''}</button>
+        {refreshing && <RefreshCw className="w-3 h-3 animate-spin text-neutral-400 shrink-0" />}
         {stats.inStock > 0 && <button onClick={() => setStockFilter(f => f === 'in' ? 'all' : 'in')} className={`shrink-0 py-1 inline-flex items-center gap-1 transition-all cursor-pointer ${stockFilter === 'in' ? 'text-emerald-700' : 'text-emerald-500/70 hover:text-emerald-700'}`}><span className={`w-1.5 h-1.5 rounded-full ${stockFilter === 'in' ? 'bg-emerald-600' : 'bg-emerald-400'}`} />{stats.inStock} en stock</button>}
         {stats.low > 0 && <button onClick={() => setStockFilter(f => f === 'low' ? 'all' : 'low')} className={`shrink-0 py-1 transition-all cursor-pointer ${stockFilter === 'low' ? 'text-amber-700' : 'text-amber-500/70 hover:text-amber-700'}`}>{stats.low} stock bas</button>}
         {stats.out > 0 && <button onClick={() => setStockFilter(f => f === 'out' ? 'all' : 'out')} className={`shrink-0 py-1 transition-all cursor-pointer ${stockFilter === 'out' ? 'text-red-700' : 'text-red-500/70 hover:text-red-700'}`}>{stats.out} rupture{stats.out > 1 ? 's' : ''}</button>}
@@ -818,7 +808,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       {/* ── Liste ─────────────────────────────── */}
       {!initialLoaded && loading ? (
         <div className="py-20 flex items-center justify-center opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-      ) : filtered.length === 0 ? (
+      ) : paginated.length === 0 ? (
         <div className="">
           <EmptyState icon={Package} title={search || categoryFilter ? 'Aucun article trouvé' : 'Aucun article'} description={search || categoryFilter ? 'Essayez d\'autres critères.' : 'Créez votre premier article.'}
             action={!search && !categoryFilter ? <button onClick={openCreate} className="btn-icon-primary" title="Nouvel article"><Plus className="w-4 h-4" /></button> : undefined} />
@@ -908,15 +898,15 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {totalCount > PAGE_SIZE && (
             <div className="flex items-center justify-between px-4 py-3 mt-3">
-              <div className="text-xs text-slate-500">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} sur {filtered.length} articles</div>
+              <div className="text-xs text-slate-500">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} sur {totalCount} articles</div>
               <div className="flex items-center gap-1">
-                <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
-                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
+                <button onClick={() => setPage(0)} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">&laquo;&laquo;</button>
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronLeft className="w-3.5 h-3.5" /></button>
                 <span className="px-3 py-1 rounded-lg text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200">{page + 1} / {totalPages}</span>
-                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
-                <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+                <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronRight className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setPage(totalPages - 1)} disabled={!hasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">&raquo;&raquo;</button>
               </div>
             </div>
           )}
@@ -942,9 +932,9 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           stockMap={stockMap} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions}
           onClose={saveAndClose}
           onPrev={editingIndex > 0 ? () => navigateArticle(-1) : undefined}
-          onNext={editingIndex < filtered.length - 1 ? () => navigateArticle(1) : undefined}
-          editingIndex={editingIndex} totalCount={filtered.length}
-          filtered={filtered} onJumpTo={jumpToArticle}
+          onNext={editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
+          editingIndex={editingIndex} totalCount={paginated.length}
+          filtered={paginated} onJumpTo={jumpToArticle}
         />
       )}
 
@@ -970,8 +960,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           isPharmacy={(tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie' || (tenant?.enabled_modules || []).includes('ipm')}
           onClose={async () => { if (editing && form.name?.trim() && form.internal_ref?.trim()) { const ok = await save(); if (!ok) return; } setDrawerOpen(false); }}
           onPrev={editing && editingIndex > 0 ? () => navigateArticle(-1) : undefined}
-          onNext={editing && editingIndex < filtered.length - 1 ? () => navigateArticle(1) : undefined}
-          editingIndex={editingIndex} totalCount={filtered.length}
+          onNext={editing && editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
+          editingIndex={editingIndex} totalCount={paginated.length}
         />
       )}
 
@@ -1064,7 +1054,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             </button>
             <button onClick={exportArticles} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition text-left">
               <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0"><Upload className="w-4 h-4 text-emerald-600" /></div>
-              <div><div className="text-xs font-bold text-slate-900">Exporter mes articles</div><div className="text-[10px] text-slate-500">{articles.length} articles</div></div>
+              <div><div className="text-xs font-bold text-slate-900">Exporter mes articles</div><div className="text-[10px] text-slate-500">{totalCount} articles</div></div>
             </button>
           </div>
           <div className="bg-slate-50 rounded-xl p-3">

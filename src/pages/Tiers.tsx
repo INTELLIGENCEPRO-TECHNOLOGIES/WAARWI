@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
-  X, Calendar, FileText, Wallet, Info, ChevronRight, Phone,
+  X, Calendar, FileText, Wallet, Info, ChevronRight, ChevronLeft, Phone,
   ShoppingBag, Check, Printer, Tag, Trash2,
   Download, Upload, Scale, RotateCcw, Save, Search, ChevronDown, TrendingUp
 } from 'lucide-react';
@@ -17,7 +17,7 @@ import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { formatFCFA, formatDateTime, formatDate } from '../lib/format';
 import { desktopAutoFocus } from '../lib/device';
 import { consumeNavContext } from '../lib/navHighlight';
-import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
+import { printDocumentA4, printCustomerStatementA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 
 import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
 import { DocumentEditor, type DocLineItem, type DocHeaderForm, type DocMode } from '../components/DocumentEditor';
@@ -157,7 +157,7 @@ export function Tiers() {
     const [cRes, sRes, salesRes, soRes, supPayRes, prepaysRes, avoirsRes] = await Promise.all([
       custQuery,
       supQuery,
-      supabase.from('sales').select('customer_id, total, paid, status').eq('tenant_id', tenant.id).not('customer_id', 'is', null).neq('status', 'cancelled').limit(5000),
+      supabase.from('sales').select('customer_id, total, paid, status').eq('tenant_id', tenant.id).not('customer_id', 'is', null).neq('status', 'cancelled').neq('status', 'deleted').limit(5000),
       supabase.from('supplier_orders').select('supplier_id, total, paid, status').eq('tenant_id', tenant.id).neq('status', 'cancelled').limit(5000),
       supabase.from('supplier_payments').select('supplier_id, amount').eq('tenant_id', tenant.id).limit(5000),
       supabase.from('customer_prepayments').select('customer_id, amount, amount_used').eq('tenant_id', tenant.id).limit(5000),
@@ -724,7 +724,7 @@ export function Tiers() {
     const rows: Row[] = [];
     if (tab !== 'suppliers') {
       for (const c of filteredCustomers) {
-        const netBal = Math.max(0, Number((c as any).balance || 0));
+        const netBal = Number((c as any).balance || 0);
         rows.push({ id: c.id, type: 'customer', accountCode: (c as any).account_code || '', name: c.name, phone: c.phone || '', balance: netBal, isActive: (c as any).is_active !== false, raw: c });
       }
     }
@@ -926,7 +926,10 @@ export function Tiers() {
                         </td>
                         <td className={`px-3 py-2 font-medium ${isSelected ? 'text-white' : 'text-slate-900'}`}>{row.name}</td>
                         <td className={`px-3 py-2 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>{row.phone || '—'}</td>
-                        <td className={`px-3 py-2 text-right font-semibold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{formatFCFA(row.balance)}</td>
+                        <td className={`px-3 py-2 text-right font-semibold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          <div className="leading-tight">{formatFCFA(Math.abs(row.balance))}</div>
+                          <div className={`text-[9px] font-bold uppercase tracking-wide ${isSelected ? 'text-slate-300' : row.balance > 0 ? 'text-amber-500' : row.balance < 0 ? 'text-emerald-500' : 'text-slate-300'}`}>{row.balance > 0 ? 'Solde dû' : row.balance < 0 ? 'Crédit dispo.' : 'Solde'}</div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -962,8 +965,9 @@ export function Tiers() {
                         </div>
                         <div className="shrink-0 text-right">
                           <div className={`text-[12px] font-bold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {formatFCFA(row.balance)}
+                            {formatFCFA(Math.abs(row.balance))}
                           </div>
+                          <div className={`text-[9px] font-bold uppercase tracking-wide ${isSelected ? 'text-slate-300' : row.balance > 0 ? 'text-amber-500' : row.balance < 0 ? 'text-emerald-500' : 'text-slate-300'}`}>{row.balance > 0 ? 'Solde dû' : row.balance < 0 ? 'Crédit dispo.' : 'Solde'}</div>
                         </div>
                       </div>
                     </button>
@@ -1277,6 +1281,7 @@ export function Tiers() {
       {custView && (
         <CustomerDetailModal
           view={custView}
+          customerList={customers}
           onClose={() => { setCustView(null); load(); }}
         />
       )}
@@ -1493,16 +1498,10 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, prepayMap, avoir
         const balance = Number((c as any).balance || 0);
         const nearLimit = limit > 0 && balance >= limit * 0.8;
         const overLimit = limit > 0 && balance >= limit;
-        const prepay = prepayMap[c.id] || 0;
-        const avoir = avoirMap[c.id] || 0;
-        const applied = Math.min(prepay, Math.max(0, balance));
-        const avoirApp = Math.min(avoir, Math.max(0, balance - applied));
-        const netDebt = Math.max(0, balance - applied - avoirApp);
-        const excessPrepay = prepay - applied;
-        const excessAvoir = avoir - avoirApp;
-        const netLabel = netDebt > 0 ? 'Solde à payer' : excessPrepay > 0 ? 'Acompte disponible' : excessAvoir > 0 ? 'Avoir disponible' : 'Solde';
-        const netAmount = netDebt > 0 ? netDebt : excessPrepay > 0 ? excessPrepay : excessAvoir > 0 ? excessAvoir : 0;
-        const netColor = netDebt > 0 ? 'text-amber-600' : excessPrepay > 0 ? 'text-emerald-600' : excessAvoir > 0 ? 'text-teal-600' : 'text-slate-300';
+        // Le solde serveur fait foi : positif = dette, négatif = crédit disponible.
+        const netLabel = balance > 0 ? 'Solde dû' : balance < 0 ? 'Crédit disponible' : 'Solde';
+        const netAmount = Math.abs(balance);
+        const netColor = balance > 0 ? 'text-amber-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300';
         return (
           <button
             key={c.id}
@@ -1665,8 +1664,10 @@ function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate,
 }
 
 /* ───────────────────────── Customer detail modal ───────────────────────── */
-function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: CustomerOptionKey }; onClose: () => void }) {
-  const { c: initialC, key } = view;
+function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Customer; key: CustomerOptionKey }; customerList: Customer[]; onClose: () => void }) {
+  const { c: viewC, key } = view;
+  const [activeCustomer, setActiveCustomer] = useState<Customer>(viewC);
+  const initialC = activeCustomer;
   const { tenant, currentSite } = useApp();
   const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
@@ -1686,6 +1687,11 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const [dateTo, setDateTo] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [invoiceView, setInvoiceView] = useState<any | null>(null);
+
+  type StatementRow = { ts: string; piece: string; label: string; kind: string; debit: number; credit: number; running: number; affects: boolean };
+  type Statement = { balance: number; opening_balance: number; closing_balance: number; total_debit: number; total_credit: number; rows: StatementRow[] };
+  const [statement, setStatement] = useState<Statement | null>(null);
+  const [statementLoading, setStatementLoading] = useState(false);
 
   const [desktopEditorOpen, setDesktopEditorOpen] = useState(false);
   const [desktopEditorMode, setDesktopEditorMode] = useState<DocMode>('view');
@@ -1718,7 +1724,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     if (!tenant) return;
     setLoading(true);
     const [sRes, pmAllRes, custRes] = await Promise.all([
-      supabase.from('sales').select('id, sale_number, total, paid, status, created_at, source, user_id').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }).limit(400),
+      supabase.from('sales').select('id, sale_number, total, paid, status, created_at, deleted_at, source, user_id').eq('tenant_id', tenant.id).eq('customer_id', c.id).order('created_at', { ascending: false }).limit(400),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('customers').select('balance').eq('id', initialC.id).maybeSingle(),
     ]);
@@ -1804,15 +1810,29 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
     balanceAdjs.forEach(adj => {
       const amt = Number(adj.amount);
       const isReconciliation = adj.kind === 'reconciliation';
-      if (amt > 0) {
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: amt, credit: 0, kind: isReconciliation ? 'allocation' : 'adjustment', affectsBalance: !isReconciliation });
+      // Une contre-passation d'annulation est une trace visible, jamais un crédit
+      // autonome : elle n'affecte pas le solde (déjà reflétée par la vente annulée).
+      const isReversal = adj.kind === 'cancel_reversal';
+      const excluded = isReconciliation || isReversal;
+      if (isReversal) {
+        const rev = Math.abs(amt);
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Contre-passation annulation', ref: '', debit: amt > 0 ? rev : 0, credit: amt < 0 ? rev : 0, kind: 'cancel', affectsBalance: false });
+      } else if (amt > 0) {
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Report de solde', ref: '', debit: amt, credit: 0, kind: isReconciliation ? 'allocation' : 'adjustment', affectsBalance: !excluded });
       } else if (amt < 0) {
-        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Règlement solde', ref: '', debit: 0, credit: Math.abs(amt), kind: isReconciliation ? 'allocation' : 'payment', affectsBalance: !isReconciliation });
+        rows.push({ id: 'adj-' + adj.id, ts: adj.created_at, label: adj.note || 'Règlement solde', ref: '', debit: 0, credit: Math.abs(amt), kind: isReconciliation ? 'allocation' : 'payment', affectsBalance: !excluded });
       }
     });
     sales.forEach(s => {
       if (s.status === 'cancelled') {
-        rows.push({ id: 'c-' + s.id, ts: s.created_at, label: 'Facture annulée', ref: s.sale_number, debit: 0, credit: 0, kind: 'cancel', affectsBalance: true });
+        rows.push({ id: 'c-' + s.id, ts: s.created_at, label: 'Facture annulée', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'cancel', affectsBalance: false });
+        return;
+      }
+      if (s.status === 'deleted') {
+        // Pièce numérotée conservée : facture d'origine au débit puis suppression
+        // au crédit, même numéro de pièce, net nul. Aucune ligne de réconciliation.
+        rows.push({ id: 's-' + s.id, ts: s.created_at, label: 'Facture', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'cancel', affectsBalance: false });
+        rows.push({ id: 'del-' + s.id, ts: (s as any).deleted_at || s.created_at, label: 'Suppression facture ' + s.sale_number, ref: s.sale_number, debit: 0, credit: Number(s.total), kind: 'cancel', affectsBalance: false });
         return;
       }
       rows.push({ id: 's-' + s.id, ts: s.created_at, label: 'Vente', ref: s.sale_number, debit: Number(s.total), credit: 0, kind: 'sale', affectsBalance: true });
@@ -1857,7 +1877,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   }), [sales, dateFrom, dateTo]);
 
   const docsKpis = useMemo(() => {
-    const valid = filteredDocs.filter(s => s.status !== 'cancelled');
+    const valid = filteredDocs.filter(s => s.status !== 'cancelled' && s.status !== 'deleted');
     const count = valid.length;
     const ca = valid.reduce((a, s) => a + Number(s.total), 0);
     const items = saleItems.filter(it => valid.some(s => s.id === it.sale_id));
@@ -1980,6 +2000,57 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   const modalTitle = key === 'info' ? 'Interrogation client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
   const [infoTab, setInfoTab] = useState<'commerciale' | 'comptable' | 'statistiques'>('comptable');
 
+  useEffect(() => {
+    if (key !== 'info' || infoTab !== 'comptable' || !tenant) return;
+    let cancelled = false;
+    setStatementLoading(true);
+    supabase.rpc('get_customer_statement', {
+      p_customer_id: c.id,
+      p_from: dateFrom || null,
+      p_to: dateTo || null,
+    }).then(({ data, error: err }) => {
+      if (cancelled) return;
+      setStatementLoading(false);
+      setStatement(err || !data ? null : (data as Statement));
+    });
+    return () => { cancelled = true; };
+  }, [key, infoTab, tenant?.id, c.id, dateFrom, dateTo]);
+
+  const printStatement = () => {
+    if (!tenant || !statement) return;
+    const tenantPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
+    const periodLabel = (dateFrom || dateTo)
+      ? `${dateFrom ? new Date(dateFrom).toLocaleDateString('fr-FR') : '…'} — ${dateTo ? new Date(dateTo).toLocaleDateString('fr-FR') : '…'}`
+      : 'Depuis l\'origine';
+    printCustomerStatementA4({
+      tenant: tenantPrint,
+      siteName: (currentSite as any)?.name || undefined,
+      customer: { name: c.name, account_code: (c as any).account_code || undefined, phone: c.phone || undefined, address: c.address || undefined },
+      periodLabel,
+      openingBalance: Number(statement.opening_balance),
+      closingBalance: Number(statement.closing_balance),
+      totalDebit: Number(statement.total_debit),
+      totalCredit: Number(statement.total_credit),
+      rows: statement.rows.map(r => ({ ts: r.ts, piece: r.piece, label: r.label, debit: Number(r.debit), credit: Number(r.credit), running: Number(r.running), affects: r.affects })),
+    });
+  };
+
+  const custIndex = customerList.findIndex(x => x.id === activeCustomer.id);
+  const prevCust = custIndex > 0 ? customerList[custIndex - 1] : null;
+  const nextCust = custIndex >= 0 && custIndex < customerList.length - 1 ? customerList[custIndex + 1] : null;
+  const custOptions = useMemo(() => customerList.map(x => ({
+    value: x.id,
+    label: x.name,
+    sublabel: [(x as any).account_code, x.phone].filter(Boolean).join(' · '),
+  })), [customerList]);
+  const goToCustomer = (next: Customer | null) => {
+    if (!next || next.id === activeCustomer.id) return;
+    setInvoiceView(null);
+    setStatement(null);
+    setCustomerBalance(Number((next as any).balance || 0));
+    setActiveCustomer(next);
+  };
+
   const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
   const commercialeSummary = useMemo(() => {
@@ -2010,27 +2081,23 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
         <div className="scrim" onClick={onClose} />
         <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-white sm:rounded-lg border border-slate-200 shadow-lg flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white">
+          <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 bg-white">
+            <button onClick={() => goToCustomer(prevCust)} disabled={!prevCust} className="p-1 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client précédent"><ChevronLeft className="w-4 h-4" /></button>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-slate-900 truncate">{c.name}</div>
-              <div className="text-[10px] text-slate-500 font-mono">{(c as any).account_code || ''}</div>
+              <SearchableSelect variant="underline" searchable menuWidth={380} wrapLabels options={custOptions} value={activeCustomer.id} onChange={(id) => goToCustomer(customerList.find(x => x.id === id) || null)} placeholder="Rechercher un client…" />
             </div>
+            <button onClick={() => goToCustomer(nextCust)} disabled={!nextCust} className="p-1 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client suivant"><ChevronRight className="w-4 h-4" /></button>
             <div className="text-right shrink-0">
               {!loading && (
                 netDebt > 0 ? (
                   <div className="text-black">
-                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Solde</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Solde dû</div>
                     <div className="text-sm font-bold num">{formatFCFA(netDebt)}</div>
                   </div>
-                ) : excessPrepay > 0 ? (
-                  <div className="text-black">
-                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Acompte dispo.</div>
-                    <div className="text-sm font-bold num">{formatFCFA(excessPrepay)}</div>
-                  </div>
-                ) : excessAvoir > 0 ? (
-                  <div className="text-black">
-                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Avoir dispo.</div>
-                    <div className="text-sm font-bold num">{formatFCFA(excessAvoir)}</div>
+                ) : creditAvailable > 0 ? (
+                  <div className="text-emerald-700">
+                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-60">Crédit disponible</div>
+                    <div className="text-sm font-bold num">{formatFCFA(creditAvailable)}</div>
                   </div>
                 ) : (
                   <div className="text-black">
@@ -2081,8 +2148,8 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
               ) : (
                 <>
                   {infoTab === 'comptable' && (
-                    <LedgerView customerName={c.name} ledger={ledger} totalDebit={totals.total} totalCredit={totals.paid} balance={totals.due} netDebt={netDebt} excessAvoir={excessAvoir} excessPrepay={excessPrepay}
-                      dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} />
+                    <LedgerView customerName={c.name} statement={statement} statementLoading={statementLoading} netDebt={netDebt} creditAvailable={creditAvailable} excessAvoir={excessAvoir} excessPrepay={excessPrepay}
+                      dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} onPrint={printStatement} />
                   )}
 
                   {infoTab === 'commerciale' && (
@@ -2226,7 +2293,7 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
   }
 
   return (
-    <Modal open onClose={onClose} title={modalTitle} size="sm" layer="top" fullscreenMobile
+    <Modal open onClose={onClose} title={modalTitle} size={key === 'pricing' ? 'xl' : 'sm'} layer="top" fullscreenMobile
       panelClassName={key === 'payment' || key === 'docs' ? 'sm:!h-[500px]' : ''}
       footer={
         key === 'payment' ? (
@@ -2253,18 +2320,13 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
           <div className="text-right">
             {netDebt > 0 ? (
               <div className="text-amber-700">
-                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde comptable</div>
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde dû</div>
                 <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(netDebt)}</div>
               </div>
-            ) : excessPrepay > 0 ? (
+            ) : creditAvailable > 0 ? (
               <div className="text-emerald-700">
-                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Acompte dispo.</div>
-                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(excessPrepay)}</div>
-              </div>
-            ) : excessAvoir > 0 ? (
-              <div className="text-teal-700">
-                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Avoir dispo.</div>
-                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(excessAvoir)}</div>
+                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Crédit disponible</div>
+                <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(creditAvailable)}</div>
               </div>
             ) : (
               <div className="text-slate-500">
@@ -2347,37 +2409,32 @@ function CustomerDetailModal({ view, onClose }: { view: { c: Customer; key: Cust
 }
 
 /* ───────────────────────── Ledger view (bank-style) ───────────────────────── */
-function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, netDebt, excessAvoir, excessPrepay, dateFrom, dateTo, onOpenPicker, onClearDates }: {
+function LedgerView({ customerName, statement, statementLoading, netDebt, creditAvailable, excessAvoir, excessPrepay, dateFrom, dateTo, onOpenPicker, onClearDates, onPrint }: {
   customerName: string;
-  ledger: { id: string; ts: string; label: string; ref: string; debit: number; credit: number; running: number; kind: string; affectsBalance: boolean }[];
-  totalDebit: number; totalCredit: number; balance: number; netDebt: number; excessAvoir: number; excessPrepay: number;
-  dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void;
+  statement: { balance: number; opening_balance: number; closing_balance: number; total_debit: number; total_credit: number; rows: { ts: string; piece: string; label: string; kind: string; debit: number; credit: number; running: number; affects: boolean }[] } | null;
+  statementLoading: boolean;
+  netDebt: number; creditAvailable: number; excessAvoir: number; excessPrepay: number;
+  dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void; onPrint: () => void;
 }) {
   const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment' | 'loan' | 'avoir' | 'allocation'>('');
 
-  const filteredLedger = useMemo(() => {
-    let r = ledger;
-    if (dateFrom) {
-      const f = new Date(dateFrom); f.setHours(0, 0, 0, 0);
-      r = r.filter(row => new Date(row.ts) >= f);
-    }
-    if (dateTo) {
-      const t = new Date(dateTo); t.setHours(23, 59, 59, 999);
-      r = r.filter(row => new Date(row.ts) <= t);
-    }
-    if (kindFilter) r = r.filter(row => row.kind === kindFilter);
-    return r;
-  }, [ledger, dateFrom, dateTo, kindFilter]);
+  const rows = statement?.rows ?? [];
+  const filteredRows = useMemo(() => kindFilter ? rows.filter(r => r.kind === kindFilter) : rows, [rows, kindFilter]);
 
-  const sortedLedger = useMemo(() => [...filteredLedger].reverse(), [filteredLedger]);
-  const filteredDebit = useMemo(() => filteredLedger.filter(r => r.affectsBalance).reduce((s, r) => s + r.debit, 0), [filteredLedger]);
-  const filteredCredit = useMemo(() => filteredLedger.filter(r => r.affectsBalance).reduce((s, r) => s + r.credit, 0), [filteredLedger]);
-  const filteredBalance = filteredDebit - filteredCredit;
+  const filteredDebit = useMemo(() => filteredRows.filter(r => r.affects).reduce((s, r) => s + Number(r.debit), 0), [filteredRows]);
+  const filteredCredit = useMemo(() => filteredRows.filter(r => r.affects).reduce((s, r) => s + Number(r.credit), 0), [filteredRows]);
+  const totalDebit = kindFilter ? filteredDebit : Number(statement?.total_debit || 0);
+  const totalCredit = kindFilter ? filteredCredit : Number(statement?.total_credit || 0);
+  const soldeCell = kindFilter ? filteredDebit - filteredCredit : Number(statement?.closing_balance || 0);
+  const opening = Number(statement?.opening_balance || 0);
 
-  if (ledger.length === 0) {
+  if (statementLoading && !statement) {
+    return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
+  }
+  if (!statement) {
     return (
       <div className="py-10 text-center">
-        <div className="text-sm font-medium text-slate-500">Aucun mouvement pour {customerName}.</div>
+        <div className="text-sm font-medium text-slate-500">Relevé indisponible pour {customerName}.</div>
       </div>
     );
   }
@@ -2395,6 +2452,9 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, ne
         {(dateFrom || dateTo) && (
           <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5" title="Effacer"><X className="w-3.5 h-3.5" /></button>
         )}
+        <button onClick={onPrint} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-slate-500 hover:text-black hover:underline transition-colors" title="Imprimer le relevé">
+          <Printer className="w-3.5 h-3.5" /> Imprimer
+        </button>
         <div className="flex items-center gap-0.5 ml-auto">
           {[{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }, { v: 'avoir' as const, l: 'Avoirs' }, { v: 'allocation' as const, l: 'Imputations' }, { v: 'loan' as const, l: 'Prêts' }].map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
@@ -2403,7 +2463,7 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, ne
             </button>
           ))}
         </div>
-        <span className="text-[10px] text-slate-400 ml-2 num">{sortedLedger.length} ligne{sortedLedger.length > 1 ? 's' : ''}</span>
+        <span className="text-[10px] text-slate-400 ml-2 num">{filteredRows.length} ligne{filteredRows.length > 1 ? 's' : ''}</span>
       </div>
 
       {/* Flat accounting table */}
@@ -2421,14 +2481,20 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, ne
               </tr>
             </thead>
             <tbody>
-              {sortedLedger.map(r => (
-                <tr key={r.id} className={`border-b border-neutral-100 hover:bg-neutral-50/50${!r.affectsBalance ? ' bg-slate-50/60' : ''}`}>
+              <tr className="border-b border-neutral-100 bg-neutral-50/60">
+                <td className="px-3 py-1.5 text-slate-500" colSpan={3}>Solde d'ouverture</td>
+                <td className="px-3 py-1.5" />
+                <td className="px-3 py-1.5" />
+                <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(opening)}</td>
+              </tr>
+              {filteredRows.map((r, i) => (
+                <tr key={i} className={`border-b border-neutral-100 hover:bg-neutral-50/50${!r.affects ? ' bg-slate-50/60' : ''}`}>
                   <td className="px-3 py-1.5 text-black whitespace-nowrap">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-                  <td className="px-3 py-1.5 font-mono text-black hidden sm:table-cell">{r.ref || '—'}</td>
-                  <td className={`px-3 py-1.5 font-medium truncate max-w-[200px]${!r.affectsBalance ? ' text-slate-500 italic' : ' text-black'}`}>{r.label}</td>
-                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affectsBalance ? ' text-slate-400' : ' text-black'}`}>{r.debit > 0 ? formatFCFA(r.debit) : ''}</td>
-                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affectsBalance ? ' text-slate-400' : ' text-black'}`}>{r.credit > 0 ? formatFCFA(r.credit) : ''}</td>
-                  <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(r.running)}</td>
+                  <td className="px-3 py-1.5 font-mono text-black hidden sm:table-cell">{r.piece || '—'}</td>
+                  <td className={`px-3 py-1.5 font-medium${!r.affects ? ' text-slate-500 italic' : ' text-black'}`}>{r.label}</td>
+                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-slate-400' : ' text-black'}`}>{Number(r.debit) > 0 ? formatFCFA(Number(r.debit)) : ''}</td>
+                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-slate-400' : ' text-black'}`}>{Number(r.credit) > 0 ? formatFCFA(Number(r.credit)) : ''}</td>
+                  <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(Number(r.running))}</td>
                 </tr>
               ))}
             </tbody>
@@ -2438,16 +2504,17 @@ function LedgerView({ customerName, ledger, totalDebit, totalCredit, balance, ne
         <div className="border-t border-neutral-300 px-3 py-2.5 flex items-center text-xs gap-3">
           <span className="font-semibold text-black w-[90px]">TOTAUX</span>
           <span className="flex-1" />
-          <span className="num font-bold text-black w-[130px] text-right whitespace-nowrap">{formatFCFA(filteredDebit)}</span>
-          <span className="num font-bold text-black w-[130px] text-right whitespace-nowrap">{formatFCFA(filteredCredit)}</span>
-          <span className="num font-bold text-black w-[140px] text-right hidden sm:inline whitespace-nowrap">{formatFCFA(filteredBalance)}</span>
+          <span className="num font-bold text-black w-[130px] text-right whitespace-nowrap">{formatFCFA(totalDebit)}</span>
+          <span className="num font-bold text-black w-[130px] text-right whitespace-nowrap">{formatFCFA(totalCredit)}</span>
+          <span className="num font-bold text-black w-[140px] text-right hidden sm:inline whitespace-nowrap">{formatFCFA(soldeCell)}</span>
         </div>
       </div>
 
       {/* Balance summary line */}
       <div className="mt-2 flex items-center gap-4 text-[11px] text-black px-1">
         {netDebt > 0 && <span>Solde dû : <span className="font-bold text-black num">{formatFCFA(netDebt)}</span></span>}
-        {netDebt === 0 && excessPrepay === 0 && excessAvoir === 0 && <span>Solde : <span className="font-bold text-black num">0 FCFA</span></span>}
+        {netDebt === 0 && creditAvailable > 0 && <span>Crédit disponible : <span className="font-bold text-emerald-700 num">{formatFCFA(creditAvailable)}</span></span>}
+        {netDebt === 0 && creditAvailable === 0 && <span>Solde : <span className="font-bold text-black num">0 FCFA</span></span>}
         {excessPrepay > 0 && <span className="ml-auto">Acompte disponible : <span className="font-bold text-black num">{formatFCFA(excessPrepay)}</span></span>}
         {excessAvoir > 0 && <span className="ml-auto">Avoir disponible : <span className="font-bold text-black num">{formatFCFA(excessAvoir)}</span></span>}
       </div>
@@ -3629,7 +3696,6 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
   const [articles, setArticles] = useState<{ id: string; name: string; internal_ref: string; sale_price: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState('');
   const [newArticleId, setNewArticleId] = useState('');
   const [newPrice, setNewPrice] = useState<number | ''>('');
   const [newNote, setNewNote] = useState('');
@@ -3670,58 +3736,58 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
 
   const existingArticleIds = new Set(prices.map((p: any) => p.article_id));
   const availableArticles = articles.filter(a => !existingArticleIds.has(a.id));
-  const filteredAvailable = search
-    ? availableArticles.filter(a => a.name.toLowerCase().includes(search.toLowerCase()) || a.internal_ref.toLowerCase().includes(search.toLowerCase()))
-    : availableArticles;
 
   if (loading) return <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
 
   return (
     <div>
-      {/* Add row - compact toolbar */}
-      <div className="flex flex-wrap items-end gap-2 mb-3 pb-3 border-b border-slate-200">
-        <div className="flex-1 min-w-[150px]">
-          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Article</label>
+      {/* Add row */}
+      <div className="flex flex-wrap items-end gap-3 mb-4 pb-4 border-b border-slate-200">
+        <div className="flex-1 min-w-[200px]">
+          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">Article</label>
           <SearchableSelect
-            options={filteredAvailable.map(a => ({ value: a.id, label: a.name, sublabel: `${a.internal_ref} — ${formatFCFA(a.sale_price)}` }))}
+            variant="underline"
+            menuWidth={600}
+            wrapLabels
+            options={availableArticles.map(a => ({ value: a.id, label: a.name, sublabel: `Réf ${a.internal_ref} · Prix normal ${formatFCFA(a.sale_price)}` }))}
             value={newArticleId}
             onChange={v => {
               setNewArticleId(v);
               const art = articles.find(a => a.id === v);
               if (art && newPrice === '') setNewPrice(art.sale_price);
             }}
-            placeholder="— Choisir —"
+            placeholder="Rechercher par désignation ou référence…"
           />
         </div>
-        <div className="w-[100px]">
-          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Prix spécial</label>
-          <input type="number" min={0} value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="input text-xs" placeholder="FCFA" />
+        <div className="w-[120px]">
+          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">Prix d'exception</label>
+          <input type="number" min={0} value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="w-full px-1 py-2 text-sm border-0 border-b border-slate-300 focus:border-slate-500 outline-none bg-transparent" placeholder="FCFA" />
         </div>
-        <div className="w-[120px] hidden sm:block">
-          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-0.5 block">Note</label>
-          <input value={newNote} onChange={e => setNewNote(e.target.value)} className="input text-xs" placeholder="Optionnelle" />
+        <div className="w-[160px] hidden sm:block">
+          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">Note</label>
+          <input value={newNote} onChange={e => setNewNote(e.target.value)} className="w-full px-1 py-2 text-sm border-0 border-b border-slate-300 focus:border-slate-500 outline-none bg-transparent" placeholder="Optionnelle" />
         </div>
-        <button onClick={addPrice} disabled={saving || !newArticleId || newPrice === ''} className="h-[38px] px-3 rounded bg-slate-900 text-white text-xs font-semibold hover:bg-slate-700 disabled:opacity-40 transition-colors inline-flex items-center gap-1">
+        <button onClick={addPrice} disabled={saving || !newArticleId || newPrice === ''} className="h-[38px] px-4 rounded-md bg-slate-900 text-white text-xs font-semibold hover:bg-slate-700 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Ajouter
         </button>
       </div>
 
-      {/* Table of existing prices */}
+      {/* Flat table of existing prices */}
       {prices.length === 0 ? (
-        <div className="text-center py-8 text-sm text-slate-400">Aucun tarif d'exception configuré.</div>
+        <div className="text-center py-10 text-sm text-slate-400">Aucun tarif d'exception configuré.</div>
       ) : (
-        <div className="border border-slate-200 rounded-lg overflow-hidden">
+        <div>
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="border-b border-slate-300">
               <tr>
-                <th className="px-2.5 py-2 text-left font-semibold text-slate-600">Référence</th>
-                <th className="px-2.5 py-2 text-left font-semibold text-slate-600">Désignation</th>
-                <th className="px-2.5 py-2 text-right font-semibold text-slate-600">Prix normal</th>
-                <th className="px-2.5 py-2 text-right font-semibold text-slate-600">Prix exception</th>
-                <th className="px-2.5 py-2 text-right font-semibold text-slate-600 hidden sm:table-cell">Écart</th>
-                <th className="px-2.5 py-2 text-left font-semibold text-slate-600 hidden sm:table-cell">Note</th>
-                <th className="px-2.5 py-2 w-8"></th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[110px]">Référence</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600">Désignation</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[110px]">Prix normal</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[120px]">Prix d'exception</th>
+                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[90px] hidden sm:table-cell">Écart</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[160px] hidden sm:table-cell">Note</th>
+                <th className="px-3 py-2 w-10"></th>
               </tr>
             </thead>
             <tbody>
@@ -3731,22 +3797,22 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
                 const diff = Number(p.exception_price) - normalPrice;
                 const pct = normalPrice > 0 ? ((diff / normalPrice) * 100).toFixed(1) : '0';
                 return (
-                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-2.5 py-1.5 font-mono text-slate-500">{art?.internal_ref || '-'}</td>
-                    <td className="px-2.5 py-1.5 font-medium text-slate-800 truncate max-w-[150px]">{art?.name || 'Supprimé'}</td>
-                    <td className="px-2.5 py-1.5 text-right num text-slate-500">{formatFCFA(normalPrice)}</td>
-                    <td className="px-2.5 py-1.5 text-right num font-semibold text-slate-900">{formatFCFA(p.exception_price)}</td>
-                    <td className={`px-2.5 py-1.5 text-right num font-medium hidden sm:table-cell ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{diff < 0 ? '' : '+'}{pct}%</td>
-                    <td className="px-2.5 py-1.5 text-slate-400 truncate max-w-[80px] hidden sm:table-cell">{p.note || '—'}</td>
-                    <td className="px-2.5 py-1.5">
-                      <button onClick={() => removePrice(p.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                    <td className="px-3 py-2 font-mono text-slate-500 align-top whitespace-nowrap">{art?.internal_ref || '-'}</td>
+                    <td className="px-3 py-2 font-medium text-slate-800 align-top">{art?.name || 'Article supprimé'}</td>
+                    <td className="px-3 py-2 text-right num text-slate-500 align-top whitespace-nowrap">{formatFCFA(normalPrice)}</td>
+                    <td className="px-3 py-2 text-right num font-semibold text-slate-900 align-top whitespace-nowrap">{formatFCFA(p.exception_price)}</td>
+                    <td className={`px-3 py-2 text-right num font-medium align-top hidden sm:table-cell whitespace-nowrap ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{diff < 0 ? '' : '+'}{pct}%</td>
+                    <td className="px-3 py-2 text-slate-400 align-top hidden sm:table-cell">{p.note || '—'}</td>
+                    <td className="px-3 py-2 align-top">
+                      <button onClick={() => removePrice(p.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          <div className="border-t border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] text-slate-500">
+          <div className="px-3 py-2 text-[10px] text-slate-400">
             {prices.length} tarif{prices.length > 1 ? 's' : ''} configuré{prices.length > 1 ? 's' : ''}
           </div>
         </div>

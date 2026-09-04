@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Plus, ShoppingBag, Loader2, Search, RefreshCw,
   CheckCircle, Truck, X, Calendar,
-  User, Package, MessageCircle, Link2,
+  User, MessageCircle, Link2,
   Printer, Pencil, Ban, ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -52,12 +52,11 @@ const FILTERS: { key: string; label: string }[] = [
 ];
 
 export function SupplierOrders() {
-  const { tenant, currentSite, sites, dataTick } = useApp();
+  const { tenant, currentSite, sites, depots, dataTick } = useApp();
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
-  const isMultiSiteDispatch = sharedSuppliers && sites.length > 1;
   const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
 
@@ -93,6 +92,7 @@ export function SupplierOrders() {
   // ── Dispatch state (multi-site) ────────────────────────────────
   const [dispatchOpen, setDispatchOpen] = useState(false);
   const [dispatchData, setDispatchData] = useState<Record<string, Record<string, number>>>({});
+  const receiveIdemRef = useRef<string>('');
 
   // ── Mobile create state ─────────────────────────────────────────
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -314,9 +314,31 @@ export function SupplierOrders() {
     });
     setReceiveQty(rq);
     setReceiveLotData({});
+    receiveIdemRef.current = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID() : `recv-${o.id}-${Date.now()}`;
     setEditorMode('receive');
     setEditorOpen(true);
   };
+
+  // Destinations autorisées pour la réception : magasin de la commande,
+  // ses dépôts rattachés, et les autres magasins si le partage fournisseurs est actif.
+  const receiveDestinations = useMemo(() => {
+    const orderSiteId = (editorOrder as any)?.site_id || currentSite?.id || '';
+    if (!orderSiteId) return [] as { id: string; name: string }[];
+    const out: { id: string; name: string }[] = [];
+    const store = sites.find(s => s.id === orderSiteId)
+      || (currentSite && currentSite.id === orderSiteId ? currentSite : null);
+    out.push({ id: orderSiteId, name: store?.name || 'Magasin principal' });
+    depots
+      .filter(d => d.parent_site_id === orderSiteId)
+      .forEach(d => out.push({ id: d.id, name: d.name }));
+    if (sharedSuppliers) {
+      sites
+        .filter(s => s.id !== orderSiteId)
+        .forEach(s => { if (!out.some(x => x.id === s.id)) out.push({ id: s.id, name: s.name }); });
+    }
+    return out;
+  }, [editorOrder, sites, depots, currentSite, sharedSuppliers]);
 
   const openDetail = async (o: SupplierOrder) => {
     if (!isDesktop) {
@@ -450,129 +472,88 @@ export function SupplierOrders() {
     if (!editorOrder || !tenant || !currentSite) return;
     if (!can('manage_supplier_orders')) { error('Permission insuffisante'); return; }
 
-    if (isMultiSiteDispatch) {
-      // Build dispatch data
-      const dd: Record<string, Record<string, number>> = {};
-      for (const item of editorItems) {
-        const itemId = item.id || '';
-        const addQty = Number(receiveQty[itemId] || 0);
-        if (addQty > 0 && item.article_id) {
-          dd[itemId] = {};
-          if (sites.length === 1) {
-            dd[itemId][sites[0].id] = addQty;
-          } else {
-            dd[itemId][currentSite!.id] = addQty;
-          }
-        }
-      }
-      if (Object.keys(dd).length === 0) { error('Aucune quantité à réceptionner'); return; }
-      setDispatchData(dd);
-      if (sites.length === 1) {
-        await receiveWithDispatch(dd);
-      } else {
-        setDispatchOpen(true);
-      }
-    } else {
-      await receivePartial();
-    }
-  };
-
-  const receiveWithDispatch = async (dd: Record<string, Record<string, number>>) => {
-    if (!editorOrder || !tenant || !currentSite) return;
-    setSaving(true);
-    let anyReceived = 0;
-    let fullyReceived = true;
-    for (const item of editorItems) {
-      const itemId = item.id || '';
-      const siteAlloc = dd[itemId];
-      if (!siteAlloc || !item.article_id) {
-        const ordered = Number(item.quantity_ordered || 0);
-        const alreadyReceived = Number(item.quantity_received || 0);
-        if (alreadyReceived < ordered) fullyReceived = false;
-        continue;
-      }
-      const totalAddQty = Object.values(siteAlloc).reduce((s, v) => s + v, 0);
-      const alreadyReceived = Number(item.quantity_received || 0);
-      const ordered = Number(item.quantity_ordered || 0);
-      const newTotalReceived = alreadyReceived + totalAddQty;
-
-      for (const [siteId, qty] of Object.entries(siteAlloc)) {
-        if (qty <= 0) continue;
-        if (stockMethod === 'lot') {
-          const lotData = receiveLotData[itemId] || { batch_number: '', expiry_date: '' };
-          await supabase.rpc('adjust_stock_lot', {
-            p_article_id: item.article_id, p_site_id: siteId,
-            p_quantity: qty, p_batch_number: lotData.batch_number || `LOT-${Date.now()}`,
-            p_expiry_date: lotData.expiry_date || null,
-            p_purchase_price: Number(item.unit_price || 0),
-            p_note: `Réception commande ${editorOrder.order_number}`,
-          });
-        } else {
-          await supabase.rpc('adjust_stock', {
-            p_article_id: item.article_id, p_site_id: siteId,
-            p_quantity: qty, p_movement_type: 'purchase',
-            p_note: `Réception commande ${editorOrder.order_number}`,
-          });
-        }
-        anyReceived += qty;
-      }
-      if (item.id) {
-        await supabase.from('supplier_order_items').update({ quantity_received: newTotalReceived }).eq('id', item.id);
-      }
-      if (newTotalReceived < ordered) fullyReceived = false;
-    }
-    const newStatus = fullyReceived ? 'received' : 'partial';
-    const update: any = { status: newStatus };
-    if (fullyReceived) update.received_date = new Date().toISOString().slice(0, 10);
-    await supabase.from('supplier_orders').update(update).eq('id', editorOrder.id);
-    success(fullyReceived ? 'Commande entièrement réceptionnée' : `Réception partielle enregistrée (+${anyReceived})`);
-    setSaving(false);
-    setDispatchOpen(false);
-    closeEditor();
-    load();
-  };
-
-  const receivePartial = async () => {
-    if (!editorOrder || !tenant || !currentSite) return;
-    setSaving(true);
-    let anyReceived = 0;
-    let fullyReceived = true;
+    // Validation : quantité reçue vs restant à recevoir
     for (const item of editorItems) {
       const itemId = item.id || '';
       const addQty = Number(receiveQty[itemId] || 0);
-      const alreadyReceived = Number(item.quantity_received || 0);
-      const ordered = Number(item.quantity_ordered || 0);
-      const newTotalReceived = alreadyReceived + addQty;
-      if (addQty > 0 && item.article_id) {
-        if (stockMethod === 'lot') {
-          const lotData = receiveLotData[itemId] || { batch_number: '', expiry_date: '' };
-          await supabase.rpc('adjust_stock_lot', {
-            p_article_id: item.article_id, p_site_id: currentSite.id,
-            p_quantity: addQty, p_batch_number: lotData.batch_number || `LOT-${Date.now()}`,
-            p_expiry_date: lotData.expiry_date || null,
-            p_purchase_price: Number(item.unit_price || 0),
-            p_note: `Réception commande ${editorOrder.order_number}`,
-          });
-        } else {
-          await supabase.rpc('adjust_stock', {
-            p_article_id: item.article_id, p_site_id: currentSite.id,
-            p_quantity: addQty, p_movement_type: 'purchase',
-            p_note: `Réception commande ${editorOrder.order_number}`,
-          });
-        }
-        if (item.id) {
-          await supabase.from('supplier_order_items').update({ quantity_received: newTotalReceived }).eq('id', item.id);
-        }
-        anyReceived += addQty;
-      }
-      if (newTotalReceived < ordered) fullyReceived = false;
+      const remaining = Math.max(0, Number(item.quantity_ordered || 0) - Number(item.quantity_received || 0));
+      if (addQty < 0) { error(`Quantité négative interdite pour ${item.name}`); return; }
+      if (addQty > remaining) { error(`Quantité reçue supérieure au restant pour ${item.name}`); return; }
     }
-    const newStatus = fullyReceived ? 'received' : 'partial';
-    const update: any = { status: newStatus };
-    if (fullyReceived) update.received_date = new Date().toISOString().slice(0, 10);
-    await supabase.from('supplier_orders').update(update).eq('id', editorOrder.id);
-    success(fullyReceived ? 'Commande entièrement réceptionnée' : `Réception partielle enregistrée (+${anyReceived})`);
+    const anyQty = editorItems.some(it => Number(receiveQty[it.id || ''] || 0) > 0 && it.article_id);
+    if (!anyQty) { error('Aucune quantité à réceptionner'); return; }
+
+    const mainId = receiveDestinations[0]?.id || currentSite.id;
+    // Préremplir la totalité sur le magasin principal
+    const dd: Record<string, Record<string, number>> = {};
+    for (const [idx, item] of editorItems.entries()) {
+      const itemId = item.id || `idx-${idx}`;
+      const addQty = Number(receiveQty[itemId] || 0);
+      if (addQty > 0 && item.article_id) dd[itemId] = { [mainId]: addQty };
+    }
+
+    if (receiveDestinations.length > 1) {
+      setDispatchData(dd);
+      setDispatchOpen(true);
+    } else {
+      await submitReception(dd);
+    }
+  };
+
+  const isDispatchValid = () => {
+    for (const [idx, item] of editorItems.entries()) {
+      const itemId = item.id || `idx-${idx}`;
+      const addQty = Number(receiveQty[itemId] || 0);
+      if (addQty <= 0 || !item.article_id) continue;
+      const values = Object.values(dispatchData[itemId] || {}).map(v => Number(v || 0));
+      if (values.some(v => v < 0)) return false;
+      if (values.reduce((s, v) => s + v, 0) !== addQty) return false;
+    }
+    return true;
+  };
+
+  const submitReception = async (dd: Record<string, Record<string, number>>) => {
+    if (!editorOrder || !tenant) return;
+
+    // Validation par ligne : somme répartie == quantité reçue, pas de négatif
+    for (const item of editorItems) {
+      const itemId = item.id || '';
+      const addQty = Number(receiveQty[itemId] || 0);
+      if (addQty <= 0 || !item.article_id) continue;
+      const alloc = dd[itemId] || {};
+      const values = Object.values(alloc).map(v => Number(v || 0));
+      if (values.some(v => v < 0)) { error(`Répartition négative pour ${item.name}`); return; }
+      const sum = values.reduce((s, v) => s + v, 0);
+      if (sum !== addQty) { error(`Répartition incomplète pour ${item.name} (${sum}/${addQty})`); return; }
+    }
+
+    const allocations: Array<{ item_id: string; site_id: string; quantity: number; batch_number: string; expiry_date: string | null }> = [];
+    for (const [idx, item] of editorItems.entries()) {
+      const itemId = item.id || `idx-${idx}`;
+      const addQty = Number(receiveQty[itemId] || 0);
+      if (addQty <= 0 || !item.article_id || !item.id) continue;
+      const lot = receiveLotData[itemId] || { batch_number: '', expiry_date: '' };
+      for (const [siteId, qty] of Object.entries(dd[itemId] || {})) {
+        if (Number(qty) <= 0) continue;
+        allocations.push({
+          item_id: item.id, site_id: siteId, quantity: Number(qty),
+          batch_number: lot.batch_number || '', expiry_date: lot.expiry_date || null,
+        });
+      }
+    }
+    if (allocations.length === 0) { error('Aucune quantité à réceptionner'); return; }
+
+    setSaving(true);
+    const { data, error: e } = await supabase.rpc('receive_supplier_order', {
+      p_order_id: editorOrder.id,
+      p_allocations: allocations,
+      p_idempotency_key: receiveIdemRef.current || `recv-${editorOrder.id}-${Date.now()}`,
+    });
     setSaving(false);
+    if (e) { error(e.message || 'Erreur lors de la réception'); return; }
+    const status = (data as any)?.status;
+    success(status === 'received' ? 'Commande entièrement réceptionnée' : 'Réception partielle enregistrée');
+    setDispatchOpen(false);
     closeEditor();
     load();
   };
@@ -956,56 +937,60 @@ export function SupplierOrders() {
       <Modal
         open={dispatchOpen}
         onClose={() => setDispatchOpen(false)}
-        title="Dispatcher la réception entre magasins"
+        title="Répartition par emplacement"
         size="lg"
+        layer="top"
         footer={
-          <>
-            <button onClick={() => setDispatchOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <div className="flex items-center gap-1">
             <button
-              onClick={() => receiveWithDispatch(dispatchData)}
-              disabled={saving}
-              className="btn-icon-primary"
-              title="Confirmer la réception"
+              onClick={() => setDispatchOpen(false)}
+              className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+              <span>Annuler</span>
+            </button>
+            <button
+              onClick={() => submitReception(dispatchData)}
+              disabled={saving || !isDispatchValid()}
+              className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-bold text-neutral-900 hover:bg-neutral-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+              <span>Confirmer la réception</span>
             </button>
-          </>
+          </div>
         }
       >
-        <div className="space-y-4">
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-neutral-50 border border-neutral-200">
-            <Package className="w-4 h-4 text-neutral-700 mt-0.5 shrink-0" />
-            <p className="text-xs text-neutral-800">
-              Le mode fournisseurs partagés est actif. Répartissez les quantités reçues entre vos {sites.length} magasins.
-            </p>
-          </div>
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            {editorItems.filter(i => {
-              const itemId = i.id || '';
+        <div>
+          <p className="text-xs text-neutral-500 px-1 pb-3">
+            Répartissez la quantité reçue de chaque article entre le magasin principal et les emplacements autorisés ({receiveDestinations.length}).
+          </p>
+          <div className="divide-y divide-neutral-100 max-h-[60vh] overflow-y-auto">
+            {editorItems.filter((i, idx) => {
+              const itemId = i.id || `idx-${idx}`;
               return (receiveQty[itemId] || 0) > 0 && i.article_id;
-            }).map(item => {
-              const itemId = item.id || '';
+            }).map((item, idx) => {
+              const itemId = item.id || `idx-${idx}`;
               const totalQty = Number(receiveQty[itemId] || 0);
               const allocated = Object.values(dispatchData[itemId] || {}).reduce((s, v) => s + v, 0);
               const isValid = allocated === totalQty;
               return (
-                <div key={itemId} className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
+                <div key={itemId} className="py-3 px-1 space-y-2">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-neutral-900">{item.name}</div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-neutral-900 truncate">{item.name}</div>
                       {item.supplier_ref && <div className="text-[10px] text-neutral-400 font-mono">{item.supplier_ref}</div>}
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs text-neutral-500">Qte reçue</div>
-                      <div className="text-sm font-bold text-neutral-900 num">{totalQty}</div>
+                    <div className="text-right shrink-0 ml-2">
+                      <span className="text-[10px] text-neutral-400">Reçue </span>
+                      <span className="text-sm font-bold text-neutral-900 num">{totalQty}</span>
                     </div>
                   </div>
-                  <div className="grid gap-1.5">
-                    {sites.map(site => {
+                  <div className="space-y-1">
+                    {receiveDestinations.map(site => {
                       const val = dispatchData[itemId]?.[site.id] || 0;
                       return (
                         <div key={site.id} className="flex items-center gap-2">
-                          <span className="text-xs text-neutral-600 font-medium flex-1 truncate">{site.name}</span>
+                          <span className="text-xs text-neutral-600 flex-1 truncate">{site.name}</span>
                           <input
                             type="number" min={0} max={totalQty}
                             value={val}
@@ -1013,22 +998,23 @@ export function SupplierOrders() {
                               const v = Math.max(0, Math.min(totalQty, Number(e.target.value) || 0));
                               setDispatchData(prev => ({ ...prev, [itemId]: { ...prev[itemId], [site.id]: v } }));
                             }}
-                            className="w-20 text-xs num text-center bg-transparent border-b border-neutral-300 focus:border-neutral-500 outline-none py-1 focus:ring-0"
+                            className="w-20 text-xs num text-center bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none py-1 focus:ring-0"
                           />
                         </div>
                       );
                     })}
                   </div>
-                  {!isValid && (
-                    <div className="text-[10px] text-amber-600 font-medium">
-                      Alloué : {allocated}/{totalQty} — {allocated < totalQty ? `${totalQty - allocated} restant(s)` : 'surplus'}
-                    </div>
-                  )}
-                  {isValid && (
-                    <div className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" /> Répartition correcte
-                    </div>
-                  )}
+                  <div className="text-[10px] font-medium pt-0.5">
+                    {isValid ? (
+                      <span className="text-emerald-600 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Répartition correcte
+                      </span>
+                    ) : (
+                      <span className="text-amber-600">
+                        Alloué : {allocated}/{totalQty} — {allocated < totalQty ? `${totalQty - allocated} restant(s)` : 'surplus'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })}

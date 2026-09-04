@@ -4,7 +4,7 @@ import {
   Plus, FileText, Loader2, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, CalendarDays, User,
   CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen,
-  Tag, ShieldCheck, Smartphone, Pencil,
+  Tag, ShieldCheck, Smartphone, Pencil, ChevronLeft, ChevronRight, RefreshCw, Ban,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -127,6 +127,18 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [returns, setReturns] = useState<SaleReturn[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Server pagination state
+  const PAGE_SIZE = 50;
+  const [billPage, setBillPage] = useState(0);
+  const [billHasMore, setBillHasMore] = useState(false);
+  const [billCursors, setBillCursors] = useState<{ val: string | null; id: string | null }[]>([]);
+  const [billTotalCount, setBillTotalCount] = useState(0);
+  const [billTotals, setBillTotals] = useState<any>({});
+  const billReqIdRef = useRef(0);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const billSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [articles, setArticles] = useState<any[]>([]);
@@ -210,6 +222,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [returnWorkflowBusy, setReturnWorkflowBusy] = useState(false);
   const [returnCashConfirmOpen, setReturnCashConfirmOpen] = useState(false);
   const [returnedQtys, setReturnedQtys] = useState<Record<string, number>>({});
+  // returnedQtys no longer filters invoices — kept for compat but always empty
 
   // Direct invoice creation
   const [invoiceEditorOpen, setInvoiceEditorOpen] = useState(false);
@@ -218,6 +231,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [invoiceForm, setInvoiceForm] = useState<{ customer_id: string; doc_date: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
   const [invoicePostCreation, setInvoicePostCreation] = useState<{ saleNumber: string; createdAt: string; createdBy: string } | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Invoice | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelPaymentAction, setCancelPaymentAction] = useState<'keep_credit' | 'refund_cash' | 'none'>('none');
   const [invoiceEditorItems, setInvoiceEditorItems] = useState<QuoteItem[]>([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
   const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [invoiceIsCredit, setInvoiceIsCredit] = useState(false);
@@ -319,60 +334,89 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const [saving, setSaving] = useState(false);
 
-  const load = async (silent = false) => {
-    if (!tenant || !currentSite) return;
-    if (!silent) setLoading(true);
-    const siteId = currentSite.id;
-    const [q, s, r] = await Promise.all([
-      supabase.from('quotes').select('*, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
-      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, user_id, representative_id, rep_commission, created_at, public_code, doc_header, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
-      supabase.from('sale_returns').select('*, customers(name, phone, address), sales(sale_number)').eq('tenant_id', tenant.id).eq('site_id', siteId).order('created_at', { ascending: false }).limit(300),
-    ]);
-    setQuotes((q.data as any) || []);
-    setInvoices((s.data as any) || []);
-    setReturns((r.data as any) || []);
-    // Refresh sales dropdown from the same invoice query so new invoices appear immediately
-    setSales((s.data as any) || []);
-    // Fetch returned quantities per sale to detect fully-returned invoices
-    const saleIds = ((s.data as any) || []).map((inv: any) => inv.id);
-    if (saleIds.length > 0) {
-      const [retItemsRes, saleItemsRes] = await Promise.all([
-        supabase.from('sale_return_items').select('return_id, article_id, quantity').in('return_id',
-          ((r.data as any) || []).map((ret: any) => ret.id)),
-        supabase.from('sale_items').select('sale_id, article_id, quantity').in('sale_id', saleIds),
-      ]);
-      const retByReturn: Record<string, { article_id: string; quantity: number }[]> = {};
-      (retItemsRes.data || []).forEach((ri: any) => {
-        if (!retByReturn[ri.return_id]) retByReturn[ri.return_id] = [];
-        retByReturn[ri.return_id].push({ article_id: ri.article_id, quantity: Number(ri.quantity) });
-      });
-      const retBySale: Record<string, number> = {};
-      ((r.data as any) || []).forEach((ret: any) => {
-        if (ret.status !== 'approved') return;
-        const items = retByReturn[ret.id] || [];
-        items.forEach((it: { article_id: string; quantity: number }) => {
-          retBySale[ret.sale_id] = (retBySale[ret.sale_id] || 0) + it.quantity;
-        });
-      });
-      const saleTotalQty: Record<string, number> = {};
-      (saleItemsRes.data || []).forEach((si: any) => {
-        saleTotalQty[si.sale_id] = (saleTotalQty[si.sale_id] || 0) + Number(si.quantity);
-      });
-      const fullyReturned: Record<string, number> = {};
-      for (const sid of saleIds) {
-        if (saleTotalQty[sid] && retBySale[sid] && retBySale[sid] >= saleTotalQty[sid]) {
-          fullyReturned[sid] = 1;
-        }
-      }
-      setReturnedQtys(fullyReturned);
-    } else {
-      setReturnedQtys({});
-    }
-    if (!silent) setLoading(false);
-  };
+  // Debounce search
+  useEffect(() => {
+    if (billSearchTimer.current) clearTimeout(billSearchTimer.current);
+    billSearchTimer.current = setTimeout(() => { setDebouncedSearch(search); setBillPage(0); setBillCursors([]); }, 250);
+    return () => { if (billSearchTimer.current) clearTimeout(billSearchTimer.current); };
+  }, [search]);
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id, billSourceSiteId]);
-  useEffect(() => { if (currentSite && !billSourceSiteId) setBillSourceSiteId(currentSite.id); }, [currentSite?.id]);
+  // Reset page when filters change
+  useEffect(() => { setBillPage(0); setBillCursors([]); }, [statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount, tenant?.id, currentSite?.id, tab]);
+
+  const loadTab = useCallback(async (pageNum: number, isRefresh = false) => {
+    if (!tenant || !currentSite) return;
+    const myReqId = ++billReqIdRef.current;
+    if (isRefresh) setRefreshing(true);
+    else if (pageNum === 0) setLoading(true);
+    else setRefreshing(true);
+
+    const siteId = currentSite.id;
+    const cursor = pageNum > 0 && billCursors[pageNum - 1] ? billCursors[pageNum - 1] : { val: null, id: null };
+    const searchParam = debouncedSearch || null;
+    const statusParam = statusFilter || null;
+    const custId = customerFilter || null;
+    const dFrom = dateFrom ? new Date(dateFrom).toISOString() : null;
+    const dTo = dateTo ? new Date(dateTo + 'T23:59:59.999').toISOString() : null;
+    const minAmt = minAmount ? Number(minAmount) : null;
+    const maxAmt = maxAmount ? Number(maxAmount) : null;
+
+    let rpcName = '';
+    let params: Record<string, any> = { p_tenant_id: tenant.id, p_site_id: siteId, p_page_size: PAGE_SIZE };
+
+    if (tab === 'invoices') {
+      rpcName = 'rpc_paginated_invoices';
+      params = { ...params, p_search: searchParam, p_status_filter: statusParam, p_customer_id: custId, p_date_from: dFrom, p_date_to: dTo, p_min_amount: minAmt, p_max_amount: maxAmt };
+      if (cursor.val && cursor.id) { params.p_cursor_created_at = cursor.val; params.p_cursor_id = cursor.id; }
+    } else if (tab === 'quotes') {
+      rpcName = 'rpc_paginated_quotes';
+      params = { ...params, p_search: searchParam, p_status_filter: statusParam, p_customer_id: custId, p_date_from: dFrom, p_date_to: dTo, p_min_amount: minAmt, p_max_amount: maxAmt };
+      if (cursor.val && cursor.id) { params.p_cursor_created_at = cursor.val; params.p_cursor_id = cursor.id; }
+    } else {
+      rpcName = 'rpc_paginated_returns';
+      const refundMethod = tab === 'credits' ? 'avoir' : 'not_avoir';
+      params = { ...params, p_search: searchParam, p_status_filter: statusParam, p_customer_id: custId, p_date_from: dFrom, p_date_to: dTo, p_min_amount: minAmt, p_max_amount: maxAmt, p_refund_method: refundMethod };
+      if (cursor.val && cursor.id) { params.p_cursor_created_at = cursor.val; params.p_cursor_id = cursor.id; }
+    }
+
+    const { data, error: rpcErr } = await supabase.rpc(rpcName, params);
+    if (myReqId !== billReqIdRef.current) return;
+
+    if (rpcErr || !data) {
+      setLoading(false); setRefreshing(false); return;
+    }
+
+    const rows = (data.rows || []) as any[];
+    setBillTotalCount(data.total_count || 0);
+    setBillTotals(data.totals || {});
+    setBillHasMore(rows.length >= PAGE_SIZE);
+
+    // Save cursor for next page
+    if (rows.length > 0) {
+      const last = rows[rows.length - 1];
+      setBillCursors(prev => { const next = [...prev]; next[pageNum] = { val: last.created_at, id: last.id }; return next; });
+    }
+
+    // Transform rows to match existing types
+    if (tab === 'invoices') {
+      setInvoices(rows.map(r => ({ ...r, customers: r.customer_name ? { name: r.customer_name } : null })) as Invoice[]);
+    } else if (tab === 'quotes') {
+      setQuotes(rows.map(r => ({ ...r, customers: r.customer_name ? { name: r.customer_name } : null })) as Quote[]);
+    } else {
+      setReturns(rows.map(r => ({
+        ...r,
+        customers: r.customer_name ? { name: r.customer_name } : null,
+        sales: r.sale_number ? { sale_number: r.sale_number } : null,
+      })) as SaleReturn[]);
+    }
+
+    setLoading(false);
+    setRefreshing(false);
+  }, [tenant, currentSite, tab, debouncedSearch, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount, billCursors]);
+
+  useEffect(() => { loadTab(billPage); /* eslint-disable-next-line */ }, [billPage, tab, debouncedSearch, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount, tenant?.id, currentSite?.id]);
+
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => loadTab(billPage, true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   // Load document settings (per doc type)
   useEffect(() => {
@@ -408,7 +452,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const t = setTimeout(() => setFlashTab(null), 6800);
     return () => clearTimeout(t);
   }, []);
-  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => loadTab(billPage, true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   useEffect(() => {
     if (!tenant || !currentSite) return;
@@ -524,73 +568,22 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     return computeRepCommission(rep, repSettings, { subtotal, net: subtotal, margin });
   };
 
-  // ── Filtering helpers ─────────────────────────────────────────
+  // ── Filtering helpers (now done server-side, these are no-ops for compatibility) ──
   const matchesCommon = (
     created_at: string,
     customer_id: string | null | undefined,
     amount: number
   ) => {
-    if (customerFilter && customer_id !== customerFilter) return false;
-    if (dateFrom) { if (new Date(created_at) < new Date(dateFrom)) return false; }
-    if (dateTo) {
-      const to = new Date(dateTo); to.setDate(to.getDate() + 1);
-      if (new Date(created_at) >= to) return false;
-    }
-    const min = minAmount ? Number(minAmount) : null;
-    const max = maxAmount ? Number(maxAmount) : null;
-    if (min != null && amount < min) return false;
-    if (max != null && amount > max) return false;
     return true;
   };
 
-  const filteredQuotes = useMemo(() => {
-    let r = quotes;
-    if (statusFilter) r = r.filter(q => q.status === statusFilter);
-    const q = search.toLowerCase().trim();
-    if (q) r = r.filter(x => x.quote_number.toLowerCase().includes(q) || (x.customers?.name || '').toLowerCase().includes(q));
-    return r.filter(x => matchesCommon(x.created_at, x.customer_id, Number(x.total)));
-  }, [quotes, search, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount]);
+  const filteredQuotes = quotes;
 
-  const filteredInvoices = useMemo(() => {
-    let r = invoices.filter(i => !returnedQtys[i.id]);
-    if (statusFilter) {
-      r = r.filter(i => {
-        if (statusFilter === 'paid') return i.status !== 'cancelled' && i.paid >= i.total;
-        if (statusFilter === 'partial') return i.status !== 'cancelled' && i.paid > 0 && i.paid < i.total;
-        if (statusFilter === 'validated') return i.status !== 'cancelled' && Number(i.paid) === 0;
-        if (statusFilter === 'cancelled') return i.status === 'cancelled';
-        return true;
-      });
-    }
-    const q = search.toLowerCase().trim();
-    if (q) r = r.filter(x => x.sale_number.toLowerCase().includes(q) || (x.customers?.name || '').toLowerCase().includes(q));
-    return r.filter(x => matchesCommon(x.created_at, x.customer_id, Number(x.total)));
-  }, [invoices, returnedQtys, search, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount]);
+  const filteredInvoices = invoices;
 
-  const filteredReturns = useMemo(() => {
-    let r = returns.filter(x => x.refund_method !== 'avoir');
-    if (statusFilter) r = r.filter(x => x.status === statusFilter);
-    const q = search.toLowerCase().trim();
-    if (q) r = r.filter(x => x.return_number.toLowerCase().includes(q) || (x.customers?.name || '').toLowerCase().includes(q) || (x.sales?.sale_number || '').toLowerCase().includes(q));
-    return r.filter(x => matchesCommon(x.created_at, x.customer_id, Number(x.total)));
-  }, [returns, search, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount]);
+  const filteredReturns = returns.filter(x => x.refund_method !== 'avoir');
 
-  const filteredCredits = useMemo(() => {
-    let r = returns.filter(x => x.refund_method === 'avoir');
-    if (statusFilter) {
-      r = r.filter(x => {
-        if (statusFilter === 'available') return x.status === 'approved' && Number(x.credit_used || 0) === 0;
-        if (statusFilter === 'partial') return x.status === 'approved' && Number(x.credit_used || 0) > 0 && Number(x.credit_used || 0) < Number(x.total);
-        if (statusFilter === 'used') return x.status === 'approved' && Number(x.credit_used || 0) >= Number(x.total);
-        if (statusFilter === 'pending') return x.status === 'pending';
-        if (statusFilter === 'rejected') return x.status === 'rejected';
-        return true;
-      });
-    }
-    const q = search.toLowerCase().trim();
-    if (q) r = r.filter(x => x.return_number.toLowerCase().includes(q) || (x.customers?.name || '').toLowerCase().includes(q) || (x.sales?.sale_number || '').toLowerCase().includes(q));
-    return r.filter(x => matchesCommon(x.created_at, x.customer_id, Number(x.total)));
-  }, [returns, search, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount]);
+  const filteredCredits = returns.filter(x => x.refund_method === 'avoir');
 
   // ── Quote actions ────────────────────────────────────────────
   const addArticleWithTierCheck = (articleId: string, target: 'invoice' | 'quote') => {
@@ -728,7 +721,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       await supabase.from('quote_items').delete().eq('quote_id', editingQuoteId);
       await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: editingQuoteId, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
       setSaving(false);
-      if (!opts?.silent) { success('Devis mis à jour'); closeQuotePanel(); load(); }
+      if (!opts?.silent) { success('Devis mis à jour'); closeQuotePanel(); loadTab(billPage, true); }
     } else {
       const { data: numData } = await supabase.rpc('next_doc_number', {
         p_tenant_id: tenant.id, p_kind: 'quote', p_prefix: 'DEV',
@@ -747,7 +740,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       await supabase.from('quote_items').insert(valid.map(i => ({ tenant_id: tenant.id, quote_id: q.id, article_id: i.article_id, name: i.name, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount, total: i.total })));
       setEditingQuoteId(q.id);
       setSaving(false);
-      if (!opts?.silent) { success('Devis créé'); closeQuotePanel(); load(); }
+      if (!opts?.silent) { success('Devis créé'); closeQuotePanel(); loadTab(billPage, true); }
     }
   };
 
@@ -810,7 +803,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const changeQuoteStatus = async (q: Quote, status: string) => {
     if (!can('edit_quotes')) { error('Vous n\'avez pas la permission de modifier les devis'); return; }
     await supabase.from('quotes').update({ status }).eq('id', q.id);
-    success('Statut mis à jour'); load();
+    success('Statut mis à jour'); loadTab(billPage, true);
     if (quoteDetail?.id === q.id) setQuoteDetail({ ...q, status });
   };
 
@@ -1001,7 +994,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
         success('Facture mise à jour');
         closeInvoiceEditor();
-        load();
+        loadTab(billPage, true);
       } catch (err: any) {
         error(err.message || 'Erreur');
       } finally {
@@ -1173,7 +1166,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       setInvoicePostCreation({ saleNumber: invNum, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
       setEditingInvoiceId(sale.id);
       setInvoiceEditorMode('view');
-      load();
+      loadTab(billPage, true);
     } catch (err: any) {
       error(err.message || 'Erreur');
     } finally {
@@ -1360,7 +1353,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setConverting(false);
     success(`Facture ${(data as any)?.sale_number || ''} créée`);
     setConvertFrom(null); setQuoteDetail(null);
-    setTab('invoices'); load();
+    setTab('invoices'); loadTab(billPage, true);
   };
 
   // ── Invoice detail ───────────────────────────────────────────
@@ -1386,7 +1379,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         setInvoicePayList((pp || []).map((p: any) => ({ method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: '' })));
       }
     }
-    load();
+    loadTab(billPage, true);
   };
 
   const printInvoice = () => {
@@ -1466,6 +1459,9 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const quickCopy = (inv: Invoice) => copyInvoiceLink(inv);
 
   const cancelInvoice = async (inv: Invoice) => {
+    setCancelReason('');
+    const hasRealPayments = Number(inv.paid) > 0;
+    setCancelPaymentAction(hasRealPayments ? 'keep_credit' : 'none');
     setCancelTarget(inv);
   };
 
@@ -1473,14 +1469,44 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const confirmCancelInvoice = async () => {
     if (!cancelTarget) return;
     if (!can('edit_invoices')) { error("Vous n'avez pas la permission d'annuler une facture"); return; }
+    if (!cancelReason.trim()) { error('Un motif d\'annulation est obligatoire'); return; }
     const inv = cancelTarget;
     if (!tenant) { error('Aucun établissement sélectionné'); return; }
     setCancelling(true);
-    const { data, error: e } = await supabase.rpc('cancel_sale', { p_sale_id: inv.id, p_tenant_id: tenant.id });
+    let cashSessionId: string | null = null;
+    if (cancelPaymentAction === 'refund_cash') {
+      if (!currentSite) { setCancelling(false); error('Aucun point de vente sélectionné'); return; }
+      const { data: sess } = await supabase.from('cash_sessions')
+        .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
+        .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
+      cashSessionId = sess?.id || null;
+      if (!cashSessionId) {
+        setCancelling(false);
+        error("Aucune session de caisse ouverte : impossible de rembourser en espèces. Ouvrez une caisse ou choisissez « Conserver en crédit ».");
+        return;
+      }
+    }
+    const { data, error: e } = await supabase.rpc('cancel_sale', {
+      p_sale_id: inv.id,
+      p_tenant_id: tenant.id,
+      p_cancel_reason: cancelReason.trim(),
+      p_payment_action: cancelPaymentAction,
+      p_cash_session_id: cashSessionId,
+    });
     setCancelling(false);
     if (e) { error(e.message); return; }
-    if (!(data as any)?.success) { error((data as any)?.error || "Échec de l'annulation"); return; }
+    if (!(data as any)?.success) {
+      const code = (data as any)?.error;
+      const msg = code === 'requires_open_session'
+        ? "Aucune session de caisse ouverte : impossible de rembourser en espèces."
+        : code === 'requires_payment_action'
+        ? "Veuillez choisir comment traiter le paiement déjà encaissé."
+        : code || "Échec de l'annulation";
+      error(msg);
+      return;
+    }
     setCancelTarget(null);
+    setCancelReason('');
     setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'cancelled' } : i));
     success(`Facture ${inv.sale_number} annulée`);
     closeInvoiceEditor();
@@ -1548,10 +1574,20 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
 
   // ── Apply credit ─────────────────────────────────────────────
-  const availableCredits = useMemo(() => returns.filter(r => r.refund_method === 'avoir' && r.status === 'approved' && Number(r.credit_used || 0) < Number(r.total) && (!invoiceDetail?.customer_id || r.customer_id === invoiceDetail.customer_id)), [returns, invoiceDetail]);
-  const openCreditApply = () => {
-    if (!invoiceDetail) return;
-    const c = availableCredits[0];
+  const [availableCredits, setAvailableCredits] = useState<SaleReturn[]>([]);
+  const openCreditApply = async () => {
+    if (!invoiceDetail || !tenant || !currentSite) return;
+    const { data: creds } = await supabase.from('sale_returns')
+      .select('*, customers(name, phone, address), sales(sale_number)')
+      .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
+      .eq('refund_method', 'avoir').eq('status', 'approved')
+      .order('created_at', { ascending: false });
+    const filtered = (creds || []).filter((r: any) =>
+      Number(r.credit_used || 0) < Number(r.total) &&
+      (!invoiceDetail.customer_id || r.customer_id === invoiceDetail.customer_id)
+    );
+    setAvailableCredits(filtered as SaleReturn[]);
+    const c = filtered[0] as SaleReturn | undefined;
     setCreditSelected(c?.id || '');
     const due = Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid));
     const avail = c ? Number(c.total) - Number(c.credit_used || 0) : 0;
@@ -1683,12 +1719,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setReturnOpen(false);
     setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true });
     setReturnLines([]);
-    await load();
+    await loadTab(billPage, true);
     if (returnMode === 'avoir') {
       const { error: avErr } = await supabase.rpc('approve_return_as_avoir', { p_return_id: ret.id });
       if (avErr) { error(avErr.message); return; }
       success('Avoir créé — disponible sur le compte client');
-      await load();
+      await loadTab(billPage, true);
     }
     openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
   };
@@ -1706,7 +1742,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setReturnWorkflowBusy(false);
     if (e) { error(e.message); return; }
     success('Avoir créé — disponible sur le compte client');
-    load();
+    loadTab(billPage, true);
     setReturnDetail(prev => prev?.id === r.id ? { ...prev, status: 'approved', refund_method: 'avoir' } : prev);
   };
 
@@ -1718,7 +1754,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setReturnWorkflowBusy(false);
     if (e) { error(e.message); return; }
     success('Remboursement enregistré en caisse');
-    load();
+    loadTab(billPage, true);
     setReturnDetail(prev => prev?.id === r.id ? { ...prev, status: 'approved', refund_method: 'cash' } : prev);
   };
 
@@ -1746,10 +1782,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const clearFilters = () => { setSearch(''); setStatusFilter(''); setCustomerFilter(''); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount(''); setFiltersOpen(false); };
 
   const counts = {
-    quotes: quotes.length,
-    invoices: invoices.filter(i => !returnedQtys[i.id]).length,
-    returns: returns.filter(r => r.refund_method !== 'avoir').length,
-    credits: returns.filter(r => r.refund_method === 'avoir').length,
+    quotes: tab === 'quotes' ? billTotalCount : 0,
+    invoices: tab === 'invoices' ? billTotalCount : 0,
+    returns: tab === 'returns' ? billTotalCount : 0,
+    credits: tab === 'credits' ? billTotalCount : 0,
   };
 
   const statusOptions = useMemo(() => {
@@ -1952,6 +1988,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : (
         <>
+        {refreshing && (
+          <div className="flex items-center justify-center py-1">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-neutral-400" />
+          </div>
+        )}
           {tab === 'quotes' && (
             filteredQuotes.length === 0 ? (
               <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => { setQuoteEditorMode('create'); setQuoteOpen(true); }} className="btn-icon-primary" title="Nouveau devis"><Plus className="w-4 h-4" /></button>} />
@@ -2173,6 +2214,25 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               </div>
             )
           )}
+          {/* ── Pagination ───────────────────────────────────────── */}
+          {billTotalCount > PAGE_SIZE && (
+            <div className="flex items-center justify-between px-4 py-3 mt-3">
+              <div className="text-xs text-slate-500">
+                {billPage * PAGE_SIZE + 1}–{Math.min((billPage + 1) * PAGE_SIZE, billTotalCount)} sur {billTotalCount}
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setBillPage(0)} disabled={billPage === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setBillPage(p => Math.max(0, p - 1))} disabled={billPage === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-3 py-1 rounded-lg text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200">{billPage + 1} / {Math.max(1, Math.ceil(billTotalCount / PAGE_SIZE))}</span>
+                <button onClick={() => setBillPage(p => p + 1)} disabled={!billHasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setBillPage(Math.ceil(billTotalCount / PAGE_SIZE) - 1)} disabled={!billHasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -2358,7 +2418,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             setSaving(false);
             success('Retour enregistré — choisissez le mode de remboursement');
             closeInvoiceEditor();
-            await load();
+            await loadTab(billPage, true);
             openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
           }}
         />
@@ -2419,7 +2479,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               success('Facture comptabilisée');
               setInvoices(prev => prev.map(inv => inv.id === viewInv.id ? { ...inv, accounting_status: 'accounted' } : inv));
               closeInvoiceEditor();
-              load();
+              loadTab(billPage, true);
             } : undefined}
             accountingBusy={accountingBusy}
             onCancel={!isCancelled && !isAccounted ? () => setCancelTarget(viewInv) : undefined}
@@ -3268,13 +3328,65 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       )}
 
       {cancelTarget && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !cancelling) setCancelTarget(null); }}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-[min(90vw,380px)]">
-            <h3 className="text-sm font-bold text-neutral-900 mb-2">Annuler la facture</h3>
-            <p className="text-xs text-neutral-600 mb-5">Annuler la facture {cancelTarget.sale_number} ? Cette action est irreversible.</p>
-            <div className="flex justify-end gap-2">
-              <button disabled={cancelling} onClick={() => setCancelTarget(null)} className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded transition-colors disabled:opacity-50">Non, garder</button>
-              <button disabled={cancelling} onClick={confirmCancelInvoice} className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">{cancelling && <Loader2 className="w-3 h-3 animate-spin" />}Oui, annuler</button>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !cancelling) { setCancelTarget(null); setCancelReason(''); } }}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[min(90vw,420px)] space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0">
+                <Ban className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900">Annuler la facture</h3>
+                <p className="text-xs text-neutral-500">Facture {cancelTarget.sale_number} - {formatFCFA(Number(cancelTarget.total))}</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5 block">Motif d'annulation *</label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Indiquez le motif de l'annulation…"
+                rows={2}
+                className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-xs text-neutral-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 resize-none"
+              />
+            </div>
+
+            {Number(cancelTarget.paid) > 0 && (
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1.5 block">Gestion du paiement encaissé</label>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setCancelPaymentAction('keep_credit')}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${cancelPaymentAction === 'keep_credit' ? 'border-amber-400' : 'border-neutral-200 hover:bg-neutral-50'}`}
+                  >
+                    <Wallet className="w-4 h-4 text-amber-600 shrink-0" />
+                    <div className="flex-1">
+                      <div className="text-xs font-semibold text-neutral-800">Conserver comme crédit client</div>
+                      <div className="text-[10px] text-neutral-500">L'argent reste encaissé et devient un crédit traçable</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setCancelPaymentAction('refund_cash')}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${cancelPaymentAction === 'refund_cash' ? 'border-red-400' : 'border-neutral-200 hover:bg-neutral-50'}`}
+                  >
+                    <RotateCcw className="w-4 h-4 text-red-500 shrink-0" />
+                    <div className="flex-1">
+                      <div className="text-xs font-semibold text-neutral-800">Rembourser le client</div>
+                      <div className="text-[10px] text-neutral-500">Crée une sortie financière et diminue la caisse</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-neutral-50 rounded-lg p-3 text-[10px] text-neutral-500 space-y-1">
+              <p>• Le stock sera restauré sur le dépôt source</p>
+              <p>• La garantie liée sera marquée comme annulée</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button disabled={cancelling} onClick={() => { setCancelTarget(null); setCancelReason(''); }} className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded transition-colors disabled:opacity-50">Non, garder</button>
+              <button disabled={cancelling || !cancelReason.trim()} onClick={confirmCancelInvoice} className="px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">{cancelling && <Loader2 className="w-3 h-3 animate-spin" />}Oui, annuler</button>
             </div>
           </div>
         </div>,
@@ -3358,978 +3470,6 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           </div>
         );
       })()}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════════
-   QuoteFullPanel — Sage 100 Cloud-inspired full-screen document editor
-   ═══════════════════════════════════════════════════════════════════════════════ */
-
-function ArticleSearchInput({ articles, value, onSelect, onNameChange, placeholder, onCreateNew }: {
-  articles: any[];
-  value: string;
-  onSelect: (a: any) => void;
-  onNameChange: (name: string) => void;
-  placeholder?: string;
-  onCreateNew?: (name: string) => void;
-}) {
-  const [query, setQuery] = useState(value);
-  const [open, setOpen] = useState(false);
-  const [highlighted, setHighlighted] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { setQuery(value); }, [value]);
-
-  const filtered = useMemo(() => {
-    if (!query.trim()) return articles.slice(0, 20);
-    const q = query.toLowerCase().trim();
-    return articles.filter(a =>
-      a.name.toLowerCase().includes(q) ||
-      (a.internal_ref || '').toLowerCase().includes(q)
-    ).slice(0, 30);
-  }, [query, articles]);
-
-  useEffect(() => { setHighlighted(0); }, [filtered.length]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!open) { if (e.key === 'ArrowDown') setOpen(true); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
-    else if (e.key === 'Enter' && filtered[highlighted]) { e.preventDefault(); onSelect(filtered[highlighted]); setOpen(false); }
-    else if (e.key === 'Escape') { setOpen(false); }
-  };
-
-  return (
-    <div ref={ref} className="relative">
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={e => { setQuery(e.target.value); onNameChange(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder || "Rechercher un article..."}
-          className="input text-xs pl-8 pr-2"
-          autoComplete="off"
-        />
-      </div>
-      {open && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-          {filtered.map((a, i) => (
-            <button
-              key={a.id}
-              onMouseDown={e => { e.preventDefault(); onSelect(a); setOpen(false); }}
-              onMouseEnter={() => setHighlighted(i)}
-              className={`w-full text-left px-3 py-2 flex items-center gap-2 text-xs transition-colors ${i === highlighted ? 'bg-teal-50 text-teal-800' : 'hover:bg-slate-50 text-slate-700'}`}
-            >
-              <Package className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{a.name}</p>
-                {a.internal_ref && <p className="text-[10px] text-slate-400">{a.internal_ref}</p>}
-              </div>
-              <span className="text-[11px] font-bold text-slate-500 num flex-shrink-0">{formatFCFA(a.sale_price)}</span>
-            </button>
-          ))}
-          {onCreateNew && (
-            <QuickCreateButton label="Créer un article" onClick={() => { onCreateNew(query); setOpen(false); }} />
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CustomerSearchInput({ customers, value, onSelect, placeholder, onCreateNew }: {
-  customers: any[];
-  value: string;
-  onSelect: (c: any) => void;
-  placeholder?: string;
-  onCreateNew?: (name: string) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const [highlighted, setHighlighted] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-
-  const selectedCustomer = customers.find(c => c.id === value);
-
-  const filtered = useMemo(() => {
-    if (!query.trim()) return customers.slice(0, 20);
-    const q = query.toLowerCase().trim();
-    return customers.filter((c: any) =>
-      c.name.toLowerCase().includes(q) ||
-      (c.phone || '').toLowerCase().includes(q)
-    ).slice(0, 30);
-  }, [query, customers]);
-
-  useEffect(() => { setHighlighted(0); }, [filtered.length]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!open) { if (e.key === 'ArrowDown') setOpen(true); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); }
-    else if (e.key === 'Enter' && filtered[highlighted]) { e.preventDefault(); e.stopPropagation(); onSelect(filtered[highlighted]); setOpen(false); setQuery(''); }
-    else if (e.key === 'Escape') { setOpen(false); }
-  };
-
-  return (
-    <div ref={ref} className="relative">
-      <div className="relative">
-        <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-        <input
-          value={open ? query : (selectedCustomer?.name || '')}
-          onChange={e => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => { setQuery(''); setOpen(true); }}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder || "Rechercher client..."}
-          className="input text-xs h-8 pl-8 pr-2 max-w-[220px]"
-          autoComplete="off"
-        />
-      </div>
-      {open && (
-        <div className="absolute z-50 left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto min-w-[260px]">
-          <button
-            onMouseDown={e => { e.preventDefault(); onSelect(null); setOpen(false); setQuery(''); }}
-            className={`w-full text-left px-3 py-2 text-xs text-slate-500 hover:bg-slate-50 transition-colors ${!value ? 'bg-teal-50 font-semibold text-teal-700' : ''}`}
-          >
-            Client comptoir
-          </button>
-          {filtered.map((c: any, i: number) => (
-            <button
-              key={c.id}
-              onMouseDown={e => { e.preventDefault(); onSelect(c); setOpen(false); setQuery(''); }}
-              onMouseEnter={() => setHighlighted(i)}
-              className={`w-full text-left px-3 py-2 flex items-center gap-2 text-xs transition-colors ${i === highlighted ? 'bg-teal-50 text-teal-800' : 'hover:bg-slate-50 text-slate-700'}`}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{c.name}</p>
-                {c.phone && <p className="text-[10px] text-slate-400">{c.phone}</p>}
-              </div>
-            </button>
-          ))}
-          {filtered.length === 0 && query.trim() && (
-            <div className="px-3 py-3 text-center text-xs text-slate-400">Aucun client trouvé</div>
-          )}
-          {onCreateNew && (
-            <QuickCreateButton label="Créer un client" onClick={() => { onCreateNew(query); setOpen(false); setQuery(''); }} />
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function QuoteFullPanel({ articles, customers, quoteForm, setQuoteForm, quoteItems, setQuoteItems, updateQuoteItem, quoteSubtotal, saving, saveQuote, autoSaveQuote, onClose, autoMode, onVehiclePicker, editingQuoteId, editingQuote, onChangeStatus, onConvert, onPrint, docSettings, isPharmacy, ipmBeneficiaire, ipmTaux, ipmPartIpm, ipmPartClient, onCreateArticle, onCreateCustomer, reps }: {
-  articles: any[];
-  customers: any[];
-  quoteForm: { customer_id: string; valid_until: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
-  setQuoteForm: (fn: any) => void;
-  quoteItems: QuoteItem[];
-  setQuoteItems: (fn: any) => void;
-  updateQuoteItem: (idx: number, field: keyof QuoteItem, val: any) => void;
-  quoteSubtotal: number;
-  saving: boolean;
-  saveQuote: (opts?: { silent?: boolean }) => void;
-  autoSaveQuote: () => void;
-  onClose: () => void;
-  autoMode: boolean;
-  onVehiclePicker: (idx: number | null) => void;
-  editingQuoteId: string | null;
-  editingQuote: Quote | null;
-  onChangeStatus: (status: string) => void;
-  onConvert: () => void;
-  onPrint: () => void;
-  docSettings: DocSettings;
-  isPharmacy?: boolean;
-  ipmBeneficiaire?: any;
-  ipmTaux?: number;
-  ipmPartIpm?: number;
-  ipmPartClient?: number;
-  onCreateArticle?: (name: string) => void;
-  onCreateCustomer?: (name: string) => void;
-  reps?: SalesRepresentative[];
-}) {
-  const [panelWidth, setPanelWidth] = useState<number | null>(null);
-  const [headerValidated, setHeaderValidated] = useState(!docSettings.require_header_lock);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const resizing = useRef(false);
-  const readOnly = editingQuote ? ['converted', 'rejected'].includes(editingQuote.status) : false;
-  const repLabel = (id?: string | null) => { const r = (reps || []).find(x => x.id === id); return r ? repDisplayName(r) : ''; };
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
-  }, [onClose]);
-
-  const startResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    resizing.current = true;
-    const startX = e.clientX;
-    const startWidth = panelRef.current?.offsetWidth || window.innerWidth - 256;
-
-    const onMove = (ev: MouseEvent) => {
-      if (!resizing.current) return;
-      const diff = startX - ev.clientX;
-      const newWidth = Math.max(600, Math.min(window.innerWidth - 64, startWidth + diff));
-      setPanelWidth(newWidth);
-    };
-    const onUp = () => { resizing.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, []);
-
-  const handleRowKeyDown = (e: React.KeyboardEvent, idx: number) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const item = quoteItems[idx];
-      if (item.name.trim() && item.unit_price > 0) {
-        if (idx === quoteItems.length - 1) {
-          setQuoteItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
-          setTimeout(() => {
-            const rows = panelRef.current?.querySelectorAll('[data-row-idx]');
-            const lastRow = rows?.[rows.length - 1];
-            const input = lastRow?.querySelector('input') as HTMLInputElement;
-            input?.focus();
-          }, 50);
-        }
-        autoSaveQuote();
-      }
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
-      {/* Resize handle */}
-      <div
-        className="hidden lg:flex items-center justify-center w-2 cursor-col-resize hover:bg-teal-100 transition-colors group flex-shrink-0 relative z-10"
-        style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
-        onMouseDown={startResize}
-      >
-        <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors" />
-      </div>
-
-      {/* Main Panel */}
-      <div
-        ref={panelRef}
-        className="bg-white h-full flex flex-col shadow-2xl flex-1 w-full"
-        style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center">
-              <FileText className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">{editingQuoteId ? 'Edition devis' : 'Nouveau devis'}</h2>
-              <p className="text-[11px] text-slate-500">
-                {editingQuoteId ? 'Sauvegarde auto à chaque ligne validée' : 'Entrée valide la ligne et ajoute une suivante'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {saving && <span className="text-[10px] text-teal-600 font-medium animate-pulse">Sauvegarde...</span>}
-            {readOnly && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 border border-slate-200">
-                <Lock className="w-3 h-3" />Verrouillé
-              </span>
-            )}
-            {editingQuote && !readOnly && (
-              <>
-                {editingQuote.status === 'draft' && <button onClick={() => onChangeStatus('sent')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-neutral-200 text-neutral-800 bg-neutral-50 hover:bg-neutral-100 transition-colors" title="Marquer envoyé"><CheckCircle className="w-3.5 h-3.5 inline mr-1" />Envoyé</button>}
-                {['draft', 'sent'].includes(editingQuote.status) && <button onClick={() => onChangeStatus('accepted')} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors" title="Accepter"><CheckCircle className="w-3.5 h-3.5 inline mr-1" />Accepter</button>}
-                {editingQuote.status === 'accepted' && <button onClick={onConvert} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-brand-200 text-brand-700 bg-brand-50 hover:bg-brand-100 transition-colors" title="Convertir en facture"><ArrowRight className="w-3.5 h-3.5 inline mr-1" />Facturer</button>}
-              </>
-            )}
-            {editingQuote && <button onClick={onPrint} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title="Imprimer"><Printer className="w-4 h-4" /></button>}
-            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-            {!readOnly && (
-              <button onClick={() => saveQuote()} disabled={saving} className="btn-icon-primary" title="Enregistrer">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                {!saving && <Check className="w-4 h-4" />}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Header lock / optional fields */}
-        {headerValidated ? (
-          <div className="px-5 py-2.5 border-b border-slate-100 bg-emerald-50/60 flex-shrink-0">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center flex-wrap gap-x-4 gap-y-1 min-w-0">
-                <Lock className="w-3 h-3 text-emerald-600" />
-                <span className="text-[11px] font-bold text-emerald-700">En-tête validé</span>
-                {quoteForm.customer_id && customers.find(c => c.id === quoteForm.customer_id) && (
-                  <span className="text-[11px] text-slate-600">{customers.find(c => c.id === quoteForm.customer_id)?.name}</span>
-                )}
-                {quoteForm.valid_until && <span className="text-[11px] text-slate-500">Validité : {new Date(quoteForm.valid_until).toLocaleDateString('fr-FR')}</span>}
-                {quoteForm.reference && <span className="text-[11px] text-slate-500">Réf : {quoteForm.reference}</span>}
-                {quoteForm.delivery_date && <span className="text-[11px] text-slate-500">Livraison : {new Date(quoteForm.delivery_date).toLocaleDateString('fr-FR')}</span>}
-                {quoteForm.warranty && <span className="text-[11px] text-slate-500">Garantie : {quoteForm.warranty}</span>}
-                {quoteForm.representative && <span className="text-[11px] text-slate-500">Représentant : {repLabel(quoteForm.representative) || quoteForm.representative}</span>}
-              </div>
-              <button onClick={() => setHeaderValidated(false)} className="btn-icon" title="Modifier"><Pencil className="w-4 h-4" /></button>
-            </div>
-          </div>
-        ) : (
-          <div className={`px-5 py-3 border-b flex-shrink-0 ${docSettings.require_header_lock ? 'border-teal-200 bg-teal-50/40' : 'border-slate-100 bg-white'} ${readOnly ? 'pointer-events-none opacity-70' : ''}`}>
-            <div className="flex items-center flex-wrap gap-2">
-              <CustomerSearchInput
-                customers={customers}
-                value={quoteForm.customer_id}
-                onSelect={(c) => setQuoteForm((f: any) => ({ ...f, customer_id: c?.id || '' }))}
-                placeholder="Rechercher client..."
-                onCreateNew={onCreateCustomer}
-              />
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <input type="date" value={quoteForm.valid_until} onChange={e => setQuoteForm((f: any) => ({ ...f, valid_until: e.target.value }))} className="input text-xs h-8 w-36" disabled={readOnly} />
-              </div>
-              <div className="flex items-center gap-1.5 flex-1 max-w-[200px]">
-                <MessageCircle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                <input value={quoteForm.note} onChange={e => setQuoteForm((f: any) => ({ ...f, note: e.target.value }))} placeholder="Note..." className="input text-xs h-8" disabled={readOnly} />
-              </div>
-              {docSettings.show_reference && (
-                <div className="flex items-center gap-1.5 min-w-[130px] flex-1 max-w-[180px]">
-                  <Tag className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <input value={quoteForm.reference} onChange={e => setQuoteForm((f: any) => ({ ...f, reference: e.target.value }))} placeholder="Référence…" className="input text-xs h-8 flex-1" />
-                </div>
-              )}
-              {docSettings.show_delivery_date && (
-                <div className="flex items-center gap-1.5 min-w-[130px]">
-                  <CalendarDays className="w-3.5 h-3.5 text-neutral-600 shrink-0" />
-                  <input type="date" value={quoteForm.delivery_date} onChange={e => setQuoteForm((f: any) => ({ ...f, delivery_date: e.target.value }))} className="input text-xs h-8" />
-                </div>
-              )}
-              {docSettings.show_warranty && (
-                <div className="flex items-center gap-1.5 min-w-[140px] flex-1 max-w-[200px]">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <input value={quoteForm.warranty} onChange={e => setQuoteForm((f: any) => ({ ...f, warranty: e.target.value }))} placeholder="Garantie…" className="input text-xs h-8 flex-1" />
-                </div>
-              )}
-              {docSettings.show_imei && (
-                <div className="flex items-center gap-1.5 min-w-[140px] flex-1 max-w-[200px]">
-                  <Smartphone className="w-3.5 h-3.5 text-neutral-600 shrink-0" />
-                  <input value={quoteForm.imei} onChange={e => setQuoteForm((f: any) => ({ ...f, imei: e.target.value }))} placeholder="IMEI / Téléphone…" className="input text-xs h-8 flex-1" />
-                </div>
-              )}
-              {docSettings.show_representative && (
-                <div className="flex items-center gap-1.5 min-w-[220px] flex-1 max-w-[320px]">
-                  <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <select value={quoteForm.representative} onChange={e => setQuoteForm((f: any) => ({ ...f, representative: e.target.value }))} className="input text-xs h-8 flex-1 min-w-0 truncate pr-7" title={repLabel(quoteForm.representative) || 'Représentant'}>
-                    <option value="">Aucun représentant</option>
-                    {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
-                  </select>
-                </div>
-              )}
-              {autoMode && !readOnly && (
-                <button onClick={() => onVehiclePicker(null)} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:border-teal-300 hover:bg-teal-50/50 transition-all shrink-0">
-                  <Car className="w-3 h-3" />Par véhicule
-                </button>
-              )}
-              {docSettings.require_header_lock && !readOnly && (
-                <button
-                  onClick={() => setHeaderValidated(true)}
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm"
-                >
-                  <Lock className="w-3 h-3" /> Valider l'en-tête
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* IPM Banner (quotes) */}
-        {isPharmacy && quoteForm.customer_id && ipmBeneficiaire && (
-          <div className="px-5 py-2 border-b border-slate-100 flex-shrink-0">
-            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-teal-50 border border-teal-200">
-              <div className="w-7 h-7 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-4 h-4 text-teal-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-bold text-teal-800">
-                  Client couvert IPM — {ipmBeneficiaire.ipm_organismes?.nom}
-                </p>
-                <p className="text-[10px] text-teal-600">
-                  Taux : {ipmTaux || 0}% — Ce devis inclut une estimation de la prise en charge IPM
-                </p>
-              </div>
-              {quoteSubtotal > 0 && (ipmPartIpm || 0) > 0 && (
-                <div className="text-right shrink-0">
-                  <p className="text-[10px] text-teal-600">Part IPM : <span className="font-bold">{formatFCFA(ipmPartIpm || 0)}</span></p>
-                  <p className="text-[10px] text-teal-800 font-bold">Part client : {formatFCFA(ipmPartClient || 0)}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Table header + rows — colonnes dynamiques */}
-        {(() => {
-          const cols = (docSettings.columns_config.length ? docSettings.columns_config : DEFAULT_COLUMNS)
-            .filter(c => c.visible).sort((a, b) => a.order - b.order);
-          const gridTemplate = cols.map(c => c.width).join(' ') + ' 40px';
-          const itemsLocked = docSettings.require_header_lock && !headerValidated;
-          return (
-            <>
-              <div className="grid gap-2 px-5 py-2 border-b border-slate-200 bg-slate-50/50 flex-shrink-0" style={{ gridTemplateColumns: gridTemplate }}>
-                {cols.map(col => (
-                  <span key={col.key} className={`text-[10px] font-bold text-slate-500 uppercase tracking-wide ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}>{col.label}</span>
-                ))}
-                <span />
-              </div>
-
-              <div className={`flex-1 overflow-y-auto min-h-0 relative ${itemsLocked ? 'pointer-events-none' : ''} ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
-                {itemsLocked && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/90 backdrop-blur-sm">
-                    <Lock className="w-8 h-8 text-slate-300 mb-3" />
-                    <p className="text-sm font-bold text-slate-500">En-tête non validé</p>
-                    <p className="text-xs text-slate-400 mt-1">Validez les informations d'en-tête pour saisir les articles</p>
-                  </div>
-                )}
-                {quoteItems.map((it, idx) => (
-                  <div key={idx} data-row-idx={idx}
-                    className={`grid gap-2 px-5 py-1.5 items-center border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${idx === quoteItems.length - 1 ? 'bg-teal-50/30' : ''}`}
-                    style={{ gridTemplateColumns: gridTemplate }}
-                    onKeyDown={e => handleRowKeyDown(e, idx)}
-                  >
-                    {cols.map(col => {
-                      switch (col.key) {
-                        case 'article': return (
-                          <div key="article">
-                            <ArticleSearchInput articles={articles} value={it.article_id ? (articles.find(a => a.id === it.article_id)?.name || '') : ''} onSelect={a => updateQuoteItem(idx, 'article_id', a.id)} onNameChange={() => {}} placeholder="Rechercher..." onCreateNew={onCreateArticle} />
-                          </div>
-                        );
-                        case 'designation': return (
-                          <div key="designation">
-                            <input value={it.name} onChange={e => updateQuoteItem(idx, 'name', e.target.value)} placeholder="Désignation" className="input text-xs" />
-                            {it.tier_name && <div className="text-[9px] font-medium text-brand-600 mt-0.5">{it.tier_name}</div>}
-                          </div>
-                        );
-                        case 'qty': return (
-                          <div key="qty"><input type="number" value={it.quantity || ''} onChange={e => updateQuoteItem(idx, 'quantity', Number(e.target.value))} onBlur={() => finalizeQuoteItem(idx, 'quantity')} className="input text-xs text-center" /></div>
-                        );
-                        case 'unit_price': return (
-                          <div key="unit_price"><input type="number" value={it.unit_price || ''} onChange={e => updateQuoteItem(idx, 'unit_price', Number(e.target.value))} onBlur={() => finalizeQuoteItem(idx, 'unit_price')} className="input text-xs text-right num" /></div>
-                        );
-                        case 'discount': return (
-                          <div key="discount"><input type="number" value={it.discount || ''} onChange={e => updateQuoteItem(idx, 'discount', Number(e.target.value))} onBlur={() => finalizeQuoteItem(idx, 'discount')} className="input text-xs text-right num" /></div>
-                        );
-                        case 'total': return (
-                          <div key="total" className="text-right"><span className="text-xs font-bold text-slate-800 num">{formatFCFA(it.total)}</span></div>
-                        );
-                        default: return null;
-                      }
-                    })}
-                    <div className="flex justify-center">
-                      <button onClick={() => setQuoteItems((p: QuoteItem[]) => p.filter((_, i) => i !== idx))} disabled={quoteItems.length === 1} className="p-1 rounded hover:bg-red-50 text-red-400 disabled:opacity-30 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <div className="px-5 py-2">
-                  <button onClick={() => setQuoteItems((p: QuoteItem[]) => [...p, { article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }])}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-800 hover:bg-teal-50 px-3 py-2 rounded-lg transition-colors">
-                    <Plus className="w-3.5 h-3.5" />Ajouter une ligne
-                  </button>
-                </div>
-              </div>
-            </>
-          );
-        })()}
-
-        {/* Footer totals */}
-        <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between flex-shrink-0">
-          <div className="text-xs text-slate-500">
-            {quoteItems.filter(i => i.name.trim()).length} ligne{quoteItems.filter(i => i.name.trim()).length > 1 ? 's' : ''}
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">Total HT</span>
-              <span className="text-lg font-black text-slate-900 num">{formatFCFA(quoteSubtotal)}</span>
-            </div>
-            {ipmBeneficiaire && (ipmPartIpm || 0) > 0 && (
-              <>
-                <div className="text-right">
-                  <span className="text-[10px] text-teal-500 uppercase font-bold tracking-wide block">Part IPM</span>
-                  <span className="text-sm font-bold text-teal-700 num">{formatFCFA(ipmPartIpm || 0)}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wide block">Part client</span>
-                  <span className="text-sm font-bold text-slate-800 num">{formatFCFA(ipmPartClient || 0)}</span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Invoice Full Panel (ERP-style) ─────────────────────────────
-function InvoiceFullPanel({ articles, customers, invoiceForm, setInvoiceForm, invoiceItems, setInvoiceItems, updateInvoiceItem, invoiceSubtotal, paymentMethods, payments, setPayments, totalPaid, saving, saveInvoice, onClose, autoMode, onVehiclePicker, isCredit, setIsCredit, docSettings, isPharmacy, ipmLoading, ipmBeneficiaire, ipmTaux, ipmConvention, ipmPartIpm, ipmPartClient, ipmConfig, ipmDocuments, setIpmDocuments, ipmDocValidation, onCreateArticle, onCreateCustomer, editingInvoiceId, reps, postCreation, onNewInvoice }: {
-  articles: any[];
-  customers: any[];
-  invoiceForm: { customer_id: string; doc_date: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string };
-  setInvoiceForm: (fn: any) => void;
-  invoiceItems: QuoteItem[];
-  setInvoiceItems: (fn: any) => void;
-  updateInvoiceItem: (idx: number, field: keyof QuoteItem, val: any) => void;
-  invoiceSubtotal: number;
-  paymentMethods: any[];
-  payments: { method_id: string; method_name: string; amount: number; reference: string }[];
-  setPayments: (fn: any) => void;
-  totalPaid: number;
-  saving: boolean;
-  saveInvoice: () => void;
-  onClose: () => void;
-  autoMode: boolean;
-  onVehiclePicker: (idx: number | null) => void;
-  isCredit: boolean;
-  setIsCredit: (v: boolean) => void;
-  docSettings: DocSettings;
-  isPharmacy: boolean;
-  ipmLoading: boolean;
-  ipmBeneficiaire: any;
-  ipmTaux: number;
-  ipmConvention: any;
-  ipmPartIpm: number;
-  ipmPartClient: number;
-  ipmConfig: any;
-  ipmDocuments: IpmDocsType;
-  setIpmDocuments: (fn: any) => void;
-  ipmDocValidation: { valide: boolean; champs_manquants: string[] };
-  onCreateArticle?: (name: string) => void;
-  onCreateCustomer?: (name: string) => void;
-  editingInvoiceId?: string | null;
-  reps?: SalesRepresentative[];
-  postCreation?: { saleNumber: string; createdAt: string; createdBy: string } | null;
-  onNewInvoice?: () => void;
-}) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [payMethodId, setPayMethodId] = useState(paymentMethods[0]?.id || '');
-  const [payAmt, setPayAmt] = useState('');
-  const [headerValidated, setHeaderValidated] = useState(!docSettings.require_header_lock);
-  const repLabel = (id?: string | null) => { const r = (reps || []).find(x => x.id === id); return r ? repDisplayName(r) : ''; };
-
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const emptyInput = { article_id: null as string | null, name: '', quantity: 1, unit_price: 0, discount: 0 };
-  const [inputRow, setInputRow] = useState(emptyInput);
-  const inputNameRef = useRef<HTMLInputElement>(null);
-
-  const validItems = invoiceItems.filter(it => it.name.trim() && (it.unit_price > 0 || it.total > 0));
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (editingIdx !== null) { cancelEdit(); } else { onClose(); } } };
-    window.addEventListener('keydown', h);
-    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
-  }, [onClose, editingIdx]);
-
-  const calc = (q: number, p: number, d: number) => Math.max(0, (q || 1) * p - (d || 0));
-
-  const commitRow = () => {
-    if (!inputRow.name.trim() || inputRow.unit_price <= 0) return;
-    const total = calc(inputRow.quantity, inputRow.unit_price, inputRow.discount);
-    const item: QuoteItem = { ...inputRow, quantity: inputRow.quantity || 1, discount: inputRow.discount || 0, total };
-    if (editingIdx !== null) {
-      setInvoiceItems((prev: QuoteItem[]) => prev.map((it: QuoteItem, i: number) => i === editingIdx ? item : it));
-      setEditingIdx(null);
-    } else {
-      setInvoiceItems((prev: QuoteItem[]) => {
-        const kept = prev.filter((it: QuoteItem) => it.name.trim());
-        return [...kept, item];
-      });
-    }
-    setInputRow(emptyInput);
-    setTimeout(() => inputNameRef.current?.focus(), 30);
-  };
-
-  const handleInputKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); commitRow(); } };
-
-  const startEdit = (vIdx: number) => {
-    const it = validItems[vIdx];
-    const realIdx = invoiceItems.indexOf(it);
-    setEditingIdx(realIdx);
-    setInputRow({ article_id: it.article_id, name: it.name, quantity: it.quantity, unit_price: it.unit_price, discount: it.discount });
-    setTimeout(() => inputNameRef.current?.focus(), 30);
-  };
-
-  const cancelEdit = () => { setEditingIdx(null); setInputRow(emptyInput); };
-
-  const removeItem = (vIdx: number) => {
-    const it = validItems[vIdx];
-    const realIdx = invoiceItems.indexOf(it);
-    if (editingIdx === realIdx) cancelEdit();
-    setInvoiceItems((p: QuoteItem[]) => p.filter((_: QuoteItem, i: number) => i !== realIdx));
-  };
-
-  const pickArticle = (a: any) => {
-    setInputRow(prev => ({ ...prev, article_id: a.id, name: a.name, unit_price: a.sale_price || prev.unit_price }));
-  };
-
-  const addPayment = () => {
-    const amt = Number(payAmt);
-    if (!amt || amt <= 0) return;
-    const pm = paymentMethods.find((m: any) => m.id === payMethodId);
-    if (!pm) return;
-    setPayments((prev: any[]) => [...prev, { method_id: pm.id, method_name: pm.name, amount: amt, reference: '' }]);
-    setPayAmt('');
-  };
-
-  const clientDue = ipmBeneficiaire && ipmPartIpm > 0 ? ipmPartClient : invoiceSubtotal;
-  const balance = clientDue - totalPaid;
-
-  const cols = (docSettings.columns_config.length ? docSettings.columns_config : DEFAULT_COLUMNS).filter(c => c.visible).sort((a, b) => a.order - b.order);
-  const itemsLocked = docSettings.require_header_lock && !headerValidated;
-
-  const inputCls = 'w-full text-xs h-7 px-2 bg-white border border-neutral-300 rounded focus:border-neutral-500 focus:ring-1 focus:ring-neutral-200 outline-none transition-all';
-  const ulInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors';
-
-  return (
-    <div className="fixed inset-0 lg:left-64 z-50 flex animate-fade-in">
-      <div className="absolute inset-0 bg-neutral-900/5" onClick={onClose} />
-      <div ref={panelRef} className="relative bg-white h-full flex flex-col w-full z-10">
-
-        {/* ── Title bar ── */}
-        <div className="flex items-center justify-between px-5 h-11 border-b border-neutral-200 flex-shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <h2 className="text-sm font-bold text-neutral-900 tracking-tight truncate">
-              {postCreation ? `Facture ${postCreation.saleNumber}` : editingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}
-            </h2>
-            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400 shrink-0" />}
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {postCreation ? (
-              <>
-                <button onClick={onNewInvoice} className="px-3 py-1 text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors flex items-center gap-1"><Plus className="w-3 h-3" />Nouveau</button>
-                <button onClick={onClose} className="px-3 py-1 text-[11px] font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors">Fermer</button>
-              </>
-            ) : (
-              <>
-                <button onClick={onClose} className="px-3 py-1 text-[11px] font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors">Annuler</button>
-                <button onClick={saveInvoice} disabled={saving || (ipmBeneficiaire && !ipmDocValidation.valide)} className="px-3.5 py-1 text-[11px] font-semibold bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-40 transition-colors">
-                  {editingInvoiceId ? 'Mettre à jour' : 'Enregistrer'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ── Header fields ── */}
-        {headerValidated ? (
-          <div className="px-5 py-1.5 border-b border-neutral-100 bg-neutral-50/50 flex-shrink-0">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 min-w-0 text-[11px]">
-                <span className="font-semibold text-emerald-700 flex items-center gap-1"><Lock className="w-3 h-3" />Validé</span>
-                {invoiceForm.customer_id && <span className="text-neutral-700 font-medium truncate max-w-[160px]">{customers.find((c: any) => c.id === invoiceForm.customer_id)?.name || ''}</span>}
-                {invoiceForm.doc_date && <span className="text-neutral-500">Date: {invoiceForm.doc_date}</span>}
-                {invoiceForm.reference && <span className="text-neutral-500">Réf: {invoiceForm.reference}</span>}
-                {invoiceForm.delivery_date && <span className="text-neutral-500">Livr: {invoiceForm.delivery_date}</span>}
-                {invoiceForm.warranty && <span className="text-neutral-500 truncate max-w-[120px]">Gar: {invoiceForm.warranty}</span>}
-                {invoiceForm.imei && <span className="text-neutral-500 truncate max-w-[140px]">IMEI: {invoiceForm.imei}</span>}
-                {invoiceForm.representative && <span className="text-neutral-500">Rep: {repLabel(invoiceForm.representative)}</span>}
-              </div>
-              {!postCreation && <button onClick={() => setHeaderValidated(false)} className="text-[10px] font-medium text-neutral-500 hover:text-neutral-700 underline underline-offset-2 shrink-0">Modifier</button>}
-            </div>
-          </div>
-        ) : (
-          <div className={`px-5 py-2.5 border-b flex-shrink-0 ${docSettings.require_header_lock ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100'}`}>
-            {docSettings.require_header_lock && (
-              <div className="flex items-center gap-1.5 mb-2">
-                <Lock className="w-3 h-3 text-neutral-500" />
-                <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide">Valider l'en-tête avant la saisie</span>
-              </div>
-            )}
-            <div className="grid grid-cols-[1fr] sm:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2 items-end">
-              <div>
-                <label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Client</label>
-                {postCreation ? (
-                  <span className="text-xs font-medium text-neutral-800 h-8 flex items-center">{customers.find((c: any) => c.id === invoiceForm.customer_id)?.name || '—'}</span>
-                ) : (
-                  <CustomerSearchInput customers={customers} value={invoiceForm.customer_id} onSelect={(c) => setInvoiceForm((f: any) => ({ ...f, customer_id: c?.id || '' }))} placeholder="Rechercher client..." onCreateNew={onCreateCustomer} />
-                )}
-              </div>
-              <div>
-                <label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Date</label>
-                {postCreation || totalPaid > 0 ? (
-                  <span className="text-xs font-medium text-neutral-800 h-8 flex items-center">{invoiceForm.doc_date || '—'}</span>
-                ) : (
-                  <input type="date" value={invoiceForm.doc_date} onChange={e => setInvoiceForm((f: any) => ({ ...f, doc_date: e.target.value }))} className={ulInputCls} />
-                )}
-              </div>
-              {docSettings.show_reference && (
-                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Référence</label><input value={invoiceForm.reference} onChange={e => setInvoiceForm((f: any) => ({ ...f, reference: e.target.value }))} placeholder="REF-..." className={ulInputCls} disabled={!!postCreation} /></div>
-              )}
-              {docSettings.show_delivery_date && (
-                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Date de livraison</label><input type="date" value={invoiceForm.delivery_date} onChange={e => setInvoiceForm((f: any) => ({ ...f, delivery_date: e.target.value }))} className={ulInputCls} disabled={!!postCreation} /></div>
-              )}
-              {docSettings.show_warranty && (
-                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Garantie</label><input value={invoiceForm.warranty} onChange={e => setInvoiceForm((f: any) => ({ ...f, warranty: e.target.value }))} placeholder="Ex: 6 mois" className={ulInputCls} disabled={!!postCreation} /></div>
-              )}
-              {docSettings.show_imei && (
-                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">IMEI / Téléphone</label><input value={invoiceForm.imei} onChange={e => setInvoiceForm((f: any) => ({ ...f, imei: e.target.value }))} placeholder="Numéro..." className={ulInputCls} disabled={!!postCreation} /></div>
-              )}
-              {docSettings.show_representative && (
-                <div><label className="text-[10px] font-medium text-neutral-500 mb-0.5 block">Représentant</label>
-                  <select value={invoiceForm.representative} onChange={e => setInvoiceForm((f: any) => ({ ...f, representative: e.target.value }))} className={ulInputCls + ' cursor-pointer'} disabled={!!postCreation}>
-                    <option value="">Aucun</option>
-                    {(reps || []).map(r => <option key={r.id} value={r.id}>{repDisplayName(r)}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              {autoMode && !postCreation && (
-                <button onClick={() => onVehiclePicker(null)} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"><Car className="w-3 h-3" />Par véhicule</button>
-              )}
-              {docSettings.require_header_lock && !postCreation && (
-                <button onClick={() => setHeaderValidated(true)} className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold bg-neutral-900 text-white hover:bg-neutral-800 transition-colors ml-auto"><Lock className="w-3 h-3" /> Valider</button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* IPM Banner */}
-        {isPharmacy && invoiceForm.customer_id && (
-          <div className="px-5 py-1.5 border-b border-neutral-100 flex-shrink-0">
-            {ipmLoading ? (
-              <div className="flex items-center gap-2 text-[11px] text-neutral-500"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification IPM...</div>
-            ) : ipmBeneficiaire ? (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-3 px-3 py-2 rounded bg-teal-50 border border-teal-200 text-[11px]">
-                  <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="font-bold text-teal-800">IPM — {ipmBeneficiaire.ipm_organismes?.nom}</span>
-                    {ipmBeneficiaire.matricule && <span className="text-teal-600 ml-2">Mat. {ipmBeneficiaire.matricule}</span>}
-                    <span className="text-teal-600 ml-2">Taux {ipmTaux}%</span>
-                    {ipmConvention?.plafond_facture && <span className="text-teal-600 ml-1">· Plafond {formatFCFA(ipmConvention.plafond_facture)}</span>}
-                  </div>
-                  {invoiceSubtotal > 0 && (
-                    <div className="text-right shrink-0 text-[10px]">
-                      <span className="text-teal-600">IPM: <b>{formatFCFA(ipmPartIpm)}</b></span>
-                      <span className="text-teal-800 font-bold ml-2">Client: {formatFCFA(ipmPartClient)}</span>
-                    </div>
-                  )}
-                </div>
-                {ipmConfig && (ipmConfig.ordonnance_obligatoire || ipmConfig.numero_ordonnance_obligatoire || ipmConfig.medecin_prescripteur_obligatoire || ipmConfig.bon_prise_en_charge_obligatoire || ipmConfig.numero_bon_obligatoire) && (
-                  <div className="flex items-center gap-2 flex-wrap px-2 py-1.5 rounded bg-teal-50/50 border border-teal-100">
-                    {(ipmConfig.ordonnance_obligatoire || ipmConfig.numero_ordonnance_obligatoire) && <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-36" placeholder="N° ordonnance *" value={ipmDocuments.numero_ordonnance} onChange={e => setIpmDocuments((d: any) => ({ ...d, numero_ordonnance: e.target.value }))} />}
-                    {ipmConfig.medecin_prescripteur_obligatoire && <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-40" placeholder="Médecin *" value={ipmDocuments.medecin} onChange={e => setIpmDocuments((d: any) => ({ ...d, medecin: e.target.value }))} />}
-                    {(ipmConfig.bon_prise_en_charge_obligatoire || ipmConfig.numero_bon_obligatoire) && <input className="text-[11px] px-2 py-1 rounded border border-teal-300 bg-white w-40" placeholder="N° bon PEC *" value={ipmDocuments.numero_bon} onChange={e => setIpmDocuments((d: any) => ({ ...d, numero_bon: e.target.value }))} />}
-                    {!ipmDocValidation.valide && <span className="text-[10px] text-red-600 font-medium">Manquant : {ipmDocValidation.champs_manquants.join(', ')}</span>}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-[10px] text-neutral-400 italic">Ce client n'est pas bénéficiaire d'un IPM actif</p>
-            )}
-          </div>
-        )}
-
-        {/* ── Table header ── */}
-        <div className="flex-shrink-0 border-b border-neutral-200 bg-neutral-50/70">
-          <div className="flex items-center px-2 h-7">
-            <div className="w-7 shrink-0" />
-            {cols.map(col => (
-              <div key={col.key} className={`px-2 text-[10px] font-bold text-neutral-500 uppercase tracking-wider ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'} ${col.key === 'article' ? 'w-[18%]' : col.key === 'designation' ? 'flex-1 min-w-0' : col.key === 'qty' ? 'w-16' : col.key === 'unit_price' ? 'w-24' : col.key === 'discount' ? 'w-20' : col.key === 'total' ? 'w-24' : ''}`}>{col.label}</div>
-            ))}
-            <div className="w-8 shrink-0" />
-          </div>
-        </div>
-
-        {/* ── Input row ── */}
-        <div className={`flex-shrink-0 border-b-2 border-neutral-300 bg-neutral-50/60 ${itemsLocked ? 'pointer-events-none opacity-30' : ''}`}>
-          {itemsLocked ? (
-            <div className="flex items-center justify-center py-3 gap-2"><Lock className="w-4 h-4 text-neutral-300" /><span className="text-xs text-neutral-400">Validez l'en-tête</span></div>
-          ) : (
-            <div className="flex items-center px-2 py-1" onKeyDown={handleInputKey}>
-              <div className="w-7 shrink-0 text-center">
-                {editingIdx !== null ? (
-                  <button onClick={cancelEdit} className="p-0.5 rounded hover:bg-neutral-200 text-neutral-400" title="Annuler"><X className="w-3 h-3" /></button>
-                ) : (
-                  <span className="text-[9px] font-bold text-neutral-300">+</span>
-                )}
-              </div>
-              {cols.map(col => {
-                const cls = `${col.key === 'article' ? 'w-[18%]' : col.key === 'designation' ? 'flex-1 min-w-0' : col.key === 'qty' ? 'w-16' : col.key === 'unit_price' ? 'w-24' : col.key === 'discount' ? 'w-20' : col.key === 'total' ? 'w-24' : ''} px-1`;
-                switch (col.key) {
-                  case 'article': return (
-                    <div key="article" className={cls}>
-                      <ArticleSearchInput articles={articles} value={inputRow.article_id ? (articles.find((a: any) => a.id === inputRow.article_id)?.name || '') : ''} onSelect={pickArticle} onNameChange={() => {}} placeholder="Article..." onCreateNew={onCreateArticle} />
-                    </div>
-                  );
-                  case 'designation': return (
-                    <div key="designation" className={cls}>
-                      <input ref={inputNameRef} value={inputRow.name} onChange={e => setInputRow(p => ({ ...p, name: e.target.value }))} placeholder="Désignation" className={inputCls} />
-                    </div>
-                  );
-                  case 'qty': return (
-                    <div key="qty" className={cls}>
-                      <input type="number" value={inputRow.quantity || ''} onChange={e => setInputRow(p => ({ ...p, quantity: Number(e.target.value) || 0 }))} className={inputCls + ' text-center'} min="1" />
-                    </div>
-                  );
-                  case 'unit_price': return (
-                    <div key="unit_price" className={cls}>
-                      <input type="number" value={inputRow.unit_price || ''} onChange={e => setInputRow(p => ({ ...p, unit_price: Number(e.target.value) || 0 }))} className={inputCls + ' text-right num'} />
-                    </div>
-                  );
-                  case 'discount': return (
-                    <div key="discount" className={cls}>
-                      <input type="number" value={inputRow.discount || ''} onChange={e => setInputRow(p => ({ ...p, discount: Number(e.target.value) || 0 }))} className={inputCls + ' text-right num'} />
-                    </div>
-                  );
-                  case 'total': return (
-                    <div key="total" className={cls + ' text-right'}>
-                      <span className="text-xs font-bold text-neutral-800 num leading-7">{formatFCFA(calc(inputRow.quantity, inputRow.unit_price, inputRow.discount))}</span>
-                    </div>
-                  );
-                  default: return null;
-                }
-              })}
-              <div className="w-8 shrink-0 text-center">
-                <button onClick={commitRow} disabled={!inputRow.name.trim() || inputRow.unit_price <= 0} className="p-1 rounded bg-neutral-900 text-white disabled:opacity-20 hover:bg-neutral-700 transition-colors" title="Valider (Entrée)"><Check className="w-3 h-3" /></button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Validated rows (scrollable) ── */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {validItems.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-neutral-300 text-xs select-none">Saisissez un article et appuyez Entrée</div>
-          ) : (
-            <div>
-              {validItems.map((it, vIdx) => {
-                const isEditing = editingIdx !== null && invoiceItems.indexOf(it) === editingIdx;
-                return (
-                  <div key={vIdx} onClick={() => { if (!isEditing) startEdit(vIdx); }}
-                    className={`flex items-center px-2 border-b border-neutral-100 cursor-pointer transition-colors group ${isEditing ? 'bg-amber-50/50' : 'hover:bg-neutral-50'}`} style={{ height: '30px' }}>
-                    <div className="w-7 shrink-0 text-center"><span className="text-[10px] text-neutral-300 group-hover:text-neutral-500 tabular-nums">{vIdx + 1}</span></div>
-                    {cols.map(col => {
-                      const cls = `px-2 text-xs truncate ${col.key === 'article' ? 'w-[18%] text-neutral-500' : col.key === 'designation' ? 'flex-1 min-w-0 font-medium text-neutral-800' : col.key === 'qty' ? 'w-16 text-center text-neutral-700 num' : col.key === 'unit_price' ? 'w-24 text-right text-neutral-700 num' : col.key === 'discount' ? 'w-20 text-right text-neutral-400 num' : col.key === 'total' ? 'w-24 text-right font-semibold text-neutral-900 num' : ''}`;
-                      switch (col.key) {
-                        case 'article': return <div key="article" className={cls}>{it.article_id ? (articles.find((a: any) => a.id === it.article_id)?.internal_ref || articles.find((a: any) => a.id === it.article_id)?.name?.substring(0, 8) || '') : '—'}</div>;
-                        case 'designation': return <div key="designation" className={cls}>{it.name}{it.tier_name && <span className="text-[9px] text-neutral-400 ml-1">{it.tier_name}</span>}</div>;
-                        case 'qty': return <div key="qty" className={cls}>{it.quantity}</div>;
-                        case 'unit_price': return <div key="unit_price" className={cls}>{formatFCFA(it.unit_price)}</div>;
-                        case 'discount': return <div key="discount" className={cls}>{it.discount > 0 ? formatFCFA(it.discount) : '—'}</div>;
-                        case 'total': return <div key="total" className={cls}>{formatFCFA(it.total)}</div>;
-                        default: return null;
-                      }
-                    })}
-                    <div className="w-8 shrink-0 text-center">
-                      <button onClick={e => { e.stopPropagation(); removeItem(vIdx); }} className="p-0.5 rounded text-neutral-200 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3 h-3" /></button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Payment section */}
-          {!editingInvoiceId && validItems.length > 0 && (
-            <div className="px-5 py-3 border-t border-neutral-200">
-              {ipmBeneficiaire && ipmPartIpm > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-teal-50 border border-teal-200 rounded text-[11px] text-teal-800 font-medium">
-                  <ShieldCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                  <span>IPM : <b>{formatFCFA(ipmPartIpm)}</b> ({ipmBeneficiaire.ipm_organismes?.nom})</span>
-                  {ipmPartClient > 0 && <span className="ml-auto">Client : <b>{formatFCFA(ipmPartClient)}</b></span>}
-                  {ipmPartClient === 0 && <span className="ml-auto font-bold">100% couvert</span>}
-                </div>
-              )}
-              {ipmPartClient === 0 && ipmBeneficiaire ? (
-                <div className="text-[11px] text-teal-600 font-medium text-center py-1">Entièrement couvert par l'IPM</div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Règlement{ipmBeneficiaire ? ' (part client)' : ''}</span>
-                    {!ipmBeneficiaire && (
-                      <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                        <input type="checkbox" checked={isCredit} onChange={e => setIsCredit(e.target.checked)} className="sr-only peer" />
-                        <div className="relative w-8 h-[18px] bg-neutral-200 peer-checked:bg-amber-500 rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-[14px] after:w-[14px] after:transition-transform peer-checked:after:translate-x-[14px]" />
-                        <span className={`text-[11px] font-medium ${isCredit ? 'text-amber-700' : 'text-neutral-500'}`}>À crédit</span>
-                      </label>
-                    )}
-                  </div>
-                  {!isCredit && (
-                    <>
-                      <div className="flex items-center gap-2 mb-2">
-                        <select value={payMethodId} onChange={e => setPayMethodId(e.target.value)} className="text-[11px] font-medium text-neutral-700 bg-transparent border-b border-neutral-300 outline-none py-1 pr-5 cursor-pointer">
-                          {paymentMethods.map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
-                        <input type="number" value={payAmt} onChange={e => setPayAmt(e.target.value)} placeholder={formatFCFA(balance > 0 ? balance : 0)} min="0" className="text-xs h-7 w-28 px-2 border-b border-neutral-300 focus:border-neutral-900 outline-none text-right num bg-transparent" onFocus={() => { if (!payAmt && balance > 0) setPayAmt(String(balance)); }} />
-                        <button onClick={addPayment} disabled={!payAmt || Number(payAmt) <= 0} className="px-2.5 py-1 rounded text-[11px] font-semibold bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors"><Plus className="w-3 h-3 inline" /> Ajouter</button>
-                      </div>
-                      {payments.length > 0 && (
-                        <div className="divide-y divide-neutral-100">
-                          {payments.map((p, i) => (
-                            <div key={i} className="flex items-center justify-between px-1 py-1.5 text-[11px]">
-                              <span className="text-neutral-600">{p.method_name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-emerald-700 num">{formatFCFA(p.amount)}</span>
-                                <button onClick={() => setPayments((prev: any[]) => prev.filter((_: any, j: number) => j !== i))} className="p-0.5 rounded hover:bg-red-50 text-neutral-300 hover:text-red-500"><X className="w-3 h-3" /></button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {isCredit && (
-                    <div className="flex items-center gap-2 px-2 py-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800"><CreditCard className="w-3.5 h-3.5 text-amber-600 shrink-0" /> À crédit — règlement ultérieur</div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── Footer ── */}
-        <div className="border-t border-neutral-200 bg-white px-5 h-auto py-2 flex flex-col gap-1 flex-shrink-0">
-          {postCreation && (
-            <div className="text-[10px] text-neutral-400">
-              Créée le {new Date(postCreation.createdAt).toLocaleDateString('fr-FR')} à {new Date(postCreation.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} par {postCreation.createdBy}
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-neutral-500 tabular-nums">
-              {validItems.length} ligne{validItems.length !== 1 ? 's' : ''}
-              {payments.length > 0 && ` · ${payments.length} règl.`}
-            </span>
-            <div className="flex items-center gap-5">
-              {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-[10px] text-teal-600">IPM <b className="num">{formatFCFA(ipmPartIpm)}</b></span>}
-              {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-[10px] text-neutral-600">Client <b className="num">{formatFCFA(ipmPartClient)}</b></span>}
-              {totalPaid > 0 && <span className="text-[10px] text-emerald-600">Payé <b className="num">{formatFCFA(totalPaid)}</b></span>}
-              {balance > 0 && totalPaid > 0 && <span className="text-[10px] text-amber-600">Reste <b className="num">{formatFCFA(balance)}</b></span>}
-              <span className="text-sm font-black text-neutral-900 num tracking-tight">TOTAL {formatFCFA(invoiceSubtotal)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

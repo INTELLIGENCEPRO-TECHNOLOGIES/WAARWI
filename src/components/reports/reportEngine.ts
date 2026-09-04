@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabase';
 import { formatDate } from '../../lib/format';
 import { BUSINESS_TYPE_LABELS } from '../../lib/types';
+import { renderA4Header, a4HeaderCss, buildPrintTenant } from '../../lib/print';
 
 // ── formatters ───────────────────────────────────────────────────────────────
 
@@ -42,19 +43,7 @@ export function a4Style(): string {
       background: #ffffff;
     }
     .page { width: 100%; }
-    .doc-header {
-      display: flex; align-items: flex-start; gap: 14px;
-      padding-bottom: 10px; border-bottom: 1px solid #111111; margin-bottom: 14px;
-    }
-    .logo-wrap img { max-width: 54px; max-height: 40px; object-fit: contain; display: block; filter: grayscale(100%); }
-    .company-block { flex: 1; }
-    .company-name { font-size: 13pt; font-weight: 700; color: #111111; letter-spacing: -0.2px; line-height: 1.2; }
-    .company-sub { font-size: 7pt; color: #6b7280; margin-top: 2px; line-height: 1.4; }
-    .doc-meta { text-align: right; min-width: 130px; }
-    .doc-title { font-size: 12pt; font-weight: 700; color: #111111; letter-spacing: 0; }
-    .doc-subtitle { font-size: 7pt; color: #6b7280; margin-top: 3px; }
-    .doc-period { font-size: 7.5pt; color: #374151; font-weight: 600; margin-top: 3px; }
-    .doc-site { font-size: 6.5pt; color: #9ca3af; margin-top: 2px; }
+    ${a4HeaderCss}
     .amount-note { font-size: 6.5pt; color: #9ca3af; margin: 0 0 10px; }
     .kpi-row {
       display: flex; margin: 0 0 14px;
@@ -116,41 +105,14 @@ const AMOUNT_NOTE = `<div class="amount-note">Montants en FCFA</div>`;
 export function docHeader(
   tenant: TenantMeta, title: string, subtitle: string, period: string, siteName?: string
 ) {
-  const activity = BUSINESS_TYPE_LABELS[tenant.business_type || 'generic'] || 'Commerce';
-  const logo = tenant.logo_url
-    ? `<div class="logo-wrap"><img src="${esc(tenant.logo_url)}" alt="" onerror="this.style.display='none'"/></div>`
-    : '';
-  const legal = tenant.legal_name && tenant.legal_name !== tenant.name
-    ? `<div class="company-sub">${esc(tenant.legal_name)}</div>` : '';
-  const meta = [
-    tenant.address,
-    tenant.phone ? `Tél: ${tenant.phone}` : '',
-    tenant.email,
-    tenant.ninea ? `NINEA: ${tenant.ninea}` : '',
-    tenant.rccm ? `RCCM: ${tenant.rccm}` : '',
-  ].filter(Boolean).join('  ·  ');
-
-  const siteHtml = siteName
-    ? `<div class="doc-site">Site : ${esc(siteName)}</div>`
-    : `<div class="doc-site">Tous les magasins / sites</div>`;
-
-  return `
-    <div class="doc-header">
-      ${logo}
-      <div class="company-block">
-        <div class="company-name">${esc(tenant.name)}</div>
-        ${legal}
-        <div class="company-sub">${esc(activity)}</div>
-        ${meta ? `<div class="company-sub" style="margin-top:4px">${esc(meta)}</div>` : ''}
-      </div>
-      <div class="doc-meta">
-        <div class="doc-title">${esc(title)}</div>
-        <div class="doc-subtitle">${esc(subtitle)}</div>
-        <div class="doc-period">${esc(period)}</div>
-        ${siteHtml}
-      </div>
-    </div>
-    ${AMOUNT_NOTE}`;
+  const printTenant = buildPrintTenant(tenant);
+  return renderA4Header({
+    tenant: printTenant,
+    docTitle: title,
+    docDate: period,
+    siteName: siteName || undefined,
+    subtitle: subtitle || undefined,
+  });
 }
 
 export function docFooter(generatedAt: string): string {
@@ -198,6 +160,8 @@ export async function fetchCashStats(
     fondsOuverture: num(r.fonds_ouverture),
     reglementsClients: num(r.reglements_clients),
     autresEntrees: num(r.autres_entrees),
+    transfertsDepuisCoffre: num(r.transferts_depuis_coffre),
+    versementsAuCoffre: num(r.versements_au_coffre),
     encaissementsReels: num(r.encaissements_reels),
     reglementsFournisseurs: num(r.reglements_fournisseurs),
     depensesPayees: num(r.depenses_payees),
@@ -401,7 +365,7 @@ export function buildCashReport(
   const {
     ventesValidees, retours, caNet, cogsNet, margeBrute, tauxMarge,
     nbVentes, nbRetours, nbAnnulations, montantAnnule, nbLignesSansCout,
-    fondsOuverture, reglementsClients, autresEntrees,
+    fondsOuverture, reglementsClients, autresEntrees, transfertsDepuisCoffre, versementsAuCoffre,
     reglementsFournisseurs, depensesPayees, remboursementsClients, autresSorties,
     totalEntrees, totalSorties, soldeTheorique, parMode, parJour, articles,
   } = stats;
@@ -476,11 +440,13 @@ export function buildCashReport(
         <tr><td>Fonds d'ouverture</td><td class="r num b">${fmtMoney(fondsOuverture)}</td></tr>
         <tr><td>Règlements clients encaissés</td><td class="r num mc">+ ${fmtMoney(reglementsClients)}</td></tr>
         <tr><td>Autres entrées</td><td class="r num mc">+ ${fmtMoney(autresEntrees)}</td></tr>
+        ${transfertsDepuisCoffre > 0 ? `<tr><td>Transferts reçus du coffre</td><td class="r num mc">+ ${fmtMoney(transfertsDepuisCoffre)}</td></tr>` : ''}
         <tr><td class="b">Total des entrées</td><td class="r num b mc">+ ${fmtMoney(totalEntrees)}</td></tr>
         <tr><td>Règlements fournisseurs décaissés</td><td class="r num mr">− ${fmtMoney(reglementsFournisseurs)}</td></tr>
         <tr><td>Dépenses payées</td><td class="r num mr">− ${fmtMoney(depensesPayees)}</td></tr>
         <tr><td>Remboursements clients décaissés</td><td class="r num mr">− ${fmtMoney(remboursementsClients)}</td></tr>
         <tr><td>Autres sorties</td><td class="r num mr">− ${fmtMoney(autresSorties)}</td></tr>
+        ${versementsAuCoffre > 0 ? `<tr><td>Versements au coffre</td><td class="r num mr">− ${fmtMoney(versementsAuCoffre)}</td></tr>` : ''}
         <tr><td class="b">Total des sorties</td><td class="r num b mr">− ${fmtMoney(totalSorties)}</td></tr>
         <tr class="total-row"><td class="b">SOLDE THÉORIQUE DE CAISSE</td><td class="r num">${fmtMoney(soldeTheorique)}</td></tr>
       </tbody>
@@ -624,7 +590,7 @@ export function buildCustomerReport(
     const mCell = showMargin ? `<td class="r num">${fmtMoney(r.marge)}</td>` : '';
     return `<tr>
       <td class="num c">${i + 1}</td>
-      <td class="b">${esc(r.name)}${r.isShared ? ' <span class="muted">(partagé)</span>' : ''}</td>
+      <td class="b">${esc(r.name)}</td>
       <td class="r num">${fmtNum(r.nbVentes)}</td>
       <td class="r num">${fmtMoney(r.caHt)}</td>
       <td class="r num ${r.remises > 0 ? 'mr' : 'muted'}">${r.remises > 0 ? fmtMoney(r.remises) : '—'}</td>
@@ -706,7 +672,7 @@ export function buildSupplierReport(
 
   const tableRows = rows.map((r, i) => `<tr>
     <td class="num c">${i + 1}</td>
-    <td class="b">${esc(r.name)}${r.isShared ? ' <span class="muted">(partagé)</span>' : ''}${r.status === 'prior_only' ? ' <span class="muted">— dette antérieure, aucun achat sur la période</span>' : ''}</td>
+    <td class="b">${esc(r.name)}${r.status === 'prior_only' ? ' <span class="muted">— dette antérieure, aucun achat sur la période</span>' : ''}</td>
     <td class="r num">${fmtNum(r.nbCommandes)}</td>
     <td class="r num b">${fmtMoney(r.totalAchats)}</td>
     <td class="r num">${r.reglements > 0 ? fmtMoney(r.reglements) : '—'}</td>

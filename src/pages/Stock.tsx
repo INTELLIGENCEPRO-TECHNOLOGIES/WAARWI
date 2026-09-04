@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin, Filter } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin, Filter, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { CategoryPickerModal } from './ArticlesComponents';
 import { PageSearch } from '../components/PageSearch';
 import { MoreMenu } from '../components/MoreMenu';
@@ -52,8 +52,17 @@ export function Stock() {
   const { success, error } = useToast();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [serverTotals, setServerTotals] = useState({ in_stock: 0, low_stock: 0, out_stock: 0, total_value: 0 });
+  const [hasMore, setHasMore] = useState(false);
+  const [stkPage, setStkPage] = useState(0);
+  const [stkCursors, setStkCursors] = useState<{ val: string | null; id: string | null }[]>([]);
+  const stkReqIdRef = useRef(0);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -199,86 +208,77 @@ export function Stock() {
 
   const load = async (silent = false) => {
     if (!tenant || !currentSite) return;
-    if (!silent) setLoading(true);
+    const myReqId = ++stkReqIdRef.current;
+    if (!silent) setLoading(true); else setRefreshing(true);
 
-    // Fetch all articles in batches (Supabase default limit is 1000)
-    let allArts: any[] = [];
-    let from = 0;
-    const batchSize = 1000;
-    while (true) {
-      let query = supabase
-        .from('articles')
-        .select('id, name, internal_ref, purchase_price, stock_min, stock_max, location, track_stock, category_id')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .eq('track_stock', true)
-        .range(from, from + batchSize - 1);
-      if (!sharedArticles && currentSite) {
-        query = query.eq('site_id', currentSite.id);
-      }
-      const { data, error: e } = await query;
-      if (e || !data) break;
-      allArts = allArts.concat(data);
-      if (data.length < batchSize) break;
-      from += batchSize;
+    const cursor = stkPage > 0 && stkCursors[stkPage - 1] ? stkCursors[stkPage - 1] : { val: null, id: null };
+
+    const params: Record<string, any> = {
+      p_tenant_id: tenant.id,
+      p_site_id: currentSite.id,
+      p_page_size: 50,
+      p_search: debouncedSearch || null,
+      p_category_id: categoryFilter || null,
+      p_stock_filter: filter !== 'all' ? filter : null,
+      p_sort_col: stkSortCol,
+      p_sort_dir: stkSortDir,
+      p_shared_articles: sharedArticles,
+    };
+    if (cursor.val && cursor.id) {
+      params.p_cursor_val = cursor.val;
+      params.p_cursor_id = cursor.id;
     }
 
-    const [{ data: stk }] = await Promise.all([
-      (async () => {
-        let allStk: any[] = [];
-        let stkFrom = 0;
-        const stkBatch = 1000;
-        while (true) {
-          const { data, error: e } = await supabase
-            .from('stock_levels')
-            .select('article_id, quantity')
-            .eq('tenant_id', tenant.id)
-            .eq('site_id', currentSite.id)
-            .range(stkFrom, stkFrom + stkBatch - 1);
-          if (e || !data) break;
-          allStk = allStk.concat(data);
-          if (data.length < stkBatch) break;
-          stkFrom += stkBatch;
-        }
-        return { data: allStk };
-      })(),
-    ]);
-    const qmap = new Map((stk || []).map((r: any) => [r.article_id, Number(r.quantity)]));
-    setRows(allArts.map((a: any) => ({
-      article_id: a.id, name: a.name, internal_ref: a.internal_ref,
-      purchase_price: Number(a.purchase_price), stock_min: Number(a.stock_min),
-      stock_max: Number(a.stock_max), quantity: qmap.get(a.id) ?? 0, location: a.location || '',
-      category_id: a.category_id || '',
-    })).sort((a, b) => a.name.localeCompare(b.name)));
+    const { data, error } = await supabase.rpc('rpc_paginated_stock', params);
+    if (myReqId !== stkReqIdRef.current) return;
 
+    if (error || !data) {
+      setLoading(false); setRefreshing(false); return;
+    }
 
+    const newRows = (data.rows || []) as Row[];
+    setRows(newRows);
+    setTotalCount(data.total_count || 0);
+    setServerTotals(data.totals || {});
+    setHasMore(newRows.length >= 50);
 
-    // Fetch stock levels per location (current site + own depots) for bulk operations / inventory book
-    const ownDepotIds = depots.filter(d => d.parent_site_id === currentSite.id).map(d => d.id);
-    const allLocationIds = [currentSite.id, ...ownDepotIds];
-    if (allLocationIds.length > 0) {
-      let allLocStk: any[] = [];
-      let locFrom = 0;
-      const locBatch = 1000;
-      while (true) {
-        const { data, error: e } = await supabase
-          .from('stock_levels')
-          .select('article_id, site_id, quantity')
-          .eq('tenant_id', tenant.id)
-          .in('site_id', allLocationIds)
-          .range(locFrom, locFrom + locBatch - 1);
-        if (e || !data) break;
-        allLocStk = allLocStk.concat(data);
-        if (data.length < locBatch) break;
-        locFrom += locBatch;
-      }
-      const byLoc = new Map<string, Map<string, number>>();
-      for (const id of allLocationIds) byLoc.set(id, new Map());
-      allLocStk.forEach((r: any) => {
-        const m = byLoc.get(r.site_id);
-        if (m) m.set(r.article_id, Number(r.quantity));
+    if (newRows.length > 0) {
+      const last = newRows[newRows.length - 1];
+      const cv = stkSortCol === 'name' ? last.name :
+        stkSortCol === 'stock' ? String(last.quantity) :
+        stkSortCol === 'min' ? String(last.stock_min) :
+        stkSortCol === 'price' ? String(last.purchase_price) :
+        last.name || '';
+      setStkCursors(prev => {
+        const next = [...prev];
+        next[stkPage] = { val: cv, id: last.article_id };
+        return next;
       });
-      setStockByLocation(byLoc);
+    }
+
+    setLoading(false);
+    setRefreshing(false);
+    setInitialLoaded(true);
+
+    // Load stock-by-location for bulk operations (on first page only)
+    if (stkPage === 0) {
+      const ownDepotIds = depots.filter(d => d.parent_site_id === currentSite.id).map(d => d.id);
+      const allLocationIds = [currentSite.id, ...ownDepotIds];
+      if (allLocationIds.length > 0) {
+        let allLocStk: any[] = [];
+        let locFrom = 0;
+        while (true) {
+          const { data: ld, error: e } = await supabase.from('stock_levels').select('article_id, site_id, quantity').eq('tenant_id', tenant.id).in('site_id', allLocationIds).range(locFrom, locFrom + 999);
+          if (e || !ld) break;
+          allLocStk = allLocStk.concat(ld);
+          if (ld.length < 1000) break;
+          locFrom += 1000;
+        }
+        const byLoc = new Map<string, Map<string, number>>();
+        for (const id of allLocationIds) byLoc.set(id, new Map());
+        allLocStk.forEach((r: any) => { const m = byLoc.get(r.site_id); if (m) m.set(r.article_id, Number(r.quantity)); });
+        setStockByLocation(byLoc);
+      }
     }
 
     // Load lots if lot mode
@@ -298,12 +298,19 @@ export function Stock() {
         purchase_price: Number(l.purchase_price), received_at: l.received_at,
       })));
     }
-
-    if (!silent) setLoading(false);
-    setInitialLoaded(true);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tenant?.id, currentSite?.id]);
+  // Debounce search
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => { setDebouncedSearch(search); setStkPage(0); setStkCursors([]); }, 250);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [search]);
+
+  useEffect(() => { if (tab === 'stocks') load(); /* eslint-disable-next-line */ }, [tab, tenant?.id, currentSite?.id, stkPage, debouncedSearch, filter, categoryFilter, stkSortCol, stkSortDir, sharedArticles]);
+
+  // Reset page when filters change
+  useEffect(() => { if (tab === 'stocks') { setStkPage(0); setStkCursors([]); } }, [filter, categoryFilter, stkSortCol, stkSortDir, tenant?.id, currentSite?.id]);
 
   // ── Load movements paginated with search/date filters ──────────────────────
   const accessibleSiteIds = useMemo(() => {
@@ -389,13 +396,27 @@ export function Stock() {
   // ── Load stock documents when entering documents sub-tab ────────────────────
   const loadStockDocs = async () => {
     if (!tenant) return;
+    // Vider immédiatement l'ancienne liste pendant le chargement
+    setStockDocs([]);
+    if (!mvSiteId && accessibleSiteIds.length === 0) return;
     let query = supabase
       .from('stock_documents')
       .select('id, doc_number, doc_type, site_id, dest_site_id, user_id, note, status, total_qty, line_count, created_at')
       .eq('tenant_id', tenant.id)
       .order('created_at', { ascending: false });
     if (mvSiteId) {
-      query = query.eq('site_id', mvSiteId);
+      // Emplacement sélectionné : source OU destination (transferts entrants comme sortants)
+      query = query.or(`site_id.eq.${mvSiteId},dest_site_id.eq.${mvSiteId}`);
+    } else {
+      // Tous les emplacements : magasin courant + ses dépôts accessibles
+      const ids = accessibleSiteIds.join(',');
+      query = query.or(`site_id.in.(${ids}),dest_site_id.in.(${ids})`);
+    }
+    if (mvDateFrom) {
+      query = query.gte('created_at', mvDateFrom + 'T00:00:00');
+    }
+    if (mvDateTo) {
+      query = query.lte('created_at', mvDateTo + 'T23:59:59');
     }
     const { data, error: e } = await query.limit(200);
     if (e) { setStockDocs([]); return; }
@@ -404,7 +425,7 @@ export function Stock() {
   useEffect(() => {
     if (tab === 'movements' && mvSubTab === 'documents') loadStockDocs();
     /* eslint-disable-next-line */
-  }, [tab, mvSubTab, tenant?.id, dataTick, mvSiteId]);
+  }, [tab, mvSubTab, tenant?.id, currentSite?.id, dataTick, mvSiteId, mvDateFrom, mvDateTo]);
 
   const [flashKey, setFlashKey] = useState<string | null>(null);
   useEffect(() => {
@@ -419,10 +440,10 @@ export function Stock() {
   }, []);
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
-  const lowCount = useMemo(() => rows.filter(r => r.quantity <= r.stock_min && r.quantity > 0).length, [rows]);
-  const outCount = useMemo(() => rows.filter(r => r.quantity <= 0).length, [rows]);
-  const inStockCount = useMemo(() => rows.filter(r => r.quantity > 0).length, [rows]);
-  const totalValue = useMemo(() => rows.reduce((s, r) => s + r.quantity * r.purchase_price, 0), [rows]);
+  const lowCount = serverTotals.low_stock || 0;
+  const outCount = serverTotals.out_stock || 0;
+  const inStockCount = serverTotals.in_stock || 0;
+  const totalValue = serverTotals.total_value || 0;
 
   const filteredMoves = moves;
 
@@ -669,42 +690,11 @@ export function Stock() {
     }
   };
 
-  const categoryMatchIds = useMemo(() => {
-    if (!categoryFilter) return null;
-    const ids = new Set<string>([categoryFilter]);
-    for (const c of categories) if (c.parent_id === categoryFilter) ids.add(c.id);
-    return ids;
-  }, [categoryFilter, categories]);
+  // Rows are already filtered/sorted/paginated server-side
+  const filtered = rows;
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    let result = rows.filter(r => {
-      if (filter === 'instock' && r.quantity <= 0) return false;
-      if (filter === 'low' && !(r.quantity > 0 && r.quantity <= r.stock_min)) return false;
-      if (filter === 'out' && r.quantity > 0) return false;
-      if (categoryMatchIds && !categoryMatchIds.has(r.category_id)) return false;
-      if (!q) return true;
-      return r.name.toLowerCase().includes(q) || r.internal_ref.toLowerCase().includes(q) || (r.location || '').toLowerCase().includes(q);
-    });
-    result.sort((a, b) => {
-      let cmp = 0;
-      switch (stkSortCol) {
-        case 'name': cmp = a.name.localeCompare(b.name); break;
-        case 'stock': cmp = a.quantity - b.quantity; break;
-        case 'min': cmp = a.stock_min - b.stock_min; break;
-        case 'price': cmp = a.purchase_price - b.purchase_price; break;
-      }
-      return stkSortDir === 'asc' ? cmp : -cmp;
-    });
-    return result;
-  }, [rows, search, filter, categoryMatchIds, stkSortCol, stkSortDir]);
-
-  // Paginated rendering
   const PAGE_SIZE = 50;
-  const [currentPage, setCurrentPage] = useState(1);
-  useEffect(() => { setCurrentPage(1); }, [search, filter, categoryFilter, stkSortCol, stkSortDir]);
   // Sync listSourceSite when currentSite changes (e.g. user switches via header)
-  // Only block the sync if user has active edits in the form
   useEffect(() => {
     if (!currentSite?.id) return;
     if (!listSourceInitialized.current) {
@@ -717,8 +707,8 @@ export function Stock() {
       setListSourceSite(currentSite.id);
     }
   }, [currentSite?.id]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const visibleItems = useMemo(() => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE), [filtered, currentPage]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const visibleItems = rows;
 
   const openAdj = (r: Row, mode: AdjustMode) => {
     setAdjRow(r); setAdjMode(mode); setAdjQty(''); setAdjNote('');
@@ -955,7 +945,8 @@ export function Stock() {
 
         {/* Row 2: Stats badges */}
         <div className="flex items-center gap-2 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
-          <span className="shrink-0 text-neutral-500 num">{filtered.length} / {rows.length}</span>
+          <span className="shrink-0 text-neutral-500 num">{totalCount} article{totalCount > 1 ? 's' : ''}</span>
+          {refreshing && <RefreshCw className="w-3 h-3 animate-spin text-neutral-400 shrink-0" />}
           <button
             onClick={() => setFilter('all')}
             className={`shrink-0 transition-colors ${filter === 'all' ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
@@ -1064,11 +1055,12 @@ export function Stock() {
       {tab === 'stocks' ? (
         (!initialLoaded && loading) ? (
           <div className="py-16 flex justify-center opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-        ) : filtered.length === 0 ? (
+        ) : rows.length === 0 ? (
           <EmptyState icon={Boxes} title="Aucun article" description="Créez des articles dans le module Articles." />
         ) : viewMode === 'list' ? (
+          <>
           <StockListEditView
-            filtered={filtered}
+            filtered={rows}
             listEditMode={listEditMode}
             setListEditMode={setListEditMode}
             listEdits={listEdits}
@@ -1116,6 +1108,22 @@ export function Stock() {
             sortDir={stkSortDir}
             onSort={(col) => { setStkSortCol(col); setStkSortDir(d => stkSortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); }}
           />
+          {/* Pagination (list mode) */}
+          {totalCount > PAGE_SIZE && (
+            <div className="flex items-center justify-between px-2 py-3 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                {stkPage * PAGE_SIZE + 1}–{Math.min((stkPage + 1) * PAGE_SIZE, totalCount)} sur {totalCount} articles
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setStkPage(0)} disabled={stkPage === 0} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setStkPage(p => Math.max(0, p - 1))} disabled={stkPage === 0} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronLeft className="w-3 h-3" /></button>
+                <span className="text-[11px] font-medium text-slate-700 px-2">{stkPage + 1} / {totalPages}</span>
+                <button onClick={() => setStkPage(p => p + 1)} disabled={!hasMore} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronRight className="w-3 h-3" /></button>
+                <button onClick={() => setStkPage(totalPages - 1)} disabled={!hasMore} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+              </div>
+            </div>
+          )}
+          </>
         ) : (
           <>
           <div className={`divide-y divide-neutral-100 ${flashKey === 'out' || flashKey === 'low' || flashKey === 'articles' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
@@ -1153,17 +1161,17 @@ export function Stock() {
             })}
           </div>
           {/* Pagination */}
-          {totalPages > 1 && (
+          {totalCount > PAGE_SIZE && (
             <div className="flex items-center justify-between px-2 py-3 border-t border-slate-100">
               <span className="text-[11px] text-slate-500">
-                {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} sur {filtered.length} articles
+                {stkPage * PAGE_SIZE + 1}–{Math.min((stkPage + 1) * PAGE_SIZE, totalCount)} sur {totalCount} articles
               </span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
-                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
-                <span className="text-[11px] font-medium text-slate-700 px-2">{currentPage} / {totalPages}</span>
-                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>'}</button>
-                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+                <button onClick={() => setStkPage(0)} disabled={stkPage === 0} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setStkPage(p => Math.max(0, p - 1))} disabled={stkPage === 0} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronLeft className="w-3 h-3" /></button>
+                <span className="text-[11px] font-medium text-slate-700 px-2">{stkPage + 1} / {totalPages}</span>
+                <button onClick={() => setStkPage(p => p + 1)} disabled={!hasMore} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronRight className="w-3 h-3" /></button>
+                <button onClick={() => setStkPage(totalPages - 1)} disabled={!hasMore} className="px-2 py-1 text-[11px] rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
               </div>
             </div>
           )}
@@ -1718,55 +1726,64 @@ export function Stock() {
         title="Livre d'inventaire — Choisir l'emplacement"
         size="sm"
         footer={
-          <>
-            <button onClick={() => setInvBookOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setInvBookOpen(false)}
+              className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+              <span>Annuler</span>
+            </button>
             <button
               onClick={() => { if (invBookScope) { runPrintInventoryBook(invBookScope); setInvBookOpen(false); } }}
               disabled={!invBookScope}
-              className="btn-icon-primary" title="Imprimer"
+              className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-bold text-neutral-900 hover:bg-neutral-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Printer className="w-4 h-4" />
+              <span>Imprimer</span>
             </button>
-          </>
+          </div>
         }
       >
-        <div className="space-y-2">
-          <p className="text-[11px] text-slate-500 mb-2">Choisissez l'emplacement à imprimer. « Tous les emplacements » génère une page (livre) par dépôt.</p>
-          <button
-            onClick={() => setInvBookScope('all')}
-            className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${invBookScope === 'all' ? 'border-ink-900 bg-ink-900/5 ring-2 ring-ink-900/10' : 'border-slate-200 hover:border-slate-300'}`}
-          >
-            <div className="w-9 h-9 rounded-xl bg-ink-900/10 flex items-center justify-center shrink-0"><BookOpen className="w-4 h-4 text-ink-900" /></div>
-            <div className="flex-1">
-              <div className="text-xs font-bold text-slate-900">Tous les emplacements</div>
-              <div className="text-[10px] text-slate-500">{1 + depots.filter(d => d.parent_site_id === currentSite?.id).length} livre(s) — un par emplacement</div>
-            </div>
-          </button>
-          {currentSite && (
+        <div>
+          <p className="text-[11px] text-neutral-500 px-1 pb-3">Choisissez l'emplacement à imprimer. « Tous les emplacements » génère une page par dépôt.</p>
+          <div className="divide-y divide-neutral-100">
             <button
-              onClick={() => setInvBookScope(currentSite.id)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${invBookScope === currentSite.id ? 'border-brand-500 bg-brand-50/40 ring-2 ring-brand-500/10' : 'border-slate-200 hover:border-slate-300'}`}
+              onClick={() => setInvBookScope('all')}
+              className="w-full flex items-center justify-between py-3 px-1 text-left transition-colors hover:bg-neutral-50"
             >
-              <div className="w-9 h-9 rounded-xl bg-brand-100 flex items-center justify-center shrink-0"><Boxes className="w-4 h-4 text-brand-700" /></div>
-              <div className="flex-1">
-                <div className="text-xs font-bold text-slate-900">{currentSite.name}</div>
-                <div className="text-[10px] text-slate-500">Magasin principal</div>
+              <div className="min-w-0">
+                <div className={`text-xs ${invBookScope === 'all' ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>Tous les emplacements</div>
+                <div className="text-[10px] text-neutral-400">{1 + depots.filter(d => d.parent_site_id === currentSite?.id).length} livre(s) — un par emplacement</div>
               </div>
+              {invBookScope === 'all' && <Check className="w-4 h-4 text-neutral-900 shrink-0" />}
             </button>
-          )}
-          {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
-            <button
-              key={d.id}
-              onClick={() => setInvBookScope(d.id)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${invBookScope === d.id ? 'border-amber-500 bg-amber-50/40 ring-2 ring-amber-500/10' : 'border-slate-200 hover:border-slate-300'}`}
-            >
-              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0"><PackageOpen className="w-4 h-4 text-amber-700" /></div>
-              <div className="flex-1">
-                <div className="text-xs font-bold text-slate-900">{d.name}</div>
-                <div className="text-[10px] text-slate-500">Dépôt</div>
-              </div>
-            </button>
-          ))}
+            {currentSite && (
+              <button
+                onClick={() => setInvBookScope(currentSite.id)}
+                className="w-full flex items-center justify-between py-3 px-1 text-left transition-colors hover:bg-neutral-50"
+              >
+                <div className="min-w-0">
+                  <div className={`text-xs ${invBookScope === currentSite.id ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>{currentSite.name}</div>
+                  <div className="text-[10px] text-neutral-400">Magasin principal</div>
+                </div>
+                {invBookScope === currentSite.id && <Check className="w-4 h-4 text-neutral-900 shrink-0" />}
+              </button>
+            )}
+            {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
+              <button
+                key={d.id}
+                onClick={() => setInvBookScope(d.id)}
+                className="w-full flex items-center justify-between py-3 px-1 text-left transition-colors hover:bg-neutral-50"
+              >
+                <div className="min-w-0">
+                  <div className={`text-xs ${invBookScope === d.id ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>{d.name}</div>
+                  <div className="text-[10px] text-neutral-400">Dépôt</div>
+                </div>
+                {invBookScope === d.id && <Check className="w-4 h-4 text-neutral-900 shrink-0" />}
+              </button>
+            ))}
+          </div>
         </div>
       </Modal>
 

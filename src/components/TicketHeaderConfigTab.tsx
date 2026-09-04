@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Save, Check, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, CornerDownLeft, Printer, RotateCcw } from 'lucide-react';
+import { Loader2, Save, Check, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, CornerDownLeft, Printer, RotateCcw, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -7,8 +7,12 @@ import {
   DEFAULT_TICKET_HEADER_CONFIG,
   TICKET_HEADER_FIELD_LABELS,
   mergeTicketHeaderConfig,
+  mergeA4HeaderConfig,
+  DEFAULT_A4_HEADER_CONFIG,
   type TicketHeaderItem,
   type TicketHeaderSize,
+  type A4LogoPosition,
+  type A4HeaderConfig,
 } from '../lib/types';
 
 const SIZE_OPTIONS: { value: TicketHeaderSize; label: string }[] = [
@@ -39,6 +43,7 @@ export function TicketHeaderConfigTab() {
   const { tenant, sites, refresh } = useApp();
   const { success, error } = useToast();
   const [config, setConfig] = useState<TicketHeaderItem[]>(DEFAULT_TICKET_HEADER_CONFIG);
+  const [a4Config, setA4Config] = useState<A4HeaderConfig>(DEFAULT_A4_HEADER_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -54,8 +59,10 @@ export function TicketHeaderConfigTab() {
     } else {
       setConfig(mergeTicketHeaderConfig(tenant.ticket_header_config || null));
     }
+    const rawA4 = (selectedSite?.a4_header_config ?? tenant.a4_header_config ?? null) as A4HeaderConfig | null;
+    setA4Config(mergeA4HeaderConfig(rawA4));
     setLoading(false);
-  }, [tenant?.id, tenant?.ticket_header_config, targetSiteId, selectedSite?.ticket_header_config]);
+  }, [tenant?.id, tenant?.ticket_header_config, tenant?.a4_header_config, targetSiteId, selectedSite?.ticket_header_config, selectedSite?.a4_header_config]);
 
   const move = (idx: number, dir: -1 | 1) => {
     setConfig(prev => {
@@ -71,7 +78,7 @@ export function TicketHeaderConfigTab() {
     setConfig(prev => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   };
 
-  const reset = () => setConfig(DEFAULT_TICKET_HEADER_CONFIG.map(d => ({ ...d })));
+  const reset = () => { setConfig(DEFAULT_TICKET_HEADER_CONFIG.map(d => ({ ...d }))); setA4Config({ ...DEFAULT_A4_HEADER_CONFIG }); };
 
   const save = async () => {
     if (!tenant) return;
@@ -80,13 +87,13 @@ export function TicketHeaderConfigTab() {
     if (selectedSite) {
       const { error: err } = await supabase
         .from('sites')
-        .update({ ticket_header_config: config })
+        .update({ ticket_header_config: config, a4_header_config: a4Config })
         .eq('id', selectedSite.id);
       e = err;
     } else {
       const { error: err } = await supabase
         .from('tenants')
-        .update({ ticket_header_config: config })
+        .update({ ticket_header_config: config, a4_header_config: a4Config })
         .eq('id', tenant.id);
       e = err;
     }
@@ -270,6 +277,107 @@ export function TicketHeaderConfigTab() {
             Aucun type d'activité défini par la plateforme. Demandez à un administrateur plateforme d'assigner un type d'activité.
           </p>
         )}
+      </div>
+
+      {/* A4 layout config */}
+      <div className="py-4 border-b border-neutral-200">
+        <div className="flex items-center gap-2 mb-3">
+          <FileText className="w-3.5 h-3.5 text-neutral-400" />
+          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Mise en page A4</span>
+        </div>
+        <p className="text-[10px] text-neutral-500 mb-3">Position et taille du logo sur les documents A4 (factures, commandes, rapports, livre d\'inventaire). Les tickets 80mm ne sont pas affectés.</p>
+
+        {/* Logo position */}
+        <div className="divide-y divide-neutral-100">
+          <div className="py-3">
+            <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">Position du logo</div>
+            <div className="flex gap-2">
+              {([
+                { value: 'above', label: 'Au-dessus' },
+                { value: 'left', label: 'À gauche' },
+                { value: 'right', label: 'À droite' },
+              ] as { value: A4LogoPosition; label: string }[]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setA4Config(prev => ({ ...prev, logo_position: opt.value }))}
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all ${
+                    a4Config.logo_position === opt.value
+                      ? 'bg-neutral-900 text-white'
+                      : 'text-neutral-500 hover:bg-neutral-100'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Logo size */}
+          <div className="py-3">
+            <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">Taille du logo</div>
+            <div className="flex gap-1">
+              {SIZE_OPTIONS.map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => setA4Config(prev => ({ ...prev, logo_size: s.value }))}
+                  className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${
+                    a4Config.logo_size === s.value
+                      ? 'bg-neutral-900 text-white'
+                      : 'text-neutral-500 hover:bg-neutral-100'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* A4 preview */}
+          <div className="py-3">
+            <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">Aperçu A4</div>
+            <div className="bg-white border border-neutral-200 rounded-lg p-3" style={{ maxWidth: 480 }}>
+              {(() => {
+                const logoPx = a4Config.logo_size === 'xl' ? 80 : a4Config.logo_size === 'lg' ? 60 : a4Config.logo_size === 'md' ? 45 : a4Config.logo_size === 'sm' ? 35 : 25;
+                const logoEl = tenantPreview.logo_url
+                  ? <img src={tenantPreview.logo_url} alt="" style={{ maxWidth: logoPx, maxHeight: logoPx, objectFit: 'contain' }} />
+                  : null;
+                const infoEl = <div className="min-w-0">
+                  <div className="text-[13px] font-bold text-neutral-900 leading-tight">{tenantPreview.name || '—'}</div>
+                  {tenantPreview.legal_name && <div className="text-[10px] font-semibold text-neutral-700">{tenantPreview.legal_name}</div>}
+                  {previewActivity && <div className="text-[9px] font-semibold text-neutral-500 uppercase tracking-wider">{previewActivity}</div>}
+                  {tenantPreview.address && <div className="text-[9px] text-neutral-500">{tenantPreview.address}</div>}
+                  {tenantPreview.phone && <div className="text-[9px] text-neutral-500">Tél: {tenantPreview.phone}</div>}
+                  {tenantPreview.ninea && <div className="text-[9px] text-neutral-500">NINEA: {tenantPreview.ninea}</div>}
+                </div>;
+                const metaEl = <div className="text-right shrink-0">
+                  <div className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide">Facture</div>
+                  <div className="text-[14px] font-bold text-neutral-900">N° FAC-001</div>
+                  <div className="text-[9px] text-neutral-500">Date : 01/01/2025</div>
+                </div>;
+                if (a4Config.logo_position === 'above') {
+                  return <div className="border-b-2 border-neutral-900 pb-2 mb-2">
+                    {logoEl && <div className="mb-2">{logoEl}</div>}
+                    <div className="flex justify-between items-start gap-3">{infoEl}{metaEl}</div>
+                  </div>;
+                } else if (a4Config.logo_position === 'left') {
+                  return <div className="border-b-2 border-neutral-900 pb-2 mb-2">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="flex gap-2 items-start flex-1 min-w-0">{logoEl}<div className="flex-1 min-w-0">{infoEl}</div></div>
+                      {metaEl}
+                    </div>
+                  </div>;
+                } else {
+                  return <div className="border-b-2 border-neutral-900 pb-2 mb-2">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="flex-1 min-w-0">{infoEl}</div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">{logoEl}{metaEl}</div>
+                    </div>
+                  </div>;
+                }
+              })()}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Actions */}

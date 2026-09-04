@@ -630,7 +630,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
                 shellSubInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600'
                   : shellSubInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
-                  : shellSubInfo.status === 'expired' ? 'bg-red-50 text-red-600'
+                  : shellSubInfo.status === 'expired' ? 'bg-transparent text-red-600'
                   : 'bg-amber-50 text-amber-600'
               }`}>
                 {shellSubInfo.status === 'trial_active' ? 'Essai' : shellSubInfo.status === 'active' ? 'Actif' : shellSubInfo.status === 'expired' ? 'Expiré' : 'En attente'}

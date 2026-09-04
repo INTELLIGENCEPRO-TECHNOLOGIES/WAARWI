@@ -9,6 +9,7 @@ import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printXReport80, buildPrintTenantForSite } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
+import type { CashMovementKind } from '../lib/cashMovements';
 
 const tap = () => { if (navigator.vibrate) navigator.vibrate(8); };
 
@@ -37,7 +38,7 @@ type InvoicePayment = {
 };
 
 type CashMovementRow = {
-  id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund';
+  id: string; kind: CashMovementKind;
   amount: number; reason: string; note: string; reference: string;
   method_name: string; customer_name: string | null; supplier_name: string | null; created_at: string;
 };
@@ -64,7 +65,7 @@ export function CashHistory() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'encDirect' | 'acomptes' | 'depenses' | 'remboursements' | 'retraits' | 'prets' | 'ventes' | 'controle' | null>(null);
+  const [detailExpanded, setDetailExpanded] = useState<'modes' | 'reglements' | 'encDirect' | 'acomptes' | 'depenses' | 'remboursements' | 'retraits' | 'prets' | 'vaultIn' | 'vaultOut' | 'ventes' | 'controle' | null>(null);
   const [highlightSessionId, setHighlightSessionId] = useState<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -407,12 +408,14 @@ export function CashHistory() {
               const mvRefund = detail.movements.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
               const mvRetrait = detail.movements.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
               const mvPret = detail.movements.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
+              const mvVaultIn = detail.movements.filter(m => m.kind === 'vault_withdrawal').reduce((s, m) => s + m.amount, 0);
+              const mvVaultOut = detail.movements.filter(m => m.kind === 'vault_deposit').reduce((s, m) => s + m.amount, 0);
               const salesTotal = detail.sales.reduce((s, x) => s + x.total, 0);
               const byMethodTotal = detail.byMethod.reduce((s, m) => s + m.amount, 0);
               const openingAmount = Number(detail.session.opening_amount) || 0;
               const totalEncaisse = byMethodTotal;
-              const totalSorties = mvExp + mvRefund + mvRetrait + mvPret;
-              const net = openingAmount + totalEncaisse - totalSorties;
+              const totalSorties = mvExp + mvRefund + mvRetrait + mvPret + mvVaultOut;
+              const net = openingAmount + totalEncaisse + mvVaultIn - totalSorties;
               const cancelledTotal = detail.cancelledSales.reduce((s, x) => s + x.total, 0);
               const variance = detail.session.variance;
               return (
@@ -438,6 +441,18 @@ export function CashHistory() {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-black">Encaissé</span>
                     <span className="text-sm font-bold text-emerald-700 num shrink-0">+{formatFCFA(totalEncaisse)}</span>
                   </div>
+                  {mvVaultIn > 0 && (
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-black">Transfert reçu du coffre</span>
+                      <span className="text-sm font-bold text-emerald-700 num shrink-0">+{formatFCFA(mvVaultIn)}</span>
+                    </div>
+                  )}
+                  {mvVaultOut > 0 && (
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-black">Versement au coffre</span>
+                      <span className="text-sm font-bold text-red-600 num shrink-0">-{formatFCFA(mvVaultOut)}</span>
+                    </div>
+                  )}
                   {totalSorties > 0 && (
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-black">Sorties</span>
@@ -531,6 +546,8 @@ export function CashHistory() {
                 const remboursementsList = detail.movements.filter(m => m.kind === 'refund');
                 const retraitsList = detail.movements.filter(m => m.kind === 'customer_withdrawal');
                 const pretsList = detail.movements.filter(m => m.kind === 'customer_loan');
+                const vaultInList = detail.movements.filter(m => m.kind === 'vault_withdrawal');
+                const vaultOutList = detail.movements.filter(m => m.kind === 'vault_deposit');
 
                 const MovSection = ({ id, icon: Icon, label, items, total, sign, color }: {
                   id: typeof detailExpanded; icon: any; label: string;
@@ -572,6 +589,8 @@ export function CashHistory() {
                   <MovSection id="remboursements" icon={RotateCcw} label="Remboursements" items={remboursementsList} total={remboursementsList.reduce((s, m) => s + m.amount, 0)} sign="-" color="text-amber-600" />
                   <MovSection id="retraits" icon={ArrowDownRight} label="Retraits client" items={retraitsList} total={retraitsList.reduce((s, m) => s + m.amount, 0)} sign="-" color="text-amber-600" />
                   <MovSection id="prets" icon={HandCoins} label="Prêts client" items={pretsList} total={pretsList.reduce((s, m) => s + m.amount, 0)} sign="-" color="text-neutral-700" />
+                  <MovSection id="vaultIn" icon={ArrowDownRight} label="Transfert reçu du coffre" items={vaultInList} total={vaultInList.reduce((s, m) => s + m.amount, 0)} sign="+" color="text-emerald-700" />
+                  <MovSection id="vaultOut" icon={ArrowUpRight} label="Versement au coffre" items={vaultOutList} total={vaultOutList.reduce((s, m) => s + m.amount, 0)} sign="-" color="text-red-600" />
                 </>);
               })()}
 

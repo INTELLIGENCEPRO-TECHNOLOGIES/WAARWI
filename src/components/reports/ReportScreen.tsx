@@ -66,11 +66,13 @@ function CashScreen({ stats, showMargin }: { stats: Extract<ReportData, { type: 
           <Row><td className={tdCls}>Fonds d'ouverture</td><td className={tdR + ' font-semibold'}>{fmtMoney(s.fondsOuverture)}</td></Row>
           <Row><td className={tdCls}>Règlements clients encaissés</td><td className={tdR}>+ {fmtMoney(s.reglementsClients)}</td></Row>
           <Row><td className={tdCls}>Autres entrées</td><td className={tdR}>+ {fmtMoney(s.autresEntrees)}</td></Row>
+          {s.transfertsDepuisCoffre > 0 && <Row><td className={tdCls}>Transferts reçus du coffre</td><td className={tdR}>+ {fmtMoney(s.transfertsDepuisCoffre)}</td></Row>}
           <Row><td className={tdCls + ' font-semibold'}>Total des entrées</td><td className={tdR + ' font-semibold'}>+ {fmtMoney(s.totalEntrees)}</td></Row>
           <Row><td className={tdCls}>Règlements fournisseurs décaissés</td><td className={tdR}>− {fmtMoney(s.reglementsFournisseurs)}</td></Row>
           <Row><td className={tdCls}>Dépenses payées</td><td className={tdR}>− {fmtMoney(s.depensesPayees)}</td></Row>
           <Row><td className={tdCls}>Remboursements clients décaissés</td><td className={tdR}>− {fmtMoney(s.remboursementsClients)}</td></Row>
           <Row><td className={tdCls}>Autres sorties</td><td className={tdR}>− {fmtMoney(s.autresSorties)}</td></Row>
+          {s.versementsAuCoffre > 0 && <Row><td className={tdCls}>Versements au coffre</td><td className={tdR}>− {fmtMoney(s.versementsAuCoffre)}</td></Row>}
           <Row><td className={tdCls + ' font-semibold'}>Total des sorties</td><td className={tdR + ' font-semibold'}>− {fmtMoney(s.totalSorties)}</td></Row>
           <tr><td className={totalTd}>Solde théorique de caisse</td><td className={totalTdR}>{signed(s.soldeTheorique)}</td></tr>
         </tbody>
@@ -263,7 +265,7 @@ function CustomersScreen({ stats, showMargin }: { stats: Extract<ReportData, { t
           {activity.length ? activity.map((r, i) => (
             <Row key={i}>
               <td className={tdC}>{i + 1}</td>
-              <td className={tdCls + ' font-semibold'}>{r.name}{r.isShared && <span className="text-neutral-400 font-normal"> (partagé)</span>}</td>
+              <td className={tdCls + ' font-semibold'}>{r.name}</td>
               <td className={tdR}>{fmtNum(r.nbVentes)}</td>
               <td className={tdR}>{fmtMoney(r.caHt)}</td>
               <td className={r.remises > 0 ? tdR : tdMuted + ' text-right'}>{r.remises > 0 ? fmtMoney(r.remises) : DASH}</td>
@@ -370,7 +372,6 @@ function SuppliersScreen({ stats }: { stats: Extract<ReportData, { type: 'suppli
               <td className={tdC}>{i + 1}</td>
               <td className={tdCls + ' font-semibold'}>
                 {r.name}
-                {r.isShared && <span className="text-neutral-400 font-normal"> (partagé)</span>}
                 {r.status === 'prior_only' && <span className="text-neutral-400 font-normal"> — dette antérieure, aucun achat sur la période</span>}
               </td>
               <td className={tdR}>{fmtNum(r.nbCommandes)}</td>

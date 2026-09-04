@@ -1,5 +1,7 @@
-import { BUSINESS_TYPE_LABELS, mergeTicketHeaderConfig } from './types';
-import type { TicketHeaderItem, TicketHeaderSize } from './types';
+import { BUSINESS_TYPE_LABELS, mergeTicketHeaderConfig, mergeA4HeaderConfig } from './types';
+import type { TicketHeaderItem, TicketHeaderSize, A4HeaderConfig, A4LogoPosition } from './types';
+import { cashMovementLabel, cashMovementSign } from './cashMovements';
+import type { CashMovementKind } from './cashMovements';
 
 export type PrintTenant = {
   name: string;
@@ -14,6 +16,7 @@ export type PrintTenant = {
   business_type?: string;
   activity_name?: string | null;
   header_config?: TicketHeaderItem[] | null;
+  a4_header_config?: A4HeaderConfig | null;
 };
 
 // Build a fully-populated PrintTenant from any tenant-like object.
@@ -33,6 +36,7 @@ export function buildPrintTenant(t: any): PrintTenant {
     business_type: t?.business_type,
     activity_name: t?.business_activity_type_name ?? null,
     header_config: t?.ticket_header_config ?? null,
+    a4_header_config: t?.a4_header_config ?? null,
   };
 }
 
@@ -53,6 +57,7 @@ export function buildPrintTenantForSite(t: any, site: any): PrintTenant {
     website: site.website || base.website,
     logo_url: site.logo_url || base.logo_url,
     header_config: site.ticket_header_config ?? base.header_config,
+    a4_header_config: site.a4_header_config ?? base.a4_header_config,
   };
 }
 
@@ -188,6 +193,123 @@ function tenantLogoA4(t: PrintTenant) {
   const px = item.size === 'xl' ? 96 : item.size === 'lg' ? 76 : item.size === 'md' ? 60 : item.size === 'sm' ? 46 : 32;
   return `<img src="${esc(t.logo_url)}" alt="" style="max-width:${px}px;max-height:${px}px;object-fit:contain;" onerror="this.style.display='none'"/>`;
 }
+
+// ── Shared A4 header (used by all A4 documents) ──────────────────────────────
+// One unified header component for reports, invoices, supplier orders,
+// inventory book, warranty certificates, and cash reports.
+
+const A4_LOGO_SIZES: Record<TicketHeaderSize, number> = {
+  xs: 50, sm: 70, md: 90, lg: 120, xl: 160,
+};
+
+export type A4HeaderOpts = {
+  tenant: PrintTenant;
+  docTitle: string;
+  docNumber?: string;
+  docDate?: string;
+  siteName?: string;
+  status?: string;
+  subtitle?: string;
+};
+
+export function renderA4Header(opts: A4HeaderOpts): string {
+  const t = opts.tenant;
+  const config = mergeTicketHeaderConfig(t.header_config);
+  const a4cfg = mergeA4HeaderConfig(t.a4_header_config);
+  const logoPx = A4_LOGO_SIZES[a4cfg.logo_size] || 60;
+
+  // Build info lines (each on its own line, no "·" merging)
+  const infoLines: string[] = [];
+  for (const item of config) {
+    if (item.key === 'logo') continue;
+    if (!item.show) continue;
+    const value = headerFieldValue(t, item.key);
+    if (!value) continue;
+    const sz = HEADER_SIZES_A4[item.size] || HEADER_SIZES_A4.sm;
+    if (item.key === 'name') {
+      infoLines.push(`<div class="a4h-company" style="font-size:${sz.fs}px;font-weight:${sz.fw};">${esc(value)}</div>`);
+    } else if (item.key === 'activity') {
+      infoLines.push(`<div class="a4h-activity" style="font-size:${sz.fs}px;font-weight:${sz.fw};">${esc(value)}</div>`);
+    } else {
+      const extraStyle = item.key === 'legal_name' ? 'font-weight:700;' : '';
+      const breakStyle = item.breakAfter ? 'margin-bottom:4px;' : '';
+      infoLines.push(`<div class="a4h-info-line" style="font-size:${sz.fs}px;font-weight:${sz.fw};${extraStyle}${breakStyle}">${esc(value)}</div>`);
+    }
+  }
+  const infoHtml = infoLines.join('');
+
+  // Logo HTML
+  const logoItem = config.find(c => c.key === 'logo');
+  const showLogo = logoItem && logoItem.show && t.logo_url;
+  const logoHtml = showLogo
+    ? `<img src="${esc(t.logo_url)}" alt="" class="a4h-logo" style="max-width:${logoPx}px;max-height:${logoPx}px;object-fit:contain;" onerror="this.style.display='none'"/>`
+    : '';
+
+  // Doc meta (right side)
+  const metaHtml = `<div class="a4h-meta">
+    <div class="a4h-title">${esc(opts.docTitle)}</div>
+    ${opts.docNumber ? `<div class="a4h-number">${esc(opts.docNumber)}</div>` : ''}
+    ${opts.docDate ? `<div class="a4h-date">${esc(opts.docDate)}</div>` : ''}
+    ${opts.siteName ? `<div class="a4h-site">${esc(opts.siteName)}</div>` : ''}
+    ${opts.subtitle ? `<div class="a4h-subtitle">${esc(opts.subtitle)}</div>` : ''}
+    ${opts.status ? `<div class="a4h-status">${esc(opts.status)}</div>` : ''}
+  </div>`;
+
+  // Layout based on logo position
+  const pos = a4cfg.logo_position;
+  let headerInner = '';
+
+  if (pos === 'above') {
+    headerInner = `
+      ${logoHtml ? `<div class="a4h-logo-above">${logoHtml}</div>` : ''}
+      <div class="a4h-body">
+        <div class="a4h-info">${infoHtml}</div>
+        ${metaHtml}
+      </div>`;
+  } else if (pos === 'left') {
+    headerInner = `
+      <div class="a4h-body a4h-body-row">
+        <div class="a4h-left-block">
+          ${logoHtml}
+          <div class="a4h-info">${infoHtml}</div>
+        </div>
+        ${metaHtml}
+      </div>`;
+  } else {
+    // right
+    headerInner = `
+      <div class="a4h-body a4h-body-row">
+        <div class="a4h-info">${infoHtml}</div>
+        <div class="a4h-right-block">
+          ${logoHtml}
+          ${metaHtml}
+        </div>
+      </div>`;
+  }
+
+  return `<div class="a4h-header">${headerInner}</div>`;
+}
+
+export const a4HeaderCss = `
+  .a4h-header { margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #000; }
+  .a4h-logo-above { margin-bottom: 8px; }
+  .a4h-logo-above img { display: block; }
+  .a4h-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .a4h-body-row { width: 100%; }
+  .a4h-left-block { display: flex; gap: 10px; align-items: flex-start; flex: 1; min-width: 0; }
+  .a4h-right-block { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .a4h-info { flex: 1; min-width: 0; }
+  .a4h-company { font-weight: 900; color: #000; line-height: 1.15; }
+  .a4h-activity { text-transform: uppercase; letter-spacing: 1px; color: #000; margin-top: 2px; }
+  .a4h-info-line { color: #000; margin-top: 1px; }
+  .a4h-meta { text-align: right; min-width: 160px; shrink: 0; }
+  .a4h-title { font-size: 13px; font-weight: 800; color: #000; text-transform: uppercase; letter-spacing: 0.5px; }
+  .a4h-number { font-size: 18px; font-weight: 900; color: #000; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .a4h-date { font-size: 10px; font-weight: 600; color: #000; margin-top: 2px; }
+  .a4h-site { font-size: 9px; font-weight: 600; color: #555; margin-top: 2px; }
+  .a4h-subtitle { font-size: 9px; font-weight: 500; color: #555; margin-top: 2px; }
+  .a4h-status { display: inline-block; padding: 3px 8px; border: 1.5px solid #000; color: #000; background: #fff; font-size: 9px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 5px; border-radius: 2px; }
+`;
 
 function waarwiFooter80() {
   return `<div class="waarwi-footer">Propulsée par <strong>WAARWI</strong><div class="waarwi-tag">Plateforme Business 2.0 made in Sénégal</div></div>`;
@@ -630,7 +752,7 @@ export type XReportControl = {
 };
 
 export type XReportMovement = {
-  kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund';
+  kind: CashMovementKind;
   amount: number;
   reason: string;
   customer_name: string | null;
@@ -669,7 +791,9 @@ export function printXReport80(opts: {
   const mvLoan = movements.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
   const mvIncome = movements.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
   const mvPrepay = movements.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-  const netTotal = opts.openingAmount + opts.salesTotal - mvExpense - mvRefund - mvWithdrawal - mvLoan;
+  const mvVaultIn = movements.filter(m => m.kind === 'vault_withdrawal').reduce((s, m) => s + m.amount, 0);
+  const mvVaultOut = movements.filter(m => m.kind === 'vault_deposit').reduce((s, m) => s + m.amount, 0);
+  const netTotal = opts.openingAmount + opts.salesTotal + mvVaultIn - mvExpense - mvRefund - mvWithdrawal - mvLoan - mvVaultOut;
   const variance = controls.length > 0
     ? controls.reduce((s, c) => s + Number(c.difference_amount ?? (c.counted_amount - c.theoretical_amount)), 0)
     : 0;
@@ -679,13 +803,13 @@ export function printXReport80(opts: {
 <div class="section">Mouvements de caisse</div>
 <div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)} FCFA</span></div>
 ${movements.map(m => {
-    const label = m.kind === 'expense' ? 'Dépense' : m.kind === 'refund' ? 'Remboursement' : m.kind === 'customer_prepayment' ? 'Acompte' : m.kind === 'customer_withdrawal' ? 'Retrait' : m.kind === 'customer_loan' ? 'Prêt' : 'Entrée';
-    const sign = m.kind === 'expense' || m.kind === 'refund' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' ? '-' : '+';
+    const label = cashMovementLabel(m.kind);
+    const sign = cashMovementSign(m.kind);
     const reason = [m.customer_name, m.reason].filter(Boolean).join(' · ');
     return `<div class="row"><span>${esc(label)}${reason ? ' : ' + esc(reason.slice(0, 22)) : ''}</span><span>${sign}${fmtMoney(m.amount)} FCFA</span></div>`;
   }).join('')}
-<div class="row"><span>Sous-total entrées</span><span>+ ${fmtMoney(mvIncome + mvPrepay)} FCFA</span></div>
-<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense + mvRefund + mvWithdrawal + mvLoan)} FCFA</span></div>
+<div class="row"><span>Sous-total entrées</span><span>+ ${fmtMoney(mvIncome + mvPrepay + mvVaultIn)} FCFA</span></div>
+<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense + mvRefund + mvWithdrawal + mvLoan + mvVaultOut)} FCFA</span></div>
 <hr class="hr" />
 <div class="row total"><span>Net caisse</span><span>${fmtMoney(netTotal)} FCFA</span></div>
 ` : '';
@@ -790,28 +914,9 @@ const a4Style = `
   .invoice-page:last-child { page-break-after: auto; break-after: auto; }
   .page-bottom-block { margin-top: auto; page-break-inside: avoid; break-inside: avoid; }
 
-  /* Full header — first page only */
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 20px;
-    margin-bottom: 16px;
-    padding-bottom: 10px;
-    border-bottom: 2.5px solid #000000;
-  }
+  /* Full header — first page only (replaced by renderA4Header) */
+  ${a4HeaderCss}
   .compact-header { margin-bottom: 10px; padding-bottom: 6px; }
-  .brand { display: flex; gap: 12px; align-items: flex-start; }
-  .brand img { max-width: 72px; max-height: 72px; object-fit: contain; }
-  .brand-text h1 { font-size: 20px; font-weight: 900; color: #000; line-height: 1.1; }
-  .brand-text .activity { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #000; margin-top: 3px; font-weight: 700; }
-  .brand-text p { font-size: 10.5px; color: #000; margin-top: 2px; font-weight: 500; }
-
-  .doc-meta { text-align: right; min-width: 175px; }
-  .doc-meta .tag { display: inline-block; padding: 4px 10px; background: #e8e8e8; color: #000; border-radius: 3px; font-size: 9.5px; letter-spacing: 1.7px; font-weight: 800; text-transform: uppercase; }
-  .doc-meta h2 { font-size: 24px; font-weight: 900; margin-top: 7px; color: #000; font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-  .doc-meta p { font-size: 10px; color: #000; margin-top: 2px; font-weight: 600; }
-  .status-badge { display: inline-block; padding: 4px 10px; border-radius: 3px; font-size: 9.5px; font-weight: 900; letter-spacing: 0.7px; text-transform: uppercase; margin-top: 6px; border: 2px solid #000; color: #000; background: #fff; }
 
   /* Parties */
   .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
@@ -888,9 +993,6 @@ export function printDocumentA4(opts: {
 }) {
   const t = opts.tenant;
 
-  const logoImg = tenantLogoA4(t);
-  const headerLines = tenantHeaderA4Lines(t);
-
   // Payment status
   const paidAmount = typeof opts.paid === 'number' ? opts.paid : (opts.payments || []).reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(0, opts.total - paidAmount);
@@ -945,22 +1047,13 @@ export function printDocumentA4(opts: {
   </tr></thead>`;
 
   // Shared header HTML — identical on every page
-  const headerHtml = `<div class="header">
-    <div class="brand">
-      ${logoImg}
-      <div class="brand-text">
-        ${headerLines}
-      </div>
-    </div>
-    <div class="doc-meta">
-      <span class="tag">${esc(opts.docLabel)}</span>
-      <h2>N° ${esc(opts.docNumber)}</h2>
-      <p>Date : ${esc(opts.docDate)}</p>
-      ${opts.cashier ? `<p>Émis par : ${esc(opts.cashier)}</p>` : ''}
-      ${extraMeta}
-      ${statusBadge}
-    </div>
-  </div>`;
+  const headerHtml = renderA4Header({
+    tenant: t,
+    docTitle: opts.docLabel,
+    docNumber: `N° ${opts.docNumber}`,
+    docDate: `Date : ${opts.docDate}`,
+    status: statusBadge ? (paidAmount >= opts.total ? 'PAYÉE' : paidAmount > 0 ? 'PARTIELLEMENT PAYÉE' : 'NON PAYÉE') : undefined,
+  });
 
   // Shared parties HTML — identical on every page
   const partiesHtml = `<div class="parties">
@@ -1094,58 +1187,34 @@ export function printStockMovementA4(opts: StockMovementPrintOpts) {
   @page { size: A4; margin: 15mm 12mm; }
   @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; font-size: 10pt; line-height: 1.5; background: #fff; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #000; font-size: 10pt; line-height: 1.5; background: #fff; }
   .doc { max-width: 186mm; margin: 0 auto; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 6mm; margin-bottom: 5mm; border-bottom: 2px solid #0f766e; }
-  .header .left { }
-  .header .logo { max-height: 16mm; max-width: 40mm; object-fit: contain; margin-bottom: 2mm; display: block; }
-  .header .company { font-size: 14pt; font-weight: 800; color: #0f172a; }
-  .header .info { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
-  .header .right { text-align: right; }
-  .header .ref { font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; font-weight: 800; color: #0f766e; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-  .header .date { font-size: 9pt; color: #475569; margin-top: 1mm; }
-  .title { text-align: center; font-size: 14pt; font-weight: 800; letter-spacing: 1px; color: #0f766e; margin: 5mm 0 3mm; text-transform: uppercase; }
-  .meta-bar { display: flex; gap: 4mm; flex-wrap: wrap; margin-bottom: 5mm; padding: 3mm 4mm; border: 1px solid #e2e8f0; border-radius: 2mm; background: #f8fafc; }
+  ${a4HeaderCss}
+  .a4h-header { border-bottom: 2px solid #000; }
+  .title { text-align: center; font-size: 14pt; font-weight: 800; letter-spacing: 1px; color: #000; margin: 5mm 0 3mm; text-transform: uppercase; }
+  .meta-bar { display: flex; gap: 4mm; flex-wrap: wrap; margin-bottom: 5mm; padding: 3mm 0; border-top: 1px solid #000; border-bottom: 1px solid #e5e7eb; }
   .meta-bar .cell { flex: 1; min-width: 35mm; }
-  .meta-bar .cell .lbl { font-size: 7.5pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
-  .meta-bar .cell .val { font-size: 10pt; font-weight: 700; color: #0f172a; margin-top: 0.5mm; }
+  .meta-bar .cell .lbl { font-size: 7.5pt; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
+  .meta-bar .cell .val { font-size: 10pt; font-weight: 700; color: #000; margin-top: 0.5mm; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 5mm; }
-  thead tr { background: #f1f5f9; }
-  thead th { text-align: left; font-size: 8pt; padding: 2.5mm 3mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #475569; border-bottom: 1.5px solid #cbd5e1; }
+  thead tr { background: #f5f5f5; }
+  thead th { text-align: left; font-size: 8pt; padding: 2.5mm 3mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #000; border-bottom: 1.5px solid #000; }
   thead th.center { text-align: center; }
-  tbody tr { border-bottom: 1px solid #e2e8f0; }
-  tbody tr:nth-child(even) { background: #f8fafc; }
-  tbody td { padding: 2.5mm 3mm; font-size: 9.5pt; vertical-align: top; }
-  .total-row { background: #f1f5f9 !important; border-top: 1.5px solid #cbd5e1; }
+  tbody tr { border-bottom: 1px solid #e5e7eb; }
+  tbody td { padding: 2.5mm 3mm; font-size: 9.5pt; vertical-align: top; color: #000; }
+  .total-row { background: #f5f5f5 !important; border-top: 1.5px solid #000; }
   .total-row td { font-weight: 800; font-size: 10pt; padding: 3mm; }
-  .observation { margin: 5mm 0; padding: 3mm 4mm; border: 1px solid #e2e8f0; border-radius: 2mm; background: #f8fafc; }
-  .observation .lbl { font-size: 8pt; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 1mm; }
-  .observation .txt { font-size: 9.5pt; color: #1e293b; }
+  .observation { margin: 5mm 0; padding: 3mm 4mm; border: 1px solid #e5e7eb; background: #fafafa; }
+  .observation .lbl { font-size: 8pt; font-weight: 700; color: #6b7280; text-transform: uppercase; margin-bottom: 1mm; }
+  .observation .txt { font-size: 9.5pt; color: #000; }
   .signatures { display: flex; justify-content: space-between; margin-top: 12mm; padding-top: 5mm; }
   .sig-block { width: 55mm; text-align: center; }
-  .sig-block .line { height: 15mm; border-bottom: 1px solid #94a3b8; }
-  .sig-block .cap { margin-top: 2mm; font-size: 8pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
+  .sig-block .line { height: 15mm; border-bottom: 1px solid #000; }
+  .sig-block .cap { margin-top: 2mm; font-size: 8pt; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
   .footer-brand { margin-top: 8mm; padding-top: 3mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 8pt; color: #94a3b8; }
 </style>${printFontLink}</head><body>
 <div class="doc">
-  <div class="header">
-    <div class="left">
-      ${t.logo_url ? `<img class="logo" src="${esc(t.logo_url)}" onerror="this.style.display='none'"/>` : ''}
-      <div class="company">${esc(t.name)}</div>
-      ${t.legal_name ? `<div class="info" style="font-weight:700">${esc(t.legal_name)}</div>` : ''}
-      <div class="info" style="text-transform:uppercase;letter-spacing:0.6px;font-weight:700">${esc(activityLabel(t))}</div>
-      ${t.address ? `<div class="info">${esc(t.address)}</div>` : ''}
-      ${t.phone ? `<div class="info">Tél : ${esc(t.phone)}</div>` : ''}
-      ${t.email ? `<div class="info">${esc(t.email)}</div>` : ''}
-      ${t.website ? `<div class="info">${esc(t.website)}</div>` : ''}
-      ${t.ninea ? `<div class="info">NINEA : ${esc(t.ninea)}</div>` : ''}
-      ${t.rccm ? `<div class="info">RCCM : ${esc(t.rccm)}</div>` : ''}
-    </div>
-    <div class="right">
-      <div class="ref">${esc(opts.reference)}</div>
-      <div class="date">${esc(opts.date)}</div>
-    </div>
-  </div>
+  ${renderA4Header({ tenant: t, docTitle: title, docNumber: opts.reference, docDate: opts.date })}
 
   <div class="title">${esc(title)}</div>
 
@@ -1184,6 +1253,134 @@ export function printStockMovementA4(opts: StockMovementPrintOpts) {
     <div class="sig-block"><div class="line"></div><div class="cap">Magasinier</div></div>
     <div class="sig-block"><div class="line"></div><div class="cap">Responsable</div></div>
   </div>
+
+  <div class="footer-brand">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
+</div>
+</body></html>`;
+  printHtml(html, 400);
+}
+
+// ── Customer Account Statement (A4) ───────────────────────────────────────────
+export type CustomerStatementRow = {
+  ts: string;
+  piece: string;
+  label: string;
+  debit: number;
+  credit: number;
+  running: number;
+  affects: boolean;
+};
+
+export type CustomerStatementPrintOpts = {
+  tenant: PrintTenant;
+  siteName?: string;
+  customer: { name: string; account_code?: string; phone?: string; address?: string };
+  periodLabel: string;
+  openingBalance: number;
+  closingBalance: number;
+  totalDebit: number;
+  totalCredit: number;
+  rows: CustomerStatementRow[];
+  issuedBy?: string;
+};
+
+export function printCustomerStatementA4(opts: CustomerStatementPrintOpts) {
+  const t = opts.tenant;
+  const title = 'RELEVÉ DE COMPTE CLIENT';
+  const fmtDate = (v: string) => new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  const rowsHtml = opts.rows.map(r => {
+    const muted = r.affects ? '' : 'color:#94a3b8;font-style:italic;';
+    return `
+    <tr>
+      <td style="white-space:nowrap;${muted}">${fmtDate(r.ts)}</td>
+      <td style="font-family:'Courier New',monospace;font-size:8.5pt;${muted}">${esc(r.piece || '')}</td>
+      <td style="${muted}">${esc(r.label)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;${muted}">${r.debit > 0 ? fmtMoney(r.debit) : ''}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;${muted}">${r.credit > 0 ? fmtMoney(r.credit) : ''}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">${fmtMoney(r.running)}</td>
+    </tr>`;
+  }).join('');
+
+  const finalLabel = opts.closingBalance > 0 ? 'Solde dû' : opts.closingBalance < 0 ? 'Crédit disponible' : 'Solde';
+  const finalValue = Math.abs(opts.closingBalance);
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)} - ${esc(opts.customer.name)}</title>
+<style>
+  @page { size: A4; margin: 15mm 12mm; }
+  @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #000; font-size: 10pt; line-height: 1.5; background: #fff; }
+  .doc { max-width: 186mm; margin: 0 auto; }
+  ${a4HeaderCss}
+  .a4h-header { border-bottom: 2px solid #000; }
+  .title { text-align: center; font-size: 14pt; font-weight: 800; letter-spacing: 1px; color: #000; margin: 5mm 0 3mm; text-transform: uppercase; }
+  .meta-bar { display: flex; gap: 4mm; flex-wrap: wrap; margin-bottom: 4mm; padding: 3mm 0; border-top: 1px solid #000; border-bottom: 1px solid #e5e7eb; }
+  .meta-bar .cell { flex: 1; min-width: 40mm; }
+  .meta-bar .cell .lbl { font-size: 7.5pt; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
+  .meta-bar .cell .val { font-size: 10pt; font-weight: 700; color: #000; margin-top: 0.5mm; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4mm; }
+  thead tr { background: #f5f5f5; }
+  thead th { text-align: left; font-size: 8pt; padding: 2.5mm 3mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #000; border-bottom: 1.5px solid #000; }
+  thead th.right { text-align: right; }
+  tbody tr { border-bottom: 1px solid #eef0f2; }
+  tbody td { padding: 2mm 3mm; font-size: 9pt; vertical-align: top; color: #000; }
+  .opening-row td { background: #fafafa; font-weight: 700; }
+  .total-row { background: #f5f5f5 !important; border-top: 1.5px solid #000; }
+  .total-row td { font-weight: 800; font-size: 9.5pt; padding: 2.5mm 3mm; }
+  .closing-box { display: flex; justify-content: flex-end; margin-top: 3mm; }
+  .closing-box .inner { border: 1.5px solid #000; padding: 3mm 6mm; text-align: right; min-width: 60mm; }
+  .closing-box .lbl { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; }
+  .closing-box .val { font-size: 13pt; font-weight: 900; font-variant-numeric: tabular-nums; margin-top: 1mm; }
+  .footer-brand { margin-top: 8mm; padding-top: 3mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 8pt; color: #94a3b8; }
+</style>${printFontLink}</head><body>
+<div class="doc">
+  ${renderA4Header({ tenant: t, docTitle: title, docDate: new Date().toLocaleDateString('fr-FR'), siteName: opts.siteName })}
+
+  <div class="title">${esc(title)}</div>
+
+  <div class="meta-bar">
+    <div class="cell"><div class="lbl">Client</div><div class="val">${esc(opts.customer.name)}</div></div>
+    ${opts.customer.account_code ? `<div class="cell"><div class="lbl">Compte</div><div class="val">${esc(opts.customer.account_code)}</div></div>` : ''}
+    ${opts.customer.phone ? `<div class="cell"><div class="lbl">Téléphone</div><div class="val">${esc(opts.customer.phone)}</div></div>` : ''}
+    <div class="cell"><div class="lbl">Période</div><div class="val">${esc(opts.periodLabel)}</div></div>
+    ${opts.customer.address ? `<div class="cell"><div class="lbl">Adresse</div><div class="val">${esc(opts.customer.address)}</div></div>` : ''}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:22mm;">Date</th>
+        <th style="width:26mm;">Pièce</th>
+        <th>Libellé</th>
+        <th class="right" style="width:26mm;">Débit</th>
+        <th class="right" style="width:26mm;">Crédit</th>
+        <th class="right" style="width:30mm;">Solde</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="opening-row">
+        <td colspan="5">Solde d'ouverture</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${fmtMoney(opts.openingBalance)}</td>
+      </tr>
+      ${rowsHtml}
+      <tr class="total-row">
+        <td colspan="3" style="text-align:right;">TOTAUX</td>
+        <td style="text-align:right;">${fmtMoney(opts.totalDebit)}</td>
+        <td style="text-align:right;">${fmtMoney(opts.totalCredit)}</td>
+        <td style="text-align:right;">${fmtMoney(opts.closingBalance)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="closing-box">
+    <div class="inner">
+      <div class="lbl">${finalLabel}</div>
+      <div class="val">${fmtMoney(finalValue)} FCFA</div>
+    </div>
+  </div>
+
+  ${opts.issuedBy ? `<div style="margin-top:5mm;font-size:8.5pt;color:#6b7280;">Établi par ${esc(opts.issuedBy)}</div>` : ''}
 
   <div class="footer-brand">Propulsée par <strong>WAARWI</strong> — Plateforme Business 2.0 made in Sénégal</div>
 </div>
@@ -1259,21 +1456,21 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
   const totalQty = opts.items.reduce((s, i) => s + i.qty_real, 0);
   const totalValue = opts.items.reduce((s, i) => s + i.qty_real * i.purchase_price, 0);
   const totalEcart = opts.items.reduce((s, i) => s + (i.qty_real - i.qty_theoretical), 0);
+  const totalTheo = opts.items.reduce((s, i) => s + i.qty_theoretical, 0);
   const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' F';
 
   const rowsHtml = opts.items.map((r, i) => {
     const ecart = r.qty_real - r.qty_theoretical;
-    const ecartClass = ecart > 0 ? 'color:#059669;' : ecart < 0 ? 'color:#dc2626;' : 'color:#64748b;';
     return `
     <tr>
-      <td style="text-align:center;font-weight:600;color:#94a3b8;font-size:8.5pt;">${i + 1}</td>
-      <td style="font-family:'Courier New',monospace;font-size:8.5pt;font-weight:600;">${esc(r.ref)}</td>
-      <td style="font-weight:600;">${esc(r.name)}</td>
-      <td style="text-align:center;font-size:8.5pt;">${esc(r.location || '')}</td>
-      <td style="text-align:center;font-variant-numeric:tabular-nums;">${r.qty_theoretical}</td>
-      <td style="text-align:center;font-weight:700;font-variant-numeric:tabular-nums;">${r.qty_real}</td>
-      <td style="text-align:center;font-weight:700;font-variant-numeric:tabular-nums;${ecartClass}">${ecart > 0 ? '+' : ''}${ecart}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;font-size:8.5pt;">${fmt(r.qty_real * r.purchase_price)}</td>
+      <td class="c num">${i + 1}</td>
+      <td class="ref">${esc(r.ref)}</td>
+      <td>${esc(r.name)}</td>
+      <td class="c">${esc(r.location || '')}</td>
+      <td class="c num">${r.qty_theoretical}</td>
+      <td class="c num b">${r.qty_real}</td>
+      <td class="c num">${ecart > 0 ? '+' : ''}${ecart}</td>
+      <td class="r num">${fmt(r.qty_real * r.purchase_price)}</td>
     </tr>`;
   }).join('');
 
@@ -1282,66 +1479,46 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
   @page { size: A4; margin: 12mm 10mm 14mm 10mm; }
   @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; font-size: 9pt; line-height: 1.4; background: #fff; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #000; font-size: 9pt; line-height: 1.4; background: #fff; }
   .doc { max-width: 190mm; margin: 0 auto; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 4mm; margin-bottom: 4mm; border-bottom: 2px solid #0f766e; }
-  .header .logo { max-height: 14mm; max-width: 35mm; object-fit: contain; margin-bottom: 1.5mm; display: block; }
-  .header .company { font-size: 13pt; font-weight: 800; color: #0f172a; }
-  .header .sub { font-size: 8pt; color: #475569; margin-top: 0.5mm; }
-  .header .right { text-align: right; }
-  .header .ref { font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-size: 10pt; font-weight: 800; color: #0f766e; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-  .header .date { font-size: 8.5pt; color: #475569; margin-top: 1mm; }
-  .doc-title { text-align: center; font-size: 13pt; font-weight: 800; letter-spacing: 1px; color: #0f766e; margin: 4mm 0 2mm; text-transform: uppercase; }
-  .doc-subtitle { text-align: center; font-size: 8.5pt; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4mm; }
-  .summary { display: flex; gap: 3mm; margin-bottom: 4mm; }
-  .summary .card { flex: 1; padding: 2.5mm 3mm; border: 1px solid #e2e8f0; border-radius: 1.5mm; background: #f8fafc; }
-  .summary .card .lbl { font-size: 7pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
-  .summary .card .val { font-size: 10pt; font-weight: 800; color: #0f172a; margin-top: 0.3mm; font-variant-numeric: tabular-nums; }
+  ${a4HeaderCss}
+  .doc-subtitle { text-align: center; font-size: 9pt; color: #555; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 3mm 0 4mm; }
+  .summary-bar { display: flex; margin: 0 0 4mm; border-top: 1px solid #000; border-bottom: 1px solid #e5e7eb; }
+  .summary-bar .cell { flex: 1; padding: 3mm 4mm; border-left: 1px solid #e5e7eb; }
+  .summary-bar .cell:first-child { border-left: none; }
+  .summary-bar .cell .lbl { font-size: 7pt; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-bar .cell .val { font-size: 10pt; font-weight: 700; color: #000; margin-top: 0.5mm; font-variant-numeric: tabular-nums; }
   table { width: 100%; border-collapse: collapse; }
   thead { display: table-header-group; }
-  thead tr { background: #f1f5f9; }
-  thead th { text-align: left; font-size: 7.5pt; padding: 2mm 2.5mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; border-bottom: 1.5px solid #cbd5e1; }
+  thead tr { background: #f5f5f5; }
+  thead th { text-align: left; font-size: 7.5pt; padding: 2mm 2.5mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #000; border-bottom: 1px solid #000; }
   thead th.c { text-align: center; }
   thead th.r { text-align: right; }
-  tbody tr { page-break-inside: avoid; border-bottom: 0.5px solid #e2e8f0; }
-  tbody tr:nth-child(even) { background: #f8fafc; }
-  tbody td { padding: 1.8mm 2.5mm; font-size: 8.5pt; vertical-align: top; }
-  .tfoot-row { background: #f1f5f9; border-top: 1.5px solid #cbd5e1; }
+  tbody tr { page-break-inside: avoid; border-bottom: 0.5px solid #e5e7eb; }
+  tbody td { padding: 1.8mm 2.5mm; font-size: 8.5pt; vertical-align: top; color: #000; }
+  .c { text-align: center; }
+  .r { text-align: right; }
+  .b { font-weight: 700; }
+  .num { font-variant-numeric: tabular-nums; }
+  .ref { font-family: 'Courier New', monospace; font-size: 8pt; font-weight: 600; }
+  .tfoot-row { background: #f5f5f5; border-top: 1px solid #000; }
   .tfoot-row td { padding: 2.5mm; font-weight: 800; font-size: 9pt; }
   .signatures { display: flex; justify-content: space-between; margin-top: 10mm; }
   .sig-block { width: 50mm; text-align: center; }
-  .sig-block .line { height: 13mm; border-bottom: 1px solid #94a3b8; }
-  .sig-block .cap { margin-top: 1.5mm; font-size: 7.5pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }
+  .sig-block .line { height: 13mm; border-bottom: 1px solid #000; }
+  .sig-block .cap { margin-top: 1.5mm; font-size: 7.5pt; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
   .brand-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 7.5pt; color: #94a3b8; }
 </style>${printFontLink}</head><body>
 <div class="doc">
-  <div class="header">
-    <div>
-      ${t.logo_url ? `<img class="logo" src="${esc(t.logo_url)}" onerror="this.style.display='none'"/>` : ''}
-      <div class="company">${esc(t.name)}</div>
-      ${t.legal_name ? `<div class="sub" style="font-weight:700">${esc(t.legal_name)}</div>` : ''}
-      <div class="sub" style="text-transform:uppercase;letter-spacing:0.6px;font-weight:700">${esc(activityLabel(t))}</div>
-      ${t.address ? `<div class="sub">${esc(t.address)}</div>` : ''}
-      ${t.phone ? `<div class="sub">Tél : ${esc(t.phone)}</div>` : ''}
-      ${t.email ? `<div class="sub">${esc(t.email)}</div>` : ''}
-      ${t.ninea ? `<div class="sub">NINEA : ${esc(t.ninea)}</div>` : ''}
-      ${t.rccm ? `<div class="sub">RCCM : ${esc(t.rccm)}</div>` : ''}
-    </div>
-    <div class="right">
-      <div class="ref">${esc(opts.reference)}</div>
-      <div class="date">${esc(opts.date)}</div>
-    </div>
-  </div>
-
-  <div class="doc-title">Livre d'inventaire</div>
+  ${renderA4Header({ tenant: t, docTitle: "Livre d'inventaire", docNumber: opts.reference, docDate: opts.date, siteName: opts.siteName })}
   <div class="doc-subtitle">État du stock disponible — ${esc(opts.siteName)}</div>
 
-  <div class="summary">
-    <div class="card"><div class="lbl">Dépôt</div><div class="val">${esc(opts.siteName)}</div></div>
-    <div class="card"><div class="lbl">Références</div><div class="val">${opts.items.length}</div></div>
-    <div class="card"><div class="lbl">Qté totale</div><div class="val">${totalQty.toLocaleString('fr-FR')}</div></div>
-    <div class="card"><div class="lbl">Écart total</div><div class="val" style="${totalEcart > 0 ? 'color:#059669' : totalEcart < 0 ? 'color:#dc2626' : ''}">${totalEcart > 0 ? '+' : ''}${totalEcart}</div></div>
-    <div class="card"><div class="lbl">Valeur stock</div><div class="val">${fmt(totalValue)}</div></div>
+  <div class="summary-bar">
+    <div class="cell"><div class="lbl">Dépôt</div><div class="val">${esc(opts.siteName)}</div></div>
+    <div class="cell"><div class="lbl">Références</div><div class="val">${opts.items.length}</div></div>
+    <div class="cell"><div class="lbl">Qté totale</div><div class="val">${totalQty.toLocaleString('fr-FR')}</div></div>
+    <div class="cell"><div class="lbl">Écart total</div><div class="val">${totalEcart > 0 ? '+' : ''}${totalEcart}</div></div>
+    <div class="cell"><div class="lbl">Valeur stock</div><div class="val">${fmt(totalValue)}</div></div>
   </div>
 
   <table>
@@ -1360,11 +1537,11 @@ export function printInventoryBookA4(opts: InventoryBookOpts) {
     <tbody>
       ${rowsHtml}
       <tr class="tfoot-row">
-        <td colspan="4" style="text-align:right;">TOTAL</td>
-        <td style="text-align:center;">${opts.items.reduce((s, r) => s + r.qty_theoretical, 0)}</td>
-        <td style="text-align:center;">${totalQty}</td>
-        <td style="text-align:center;${totalEcart > 0 ? 'color:#059669' : totalEcart < 0 ? 'color:#dc2626' : ''}">${totalEcart > 0 ? '+' : ''}${totalEcart}</td>
-        <td style="text-align:right;">${fmt(totalValue)}</td>
+        <td colspan="4" class="r">TOTAL</td>
+        <td class="c num">${totalTheo}</td>
+        <td class="c num">${totalQty}</td>
+        <td class="c num">${totalEcart > 0 ? '+' : ''}${totalEcart}</td>
+        <td class="r num">${fmt(totalValue)}</td>
       </tr>
     </tbody>
   </table>
@@ -1402,8 +1579,6 @@ export type WarrantyCertificateOpts = {
 
 export function printWarrantyCertificate(opts: WarrantyCertificateOpts) {
   const t = opts.tenant;
-  const logoImg = tenantLogoA4(t);
-  const headerLines = tenantHeaderA4Lines(t);
 
   const statusLabels: Record<string, { text: string; color: string; bg: string }> = {
     active: { text: 'EN COURS DE VALIDITÉ', color: '#166534', bg: '#dcfce7' },
@@ -1436,6 +1611,7 @@ export function printWarrantyCertificate(opts: WarrantyCertificateOpts) {
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>FICHE DE GARANTIE - ${esc(opts.saleNumber)}</title>
 <style>${a4Style}
+  ${a4HeaderCss}
   .doc-number { font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .warranty-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.5px; }
   .warranty-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin: 16px 0; }
@@ -1456,22 +1632,14 @@ export function printWarrantyCertificate(opts: WarrantyCertificateOpts) {
   .sig-block-w .cap-w { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #6b7280; letter-spacing: 0.3px; }
 </style>${printFontLink}</head><body>
 <div class="page-content">
-  <div class="header">
-    <div class="brand">
-      ${logoImg}
-      <div class="brand-text">
-        ${headerLines}
-      </div>
-    </div>
-    <div class="doc-info">
-      <div class="doc-title">FICHE DE GARANTIE</div>
-      <div class="doc-number">${esc(opts.saleNumber)}</div>
-      <div class="doc-date">${new Date(opts.saleDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-      <div style="margin-top:8px;">
-        <span class="warranty-badge" style="background:${statusCfg.bg};color:${statusCfg.color};">${statusCfg.text}</span>
-      </div>
-    </div>
-  </div>
+  ${renderA4Header({
+    tenant: t,
+    docTitle: 'FICHE DE GARANTIE',
+    docNumber: opts.saleNumber,
+    docDate: new Date(opts.saleDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+    subtitle: opts.siteName || undefined,
+    status: statusCfg.text,
+  })}
 
   ${opts.customerName ? `<div class="client-box"><div class="client-label">CLIENT</div><div class="client-name">${esc(opts.customerName)}</div>${opts.customerPhone ? `<div class="client-phone">${esc(opts.customerPhone)}</div>` : ''}</div>` : ''}
 

@@ -65,7 +65,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (prof?.tenant_id) {
       const [{ data: ten }, { data: s }] = await Promise.all([
         supabase.from('tenants').select('*').eq('id', prof.tenant_id).maybeSingle(),
-        supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id, logo_url, legal_name, ninea, rccm, email, website, ticket_header_config').eq('tenant_id', prof.tenant_id).eq('is_active', true).order('name'),
+        supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id, logo_url, legal_name, ninea, rccm, email, website, ticket_header_config, a4_header_config').eq('tenant_id', prof.tenant_id).eq('is_active', true).order('name'),
       ]);
       let tenantWithActivity: Tenant | null = ten || null;
       if (ten?.business_activity_type_id) {
@@ -170,7 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const timer = setTimeout(async () => {
       const [{ data: ten }, { data: s }, { data: prof }] = await Promise.all([
         supabase.from('tenants').select('*').eq('id', tid).maybeSingle(),
-        supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id, logo_url, legal_name, ninea, rccm, email, website, ticket_header_config').eq('tenant_id', tid).eq('is_active', true).order('name'),
+        supabase.from('sites').select('id, name, code, address, phone, is_active, is_warehouse, tenant_id, parent_site_id, logo_url, legal_name, ninea, rccm, email, website, ticket_header_config, a4_header_config').eq('tenant_id', tid).eq('is_active', true).order('name'),
         supabase.from('profiles').select('*').eq('id', pid).maybeSingle(),
       ]);
       if (ten) {

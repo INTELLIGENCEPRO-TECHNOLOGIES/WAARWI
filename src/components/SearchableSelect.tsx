@@ -19,6 +19,8 @@ type Props = {
   searchable?: boolean;
   noBorder?: boolean;
   variant?: 'default' | 'underline';
+  menuWidth?: number;
+  wrapLabels?: boolean;
 };
 
 export function SearchableSelect({
@@ -32,6 +34,8 @@ export function SearchableSelect({
   searchable = true,
   noBorder = false,
   variant = 'default',
+  menuWidth,
+  wrapLabels = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -56,8 +60,15 @@ export function SearchableSelect({
   const updatePos = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-  }, []);
+    const margin = 8;
+    const maxW = window.innerWidth - margin * 2;
+    const width = Math.min(menuWidth ?? rect.width, maxW);
+    let left = rect.left;
+    if (left + width > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - margin - width);
+    }
+    setPos({ top: rect.bottom + 4, left, width });
+  }, [menuWidth]);
 
   useEffect(() => {
     if (open) {
@@ -184,8 +195,8 @@ export function SearchableSelect({
                     `}
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="truncate">{opt.label}</div>
-                      {opt.sublabel && <div className="text-[11px] text-neutral-400 truncate mt-0.5">{opt.sublabel}</div>}
+                      <div className={wrapLabels ? 'break-words' : 'truncate'}>{opt.label}</div>
+                      {opt.sublabel && <div className={`text-[11px] text-neutral-400 mt-0.5 ${wrapLabels ? 'break-words' : 'truncate'}`}>{opt.sublabel}</div>}
                     </div>
                     {isSelected && <Check className="w-4 h-4 text-neutral-600 shrink-0" />}
                   </button>
@@ -209,8 +220,8 @@ export function SearchableSelect({
                   `}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="truncate">{opt.label}</div>
-                    {opt.sublabel && <div className="text-[11px] text-slate-400 truncate mt-0.5">{opt.sublabel}</div>}
+                    <div className={wrapLabels ? 'break-words' : 'truncate'}>{opt.label}</div>
+                    {opt.sublabel && <div className={`text-[11px] text-slate-400 mt-0.5 ${wrapLabels ? 'break-words' : 'truncate'}`}>{opt.sublabel}</div>}
                   </div>
                   {isSelected && <Check className="w-4 h-4 text-teal-600 shrink-0" />}
                 </button>
