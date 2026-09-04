@@ -458,7 +458,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (!tenant || !currentSite) return;
     const isShared = (tenant as any)?.settings?.shared_articles !== false;
     const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
-    let custQuery = supabase.from('customers').select('id, name, phone').eq('tenant_id', tenant.id).eq('is_active', true).order('name');
+    let custQuery = supabase.from('customers').select('id, name, phone, address').eq('tenant_id', tenant.id).eq('is_active', true).order('name');
     if (!isSharedCust && currentSite) {
       custQuery = custQuery.eq('site_id', currentSite.id);
     }
@@ -480,7 +480,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     Promise.all([
       custQuery,
       fetchAllArticles(),
-      supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, user_id, customers(name)').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(200),
+      supabase.from('sales').select('id, sale_number, customer_id, total, paid, status, user_id, customers(name, phone, address)').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(200),
       supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).order('sort_order'),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
       supabase.from('sales_representatives').select('*').eq('tenant_id', tenant.id).order('code'),
@@ -902,8 +902,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setInvoicePostCreation(null);
   };
   const openInvoiceForEdit = async (inv: Invoice) => {
-    const { data: items } = await supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id);
+    const [{ data: items }, { data: full }] = await Promise.all([
+      supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
+      supabase.from('sales').select('*, customers(name, phone, address)').eq('id', inv.id).maybeSingle(),
+    ]);
     setInvoicePostCreation(null);
+    if (full) setInvoiceDetail(full as any);
     setEditingInvoiceId(inv.id);
     setInvoiceEditorMode('edit');
     setInvoiceForm({
@@ -926,7 +930,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setInvoiceEditorOpen(true);
   };
   const openInvoiceForView = async (inv: Invoice) => {
-    const { data: items } = await supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id);
+    const [{ data: items }, { data: full }] = await Promise.all([
+      supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
+      supabase.from('sales').select('*, customers(name, phone, address)').eq('id', inv.id).maybeSingle(),
+    ]);
     setEditingInvoiceId(inv.id);
     setInvoiceNavIdx(invoices.findIndex(i => i.id === inv.id));
     setInvoiceEditorMode('view');
@@ -947,6 +954,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', inv.id);
     setInvoicePayList((pp || []).map((p: any) => ({ method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: '' })));
     setInvoiceIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
+    if (full) setInvoiceDetail(full as any);
     setInvoiceEditorOpen(true);
   };
 
@@ -1166,6 +1174,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       setInvoicePostCreation({ saleNumber: invNum, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
       setEditingInvoiceId(sale.id);
       setInvoiceEditorMode('view');
+      const { data: newFull } = await supabase.from('sales').select('*, customers(name, phone, address)').eq('id', sale.id).maybeSingle();
+      if (newFull) setInvoiceDetail(newFull as any);
       loadTab(billPage, true);
     } catch (err: any) {
       error(err.message || 'Erreur');
@@ -1360,13 +1370,15 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const openInvoiceDetail = async (s: Invoice) => {
     setInvoiceDetail(s);
     setInvoiceIpmVente(null);
-    const [{ data: it }, { data: pp }, { data: ipmV }] = await Promise.all([
+    const [{ data: it }, { data: pp }, { data: ipmV }, { data: full }] = await Promise.all([
       supabase.from('sale_items').select('*, articles(internal_ref, oem_ref)').eq('sale_id', s.id),
       supabase.from('sale_payments').select('*').eq('sale_id', s.id),
       supabase.from('ipm_ventes').select('*, ipm_organismes(nom)').eq('sale_id', s.id).limit(1).maybeSingle(),
+      supabase.from('sales').select('id, sale_number, total, paid, status, customer_id, created_at, public_code, doc_header, user_id, customers(name, phone, address)').eq('id', s.id).maybeSingle(),
     ]);
     setInvoiceItems(it || []); setInvoicePays(pp || []);
     setInvoiceIpmVente(ipmV || null);
+    if (full) setInvoiceDetail(full as any);
   };
 
   const reloadInvoice = async (id: string) => {
@@ -2351,7 +2363,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             if (inv) comptabiliserFromEditor(inv);
           } : undefined}
           onPrint={editingInvoiceId ? () => {
-            const inv = invoices.find(i => i.id === editingInvoiceId);
+            const inv = invoiceDetail || invoices.find(i => i.id === editingInvoiceId);
             if (!inv || !tenant) return;
             const pitems = invoiceEditorItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
             const psubtotal = pitems.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
@@ -2456,7 +2468,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                 docLabel: 'FACTURE',
                 docNumber: viewInv.sale_number,
                 docDate: invoiceForm.doc_date || new Date(viewInv.created_at).toLocaleDateString('fr-FR'),
-                customer: viewInv.customers ? { name: viewInv.customers.name } : null,
+                customer: (invoiceDetail || viewInv).customers ? { name: (invoiceDetail || viewInv).customers.name, phone: ((invoiceDetail || viewInv).customers as any).phone || undefined, address: ((invoiceDetail || viewInv).customers as any).address || undefined } : null,
                 items: pitems, subtotal: psubtotal, total: Number(viewInv.total),
                 payments: invoicePayList.map(p => ({ method_name: p.method_name, amount: p.amount })),
                 paid: Number(viewInv.paid),
