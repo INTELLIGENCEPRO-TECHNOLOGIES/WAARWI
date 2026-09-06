@@ -22,7 +22,7 @@ type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites
 type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
 
 export function Settings() {
-  const { refresh, profile, tenant, sites } = useApp();
+  const { refresh, profile, tenant, sites, isOwner } = useApp();
   const autoMode = (tenant?.business_type || 'auto_parts') === 'auto_parts';
   const [tab, setTab] = useState<TabKey>('home');
 
@@ -30,7 +30,7 @@ export function Settings() {
     {
       title: 'Votre entreprise',
       tiles: [
-        { k: 'company', label: 'Identification', icon: Building2, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' },
+        ...(isOwner ? [{ k: 'company' as TabKey, label: 'Identification', icon: Building2, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' }] : []),
         { k: 'subscription', label: 'Abonnement', icon: CreditCard, color: 'text-blue-700', bg: 'bg-blue-50/80 border-blue-200' },
         { k: 'users', label: 'Utilisateurs', icon: Users, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
         { k: 'permissions', label: 'Permissions', icon: Shield, color: 'text-rose-700', bg: 'bg-rose-50/80 border-rose-200' },
@@ -462,7 +462,7 @@ function BoutiqueTab() {
 
 /* ===================== SITES ===================== */
 function SitesTab() {
-  const { tenant, refresh } = useApp();
+  const { tenant, refresh, sites: appSites, depots: appDepots, isOwner } = useApp();
   const { success, error } = useToast();
   const [list, setList] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -475,7 +475,12 @@ function SitesTab() {
   const load = async () => {
     if (!tenant) return;
     const { data } = await supabase.from('sites').select('*').eq('tenant_id', tenant.id).order('is_warehouse').order('name');
-    setList(data || []);
+    if (isOwner) {
+      setList(data || []);
+    } else {
+      const accessibleIds = new Set([...appSites, ...appDepots].map(s => s.id));
+      setList((data || []).filter(s => accessibleIds.has(s.id)));
+    }
   };
   useEffect(() => { load(); }, [tenant?.id]);
 
@@ -545,7 +550,7 @@ function SitesTab() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Magasins</h2>
-          <button onClick={openCreateStore} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>
+          {isOwner && <button onClick={openCreateStore} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -572,7 +577,7 @@ function SitesTab() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Depots / Entrepots</h2>
-          <button onClick={openCreateDepot} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>
+          {(isOwner || stores.length > 0) && <button onClick={openCreateDepot} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -613,7 +618,7 @@ function SitesTab() {
               <label className="label">Magasin rattaché *</label>
               <select value={form.parent_site_id || ''} onChange={e => setForm({ ...form, parent_site_id: e.target.value })} className="input">
                 <option value="">— Sélectionner —</option>
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {(isOwner ? stores : stores.filter(s => appSites.some(as => as.id === s.id))).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
               <p className="text-[10px] text-slate-400 mt-1">Seul ce magasin pourra vendre depuis ce dépôt (sauf si transfert inter-dépôts activé).</p>
             </div>
@@ -757,7 +762,9 @@ function PaymentsTab() {
 
 /* ===================== CATEGORIES ===================== */
 function CategoriesTab() {
-  const { tenant } = useApp();
+  const { tenant, currentSite, isOwner, sites: appSites } = useApp();
+  const rootSiteId = !isOwner ? (currentSite?.is_warehouse ? currentSite?.parent_site_id : currentSite?.id) : null;
+  const allStores = appSites.filter((s: any) => !s.is_warehouse);
   const { success, error } = useToast();
   const [list, setList] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -768,7 +775,7 @@ function CategoriesTab() {
 
   const load = async () => {
     if (!tenant) return;
-    const { data } = await supabase.from('part_categories').select('*').eq('tenant_id', tenant.id).order('name');
+    const { data } = await supabase.from('part_categories').select('*, site_id').eq('tenant_id', tenant.id).order('name');
     setList(data || []);
   };
   useEffect(() => { load(); }, [tenant?.id]);
@@ -778,7 +785,7 @@ function CategoriesTab() {
 
   const openCreate = (parentId?: string) => {
     setEditing(null);
-    setForm({ name: '', code: '', parent_id: parentId || null, is_active: true });
+    setForm({ name: '', code: '', parent_id: parentId || null, is_active: true, site_id: isOwner ? null : rootSiteId });
     setOpen(true);
   };
   const openEdit = (c: any) => { setEditing(c); setForm({ ...c }); setOpen(true); };
@@ -787,7 +794,7 @@ function CategoriesTab() {
     if (!tenant || !form.name) { error('Nom obligatoire'); return; }
     setSaving(true);
     const newTrackStock = form.track_stock !== false;
-    const payload = { tenant_id: tenant.id, name: form.name, code: form.code || '', parent_id: form.parent_id || null, is_active: form.is_active !== false, track_stock: newTrackStock };
+    const payload = { tenant_id: tenant.id, name: form.name, code: form.code || '', parent_id: form.parent_id || null, is_active: form.is_active !== false, track_stock: newTrackStock, site_id: form.site_id || null };
     const { error: e } = editing
       ? await supabase.from('part_categories').update(payload).eq('id', editing.id)
       : await supabase.from('part_categories').insert(payload);
@@ -815,7 +822,7 @@ function CategoriesTab() {
           {roots.length === 0 ? <div className="py-8 text-center text-sm text-neutral-400">Aucune catégorie</div> : (
             <table className="w-full text-sm">
               <thead className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold border-b border-neutral-200 sticky top-0 bg-white">
-                <tr><th className="px-3 py-2 text-left">Catégorie</th><th className="px-3 py-2 text-left hidden sm:table-cell">Code</th><th className="px-3 py-2 text-center">Statut</th><th className="px-3 py-2 text-right">Actions</th></tr>
+                <tr><th className="px-3 py-2 text-left">Catégorie</th><th className="px-3 py-2 text-left hidden sm:table-cell">Code</th><th className="px-3 py-2 text-center">Site</th><th className="px-3 py-2 text-center">Statut</th><th className="px-3 py-2 text-right">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 {roots.map(cat => (
@@ -823,25 +830,27 @@ function CategoriesTab() {
                     <tr key={cat.id} className="bg-neutral-50/60 hover:bg-neutral-100/60">
                       <td className="px-3 py-2 font-semibold text-neutral-900 text-sm">{cat.name}</td>
                       <td className="px-3 py-2 font-mono text-xs hidden sm:table-cell text-neutral-500">{cat.code}</td>
+                      <td className="px-3 py-2 text-center"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${cat.site_id ? 'bg-blue-50 text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{cat.site_id ? (allStores.find((s: any) => s.id === cat.site_id)?.name || 'Site') : 'Global'}</span></td>
                       <td className="px-3 py-2 text-center"><span className={`text-[10px] font-bold ${cat.is_active ? 'text-emerald-600' : 'text-neutral-400'}`}>{cat.is_active ? 'Active' : 'Inactive'}</span></td>
                       <td className="px-3 py-2 text-right">
-                        <div className="inline-flex gap-0.5">
+                        {(isOwner || (cat.site_id && cat.site_id === rootSiteId)) ? <div className="inline-flex gap-0.5">
                           <button onClick={() => openCreate(cat.id)} className="p-1 rounded hover:bg-neutral-200 text-neutral-700" title="Sous-catégorie"><Plus className="w-3 h-3" /></button>
                           <button onClick={() => openEdit(cat)} className="p-1 rounded hover:bg-neutral-200"><Edit2 className="w-3 h-3 text-neutral-500" /></button>
                           <button onClick={() => setToDelete(cat)} className="p-1 rounded hover:bg-red-50 text-red-600"><Trash2 className="w-3 h-3" /></button>
-                        </div>
+                        </div> : null}
                       </td>
                     </tr>
                     {children(cat.id).map(sub => (
                       <tr key={sub.id} className="hover:bg-neutral-50/60">
                         <td className="px-3 py-2 pl-7 text-neutral-600 text-sm">↳ {sub.name}</td>
                         <td className="px-3 py-2 font-mono text-xs hidden sm:table-cell text-neutral-400">{sub.code}</td>
+                        <td className="px-3 py-2 text-center"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${sub.site_id ? 'bg-blue-50 text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{sub.site_id ? (allStores.find((s: any) => s.id === sub.site_id)?.name || 'Site') : 'Global'}</span></td>
                         <td className="px-3 py-2 text-center"><span className={`text-[10px] font-bold ${sub.is_active ? 'text-emerald-600' : 'text-neutral-400'}`}>{sub.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td className="px-3 py-2 text-right">
-                          <div className="inline-flex gap-0.5">
+                          {(isOwner || (sub.site_id && sub.site_id === rootSiteId)) ? <div className="inline-flex gap-0.5">
                             <button onClick={() => openEdit(sub)} className="p-1 rounded hover:bg-neutral-200"><Edit2 className="w-3 h-3 text-neutral-500" /></button>
                             <button onClick={() => setToDelete(sub)} className="p-1 rounded hover:bg-red-50 text-red-600"><Trash2 className="w-3 h-3" /></button>
-                          </div>
+                          </div> : null}
                         </td>
                       </tr>
                     ))}
@@ -861,9 +870,19 @@ function CategoriesTab() {
           <div><label className="label">Catégorie parente</label>
             <select value={form.parent_id || ''} onChange={e => setForm({ ...form, parent_id: e.target.value || null })} className="input">
               <option value="">— Catégorie principale —</option>
-              {list.filter(c => !c.parent_id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {list.filter(c => !c.parent_id && (c.site_id === form.site_id || !c.site_id || !form.site_id)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          {isOwner ? (
+            <div><label className="label">Site</label>
+              <select value={form.site_id || ''} onChange={e => setForm({ ...form, site_id: e.target.value || null })} className="input">
+                <option value="">Global (tous les sites)</option>
+                {allStores.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div><label className="label">Site</label><div className="text-sm text-neutral-600 py-1.5">{allStores.find((s: any) => s.id === rootSiteId)?.name || 'Mon site'}</div></div>
+          )}
           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Active</span></label>
           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.track_stock !== false} onChange={e => setForm({ ...form, track_stock: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Suivi de stock</span><span className="text-[10px] text-neutral-400">(appliqué à tous les articles de cette catégorie)</span></label>
         </div>
@@ -1235,13 +1254,15 @@ function UsersTab() {
     setSaving(true);
     try {
       if (editing) {
-        await callAdminUsers('update', { user_id: editing.id, full_name: form.full_name, role: form.role, is_active: form.is_active });
         const siteIds = (form.assigned_site_ids && form.assigned_site_ids.length > 0) ? form.assigned_site_ids : null;
-        await supabase.from('profiles').update({ assigned_site_ids: siteIds } as any).eq('id', editing.id);
+        const siteMode = (siteIds && siteIds.length > 0) ? 'selected' : 'all';
+        await callAdminUsers('update', { user_id: editing.id, full_name: form.full_name, role: form.role, is_active: form.is_active, site_access_mode: siteMode, assigned_site_ids: siteIds });
         success('Utilisateur mis à jour');
       } else {
         if (!form.password || form.password.length < 6) { error('Mot de passe min 6 caractères'); setSaving(false); return; }
-        await callAdminUsers('create', { email: form.email, password: form.password, full_name: form.full_name, role: form.role });
+        const siteIds = (form.assigned_site_ids && form.assigned_site_ids.length > 0) ? form.assigned_site_ids : null;
+        const siteMode = (siteIds && siteIds.length > 0) ? 'selected' : 'all';
+        await callAdminUsers('create', { email: form.email, password: form.password, full_name: form.full_name, role: form.role, site_access_mode: siteMode, assigned_site_ids: siteIds });
         success('Utilisateur créé');
       }
       setOpen(false); setEditing(null); setForm({ email: '', password: '', full_name: '', role: 'cashier', assigned_site_ids: [] });
@@ -1303,8 +1324,7 @@ function UsersTab() {
               </span>
               <div className="flex items-center gap-1 shrink-0">
                 <button onClick={async () => {
-                  const { data: prof } = await supabase.from('profiles').select('assigned_site_ids').eq('id', u.id).maybeSingle();
-                  setEditing(u); setForm({ ...u, assigned_site_ids: (prof as any)?.assigned_site_ids || [] }); setOpen(true);
+                  setEditing(u); setForm({ ...u, assigned_site_ids: u.assigned_site_ids || [] }); setOpen(true);
                 }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Modifier"><Edit2 className="w-3.5 h-3.5" /></button>
                 <button onClick={() => { setResetFor(u); setNewPass(''); }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Mot de passe"><KeyRound className="w-3.5 h-3.5" /></button>
                 {u.id !== profile?.id && (
@@ -1386,11 +1406,11 @@ const STOCK_METHODS: { value: StockMethod; label: string; desc: string }[] = [
 ];
 
 function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
-  const { tenant, sites, depots } = useApp();
+  const { tenant, sites, depots, currentSite } = useApp();
   const { success } = useToast();
 
   const settings = (tenant as any)?.settings || {};
-  const allowNegative = !!settings.allow_negative_stock;
+  const allowNegative = !!(currentSite as any)?.allow_negative_stock;
   const stockMethod: StockMethod = settings.stock_method || 'none';
   const sharedArticles = settings.shared_articles !== false;
   const interDepotTransfer = !!settings.inter_depot_transfer;
@@ -1415,7 +1435,9 @@ function StockSettingsTab({ onRefresh }: { onRefresh: () => void }) {
             desc="Permet de vendre des articles même si le stock est à zéro ou insuffisant."
             active={allowNegative}
             onToggle={async () => {
-              await updateSetting('allow_negative_stock', !allowNegative);
+              if (!currentSite?.id) return;
+              await supabase.from('sites').update({ allow_negative_stock: !allowNegative }).eq('id', currentSite.id);
+              onRefresh();
               success(!allowNegative ? 'Stock négatif autorisé' : 'Stock négatif désactivé');
             }}
           />

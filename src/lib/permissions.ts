@@ -102,6 +102,14 @@ export const PERMISSION_KEYS = [
   'rep_commission_view',
   'rep_settings_edit',
   'rep_export',
+  // Backup & Restore
+  'backup_create',
+  'backup_restore',
+  'backup_reset_operations',
+  'backup_import',
+  'backup_download',
+  'backup_delete',
+  'backup_manage_schedule',
 ] as const;
 
 export type PermissionKey = typeof PERMISSION_KEYS[number];
@@ -195,6 +203,13 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   rep_commission_view: 'Voir les montants de commission',
   rep_settings_edit: 'Modifier les paramètres de commission',
   rep_export: 'Imprimer / exporter les rapports représentants',
+  backup_create: 'Créer une sauvegarde manuelle',
+  backup_restore: 'Restaurer une sauvegarde',
+  backup_reset_operations: 'Réinitialiser les opérations',
+  backup_import: 'Importer une sauvegarde depuis un fichier',
+  backup_download: 'Télécharger une sauvegarde',
+  backup_delete: 'Supprimer une sauvegarde',
+  backup_manage_schedule: 'Gérer la planification des sauvegardes automatiques',
 };
 
 export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] = [
@@ -256,13 +271,22 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
     label: 'Administration',
     keys: ['export_data', 'manage_settings', 'manage_users'],
   },
+  {
+    label: 'Sauvegarde & Restauration',
+    keys: ['backup_create', 'backup_restore', 'backup_reset_operations', 'backup_import', 'backup_download', 'backup_delete', 'backup_manage_schedule'],
+  },
 ];
 
 const ALL_TRUE: PermissionMap = PERMISSION_KEYS.reduce((acc, k) => ({ ...acc, [k]: true }), {} as PermissionMap);
 const ALL_FALSE: PermissionMap = PERMISSION_KEYS.reduce((acc, k) => ({ ...acc, [k]: false }), {} as PermissionMap);
 
+const OWNER_ONLY_KEYS: Set<PermissionKey> = new Set([
+  'backup_create', 'backup_restore', 'backup_reset_operations',
+  'backup_import', 'backup_download', 'backup_delete', 'backup_manage_schedule',
+]);
+
 export function usePermissions(): { permissions: PermissionMap; loading: boolean; can: (key: PermissionKey) => boolean } {
-  const { profile, dataTick } = useApp();
+  const { profile, dataTick, isOwner } = useApp();
   const [permissions, setPermissions] = useState<PermissionMap>(ALL_FALSE);
   const [loading, setLoading] = useState(true);
 
@@ -273,8 +297,20 @@ export function usePermissions(): { permissions: PermissionMap; loading: boolean
       return;
     }
 
-    if (profile.role === 'admin' || profile.role === 'super_admin') {
+    if (profile.role === 'super_admin') {
       setPermissions(ALL_TRUE);
+      setLoading(false);
+      return;
+    }
+
+    if (profile.role === 'admin') {
+      if (isOwner) {
+        setPermissions(ALL_TRUE);
+      } else {
+        const map = { ...ALL_TRUE };
+        for (const k of OWNER_ONLY_KEYS) map[k] = false;
+        setPermissions(map);
+      }
       setLoading(false);
       return;
     }
@@ -294,20 +330,24 @@ export function usePermissions(): { permissions: PermissionMap; loading: boolean
             map[k] = data.permissions[k] === true;
           }
         }
+        for (const k of OWNER_ONLY_KEYS) map[k] = false;
         setPermissions(map);
       } else {
-        // No config found for this role: deny everything (secure by default)
         setPermissions(ALL_FALSE);
       }
       setLoading(false);
     })();
-  }, [profile?.tenant_id, profile?.role, dataTick]);
+  }, [profile?.tenant_id, profile?.role, dataTick, isOwner]);
 
   const can = useCallback((key: PermissionKey): boolean => {
     if (!profile) return false;
-    if (profile.role === 'admin' || profile.role === 'super_admin') return true;
+    if (profile.role === 'super_admin') return true;
+    if (profile.role === 'admin') {
+      if (OWNER_ONLY_KEYS.has(key)) return isOwner;
+      return true;
+    }
     return permissions[key] === true;
-  }, [profile, permissions]);
+  }, [profile, permissions, isOwner]);
 
   return { permissions, loading, can };
 }

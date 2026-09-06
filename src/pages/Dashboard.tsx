@@ -6,9 +6,7 @@ import { usePermissions } from '../lib/permissions';
 import { formatFCFA, formatCompactFCFA, formatDateTime } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { Modal } from '../components/Modal';
-import { SearchableSelect } from '../components/SearchableSelect';
 import { desktopAutoFocus } from '../lib/device';
-import { printStockMovementA4, printStockMovement80, type PrintTenant } from '../lib/print';
 import {
   TrendingUp, TrendingDown, AlertTriangle, Package, Loader2,
   Users, FileText, ExternalLink, Globe,
@@ -2099,135 +2097,6 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
     })();
     return () => { cancelled = true; };
   }, [hasMultiSites, tenant?.id, currentSite?.id, stats.todaySales, period]);
-  // ── Quick-action modal state ─────────────────────────────────────────────
-  type QAModal = 'customer' | 'supplier' | 'stock_in' | 'stock_out' | 'stock_transfer' | null;
-  const [qaModal, setQAModal] = useState<QAModal>(null);
-  const [qaSaving, setQASaving] = useState(false);
-
-  // Customer form
-  const [custForm, setCustForm] = useState<any>({ customer_type: 'particulier' });
-  // Supplier form
-  const [supForm, setSupForm] = useState<any>({ country: 'Sénégal' });
-  // Stock adj
-  const [stockRows, setStockRows] = useState<{ article_id: string; name: string; internal_ref: string; quantity: number }[]>([]);
-  const [adjArticleId, setAdjArticleId] = useState('');
-  const [adjQty, setAdjQty] = useState<number | ''>('');
-  const [adjNote, setAdjNote] = useState('');
-  const [adjTargetSite, setAdjTargetSite] = useState('');
-
-  const openModal = async (modal: QAModal) => {
-    setQASaving(false);
-    setCustForm({ customer_type: 'particulier' });
-    setSupForm({ country: 'Sénégal' });
-    setAdjQty(''); setAdjNote(''); setAdjTargetSite('');
-
-    if (modal === 'stock_in' || modal === 'stock_out' || modal === 'stock_transfer') {
-      if (tenant && currentSite) {
-        let allArts: any[] = [];
-        let artFrom = 0;
-        while (true) {
-          const { data, error: e } = await supabase.from('articles').select('id, name, internal_ref').eq('tenant_id', tenant.id).eq('is_active', true).order('name').range(artFrom, artFrom + 999);
-          if (e || !data || data.length === 0) break;
-          allArts = allArts.concat(data);
-          if (data.length < 1000) break;
-          artFrom += 1000;
-        }
-        let allStk: any[] = [];
-        let sFrom = 0;
-        while (true) {
-          const { data, error: e } = await supabase.from('stock_levels').select('article_id, quantity').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).range(sFrom, sFrom + 999);
-          if (e || !data || data.length === 0) break;
-          allStk = allStk.concat(data);
-          if (data.length < 1000) break;
-          sFrom += 1000;
-        }
-        const qmap = new Map(allStk.map((r: any) => [r.article_id, Number(r.quantity)]));
-        const rows = allArts.map((a: any) => ({ article_id: a.id, name: a.name, internal_ref: a.internal_ref, quantity: qmap.get(a.id) ?? 0 }));
-        setStockRows(rows);
-        if (rows.length > 0) setAdjArticleId(rows[0].article_id);
-      }
-    }
-    setQAModal(modal);
-  };
-
-  const saveCustomer = async () => {
-    if (!tenant || !custForm.name?.trim()) return;
-    setQASaving(true);
-    const { error } = await supabase.from('customers').insert({
-      tenant_id: tenant.id, name: custForm.name.trim(),
-      phone: custForm.phone || '', email: custForm.email || '',
-      address: custForm.address || '', whatsapp: custForm.whatsapp || '',
-      customer_type: custForm.customer_type || 'particulier', is_active: true,
-    });
-    setQASaving(false);
-    if (error) {
-      const msg = error.message || '';
-      toastError(msg.includes('Limite du plan') ? 'Limite de clients atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
-    } else { setQAModal(null); nav('tiers', { target: 'customers' }); }
-  };
-
-  const saveSupplier = async () => {
-    if (!tenant || !supForm.name?.trim()) return;
-    setQASaving(true);
-    const { error } = await supabase.from('suppliers').insert({
-      tenant_id: tenant.id, name: supForm.name.trim(),
-      contact: supForm.contact || '', phone: supForm.phone || '',
-      whatsapp: supForm.whatsapp || '', email: supForm.email || '',
-      address: supForm.address || '', country: supForm.country || 'Sénégal',
-      delivery_days: Number(supForm.delivery_days || 0),
-      payment_terms: supForm.payment_terms || '', is_active: true,
-    });
-    setQASaving(false);
-    if (error) {
-      const msg = error.message || '';
-      toastError(msg.includes('Limite du plan') ? 'Limite de fournisseurs atteinte pour votre plan. Mettez à niveau votre abonnement.' : msg);
-    } else { setQAModal(null); nav('tiers', { target: 'suppliers' }); }
-  };
-
-  const [stockDone, setStockDone] = useState<{ articleName: string; articleRef: string; qty: number; type: string; label: string } | null>(null);
-
-  const printStockDone = (format: 'a4' | '80') => {
-    if (!stockDone || !tenant || !currentSite || !profile) return;
-    const opts = {
-      tenant: { name: tenant.name, phone: tenant.phone || '', address: tenant.address || '', logo_url: tenant.logo_url || '' } as PrintTenant,
-      movementType: stockDone.type,
-      movementLabel: stockDone.label,
-      reference: `MOV-${Date.now().toString(36).toUpperCase()}`,
-      date: new Date().toLocaleString('fr-FR'),
-      user: profile.full_name || 'Utilisateur',
-      siteName: currentSite.name,
-      items: [{ ref: stockDone.articleRef, name: stockDone.articleName, quantity: stockDone.qty }],
-      observation: adjNote || undefined,
-    };
-    if (format === 'a4') printStockMovementA4(opts);
-    else printStockMovement80(opts);
-  };
-
-  const saveStockAdj = async () => {
-    if (!tenant || !currentSite || !adjArticleId || adjQty === '' || Number(adjQty) <= 0) return;
-    setQASaving(true);
-    const movType = qaModal === 'stock_in' ? 'adjustment_in' : qaModal === 'stock_out' ? 'adjustment_out' : 'transfer_out';
-    const articleRow = stockRows.find(r => r.article_id === adjArticleId);
-    if (qaModal === 'stock_transfer') {
-      if (!adjTargetSite) { setQASaving(false); return; }
-      await supabase.rpc('adjust_stock', { p_article_id: adjArticleId, p_site_id: currentSite.id, p_quantity: -Number(adjQty), p_movement_type: 'transfer_out', p_note: adjNote || 'Transfert' });
-      await supabase.rpc('adjust_stock', { p_article_id: adjArticleId, p_site_id: adjTargetSite, p_quantity: Number(adjQty), p_movement_type: 'transfer_in', p_note: adjNote || 'Transfert' });
-    } else {
-      const qty = qaModal === 'stock_in' ? Number(adjQty) : -Number(adjQty);
-      await supabase.rpc('adjust_stock', { p_article_id: adjArticleId, p_site_id: currentSite.id, p_quantity: qty, p_movement_type: movType, p_note: adjNote || undefined });
-    }
-    setQASaving(false);
-    setQAModal(null);
-    setStockDone({
-      articleName: articleRow?.name || 'Article',
-      articleRef: articleRow?.internal_ref || '',
-      qty: Number(adjQty),
-      type: movType,
-      label: qaModal === 'stock_in' ? 'Entrée de stock' : qaModal === 'stock_out' ? 'Sortie de stock' : 'Transfert',
-    });
-  };
-
-  const adjRow = stockRows.find(r => r.article_id === adjArticleId);
 
   const lastSaleTime = stats.recentSales.length > 0
     ? new Date(stats.recentSales[0].created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
@@ -2429,11 +2298,11 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                   { icon: ShoppingCart, label: 'Nouvelle vente', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
                   { icon: CreditCard, label: 'Encaisser', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('pos', { target: 'directPos' }); } },
                   { icon: ClipboardList, label: 'Nouvelle commande', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('supplier_orders', { target: 'newOrder' }); } },
-                  { icon: Users, label: 'Nouveau client', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('customer'); } },
-                  { icon: Truck, label: 'Nouveau fournisseur', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('supplier'); } },
-                  { icon: ArrowDownCircle, label: 'Entrée stock', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('stock_in'); } },
-                  { icon: ArrowUpCircle, label: 'Sortie stock', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('stock_out'); } },
-                  { icon: ArrowRightLeft, label: 'Transfert', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); openModal('stock_transfer'); } },
+                  { icon: Users, label: 'Nouveau client', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('tiers', { target: 'newCustomer' }); } },
+                  { icon: Truck, label: 'Nouveau fournisseur', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('tiers', { target: 'newSupplier' }); } },
+                  { icon: ArrowDownCircle, label: 'Entrée stock', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('stock', { target: 'stockIn' }); } },
+                  { icon: ArrowUpCircle, label: 'Sortie stock', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('stock', { target: 'stockOut' }); } },
+                  { icon: ArrowRightLeft, label: 'Transfert', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('stock', { target: 'stockTransfer' }); } },
                   { icon: BarChart3, label: 'Rapport', color: 'text-neutral-700', bg: 'bg-neutral-100', action: () => { setFabOpen(false); nav('reports'); } },
                 ].map(item => (
                   <button
@@ -3013,164 +2882,6 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         </div>
       </div>
 
-      {/* ── Quick-action modals ────────────────────────────────────────────── */}
-      <Modal open={qaModal === 'customer'} onClose={() => setQAModal(null)} title="Nouveau client" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveCustomer} disabled={qaSaving || !custForm.name?.trim()} className="btn-icon-primary" title="Créer le client">{qaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
-          <div>
-            <label className="label">Nom *</label>
-            <input value={custForm.name || ''} onChange={e => setCustForm((f: any) => ({ ...f, name: e.target.value }))} className="input" autoFocus={desktopAutoFocus} placeholder="Nom du client" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Type</label>
-              <select value={custForm.customer_type || 'particulier'} onChange={e => setCustForm((f: any) => ({ ...f, customer_type: e.target.value }))} className="input">
-                <option value="particulier">Particulier</option>
-                <option value="professionnel">Professionnel</option>
-                <option value="garage">Garage</option>
-                <option value="revendeur">Revendeur</option>
-                <option value="societe">Société</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Telephone</label>
-              <input value={custForm.phone || ''} onChange={e => setCustForm((f: any) => ({ ...f, phone: e.target.value }))} className="input" placeholder="+221 77 000 00 00" />
-            </div>
-          </div>
-          <div>
-            <label className="label">WhatsApp</label>
-            <input value={custForm.whatsapp || ''} onChange={e => setCustForm((f: any) => ({ ...f, whatsapp: e.target.value }))} className="input" placeholder="+221 77 000 00 00" />
-          </div>
-          <div>
-            <label className="label">Adresse</label>
-            <input value={custForm.address || ''} onChange={e => setCustForm((f: any) => ({ ...f, address: e.target.value }))} className="input" />
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={qaModal === 'supplier'} onClose={() => setQAModal(null)} title="Nouveau fournisseur" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveSupplier} disabled={qaSaving || !supForm.name?.trim()} className="btn-icon-primary" title="Créer le fournisseur">{qaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
-          <div>
-            <label className="label">Nom *</label>
-            <input value={supForm.name || ''} onChange={e => setSupForm((f: any) => ({ ...f, name: e.target.value }))} className="input" autoFocus={desktopAutoFocus} placeholder="Nom du fournisseur" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Contact</label>
-              <input value={supForm.contact || ''} onChange={e => setSupForm((f: any) => ({ ...f, contact: e.target.value }))} className="input" />
-            </div>
-            <div>
-              <label className="label">Telephone</label>
-              <input value={supForm.phone || ''} onChange={e => setSupForm((f: any) => ({ ...f, phone: e.target.value }))} className="input" placeholder="+221 33 000 00 00" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">WhatsApp</label>
-              <input value={supForm.whatsapp || ''} onChange={e => setSupForm((f: any) => ({ ...f, whatsapp: e.target.value }))} className="input" />
-            </div>
-            <div>
-              <label className="label">Pays</label>
-              <input value={supForm.country || 'Senegal'} onChange={e => setSupForm((f: any) => ({ ...f, country: e.target.value }))} className="input" />
-            </div>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        open={qaModal === 'stock_in' || qaModal === 'stock_out'}
-        onClose={() => setQAModal(null)}
-        title={qaModal === 'stock_in' ? 'Entrée de stock' : 'Sortie de stock'}
-        size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0} className="btn-icon-primary" title="Valider">{qaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}</button></>}
-      >
-        <div className="space-y-3">
-          {adjRow && (
-            <div className="p-3 rounded-xl bg-gradient-to-br from-neutral-50 to-white border border-neutral-200">
-              <div className="text-[12px] font-semibold text-neutral-900 truncate">{adjRow.name}</div>
-              <div className="text-[10px] text-neutral-500 font-mono">{adjRow.internal_ref}</div>
-              <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-neutral-200 text-neutral-700">
-                Stock actuel : <span className="num">{adjRow.quantity}</span>
-              </div>
-            </div>
-          )}
-          <div>
-            <label className="label">Article</label>
-            <SearchableSelect
-              options={stockRows.map(r => ({ value: r.article_id, label: r.name, sublabel: r.internal_ref }))}
-              value={adjArticleId}
-              onChange={v => setAdjArticleId(v)}
-              placeholder="Rechercher un article..."
-            />
-          </div>
-          <div>
-            <label className="label">Quantité</label>
-            <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input text-lg font-semibold" autoFocus={desktopAutoFocus} />
-          </div>
-          <div>
-            <label className="label">Note / motif</label>
-            <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="input" placeholder="Achat, retour, perte, correction..." />
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={qaModal === 'stock_transfer'} onClose={() => setQAModal(null)} title="Transfert de stock" size="sm"
-        footer={<><button onClick={() => setQAModal(null)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button><button onClick={saveStockAdj} disabled={qaSaving || adjQty === '' || Number(adjQty) <= 0 || !adjTargetSite} className="btn-icon-primary" title="Transferer">{qaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}</button></>}>
-        <div className="space-y-3">
-          <div>
-            <label className="label">Article</label>
-            <SearchableSelect
-              options={stockRows.map(r => ({ value: r.article_id, label: r.name, sublabel: r.internal_ref }))}
-              value={adjArticleId}
-              onChange={v => setAdjArticleId(v)}
-              placeholder="Rechercher un article..."
-            />
-          </div>
-          <div>
-            <label className="label">Magasin de destination</label>
-            <SearchableSelect
-              options={sites.filter((s: any) => s.id !== currentSite?.id).map((s: any) => ({ value: s.id, label: s.name }))}
-              value={adjTargetSite}
-              onChange={v => setAdjTargetSite(v)}
-              placeholder="-- Choisir --"
-              searchable={false}
-            />
-          </div>
-          <div>
-            <label className="label">Quantité à transférer</label>
-            <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(Number(e.target.value))} className="input" autoFocus={desktopAutoFocus} />
-          </div>
-          <div>
-            <label className="label">Note</label>
-            <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="input" placeholder="Motif du transfert" />
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={!!stockDone} onClose={() => setStockDone(null)} title="Mouvement enregistré" size="sm"
-        footer={<button onClick={() => setStockDone(null)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}
-      >
-        {stockDone && (
-          <div className="text-center space-y-4">
-            <div className="w-14 h-14 mx-auto rounded-full bg-neutral-100 flex items-center justify-center">
-              <CheckIcon className="w-7 h-7 text-neutral-700" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-neutral-900">{stockDone.label}</p>
-              <p className="text-xs text-neutral-500 mt-1">{stockDone.articleName} - Qté: {stockDone.qty}</p>
-            </div>
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <button onClick={() => printStockDone('a4')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-200 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors">
-                <FileText className="w-3.5 h-3.5" /> Imprimer A4
-              </button>
-              <button onClick={() => printStockDone('80')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-200 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors">
-                <Receipt className="w-3.5 h-3.5" /> Ticket 80mm
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }

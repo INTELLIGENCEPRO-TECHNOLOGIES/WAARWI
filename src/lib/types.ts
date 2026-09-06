@@ -130,6 +130,11 @@ export type Profile = {
   role: string;
   auto_print_ticket?: boolean;
   auto_print_invoice?: boolean;
+  site_access_mode?: 'all' | 'selected';
+  assigned_site_ids?: string[] | null;
+  default_site_id?: string | null;
+  is_active?: boolean;
+  phone?: string | null;
 };
 
 export type Site = {
@@ -144,6 +149,7 @@ export type Site = {
   parent_site_id: string | null;
   ticket_header_config?: TicketHeaderItem[] | null;
   a4_header_config?: A4HeaderConfig | null;
+  allow_negative_stock?: boolean;
 };
 
 export type Category = {
@@ -153,6 +159,7 @@ export type Category = {
   name: string;
   code: string;
   is_active: boolean;
+  site_id?: string | null;
 };
 
 export type VehicleBrand = {

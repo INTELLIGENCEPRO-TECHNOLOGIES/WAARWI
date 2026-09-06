@@ -456,6 +456,13 @@ p { line-height: 1.6; }
 }
 .cart-fab-blink { animation: cart-fab-blink 1.2s ease-in-out infinite; }
 
+/* ── Quick action zoom pulse ─────────────────────────── */
+@keyframes quick-action-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); }
+}
+.quick-action-pulse { animation: quick-action-pulse 1.8s ease-in-out infinite; }
+
 /* ── Highlight flash ─────────────────────────────────── */
 @keyframes waarwi-flash {
   0%, 100% { background-color: transparent; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }

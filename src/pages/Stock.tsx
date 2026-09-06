@@ -428,16 +428,31 @@ export function Stock() {
   }, [tab, mvSubTab, tenant?.id, currentSite?.id, dataTick, mvSiteId, mvDateFrom, mvDateTo]);
 
   const [flashKey, setFlashKey] = useState<string | null>(null);
+  const handleNavTarget = useCallback((target: string) => {
+    switch (target) {
+      case 'outOfStock': setTab('stocks'); setFilter('out'); setFlashKey('out'); break;
+      case 'lowStock': setTab('stocks'); setFilter('low'); setFlashKey('low'); break;
+      case 'stockIn': setTab('stocks'); setFlashKey('stockIn'); break;
+      case 'stockOut': setTab('stocks'); setFlashKey('stockOut'); break;
+      case 'stockTransfer': setTab('stocks'); setFlashKey('stockTransfer'); break;
+      case 'stockInventory': setTab('stocks'); setFlashKey('stockInventory'); break;
+      case 'stockMovements': setTab('movements'); setMvSubTab('movements'); setFlashKey('stockMovements'); break;
+      case 'articles': setTab('stocks'); setFilter('all'); setFlashKey('articles'); break;
+    }
+    setTimeout(() => setFlashKey(null), 6800);
+  }, []);
   useEffect(() => {
     const ctx = consumeNavContext();
-    if (!ctx?.target) return;
-    if (ctx.target === 'outOfStock') { setTab('stocks'); setFilter('out'); setFlashKey('out'); }
-    else if (ctx.target === 'lowStock') { setTab('stocks'); setFilter('low'); setFlashKey('low'); }
-    else if (ctx.target === 'stockIn') { setTab('movements'); setFlashKey('stockIn'); }
-    else if (ctx.target === 'articles') { setTab('stocks'); setFilter('all'); setFlashKey('articles'); }
-    const t = setTimeout(() => setFlashKey(null), 6800);
-    return () => clearTimeout(t);
-  }, []);
+    if (ctx?.target) handleNavTarget(ctx.target);
+  }, [handleNavTarget]);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const target = (e as CustomEvent).detail?.target;
+      if (target) handleNavTarget(target);
+    };
+    window.addEventListener('waarwi:quickaction', handler);
+    return () => window.removeEventListener('waarwi:quickaction', handler);
+  }, [handleNavTarget]);
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
   const lowCount = serverTotals.low_stock || 0;

@@ -7,17 +7,18 @@ import {
   CreditCard as CreditCard_, Package as Package_, Boxes as Boxes_, FileText as FileText_,
   Globe as Globe_, BookOpen as BookOpen_, Settings as Settings_, Info as Info_, Library,
   ShoppingCart, Truck, Wallet, BarChart3, Receipt, Eye, Monitor, Globe, ImagePlus, HeartPulse, Bell, ArrowRightLeft,
-  Rocket, Sparkles, Bug, RefreshCw, Lock,
+  Rocket, Sparkles, Bug, RefreshCw, Lock, HardDrive,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { formatCompactFCFA, formatDate, formatDateTime, formatFCFA } from '../lib/format';
 import { MasterCatalogAdmin } from '../components/MasterCatalogAdmin';
+import { CentralizedBackups } from '../components/CentralizedBackups';
 import { LandingConfigSection as LandingConfigSectionNew } from '../components/LandingConfigSection';
 import { LOGIN_ICON_MAP, DEFAULT_LOGIN_MODULES, type LoginModule, type TextAccent } from '../lib/loginConfig';
 
-type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'landing' | 'releases';
+type Section = 'overview' | 'tenants' | 'plans' | 'subscriptions' | 'messages' | 'activity' | 'master_catalogs' | 'login_config' | 'landing' | 'releases' | 'backups';
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const doFetch = async (accessToken: string) => {
@@ -80,6 +81,7 @@ const sidebarGroups = [
     label: 'SURVEILLANCE',
     items: [
       { k: 'activity' as Section, l: 'Activité', icon: Activity },
+      { k: 'backups' as Section, l: 'Sauvegardes', icon: HardDrive },
     ],
   },
 ];
@@ -90,86 +92,70 @@ export function PlatformAdmin() {
 
   return (
     <div className="flex h-full min-h-screen lg:min-h-0">
-      {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-screen lg:h-screen w-[240px] bg-white border-r border-[#E5E7EB] flex flex-col overflow-y-auto transition-transform lg:transition-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-4 border-b border-[#E5E7EB]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#111111] flex items-center justify-center overflow-hidden p-0.5">
-              <img src="/newlogo.png" alt="W" className="w-full h-full object-contain invert" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-[#0F172A] leading-tight">Waarwi</div>
-              <div className="text-[10px] text-[#64748B] font-medium">Console plateforme</div>
-            </div>
-          </div>
+      <aside className={`fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-screen w-[220px] bg-white border-r border-[#E8E8E8] flex flex-col overflow-y-auto transition-transform lg:transition-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="h-14 flex items-center gap-2.5 px-5 border-b border-[#E8E8E8] shrink-0">
+          <img src="/newlogo.png" alt="Waarwi" className="w-6 h-6 object-contain" />
+          <span className="text-[13px] font-semibold text-[#111]">Waarwi</span>
+          <span className="text-[10px] text-[#999] font-medium ml-auto">Admin</span>
         </div>
 
-        <nav className="flex-1 p-3 space-y-5">
+        <nav className="flex-1 py-4 space-y-5 overflow-y-auto">
           {sidebarGroups.map(group => (
             <div key={group.label}>
-              <div className="text-[10px] font-bold text-[#64748B] tracking-wider uppercase px-2.5 mb-1.5">{group.label}</div>
-              <div className="space-y-0.5">
-                {group.items.map(item => {
-                  const I = item.icon;
-                  const active = section === item.k;
-                  return (
-                    <button
-                      key={item.k}
-                      onClick={() => { setSection(item.k); setSidebarOpen(false); }}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                        active
-                          ? 'bg-[#0F172A] text-white'
-                          : 'text-[#64748B] hover:bg-[#F7F8FA] hover:text-[#0F172A]'
-                      }`}
-                    >
-                      <I className="w-4 h-4 shrink-0" />
-                      <span>{item.l}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <div className="text-[10px] font-semibold text-[#999] tracking-wider uppercase px-5 mb-1">{group.label}</div>
+              {group.items.map(item => {
+                const I = item.icon;
+                const active = section === item.k;
+                return (
+                  <button
+                    key={item.k}
+                    onClick={() => { setSection(item.k); setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-[7px] text-[13px] transition-colors border-l-2 ${
+                      active
+                        ? 'border-[#111] text-[#111] font-semibold bg-[#FAFAFA]'
+                        : 'border-transparent text-[#666] hover:text-[#111] hover:bg-[#FAFAFA] font-medium'
+                    }`}
+                  >
+                    <I className="w-[15px] h-[15px] shrink-0" />
+                    <span>{item.l}</span>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </nav>
 
-        <div className="p-3 border-t border-[#E5E7EB]">
-          <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-[#64748B]">
-            <Shield className="w-3.5 h-3.5" />
-            <span className="font-medium">Super admin</span>
+        <div className="px-5 py-3 border-t border-[#E8E8E8] shrink-0">
+          <div className="flex items-center gap-1.5 text-[11px] text-[#999]">
+            <Shield className="w-3 h-3" />
+            <span>Super admin</span>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 min-w-0 bg-[#F7F8FA]">
-        {/* Compact top bar */}
-        <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-[#E5E7EB] px-4 sm:px-6 py-3 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1.5 rounded-lg hover:bg-[#F7F8FA] text-[#64748B]">
+      <main className="flex-1 min-w-0 bg-white">
+        <header className="sticky top-0 z-30 h-14 bg-white border-b border-[#E8E8E8] px-5 sm:px-8 flex items-center gap-3">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 text-[#666] hover:text-[#111]">
             <Layers className="w-5 h-5" />
           </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-base font-bold text-[#0F172A]">
-              {sidebarGroups.flatMap(g => g.items).find(i => i.k === section)?.l || 'Console'}
-            </h1>
-            <p className="text-[11px] text-[#64748B]">Pilotage global de Waarwi</p>
-          </div>
+          <h1 className="text-[15px] font-semibold text-[#111] flex-1 min-w-0">
+            {sidebarGroups.flatMap(g => g.items).find(i => i.k === section)?.l || 'Console'}
+          </h1>
           <button
             onClick={() => supabase.auth.signOut()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#E5E7EB] text-xs font-medium text-[#64748B] hover:text-[#0F172A] hover:bg-[#F7F8FA] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-[#666] hover:text-[#111] transition-colors"
             title="Déconnexion"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Déconnexion</span>
           </button>
-        </div>
+        </header>
 
-        {/* Page content */}
-        <div className="p-4 sm:p-6">
+        <div className="p-5 sm:p-8">
           {section === 'overview' && <OverviewSection />}
           {section === 'tenants' && <TenantsSection />}
           {section === 'plans' && <PlansSection />}
@@ -180,6 +166,7 @@ export function PlatformAdmin() {
           {section === 'master_catalogs' && <MasterCatalogAdmin />}
           {section === 'releases' && <ReleasesSection />}
           {section === 'activity' && <ActivitySection />}
+          {section === 'backups' && <CentralizedBackups />}
         </div>
       </main>
     </div>
@@ -910,13 +897,37 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
   });
   const [saving, setSaving] = useState(false);
   const [subForm, setSubForm] = useState<any>({ plan_code: tenant.plan, billing_cycle: tenant.billing_cycle || 'monthly', amount: 0, auto_renew: tenant.auto_renew !== false, started_at: new Date().toISOString().slice(0, 10), ends_at: '' });
+  const [activationLock, setActivationLock] = useState<boolean | null>(null);
+  const [activationLoading, setActivationLoading] = useState(false);
   const { success, error } = useToast();
+
+  const loadActivation = async () => {
+    const { data } = await supabase.from('_br_tenant_activation').select('enabled').eq('tenant_id', tenant.id).maybeSingle();
+    setActivationLock(data?.enabled ?? false);
+  };
+
+  const toggleActivation = async () => {
+    setActivationLoading(true);
+    const now = new Date().toISOString();
+    const newVal = !activationLock;
+    const { error: e } = await supabase.from('_br_tenant_activation').upsert({
+      tenant_id: tenant.id,
+      enabled: newVal,
+      enabled_at: newVal ? now : null,
+      disabled_at: newVal ? null : now,
+    }, { onConflict: 'tenant_id' });
+    setActivationLoading(false);
+    if (e) { error(e.message); return; }
+    setActivationLock(newVal);
+    success(newVal ? 'Opérations backup/restore activées' : 'Opérations backup/restore verrouillées');
+  };
 
   useEffect(() => {
     (async () => {
       try { setDetail(await call('tenant_detail', { tenant_id: tenant.id })); }
       catch (e: any) { error(e.message); }
     })();
+    loadActivation();
   }, [tenant.id]);
 
   const saveInfo = async () => {
@@ -1258,6 +1269,23 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                     </div>
 
                     <div className="space-y-3">
+                      {/* Activation lock for backup/restore */}
+                      <div className="flex items-center justify-between py-3 border-t border-[#F1F5F9]">
+                        <div>
+                          <div className="text-xs font-medium text-[#0F172A]">Verrou sauvegarde / restauration</div>
+                          <div className="text-[11px] text-[#64748B]">Autorise les opérations destructrices (restauration, réinitialisation, import) pour ce tenant.</div>
+                        </div>
+                        <button
+                          onClick={toggleActivation}
+                          disabled={activationLoading || activationLock === null}
+                          className="shrink-0 relative"
+                        >
+                          <div className={`w-9 h-5 rounded-full transition-colors relative ${activationLock ? 'bg-[#16A34A]' : 'bg-[#D1D5DB]'}`}>
+                            <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${activationLock ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                          </div>
+                        </button>
+                      </div>
+
                       {/* Suspend / Reactivate */}
                       <div className="flex items-center justify-between py-3 border-t border-[#F1F5F9]">
                         <div>

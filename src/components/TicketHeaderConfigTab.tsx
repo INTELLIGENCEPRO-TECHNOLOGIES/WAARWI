@@ -40,7 +40,7 @@ const PREVIEW_FONT_WEIGHT: Record<TicketHeaderSize, number> = {
 };
 
 export function TicketHeaderConfigTab() {
-  const { tenant, sites, refresh } = useApp();
+  const { tenant, sites, refresh, currentSite, isOwner } = useApp();
   const { success, error } = useToast();
   const [config, setConfig] = useState<TicketHeaderItem[]>(DEFAULT_TICKET_HEADER_CONFIG);
   const [a4Config, setA4Config] = useState<A4HeaderConfig>(DEFAULT_A4_HEADER_CONFIG);
@@ -48,6 +48,13 @@ export function TicketHeaderConfigTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [targetSiteId, setTargetSiteId] = useState<string>('');
+
+  // Non-owner: force to currentSite
+  useEffect(() => {
+    if (!isOwner && currentSite?.id) {
+      setTargetSiteId(currentSite.id);
+    }
+  }, [isOwner, currentSite?.id]);
 
   const activeSites = (sites || []).filter((s: any) => !s.is_warehouse && s.is_active);
   const selectedSite = targetSiteId ? activeSites.find((s: any) => s.id === targetSiteId) : null;
@@ -84,11 +91,13 @@ export function TicketHeaderConfigTab() {
     if (!tenant) return;
     setSaving(true);
     let e: any = null;
-    if (selectedSite) {
+    if (selectedSite || !isOwner) {
+      const siteId = selectedSite?.id || currentSite?.id;
+      if (!siteId) { error('Aucun site sélectionné'); setSaving(false); return; }
       const { error: err } = await supabase
         .from('sites')
         .update({ ticket_header_config: config, a4_header_config: a4Config })
-        .eq('id', selectedSite.id);
+        .eq('id', siteId);
       e = err;
     } else {
       const { error: err } = await supabase
@@ -143,16 +152,20 @@ export function TicketHeaderConfigTab() {
       {activeSites.length > 1 && (
         <div className="py-4 border-b border-neutral-200">
           <label className="block text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-1">Configurer l'entête pour</label>
-          <select
-            value={targetSiteId}
-            onChange={e => setTargetSiteId(e.target.value)}
-            className="bare-input text-sm py-1.5 w-full"
-          >
-            <option value="">Tous les magasins (configuration par défaut)</option>
-            {activeSites.map((s: any) => (
-              <option key={s.id} value={s.id}>{s.name}{s.ticket_header_config ? ' (personnalisé)' : ''}</option>
-            ))}
-          </select>
+          {isOwner ? (
+            <select
+              value={targetSiteId}
+              onChange={e => setTargetSiteId(e.target.value)}
+              className="bare-input text-sm py-1.5 w-full"
+            >
+              <option value="">Tous les magasins (configuration par défaut)</option>
+              {activeSites.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.name}{s.ticket_header_config ? ' (personnalisé)' : ''}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-sm text-neutral-700 py-1.5">{currentSite?.name || 'Mon magasin'}</div>
+          )}
           {selectedSite && (
             <p className="text-[10px] text-neutral-400 mt-1">Les champs laissés vides utiliseront les valeurs de la configuration par défaut de l'entreprise.</p>
           )}

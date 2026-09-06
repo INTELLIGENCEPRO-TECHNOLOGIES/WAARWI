@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Plus, FileText, Loader2, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, CalendarDays, User,
-  CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen,
+  CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen, FilePlus,
   Tag, ShieldCheck, Smartphone, Pencil, ChevronLeft, ChevronRight, RefreshCw, Ban,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -204,6 +204,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [payMethod, setPayMethod] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [paying, setPaying] = useState(false);
+  const payingRef = useRef(false);
 
   // Apply credit
   const [creditOpen, setCreditOpen] = useState(false);
@@ -444,9 +445,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [tenant?.id]);
 
   const [flashTab, setFlashTab] = useState<Tab | null>(null);
+  const pendingNavRef = useRef<string | null>(null);
   useEffect(() => {
     const ctx = consumeNavContext();
     if (!ctx?.target) return;
+    pendingNavRef.current = ctx.target;
     if (ctx.target === 'quotes') { setTab('quotes'); setFlashTab('quotes'); }
     else if (ctx.target === 'returns') { setTab('returns'); setFlashTab('returns'); }
     const t = setTimeout(() => setFlashTab(null), 6800);
@@ -901,6 +904,32 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setInvoiceIsCredit(false);
     setInvoicePostCreation(null);
   };
+  const handleNavTarget = useCallback((target: string) => {
+    switch (target) {
+      case 'newInvoice': setTab('invoices'); openInvoiceEditor(); break;
+      case 'newQuote': setTab('quotes'); setQuoteEditorMode('create'); setQuoteOpen(true); break;
+      case 'newReturn': setTab('returns'); setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); break;
+      case 'newAvoir': setTab('credits'); setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); break;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (pendingNavRef.current) {
+      const t = pendingNavRef.current;
+      pendingNavRef.current = null;
+      handleNavTarget(t);
+    }
+  }, [handleNavTarget]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const target = (e as CustomEvent).detail?.target;
+      if (target) handleNavTarget(target);
+    };
+    window.addEventListener('waarwi:quickaction', handler);
+    return () => window.removeEventListener('waarwi:quickaction', handler);
+  }, [handleNavTarget]);
+
   const openInvoiceForEdit = async (inv: Invoice) => {
     const [{ data: items }, { data: full }] = await Promise.all([
       supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
@@ -1028,7 +1057,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }
 
     // Stock check if negative stock not allowed
-    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     const articleItems = valid.filter(i => i.article_id);
     const trackedItems = articleItems.filter(i => {
       const art = articles.find((a: any) => a.id === i.article_id);
@@ -1231,7 +1260,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }
 
     // Stock check: block if insufficient stock and negative stock not allowed
-    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     const trackedConvertItems = convertItems.filter(i => {
       const art = articles.find((a: any) => a.id === i.article_id);
       return art && art.track_stock !== false;
@@ -1549,6 +1578,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setPayOpen(true);
   };
   const registerPayment = async () => {
+    if (payingRef.current) return;
     if (!invoiceDetail) return;
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'enregistrer des paiements'); return; }
     const amt = Number(payAmount);
@@ -1556,12 +1586,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const pm = paymentMethods.find(p => p.id === payMethod);
     if (!pm) { error('Mode de règlement requis'); return; }
     if (!tenant || !currentSite) return;
+    payingRef.current = true;
     setPaying(true);
     const { data: sess } = await supabase.from('cash_sessions')
       .select('id')
       .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
       .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-    if (!sess) { setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
+    if (!sess) { payingRef.current = false; setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
     const ref = `Règlement facture ${invoiceDetail.sale_number}${invoiceDetail.customers?.name ? ' · ' + invoiceDetail.customers.name : ''}`;
     const { error: e } = await supabase.rpc('register_sale_payment', {
       p_sale_id: invoiceDetail.id,
@@ -1571,8 +1602,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       p_reference: ref,
       p_cash_session_id: sess.id,
     });
-    setPaying(false);
-    if (e) { error(e.message); return; }
+    if (e) { payingRef.current = false; setPaying(false); error(e.message); return; }
     // Update IPM part_beneficiaire_payee if this is an IPM sale
     const { data: ipmV } = await supabase.from('ipm_ventes').select('id, part_client').eq('sale_id', invoiceDetail.id).limit(1).maybeSingle();
     if (ipmV) {
@@ -1582,6 +1612,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     }
     success('Paiement enregistré · imputé sur la caisse du jour');
     setPayOpen(false);
+    payingRef.current = false;
+    setPaying(false);
     await reloadInvoice(invoiceDetail.id);
   };
 
@@ -1844,10 +1876,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [newMenuOpen]);
   const newMenuItems = [
-    { key: 'invoice', label: 'Nouvelle facture', icon: Receipt, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; } openInvoiceEditor(); } },
+    { key: 'invoice', label: 'Nouvelle facture', icon: FilePlus, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; } openInvoiceEditor(); } },
     { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } setQuoteEditorMode('create'); setQuoteOpen(true); } },
     { key: 'return', label: 'Nouveau retour', icon: RotateCcw, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; } setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); } },
-    { key: 'credit', label: 'Nouvel avoir', icon: Wallet, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); } },
+    { key: 'credit', label: 'Nouvel avoir', icon: CreditCard, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); } },
   ];
 
   const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
@@ -1858,32 +1890,23 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
       <div className="flex items-start justify-between">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Facturation</h1>
-        <div className="relative shrink-0" ref={newMenuRef}>
-          <button
-            onClick={() => setNewMenuOpen(v => !v)}
-            className="p-1.5 text-neutral-500 hover:text-brand-700 transition-colors"
-            aria-label="Nouveau document"
-          >
-            <Plus className={`w-5 h-5 transition-transform duration-200 ${newMenuOpen ? 'rotate-45' : ''}`} />
-          </button>
-            {newMenuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl bg-white border border-slate-200 shadow-lg overflow-hidden z-50 origin-top-right">
-                {newMenuItems.map((item, idx) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.key}
-                      onClick={() => { item.action(); setNewMenuOpen(false); }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition-colors text-left ${idx !== newMenuItems.length - 1 ? 'border-b border-slate-100' : ''}`}
-                    >
-                      <Icon className="w-4 h-4 text-slate-400" />
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+        <div className="shrink-0">
+          {(() => {
+            const item = newMenuItems.find(i =>
+              (tab === 'invoices' && i.key === 'invoice') ||
+              (tab === 'quotes' && i.key === 'quote') ||
+              (tab === 'returns' && i.key === 'return') ||
+              (tab === 'credits' && i.key === 'credit')
+            );
+            if (!item) return null;
+            const Icon = item.icon;
+            return (
+              <button onClick={item.action} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors">
+                <Icon className="w-4 h-4" /><span className="hidden sm:inline">{item.label}</span>
+              </button>
+            );
+          })()}
+        </div>
         </div>
       <div className="flex items-center gap-2">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
@@ -2007,7 +2030,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         )}
           {tab === 'quotes' && (
             filteredQuotes.length === 0 ? (
-              <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => { setQuoteEditorMode('create'); setQuoteOpen(true); }} className="btn-icon-primary" title="Nouveau devis"><Plus className="w-4 h-4" /></button>} />
+              <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => { setQuoteEditorMode('create'); setQuoteOpen(true); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />Nouveau devis</button>} />
             ) : (
               <div className={flashTab === 'quotes' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
                 <div className="md:hidden count-up">
@@ -2076,7 +2099,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
           {tab === 'invoices' && (
             filteredInvoices.length === 0 ? (
-              <EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="btn-icon-primary" title="Nouvelle facture"><Plus className="w-4 h-4" /></button>} />
+              <EmptyState icon={Receipt} title="Aucune facture" description="Les factures créées apparaîtront ici." action={<button onClick={openInvoiceEditor} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />Nouvelle facture</button>} />
             ) : (
               <>
                 <div className="md:hidden count-up">
@@ -2154,7 +2177,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                 icon={tab === 'returns' ? RotateCcw : Wallet}
                 title={tab === 'returns' ? 'Aucun retour' : 'Aucun avoir'}
                 description={tab === 'returns' ? 'Les retours clients apparaîtront ici.' : 'Les avoirs clients apparaîtront ici.'}
-                action={<button onClick={() => { if (tab === 'returns') { setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); } else { setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); } setReturnLines([]); setReturnOpen(true); }} className="btn-icon-primary" title={tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}><Plus className="w-4 h-4" /></button>}
+                action={<button onClick={() => { if (tab === 'returns') { setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); } else { setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); } setReturnLines([]); setReturnOpen(true); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />{tab === 'returns' ? 'Nouveau retour' : 'Nouvel avoir'}</button>}
               />
             ) : (
               <div className={flashTab === 'returns' && tab === 'returns' ? 'waarwi-flash waarwi-flash-scroll' : ''}>

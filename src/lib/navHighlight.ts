@@ -1,7 +1,19 @@
 const KEY = 'waarwi:navCtx';
 
 export type NavContext = {
-  target?: 'receivables' | 'payables' | 'lowStock' | 'outOfStock' | 'quotes' | 'returns' | 'webNew' | 'webPrep' | 'webReady' | 'stockIn' | 'recentSales' | 'customers' | 'suppliers' | 'articles' | 'directPos' | 'newOrder' | 'newArticle';
+  target?:
+    | 'receivables' | 'payables' | 'lowStock' | 'outOfStock'
+    | 'quotes' | 'returns' | 'webNew' | 'webPrep' | 'webReady'
+    | 'stockIn' | 'recentSales' | 'customers' | 'suppliers'
+    | 'articles' | 'directPos' | 'newOrder' | 'newArticle'
+    // Quick-action targets
+    | 'newInvoice' | 'newQuote' | 'newReturn' | 'newAvoir' | 'reprintSale'
+    | 'newCustomer' | 'customerPayment' | 'customerPrepayment'
+    | 'customerLookup' | 'customerDocuments'
+    | 'newSupplier' | 'supplierPayment' | 'supplierDocuments'
+    | 'stockOut' | 'stockTransfer' | 'stockInventory' | 'stockMovements'
+    | 'openCashSession' | 'cashMovement' | 'newExpense'
+    | 'vaultDeposit';
   highlightId?: string;
   filter?: string;
 };

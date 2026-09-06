@@ -8,6 +8,7 @@ type ExpenseCategory = {
   id: string;
   name: string;
   is_active: boolean;
+  site_id: string | null;
 };
 
 const DEFAULT_NAMES = [
@@ -16,7 +17,9 @@ const DEFAULT_NAMES = [
 ];
 
 export function ExpenseCategoriesTab() {
-  const { tenant } = useApp();
+  const { tenant, currentSite, isOwner, sites: appSites } = useApp();
+  const rootSiteId = !isOwner ? (currentSite?.is_warehouse ? currentSite?.parent_site_id : currentSite?.id) : null;
+  const allStores = appSites.filter((s: any) => !s.is_warehouse);
   const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
   const [cats, setCats] = useState<ExpenseCategory[]>([]);
@@ -30,7 +33,7 @@ export function ExpenseCategoriesTab() {
     if (!tenant) return;
     const { data, error: e } = await supabase
       .from('expense_categories')
-      .select('id, name, is_active')
+      .select('id, name, is_active, site_id')
       .eq('tenant_id', tenant.id)
       .order('name');
     if (e) { error(e.message); setLoading(false); return; }
@@ -46,7 +49,7 @@ export function ExpenseCategoriesTab() {
     setAdding(true);
     const { error: e } = await supabase
       .from('expense_categories')
-      .insert({ tenant_id: tenant.id, name });
+      .insert({ tenant_id: tenant.id, name, site_id: isOwner ? null : rootSiteId });
     setAdding(false);
     if (e) {
       error(e.code === '23505' ? 'Ce type de dépense existe déjà' : e.message);
@@ -87,7 +90,7 @@ export function ExpenseCategoriesTab() {
     setSeeding(true);
     const { error: e } = await supabase
       .from('expense_categories')
-      .insert(DEFAULT_NAMES.map(name => ({ tenant_id: tenant.id, name })));
+      .insert(DEFAULT_NAMES.map(name => ({ tenant_id: tenant.id, name, site_id: isOwner ? null : rootSiteId })));
     setSeeding(false);
     if (e) { error(e.message); return; }
     success('Types de dépenses par défaut créés');
@@ -160,6 +163,8 @@ export function ExpenseCategoriesTab() {
                 ) : (
                   <>
                     <span className={`flex-1 text-sm font-medium truncate ${c.is_active ? 'text-neutral-900' : 'text-neutral-400 line-through'}`}>{c.name}</span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${c.site_id ? 'bg-blue-50 text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{c.site_id ? (allStores.find((s: any) => s.id === c.site_id)?.name || 'Site') : 'Global'}</span>
+                    {(isOwner || (c.site_id && c.site_id === rootSiteId)) ? (<>
                     <button
                       onClick={() => { setEditingId(c.id); setEditName(c.name); }}
                       className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition"
@@ -172,6 +177,7 @@ export function ExpenseCategoriesTab() {
                         <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${c.is_active ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
                       </div>
                     </button>
+                    </>) : null}
                   </>
                 )}
               </div>

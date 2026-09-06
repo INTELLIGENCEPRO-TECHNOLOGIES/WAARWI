@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import {
-  Plus, ShoppingBag, Loader2, Search, RefreshCw,
+  Plus, ShoppingBag, Loader2, Search, RefreshCw, ClipboardList,
   CheckCircle, Truck, X, Calendar,
   User, MessageCircle, Link2,
   Printer, Pencil, Ban, ChevronDown,
@@ -671,8 +671,8 @@ export function SupplierOrders() {
       <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
         <div className="flex items-start justify-between">
           <h1 className="text-lg font-bold text-neutral-900 leading-tight">Achats</h1>
-          <button onClick={openCreate} className="shrink-0" title="Nouvelle commande">
-            <Plus className="w-5 h-5 text-neutral-900 hover:text-neutral-600 transition-colors" />
+          <button onClick={openCreate} className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors">
+            <ClipboardList className="w-4 h-4" /><span className="hidden sm:inline">Nouvelle commande</span>
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -739,7 +739,7 @@ export function SupplierOrders() {
           icon={ShoppingBag}
           title="Aucune commande"
           description="Créez votre première commande fournisseur."
-          action={<button onClick={openCreate} className="p-2 text-neutral-900 hover:text-neutral-600 transition"><Plus className="w-5 h-5" /></button>}
+          action={<button onClick={openCreate} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><ClipboardList className="w-4 h-4" />Nouvelle commande</button>}
         />
       ) : (
         <div className={flashList ? 'waarwi-flash waarwi-flash-scroll' : ''}>

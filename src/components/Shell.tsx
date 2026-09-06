@@ -5,12 +5,14 @@ import {
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library, Truck,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
   PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft, UserCheck,
-  X, Monitor, Check, Network,
+  X, Monitor, Check, Activity,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { usePermissions, type PermissionKey } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
+import { QuickActionsPanel } from './QuickActionsPanel';
+import { QuickActionProvider, useQuickAction } from '../context/QuickActionContext';
 
 
 export type Route =
@@ -436,6 +438,17 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileOpen]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setFabOpen(v => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const navList = (
     <nav className={`flex-1 overflow-y-auto py-4 space-y-4 side-scroll ${sidebarDark ? 'side-scroll-dark' : ''} ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
       {isSuperAdmin ? (
@@ -605,6 +618,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     </nav>
   );
   return (
+    <QuickActionProvider onNavigate={(r) => { onRoute(r as Route); setMobileOpen(false); }}>
     <div className="min-h-screen h-screen flex flex-col overflow-hidden bg-white">
       {/* Desktop header */}
       <header
@@ -654,8 +668,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 onClick={() => setSiteOpen(!siteOpen)}
                 className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-neutral-50 transition-colors"
               >
-                <Network className="w-3.5 h-3.5 text-neutral-500" />
-                <span className="text-[12px] font-semibold text-neutral-900 max-w-[160px] truncate">{currentSite?.name || 'Site'}</span>
+                <span className="text-[12px] text-neutral-500 whitespace-nowrap">Magasin actif:</span>
+                <span className="text-[12px] font-semibold text-neutral-900 whitespace-nowrap">{currentSite?.name || 'Site'}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${siteOpen ? 'rotate-180' : ''}`} />
               </button>
               {siteOpen && (
@@ -695,6 +709,13 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             </div>
           )}
           <div className={`flex items-center gap-2 shrink-0 ${isDashboard ? 'hidden' : ''}`}>
+            <button
+              onClick={() => setFabOpen(v => !v)}
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${fabOpen ? 'text-neutral-900 bg-neutral-50' : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 quick-action-pulse'}`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>{t('quickAction.title')}</span>
+            </button>
             {newOrdersCount > 0 && (
               <button
                 onClick={() => onRoute('online_orders')}
@@ -1193,49 +1214,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </nav>
         )}
 
-        {/* FAB overlay */}
-        {fabOpen && (
-          <div className="lg:hidden fixed inset-0 z-[42] bg-black/30 backdrop-blur-sm" onClick={() => setFabOpen(false)} />
-        )}
-
-        {/* FAB actions panel */}
-        {fabOpen && (
-          <div className="lg:hidden fixed inset-x-0 z-[44] flex justify-center px-3 animate-scale-in" style={{ bottom: 'calc(max(6px, env(safe-area-inset-bottom)) + 68px)' }}>
-            <div className="w-full max-w-[320px] rounded-xl overflow-hidden bg-white border border-neutral-200 shadow-premium">
-              <div className="px-4 pt-3 pb-2 border-b border-neutral-100">
-                <div className="text-[12px] font-bold text-neutral-900">{t('quickAction.title')}</div>
-              </div>
-              <div className="p-1.5 space-y-0.5">
-                {[
-                  { icon: CreditCard, labelKey: 'quickAction.encaisser', descKey: 'quickAction.encaisserDesc', route: 'tiers' as Route },
-                  { icon: Wallet, labelKey: 'quickAction.acompte', descKey: 'quickAction.acompteDesc', route: 'tiers' as Route },
-                  { icon: Receipt, labelKey: 'quickAction.reprint', descKey: 'quickAction.reprintDesc', route: 'sales' as Route },
-                  { icon: ShoppingCart, labelKey: 'quickAction.quickSale', descKey: 'quickAction.quickSaleDesc', route: 'pos' as Route },
-                  { icon: Package, labelKey: 'quickAction.stockIn', descKey: 'quickAction.stockInDesc', route: 'stock' as Route },
-                  { icon: FileText, labelKey: 'quickAction.newQuote', descKey: 'quickAction.newQuoteDesc', route: 'billing' as Route },
-                ].map((a, i) => {
-                  const Icon = a.icon;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => { onRoute(a.route); setFabOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg active:scale-[0.97] hover:bg-neutral-50 transition-all text-left"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
-                        <Icon className="w-4 h-4 text-neutral-700" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[12px] font-semibold text-neutral-900">{t(a.labelKey)}</div>
-                        <div className="text-[10px] text-neutral-400">{t(a.descKey)}</div>
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Quick Actions Panel (mobile + desktop) */}
+        {fabOpen && <QuickActionsPanel onClose={() => setFabOpen(false)} />}
 
         {/* FAB button */}
         {!isPlatformAdmin && (route === 'pos' ? (
@@ -1261,7 +1241,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         ) : (
           <button
             onClick={() => setFabOpen(v => !v)}
-            className="lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-200 active:scale-90"
+            className={`lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-200 active:scale-90 ${!fabOpen ? 'quick-action-pulse' : ''}`}
             style={{
               bottom: 'calc(env(safe-area-inset-bottom) + 26px)',
               transform: `translateX(-50%) ${fabOpen ? 'rotate(135deg)' : 'rotate(0deg)'}`,
@@ -1327,5 +1307,6 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </div>
       )}
     </div>
+    </QuickActionProvider>
   );
 }

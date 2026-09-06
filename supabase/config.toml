@@ -1,0 +1,20 @@
+[functions.admin-users]
+verify_jwt = true
+
+[functions.admin-user]
+verify_jwt = true
+
+[functions.send-notification-email]
+verify_jwt = false
+
+[functions.run-ipm-migration]
+verify_jwt = false
+
+[functions.shop-og]
+verify_jwt = false
+
+[functions.backup-scheduler]
+verify_jwt = false
+
+[functions.backup-offsite]
+verify_jwt = false

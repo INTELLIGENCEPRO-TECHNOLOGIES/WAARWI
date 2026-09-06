@@ -16,7 +16,6 @@ function json(data: unknown, status = 200) {
 
 function htmlPage(title: string, message: string, success: boolean) {
   const color = success ? "#059669" : "#dc2626";
-  const bgColor = success ? "#ecfdf5" : "#fef2f2";
   const iconChar = success ? "\u2713" : "\u2717";
   const html = `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -45,6 +44,38 @@ p{font-size:16px;color:#64748b;line-height:1.7}
   return new Response(new TextEncoder().encode(html).buffer, { status: 200, headers: h });
 }
 
+// ── Scope helpers ──────────────────────────────────────────────────
+type Prof = {
+  id: string; tenant_id: string | null; role: string; email: string;
+  site_access_mode: string; assigned_site_ids: string[] | null;
+  is_active: boolean; full_name: string;
+};
+
+function isOwner(prof: Prof, tenantOwnerUserId: string | null): boolean {
+  return !!tenantOwnerUserId && prof.id === tenantOwnerUserId;
+}
+
+function callerRootSiteIds(prof: Prof): string[] | null {
+  if (prof.site_access_mode === "all") return null;
+  return prof.assigned_site_ids && prof.assigned_site_ids.length > 0 ? prof.assigned_site_ids : [];
+}
+
+function targetInCallerScope(
+  targetProfile: Prof,
+  callerSiteIds: string[] | null,
+): boolean {
+  if (callerSiteIds === null) return true;
+  if (callerSiteIds.length === 0) return false;
+  if (targetProfile.site_access_mode === "all") return false;
+  const targetSites = targetProfile.assigned_site_ids || [];
+  if (targetSites.length === 0) return false;
+  return targetSites.every((s) => callerSiteIds.includes(s));
+}
+
+async function getTenantOwnerUserId(admin: any, tenantId: string): Promise<string | null> {
+  const { data } = await admin.from("tenants").select("owner_user_id").eq("id", tenantId).maybeSingle();
+  return data?.owner_user_id || null;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
@@ -54,7 +85,6 @@ Deno.serve(async (req: Request) => {
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Handle GET requests with action_token (email button clicks)
     const url = new URL(req.url);
     const actionToken = url.searchParams.get("action_token");
     if (actionToken) {
@@ -87,7 +117,6 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action as string;
 
-    // Public action: auto-approve by token (no auth required, token is the secret)
     if (action === "auto_approve_by_token") {
       const { token } = body;
       if (!token) return json({ error: "token requis" }, 400);
@@ -105,7 +134,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, tenant_name: result.tenant_name });
     }
 
-    // All other actions require authentication
     const authHeader = req.headers.get("Authorization") || "";
     const authToken = authHeader.replace("Bearer ", "");
     if (!authToken) return json({ error: "Unauthorized" }, 401);
@@ -130,20 +158,62 @@ Deno.serve(async (req: Request) => {
       });
     };
 
-    // ============ USERS ============
+    // ============ USERS (scope-enforced) ============
     if (action === "list") {
       const tenantId = isSuperAdmin && body.tenant_id ? body.tenant_id : callerProfile.tenant_id;
       if (!tenantId) return json({ users: [] });
-      const { data } = await admin.from("profiles").select("*").eq("tenant_id", tenantId).order("created_at");
-      return json({ users: data || [] });
+
+      const { data: allUsers } = await admin.from("profiles").select("*").eq("tenant_id", tenantId).order("created_at");
+      if (!allUsers) return json({ users: [] });
+
+      if (isSuperAdmin) return json({ users: allUsers });
+
+      const ownerUserId = await getTenantOwnerUserId(admin, tenantId);
+      const callerIsOwner = isOwner(callerProfile as Prof, ownerUserId);
+
+      if (callerIsOwner || callerProfile.site_access_mode === "all") {
+        return json({ users: allUsers, owner_user_id: ownerUserId });
+      }
+
+      const mySiteIds = callerRootSiteIds(callerProfile as Prof);
+      const visible = allUsers.filter((u: any) => {
+        if (u.id === callerProfile.id) return true;
+        if (u.site_access_mode === "all") return false;
+        if (!u.assigned_site_ids || u.assigned_site_ids.length === 0) return false;
+        return u.assigned_site_ids.every((s: string) => mySiteIds?.includes(s));
+      });
+      return json({ users: visible, owner_user_id: ownerUserId });
     }
 
     if (action === "create") {
       if (!isAdmin) return json({ error: "Forbidden" }, 403);
-      const { email, password, full_name, role, tenant_id } = body;
+      const { email, password, full_name, role, tenant_id, site_access_mode, assigned_site_ids } = body;
       if (!email || !password) return json({ error: "email et mot de passe requis" }, 400);
       const targetTenant = isSuperAdmin && tenant_id ? tenant_id : callerProfile.tenant_id;
       if (!targetTenant) return json({ error: "Tenant introuvable" }, 400);
+
+      const ownerUserId = await getTenantOwnerUserId(admin, targetTenant);
+      const callerIsOwner = isOwner(callerProfile as Prof, ownerUserId);
+
+      if (role === "super_admin" && !isSuperAdmin) {
+        return json({ error: "Seul un super-admin plateforme peut créer un super_admin" }, 403);
+      }
+      if (role === "admin" && !callerIsOwner && !isSuperAdmin) {
+        return json({ error: "Seul le propriétaire peut créer un administrateur" }, 403);
+      }
+
+      const newMode = site_access_mode || "selected";
+      if (newMode === "all" && !callerIsOwner && !isSuperAdmin) {
+        return json({ error: "Seul le propriétaire peut accorder l'accès à tous les magasins" }, 403);
+      }
+
+      if (!isSuperAdmin && !callerIsOwner && newMode === "selected") {
+        const mySiteIds = callerRootSiteIds(callerProfile as Prof);
+        const newSites: string[] = assigned_site_ids || [];
+        if (mySiteIds !== null && newSites.some((s: string) => !mySiteIds.includes(s))) {
+          return json({ error: "Vous ne pouvez attribuer que des magasins de votre propre portée" }, 403);
+        }
+      }
 
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
         email, password, email_confirm: true,
@@ -151,14 +221,20 @@ Deno.serve(async (req: Request) => {
       });
       if (createErr || !created.user) return json({ error: createErr?.message || "Création échouée" }, 400);
 
-      const { error: profErr } = await admin.from("profiles").upsert({
+      const profileData: Record<string, unknown> = {
         id: created.user.id,
         tenant_id: targetTenant,
         full_name: full_name || "",
         email,
         role: role || "cashier",
         is_active: true,
-      });
+        site_access_mode: newMode,
+      };
+      if (newMode === "selected" && assigned_site_ids) {
+        profileData.assigned_site_ids = assigned_site_ids;
+      }
+
+      const { error: profErr } = await admin.from("profiles").upsert(profileData);
       if (profErr) {
         await admin.auth.admin.deleteUser(created.user.id);
         return json({ error: profErr.message }, 400);
@@ -170,9 +246,21 @@ Deno.serve(async (req: Request) => {
       if (!isAdmin) return json({ error: "Forbidden" }, 403);
       const { user_id, new_password } = body;
       if (!user_id || !new_password) return json({ error: "Paramètres manquants" }, 400);
-      const { data: target } = await admin.from("profiles").select("tenant_id").eq("id", user_id).maybeSingle();
+      const { data: target } = await admin.from("profiles").select("*").eq("id", user_id).maybeSingle();
       if (!target) return json({ error: "Utilisateur introuvable" }, 404);
       if (!isSuperAdmin && target.tenant_id !== callerProfile.tenant_id) return json({ error: "Forbidden" }, 403);
+
+      const ownerUserId = await getTenantOwnerUserId(admin, target.tenant_id);
+      if (!isSuperAdmin && isOwner(target as Prof, ownerUserId) && target.id !== callerProfile.id) {
+        return json({ error: "Impossible de réinitialiser le mot de passe du propriétaire" }, 403);
+      }
+      if (!isSuperAdmin && !isOwner(callerProfile as Prof, ownerUserId)) {
+        const mySiteIds = callerRootSiteIds(callerProfile as Prof);
+        if (!targetInCallerScope(target as Prof, mySiteIds)) {
+          return json({ error: "Utilisateur hors de votre portée" }, 403);
+        }
+      }
+
       const { error } = await admin.auth.admin.updateUserById(user_id, { password: new_password });
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
@@ -180,14 +268,51 @@ Deno.serve(async (req: Request) => {
 
     if (action === "update") {
       if (!isAdmin) return json({ error: "Forbidden" }, 403);
-      const { user_id, full_name, role, is_active } = body;
-      const { data: target } = await admin.from("profiles").select("tenant_id").eq("id", user_id).maybeSingle();
+      const { user_id, full_name, role, is_active, site_access_mode, assigned_site_ids } = body;
+      const { data: target } = await admin.from("profiles").select("*").eq("id", user_id).maybeSingle();
       if (!target) return json({ error: "Utilisateur introuvable" }, 404);
       if (!isSuperAdmin && target.tenant_id !== callerProfile.tenant_id) return json({ error: "Forbidden" }, 403);
+
+      const ownerUserId = await getTenantOwnerUserId(admin, target.tenant_id);
+      const callerIsOwner = isOwner(callerProfile as Prof, ownerUserId);
+      const targetIsOwner = isOwner(target as Prof, ownerUserId);
+
+      if (targetIsOwner && !isSuperAdmin && !callerIsOwner) {
+        return json({ error: "Impossible de modifier le propriétaire du tenant" }, 403);
+      }
+
+      if (role === "super_admin" && !isSuperAdmin) {
+        return json({ error: "Seul un super-admin plateforme peut attribuer le rôle super_admin" }, 403);
+      }
+      if (role === "admin" && !callerIsOwner && !isSuperAdmin) {
+        return json({ error: "Seul le propriétaire peut attribuer le rôle administrateur" }, 403);
+      }
+
+      if (!isSuperAdmin && !callerIsOwner) {
+        const mySiteIds = callerRootSiteIds(callerProfile as Prof);
+        if (!targetInCallerScope(target as Prof, mySiteIds)) {
+          return json({ error: "Utilisateur hors de votre portée" }, 403);
+        }
+      }
+
+      if (site_access_mode === "all" && !callerIsOwner && !isSuperAdmin) {
+        return json({ error: "Seul le propriétaire peut accorder l'accès à tous les magasins" }, 403);
+      }
+
+      if (!isSuperAdmin && !callerIsOwner && assigned_site_ids) {
+        const mySiteIds = callerRootSiteIds(callerProfile as Prof);
+        if (mySiteIds !== null && assigned_site_ids.some((s: string) => !mySiteIds.includes(s))) {
+          return json({ error: "Vous ne pouvez attribuer que des magasins de votre propre portée" }, 403);
+        }
+      }
+
       const patch: Record<string, unknown> = {};
       if (full_name !== undefined) patch.full_name = full_name;
       if (role !== undefined) patch.role = role;
       if (is_active !== undefined) patch.is_active = is_active;
+      if (site_access_mode !== undefined) patch.site_access_mode = site_access_mode;
+      if (assigned_site_ids !== undefined) patch.assigned_site_ids = assigned_site_ids;
+
       const { error } = await admin.from("profiles").update(patch).eq("id", user_id);
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
@@ -197,9 +322,22 @@ Deno.serve(async (req: Request) => {
       if (!isAdmin) return json({ error: "Forbidden" }, 403);
       const { user_id } = body;
       if (user_id === caller.id) return json({ error: "Vous ne pouvez pas supprimer votre propre compte" }, 400);
-      const { data: target } = await admin.from("profiles").select("tenant_id").eq("id", user_id).maybeSingle();
+      const { data: target } = await admin.from("profiles").select("*").eq("id", user_id).maybeSingle();
       if (!target) return json({ error: "Utilisateur introuvable" }, 404);
       if (!isSuperAdmin && target.tenant_id !== callerProfile.tenant_id) return json({ error: "Forbidden" }, 403);
+
+      const ownerUserId = await getTenantOwnerUserId(admin, target.tenant_id);
+      if (isOwner(target as Prof, ownerUserId)) {
+        return json({ error: "Impossible de supprimer le propriétaire du tenant" }, 403);
+      }
+
+      if (!isSuperAdmin && !isOwner(callerProfile as Prof, ownerUserId)) {
+        const mySiteIds = callerRootSiteIds(callerProfile as Prof);
+        if (!targetInCallerScope(target as Prof, mySiteIds)) {
+          return json({ error: "Utilisateur hors de votre portée" }, 403);
+        }
+      }
+
       const { error } = await admin.auth.admin.deleteUser(user_id);
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
@@ -211,15 +349,7 @@ Deno.serve(async (req: Request) => {
     if (action === "platform_overview") {
       const now = new Date();
       const in7 = new Date(Date.now() + 7 * 86400000).toISOString();
-      const [
-        tenantsRes,
-        usersRes,
-        subsActive,
-        expiringRes,
-        suspendedRes,
-        mrrRes,
-        recentEvents,
-      ] = await Promise.all([
+      const [tenantsRes, usersRes, subsActive, expiringRes, suspendedRes, mrrRes, recentEvents] = await Promise.all([
         admin.from("tenants").select("id,plan,is_active,status,plan_expires_at,created_at"),
         admin.from("profiles").select("id", { count: "exact", head: true }),
         admin.from("tenant_subscriptions").select("id,plan_code,amount,billing_cycle", { count: "exact" }).eq("status", "active"),
@@ -228,34 +358,23 @@ Deno.serve(async (req: Request) => {
         admin.from("tenant_subscriptions").select("amount,billing_cycle,tenants(name)").eq("status", "active").neq("billing_cycle", "lifetime"),
         admin.from("platform_events").select("*").order("created_at", { ascending: false }).limit(10),
       ]);
-
       const tenants = tenantsRes.data || [];
       const byPlan: Record<string, number> = {};
       for (const t of tenants) byPlan[t.plan] = (byPlan[t.plan] || 0) + 1;
       const EXCLUDED_MRR_TENANTS = ["INTELLIGENCEPRO TECHNOLOGIES", "SAD PIECES AUTO"];
       const mrr = (mrrRes.data || [])
-        .filter((r: any) => {
-          const name = r.tenants?.name as string | undefined;
-          return !name || !EXCLUDED_MRR_TENANTS.includes(name.toUpperCase());
-        })
+        .filter((r: any) => { const name = r.tenants?.name as string | undefined; return !name || !EXCLUDED_MRR_TENANTS.includes(name.toUpperCase()); })
         .reduce((s: number, r: any) => s + Number(r.amount || 0) / (r.billing_cycle === "yearly" ? 12 : 1), 0);
-
       return json({
-        tenants_total: tenants.length,
-        tenants_active: tenants.filter((t: any) => t.is_active).length,
-        tenants_suspended: suspendedRes.count || 0,
-        users_total: usersRes.count || 0,
-        subscriptions_active: subsActive.count || 0,
-        by_plan: byPlan,
-        mrr: Math.round(mrr),
-        expiring_soon: expiringRes.data || [],
-        recent_events: recentEvents.data || [],
+        tenants_total: tenants.length, tenants_active: tenants.filter((t: any) => t.is_active).length,
+        tenants_suspended: suspendedRes.count || 0, users_total: usersRes.count || 0,
+        subscriptions_active: subsActive.count || 0, by_plan: byPlan, mrr: Math.round(mrr),
+        expiring_soon: expiringRes.data || [], recent_events: recentEvents.data || [],
       });
     }
 
     if (action === "list_tenants") {
-      const { data } = await admin
-        .from("tenants")
+      const { data } = await admin.from("tenants")
         .select("*, profiles(id,email,full_name,role,is_active), tenant_subscriptions(id,plan_code,status,amount,billing_cycle,started_at,ends_at,auto_renew)")
         .order("created_at", { ascending: false });
       return json({ tenants: data || [] });
@@ -305,35 +424,23 @@ Deno.serve(async (req: Request) => {
     if (action === "approve_tenant") {
       const { tenant_id } = body;
       if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
-
-      // Get tenant's selected plan and billing cycle
       const { data: tenantData } = await admin.from("tenants").select("selected_plan_code, plan, billing_cycle").eq("id", tenant_id).maybeSingle();
       const planCode = tenantData?.selected_plan_code || tenantData?.plan || "trial";
       const billingCycle = tenantData?.billing_cycle || "monthly";
       const { data: planData } = await admin.from("plans").select("trial_days, price_monthly, price_yearly, price_lifetime").eq("code", planCode).maybeSingle();
       const trialDays = planData?.trial_days || 14;
       const isLifetime = billingCycle === "lifetime";
-
       const now = new Date();
       const trialEnd = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
-
-      // Calculate subscription end date (after trial) - lifetime has no end
       let subscriptionEndDate: Date | null = null;
       if (!isLifetime) {
-        if (billingCycle === "yearly") {
-          subscriptionEndDate = new Date(trialEnd.getTime() + 365 * 24 * 60 * 60 * 1000);
-        } else {
-          subscriptionEndDate = new Date(trialEnd.getTime() + 30 * 24 * 60 * 60 * 1000);
-        }
+        subscriptionEndDate = billingCycle === "yearly"
+          ? new Date(trialEnd.getTime() + 365 * 24 * 60 * 60 * 1000)
+          : new Date(trialEnd.getTime() + 30 * 24 * 60 * 60 * 1000);
       }
-
       const updatePayload: Record<string, unknown> = {
-        approval_status: "approved",
-        approved_at: now.toISOString(),
-        approved_by: caller.id,
-        is_active: true,
-        status: "active",
-        plan: planCode,
+        approval_status: "approved", approved_at: now.toISOString(), approved_by: caller.id,
+        is_active: true, status: "active", plan: planCode,
         subscription_status: isLifetime ? "active" : "trial_active",
         trial_start_date: isLifetime ? null : now.toISOString(),
         trial_end_date: isLifetime ? null : trialEnd.toISOString(),
@@ -341,100 +448,56 @@ Deno.serve(async (req: Request) => {
         plan_expires_at: subscriptionEndDate ? subscriptionEndDate.toISOString() : null,
         auto_renew: !isLifetime,
       };
-
       const { error } = await admin.from("tenants").update(updatePayload).eq("id", tenant_id);
       if (error) return json({ error: error.message }, 400);
-
-      // Create subscription record
       const amount = isLifetime ? (planData?.price_lifetime || 0) : billingCycle === "yearly" ? (planData?.price_yearly || 0) : (planData?.price_monthly || 0);
       await admin.from("tenant_subscriptions").insert({
-        tenant_id,
-        plan_code: planCode,
-        billing_cycle: billingCycle,
-        amount,
-        currency: "FCFA",
+        tenant_id, plan_code: planCode, billing_cycle: billingCycle, amount, currency: "FCFA",
         started_at: isLifetime ? now.toISOString() : trialEnd.toISOString(),
         ends_at: subscriptionEndDate ? subscriptionEndDate.toISOString() : null,
-        auto_renew: !isLifetime,
-        status: "pending",
+        auto_renew: !isLifetime, status: "pending",
         notes: `Abonnement ${billingCycle === "yearly" ? "annuel" : "mensuel"} - commence après essai de ${trialDays}j`,
         created_by: caller.id,
       });
-
       await logEvent("tenant.approve", tenant_id, { trial_days: trialDays, plan: planCode, billing_cycle: billingCycle });
-
-      // Send approval notification email (fire-and-forget)
       fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
-        method: "POST",
-        headers: {
-          "Authorization": authHeader,
-          "Content-Type": "application/json",
-        },
+        method: "POST", headers: { "Authorization": authHeader, "Content-Type": "application/json" },
         body: JSON.stringify({ type: "approval", tenant_id }),
       }).catch(() => {});
-
       return json({ success: true });
     }
 
     if (action === "reject_tenant") {
       const { tenant_id, reason } = body;
       if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
-      const { error } = await admin.from("tenants").update({
-        approval_status: "rejected",
-        rejection_reason: reason || "",
-        is_active: false,
-        status: "suspended",
-      }).eq("id", tenant_id);
+      const { error } = await admin.from("tenants").update({ approval_status: "rejected", rejection_reason: reason || "", is_active: false, status: "suspended" }).eq("id", tenant_id);
       if (error) return json({ error: error.message }, 400);
       await logEvent("tenant.reject", tenant_id, { reason: reason || "" });
-
-      // Send rejection notification email (fire-and-forget)
-      const SUPABASE_URL2 = Deno.env.get("SUPABASE_URL")!;
-      fetch(`${SUPABASE_URL2}/functions/v1/send-notification-email`, {
-        method: "POST",
-        headers: {
-          "Authorization": authHeader,
-          "Content-Type": "application/json",
-        },
+      fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
+        method: "POST", headers: { "Authorization": authHeader, "Content-Type": "application/json" },
         body: JSON.stringify({ type: "rejection", tenant_id, reason: reason || "" }),
       }).catch(() => {});
-
       return json({ success: true });
     }
 
     if (action === "delete_tenant") {
       const { tenant_id, reason } = body;
       if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
-
       const { data: result, error: rpcErr } = await admin.rpc("delete_tenant_permanently", {
-        p_tenant_id: tenant_id,
-        p_actor_id: caller.id,
-        p_actor_email: caller.email || "",
-        p_reason: reason || "",
+        p_tenant_id: tenant_id, p_actor_id: caller.id, p_actor_email: caller.email || "", p_reason: reason || "",
       });
-
       if (rpcErr) return json({ error: rpcErr.message }, 400);
       if (!result?.success) return json({ error: result?.error || "Échec de la suppression" }, 400);
-
-      // Delete auth users that belonged to this tenant
       const userIds: string[] = result.user_ids || [];
       const deleteErrors: string[] = [];
       for (const uid of userIds) {
-        if (uid === caller.id) continue; // never delete the super admin
+        if (uid === caller.id) continue;
         const { error: delErr } = await admin.auth.admin.deleteUser(uid);
         if (delErr) deleteErrors.push(`${uid}: ${delErr.message}`);
       }
-
-      return json({
-        success: true,
-        tenant_name: result.tenant_name,
-        users_deleted: userIds.length - deleteErrors.length,
-        data_summary: result.data_summary,
-        delete_errors: deleteErrors.length > 0 ? deleteErrors : undefined,
-      });
+      return json({ success: true, tenant_name: result.tenant_name, users_deleted: userIds.length - deleteErrors.length, data_summary: result.data_summary, delete_errors: deleteErrors.length > 0 ? deleteErrors : undefined });
     }
 
-    // ============ PLANS ============
     if (action === "list_plans") {
       const { data } = await admin.from("plans").select("*").order("sort_order");
       return json({ plans: data || [] });
@@ -456,7 +519,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: true });
     }
 
-    // ============ SUBSCRIPTIONS ============
     if (action === "create_subscription") {
       const { tenant_id, plan_code, billing_cycle, amount, currency, started_at, ends_at, auto_renew, notes, custom_limits } = body;
       if (!tenant_id || !plan_code) return json({ error: "Paramètres manquants" }, 400);
@@ -464,24 +526,14 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await admin.from("tenant_subscriptions").insert({
         tenant_id, plan_code, billing_cycle: billing_cycle || "monthly",
         amount: amount || 0, currency: currency || "FCFA",
-        started_at: started_at || new Date().toISOString(),
-        ends_at: ends_at || null,
-        auto_renew: auto_renew !== false,
-        notes: notes || "",
-        status: "active",
-        created_by: caller.id,
-        custom_limits: custom_limits || null,
+        started_at: started_at || new Date().toISOString(), ends_at: ends_at || null,
+        auto_renew: auto_renew !== false, notes: notes || "", status: "active", created_by: caller.id, custom_limits: custom_limits || null,
       }).select().maybeSingle();
       if (error) return json({ error: error.message }, 400);
       await admin.from("tenants").update({
-        plan: plan_code,
-        plan_expires_at: ends_at || null,
-        status: "active",
-        is_active: true,
-        subscription_status: "active",
-        billing_cycle: billing_cycle || "monthly",
-        auto_renew: auto_renew !== false,
-        subscription_start_date: started_at || new Date().toISOString(),
+        plan: plan_code, plan_expires_at: ends_at || null, status: "active", is_active: true,
+        subscription_status: "active", billing_cycle: billing_cycle || "monthly",
+        auto_renew: auto_renew !== false, subscription_start_date: started_at || new Date().toISOString(),
       }).eq("id", tenant_id);
       await logEvent("subscription.create", tenant_id, { plan_code, amount, custom_limits });
       return json({ success: true, subscription: data });
@@ -501,36 +553,20 @@ Deno.serve(async (req: Request) => {
     if (action === "send_payment_reminder") {
       const { tenant_id, custom_message } = body;
       if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
-
       const { data: tenantData } = await admin.from("tenants").select("name, email, plan, plan_expires_at, billing_cycle, whatsapp_phone").eq("id", tenant_id).maybeSingle();
       if (!tenantData) return json({ error: "Tenant introuvable" }, 404);
-
       const { data: planData } = await admin.from("plans").select("name, price_monthly, price_yearly, price_lifetime").eq("code", tenantData.plan).maybeSingle();
-
       const expiresAt = tenantData.plan_expires_at ? new Date(tenantData.plan_expires_at) : null;
       const daysLeft = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86400000) : null;
       const amount = tenantData.billing_cycle === "lifetime" ? (planData?.price_lifetime || 0) : tenantData.billing_cycle === "yearly" ? (planData?.price_yearly || 0) : (planData?.price_monthly || 0);
       const cycleLabel = tenantData.billing_cycle === "yearly" ? "annuel" : "mensuel";
-
-      // Create in-app message directly (no email since most clients have fictitious emails)
-      const messageBody = custom_message
-        ? custom_message
-        : `Votre abonnement ${planData?.name || tenantData.plan} (${cycleLabel}) ${
-            daysLeft !== null && daysLeft > 0
-              ? `expire dans ${daysLeft} jour${daysLeft > 1 ? 's' : ''}`
-              : `est expir\u00e9`
-          }. Montant : ${new Intl.NumberFormat("fr-FR").format(amount)} FCFA. Veuillez contacter l'administrateur pour le renouvellement.`;
-
+      const messageBody = custom_message || `Votre abonnement ${planData?.name || tenantData.plan} (${cycleLabel}) ${daysLeft !== null && daysLeft > 0 ? `expire dans ${daysLeft} jour${daysLeft > 1 ? 's' : ''}` : `est expir\u00e9`}. Montant : ${new Intl.NumberFormat("fr-FR").format(amount)} FCFA. Veuillez contacter l'administrateur pour le renouvellement.`;
       await admin.from("tenant_messages").insert({
         title: daysLeft !== null && daysLeft > 0 ? "Rappel : Renouvellement d'abonnement" : "URGENT : Abonnement expir\u00e9",
-        body: messageBody,
-        severity: daysLeft !== null && daysLeft > 0 ? "warning" : "critical",
-        target: "tenant",
-        tenant_id,
-        requires_ack: true,
+        body: messageBody, severity: daysLeft !== null && daysLeft > 0 ? "warning" : "critical",
+        target: "tenant", tenant_id, requires_ack: true,
         expires_at: new Date(Date.now() + 3 * 86400000).toISOString(),
       });
-
       await logEvent("subscription.reminder_sent", tenant_id, { days_left: daysLeft, amount, method: "in_app" });
       return json({ success: true, tenant_name: tenantData.name, days_left: daysLeft });
     }
@@ -543,22 +579,14 @@ Deno.serve(async (req: Request) => {
       const pastLimit = new Date(now.getTime() - 30 * 86400000);
       const { data } = await admin.from("tenants")
         .select("id, name, email, plan, plan_expires_at, billing_cycle, whatsapp_phone, auto_renew")
-        .eq("approval_status", "approved")
-        .eq("is_active", true)
-        .neq("billing_cycle", "lifetime")
-        .not("plan_expires_at", "is", null)
-        .lte("plan_expires_at", futureLimit.toISOString())
-        .gte("plan_expires_at", pastLimit.toISOString())
+        .eq("approval_status", "approved").eq("is_active", true).neq("billing_cycle", "lifetime")
+        .not("plan_expires_at", "is", null).lte("plan_expires_at", futureLimit.toISOString()).gte("plan_expires_at", pastLimit.toISOString())
         .order("plan_expires_at");
       return json({ tenants: data || [] });
     }
 
-    // ============ MESSAGES ============
     if (action === "list_messages") {
-      const { data } = await admin
-        .from("tenant_messages")
-        .select("*, tenants(name)")
-        .order("created_at", { ascending: false });
+      const { data } = await admin.from("tenant_messages").select("*, tenants(name)").order("created_at", { ascending: false });
       return json({ messages: data || [] });
     }
 
@@ -566,14 +594,10 @@ Deno.serve(async (req: Request) => {
       const { title, body: b, severity, target, tenant_id, plan_code, requires_ack, cta_label, cta_url, expires_at } = body;
       if (!title) return json({ error: "Titre requis" }, 400);
       const { data, error } = await admin.from("tenant_messages").insert({
-        title, body: b || "", severity: severity || "info",
-        target: target || "all",
-        tenant_id: target === "tenant" ? tenant_id : null,
-        plan_code: target === "plan" ? plan_code : null,
-        requires_ack: requires_ack !== false,
-        cta_label: cta_label || "", cta_url: cta_url || "",
-        expires_at: expires_at || null,
-        created_by: caller.id,
+        title, body: b || "", severity: severity || "info", target: target || "all",
+        tenant_id: target === "tenant" ? tenant_id : null, plan_code: target === "plan" ? plan_code : null,
+        requires_ack: requires_ack !== false, cta_label: cta_label || "", cta_url: cta_url || "",
+        expires_at: expires_at || null, created_by: caller.id,
       }).select().maybeSingle();
       if (error) return json({ error: error.message }, 400);
       await logEvent("message.create", target === "tenant" ? tenant_id : null, { title, target });
@@ -588,21 +612,14 @@ Deno.serve(async (req: Request) => {
       return json({ success: true });
     }
 
-    // ============ ACTIVITY ============
     if (action === "list_events") {
       const { limit } = body;
-      const { data } = await admin.from("platform_events").select("*, tenants(name)")
-        .order("created_at", { ascending: false })
-        .limit(limit || 100);
+      const { data } = await admin.from("platform_events").select("*, tenants(name)").order("created_at", { ascending: false }).limit(limit || 100);
       return json({ events: data || [] });
     }
 
     if (action === "tenant_activity_overview") {
-      const { data: tenants } = await admin.from("tenants")
-        .select("id, name, plan, created_at, last_active_at")
-        .eq("approval_status", "approved")
-        .order("created_at", { ascending: false });
-
+      const { data: tenants } = await admin.from("tenants").select("id, name, plan, created_at, last_active_at").eq("approval_status", "approved").order("created_at", { ascending: false });
       const activity = [];
       for (const t of (tenants || [])) {
         const [salesRes, articlesRes, usersRes] = await Promise.all([
@@ -610,21 +627,11 @@ Deno.serve(async (req: Request) => {
           admin.from("articles").select("id", { count: "exact", head: true }).eq("tenant_id", t.id),
           admin.from("profiles").select("id", { count: "exact", head: true }).eq("tenant_id", t.id),
         ]);
-        activity.push({
-          tenant_id: t.id,
-          tenant_name: t.name,
-          plan: t.plan || "starter",
-          last_active_at: t.last_active_at || null,
-          total_sales: salesRes.count || 0,
-          total_articles: articlesRes.count || 0,
-          total_users: usersRes.count || 0,
-          created_at: t.created_at,
-        });
+        activity.push({ tenant_id: t.id, tenant_name: t.name, plan: t.plan || "starter", last_active_at: t.last_active_at || null, total_sales: salesRes.count || 0, total_articles: articlesRes.count || 0, total_users: usersRes.count || 0, created_at: t.created_at });
       }
       return json({ activity });
     }
 
-    // ============ LOGIN CONFIG ============
     if (action === "get_login_config") {
       const { data } = await admin.from("platform_login_config").select("*").eq("id", "default").maybeSingle();
       return json(data || {});
@@ -649,7 +656,6 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, config: data });
     }
 
-    // ============ LANDING CONFIG ============
     if (action === "get_landing_config") {
       const { data } = await admin.from("landing_config").select("*").eq("id", "default").maybeSingle();
       return json(data || {});
@@ -664,8 +670,7 @@ Deno.serve(async (req: Request) => {
         demo_desktop, demo_mobile, why_waarwi, faq_items, section_titles,
         whatsapp_url, phone_display, phone_tel,
         contact_email, contact_hours, testimonials, client_logos,
-        legal_mentions, privacy_policy, terms_of_service,
-        global_effects,
+        legal_mentions, privacy_policy, terms_of_service, global_effects,
       } = body;
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: caller.id };
       if (hero_headline !== undefined) patch.hero_headline = hero_headline;
@@ -704,12 +709,8 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, config: data });
     }
 
-    // ============ SECTOR IMAGES (landing "Secteurs" cards) ============
     if (action === "get_sectors_admin") {
-      const { data, error } = await admin
-        .from("business_activity_types")
-        .select("id, name, slug, description, is_active, image_url, image_alt, image_position")
-        .order("name");
+      const { data, error } = await admin.from("business_activity_types").select("id, name, slug, description, is_active, image_url, image_alt, image_position").order("name");
       if (error) return json({ error: error.message }, 400);
       return json({ sectors: data || [] });
     }
@@ -721,12 +722,7 @@ Deno.serve(async (req: Request) => {
       if (image_url !== undefined) patch.image_url = image_url || null;
       if (image_alt !== undefined) patch.image_alt = image_alt || null;
       if (image_position !== undefined) patch.image_position = (image_position === "left" || image_position === "right") ? image_position : "center";
-      const { data, error } = await admin
-        .from("business_activity_types")
-        .update(patch)
-        .eq("id", sector_id)
-        .select("id, name, slug, description, is_active, image_url, image_alt, image_position")
-        .maybeSingle();
+      const { data, error } = await admin.from("business_activity_types").update(patch).eq("id", sector_id).select("id, name, slug, description, is_active, image_url, image_alt, image_position").maybeSingle();
       if (error) return json({ error: error.message }, 400);
       await logEvent("sector_image.update", sector_id, patch);
       return json({ success: true, sector: data });
@@ -735,39 +731,25 @@ Deno.serve(async (req: Request) => {
     if (action === "delete_sector_image") {
       const { sector_id } = body;
       if (!sector_id) return json({ error: "sector_id requis" }, 400);
-      const { data, error } = await admin
-        .from("business_activity_types")
-        .update({ image_url: null, image_alt: null, image_position: "center" })
-        .eq("id", sector_id)
-        .select("id, image_url")
-        .maybeSingle();
+      const { data, error } = await admin.from("business_activity_types").update({ image_url: null, image_alt: null, image_position: "center" }).eq("id", sector_id).select("id, image_url").maybeSingle();
       if (error) return json({ error: error.message }, 400);
       await logEvent("sector_image.delete", sector_id, null);
       return json({ success: true, sector: data });
     }
 
-    // ============ SUBSCRIPTION LIFECYCLE ============
     if (action === "run_subscription_lifecycle") {
       const { data, error } = await admin.rpc("process_subscription_lifecycle");
       if (error) return json({ error: error.message }, 500);
-
-      // Send admin alerts for newly expired tenants
       const result = data as { renewed?: number; expired?: number; suspended?: number; reminders_sent?: number };
       if ((result?.expired || 0) > 0) {
-        const { data: expiredTenants } = await admin.from("tenants")
-          .select("id, name, email, plan, plan_expires_at")
-          .eq("subscription_status", "expired")
-          .eq("is_active", true);
-
+        const { data: expiredTenants } = await admin.from("tenants").select("id, name, email, plan, plan_expires_at").eq("subscription_status", "expired").eq("is_active", true);
         for (const t of (expiredTenants || [])) {
           fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            method: "POST", headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({ type: "subscription_expired_admin", tenant_id: t.id }),
           }).catch(() => {});
         }
       }
-
       await logEvent("subscription.lifecycle_run", null, result);
       return json({ success: true, ...result });
     }
@@ -777,7 +759,6 @@ Deno.serve(async (req: Request) => {
       const patch: Record<string, unknown> = {};
       if (auto_suspend_enabled !== undefined) patch.auto_suspend_enabled = !!auto_suspend_enabled;
       if (auto_suspend_grace_days !== undefined) patch.auto_suspend_grace_days = Math.max(1, Math.min(90, Number(auto_suspend_grace_days) || 7));
-
       const { error } = await admin.from("tenants").update(patch).neq("billing_cycle", "lifetime");
       if (error) return json({ error: error.message }, 400);
       await logEvent("subscription.auto_suspend_config", null, patch);
@@ -785,20 +766,15 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "get_auto_suspend_settings") {
-      const { data } = await admin.from("tenants")
-        .select("auto_suspend_enabled, auto_suspend_grace_days")
-        .limit(1)
-        .maybeSingle();
+      const { data } = await admin.from("tenants").select("auto_suspend_enabled, auto_suspend_grace_days").limit(1).maybeSingle();
       return json({ auto_suspend_enabled: data?.auto_suspend_enabled || false, auto_suspend_grace_days: data?.auto_suspend_grace_days || 7 });
     }
 
     if (action === "send_expiration_alert") {
       const { tenant_id } = body;
       if (!tenant_id) return json({ error: "tenant_id requis" }, 400);
-
       const res = await fetch(`${SUPABASE_URL}/functions/v1/send-notification-email`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        method: "POST", headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ type: "subscription_expired_admin", tenant_id }),
       });
       const resData = await res.json().catch(() => ({}));

@@ -344,10 +344,19 @@ $function$;
 
 
 -- =========================================================================
--- 3. EMERGENCY RESTORE for tenant INTELLIGENCEPRO TECHNOLOGIES
---    Direct restore from backup, bypassing current_tenant_id()
+-- 3. EMERGENCY RESTORE — NEUTRALIZED (BR-v2 migration, 2025-09)
+--    Original block contained hardcoded tenant/backup UUIDs.
+--    Kept as documentation. DO NOT re-enable.
 -- =========================================================================
-DO $emergency$
+DO $emergency_neutralized$
+BEGIN
+  RAISE NOTICE 'Emergency restore block neutralized by BR-v2 migration';
+END;
+$emergency_neutralized$;
+
+-- Original emergency block below, commented out for auditability:
+/*
+DO $emergency_original$
 DECLARE
   v_tenant uuid := '31f9910a-5e94-4dc1-8ab5-c204bbcdb7db';
   v_backup_id uuid := '2631f2c8-6f58-4e6b-9ab4-fa0839144b6a';
@@ -523,4 +532,5 @@ BEGIN
 
   RAISE NOTICE 'Emergency restore completed for tenant %', v_tenant;
 END;
-$emergency$;
+$emergency_original$;
+*/

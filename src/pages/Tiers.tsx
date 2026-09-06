@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff,
+  Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff, UserPlus,
   X, Calendar, FileText, Wallet, Info, ChevronRight, ChevronLeft, Phone,
   ShoppingBag, Check, Printer, Tag, Trash2,
   Download, Upload, Scale, RotateCcw, Save, Search, ChevronDown, TrendingUp
@@ -213,18 +213,11 @@ export function Tiers() {
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
 
   const [flashTarget, setFlashTarget] = useState<'customers' | 'suppliers' | null>(null);
+  const pendingNavRef = useRef<string | null>(null);
   useEffect(() => {
     const ctx = consumeNavContext();
     if (!ctx?.target) return;
-    if (ctx.target === 'receivables' || ctx.target === 'customers') {
-      setTab('customers');
-      setFlashTarget('customers');
-    } else if (ctx.target === 'payables' || ctx.target === 'suppliers') {
-      setTab('suppliers');
-      setFlashTarget('suppliers');
-    }
-    const t = setTimeout(() => setFlashTarget(null), 6800);
-    return () => clearTimeout(t);
+    pendingNavRef.current = ctx.target;
   }, []);
 
   // ── Filters ──────────────────────────────────────────────────
@@ -391,6 +384,43 @@ export function Tiers() {
   };
   const openSupCreate = () => { setSupEdit(null); setSupForm({ country: 'Sénégal', is_active: true }); setSupErrors({}); setSupTouched({}); setSupOpen(true); setCreateMenuOpen(false); };
   const openSupEdit = (s: Supplier) => { setSupEdit(s); setSupForm(s); setSupErrors({}); setSupTouched({}); setSupOpen(true); };
+
+  const handleNavTarget = useCallback((target: string) => {
+    switch (target) {
+      case 'newCustomer': openCustCreate(); break;
+      case 'newSupplier': openSupCreate(); break;
+      case 'customerPayment':
+      case 'customerPrepayment':
+      case 'customerLookup':
+      case 'customerDocuments':
+      case 'receivables':
+      case 'customers':
+        setTab('customers'); setFlashTarget('customers'); break;
+      case 'supplierPayment':
+      case 'supplierDocuments':
+      case 'payables':
+      case 'suppliers':
+        setTab('suppliers'); setFlashTarget('suppliers'); break;
+    }
+    setTimeout(() => setFlashTarget(null), 6800);
+  }, []);
+
+  useEffect(() => {
+    if (pendingNavRef.current) {
+      handleNavTarget(pendingNavRef.current);
+      pendingNavRef.current = null;
+    }
+  }, [handleNavTarget]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const target = (e as CustomEvent).detail?.target;
+      if (target) handleNavTarget(target);
+    };
+    window.addEventListener('waarwi:quickaction', handler);
+    return () => window.removeEventListener('waarwi:quickaction', handler);
+  }, [handleNavTarget]);
+
   const saveSup = async () => {
     if (!validateSupAll()) { error(t('tiers.fixErrors')); return; }
     if (!can('manage_customers')) { error(t('tiers.noPermissionSuppliers')); return; }
@@ -824,10 +854,8 @@ export function Tiers() {
             <button onClick={reconcileBalances} disabled={reconciling} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 disabled:opacity-40 transition-colors" title="Rapprochement des soldes"><RotateCcw className={`w-3.5 h-3.5 ${reconciling ? 'animate-spin' : ''}`} /><span className="hidden lg:inline">Rapprochement</span></button>
             <button onClick={exportTiers} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 transition-colors" title="Exporter"><Download className="w-3.5 h-3.5" /><span className="hidden lg:inline">Exporter</span></button>
             <button onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 transition-colors" title="Importer"><Upload className="w-3.5 h-3.5" /><span className="hidden lg:inline">Importer</span></button>
-            <div className="relative">
-              <button ref={createBtnRef} onClick={() => setCreateMenuOpen(v => !v)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 transition-colors" aria-label="Nouveau tiers"><Plus className="w-4 h-4" /><span className="hidden lg:inline">Créer</span></button>
-              {createMenuOpen && createMenuDropdown}
-            </div>
+            <button onClick={openCustCreate} className={`inline-flex items-center gap-1.5 text-xs font-semibold text-black hover:text-brand-700 transition-colors ${tab === 'suppliers' ? 'hidden' : ''}`}><UserPlus className="w-4 h-4" /><span className="hidden lg:inline">Nouveau client</span></button>
+            <button onClick={openSupCreate} className={`inline-flex items-center gap-1.5 text-xs font-semibold text-black hover:text-brand-700 transition-colors ${tab === 'customers' ? 'hidden' : ''}`}><Truck className="w-4 h-4" /><span className="hidden lg:inline">Nouveau fournisseur</span></button>
           </div>
         </div>
         {/* Row 2: search bar (mobile only) */}

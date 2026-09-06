@@ -121,10 +121,11 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
 
   useEffect(() => {
     const ctx = consumeNavContext();
-    if (!ctx?.highlightId) return;
-    setHighlightId(ctx.highlightId);
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    highlightTimerRef.current = setTimeout(() => setHighlightId(null), 6800);
+    if (ctx?.highlightId) {
+      setHighlightId(ctx.highlightId);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => setHighlightId(null), 6800);
+    }
     return () => { if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current); };
   }, []);
 

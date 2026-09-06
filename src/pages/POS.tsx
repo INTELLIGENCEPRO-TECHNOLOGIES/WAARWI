@@ -28,6 +28,8 @@ import { isSaleSettlementIncome, type CashMovementKind } from '../lib/cashMoveme
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
 import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments } from '../lib/ipm';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
+import { QuickActionsPanel } from '../components/QuickActionsPanel';
+import { Activity } from 'lucide-react';
 import { CategoryPickerModal } from './ArticlesComponents';
 import { PosNumpad, type NumpadField } from '../components/PosNumpad';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
@@ -310,6 +312,7 @@ function POSLandingOpenMinimal({
   onMenu: () => void;
 }) {
   const [now, setNow] = useState(() => new Date());
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const fundInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -354,21 +357,21 @@ function POSLandingOpenMinimal({
             <span className="text-[9px] sm:text-xs text-neutral-400 capitalize leading-none">{dateStr}</span>
           </div>
         </div>
-        {/* Logo zone: gradient fading to pure white */}
-        <div className="max-w-[30vw] sm:max-w-[220px] flex items-center justify-end rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-br from-white to-white">
+        {/* Logo zone: directly on page background */}
+        <div className="flex-1 min-w-0 flex items-center justify-end px-2 py-1.5 sm:px-3 sm:py-2 overflow-hidden">
           {tenantLogo ? (
             <img src={tenantLogo} alt={tenantName || ''} className="max-h-8 sm:max-h-16 max-w-full object-contain" />
           ) : (
-            <span className="text-xs sm:text-lg font-bold text-neutral-700 tracking-tight">{tenantName || 'Waarwi'}</span>
+            <span className="text-xs sm:text-lg font-bold text-neutral-700 tracking-tight truncate whitespace-nowrap">{tenantName || 'Waarwi'}</span>
           )}
         </div>
       </div>
 
       {/* Center: site + cashier info, then Ouvrir la caisse */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 gap-3">
-        {/* Site name + cashier on two small lines */}
-        <div className="flex flex-col items-center gap-0.5 text-center">
-          {siteName && <div className="text-[11px] leading-tight"><span className="text-neutral-400">Point de vente : </span><span className="font-semibold text-neutral-700">{siteName}</span></div>}
+        {/* Site name (larger, higher) + cashier below */}
+        <div className="flex flex-col items-center gap-1.5 text-center">
+          {siteName && <div className="text-sm sm:text-base font-semibold text-neutral-800"><span className="text-neutral-400 font-normal">Point de vente : </span>{siteName}</div>}
           {cashierName && <div className="text-[11px] leading-tight"><span className="text-neutral-400">Vendeur : </span><span className="font-semibold text-neutral-700">{cashierName}</span></div>}
         </div>
         <button
@@ -380,8 +383,8 @@ function POSLandingOpenMinimal({
         </button>
       </div>
 
-      {/* Bottom: Menu button */}
-      <div className="flex justify-center pb-4 sm:pb-8">
+      {/* Bottom: Menu + Quick Actions buttons */}
+      <div className="flex items-center justify-center gap-3 pb-4 sm:pb-8">
         <button
           onClick={onMenu}
           className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-bold shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
@@ -389,7 +392,16 @@ function POSLandingOpenMinimal({
           <MenuIcon className="w-5 h-5" />
           Menu
         </button>
+        <button
+          onClick={() => setQuickActionsOpen(true)}
+          className="flex items-center gap-1.5 px-4 py-3.5 rounded-xl bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-700 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] quick-action-pulse"
+        >
+          <Activity className="w-4 h-4" />
+          <span className="hidden sm:inline">Actions rapides</span>
+        </button>
       </div>
+
+      {quickActionsOpen && <QuickActionsPanel onClose={() => setQuickActionsOpen(false)} />}
 
       {/* Fund modal */}
       {fundModalOpen && (
@@ -587,7 +599,7 @@ function POSLandingResume({
         <div className="flex items-end px-8 pt-6 pb-5 border-b border-neutral-100">
           <div className="leading-tight">
             <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Caisse</h1>
-            <p className="text-sm text-neutral-500 mt-0.5">{tenantName || currentSite?.name || '-'}</p>
+            <p className="text-sm text-neutral-500 mt-0.5 truncate whitespace-nowrap">{tenantName || currentSite?.name || '-'}</p>
           </div>
         </div>
 
@@ -1516,6 +1528,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         setScreen('pos');
       }
     }
+    // Handle quick-action targets on mount
+    const ctx = peekNavContext();
+    if (!ctx?.target) return;
+    if (ctx.target === 'openCashSession') { consumeNavContext(); setScreen('open-form'); }
+    else if (ctx.target === 'cashMovement' || ctx.target === 'newExpense') {
+      consumeNavContext();
+      if (session) { setScreen('pos'); }
+    }
   }, [session, screen]);
 
   const categoryMatchIds = useMemo(() => {
@@ -1548,7 +1568,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const tracksStock = (a: ArticleLite) => a.track_stock !== false;
 
   const addToCart = (a: ArticleLite) => {
-    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     // If already in cart, just increment qty
     const existing = cart.find(i => i.article_id === a.id);
     if (existing) {
@@ -1590,7 +1610,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const updateQty = (id: string, delta: number) => {
-    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     const art = articles.find(a => a.id === id);
     const tracked = art ? tracksStock(art) : true;
     setCart(c => c.flatMap(i => {
@@ -1605,7 +1625,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const setQty = (id: string, raw: string) => {
     const n = raw === '' ? 0 : Number(raw);
     if (isNaN(n)) return;
-    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     const art = articles.find(a => a.id === id);
     const tracked = art ? tracksStock(art) : true;
     const val = (allowNeg || !tracked) ? n : Math.min(n, (cart.find(i => i.article_id === id)?.stock_available ?? n));
@@ -1630,7 +1650,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const commitNumpad = (field: NumpadField, value: number) => {
     if (!selectedLineId) return;
-    const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+    const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     if (field === 'qty') {
       const item = cart.find(i => i.article_id === selectedLineId);
       if (!allowNeg && item && tracksStock(articles.find(a => a.id === selectedLineId)!) && value > (item.stock_available ?? value)) {
@@ -1869,6 +1889,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setMvCustomer(null); setMvCustSearch('');
     setMvPrint(true);
   };
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const target = (e as CustomEvent).detail?.target;
+      if (target === 'directPos' && session) setScreen('pos');
+      else if (target === 'openCashSession') setScreen('open-form');
+      else if ((target === 'cashMovement' || target === 'newExpense') && session) {
+        setScreen('pos');
+        openMovement();
+      }
+    };
+    window.addEventListener('waarwi:quickaction', handler);
+    return () => window.removeEventListener('waarwi:quickaction', handler);
+  }, [session]);
 
   const submitMovement = async () => {
     if (!session || !currentSite) return;
@@ -2427,7 +2461,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     for (const it of webOrderItems) {
       const a = articles.find(x => x.id === it.article_id);
       if (!a) { missing.push(it.article_name); continue; }
-      const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+      const allowNeg = !!(currentSite as any)?.allow_negative_stock;
       if (!allowNeg && tracksStock(a) && a.stock_available < it.quantity) {
         error(`Stock insuffisant pour "${a.name}" (${a.stock_available} dispo / ${it.quantity} requis)`);
         return;
@@ -3258,7 +3292,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             ) : articleView === 'grid' ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5 w-full justify-center">
                 {filtered.map(a => {
-                  const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+                  const allowNeg = !!(currentSite as any)?.allow_negative_stock;
                   const tracked = tracksStock(a);
                   const out = !allowNeg && tracked && a._stockLoaded && a.stock_available <= 0;
                   const low = tracked && a._stockLoaded && a.stock_available > 0 && a.stock_available <= 3;
@@ -3289,7 +3323,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             ) : (
               <div className="flex flex-col divide-y divide-neutral-100 border-y border-neutral-100">
                 {filtered.map(a => {
-                  const allowNeg = !!(tenant as any)?.settings?.allow_negative_stock;
+                  const allowNeg = !!(currentSite as any)?.allow_negative_stock;
                   const tracked = tracksStock(a);
                   const out = !allowNeg && tracked && a._stockLoaded && a.stock_available <= 0;
                   const stockLabel = tracked && can('view_stock_levels') ? (!a._stockLoaded ? '...' : a.stock_available <= 0 ? (allowNeg ? '0' : 'Rup') : `${a.stock_available}`) : '';
@@ -5051,8 +5085,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             <p className="text-xs text-neutral-500 mt-1">Vous n'avez qu'un seul magasin configuré. Contactez l'administrateur pour en ajouter d'autres.</p>
           </div>
         ) : (
-          <div className="space-y-1.5">
-            <p className="text-[11px] text-neutral-500 uppercase tracking-wider font-semibold mb-2">Sélectionnez un magasin</p>
+          <div>
+            <p className="text-[11px] text-neutral-500 uppercase tracking-wider font-semibold mb-1">Sélectionnez un magasin</p>
+            <div className="divide-y divide-neutral-100">
             {sites.map(s => {
               const active = s.id === currentSite?.id;
               return (
@@ -5067,9 +5102,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     }
                   }}
                   disabled={active}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${active ? 'bg-neutral-100 border border-neutral-200' : 'bg-white border border-neutral-200 hover:border-neutral-400 active:scale-[0.98]'}`}
+                  className="w-full flex items-center gap-3 px-1 py-3 text-left transition-colors disabled:cursor-default"
                 >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-600'}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500'}`}>
                     <Store className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -5080,6 +5115,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 </button>
               );
             })}
+            </div>
           </div>
         )}
       </Modal>

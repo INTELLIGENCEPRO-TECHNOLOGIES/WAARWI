@@ -409,7 +409,7 @@ export function InfosTab({ form, setForm, editing, categories, suppliers, onGene
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Désignation *" className="sm:col-span-2">
-          <input value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bare-input text-sm" placeholder="Nom de l'article" />
+          <input data-field="designation" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="bare-input text-sm" placeholder="Nom de l'article" autoFocus={!form.name} />
         </Field>
         <Field label="Référence interne *">
           <div className="flex gap-2">
@@ -674,10 +674,11 @@ export function ImageTab({ currentUrl, uploading, onFileSelect, onDelete }: {
 
 // ── MobileArticleEdit (swipe-based, native-feel modal) ─────
 
-export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, saving, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount }: {
+export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, saveAndNew, saveAndClose: saveAndCloseIntent, saving, saveState, formMode, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, isPharmacy, onClose, onPrev, onNext, editingIndex, totalCount }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
-  save: () => Promise<boolean>; saving: boolean;
+  save: () => Promise<boolean>; saveAndNew: () => Promise<void>; saveAndClose: () => Promise<void>;
+  saving: boolean; saveState?: string; formMode?: string;
   compats: Compat[]; setCompats: (c: Compat[] | ((p: Compat[]) => Compat[])) => void;
   categories: Category[]; suppliers: any[]; brands: VehicleBrand[]; models: any[];
   autoMode: boolean; generateRef: () => void; addCompat: () => void; removeCompat: (i: number) => void;
@@ -759,9 +760,12 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
           </button>
 
           <div className="flex-1 min-w-0 px-1">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 leading-none">
-              {editing ? 'Modification' : 'Nouvel article'}
-              {totalCount > 0 && <span className="text-slate-400"> · {editingIndex + 1}/{totalCount}</span>}
+            <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 leading-none flex items-center gap-1.5">
+              <span>{formMode === 'create' ? 'Nouvel article' : 'Modification'}</span>
+              {!!(formMode !== 'create' && totalCount > 0) && <span className="text-slate-400">· {editingIndex + 1}/{totalCount}</span>}
+              {saveState === 'saving' && <Loader2 className="w-2.5 h-2.5 animate-spin text-neutral-400" />}
+              {saveState === 'saved' && <span className="text-emerald-500">Enregistré</span>}
+              {saveState === 'error' && <span className="text-red-500">Échec</span>}
             </div>
             <h2 className="text-sm font-bold text-slate-900 leading-tight mt-0.5 break-words">
               {form.name || 'Sans titre'}
@@ -782,11 +786,24 @@ export function MobileArticleEdit({ form, setForm, editing, tab, setTab, save, s
             </div>
           )}
 
-          {/* Save — compact branded icon button */}
-          <button onClick={save} disabled={saving} aria-label="Enregistrer"
-            className="shrink-0 w-9 h-9 flex items-center justify-center text-neutral-900 active:scale-90 transition-all disabled:opacity-50">
-            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-          </button>
+          {/* Save actions */}
+          {formMode === 'create' ? (
+            <div className="shrink-0 flex items-center gap-1">
+              <button onClick={saveAndCloseIntent} disabled={saving} aria-label="Enregistrer et fermer"
+                className="w-9 h-9 flex items-center justify-center text-neutral-500 active:scale-90 transition-all disabled:opacity-50">
+                <CheckCircle2 className="w-5 h-5" />
+              </button>
+              <button onClick={saveAndNew} disabled={saving} aria-label="Enregistrer et nouveau"
+                className="w-9 h-9 flex items-center justify-center text-neutral-900 active:scale-90 transition-all disabled:opacity-50">
+                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+              </button>
+            </div>
+          ) : (
+            <button onClick={save} disabled={saving} aria-label="Enregistrer"
+              className="shrink-0 w-9 h-9 flex items-center justify-center text-neutral-900 active:scale-90 transition-all disabled:opacity-50">
+              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+            </button>
+          )}
         </div>
 
         {/* Section indicator — icon-only segmented control + active label */}
@@ -1114,11 +1131,12 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
 
 // ── FullScreenArticleEdit ──────────────────────────────────
 
-export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TABS: _TABS, save, saving, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, onClose, onPrev, onNext, editingIndex, totalCount, filtered, onJumpTo }: {
+export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TABS: _TABS, save, saveAndNew, saveAndClose: saveAndCloseIntent, saving, saveState, formMode, compats, setCompats, categories, suppliers, brands, models, autoMode, generateRef, addCompat, removeCompat, createCategory, imagePreview, imageUploading, onFileSelect, onDeleteImage, marginValue, marginStr, showPurchasePrice, showMargin, stockMap, formTiers, setFormTiers, tierDefinitions, onClose, onPrev, onNext, editingIndex, totalCount, filtered, onJumpTo }: {
   form: Form; setForm: (f: Form | ((p: Form) => Form)) => void;
   editing: Article | null; tab: TabKey; setTab: (t: TabKey) => void;
   TABS: { k: TabKey; l: string; icon: any }[];
-  save: () => Promise<boolean>; saving: boolean;
+  save: () => Promise<boolean>; saveAndNew: () => Promise<void>; saveAndClose: () => Promise<void>;
+  saving: boolean; saveState?: string; formMode?: string;
   compats: Compat[]; setCompats: (c: Compat[] | ((p: Compat[]) => Compat[])) => void;
   categories: Category[]; suppliers: any[]; brands: VehicleBrand[]; models: any[];
   autoMode: boolean; generateRef: () => void; addCompat: () => void; removeCompat: (i: number) => void;
@@ -1154,6 +1172,28 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
     { key: 'image', label: 'Image', icon: Camera },
   ];
 
+  const isCreate = formMode === 'create';
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) { saveAndCloseIntent(); }
+        else if (isCreate) { saveAndNew(); }
+        else { save(); }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isCreate, save, saveAndNew, saveAndCloseIntent]);
+
+  const saveStateLabel = saveState === 'saving' ? 'Enregistrement…'
+    : saveState === 'saved' ? 'Enregistré'
+    : saveState === 'dirty' ? 'Modifications en cours…'
+    : saveState === 'error' ? 'Échec'
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col animate-fade-in">
       {/* Top bar */}
@@ -1162,8 +1202,16 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-            {editing ? 'Modification' : 'Nouvel article'}{totalCount > 0 && ` — ${editingIndex + 1}/${totalCount}`}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+              {isCreate ? 'Nouvel article' : 'Modification'}{totalCount > 0 && !isCreate && ` — ${editingIndex + 1}/${totalCount}`}
+            </span>
+            {saveStateLabel && (
+              <span className={`text-[10px] font-semibold ${saveState === 'error' ? 'text-red-500' : saveState === 'saved' ? 'text-emerald-500' : 'text-neutral-400'}`}>
+                {saveState === 'saving' && <Loader2 className="w-3 h-3 animate-spin inline mr-0.5" />}
+                {saveStateLabel}
+              </span>
+            )}
           </div>
           <h2 className="text-base font-bold text-neutral-900 break-words leading-tight">{form.name || 'Sans titre'}</h2>
         </div>
@@ -1193,20 +1241,35 @@ export function FullScreenArticleEdit({ form, setForm, editing, tab, setTab, TAB
           )}
         </div>
 
-        {/* Prev/Next */}
-        <div className="flex items-center gap-1">
-          <button onClick={onPrev} disabled={!onPrev} className="p-2 text-neutral-500 hover:text-neutral-900 disabled:opacity-30 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <button onClick={onNext} disabled={!onNext} className="p-2 text-neutral-500 hover:text-neutral-900 disabled:opacity-30 transition-colors">
-            <ArrowRightIcon className="w-4 h-4" />
-          </button>
-        </div>
+        {/* Prev/Next (edit mode only) */}
+        {!isCreate && (
+          <div className="flex items-center gap-1">
+            <button onClick={onPrev} disabled={!onPrev} className="p-2 text-neutral-500 hover:text-neutral-900 disabled:opacity-30 transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <button onClick={onNext} disabled={!onNext} className="p-2 text-neutral-500 hover:text-neutral-900 disabled:opacity-30 transition-colors">
+              <ArrowRightIcon className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 text-sm font-bold text-neutral-900 hover:opacity-70 disabled:opacity-50 transition-opacity">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-          Enregistrer
-        </button>
+        {/* Save buttons: context-dependent */}
+        {isCreate ? (
+          <div className="flex items-center gap-2">
+            <button onClick={saveAndCloseIntent} disabled={saving} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-neutral-600 hover:text-neutral-900 transition-colors disabled:opacity-50" title="Ctrl+Maj+Entrée">
+              Enregistrer et fermer
+            </button>
+            <button onClick={saveAndNew} disabled={saving} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors disabled:opacity-50" title="Ctrl+Entrée">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              Enregistrer et nouveau
+            </button>
+          </div>
+        ) : (
+          <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 text-sm font-bold text-neutral-900 hover:opacity-70 disabled:opacity-50 transition-opacity">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            Enregistrer
+          </button>
+        )}
       </div>
 
       {/* Body: sidebar + content */}

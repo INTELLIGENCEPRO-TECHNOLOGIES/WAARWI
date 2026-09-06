@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Database, Download, RefreshCw, Trash2, Loader2, Clock,
-  ShieldCheck, AlertTriangle, Play, RotateCcw, Upload
+  ShieldCheck, AlertTriangle, Play, RotateCcw, Upload,
+  CheckCircle2, XCircle, Lock, Info, FileCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
+import { usePermissions } from '../lib/permissions';
 import { ConfirmDialog } from './Modal';
+
+type BackupStatus = 'creating' | 'verified' | 'failed' | 'legacy' | 'incompatible';
 
 type Backup = {
   id: string;
@@ -15,6 +19,12 @@ type Backup = {
   is_auto: boolean;
   size_bytes: number;
   created_at: string;
+  format_version: number | null;
+  status: BackupStatus | null;
+  verified_at: string | null;
+  global_checksum: string | null;
+  row_counts: Record<string, number> | null;
+  error_message: string | null;
 };
 
 type Schedule = {
@@ -24,6 +34,12 @@ type Schedule = {
   keep_count: number;
   last_run_at: string | null;
   next_run_at: string | null;
+};
+
+type PreflightResult = {
+  viable: boolean;
+  issues: { code: string; severity: string; message: string; table?: string }[];
+  issue_count: number;
 };
 
 const FREQ_OPTIONS = [
@@ -49,30 +65,60 @@ function fmtDate(iso: string | null) {
   });
 }
 
+function totalRows(rc: Record<string, number> | null): number {
+  if (!rc) return 0;
+  return Object.values(rc).reduce((a, b) => a + b, 0);
+}
+
+function StatusBadge({ status }: { status: BackupStatus | null }) {
+  if (!status) return null;
+  const cfg: Record<string, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
+    verified: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Vérifié', icon: <CheckCircle2 className="w-3 h-3" /> },
+    creating: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'En cours', icon: <Loader2 className="w-3 h-3 animate-spin" /> },
+    failed: { bg: 'bg-red-50', text: 'text-red-700', label: 'Échec', icon: <XCircle className="w-3 h-3" /> },
+    legacy: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Legacy v1', icon: <AlertTriangle className="w-3 h-3" /> },
+    incompatible: { bg: 'bg-red-50', text: 'text-red-700', label: 'Incompatible', icon: <XCircle className="w-3 h-3" /> },
+  };
+  const c = cfg[status] || cfg.failed;
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${c.bg} ${c.text}`}>
+      {c.icon}{c.label}
+    </span>
+  );
+}
+
 export function BackupTab() {
   const { tenant } = useApp();
-  const { success, error } = useToast();
+  const toast = useToast();
+  const { can } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
+  const [activationEnabled, setActivationEnabled] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState<Backup | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Backup | null>(null);
-  const [label, setLabel] = useState('');
   const [confirmImport, setConfirmImport] = useState<{ name: string; payload: any } | null>(null);
+  const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null);
+  const [preflightTarget, setPreflightTarget] = useState<Backup | null>(null);
+  const [label, setLabel] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     if (!tenant) return;
     setLoading(true);
-    const [{ data: b }, { data: s }] = await Promise.all([
+    const [{ data: b }, { data: s }, { data: act }] = await Promise.all([
       supabase.from('tenant_backups')
-        .select('id,label,kind,is_auto,size_bytes,created_at')
+        .select('id,label,kind,is_auto,size_bytes,created_at,format_version,status,verified_at,global_checksum,row_counts,error_message')
         .eq('tenant_id', tenant.id)
         .order('created_at', { ascending: false }),
       supabase.from('tenant_backup_settings')
         .select('*')
+        .eq('tenant_id', tenant.id)
+        .maybeSingle(),
+      supabase.from('_br_tenant_activation')
+        .select('enabled')
         .eq('tenant_id', tenant.id)
         .maybeSingle(),
     ]);
@@ -85,74 +131,98 @@ export function BackupTab() {
       last_run_at: null,
       next_run_at: null,
     });
+    setActivationEnabled(act?.enabled === true);
     setLoading(false);
   }, [tenant]);
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    if (!tenant) return;
-    (async () => {
-      try {
-        await supabase.rpc('tenant_run_due_auto_backup');
-        load();
-      } catch { /* silent */ }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenant?.id]);
-
   const createBackup = async () => {
+    if (!can('backup_create')) { toast.error('Permission insuffisante'); return; }
     setBusy('create');
-    const { error: e } = await supabase.rpc('tenant_create_backup', {
+    const { data, error: e } = await supabase.rpc('br_create_backup', {
       p_label: label || '',
-      p_auto: false,
+      p_kind: 'manual',
     });
     setBusy(null);
-    if (e) { error(e.message); return; }
+    if (e) { toast.error(e.message); return; }
     setLabel('');
-    success('Sauvegarde créée');
+    const report = data as any;
+    toast.success(`Sauvegarde créée — ${report?.total_rows ?? 0} lignes, ${report?.table_count ?? 0} tables`);
     load();
   };
 
+  const runPreflight = async (b: Backup) => {
+    setBusy('preflight');
+    setPreflightTarget(b);
+    setPreflightResult(null);
+    const { data, error: e } = await supabase.rpc('br_preflight_restore', { p_backup_id: b.id });
+    setBusy(null);
+    if (e) { toast.error(e.message); setPreflightTarget(null); return; }
+    const result = data as PreflightResult;
+    setPreflightResult(result);
+    if (result.viable) {
+      setConfirmRestore(b);
+    }
+  };
+
   const doRestore = async (b: Backup) => {
+    if (!can('backup_restore')) { toast.error('Permission insuffisante'); return; }
     setBusy('restore');
-    const { error: e } = await supabase.rpc('tenant_restore_backup', { p_backup_id: b.id });
+    const { data, error: e } = await supabase.rpc('br_restore_backup', { p_backup_id: b.id });
     setBusy(null);
     setConfirmRestore(null);
-    if (e) { error(e.message); return; }
-    success('Restauration effectuée');
+    setPreflightResult(null);
+    setPreflightTarget(null);
+    if (e) { toast.error(e.message); return; }
+    const report = data as any;
+    toast.success(`Restauration réussie — sauvegarde de sécurité: ${report?.safety_backup_id ? 'créée' : 'N/A'}`);
     load();
   };
 
   const doReset = async () => {
+    if (!can('backup_reset_operations')) { toast.error('Permission insuffisante'); return; }
     setBusy('reset');
-    const { error: e } = await supabase.rpc('tenant_reset_operations');
+    const { data, error: e } = await supabase.rpc('br_reset_operations');
     setBusy(null);
     setConfirmReset(false);
-    if (e) { error(e.message); return; }
-    success('Données opérationnelles réinitialisées');
+    if (e) { toast.error(e.message); return; }
+    const report = data as any;
+    toast.success(`Opérations réinitialisées — sauvegarde de sécurité: ${report?.safety_backup_id ? 'créée' : 'N/A'}`);
+    load();
   };
 
   const doDelete = async (b: Backup) => {
+    if (!can('backup_delete')) { toast.error('Permission insuffisante'); return; }
     setBusy('delete');
     const { error: e } = await supabase.from('tenant_backups').delete().eq('id', b.id);
     setBusy(null);
     setConfirmDelete(null);
-    if (e) { error(e.message); return; }
-    success('Sauvegarde supprimée');
+    if (e) { toast.error(e.message); return; }
+    toast.success('Sauvegarde supprimée');
     load();
   };
 
   const doDownload = async (b: Backup) => {
+    if (!can('backup_download')) { toast.error('Permission insuffisante'); return; }
     setBusy('download');
     const { data, error: e } = await supabase.from('tenant_backups')
-      .select('payload,created_at,label')
+      .select('payload,created_at,label,format_version,checksums,global_checksum,row_counts')
       .eq('id', b.id)
       .maybeSingle();
     setBusy(null);
-    if (e || !data) { error(e?.message || 'Introuvable'); return; }
+    if (e || !data) { toast.error(e?.message || 'Introuvable'); return; }
     const blob = new Blob([JSON.stringify({
-      meta: { id: b.id, label: data.label, created_at: data.created_at, tenant: tenant?.name },
+      meta: {
+        id: b.id,
+        label: data.label,
+        created_at: data.created_at,
+        tenant: tenant?.name,
+        format_version: data.format_version,
+        checksums: data.checksums,
+        global_checksum: data.global_checksum,
+        row_counts: data.row_counts,
+      },
       payload: data.payload,
     }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -165,11 +235,12 @@ export function BackupTab() {
   };
 
   const saveSchedule = async (patch: Partial<Schedule>) => {
+    if (!can('backup_manage_schedule')) { toast.error('Permission insuffisante'); return; }
     if (!tenant || !schedule) return;
     const next = { ...schedule, ...patch };
     setSchedule(next);
     const enabling = patch.auto_enabled === true && !schedule.auto_enabled;
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       tenant_id: tenant.id,
       auto_enabled: next.auto_enabled,
       frequency_hours: next.frequency_hours,
@@ -185,7 +256,7 @@ export function BackupTab() {
     const { error: e } = await supabase
       .from('tenant_backup_settings')
       .upsert(payload, { onConflict: 'tenant_id' });
-    if (e) { error(e.message); load(); }
+    if (e) { toast.error(e.message); load(); }
   };
 
   const onPickFile = () => fileInputRef.current?.click();
@@ -197,39 +268,44 @@ export function BackupTab() {
     try {
       const text = await f.text();
       const json = JSON.parse(text);
-      setConfirmImport({ name: f.name, payload: json });
+      const payload = json.payload || json;
+      if (typeof payload !== 'object' || payload === null) throw new Error('Invalid');
+      setConfirmImport({ name: f.name, payload });
     } catch {
-      error('Fichier JSON invalide');
+      toast.error('Fichier JSON invalide');
     }
   };
 
   const doImport = async () => {
+    if (!can('backup_import')) { toast.error('Permission insuffisante'); return; }
     if (!confirmImport) return;
     setBusy('import');
-    const { error: e } = await supabase.rpc('tenant_restore_from_payload', {
+    const { data, error: e } = await supabase.rpc('br_import_payload', {
       p_payload: confirmImport.payload,
     });
     setBusy(null);
     setConfirmImport(null);
-    if (e) { error(e.message); return; }
-    success('Restauration depuis le fichier effectuée');
+    if (e) { toast.error(e.message); return; }
+    const report = data as any;
+    toast.success(`Import réussi — sauvegarde de sécurité: ${report?.safety_backup_id ? 'créée' : 'N/A'}`);
     load();
   };
 
   const runNow = async () => {
+    if (!can('backup_create')) { toast.error('Permission insuffisante'); return; }
     setBusy('runNow');
-    const { error: e } = await supabase.rpc('tenant_run_due_auto_backup');
-    if (!e) {
-      await supabase.rpc('tenant_create_backup', {
-        p_label: `Auto ${new Date().toLocaleString('fr-FR')}`,
-        p_auto: true,
-      });
-    }
+    const { error: e } = await supabase.rpc('br_create_backup', {
+      p_label: `Auto ${new Date().toLocaleString('fr-FR')}`,
+      p_kind: 'auto',
+    });
     setBusy(null);
-    if (e) { error(e.message); return; }
-    success('Sauvegarde automatique exécutée');
+    if (e) { toast.error(e.message); return; }
+    toast.success('Sauvegarde automatique créée');
     load();
   };
+
+  const canRestore = (b: Backup) =>
+    b.status === 'verified' && (b.format_version ?? 1) >= 2;
 
   return (
     <div className="space-y-0">
@@ -242,59 +318,82 @@ export function BackupTab() {
         </p>
       </div>
 
+      {/* Activation lock banner */}
+      {!activationEnabled && (
+        <div className="py-3 px-3 bg-amber-50 border border-amber-200 rounded-md my-3 flex items-start gap-2.5">
+          <Lock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-amber-800">Verrouillage de sécurité actif</p>
+            <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+              Les opérations destructrices (restauration, réinitialisation, import) sont désactivées par défaut.
+              Contactez l'administrateur de la plateforme pour activer ces opérations sur votre tenant.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Create manual backup */}
-      <div className="py-4 border-b border-neutral-200">
-        <div className="flex items-center gap-2 mb-3">
-          <ShieldCheck className="w-4 h-4 text-neutral-400" />
-          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Créer une sauvegarde manuelle</h4>
+      {can('backup_create') && (
+        <div className="py-4 border-b border-neutral-200">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck className="w-4 h-4 text-neutral-400" />
+            <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Créer une sauvegarde manuelle</h4>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="bare-input text-sm py-1.5 flex-1"
+              placeholder="Libellé (optionnel) — ex: Avant mise à jour tarifs"
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+            />
+            <button
+              onClick={createBackup}
+              disabled={busy === 'create'}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-neutral-900 text-white hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50 shrink-0"
+              title="Créer la sauvegarde"
+            >
+              {busy === 'create' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            className="bare-input text-sm py-1.5 flex-1"
-            placeholder="Libellé (optionnel) — ex: Avant mise à jour tarifs"
-            value={label}
-            onChange={e => setLabel(e.target.value)}
-          />
-          <button
-            onClick={createBackup}
-            disabled={busy === 'create'}
-            className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-neutral-900 text-white hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50 shrink-0"
-            title="Créer la sauvegarde"
-          >
-            {busy === 'create' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Import from file */}
-      <div className="py-4 border-b border-neutral-200">
-        <div className="flex items-center gap-2 mb-2">
-          <Upload className="w-4 h-4 text-neutral-400" />
-          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Importer une sauvegarde depuis un fichier</h4>
+      {can('backup_import') && (
+        <div className="py-4 border-b border-neutral-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Upload className="w-4 h-4 text-neutral-400" />
+            <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Importer une sauvegarde depuis un fichier</h4>
+          </div>
+          <p className="text-[11px] text-neutral-500 leading-relaxed mb-3">
+            Sélectionnez un fichier <code className="text-xs">.json</code> précédemment téléchargé pour restaurer l'état de votre entreprise.
+            Une sauvegarde de sécurité sera créée automatiquement avant la restauration.
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={onFileChosen}
+            className="hidden"
+          />
+          <button
+            onClick={onPickFile}
+            disabled={busy === 'import' || !activationEnabled}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 transition disabled:opacity-50"
+          >
+            {busy === 'import' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            Choisir un fichier…
+          </button>
+          {!activationEnabled && (
+            <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+              <Lock className="w-3 h-3" /> Verrouillage actif — import désactivé
+            </p>
+          )}
         </div>
-        <p className="text-[11px] text-neutral-500 leading-relaxed mb-3">
-          Sélectionnez un fichier <code className="text-xs">.json</code> précédemment téléchargé pour restaurer l'état de votre entreprise.
-          Une sauvegarde de sécurité sera créée automatiquement avant la restauration.
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json,.json"
-          onChange={onFileChosen}
-          className="hidden"
-        />
-        <button
-          onClick={onPickFile}
-          disabled={busy === 'import'}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 transition"
-        >
-          {busy === 'import' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-          Choisir un fichier…
-        </button>
-      </div>
+      )}
 
       {/* Schedule */}
-      {schedule && (
+      {can('backup_manage_schedule') && schedule && (
         <div className="py-4 border-b border-neutral-200 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -345,7 +444,7 @@ export function BackupTab() {
           <button
             onClick={runNow}
             disabled={busy === 'runNow'}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 transition"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 transition disabled:opacity-50"
           >
             {busy === 'runNow' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
             Exécuter maintenant
@@ -375,27 +474,51 @@ export function BackupTab() {
             {backups.map(b => (
               <div key={b.id} className="py-3 flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                      {b.is_auto ? 'AUTO' : 'MANUEL'}
+                      {b.kind === 'safety' ? 'SÉCURITÉ' : b.is_auto ? 'AUTO' : 'MANUEL'}
                     </span>
+                    <StatusBadge status={b.status} />
                     <div className="font-medium text-sm text-neutral-900 truncate">{b.label}</div>
                   </div>
-                  <div className="text-[11px] text-neutral-500 mt-0.5 flex items-center gap-3">
+                  <div className="text-[11px] text-neutral-500 mt-0.5 flex items-center gap-3 flex-wrap">
                     <span>{fmtDate(b.created_at)}</span>
                     <span>{fmtBytes(b.size_bytes)}</span>
+                    {b.row_counts && <span>{totalRows(b.row_counts).toLocaleString('fr-FR')} lignes</span>}
+                    {b.format_version && <span>v{b.format_version}</span>}
                   </div>
+                  {b.error_message && (
+                    <p className="text-[10px] text-red-600 mt-0.5 truncate">{b.error_message}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => doDownload(b)} className="p-1.5 rounded-md hover:bg-neutral-100 transition-colors" title="Télécharger">
-                    <Download className="w-4 h-4 text-neutral-500" />
-                  </button>
-                  <button onClick={() => setConfirmRestore(b)} className="p-1.5 rounded-md hover:bg-neutral-100 transition-colors" title="Restaurer">
-                    <RotateCcw className="w-4 h-4 text-neutral-500" />
-                  </button>
-                  <button onClick={() => setConfirmDelete(b)} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition-colors" title="Supprimer">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {can('backup_download') && (
+                    <button onClick={() => doDownload(b)} disabled={!!busy} className="p-1.5 rounded-md hover:bg-neutral-100 transition-colors disabled:opacity-40" title="Télécharger">
+                      <Download className="w-4 h-4 text-neutral-500" />
+                    </button>
+                  )}
+                  {can('backup_restore') && canRestore(b) && (
+                    <button
+                      onClick={() => runPreflight(b)}
+                      disabled={!!busy || !activationEnabled}
+                      className="p-1.5 rounded-md hover:bg-neutral-100 transition-colors disabled:opacity-40"
+                      title={activationEnabled ? 'Vérifier puis restaurer' : 'Verrouillage actif'}
+                    >
+                      {busy === 'preflight' && preflightTarget?.id === b.id
+                        ? <Loader2 className="w-4 h-4 text-neutral-500 animate-spin" />
+                        : <RotateCcw className="w-4 h-4 text-neutral-500" />}
+                    </button>
+                  )}
+                  {can('backup_restore') && !canRestore(b) && b.status === 'legacy' && (
+                    <span className="p-1.5 text-amber-500" title="Sauvegarde legacy (v1) — ne peut pas être restaurée via le système v2">
+                      <AlertTriangle className="w-4 h-4" />
+                    </span>
+                  )}
+                  {can('backup_delete') && (
+                    <button onClick={() => setConfirmDelete(b)} disabled={!!busy} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition-colors disabled:opacity-40" title="Supprimer">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -404,39 +527,76 @@ export function BackupTab() {
       </div>
 
       {/* Reset operations */}
-      <div className="py-4 border-b border-neutral-200">
-        <div className="flex items-center gap-2 mb-2">
-          <AlertTriangle className="w-4 h-4 text-amber-600" />
-          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Réinitialiser les opérations</h4>
+      {can('backup_reset_operations') && (
+        <div className="py-4 border-b border-neutral-200">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Réinitialiser les opérations</h4>
+          </div>
+          <div className="border-l-2 border-amber-400 pl-3">
+            <p className="text-[11px] text-neutral-600 leading-relaxed">
+              Supprime toutes les ventes, commandes, sessions de caisse, mouvements, écritures comptables et notifications.
+              <strong className="text-neutral-800"> Vos articles, clients, fournisseurs et paramètres sont conservés.</strong>
+              {' '}Une sauvegarde de sécurité est créée automatiquement avant l'opération.
+            </p>
+            <button
+              onClick={() => setConfirmReset(true)}
+              disabled={!activationEnabled || !!busy}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-800 transition disabled:opacity-50"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Réinitialiser les opérations
+            </button>
+            {!activationEnabled && (
+              <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Verrouillage actif — réinitialisation désactivée
+              </p>
+            )}
+          </div>
         </div>
-        <div className="border-l-2 border-amber-400 pl-3">
-          <p className="text-[11px] text-neutral-600 leading-relaxed">
-            Supprime toutes les ventes, commandes, sessions de caisse, mouvements, écritures comptables et notifications.
-            <strong className="text-neutral-800"> Vos articles, clients, fournisseurs et paramètres sont conservés.</strong>
-          </p>
-          <button
-            onClick={() => setConfirmReset(true)}
-            className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-800 transition"
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            Réinitialiser les opérations
-          </button>
+      )}
+
+      {/* Preflight results dialog */}
+      {preflightResult && !preflightResult.viable && preflightTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <FileCheck className="w-5 h-5 text-red-600" />
+              <h3 className="font-bold text-sm text-neutral-900">Vérification pré-restauration échouée</h3>
+            </div>
+            <p className="text-xs text-neutral-600 mb-3">
+              La sauvegarde « {preflightTarget.label} » ne peut pas être restaurée :
+            </p>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {preflightResult.issues.map((iss, i) => (
+                <div key={i} className={`text-[11px] px-2 py-1.5 rounded ${iss.severity === 'fatal' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                  <span className="font-semibold">[{iss.code}]</span> {iss.message}
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => { setPreflightResult(null); setPreflightTarget(null); }}
+              className="mt-4 w-full text-center text-xs font-medium text-neutral-700 hover:text-neutral-900 py-2 rounded-md border border-neutral-200 hover:bg-neutral-50 transition"
+            >
+              Fermer
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmRestore}
         title="Restaurer cette sauvegarde ?"
-        message={`Toutes les données actuelles du tenant seront remplacées par celles de « ${confirmRestore?.label} ». Cette action est irréversible.`}
+        message={`La vérification pré-restauration a réussi. Toutes les données actuelles seront remplacées par celles de « ${confirmRestore?.label} ». Une sauvegarde de sécurité sera créée avant l'opération. Cette action est irréversible.`}
         confirmLabel="Restaurer"
         danger
-        onClose={() => setConfirmRestore(null)}
+        onClose={() => { setConfirmRestore(null); setPreflightResult(null); setPreflightTarget(null); }}
         onConfirm={() => confirmRestore && doRestore(confirmRestore)}
       />
       <ConfirmDialog
         open={confirmReset}
         title="Réinitialiser les opérations ?"
-        message="Toutes les ventes, commandes et mouvements seront supprimés. Les articles, clients et fournisseurs restent intacts. Pensez à créer une sauvegarde avant."
+        message="Toutes les ventes, commandes et mouvements seront supprimés. Les articles, clients et fournisseurs restent intacts. Une sauvegarde de sécurité sera créée automatiquement."
         confirmLabel="Réinitialiser"
         danger
         onClose={() => setConfirmReset(false)}

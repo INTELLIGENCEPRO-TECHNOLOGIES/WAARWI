@@ -3,9 +3,9 @@ import {
   Plus, Package, Trash2, Loader2, X, Car, DollarSign, Boxes, Info,
   Pencil, Filter, ChevronDown, ChevronUp,
   Upload, Camera, CheckSquare, Square,
-  Lightbulb, Download, Search,
+  Lightbulb, Download, Search, AlertTriangle,
   List, LayoutGrid, Save,
-  MoreHorizontal, Check, ChevronLeft, ChevronRight, RefreshCw,
+  MoreHorizontal, Check, ChevronLeft, ChevronRight, RefreshCw, PackagePlus,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -29,6 +29,9 @@ type PricingTier = { id: string; article_id: string; tier_name: string; price: n
 type TierDefinition = { id: string; tier_name: string; sort_order: number; is_default: boolean };
 
 type TabKey = 'infos' | 'prix' | 'stock' | 'compat' | 'image';
+type FormMode = 'create' | 'edit';
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+type SaveIntent = 'stay' | 'new' | 'close';
 
 export function Articles({ onNavigate }: { onNavigate?: (route: string) => void } = {}) {
   const { tenant, currentSite, sites, depots, dataTick, refData } = useApp();
@@ -45,6 +48,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [serverStats, setServerStats] = useState({ in_stock: 0, low_stock: 0, out_stock: 0, total_articles: 0 });
   const [search, setSearch] = useState('');
@@ -87,6 +91,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageDeletePending, setImageDeletePending] = useState(false);
+
+  // ── Form state machine ──
+  const [formMode, setFormMode] = useState<FormMode>('create');
+  const [currentArticleId, setCurrentArticleId] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const savedSnapshotRef = useRef<string>('');
+  const userTouchedRef = useRef(false);
+  const pendingReloadRef = useRef(false);
 
   // Nouveaux états pour le mode affichage, édition en liste, et affichage plein écran
   const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
@@ -144,9 +156,12 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     if (myReqId !== reqIdRef.current) return;
 
     if (error || !data) {
+      console.error('[Articles] rpc_paginated_articles error:', error?.message || 'no data');
+      setLoadError(error?.message || 'Impossible de charger les articles');
       setLoading(false); setRefreshing(false);
       return;
     }
+    setLoadError(null);
 
     const rows = (data.rows || []) as Article[];
     const newStockMap: Record<string, number> = {};
@@ -221,19 +236,33 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     out: serverStats.out_stock || 0,
   }), [serverStats]);
 
-  const openCreate = () => {
+  const getFormSnapshot = (f: Form, c: Compat[], t: typeof formTiers) => JSON.stringify({ f, c, t });
+
+  const initCreateForm = () => {
+    const newForm: Form = {
+      internal_ref: '', name: '', brand: '', oem_ref: '', supplier_ref: '', barcode: '',
+      condition: 'neuf', unit: 'pièce', purchase_price: 0, sale_price: 0, min_price: 0,
+      wholesale_price: 0, vat_rate: 0, stock_min: 0, stock_max: 0, location: '', stock_init: 0,
+    };
+    const newTiers = tierDefinitions.map(t => ({ tier_name: t.tier_name, price: '' as number | '' }));
+    const newCompats: Compat[] = [];
     setEditing(null);
-    setCompats([]);
+    setForm(newForm);
+    setCompats(newCompats);
+    setFormTiers(newTiers);
     setTab('infos');
     setImageFile(null);
     setImagePreview(null);
     setImageDeletePending(false);
-    setForm({
-      internal_ref: '', name: '', brand: '', oem_ref: '', supplier_ref: '', barcode: '',
-      condition: 'neuf', unit: 'pièce', purchase_price: 0, sale_price: 0, min_price: 0,
-      wholesale_price: 0, vat_rate: 0, stock_min: 0, stock_max: 0, location: '', stock_init: 0,
-    });
-    setFormTiers(tierDefinitions.map(t => ({ tier_name: t.tier_name, price: '' })));
+    setFormMode('create');
+    setCurrentArticleId(null);
+    setSaveState('idle');
+    userTouchedRef.current = false;
+    savedSnapshotRef.current = getFormSnapshot(newForm, newCompats, newTiers);
+  };
+
+  const openCreate = () => {
+    initCreateForm();
     const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
     if (isDesktop) {
       setEditingIndex(-1);
@@ -251,34 +280,55 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   const openEdit = async (a: Article) => {
     skipAutoSaveRef.current = true;
     setEditing(a);
+    setFormMode('edit');
+    setCurrentArticleId(a.id);
+    setSaveState('idle');
+    userTouchedRef.current = false;
     setTab('infos');
     setImageFile(null);
     setImagePreview(a.image_url || null);
     setImageDeletePending(false);
-    setForm({ ...a, stock_init: 0 });
+    const editForm = { ...a, stock_init: 0 };
+    setForm(editForm);
 
     const [{ data: compatData }, { data: tiersData }] = await Promise.all([
       supabase.from('article_compatibilities').select('*').eq('article_id', a.id),
       supabase.from('article_pricing_tiers').select('*').eq('article_id', a.id).order('sort_order'),
     ]);
 
-    setCompats((compatData || []).map((c: any) => ({ id: c.id, brand_id: c.brand_id || '', model_id: c.model_id || '', year_start: c.year_start || 0, year_end: c.year_end || 0, notes: c.notes || '' })));
+    const loadedCompats = (compatData || []).map((c: any) => ({ id: c.id, brand_id: c.brand_id || '', model_id: c.model_id || '', year_start: c.year_start || 0, year_end: c.year_end || 0, notes: c.notes || '' }));
+    setCompats(loadedCompats);
     setPricingTiers(tiersData || []);
 
     const loadedTiers = tiersData || [];
     const newFormTiers = tierDefinitions.map(def => {
       const existing = loadedTiers.find(t => t.tier_name === def.tier_name);
-      return { tier_name: def.tier_name, price: existing?.price || '' };
+      return { tier_name: def.tier_name, price: existing?.price || '' as number | '' };
     });
     setFormTiers(newFormTiers);
+    savedSnapshotRef.current = getFormSnapshot(editForm, loadedCompats, newFormTiers);
     setDrawerOpen(true);
   };
 
-  const generateRef = () => {
+  const generateRef = async () => {
+    if (!tenant) return;
     const cat = categories.find(c => c.id === form.category_id);
     const prefix = cat?.code || 'ART';
-    const num = String(totalCount + 1).padStart(4, '0');
-    setForm(f => ({ ...f, internal_ref: `${prefix}-${num}` }));
+    const { data } = await supabase
+      .from('articles')
+      .select('internal_ref')
+      .eq('tenant_id', tenant.id)
+      .ilike('internal_ref', `${prefix}-%`)
+      .order('internal_ref', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let nextNum = 1;
+    if (data?.internal_ref) {
+      const match = data.internal_ref.match(/(\d+)$/);
+      if (match) nextNum = parseInt(match[1], 10) + 1;
+    }
+    const ref = `${prefix}-${String(nextNum).padStart(4, '0')}`;
+    setForm(f => ({ ...f, internal_ref: ref }));
   };
 
   const addCompat = () => setCompats(c => [...c, { brand_id: '', model_id: '', year_start: 0, year_end: 0, notes: '' }]);
@@ -295,15 +345,25 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
     return newCat.id;
   };
 
-  const save = async (opts?: { silent?: boolean }): Promise<boolean> => {
+  const isDirty = useCallback(() => {
+    return getFormSnapshot(form, compats, formTiers) !== savedSnapshotRef.current;
+  }, [form, compats, formTiers]);
+
+  const save = async (opts?: { silent?: boolean; intent?: SaveIntent }): Promise<boolean> => {
     const silent = opts?.silent ?? false;
+    const intent = opts?.intent ?? 'stay';
     if (!tenant) return false;
     if (!can('manage_articles')) { if (!silent) error('Vous n\'avez pas la permission de modifier les articles'); return false; }
     if (!form.name?.trim()) { if (!silent) { error('Désignation obligatoire'); setTab('infos'); } return false; }
     if (!form.internal_ref?.trim()) { if (!silent) { error('Référence interne obligatoire'); setTab('infos'); } return false; }
+
+    if (saving) return false;
     setSaving(true);
+    setSaveState('saving');
+
+    const isCreate = formMode === 'create' && !currentArticleId;
+
     try {
-      // Handle image upload if a new file was selected
       let finalImageUrl: string | null = form.image_url || null;
 
       if (imageDeletePending) {
@@ -311,8 +371,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       } else if (imageFile) {
         setImageUploading(true);
         const ext = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
-        // Use a temp key for new articles (will be updated after insert), or article id for edits
-        const tempKey = editing?.id || `temp_${Date.now()}`;
+        const tempKey = currentArticleId || `temp_${Date.now()}`;
         const path = `${tenant.id}/articles/${tempKey}/main.${ext}`;
         const { error: upErr } = await supabase.storage.from('article-images').upload(path, imageFile, { upsert: true, contentType: imageFile.type });
         setImageUploading(false);
@@ -346,19 +405,16 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         ipm_eligible: form.ipm_eligible !== false,
         track_stock: form.track_stock !== false,
       };
-      if (!sharedArticles && currentSite && !editing) {
-        payload.site_id = currentSite.id;
-      }
 
-      let articleId = editing?.id;
-      if (editing) {
-        const { error: e } = await supabase.from('articles').update(payload).eq('id', editing.id);
-        if (e) throw e;
-      } else {
+      let articleId = currentArticleId;
+
+      if (isCreate) {
+        if (!sharedArticles && currentSite) payload.site_id = currentSite.id;
         const { data, error: e } = await supabase.from('articles').insert(payload).select().single();
         if (e) throw e;
         articleId = data.id;
-        // Re-upload image to real article id path (move from temp path)
+
+        // Re-upload image to real path
         if (imageFile && articleId && finalImageUrl) {
           const ext = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
           const realPath = `${tenant.id}/articles/${articleId}/main.${ext}`;
@@ -367,18 +423,33 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           const realUrl = urlData.publicUrl + `?t=${Date.now()}`;
           await supabase.from('articles').update({ image_url: realUrl }).eq('id', articleId);
         }
-      }
 
-      if (!editing && form.stock_init && Number(form.stock_init) > 0 && currentSite && articleId) {
-        const { error: e } = await supabase.rpc('adjust_stock', {
-          p_article_id: articleId, p_site_id: currentSite.id,
-          p_quantity: Number(form.stock_init), p_movement_type: 'initial', p_note: 'Stock initial',
-        });
+        // Apply stock initial only once during creation
+        if (form.stock_init && Number(form.stock_init) > 0 && currentSite) {
+          await supabase.rpc('adjust_stock', {
+            p_article_id: articleId, p_site_id: currentSite.id,
+            p_quantity: Number(form.stock_init), p_movement_type: 'initial', p_note: 'Stock initial',
+          });
+        }
+
+        // Transition to edit mode so subsequent saves are UPDATEs
+        setCurrentArticleId(articleId);
+        setFormMode('edit');
+        setEditing(data as Article);
+        setForm(f => ({ ...f, id: articleId, stock_init: 0 }));
+        setImageFile(null);
+        pendingReloadRef.current = true;
+      } else if (articleId) {
+        const { error: e } = await supabase.from('articles').update(payload).eq('id', articleId);
         if (e) throw e;
+
+        // Local update: patch article in list without reloading
+        setArticles(prev => prev.map(a => a.id === articleId ? { ...a, ...payload, id: articleId } as Article : a));
       }
 
+      // Save compats
       if (articleId) {
-        if (editing) await supabase.from('article_compatibilities').delete().eq('article_id', articleId);
+        if (!isCreate) await supabase.from('article_compatibilities').delete().eq('article_id', articleId);
         const newCompats = compats.filter(c => c.brand_id);
         if (newCompats.length > 0) {
           await supabase.from('article_compatibilities').insert(
@@ -387,9 +458,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
         }
 
         // Save pricing tiers
-        if (editing) {
-          await supabase.from('article_pricing_tiers').delete().eq('article_id', articleId);
-        }
+        if (!isCreate) await supabase.from('article_pricing_tiers').delete().eq('article_id', articleId);
         const tiersToSave = formTiers
           .filter(t => t.price !== '' && Number(t.price) > 0)
           .map((t, idx) => ({
@@ -400,17 +469,38 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
             sort_order: idx,
           }));
         if (tiersToSave.length > 0) {
-          const { error: tierErr } = await supabase.from('article_pricing_tiers').insert(tiersToSave);
-          if (tierErr) throw tierErr;
+          await supabase.from('article_pricing_tiers').insert(tiersToSave);
         }
       }
 
-      if (!silent) success(editing ? 'Article modifié' : 'Article créé');
-      if (!silent) setDrawerOpen(false);
-      if (!silent) await loadPage(page, true);
+      // Update snapshot
+      savedSnapshotRef.current = getFormSnapshot(form, compats, formTiers);
+      setSaveState('saved');
+      userTouchedRef.current = false;
+
+      // Handle intent
+      if (intent === 'new') {
+        if (!silent) success('Article créé');
+        initCreateForm();
+        // Focus designation field after a tick
+        setTimeout(() => { document.querySelector<HTMLInputElement>('[data-field="designation"]')?.focus(); }, 50);
+      } else if (intent === 'close') {
+        if (!silent) success(isCreate ? 'Article créé' : 'Article modifié');
+        setFullScreenOpen(false);
+        setDrawerOpen(false);
+        if (pendingReloadRef.current) { await loadPage(page, true); pendingReloadRef.current = false; }
+      } else {
+        if (!silent) success(isCreate ? 'Article créé' : 'Article modifié');
+        if (!silent && !isCreate) {
+          // Don't reload list on every auto-save, mark for reload on close
+          pendingReloadRef.current = true;
+        }
+      }
+
       return true;
     } catch (e: any) {
       const msg = e.message || '';
+      setSaveState('error');
       if (!silent) {
         if (msg.includes('Limite du plan')) {
           error(msg.replace('Mettez à niveau votre abonnement.', '').trim());
@@ -532,16 +622,35 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   };
 
   const saveAndClose = async () => {
-    if (form.name?.trim() && form.internal_ref?.trim()) {
-      const ok = await save();
-      if (!ok) return;
+    if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null; }
+    // If in create mode with no data entered, just close
+    if (formMode === 'create' && !currentArticleId && !form.name?.trim()) {
+      setFullScreenOpen(false);
+      setDrawerOpen(false);
+      if (pendingReloadRef.current) { loadPage(page, true); pendingReloadRef.current = false; }
+      return;
     }
-    setFullScreenOpen(false);
+    // If already saved and no new changes, just close
+    if (!isDirty()) {
+      setFullScreenOpen(false);
+      setDrawerOpen(false);
+      if (pendingReloadRef.current) { loadPage(page, true); pendingReloadRef.current = false; }
+      return;
+    }
+    // Save then close
+    await save({ intent: 'close' });
+  };
+
+  const saveAndNew = async () => {
+    if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null; }
+    await save({ intent: 'new' });
   };
 
   const navigateArticle = async (dir: -1 | 1) => {
-    if (editing && form.name?.trim() && form.internal_ref?.trim()) {
-      await save();
+    if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null; }
+    if (isDirty() && form.name?.trim() && form.internal_ref?.trim()) {
+      const ok = await save({ silent: true });
+      if (!ok) return;
     }
     const newIdx = editingIndex + dir;
     if (newIdx < 0 || newIdx >= paginated.length) return;
@@ -552,21 +661,39 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
   };
 
   const jumpToArticle = async (a: Article) => {
-    if (editing && form.name?.trim() && form.internal_ref?.trim()) {
-      await save();
+    if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null; }
+    if (isDirty() && form.name?.trim() && form.internal_ref?.trim()) {
+      const ok = await save({ silent: true });
+      if (!ok) return;
     }
     const idx = paginated.indexOf(a);
     if (idx >= 0) { setEditingIndex(idx); await openEdit(a); setDrawerOpen(false); }
   };
 
+  // Track user interaction for dirty detection
+  const wrappedSetForm = useCallback((updater: Form | ((p: Form) => Form)) => {
+    userTouchedRef.current = true;
+    setSaveState(s => s === 'saved' || s === 'idle' ? 'dirty' : s);
+    setForm(updater);
+  }, []);
+
   useEffect(() => {
-    if (!fullScreenOpen || !editing) return;
+    if (!fullScreenOpen) return;
+    // Auto-save only for existing articles (edit mode with id)
+    if (!currentArticleId) return;
     if (skipAutoSaveRef.current) { skipAutoSaveRef.current = false; return; }
+    if (!userTouchedRef.current) return;
+    if (!isDirty()) return;
+
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
-    autoSaveRef.current = setTimeout(() => { save({ silent: true }); }, 1200);
+    autoSaveRef.current = setTimeout(() => {
+      if (form.name?.trim() && form.internal_ref?.trim()) {
+        save({ silent: true });
+      }
+    }, 1200);
     return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, compats, formTiers, fullScreenOpen, editing]);
+  }, [form, compats, formTiers, fullScreenOpen, currentArticleId]);
 
   const allFilteredSelected = paginated.length > 0 && paginated.every(a => selectedIds.has(a.id));
 
@@ -726,8 +853,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
         <div className="flex items-start justify-between">
           <h1 className="text-lg font-bold text-neutral-900 leading-tight">Articles</h1>
-          <button onClick={openCreate} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" aria-label="Nouvel article">
-            <Plus className="w-5 h-5" />
+          <button onClick={openCreate} className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors">
+            <PackagePlus className="w-4 h-4" /><span className="hidden sm:inline">Nouvel article</span>
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -806,12 +933,20 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       </div>
 
       {/* ── Liste ─────────────────────────────── */}
-      {!initialLoaded && loading ? (
+      {loadError && (
+        <div className="py-10 flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center"><AlertTriangle className="w-6 h-6 text-red-500" /></div>
+          <p className="text-sm font-semibold text-neutral-800">Erreur de chargement</p>
+          <p className="text-xs text-neutral-500 text-center max-w-sm">{loadError}</p>
+          <button onClick={() => { setLoadError(null); loadPage(page); }} className="mt-1 px-4 py-2 bg-neutral-900 text-white text-xs font-semibold rounded-lg hover:bg-neutral-800 transition-colors">Réessayer</button>
+        </div>
+      )}
+      {!loadError && !initialLoaded && loading ? (
         <div className="py-20 flex items-center justify-center opacity-0 animate-[fadeIn_0.3s_ease_0.4s_forwards]"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : paginated.length === 0 ? (
         <div className="">
           <EmptyState icon={Package} title={search || categoryFilter ? 'Aucun article trouvé' : 'Aucun article'} description={search || categoryFilter ? 'Essayez d\'autres critères.' : 'Créez votre premier article.'}
-            action={!search && !categoryFilter ? <button onClick={openCreate} className="btn-icon-primary" title="Nouvel article"><Plus className="w-4 h-4" /></button> : undefined} />
+            action={!search && !categoryFilter ? <button onClick={openCreate} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><PackagePlus className="w-4 h-4" />Nouvel article</button> : undefined} />
         </div>
       ) : (
         <>
@@ -919,14 +1054,16 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       {/* ── Full-screen edit (desktop) ────── */}
       {fullScreenOpen && (
         <FullScreenArticleEdit
-          form={form} setForm={setForm} editing={editing} tab={tab} setTab={setTab}
-          TABS={TABS} save={save} saving={saving} compats={compats} setCompats={setCompats}
+          form={form} setForm={wrappedSetForm} editing={editing} tab={tab} setTab={setTab}
+          TABS={TABS} save={() => save()} saveAndNew={saveAndNew} saveAndClose={saveAndClose}
+          saving={saving} saveState={saveState} formMode={formMode}
+          compats={compats} setCompats={setCompats}
           categories={categories} suppliers={suppliers} brands={brands} models={models}
           autoMode={autoMode} generateRef={generateRef} addCompat={addCompat} removeCompat={removeCompat}
           createCategory={createCategory}
           imagePreview={imagePreview} imageUploading={imageUploading}
-          onFileSelect={file => { setImageFile(file); setImageDeletePending(false); setImagePreview(URL.createObjectURL(file)); }}
-          onDeleteImage={() => { setImageFile(null); setImagePreview(null); setImageDeletePending(true); }}
+          onFileSelect={file => { setImageFile(file); setImageDeletePending(false); setImagePreview(URL.createObjectURL(file)); userTouchedRef.current = true; }}
+          onDeleteImage={() => { setImageFile(null); setImagePreview(null); setImageDeletePending(true); userTouchedRef.current = true; }}
           marginValue={marginValue} marginStr={marginStr}
           showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')}
           stockMap={stockMap} formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions}
@@ -941,9 +1078,10 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
       {/* ── Drawer article (mobile + fallback) ────── */}
       {drawerOpen && !fullScreenOpen && (
         <MobileArticleEdit
-          form={form} setForm={setForm}
+          form={form} setForm={wrappedSetForm}
           editing={editing} tab={tab} setTab={setTab}
-          save={save} saving={saving}
+          save={() => save()} saveAndNew={saveAndNew} saveAndClose={saveAndClose}
+          saving={saving} saveState={saveState} formMode={formMode}
           compats={compats} setCompats={setCompats}
           categories={categories} suppliers={suppliers}
           brands={brands} models={models}
@@ -951,14 +1089,14 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
           addCompat={addCompat} removeCompat={removeCompat}
           createCategory={createCategory}
           imagePreview={imagePreview} imageUploading={imageUploading}
-          onFileSelect={(f) => { setImageFile(f); setImageDeletePending(false); setImagePreview(URL.createObjectURL(f)); }}
-          onDeleteImage={() => { setImageFile(null); setImagePreview(null); setImageDeletePending(true); }}
+          onFileSelect={(f) => { setImageFile(f); setImageDeletePending(false); setImagePreview(URL.createObjectURL(f)); userTouchedRef.current = true; }}
+          onDeleteImage={() => { setImageFile(null); setImagePreview(null); setImageDeletePending(true); userTouchedRef.current = true; }}
           marginValue={marginValue} marginStr={marginStr}
           showPurchasePrice={can('view_purchase_prices')} showMargin={can('view_margins')}
           stockMap={stockMap}
           formTiers={formTiers} setFormTiers={setFormTiers} tierDefinitions={tierDefinitions}
           isPharmacy={(tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie' || (tenant?.enabled_modules || []).includes('ipm')}
-          onClose={async () => { if (editing && form.name?.trim() && form.internal_ref?.trim()) { const ok = await save(); if (!ok) return; } setDrawerOpen(false); }}
+          onClose={saveAndClose}
           onPrev={editing && editingIndex > 0 ? () => navigateArticle(-1) : undefined}
           onNext={editing && editingIndex < paginated.length - 1 ? () => navigateArticle(1) : undefined}
           editingIndex={editingIndex} totalCount={paginated.length}
