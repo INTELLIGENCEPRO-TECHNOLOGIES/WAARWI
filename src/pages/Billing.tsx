@@ -112,9 +112,20 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
 
-  const [tab, setTab] = useState<Tab>('invoices');
+  const [tab, setTabRaw] = useState<Tab>('invoices');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [tabError, setTabError] = useState<string | null>(null);
+
+  const switchTab = useCallback((t: Tab) => {
+    setTabRaw(t);
+    setSearch('');
+    setDebouncedSearch('');
+    setStatusFilter('');
+    setBillPage(0);
+    setBillCursors([]);
+    setTabError(null);
+  }, []);
   const [customerFilter, setCustomerFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -358,7 +369,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const statusParam = statusFilter || null;
     const custId = customerFilter || null;
     const dFrom = dateFrom ? new Date(dateFrom).toISOString() : null;
-    const dTo = dateTo ? new Date(dateTo + 'T23:59:59.999').toISOString() : null;
+    const dTo = dateTo ? (() => { const d = new Date(dateTo); d.setDate(d.getDate() + 1); return d.toISOString(); })() : null;
     const minAmt = minAmount ? Number(minAmount) : null;
     const maxAmt = maxAmount ? Number(maxAmount) : null;
 
@@ -384,8 +395,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (myReqId !== billReqIdRef.current) return;
 
     if (rpcErr || !data) {
+      setTabError(rpcErr?.message || 'Erreur de chargement');
       setLoading(false); setRefreshing(false); return;
     }
+    setTabError(null);
 
     const rows = (data.rows || []) as any[];
     setBillTotalCount(data.total_count || 0);
@@ -450,8 +463,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     const ctx = consumeNavContext();
     if (!ctx?.target) return;
     pendingNavRef.current = ctx.target;
-    if (ctx.target === 'quotes') { setTab('quotes'); setFlashTab('quotes'); }
-    else if (ctx.target === 'returns') { setTab('returns'); setFlashTab('returns'); }
+    if (ctx.target === 'quotes') { setTabRaw('quotes'); setFlashTab('quotes'); }
+    else if (ctx.target === 'returns') { setTabRaw('returns'); setFlashTab('returns'); }
     const t = setTimeout(() => setFlashTab(null), 6800);
     return () => clearTimeout(t);
   }, []);
@@ -906,10 +919,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
   const handleNavTarget = useCallback((target: string) => {
     switch (target) {
-      case 'newInvoice': setTab('invoices'); openInvoiceEditor(); break;
-      case 'newQuote': setTab('quotes'); setQuoteEditorMode('create'); setQuoteOpen(true); break;
-      case 'newReturn': setTab('returns'); setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); break;
-      case 'newAvoir': setTab('credits'); setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); break;
+      case 'newInvoice': setTabRaw('invoices'); openInvoiceEditor(); break;
+      case 'newQuote': setTabRaw('quotes'); setQuoteEditorMode('create'); setQuoteOpen(true); break;
+      case 'newReturn': setTabRaw('returns'); setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); break;
+      case 'newAvoir': setTabRaw('credits'); setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); break;
     }
   }, []);
 
@@ -1392,7 +1405,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setConverting(false);
     success(`Facture ${(data as any)?.sale_number || ''} créée`);
     setConvertFrom(null); setQuoteDetail(null);
-    setTab('invoices'); loadTab(billPage, true);
+    setTabRaw('invoices'); loadTab(billPage, true);
   };
 
   // ── Invoice detail ───────────────────────────────────────────
@@ -1914,7 +1927,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="N°, client, vente…"
+            placeholder={tab === 'invoices' ? 'N° facture, client ou montant\u2026' : tab === 'quotes' ? 'N° devis, client ou montant\u2026' : 'N°, client ou vente li\u00e9e\u2026'}
             className="bare-input w-full text-sm py-1.5"
           />
           <div className="h-px bg-neutral-200 mt-1" />
@@ -1971,7 +1984,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               <div key={t.key} className="flex items-stretch shrink-0 min-w-[80px]">
                 {i > 0 && <div className="w-px bg-neutral-200 shrink-0" />}
                 <button
-                  onClick={() => { setTab(t.key); setStatusFilter(''); }}
+                  onClick={() => switchTab(t.key)}
                   className={`flex-1 flex items-center justify-center py-2 px-3 transition-all ${
                     active
                       ? 'text-neutral-900 bg-neutral-100/80 border-b-2 border-neutral-900 font-bold'
@@ -1992,7 +2005,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             return (
               <button
                 key={t.key}
-                onClick={() => { setTab(t.key); setStatusFilter(''); }}
+                onClick={() => switchTab(t.key)}
                 className={`shrink-0 inline-flex items-center gap-1.5 py-1 transition-colors ${
                   active
                     ? 'text-neutral-900 font-bold'
@@ -2019,7 +2032,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       </div>{/* end sticky header */}
 
       {/* ── Content ──────────────────────────────────────────── */}
-      {loading ? (
+      {tabError ? (
+        <div className="py-16 flex flex-col items-center gap-3">
+          <p className="text-sm text-red-600">{tabError}</p>
+          <button onClick={() => { setTabError(null); loadTab(billPage); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><RefreshCw className="w-4 h-4" />Réessayer</button>
+        </div>
+      ) : loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
       ) : (
         <>
@@ -3461,50 +3479,88 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       />
 
       {/* ── Invoice search modal (Atteindre une facture) ── */}
-      {invoiceSearchOpen && (() => {
-        const q = invoiceSearchQuery.toLowerCase().trim();
-        const filtered = q
-          ? invoices.filter(inv => {
-              const num = (inv.sale_number || '').toLowerCase();
-              const name = (inv.customers?.name || '').toLowerCase();
-              const amt = String(inv.total);
-              return num.includes(q) || name.includes(q) || amt.includes(q);
-            }).slice(0, 30)
-          : invoices.slice(0, 20);
-        return (
-          <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-[10vh]" onClick={() => { setInvoiceSearchOpen(false); setInvoiceSearchQuery(''); }}>
-            <div className="absolute inset-0 bg-black/40" />
-            <div className="relative bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-              <div className="px-4 pt-4 pb-2">
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Rechercher une facture (n°, client, montant)…"
-                  className="w-full text-sm outline-none border-0 border-b border-slate-200 focus:border-slate-900 pb-2 bg-transparent placeholder:text-slate-400 transition-colors"
-                  value={invoiceSearchQuery}
-                  onChange={e => setInvoiceSearchQuery(e.target.value)}
-                />
-              </div>
-              <div className="overflow-y-auto flex-1 px-2 pb-2">
-                {filtered.map(inv => (
-                  <button
-                    key={inv.id}
-                    onClick={() => { setInvoiceSearchOpen(false); setInvoiceSearchQuery(''); openInvoiceForView(inv); }}
-                    className="w-full text-left px-3 py-2.5 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900 doc-number">{inv.sale_number}</div>
-                      <div className="text-[11px] text-slate-500 truncate">{inv.customers?.name || 'Client comptoir'}</div>
-                    </div>
-                    <div className="text-sm font-bold text-slate-700 num shrink-0">{formatFCFA(inv.total)}</div>
-                  </button>
-                ))}
-                {filtered.length === 0 && <div className="text-center text-sm text-slate-400 py-6">Aucune facture trouvée</div>}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {invoiceSearchOpen && <InvoiceSearchModal
+        tenant={tenant}
+        currentSite={currentSite}
+        onClose={() => { setInvoiceSearchOpen(false); setInvoiceSearchQuery(''); }}
+        query={invoiceSearchQuery}
+        setQuery={setInvoiceSearchQuery}
+        onSelect={(inv) => { setInvoiceSearchOpen(false); setInvoiceSearchQuery(''); openInvoiceForView(inv); }}
+      />}
+    </div>
+  );
+}
+
+function InvoiceSearchModal({ tenant, currentSite, onClose, query, setQuery, onSelect }: {
+  tenant: any; currentSite: any;
+  onClose: () => void; query: string; setQuery: (v: string) => void;
+  onSelect: (inv: Invoice) => void;
+}) {
+  const [results, setResults] = useState<Invoice[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [initial, setInitial] = useState(true);
+  const reqRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const doSearch = useCallback(async (q: string) => {
+    if (!tenant || !currentSite) return;
+    const myId = ++reqRef.current;
+    setSearching(true);
+    setErr(null);
+    const params: Record<string, any> = {
+      p_tenant_id: tenant.id,
+      p_site_id: currentSite.id,
+      p_page_size: q.trim() ? 30 : 20,
+      p_search: q.trim() || null,
+    };
+    const { data, error: rpcErr } = await supabase.rpc('rpc_paginated_invoices', params);
+    if (myId !== reqRef.current) return;
+    if (rpcErr || !data) { setErr(rpcErr?.message || 'Erreur'); setSearching(false); return; }
+    setResults((data.rows || []).map((r: any) => ({ ...r, customers: r.customer_name ? { name: r.customer_name } : null })) as Invoice[]);
+    setSearching(false);
+    setInitial(false);
+  }, [tenant, currentSite]);
+
+  useEffect(() => { doSearch(''); }, [doSearch]);
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => doSearch(query), 250);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [query, doSearch]);
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-[10vh]" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="relative bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="px-4 pt-4 pb-2">
+          <input autoFocus type="text" placeholder="Rechercher une facture (n°, client, montant)…"
+            className="w-full text-sm outline-none border-0 border-b border-slate-200 focus:border-slate-900 pb-2 bg-transparent placeholder:text-slate-400 transition-colors"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+        <div className="overflow-y-auto flex-1 px-2 pb-2">
+          {searching && initial ? (
+            <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-neutral-400" /></div>
+          ) : err ? (
+            <div className="text-center text-sm text-red-500 py-6">{err}</div>
+          ) : results.length === 0 ? (
+            <div className="text-center text-sm text-slate-400 py-6">Aucune facture trouvée</div>
+          ) : (
+            results.map(inv => (
+              <button key={inv.id} onClick={() => onSelect(inv)}
+                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900 doc-number">{inv.sale_number}</div>
+                  <div className="text-[11px] text-slate-500 truncate">{inv.customers?.name || 'Client comptoir'}</div>
+                </div>
+                <div className="text-sm font-bold text-slate-700 num shrink-0">{formatFCFA(inv.total)}</div>
+              </button>
+            ))
+          )}
+          {searching && !initial && <div className="flex justify-center py-2"><Loader2 className="w-4 h-4 animate-spin text-neutral-300" /></div>}
+        </div>
+      </div>
     </div>
   );
 }

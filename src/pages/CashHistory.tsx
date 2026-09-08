@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, CreditCard, Package, HandCoins, RotateCcw, Search } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Clock, Loader2, X, Printer, Check, Wallet, ArrowDownRight, ArrowUpRight, Calendar, ChevronRight, ChevronLeft, CreditCard, Package, HandCoins, RotateCcw, Search, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { formatFCFA, formatDateTime } from '../lib/format';
@@ -54,11 +54,20 @@ type SessionDetail = {
   movements: CashMovementRow[];
 };
 
+const PAGE_SIZE = 50;
+
 export function CashHistory() {
   const { tenant, currentSite, profile, dataTick } = useApp();
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reqIdRef = useRef(0);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [serverStats, setServerStats] = useState<{ open_count: number; closed_count: number; variance_count: number }>({ open_count: 0, closed_count: 0, variance_count: 0 });
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -102,41 +111,63 @@ export function CashHistory() {
     return () => cancelAnimationFrame(raf);
   }, [highlightSessionId, sessions, loading]);
 
-  const load = async (silent = false) => {
+  // Debounce search input
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [search]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, dateFrom, dateTo, tenant?.id, currentSite?.id]);
+
+  const load = useCallback(async (silent = false) => {
     if (!tenant || !currentSite) return;
     if (!silent) setLoading(true);
-    const { data } = await supabase
-      .from('cash_sessions')
-      .select('id, opening_amount, theoretical_amount, counted_cash, opened_at, closed_at, closing_amount, variance, status, user_id, site_id, tenant_id')
-      .eq('tenant_id', tenant.id)
-      .eq('site_id', currentSite.id)
-      .order('opened_at', { ascending: false })
-      .limit(200);
-    setSessions((data || []) as any);
-    if (!silent) setLoading(false);
-  };
+    setLoadError(null);
+    const myReqId = ++reqIdRef.current;
 
-  useEffect(() => { load(); }, [tenant?.id, currentSite?.id]);
-  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
-
-  const filtered = useMemo(() => {
-    let r = sessions;
+    const params: Record<string, unknown> = {
+      p_tenant_id: tenant.id,
+      p_site_id: currentSite.id,
+      p_page: page,
+      p_page_size: PAGE_SIZE,
+    };
+    if (debouncedSearch) params.p_search = debouncedSearch;
     if (dateFrom) {
       const f = new Date(dateFrom); f.setHours(0, 0, 0, 0);
-      r = r.filter(s => new Date(s.opened_at) >= f);
+      params.p_date_from = f.toISOString();
     }
     if (dateTo) {
-      const t = new Date(dateTo); t.setHours(23, 59, 59, 999);
-      r = r.filter(s => new Date(s.opened_at) <= t);
+      const t = new Date(dateTo); t.setHours(0, 0, 0, 0);
+      t.setDate(t.getDate() + 1);
+      params.p_date_to = t.toISOString();
     }
-    const q = search.toLowerCase().trim();
-    if (!q) return r;
-    return r.filter(s =>
-      s.id.toLowerCase().includes(q) ||
-      (s.cashier_name || '').toLowerCase().includes(q) ||
-      (s.site_name || '').toLowerCase().includes(q)
-    );
-  }, [sessions, search, dateFrom, dateTo]);
+
+    const { data, error } = await supabase.rpc('rpc_paginated_cash_sessions', params);
+    if (myReqId !== reqIdRef.current) return;
+
+    if (error || !data) {
+      setLoadError(error?.message || 'Impossible de charger les sessions');
+      setSessions([]);
+      setTotalCount(0);
+      setServerStats({ open_count: 0, closed_count: 0, variance_count: 0 });
+      if (!silent) setLoading(false);
+      return;
+    }
+
+    setSessions((data.rows || []) as SessionRow[]);
+    setTotalCount(data.total_count || 0);
+    setServerStats(data.stats || { open_count: 0, closed_count: 0, variance_count: 0 });
+    setLoadError(null);
+    if (!silent) setLoading(false);
+  }, [tenant?.id, currentSite?.id, page, debouncedSearch, dateFrom, dateTo]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick, load]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const filtered = sessions;
 
   const openDetail = async (s: SessionRow) => {
     setDetail(null); setDetailOpen(true); setLoadingDetail(true); setDetailExpanded(null);
@@ -215,12 +246,7 @@ export function CashHistory() {
     });
   };
 
-  const stats = useMemo(() => {
-    const open = sessions.filter(s => s.status === 'open').length;
-    const closed = sessions.filter(s => s.status === 'closed').length;
-    const variances = sessions.filter(s => s.variance != null && Number(s.variance) !== 0).length;
-    return { open, closed, variances };
-  }, [sessions]);
+  const stats = serverStats;
 
   const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '';
   const dateLabel = dateFrom && dateTo ? `${fmtDate(dateFrom)} → ${fmtDate(dateTo)}` : dateFrom ? `Depuis ${fmtDate(dateFrom)}` : dateTo ? `Jusqu'au ${fmtDate(dateTo)}` : 'Période';
@@ -246,10 +272,10 @@ export function CashHistory() {
 
       {/* Inline stats chips */}
       <div className="flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap mt-3">
-        <span className="shrink-0 text-neutral-500 num">{filtered.length} / {sessions.length}</span>
-        {stats.open > 0 && <span className="shrink-0 text-neutral-700 num">{stats.open} ouverte{stats.open > 1 ? 's' : ''}</span>}
-        {stats.closed > 0 && <span className="shrink-0 text-neutral-600 num">{stats.closed} clôturée{stats.closed > 1 ? 's' : ''}</span>}
-        {stats.variances > 0 && <span className="shrink-0 text-amber-600 num">{stats.variances} écart{stats.variances > 1 ? 's' : ''}</span>}
+        <span className="shrink-0 text-neutral-500 num">{totalCount} session{totalCount !== 1 ? 's' : ''}</span>
+        {stats.open_count > 0 && <span className="shrink-0 text-neutral-700 num">{stats.open_count} ouverte{stats.open_count > 1 ? 's' : ''}</span>}
+        {stats.closed_count > 0 && <span className="shrink-0 text-neutral-600 num">{stats.closed_count} clôturée{stats.closed_count > 1 ? 's' : ''}</span>}
+        {stats.variance_count > 0 && <span className="shrink-0 text-amber-600 num">{stats.variance_count} écart{stats.variance_count > 1 ? 's' : ''}</span>}
         {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="shrink-0 text-neutral-500 hover:text-neutral-700 inline-flex items-center gap-1 transition-all" title="Effacer"><X className="w-3 h-3" />Réinitialiser</button>}
       </div>
 
@@ -258,6 +284,15 @@ export function CashHistory() {
       {/* MOBILE: cards / DESKTOP: list */}
       {loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+      ) : loadError ? (
+        <div className="py-12 flex flex-col items-center gap-3">
+          <AlertTriangle className="w-6 h-6 text-amber-500" />
+          <p className="text-sm text-neutral-700 font-semibold">Chargement impossible</p>
+          <p className="text-xs text-neutral-500 max-w-xs text-center">{loadError}</p>
+          <button onClick={() => load()} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 transition-colors">
+            <RefreshCw className="w-3.5 h-3.5" /> Réessayer
+          </button>
+        </div>
       ) : filtered.length === 0 ? (
         <EmptyState icon={Clock} title="Aucune session" description="Les sessions de caisse apparaîtront ici après ouverture." />
       ) : (
@@ -363,6 +398,26 @@ export function CashHistory() {
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 py-3">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" /> Précédent
+              </button>
+              <span className="text-[11px] text-neutral-500 num">{page} / {totalPages}</span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Suivant <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </>
       )}
 

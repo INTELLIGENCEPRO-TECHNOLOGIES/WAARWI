@@ -97,26 +97,21 @@ export function Coffre() {
 
   const [initOpen, setInitOpen] = useState(false);
   const [initAmount, setInitAmount] = useState('');
-  const [initNote, setInitNote] = useState('');
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositDate, setDepositDate] = useState(() => localISODate(new Date()));
   const [depositRef, setDepositRef] = useState('');
-  const [depositNote, setDepositNote] = useState('');
 
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
   const [transferRef, setTransferRef] = useState('');
-  const [transferNote, setTransferNote] = useState('');
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawDate, setWithdrawDate] = useState(() => localISODate(new Date()));
   const [withdrawReason, setWithdrawReason] = useState('');
-  const [withdrawBeneficiary, setWithdrawBeneficiary] = useState('');
   const [withdrawRef, setWithdrawRef] = useState('');
-  const [withdrawNote, setWithdrawNote] = useState('');
 
   const [payOpen, setPayOpen] = useState(false);
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; balance: number }[]>([]);
@@ -213,13 +208,13 @@ export function Coffre() {
     const { error: e } = await supabase.rpc('initialize_site_vault', {
       p_site_id: currentSite.id,
       p_opening_amount: amt,
-      p_note: initNote || null,
+      p_note: null,
       p_idempotency_key: newIdempotencyKey(),
     });
     setBusy(false);
     if (e) { error(e.message || 'Initialisation impossible'); return; }
     success('Coffre initialisé');
-    setInitOpen(false); setInitAmount(''); setInitNote('');
+    setInitOpen(false); setInitAmount('');
     load(true);
   };
 
@@ -234,14 +229,14 @@ export function Coffre() {
       p_amount: amt,
       p_effective_at: effectiveAt,
       p_reference: depositRef || null,
-      p_note: depositNote || null,
+      p_note: null,
       p_idempotency_key: newIdempotencyKey(),
     });
     setBusy(false);
     if (e) { error(e.message || 'Dépôt impossible'); return; }
     success('Dépôt manuel enregistré');
     setDepositOpen(false);
-    setDepositAmount(''); setDepositRef(''); setDepositNote(''); setDepositDate(localISODate(new Date()));
+    setDepositAmount(''); setDepositRef(''); setDepositDate(localISODate(new Date()));
     load(true);
   };
 
@@ -261,13 +256,13 @@ export function Coffre() {
       p_cash_session_id: session.id,
       p_amount: amt,
       p_reference: transferRef || null,
-      p_note: transferNote || null,
+      p_note: null,
       p_idempotency_key: newIdempotencyKey(),
     });
     setBusy(false);
     if (e) { error(e.message || 'Transfert impossible'); return; }
     success('Transfert vers la caisse effectué');
-    setTransferOpen(false); setTransferAmount(''); setTransferRef(''); setTransferNote('');
+    setTransferOpen(false); setTransferAmount(''); setTransferRef('');
     load(true);
   };
 
@@ -284,16 +279,16 @@ export function Coffre() {
       p_amount: amt,
       p_effective_at: effectiveAt,
       p_reason: withdrawReason.trim(),
-      p_beneficiary: withdrawBeneficiary || null,
+      p_beneficiary: null,
       p_reference: withdrawRef || null,
-      p_note: withdrawNote || null,
+      p_note: null,
       p_idempotency_key: newIdempotencyKey(),
     });
     setBusy(false);
     if (e) { error(e.message || 'Retrait impossible'); return; }
     success('Retrait manuel enregistré');
     setWithdrawOpen(false);
-    setWithdrawAmount(''); setWithdrawReason(''); setWithdrawBeneficiary(''); setWithdrawRef(''); setWithdrawNote('');
+    setWithdrawAmount(''); setWithdrawReason(''); setWithdrawRef('');
     setWithdrawDate(localISODate(new Date()));
     load(true);
   };
@@ -585,6 +580,7 @@ export function Coffre() {
 
       {/* Init modal */}
       <Modal open={initOpen} onClose={() => setInitOpen(false)} title="Initialiser le coffre" size="sm"
+        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
         footer={
           <div className="flex justify-end gap-2">
             <button onClick={() => setInitOpen(false)} className="btn-secondary">Annuler</button>
@@ -593,20 +589,17 @@ export function Coffre() {
             </button>
           </div>
         }>
-        <div className="space-y-4">
+        <div className="space-y-3 pt-2">
           <div>
-            <label className="label">Solde initial</label>
-            <input type="number" min={0} value={initAmount} onChange={e => setInitAmount(e.target.value)} className="input" placeholder="0" />
-          </div>
-          <div>
-            <label className="label">Note (facultatif)</label>
-            <input value={initNote} onChange={e => setInitNote(e.target.value)} className="input" placeholder="Motif de l’initialisation" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Solde initial</label>
+            <input type="number" min={0} value={initAmount} onChange={e => setInitAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
           </div>
         </div>
       </Modal>
 
       {/* Manual deposit modal */}
       <Modal open={depositOpen} onClose={() => setDepositOpen(false)} title="Dépôt manuel au coffre" size="sm"
+        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
         footer={
           <div className="flex justify-end gap-2">
             <button onClick={() => setDepositOpen(false)} className="btn-secondary">Annuler</button>
@@ -615,29 +608,25 @@ export function Coffre() {
             </button>
           </div>
         }>
-        <div className="space-y-4">
-          <p className="text-sm text-neutral-500">Ce dépôt crédite uniquement le coffre. Aucun mouvement de caisse n’est créé.</p>
+        <div className="space-y-3 pt-2">
           <div>
-            <label className="label">Montant</label>
-            <input type="number" min={0} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} className="input" placeholder="0" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
+            <input type="number" min={0} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
           </div>
           <div>
-            <label className="label">Date effective</label>
-            <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} className="input" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Date effective</label>
+            <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
           </div>
           <div>
-            <label className="label">Provenance / référence (facultatif)</label>
-            <input value={depositRef} onChange={e => setDepositRef(e.target.value)} className="input" placeholder="Ex. apport propriétaire" />
-          </div>
-          <div>
-            <label className="label">Note (facultatif)</label>
-            <input value={depositNote} onChange={e => setDepositNote(e.target.value)} className="input" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Provenance / référence (facultatif)</label>
+            <input value={depositRef} onChange={e => setDepositRef(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="Ex. apport propriétaire" />
           </div>
         </div>
       </Modal>
 
       {/* Transfer modal */}
       <Modal open={transferOpen} onClose={() => setTransferOpen(false)} title="Transférer vers la caisse" size="sm"
+        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
         footer={
           <div className="flex justify-end gap-2">
             <button onClick={() => setTransferOpen(false)} className="btn-secondary">Annuler</button>
@@ -646,25 +635,22 @@ export function Coffre() {
             </button>
           </div>
         }>
-        <div className="space-y-4">
-          <p className="text-sm text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
+        <div className="space-y-3 pt-2">
+          <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
-            <label className="label">Montant</label>
-            <input type="number" min={0} value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="input" placeholder="0" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
+            <input type="number" min={0} value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
           </div>
           <div>
-            <label className="label">Référence (facultatif)</label>
-            <input value={transferRef} onChange={e => setTransferRef(e.target.value)} className="input" />
-          </div>
-          <div>
-            <label className="label">Note (facultatif)</label>
-            <input value={transferNote} onChange={e => setTransferNote(e.target.value)} className="input" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
+            <input value={transferRef} onChange={e => setTransferRef(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
           </div>
         </div>
       </Modal>
 
       {/* Manual withdrawal modal */}
       <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Retrait manuel du coffre" size="sm"
+        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
         footer={
           <div className="flex justify-end gap-2">
             <button onClick={() => setWithdrawOpen(false)} className="btn-secondary">Annuler</button>
@@ -673,38 +659,30 @@ export function Coffre() {
             </button>
           </div>
         }>
-        <div className="space-y-4">
-          <p className="text-sm text-neutral-500">Ce retrait débite uniquement le coffre. Aucun mouvement de caisse n’est créé.</p>
-          <p className="text-sm text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
+        <div className="space-y-3 pt-2">
+          <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
-            <label className="label">Montant</label>
-            <input type="number" min={0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="input" placeholder="0" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
+            <input type="number" min={0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
           </div>
           <div>
-            <label className="label">Date effective</label>
-            <input type="date" value={withdrawDate} onChange={e => setWithdrawDate(e.target.value)} className="input" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Date effective</label>
+            <input type="date" value={withdrawDate} onChange={e => setWithdrawDate(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
           </div>
           <div>
-            <label className="label">Motif ou destination</label>
-            <input value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} className="input" placeholder="Ex. dépôt à la banque" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Motif ou destination</label>
+            <input value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="Ex. dépôt à la banque" />
           </div>
           <div>
-            <label className="label">Bénéficiaire (facultatif)</label>
-            <input value={withdrawBeneficiary} onChange={e => setWithdrawBeneficiary(e.target.value)} className="input" />
-          </div>
-          <div>
-            <label className="label">Référence (facultatif)</label>
-            <input value={withdrawRef} onChange={e => setWithdrawRef(e.target.value)} className="input" />
-          </div>
-          <div>
-            <label className="label">Note (facultatif)</label>
-            <input value={withdrawNote} onChange={e => setWithdrawNote(e.target.value)} className="input" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
+            <input value={withdrawRef} onChange={e => setWithdrawRef(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
           </div>
         </div>
       </Modal>
 
       {/* Supplier payment modal */}
       <Modal open={payOpen} onClose={() => setPayOpen(false)} title="Régler un fournisseur depuis le coffre" size="sm"
+        panelClassName="sm:!w-[400px] sm:!h-[360px] sm:!max-h-[360px]"
         footer={
           <div className="flex justify-end gap-2">
             <button onClick={() => setPayOpen(false)} className="btn-secondary">Annuler</button>
@@ -713,11 +691,11 @@ export function Coffre() {
             </button>
           </div>
         }>
-        <div className="space-y-4">
-          <p className="text-sm text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
+        <div className="space-y-3 pt-2">
+          <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
-            <label className="label">Fournisseur</label>
-            <select value={paySupplier} onChange={e => setPaySupplier(e.target.value)} className="input">
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Fournisseur</label>
+            <select value={paySupplier} onChange={e => setPaySupplier(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm">
               <option value="">Sélectionner…</option>
               {suppliers.map(s => (
                 <option key={s.id} value={s.id}>{s.name}{s.balance ? ` — ${formatFCFA(s.balance)}` : ''}</option>
@@ -725,18 +703,18 @@ export function Coffre() {
             </select>
           </div>
           <div>
-            <label className="label">Mode de paiement</label>
-            <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="input">
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Mode de paiement</label>
+            <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm">
               {methods.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Montant</label>
-            <input type="number" min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input" placeholder="0" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
+            <input type="number" min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
           </div>
           <div>
-            <label className="label">Référence (facultatif)</label>
-            <input value={payRef} onChange={e => setPayRef(e.target.value)} className="input" />
+            <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
+            <input value={payRef} onChange={e => setPayRef(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
           </div>
         </div>
       </Modal>

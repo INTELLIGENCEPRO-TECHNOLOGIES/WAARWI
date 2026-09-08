@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   Plus, ShoppingBag, Loader2, Search, RefreshCw, ClipboardList,
   CheckCircle, Truck, X, Calendar,
   User, MessageCircle, Link2,
-  Printer, Pencil, Ban, ChevronDown,
+  Printer, Pencil, Ban, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -61,10 +61,20 @@ export function SupplierOrders() {
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
 
   // ── List state ──────────────────────────────────────────────────
+  const PAGE_SIZE = 50;
   const [list, setList] = useState<SupplierOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reqIdRef = useRef(0);
+  const [page, setPage] = useState(1);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [allCount, setAllCount] = useState(0);
+  const [serverStatusCounts, setServerStatusCounts] = useState<Record<string, number>>({});
+  const [serverPending, setServerPending] = useState<{ pending_count: number; pending_total: number }>({ pending_count: 0, pending_total: 0 });
   const [statusFilter, setStatusFilter] = useState('');
   const [toCancel, setToCancel] = useState<SupplierOrder | null>(null);
   const [flashList, setFlashList] = useState(false);
@@ -102,21 +112,59 @@ export function SupplierOrders() {
   // ── Vehicle picker ──────────────────────────────────────────────
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
 
+  // ── Debounce search ────────────────────────────────────────────
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [search]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, tenant?.id, currentSite?.id]);
+
   // ── Load data ──────────────────────────────────────────────────
 
-  const load = async (silent = false) => {
+  const load = useCallback(async (silent = false) => {
     if (!tenant || !currentSite) return;
     if (!silent) setLoading(true); else setRefreshing(true);
-    const { data } = await supabase
-      .from('supplier_orders')
-      .select('*, suppliers(name, phone, whatsapp, email, address)')
-      .eq('tenant_id', tenant.id)
-      .eq('site_id', currentSite.id)
-      .order('created_at', { ascending: false })
-      .limit(200);
-    setList((data as any) || []);
+    setLoadError(null);
+    const myReqId = ++reqIdRef.current;
+
+    const params: Record<string, unknown> = {
+      p_tenant_id: tenant.id,
+      p_site_id: currentSite.id,
+      p_page: page,
+      p_page_size: PAGE_SIZE,
+    };
+    if (debouncedSearch) params.p_search = debouncedSearch;
+    if (statusFilter) params.p_status_filter = statusFilter;
+
+    const { data, error: rpcErr } = await supabase.rpc('rpc_paginated_supplier_orders', params);
+    if (myReqId !== reqIdRef.current) return;
+
+    if (rpcErr || !data) {
+      setLoadError(rpcErr?.message || 'Impossible de charger les commandes');
+      setList([]); setFilteredCount(0); setAllCount(0);
+      setServerStatusCounts({}); setServerPending({ pending_count: 0, pending_total: 0 });
+      setLoading(false); setRefreshing(false);
+      return;
+    }
+
+    const rows = ((data.rows || []) as any[]).map((r: any) => ({
+      ...r,
+      suppliers: r.supplier_name ? {
+        name: r.supplier_name, phone: r.supplier_phone,
+        whatsapp: r.supplier_whatsapp, email: r.supplier_email, address: r.supplier_address,
+      } : null,
+    })) as SupplierOrder[];
+    setList(rows);
+    setFilteredCount(data.filtered_count || 0);
+    setAllCount(data.all_count || 0);
+    setServerStatusCounts(data.status_counts || {});
+    setServerPending(data.pending || { pending_count: 0, pending_total: 0 });
+    setLoadError(null);
     setLoading(false); setRefreshing(false);
-  };
+  }, [tenant?.id, currentSite?.id, page, debouncedSearch, statusFilter]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -129,8 +177,8 @@ export function SupplierOrders() {
 
   const creatorName = (userId?: string | null) => (userId && profileNames[userId]) || 'Utilisateur non renseigné';
 
-  useEffect(() => { load(); }, [tenant?.id, currentSite?.id]);
-  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick, load]);
 
   useEffect(() => {
     const ctx = consumeNavContext();
@@ -226,23 +274,15 @@ export function SupplierOrders() {
 
   useEffect(() => { loadRefData(); }, [tenant?.id, currentSite?.id]);
 
-  // ── Filtering ───────────────────────────────────────────────────
-
-  const filtered = useMemo(() => {
-    let r = list;
-    if (statusFilter) r = r.filter(o => o.status === statusFilter);
-    const q = search.toLowerCase().trim();
-    if (q) r = r.filter(x => x.order_number.toLowerCase().includes(q) || (x.suppliers?.name || '').toLowerCase().includes(q));
-    return r;
-  }, [list, search, statusFilter]);
-
+  // ── Server-side filtering — list is already filtered ────────────
+  const filtered = list;
   const counts = useMemo(() => {
-    const c: Record<string, number> = { '': list.length };
-    for (const o of list) c[o.status] = (c[o.status] || 0) + 1;
+    const c: Record<string, number> = { '': allCount };
+    for (const [k, v] of Object.entries(serverStatusCounts)) c[k] = Number(v) || 0;
     return c;
-  }, [list]);
-
-  const totalPending = list.filter(o => ['sent', 'confirmed', 'partial'].includes(o.status)).reduce((s, o) => s + Number(o.total), 0);
+  }, [allCount, serverStatusCounts]);
+  const totalPending = serverPending.pending_total;
+  const totalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
 
   // ── Editor helpers ──────────────────────────────────────────────
 
@@ -710,9 +750,9 @@ export function SupplierOrders() {
         </div>
         {/* Desktop: original filter bar with counts and stats */}
         <div className="hidden md:flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
-          <span className="shrink-0 text-neutral-900 num">{list.length} commandes</span>
-          {(counts.sent || 0) + (counts.confirmed || 0) + (counts.partial || 0) > 0 && (
-            <span className="shrink-0 text-amber-600 num">{(counts.sent || 0) + (counts.confirmed || 0) + (counts.partial || 0)} en attente</span>
+          <span className="shrink-0 text-neutral-900 num">{allCount} commandes</span>
+          {serverPending.pending_count > 0 && (
+            <span className="shrink-0 text-amber-600 num">{serverPending.pending_count} en attente</span>
           )}
           {totalPending > 0 && (
             <span className="shrink-0 text-brand-700 num">{formatFCFA(totalPending)} à recevoir</span>
@@ -734,6 +774,15 @@ export function SupplierOrders() {
       {/* ═══ List ═══ */}
       {loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+      ) : loadError ? (
+        <div className="py-12 flex flex-col items-center gap-3">
+          <AlertTriangle className="w-6 h-6 text-amber-500" />
+          <p className="text-sm text-neutral-700 font-semibold">Chargement impossible</p>
+          <p className="text-xs text-neutral-500 max-w-xs text-center">{loadError}</p>
+          <button onClick={() => load()} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 transition-colors">
+            <RefreshCw className="w-3.5 h-3.5" /> Réessayer
+          </button>
+        </div>
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={ShoppingBag}
@@ -803,6 +852,26 @@ export function SupplierOrders() {
               );
             })}
           </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 py-3">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" /> Précédent
+              </button>
+              <span className="text-[11px] text-neutral-500 num">{page} / {totalPages}</span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Suivant <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 

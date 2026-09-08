@@ -72,7 +72,13 @@ export function Stock() {
   const [stkSortDir, setStkSortDir] = useState<'asc' | 'desc'>('asc');
   const [tab, setTab] = useState<'stocks' | 'movements' | 'lots'>('stocks');
   const [mvSubTab, setMvSubTab] = useState<'movements' | 'documents'>('movements');
+  const [movementSearch, setMovementSearch] = useState('');
+  const [debouncedMovementSearch, setDebouncedMovementSearch] = useState('');
+  const mvSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [documentSearch, setDocumentSearch] = useState('');
   const [moves, setMoves] = useState<any[]>([]);
+  const [mvError, setMvError] = useState<string | null>(null);
+  const [docsError, setDocsError] = useState<string | null>(null);
   const [mvDateFrom, setMvDateFrom] = useState<string>('');
   const [mvDateTo, setMvDateTo] = useState<string>('');
   const [mvPickerOpen, setMvPickerOpen] = useState(false);
@@ -307,6 +313,13 @@ export function Stock() {
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [search]);
 
+  // Debounce movement search independently
+  useEffect(() => {
+    if (mvSearchTimer.current) clearTimeout(mvSearchTimer.current);
+    mvSearchTimer.current = setTimeout(() => { setDebouncedMovementSearch(movementSearch); }, 250);
+    return () => { if (mvSearchTimer.current) clearTimeout(mvSearchTimer.current); };
+  }, [movementSearch]);
+
   useEffect(() => { if (tab === 'stocks') load(); /* eslint-disable-next-line */ }, [tab, tenant?.id, currentSite?.id, stkPage, debouncedSearch, filter, categoryFilter, stkSortCol, stkSortDir, sharedArticles]);
 
   // Reset page when filters change
@@ -329,28 +342,23 @@ export function Stock() {
   const loadMovements = async (page = 1) => {
     if (!tenant || !currentSite) return;
     setMvLoading(true);
+    setMvError(null);
     const from = (page - 1) * MV_PAGE_SIZE;
     const to = from + MV_PAGE_SIZE - 1;
 
-    // If search is active, we need to find matching article IDs first
-    let articleFilter: string[] | null = null;
-    const q = search.toLowerCase().trim();
-    if (q && tab === 'movements') {
-      const matchingArticles = rows.filter(r =>
-        r.name.toLowerCase().includes(q) || r.internal_ref.toLowerCase().includes(q)
-      ).map(r => r.article_id);
-      articleFilter = matchingArticles;
-      if (matchingArticles.length === 0) {
-        setMoves([]);
-        setMvTotalCount(0);
-        setMvLoading(false);
-        return;
-      }
+    const q = debouncedMovementSearch.trim();
+    const hasSearch = q.length > 0;
+
+    let selectStr = 'id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, site_id, stock_document_id, stock_documents(site_id, dest_site_id, doc_number)';
+    if (hasSearch) {
+      selectStr = 'id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, site_id, stock_document_id, articles!inner(name, internal_ref, oem_ref, barcode), stock_documents(site_id, dest_site_id, doc_number)';
+    } else {
+      selectStr = 'id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, site_id, stock_document_id, articles(name, internal_ref), stock_documents(site_id, dest_site_id, doc_number)';
     }
 
     let query = supabase
       .from('stock_movements')
-      .select('id, movement_type, quantity, previous_qty, new_qty, note, created_at, article_id, site_id, stock_document_id, articles(name, internal_ref), stock_documents(site_id, dest_site_id, doc_number)', { count: 'exact' })
+      .select(selectStr, { count: 'exact' })
       .eq('tenant_id', tenant.id);
 
     if (mvSiteId) {
@@ -359,9 +367,12 @@ export function Stock() {
       query = query.in('site_id', accessibleSiteIds);
     }
 
-    if (articleFilter && articleFilter.length <= 200) {
-      query = query.in('article_id', articleFilter);
+    if (hasSearch) {
+      const escaped = q.replace(/%/g, '\\%').replace(/_/g, '\\_');
+      const pattern = `%${escaped}%`;
+      query = query.or(`name.ilike.${pattern},internal_ref.ilike.${pattern},oem_ref.ilike.${pattern},barcode.ilike.${pattern}`, { referencedTable: 'articles' });
     }
+
     if (mvDateFrom) {
       query = query.gte('created_at', mvDateFrom + 'T00:00:00');
     }
@@ -372,7 +383,11 @@ export function Stock() {
     query = query.order('created_at', { ascending: false }).range(from, to);
 
     const { data, count, error: e } = await query;
-    if (!e) {
+    if (e) {
+      setMvError(e.message || 'Erreur inconnue');
+      setMoves([]);
+      setMvTotalCount(0);
+    } else {
       setMoves(data || []);
       setMvTotalCount(count ?? 0);
     }
@@ -384,20 +399,20 @@ export function Stock() {
     /* eslint-disable-next-line */
   }, [tab, mvSubTab, mvPage, mvDateFrom, mvDateTo, tenant?.id, currentSite?.id, mvSiteId]);
 
-  // Reset movements page when search or date changes
+  // Reset movements page when movement search changes (debounced)
   useEffect(() => {
     if (tab === 'movements' && mvSubTab === 'movements') {
       setMvPage(1);
       loadMovements(1);
     }
     /* eslint-disable-next-line */
-  }, [search]);
+  }, [debouncedMovementSearch]);
 
   // ── Load stock documents when entering documents sub-tab ────────────────────
   const loadStockDocs = async () => {
     if (!tenant) return;
-    // Vider immédiatement l'ancienne liste pendant le chargement
     setStockDocs([]);
+    setDocsError(null);
     if (!mvSiteId && accessibleSiteIds.length === 0) return;
     let query = supabase
       .from('stock_documents')
@@ -405,10 +420,8 @@ export function Stock() {
       .eq('tenant_id', tenant.id)
       .order('created_at', { ascending: false });
     if (mvSiteId) {
-      // Emplacement sélectionné : source OU destination (transferts entrants comme sortants)
       query = query.or(`site_id.eq.${mvSiteId},dest_site_id.eq.${mvSiteId}`);
     } else {
-      // Tous les emplacements : magasin courant + ses dépôts accessibles
       const ids = accessibleSiteIds.join(',');
       query = query.or(`site_id.in.(${ids}),dest_site_id.in.(${ids})`);
     }
@@ -416,10 +429,16 @@ export function Stock() {
       query = query.gte('created_at', mvDateFrom + 'T00:00:00');
     }
     if (mvDateTo) {
-      query = query.lte('created_at', mvDateTo + 'T23:59:59');
+      const nextDay = new Date(mvDateTo + 'T00:00:00');
+      nextDay.setDate(nextDay.getDate() + 1);
+      query = query.lt('created_at', nextDay.toISOString().split('T')[0] + 'T00:00:00');
     }
     const { data, error: e } = await query.limit(200);
-    if (e) { setStockDocs([]); return; }
+    if (e) {
+      setDocsError(e.message || 'Erreur inconnue');
+      setStockDocs([]);
+      return;
+    }
     setStockDocs((data || []) as StockDocRow[]);
   };
   useEffect(() => {
@@ -993,13 +1012,31 @@ export function Stock() {
         {/* Row 4: Search + Category filter */}
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
-            <PageSearch
-              value={search}
-              onChange={setSearch}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              placeholder={tab === 'movements' ? "Rechercher un article…" : "Rechercher un article..."}
-            />
+            {tab === 'stocks' ? (
+              <PageSearch
+                value={search}
+                onChange={setSearch}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder="Rechercher un article..."
+              />
+            ) : tab === 'movements' && mvSubTab === 'documents' ? (
+              <PageSearch
+                value={documentSearch}
+                onChange={setDocumentSearch}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder="Rechercher un document..."
+              />
+            ) : (
+              <PageSearch
+                value={movementSearch}
+                onChange={setMovementSearch}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder="Rechercher un article (nom, réf, OEM, code-barres)…"
+              />
+            )}
           </div>
           {tab === 'stocks' && (
             <div className="flex items-center gap-1.5 shrink-0">
@@ -1267,9 +1304,9 @@ export function Stock() {
           <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
             <span className="shrink-0 text-neutral-500 num">{mvTotalCount} mouvement{mvTotalCount > 1 ? 's' : ''}</span>
-            {search && tab === 'movements' && (
+            {movementSearch && (
               <span className="shrink-0 text-blue-600 inline-flex items-center gap-1 normal-case tracking-normal text-[10px]">
-                Filtre: "{search}"
+                Filtre: "{movementSearch}"
               </span>
             )}
             {(mvDateFrom || mvDateTo) && (
@@ -1285,8 +1322,14 @@ export function Stock() {
 
           {mvLoading ? (
             <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
+          ) : mvError ? (
+            <div className="py-8 text-center space-y-2">
+              <AlertTriangle className="w-6 h-6 text-red-400 mx-auto" />
+              <p className="text-sm font-semibold text-red-700">Chargement impossible</p>
+              <p className="text-xs text-red-500">{mvError}</p>
+            </div>
           ) : filteredMoves.length === 0 ? (
-            <EmptyState icon={History} title={(mvDateFrom || mvDateTo || search) ? 'Aucun mouvement trouvé' : 'Aucun mouvement'} description={(mvDateFrom || mvDateTo || search) ? 'Essayez une autre période ou un autre article.' : 'Les mouvements de stock apparaîtront ici après chaque opération.'} />
+            <EmptyState icon={History} title={(mvDateFrom || mvDateTo || movementSearch) ? 'Aucun mouvement trouvé' : 'Aucun mouvement'} description={(mvDateFrom || mvDateTo || movementSearch) ? 'Essayez une autre période ou un autre article.' : 'Les mouvements de stock apparaîtront ici après chaque opération.'} />
           ) : (
           <>
           <div className={`divide-y divide-neutral-100 ${flashKey === 'stockIn' ? 'waarwi-flash waarwi-flash-scroll' : ''}`}>
@@ -1376,7 +1419,7 @@ export function Stock() {
           <>
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
             <span className="shrink-0 text-neutral-500 num">
-              {(() => { const sq = search.toLowerCase().trim(); return stockDocs.filter(d => { if (docsTypeFilter !== 'all' && d.doc_type !== docsTypeFilter) return false; if (sq) return d.doc_number.toLowerCase().includes(sq) || (d.note || '').toLowerCase().includes(sq); return true; }).length; })() } / {stockDocs.length}
+              {(() => { const sq = documentSearch.toLowerCase().trim(); return stockDocs.filter(d => { if (docsTypeFilter !== 'all' && d.doc_type !== docsTypeFilter) return false; if (sq) return d.doc_number.toLowerCase().includes(sq) || (d.note || '').toLowerCase().includes(sq); return true; }).length; })() } / {stockDocs.length}
             </span>
             {(['all', 'entry', 'exit', 'transfer', 'inventory'] as const).map(k => {
               const labels: Record<string, string> = { all: 'Tous', entry: 'Entrées', exit: 'Sorties', transfer: 'Transferts', inventory: 'Inventaires' };
@@ -1390,8 +1433,14 @@ export function Stock() {
             })}
           </div>
 
-          {(() => {
-            const sq = search.toLowerCase().trim();
+          {docsError ? (
+            <div className="py-8 text-center space-y-2">
+              <AlertTriangle className="w-6 h-6 text-red-400 mx-auto" />
+              <p className="text-sm font-semibold text-red-700">Chargement impossible</p>
+              <p className="text-xs text-red-500">{docsError}</p>
+            </div>
+          ) : (() => {
+            const sq = documentSearch.toLowerCase().trim();
             const filtered = stockDocs.filter(d => {
               if (docsTypeFilter !== 'all' && d.doc_type !== docsTypeFilter) return false;
               if (sq) return d.doc_number.toLowerCase().includes(sq) || (d.note || '').toLowerCase().includes(sq);

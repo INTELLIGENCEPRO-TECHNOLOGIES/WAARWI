@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   Filter, RefreshCw, Printer, Download, Search,
   X, Eye, FileText, Copy, Clock, ShieldCheck, Smartphone, Store, User, Calendar,
-  CheckCircle, AlertTriangle, XCircle, Minus, Ban, Loader2,
+  CheckCircle, AlertTriangle, XCircle, Minus, Ban, Loader2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -24,13 +24,18 @@ type WarrantyEntry = {
   representative: string | null;
   total: number;
   status: string;
+  site_id: string | null;
   site_name: string | null;
   user_name: string | null;
   warranty_cancelled?: boolean;
   warranty_cancelled_at?: string | null;
   warranty_cancelled_reason?: string | null;
+  warranty_status?: WarrantyStatus;
+  expiration_date?: string | null;
   items?: { name: string; quantity: number; unit_price: number }[];
 };
+
+const PAGE_SIZE = 50;
 
 type WarrantyStatus = 'active' | 'expiring' | 'expired' | 'none' | 'cancelled';
 
@@ -92,7 +97,15 @@ export function Warranties() {
   const { success, error } = useToast();
   const [entries, setEntries] = useState<WarrantyEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reqIdRef = useRef(0);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [serverStats, setServerStats] = useState<Record<string, number>>({});
+  const [siteOptions, setSiteOptions] = useState<{ id: string; name: string }[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<WarrantyStatus | ''>('');
   const [filterSite, setFilterSite] = useState('');
@@ -104,110 +117,79 @@ export function Warranties() {
   const [cancelling, setCancelling] = useState(false);
   const [warrantyTerms, setWarrantyTerms] = useState('');
 
-  const load = async () => {
+  // Debounce search
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setDebouncedSearch(globalSearch.trim()), 250);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [globalSearch]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterStatus, filterSite, filterDateFrom, filterDateTo, tenant?.id]);
+
+  const load = useCallback(async () => {
     if (!tenant) return;
     setLoading(true);
-    const [{ data, error: e }, { data: settingsData }] = await Promise.all([
-      supabase
-        .from('sales')
-        .select('id, sale_number, created_at, total, status, customer_id, site_id, user_id, doc_header, customers(name, phone), sites(name), sale_items(name, quantity, unit_price)')
-        .eq('tenant_id', tenant.id)
-        .not('doc_header', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(500),
-      supabase
-        .from('document_settings')
-        .select('warranty_terms')
-        .eq('tenant_id', tenant.id)
-        .eq('doc_type', 'invoice')
-        .maybeSingle(),
-    ]);
+    setLoadError(null);
+    const myReqId = ++reqIdRef.current;
 
-    if (e) {
-      error('Erreur de chargement');
+    // Load warranty terms in parallel
+    const termsPromise = supabase
+      .from('document_settings')
+      .select('warranty_terms')
+      .eq('tenant_id', tenant.id)
+      .eq('doc_type', 'invoice')
+      .maybeSingle();
+
+    const params: Record<string, unknown> = {
+      p_tenant_id: tenant.id,
+      p_page: page,
+      p_page_size: PAGE_SIZE,
+    };
+    if (filterSite) params.p_site_id = filterSite;
+    if (debouncedSearch) params.p_search = debouncedSearch;
+    if (filterStatus) params.p_status_filter = filterStatus;
+    if (filterDateFrom) {
+      const f = new Date(filterDateFrom); f.setHours(0, 0, 0, 0);
+      params.p_date_from = f.toISOString();
+    }
+    if (filterDateTo) {
+      const t = new Date(filterDateTo); t.setHours(0, 0, 0, 0);
+      t.setDate(t.getDate() + 1);
+      params.p_date_to = t.toISOString();
+    }
+
+    const [{ data, error: rpcErr }, { data: settingsData }] = await Promise.all([
+      supabase.rpc('rpc_paginated_warranties', params),
+      termsPromise,
+    ]);
+    if (myReqId !== reqIdRef.current) return;
+
+    if (settingsData?.warranty_terms) setWarrantyTerms(settingsData.warranty_terms);
+
+    if (rpcErr || !data) {
+      setLoadError(rpcErr?.message || 'Impossible de charger les garanties');
+      setEntries([]); setTotalCount(0); setServerStats({}); setSiteOptions([]);
       setLoading(false);
       return;
     }
 
-    if (settingsData?.warranty_terms) {
-      setWarrantyTerms(settingsData.warranty_terms);
-    }
-
-    const userIds = [...new Set((data || []).map((s: any) => s.user_id).filter(Boolean))];
-    let userMap: Record<string, string> = {};
-    if (userIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', userIds);
-      if (profiles) {
-        userMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.full_name || '']));
-      }
-    }
-
-    const rows: WarrantyEntry[] = (data || [])
-      .filter((s: any) => {
-        const dh = s.doc_header;
-        return dh && (dh.imei || dh.warranty);
-      })
-      .map((s: any) => ({
-        id: s.id,
-        sale_number: s.sale_number,
-        created_at: s.created_at,
-        customer_name: s.customers?.name || null,
-        customer_phone: s.customers?.phone || null,
-        imei: s.doc_header?.imei || null,
-        warranty: s.doc_header?.warranty || null,
-        delivery_date: s.doc_header?.delivery_date || null,
-        representative: s.doc_header?.representative || null,
-        total: Number(s.total),
-        status: s.status,
-        site_name: s.sites?.name || null,
-        user_name: userMap[s.user_id] || null,
-        warranty_cancelled: s.doc_header?.warranty_cancelled || false,
-        warranty_cancelled_at: s.doc_header?.warranty_cancelled_at || null,
-        warranty_cancelled_reason: s.doc_header?.warranty_cancelled_reason || null,
-        items: (s.sale_items || []).map((i: any) => ({ name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
-      }));
-
+    const rows: WarrantyEntry[] = ((data.rows || []) as any[]).map((r: any) => ({
+      ...r,
+      total: Number(r.total),
+    }));
     setEntries(rows);
+    setTotalCount(data.total_count || 0);
+    setServerStats(data.stats || {});
+    setSiteOptions(data.site_options || []);
+    setLoadError(null);
     setLoading(false);
-  };
+  }, [tenant?.id, page, debouncedSearch, filterStatus, filterSite, filterDateFrom, filterDateTo]);
 
-  useEffect(() => { load(); }, [tenant?.id]);
+  useEffect(() => { load(); }, [load]);
 
-  const filtered = useMemo(() => {
-    let list = entries;
-
-    if (globalSearch.trim()) {
-      const q = globalSearch.toLowerCase();
-      list = list.filter(e =>
-        (e.imei && e.imei.toLowerCase().includes(q)) ||
-        (e.sale_number && e.sale_number.toLowerCase().includes(q)) ||
-        (e.customer_name && e.customer_name.toLowerCase().includes(q)) ||
-        (e.customer_phone && e.customer_phone.includes(q)) ||
-        (e.warranty && e.warranty.toLowerCase().includes(q)) ||
-        (e.representative && e.representative.toLowerCase().includes(q))
-      );
-    }
-
-    if (filterStatus) {
-      list = list.filter(e => getWarrantyStatus(e.created_at, e.warranty, e.warranty_cancelled) === filterStatus);
-    }
-
-    if (filterSite) {
-      list = list.filter(e => e.site_name === filterSite);
-    }
-
-    if (filterDateFrom) {
-      list = list.filter(e => e.created_at >= filterDateFrom);
-    }
-    if (filterDateTo) {
-      list = list.filter(e => e.created_at.slice(0, 10) <= filterDateTo);
-    }
-
-    return list;
-  }, [entries, globalSearch, filterStatus, filterSite, filterDateFrom, filterDateTo]);
+  const filtered = entries;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const copyImei = (imei: string) => {
     navigator.clipboard.writeText(imei);
@@ -247,9 +229,14 @@ export function Warranties() {
     load();
   };
 
-  const printCertificate = (entry: WarrantyEntry) => {
+  const printCertificate = async (entry: WarrantyEntry) => {
     if (!tenant) return;
-    const ws = getWarrantyStatus(entry.created_at, entry.warranty, entry.warranty_cancelled);
+    let items = entry.items;
+    if (!items || items.length === 0) {
+      const { data } = await supabase.from('sale_items').select('name, quantity, unit_price').eq('sale_id', entry.id);
+      items = (data || []).map((i: any) => ({ name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) }));
+    }
+    const ws = (entry.warranty_status as WarrantyStatus) || getWarrantyStatus(entry.created_at, entry.warranty, entry.warranty_cancelled);
     const expiry = entry.warranty ? computeWarrantyExpiry(entry.created_at, entry.warranty) : '';
     printWarrantyCertificate({
       tenant: buildPrintTenantForSite(tenant, currentSite),
@@ -260,7 +247,7 @@ export function Warranties() {
       imei: entry.imei,
       warrantyDuration: entry.warranty || '',
       expirationDate: expiry,
-      items: entry.items,
+      items,
       total: entry.total,
       warrantyTerms: warrantyTerms || undefined,
       representative: entry.representative,
@@ -269,21 +256,38 @@ export function Warranties() {
     });
   };
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
+    if (!tenant) return;
     const headers = ['Date vente', 'Facture', 'Client', 'Téléphone', 'IMEI', 'Garantie', 'Expiration', 'Statut garantie', 'Magasin', 'Vendeur'];
-    const rows = filtered.map(e => [
-      new Date(e.created_at).toLocaleDateString('fr-FR'),
-      e.sale_number,
-      e.customer_name || '',
-      e.customer_phone || '',
-      e.imei || '',
-      e.warranty || '',
-      getExpirationDate(e.created_at, e.warranty) || '',
-      STATUS_CONFIG[getWarrantyStatus(e.created_at, e.warranty, e.warranty_cancelled)].label,
-      e.site_name || '',
-      e.user_name || '',
-    ]);
-    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const allRows: string[][] = [];
+    let pg = 1;
+    const batchSize = 200;
+    while (true) {
+      const params: Record<string, unknown> = {
+        p_tenant_id: tenant.id, p_page: pg, p_page_size: batchSize,
+      };
+      if (filterSite) params.p_site_id = filterSite;
+      if (debouncedSearch) params.p_search = debouncedSearch;
+      if (filterStatus) params.p_status_filter = filterStatus;
+      if (filterDateFrom) { const f = new Date(filterDateFrom); f.setHours(0,0,0,0); params.p_date_from = f.toISOString(); }
+      if (filterDateTo) { const t = new Date(filterDateTo); t.setHours(0,0,0,0); t.setDate(t.getDate()+1); params.p_date_to = t.toISOString(); }
+      const { data: batch } = await supabase.rpc('rpc_paginated_warranties', params);
+      if (!batch?.rows?.length) break;
+      for (const e of batch.rows as any[]) {
+        const ws = e.warranty_status || getWarrantyStatus(e.created_at, e.warranty, e.warranty_cancelled);
+        allRows.push([
+          new Date(e.created_at).toLocaleDateString('fr-FR'),
+          e.sale_number, e.customer_name || '', e.customer_phone || '',
+          e.imei || '', e.warranty || '',
+          e.expiration_date ? new Date(e.expiration_date).toLocaleDateString('fr-FR') : (getExpirationDate(e.created_at, e.warranty) || ''),
+          STATUS_CONFIG[ws as WarrantyStatus]?.label || ws,
+          e.site_name || '', e.user_name || '',
+        ]);
+      }
+      if ((batch.rows as any[]).length < batchSize) break;
+      pg++;
+    }
+    const csv = [headers.join(';'), ...allRows.map(r => r.join(';'))].join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -293,15 +297,7 @@ export function Warranties() {
     URL.revokeObjectURL(url);
   };
 
-  const siteNames = useMemo(() => [...new Set(entries.map(e => e.site_name).filter(Boolean))], [entries]);
-
-  const stats = useMemo(() => {
-    const active = entries.filter(e => getWarrantyStatus(e.created_at, e.warranty, e.warranty_cancelled) === 'active').length;
-    const expiring = entries.filter(e => getWarrantyStatus(e.created_at, e.warranty, e.warranty_cancelled) === 'expiring').length;
-    const expired = entries.filter(e => getWarrantyStatus(e.created_at, e.warranty, e.warranty_cancelled) === 'expired').length;
-    const cancelled = entries.filter(e => getWarrantyStatus(e.created_at, e.warranty, e.warranty_cancelled) === 'cancelled').length;
-    return { active, expiring, expired, cancelled };
-  }, [entries]);
+  const stats = serverStats;
 
   return (
     <div className="space-y-3 pb-6">
@@ -338,26 +334,26 @@ export function Warranties() {
       </div>
 
         {/* Stats - minimalist dividers, no card */}
-        {!loading && entries.length > 0 && (
+        {!loading && !loadError && totalCount > 0 && (
           <div className="flex items-stretch border-b border-neutral-200 pb-3">
             <div className="flex-1 px-2 first:pl-0">
               <p className="text-[10px] text-neutral-500 mb-0.5">Garanties actives</p>
-              <p className="text-base font-bold text-emerald-600 tabular-nums">{stats.active}</p>
+              <p className="text-base font-bold text-emerald-600 tabular-nums">{stats.active || 0}</p>
             </div>
             <div className="w-px bg-neutral-200" />
             <div className="flex-1 px-2">
               <p className="text-[10px] text-neutral-500 mb-0.5">Expirent bientôt</p>
-              <p className="text-base font-bold text-amber-600 tabular-nums">{stats.expiring}</p>
+              <p className="text-base font-bold text-amber-600 tabular-nums">{stats.expiring || 0}</p>
             </div>
             <div className="w-px bg-neutral-200" />
             <div className="flex-1 px-2">
               <p className="text-[10px] text-neutral-500 mb-0.5">Expirées</p>
-              <p className="text-base font-bold text-neutral-900 tabular-nums">{stats.expired}</p>
+              <p className="text-base font-bold text-neutral-900 tabular-nums">{stats.expired || 0}</p>
             </div>
             <div className="w-px bg-neutral-200" />
             <div className="flex-1 px-2 last:pr-0">
               <p className="text-[10px] text-neutral-500 mb-0.5">Annulées</p>
-              <p className="text-base font-bold text-red-600 tabular-nums">{stats.cancelled}</p>
+              <p className="text-base font-bold text-red-600 tabular-nums">{stats.cancelled || 0}</p>
             </div>
           </div>
         )}
@@ -397,7 +393,7 @@ export function Warranties() {
                   placeholder="Tous"
                   value={filterSite}
                   onChange={setFilterSite}
-                  options={siteNames.map(s => ({ value: s!, label: s! }))}
+                  options={siteOptions.map(s => ({ value: s.id, label: s.name }))}
                 />
               </div>
             </>
@@ -410,7 +406,7 @@ export function Warranties() {
             {filterDateFrom && <span className="shrink-0 text-slate-600 num">Du {new Date(filterDateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>}
             {filterDateTo && <span className="shrink-0 text-slate-600 num">Au {new Date(filterDateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>}
             {filterStatus && <span className="shrink-0 text-brand-700">{STATUS_CONFIG[filterStatus as WarrantyStatus]?.label || filterStatus}</span>}
-            {filterSite && <span className="shrink-0 text-brand-700">{filterSite}</span>}
+            {filterSite && <span className="shrink-0 text-brand-700">{siteOptions.find(s => s.id === filterSite)?.name || filterSite}</span>}
             <button onClick={() => { setFilterStatus(''); setFilterSite(''); setFilterDateFrom(''); setFilterDateTo(''); }} className="shrink-0 text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 transition-all">
               <X className="w-3 h-3" />Réinitialiser
             </button>
@@ -424,8 +420,20 @@ export function Warranties() {
           </div>
         )}
 
+        {/* Error state */}
+        {!loading && loadError && (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <AlertTriangle className="w-6 h-6 text-amber-500" />
+            <p className="text-sm text-neutral-700 font-semibold">Chargement impossible</p>
+            <p className="text-xs text-neutral-500 max-w-xs text-center">{loadError}</p>
+            <button onClick={() => load()} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-800 transition-colors">
+              <RefreshCw className="w-3.5 h-3.5" /> Réessayer
+            </button>
+          </div>
+        )}
+
         {/* Empty state */}
-        {!loading && filtered.length === 0 && (
+        {!loading && !loadError && filtered.length === 0 && (
           <div className="text-center py-16">
             <Smartphone className="w-8 h-8 text-neutral-300 mx-auto mb-3" />
             <p className="text-sm font-semibold text-neutral-600">Aucun enregistrement</p>
@@ -452,7 +460,7 @@ export function Warranties() {
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {filtered.map(entry => {
-                    const ws = getWarrantyStatus(entry.created_at, entry.warranty, entry.warranty_cancelled);
+                    const ws = (entry.warranty_status as WarrantyStatus) || getWarrantyStatus(entry.created_at, entry.warranty, entry.warranty_cancelled);
                     const cfg = STATUS_CONFIG[ws];
                     const Icon = cfg.icon;
                     const expiry = getExpirationDate(entry.created_at, entry.warranty);
@@ -507,10 +515,31 @@ export function Warranties() {
               </table>
             </div>
 
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 py-3">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Précédent
+                </button>
+                <span className="text-[11px] text-neutral-500 num">{page} / {totalPages}</span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-600 hover:text-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Suivant <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {/* Mobile list - no cards, dividers only */}
             <div className="md:hidden divide-y divide-neutral-100">
               {filtered.map(entry => {
-                const ws = getWarrantyStatus(entry.created_at, entry.warranty, entry.warranty_cancelled);
+                const ws = (entry.warranty_status as WarrantyStatus) || getWarrantyStatus(entry.created_at, entry.warranty, entry.warranty_cancelled);
                 const cfg = STATUS_CONFIG[ws];
                 const Icon = cfg.icon;
                 const expiry = getExpirationDate(entry.created_at, entry.warranty);

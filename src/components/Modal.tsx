@@ -15,7 +15,7 @@ type Props = {
   panelClassName?: string;
 };
 
-export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false, variant = 'default', panelClassName = '' }: Props) {
+export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false, variant = 'default', panelClassName = '' }: Props & { panelClassName?: string }) {
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
