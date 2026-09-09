@@ -21,6 +21,7 @@ type Props = {
   variant?: 'default' | 'underline';
   menuWidth?: number;
   wrapLabels?: boolean;
+  maxResults?: number;
 };
 
 export function SearchableSelect({
@@ -36,6 +37,7 @@ export function SearchableSelect({
   variant = 'default',
   menuWidth,
   wrapLabels = false,
+  maxResults,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -50,12 +52,17 @@ export function SearchableSelect({
   const selected = options.find(o => o.value === value);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return options;
-    const q = query.toLowerCase();
-    return options.filter(
-      o => o.label.toLowerCase().includes(q) || (o.sublabel && o.sublabel.toLowerCase().includes(q))
-    );
-  }, [options, query]);
+    let result: SelectOption[];
+    if (!query.trim()) {
+      result = options;
+    } else {
+      const q = query.toLowerCase();
+      result = options.filter(
+        o => o.label.toLowerCase().includes(q) || (o.sublabel && o.sublabel.toLowerCase().includes(q))
+      );
+    }
+    return maxResults != null ? result.slice(0, maxResults) : result;
+  }, [options, query, maxResults]);
 
   const updatePos = useCallback(() => {
     if (!triggerRef.current) return;

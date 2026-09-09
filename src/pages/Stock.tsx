@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin, Filter, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Boxes, Plus, Minus, Loader2, AlertTriangle, ArrowRightLeft, ClipboardList, ArrowDownCircle, ArrowUpCircle, X, TrendingDown, History, Calendar, BookOpen, PackageOpen, Clock, LayoutGrid, List, Check, Save, Printer, Info, Scroll, ChevronUp, ChevronDown, Trash2, MapPin, Filter, ChevronLeft, ChevronRight, RefreshCw, ArrowRight, Lightbulb } from 'lucide-react';
 import { CategoryPickerModal } from './ArticlesComponents';
 import { PageSearch } from '../components/PageSearch';
 import { MoreMenu } from '../components/MoreMenu';
@@ -107,7 +107,13 @@ export function Stock() {
   const [listTransferTarget, setListTransferTarget] = useState('');
   const [listSourceSite, setListSourceSite] = useState('');
   const listSourceInitialized = useRef(false);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const guideKey = tenant ? `waarwi:stock_guide_dismissed:${tenant.id}` : '';
+  const [guideDismissed, setGuideDismissed] = useState<boolean>(() => {
+    try { return guideKey ? localStorage.getItem(guideKey) === '1' : false; } catch { return false; }
+  });
+  const [guideStep, setGuideStep] = useState(0);
+  const dismissGuide = () => { setGuideDismissed(true); try { if (guideKey) localStorage.setItem(guideKey, '1'); } catch {} };
+  const reopenGuide = () => { setGuideDismissed(false); setGuideStep(0); try { if (guideKey) localStorage.removeItem(guideKey); } catch {} };
 
   const [adjOpen, setAdjOpen] = useState(false);
   const [adjRow, setAdjRow] = useState<Row | null>(null);
@@ -938,7 +944,7 @@ export function Stock() {
               { icon: <History className="w-4 h-4" />, label: 'Historique des mouvements', onClick: () => { if (viewMode === 'list') saveBulkRef.current?.(); setTab('movements'); } },
               { icon: <BookOpen className="w-4 h-4" />, label: "Livre d'inventaire", onClick: () => { if (viewMode === 'list') saveBulkRef.current?.(); printInventoryBook(); } },
               { icon: <PackageOpen className="w-4 h-4" />, label: 'Voir les lots', onClick: () => { if (viewMode === 'list') saveBulkRef.current?.(); setTab(t => t === 'lots' ? 'stocks' : 'lots'); }, hidden: stockMethod !== 'lot' },
-              { icon: <Info className="w-4 h-4" />, label: 'Guide', onClick: () => setHelpOpen(true) },
+              { icon: <Info className="w-4 h-4" />, label: 'Guide', onClick: reopenGuide },
             ]} />
           )}
           {can('manage_stock') && tab !== 'stocks' && (
@@ -1085,6 +1091,20 @@ export function Stock() {
             >
               <ClipboardList className="w-4 h-4" />Inventaire
             </button>
+            <div className="hidden lg:flex items-center gap-3 ml-auto">
+              <button
+                onClick={() => { if (viewMode === 'list') saveBulkRef.current?.(); setTab('movements'); }}
+                className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-500 hover:text-teal-700 transition-all active:scale-95"
+              >
+                <History className="w-4 h-4" />Historique des mouvements
+              </button>
+              <button
+                onClick={() => { if (viewMode === 'list') saveBulkRef.current?.(); printInventoryBook(); }}
+                className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-500 hover:text-neutral-900 transition-all active:scale-95"
+              >
+                <BookOpen className="w-4 h-4" />Livre d'inventaire
+              </button>
+            </div>
           </div>
         )}
 
@@ -1103,6 +1123,16 @@ export function Stock() {
           </div>
         )}
       </div>
+
+      {/* Inline stepped guide */}
+      {tab === 'stocks' && !guideDismissed && (
+        <StockGuide step={guideStep} onStep={setGuideStep} onDismiss={dismissGuide} />
+      )}
+      {tab === 'stocks' && guideDismissed && (
+        <button onClick={reopenGuide} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-brand-700 transition-colors px-1 mt-1">
+          <Lightbulb className="w-3.5 h-3.5" />Revoir le guide de gestion du stock
+        </button>
+      )}
 
       {tab === 'stocks' ? (
         (!initialLoaded && loading) ? (
@@ -2001,37 +2031,7 @@ export function Stock() {
         )}
       </Modal>
 
-      {/* Help/Guide modal */}
-      <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Guide de gestion du stock" size="md" fullscreenMobile>
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-          <HelpSection icon={<ArrowDownCircle className="w-4 h-4 text-emerald-600" />} title="Entrée de stock" color="emerald">
-            Enregistre une réception de marchandise (achat, retour fournisseur, production). Le stock de l'article augmente de la quantité saisie.
-          </HelpSection>
-          <HelpSection icon={<ArrowUpCircle className="w-4 h-4 text-red-500" />} title="Sortie de stock" color="red">
-            Enregistre une sortie manuelle (perte, casse, don, consommation interne). Le stock diminue de la quantité saisie. Les ventes déduisent automatiquement le stock.
-          </HelpSection>
-          {canTransfer && (
-            <HelpSection icon={<ArrowRightLeft className="w-4 h-4 text-amber-600" />} title="Transfert" color="amber">
-              Déplace une quantité d'un dépôt/site vers un autre. Le stock sort du site d'origine et entre dans le site de destination. Utile pour équilibrer les stocks entre magasins.
-            </HelpSection>
-          )}
-          <HelpSection icon={<ClipboardList className="w-4 h-4 text-neutral-700" />} title="Inventaire" color="slate">
-            Permet de corriger le stock réel après un comptage physique. Vous saisissez la quantité réellement comptée et le système calcule automatiquement l'écart (positif ou négatif).
-          </HelpSection>
-          <HelpSection icon={<BookOpen className="w-4 h-4 text-ink-900" />} title="Livre d'inventaire" color="slate">
-            Génère un document imprimable A4 listant tous les articles en stock avec leurs quantités, emplacements et valeurs. Idéal pour les contrôles périodiques et les audits.
-          </HelpSection>
-          <HelpSection icon={<List className="w-4 h-4 text-neutral-700" />} title="Vue liste éditable" color="slate">
-            Basculez en vue liste pour saisir rapidement des entrées, sorties ou inventaires en masse. Parcourez les articles avec les flèches du clavier, puis cliquez « Enregistrer » pour valider toutes les modifications en une seule fois.
-          </HelpSection>
-          <HelpSection icon={<History className="w-4 h-4 text-teal-700" />} title="Historique des mouvements" color="teal">
-            Consultez la trace chronologique de toutes les opérations de stock (entrées, sorties, ventes, transferts, inventaires). Filtrable par période. Chaque mouvement peut être imprimé en A4 ou en ticket 80mm.
-          </HelpSection>
-          <HelpSection icon={<Printer className="w-4 h-4 text-slate-600" />} title="Impression mouvement" color="slate">
-            Chaque mouvement dispose de deux formats d'impression : A4 (bon professionnel complet) et 80mm (ticket thermique compact). Le bon A4 inclut l'en-tête entreprise, les détails du mouvement et une zone signature.
-          </HelpSection>
-        </div>
-      </Modal>
+
 
       {/* Lot picker for sortie */}
       <LotPickerModal
@@ -2481,8 +2481,8 @@ function StockListEditView({
         if (!showSourcePicker && !isTransfer) {
           return (
             <div className="shrink-0 mb-2 flex items-center justify-end">
-              <button onClick={saveBulk} disabled={editCount === 0 || listSaving} className="btn-icon-primary" title={`Enregistrer${editCount > 0 ? ` (${editCount})` : ''}`}>
-                {listSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              <button onClick={saveBulk} disabled={editCount === 0 || listSaving} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-brand-700 hover:bg-neutral-100 rounded-lg px-2 py-1.5 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed" title={`Enregistrer${editCount > 0 ? ` (${editCount})` : ''}`}>
+                {listSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer{editCount > 0 ? ` (${editCount})` : ''}
               </button>
             </div>
           );
@@ -2542,8 +2542,8 @@ function StockListEditView({
                 <div className="h-px bg-neutral-200 flex-1" />
               </div>
             )}
-            <button onClick={saveBulk} disabled={editCount === 0 || listSaving} className="btn-icon-primary shrink-0" title={`Enregistrer${editCount > 0 ? ` (${editCount})` : ''}`}>
-              {listSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            <button onClick={saveBulk} disabled={editCount === 0 || listSaving} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-brand-700 hover:bg-neutral-100 rounded-lg px-2 py-1.5 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed" title={`Enregistrer${editCount > 0 ? ` (${editCount})` : ''}`}>
+              {listSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Enregistrer{editCount > 0 ? ` (${editCount})` : ''}
             </button>
           </div>
         );
@@ -2651,17 +2651,46 @@ function StockListEditView({
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
- *  HELP SECTION — Reusable row for the guide modal
+ *  STOCK GUIDE — Inline stepped banner (same style as MasterCatalogGuide)
  * ════════════════════════════════════════════════════════════════════════════ */
-function HelpSection({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
-  const bgMap: Record<string, string> = { emerald: 'bg-emerald-50 border-emerald-200', red: 'bg-red-50 border-red-200', amber: 'bg-amber-50 border-amber-200', slate: 'bg-neutral-50 border-neutral-200', teal: 'bg-teal-50 border-teal-200' };
+const STOCK_GUIDE_STEPS: { title: string; desc: string; icon: typeof ArrowDownCircle }[] = [
+  { title: 'Entrée de stock', desc: 'Enregistre une réception de marchandise (achat, retour fournisseur, production). Le stock de l\'article augmente de la quantité saisie.', icon: ArrowDownCircle },
+  { title: 'Sortie de stock', desc: 'Enregistre une sortie manuelle (perte, casse, don, consommation interne). Le stock diminue de la quantité saisie. Les ventes déduisent automatiquement le stock.', icon: ArrowUpCircle },
+  { title: 'Transfert', desc: 'Déplace une quantité d\'un dépôt/site vers un autre. Le stock sort du site d\'origine et entre dans le site de destination.', icon: ArrowRightLeft },
+  { title: 'Inventaire', desc: 'Permet de corriger le stock réel après un comptage physique. Vous saisissez la quantité réellement comptée et le système calcule l\'écart.', icon: ClipboardList },
+  { title: 'Livre d\'inventaire', desc: 'Génère un document imprimable A4 listant tous les articles en stock avec leurs quantités, emplacements et valeurs.', icon: BookOpen },
+  { title: 'Vue liste éditable', desc: 'Basculez en vue liste pour saisir rapidement des entrées, sorties ou inventaires en masse. Validez toutes les modifications en une seule fois.', icon: List },
+  { title: 'Historique des mouvements', desc: 'Consultez la trace chronologique de toutes les opérations de stock. Filtrable par période, imprimable en A4 ou ticket 80mm.', icon: History },
+  { title: 'Impression mouvement', desc: 'Chaque mouvement dispose de deux formats d\'impression : A4 (bon professionnel) et 80mm (ticket thermique compact).', icon: Printer },
+];
+
+function StockGuide({ step, onStep, onDismiss }: { step: number; onStep: (s: number) => void; onDismiss: () => void }) {
+  const steps = STOCK_GUIDE_STEPS;
+  const s = steps[step] || steps[0];
+  const Icon = s.icon;
   return (
-    <div className={`p-3 rounded-xl border ${bgMap[color] || 'bg-slate-50 border-slate-200'}`}>
-      <div className="flex items-center gap-2 mb-1">
-        {icon}
-        <span className="text-xs font-bold text-slate-900">{title}</span>
+    <div className="relative py-3 border-b border-neutral-100 animate-fade-in">
+      <button onClick={onDismiss} className="absolute top-3 right-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-4 h-4" /></button>
+      <div className="flex items-start gap-3">
+        <Icon className="w-5 h-5 text-brand-700 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0 pr-6">
+          <h4 className="text-sm font-bold text-neutral-900">{s.title}</h4>
+          <p className="text-xs text-neutral-500 mt-0.5">{s.desc}</p>
+          <div className="flex items-center gap-2 mt-3">
+            {steps.map((_, i) => <span key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === step ? 'bg-brand-600 w-4' : 'bg-neutral-200'}`} />)}
+            <div className="flex-1" />
+            {step < steps.length - 1 ? (
+              <button onClick={() => onStep(step + 1)} className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-700 hover:text-brand-800 transition-colors">
+                Suivant <ArrowRight className="w-3 h-3" />
+              </button>
+            ) : (
+              <button onClick={onDismiss} className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-700 hover:text-brand-800 transition-colors">
+                Compris <Check className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-      <p className="text-[11px] text-slate-600 leading-relaxed">{children}</p>
     </div>
   );
 }

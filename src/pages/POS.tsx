@@ -1360,11 +1360,32 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       return all;
     };
 
-    const [allArts, allStk, csResult, custResult, topResult, tiersResult] = await Promise.all([
+    const fetchCustomersBatched = async () => {
+      let all: any[] = [];
+      let from = 0;
+      const seen = new Set<string>();
+      while (true) {
+        let q = supabase.from('customers')
+          .select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, credit_blocked, balance, is_active, tenant_id, site_id')
+          .eq('tenant_id', tenant.id).eq('is_active', true)
+          .order('name').order('id')
+          .range(from, from + 999);
+        if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id);
+        const { data, error: e } = await q;
+        if (e) { console.error('[POS] customers fetch error', e, { from }); break; }
+        if (!data) break;
+        for (const c of data) { if (!seen.has(c.id)) { seen.add(c.id); all.push(c); } }
+        if (data.length < 1000) break;
+        from += 1000;
+      }
+      return all;
+    };
+
+    const [allArts, allStk, csResult, allCust, topResult, tiersResult] = await Promise.all([
       fetchArticlesBatched(),
       fetchStockBatched(),
       supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, status, user_id, site_id, tenant_id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
-      (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, balance, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
+      fetchCustomersBatched(),
       supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
     ]);
@@ -1374,7 +1395,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
     const stk = allStk;
     const cs = csResult.data;
-    const cust = custResult.data;
+    const cust = allCust;
     const topRows = topResult.data;
     const tiers = tiersResult.data;
 
@@ -1445,16 +1466,15 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   useEffect(() => { load(); }, [load]);
 
-  // Realtime: silently refresh stock + customers + articles when another user makes changes
+  // Realtime: silently refresh stock + articles when another user makes changes (NOT customers)
   useEffect(() => {
     if (!tenant || !currentSite) return;
     const stockSiteId = saleSourceSiteId || currentSite.id;
     const isShared = (tenant as any)?.settings?.shared_articles !== false;
-    const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const unsub = onDataChange(
-      ['articles', 'stock_levels', 'customers', 'sales', 'sale_payments', 'cash_movements'],
+      ['articles', 'stock_levels'],
       () => {
         if (!initialLoadDone.current) return;
         if (timer) clearTimeout(timer);
@@ -1485,11 +1505,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             }
             return all;
           };
-          const [stk, { data: cust }, newArts] = await Promise.all([
-            fetchStk(),
-            (() => { let q = supabase.from('customers').select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, balance, is_active, tenant_id, site_id').eq('tenant_id', tenant.id).eq('is_active', true).order('name').limit(300); if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id); return q; })(),
-            fetchArts(),
-          ]);
+          const [stk, newArts] = await Promise.all([fetchStk(), fetchArts()]);
           if (stk && newArts && newArts.length > 0) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
             const prevMap = new Map(posCache.articles.map(a => [a.id, a.stock_available]));
@@ -1509,15 +1525,52 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
             setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.has(a.id) ? Number(qmap.get(a.id)) : a.stock_available, _stockLoaded: true })));
           }
-          if (cust) {
-            setCustomers(cust as any);
-            posCache.customers = cust as any;
-          }
         }, 600);
       }
     );
     return () => { unsub(); if (timer) clearTimeout(timer); };
   }, [tenant?.id, currentSite?.id, saleSourceSiteId, onDataChange]);
+
+  // Realtime: refresh customers only when customer data changes
+  useEffect(() => {
+    if (!tenant || !currentSite) return;
+    const isSharedCust = (tenant as any)?.settings?.shared_customers !== false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsub = onDataChange(
+      ['customers'],
+      () => {
+        if (!initialLoadDone.current) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(async () => {
+          let all: any[] = [];
+          let from = 0;
+          const seen = new Set<string>();
+          let failed = false;
+          while (true) {
+            let q = supabase.from('customers')
+              .select('id, name, phone, email, address, whatsapp, customer_type, credit_limit, credit_blocked, balance, is_active, tenant_id, site_id')
+              .eq('tenant_id', tenant.id).eq('is_active', true)
+              .order('name').order('id')
+              .range(from, from + 999);
+            if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id);
+            const { data, error: e } = await q;
+            if (e) { console.error('[POS] realtime customers fetch error', e, { from }); failed = true; break; }
+            if (!data) break;
+            for (const c of data) { if (!seen.has(c.id)) { seen.add(c.id); all.push(c); } }
+            if (data.length < 1000) break;
+            from += 1000;
+          }
+          if (!failed && all.length > 0) {
+            const cust = all as Customer[];
+            setCustomers(cust);
+            posCache.customers = cust;
+          }
+        }, 600);
+      }
+    );
+    return () => { unsub(); if (timer) clearTimeout(timer); };
+  }, [tenant?.id, currentSite?.id, onDataChange]);
 
   // Force-skip resume screen when coming from Dashboard "Ventes" button
   useEffect(() => {
@@ -2921,10 +2974,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         <div className="flex items-stretch gap-1.5">
           <div className="flex-1 min-w-0 [&>div>button]:rounded-none [&>div>button]:border-0 [&>div>button]:border-b [&>div>button]:border-neutral-200 [&>div>button]:py-2.5 [&>div>button]:px-0 [&>div>button]:text-sm [&>div>button]:shadow-none">
             <SearchableSelect
-              options={[{ value: '', label: 'Client comptoir' }, ...customers.map(c => ({ value: c.id, label: c.name }))]}
+              options={[{ value: '', label: 'Client comptoir' }, ...customers.map(c => ({ value: c.id, label: c.name, sublabel: (c as any).phone || undefined }))]}
               value={customer?.id || ''}
               onChange={v => setCustomer(customers.find(c => c.id === v) || null)}
               placeholder="Client comptoir"
+              maxResults={50}
             />
           </div>
           <button onClick={() => { setQuickCustomerName(''); setQuickCustomerOpen(true); }} className="shrink-0 inline-flex items-center justify-center px-3 py-2.5 rounded-lg bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800 transition-all active:scale-95" title="Créer un client">
