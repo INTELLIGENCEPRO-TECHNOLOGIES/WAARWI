@@ -32,16 +32,16 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
   return (
     <div className={`fixed inset-0 ${z} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`}>
       <div className="scrim" onClick={onClose} />
-      <div className={`relative w-full ${w} bg-white ${variant === 'flat' ? 'flat-modal' : ''} ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col ${panelClassName}`}>
+      <div className={`relative w-full ${w} bg-[var(--w-surface)] ${variant === 'flat' ? 'flat-modal' : ''} ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col ${panelClassName}`}>
         {!fullMobile && !fullscreenMobile && <div className="sm:hidden sheet-handle" />}
-        <div className={`flex items-center justify-between border-b border-neutral-800 bg-black ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : 'px-4 py-3 sm:px-5 sm:py-4 rounded-t-xl'}`}>
-          <h3 className={`font-bold text-white tracking-tight ${fullscreenMobile ? 'text-base sm:text-lg' : fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-neutral-800 text-neutral-400 transition-colors">
+        <div className={`flex items-center justify-between border-b border-[var(--w-separator)] bg-[var(--w-surface-el)] ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : 'px-4 py-3 sm:px-5 sm:py-4 rounded-t-xl'}`}>
+          <h3 className={`font-bold text-[var(--w-text)] tracking-tight ${fullscreenMobile ? 'text-base sm:text-lg' : fullMobile ? 'text-sm sm:text-lg' : 'text-base sm:text-lg'}`}>{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className={`flex-1 overflow-y-auto ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4' : fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-4' : 'px-3 py-3 sm:px-5 sm:py-4'}`}>{children}</div>
-        {footer && <div className={`border-t border-slate-100 bg-slate-50/70 sm:rounded-b-xl flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full pb-safe ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-3' : fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-3' : 'px-4 sm:px-5 py-3'}`}>{footer}</div>}
+        {footer && <div className={`border-t border-[var(--w-separator-l)] bg-[var(--w-surface-el)] sm:rounded-b-xl flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full pb-safe ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-3' : fullMobile ? 'px-2.5 py-2 sm:px-5 sm:py-3' : 'px-4 sm:px-5 py-3'}`}>{footer}</div>}
       </div>
     </div>
   );
@@ -101,22 +101,22 @@ export function DocPanel({ open, onClose, title, children, footer, fullscreen = 
         style={{ marginLeft: panelWidth ? `calc(100% - ${panelWidth}px - 8px)` : '0' }}
         onMouseDown={startResize}
       >
-        <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-teal-500 transition-colors" />
+        <GripVertical className="w-3 h-3 text-[var(--w-text-disabled)] group-hover:text-teal-500 transition-colors" />
       </div>
 
       <div
         ref={panelRef}
-        className="bg-white h-full flex flex-col shadow-2xl flex-1 w-full"
+        className="bg-[var(--w-surface)] h-full flex flex-col shadow-2xl flex-1 w-full"
         style={panelWidth ? { width: `${panelWidth}px`, flex: 'none' } : undefined}
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/80 flex-shrink-0">
-          <h3 className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--w-separator)] bg-[var(--w-surface-el)] flex-shrink-0">
+          <h3 className="text-base font-bold text-[var(--w-text)] tracking-tight">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/80 flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full">{footer}</div>}
+        {footer && <div className="px-5 py-3 border-t border-[var(--w-separator)] bg-[var(--w-surface-el)] flex items-center justify-end gap-2 flex-wrap [&>div.grid]:w-full">{footer}</div>}
       </div>
     </div>
   );
@@ -135,7 +135,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
         </button>
       </>}
     >
-      <p className="text-slate-600">{message}</p>
+      <p className="text-[var(--w-text-sec)]">{message}</p>
     </Modal>
   );
 }

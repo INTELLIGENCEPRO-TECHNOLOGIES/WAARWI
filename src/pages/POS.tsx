@@ -346,7 +346,7 @@ function POSLandingOpenMinimal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-gradient-to-br from-white via-neutral-50 to-neutral-200 overflow-hidden">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] overflow-hidden">
       {/* Top bar: clock left, logo right — aligned on all sizes */}
       <div className="flex items-center justify-between px-4 sm:px-10 pt-4 sm:pt-8">
         {/* Clock: time on left, day+date stacked on right at same height */}
@@ -394,7 +394,7 @@ function POSLandingOpenMinimal({
         </button>
         <button
           onClick={() => setQuickActionsOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-3.5 rounded-xl bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-700 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] quick-action-pulse"
+          className="flex items-center gap-1.5 px-4 py-3.5 rounded-xl bg-[var(--w-surface)] border border-[var(--w-separator)] hover:bg-[var(--w-hover)] text-[var(--w-text-sec)] text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] quick-action-pulse"
         >
           <Activity className="w-4 h-4" />
           <span className="hidden sm:inline">Actions rapides</span>
@@ -419,7 +419,7 @@ function POSLandingOpenMinimal({
                   type="number"
                   value={openingAmount || ''}
                   onChange={e => setOpeningAmount(Math.max(0, Number(e.target.value)))}
-                  className="flex-1 min-w-0 text-lg font-bold text-neutral-900 tabular-nums bg-transparent border-0 border-b border-neutral-200 focus:border-brand-500 focus:outline-none py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-input-ul flex-1 min-w-0 text-lg font-bold text-neutral-900 tabular-nums py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   placeholder="0"
                   min="0"
                   inputMode="numeric"
@@ -523,7 +523,7 @@ function POSLandingOpenInline({
                   type="number"
                   value={openingAmount || ''}
                   onChange={e => setOpeningAmount(Math.max(0, Number(e.target.value)))}
-                  className="flex-1 min-w-0 text-lg font-bold text-neutral-900 tabular-nums bg-transparent border-0 border-b border-neutral-200 focus:border-brand-500 focus:outline-none py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-input-ul flex-1 min-w-0 text-lg font-bold text-neutral-900 tabular-nums py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   placeholder="0"
                   min="0"
                   inputMode="numeric"
@@ -681,7 +681,7 @@ function POSLandingResume({
           </div>
 
           {/* Separator between rows */}
-          <div className="h-px bg-neutral-100 mt-6 mb-6" />
+          <div className="h-px bg-[var(--w-separator-l)] mt-6 mb-6" />
 
           {/* ── Row 2: Tickets récents + Accès rapide ── */}
           <div className="grid lg:grid-cols-[1fr_300px]">
@@ -2948,9 +2948,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // ─── Main POS screen ──────────────────────────────────────────────────────
 
   const CartPanel = (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-[var(--w-surface)]">
       {/* Header — compact */}
-      <div className="px-3 py-2 border-b border-neutral-200/70 bg-white flex items-center gap-2">
+      <div className="px-3 py-2 border-b border-[var(--w-separator)] bg-[var(--w-surface)] flex items-center gap-2">
         <span className="text-xs font-bold text-neutral-900 leading-none">{cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
         <div className="flex-1" />
         {heldCarts.length > 0 && (
@@ -2970,9 +2970,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       </div>
 
       {/* Customer selector — compact */}
-      <div className="px-3 py-1.5 border-b border-neutral-200/70 bg-white">
+      <div className="px-3 py-1.5 border-b border-[var(--w-separator)] bg-[var(--w-surface)]">
         <div className="flex items-stretch gap-1.5">
-          <div className="flex-1 min-w-0 [&>div>button]:rounded-none [&>div>button]:border-0 [&>div>button]:border-b [&>div>button]:border-neutral-200 [&>div>button]:py-2.5 [&>div>button]:px-0 [&>div>button]:text-sm [&>div>button]:shadow-none">
+          <div className="flex-1 min-w-0 [&>div>button]:rounded-none [&>div>button]:border-0 [&>div>button]:border-b [&>div>button]:border-[var(--w-field-border)] [&>div>button]:py-2.5 [&>div>button]:px-0 [&>div>button]:text-sm [&>div>button]:shadow-none">
             <SearchableSelect
               options={[{ value: '', label: 'Client comptoir' }, ...customers.map(c => ({ value: c.id, label: c.name, sublabel: (c as any).phone || undefined }))]}
               value={customer?.id || ''}
@@ -3016,7 +3016,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         ) : (
           <div className="divide-y divide-neutral-100">
             {cart.map(i => (
-              <div key={i.article_id} onClick={() => setSelectedLineId(i.article_id)} className={`group px-3 py-1.5 cursor-pointer transition-colors ${selectedLineId === i.article_id ? 'bg-brand-50/50 border-l-2 border-l-neutral-900' : 'hover:bg-neutral-50 border-l-2 border-l-transparent'}`}>
+              <div key={i.article_id} onClick={() => setSelectedLineId(i.article_id)} className={`group px-3 py-1.5 cursor-pointer transition-colors ${selectedLineId === i.article_id ? 'bg-[var(--w-active)] border-l-2 border-l-brand-600' : 'hover:bg-neutral-50 border-l-2 border-l-transparent'}`}>
                 <div className="flex items-start justify-between gap-1">
                   <div className="min-w-0 flex-1">
                     <div className="text-[11px] font-semibold text-neutral-900 leading-snug">{i.name}</div>
@@ -3040,7 +3040,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       </div>
 
       {/* Footer totals + pay button — MOBILE (unchanged) */}
-      <div className="lg:hidden border-t border-neutral-200 px-3 pt-2 pb-3 bg-white pb-safe space-y-1.5">
+      <div className="lg:hidden border-t border-[var(--w-separator)] px-3 pt-2 pb-3 bg-[var(--w-surface)] pb-safe space-y-1.5">
         <div className="flex items-center justify-between text-[11px]">
           <span className="text-neutral-500">Sous-total</span>
           <span className="font-semibold text-neutral-800 num">{formatFCFA(subtotal)}</span>
@@ -3084,7 +3084,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
       {/* Footer — DESKTOP with virtual numpad (Warwi branded) */}
       {cart.length > 0 && (
-        <div className="hidden lg:flex flex-col flex-shrink-0 border-t border-neutral-200 bg-white pb-1">
+        <div className="hidden lg:flex flex-col flex-shrink-0 border-t border-[var(--w-separator)] bg-[var(--w-surface)] pb-1">
           {/* Compact totals row */}
           <div className="px-3 py-1.5 space-y-0.5 shrink-0">
             <div className="flex items-center justify-between text-[11px]">
@@ -3417,14 +3417,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           </div>
         </div>
 
-        <aside className="hidden lg:flex w-[400px] xl:w-[440px] bg-white border-l border-neutral-200/70 flex-col shadow-[inset_8px_0_24px_-16px_rgb(15_23_42_/0.08)]">
+        <aside className="hidden lg:flex w-[400px] xl:w-[440px] bg-[var(--w-surface)] border-l border-[var(--w-separator)] flex-col shadow-[inset_8px_0_24px_-16px_rgb(15_23_42_/0.08)]">
           {CartPanel}
         </aside>
 
         {mobileCartOpen && (
           <div className="fixed inset-0 z-40 lg:hidden animate-fade-in">
-            <div className="absolute inset-0 bg-white flex flex-col overflow-hidden" style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
-              <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100 shrink-0">
+            <div className="absolute inset-0 bg-[var(--w-surface)] flex flex-col overflow-hidden" style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--w-separator-l)] shrink-0">
                 <span className="text-sm font-bold text-neutral-900">Panier</span>
                 <button onClick={() => setMobileCartOpen(false)} className="p-1.5 text-neutral-500 hover:text-neutral-800"><X className="w-5 h-5" /></button>
               </div>
@@ -3566,8 +3566,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     <div className="relative group">
                       <Search className="w-4 h-4 absolute left-0 top-1/2 -translate-y-1/2 text-neutral-400" />
                       <input autoFocus value={mvCustSearch} onChange={e => setMvCustSearch(e.target.value)}
-                        className="w-full pl-6 pr-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Rechercher un client…" />
-                      <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                        className="w-input-ul pl-6 text-[13px]" placeholder="Rechercher un client…" />
                     </div>
                     <div className="mt-1 max-h-32 overflow-y-auto divide-y divide-neutral-100">
                       {customers
@@ -3637,15 +3636,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
                   <input type="number" value={mvAmount || ''} onChange={e => setMvAmount(Math.max(0, Number(e.target.value)))}
-                    className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-2xl font-bold num text-neutral-900 placeholder:text-neutral-300" placeholder="0 FCFA" min={0} />
-                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                    className="w-input-ul text-2xl font-bold num" placeholder="0 FCFA" min={0} />
                 </div>
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</div>
                   {mvKind === 'expense' && expenseCats.length > 0 ? (
                     <div className="relative">
                       <select value={mvExpenseCat} onChange={e => setMvExpenseCat(e.target.value)}
-                        className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 appearance-none pr-5">
+                        className="w-select-ul py-2 text-[13px] pr-5">
                         <option value="">Sélectionner…</option>
                         {expenseCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
@@ -3653,9 +3651,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   ) : (
                     <input value={mvReason} onChange={e => setMvReason(e.target.value)}
-                      className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
+                      className="w-input-ul text-[13px]" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
                   )}
-                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
               </div>
 
@@ -3677,14 +3674,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence</div>
                   <input value={mvRef} onChange={e => setMvRef(e.target.value)}
-                    className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="N° pièce…" />
-                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                    className="w-input-ul text-[13px]" placeholder="N° pièce…" />
                 </div>
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Note</div>
                   <input value={mvNote} onChange={e => setMvNote(e.target.value)}
-                    className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Ajouter une note…" />
-                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                    className="w-input-ul text-[13px]" placeholder="Ajouter une note…" />
                 </div>
               </div>
             </div>
@@ -3750,15 +3745,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
                   <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
-                    autoFocus className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-lg font-bold num text-neutral-900 placeholder:text-neutral-400" placeholder="0" min={0} />
-                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                    autoFocus className="w-input-ul text-lg font-bold num" placeholder="0" min={0} />
                 </div>
 
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Libellé (optionnel)</div>
                   <input value={custPayLabel} onChange={e => setCustPayLabel(e.target.value)}
-                    className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Ex: Acompte travaux, location matériel…" />
-                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                    className="w-input-ul text-[13px]" placeholder="Ex: Acompte travaux, location matériel…" />
                 </div>
 
                 <div>
@@ -3775,8 +3768,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence (optionnel)</div>
-                  <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="N° bordereau, transaction…" />
-                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                  <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="w-input-ul text-[13px]" placeholder="N° bordereau, transaction…" />
                 </div>
               </div>
             ) : !custPayCustomer ? (
@@ -3786,9 +3778,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-0 top-1/2 -translate-y-1/2 text-neutral-400" />
                     <input autoFocus value={custPaySearch} onChange={e => setCustPaySearch(e.target.value)}
-                      className="w-full pl-6 pr-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Nom, téléphone…" />
+                      className="w-input-ul pl-6 text-[13px]" placeholder="Nom, téléphone…" />
                   </div>
-                  <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
                 </div>
                 <div className="mt-3 max-h-72 overflow-y-auto -mx-1">
                   {customers
@@ -3859,8 +3850,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     <div className="group">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
                       <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
-                        className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-lg font-bold num text-neutral-900 placeholder:text-neutral-400" placeholder="0" min={0} />
-                      <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                        className="w-input-ul text-lg font-bold num" placeholder="0" min={0} />
                     </div>
 
                     <div>
@@ -3877,8 +3867,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
                     <div className="group">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence (optionnel)</div>
-                      <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="N° bordereau, transaction…" />
-                      <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+                      <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="w-input-ul text-[13px]" placeholder="N° bordereau, transaction…" />
                     </div>
                   </>
                 )}
@@ -3998,8 +3987,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             {/* Search */}
             <div className="relative group mb-4">
               <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <input value={returnSearch} onChange={e => setReturnSearch(e.target.value)} placeholder="Rechercher un ticket de la session..." className="w-full pl-6 pr-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" autoFocus={desktopAutoFocus} />
-              <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+              <input value={returnSearch} onChange={e => setReturnSearch(e.target.value)} placeholder="Rechercher un ticket de la session..." className="w-input-ul pl-6 text-[13px]" autoFocus={desktopAutoFocus} />
             </div>
             {/* List */}
             {filteredReturnSales.length === 0 ? (
@@ -4570,7 +4558,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           {statsData.byMethod.map(m => {
                             const pct = totalMethods > 0 ? (m.amount / totalMethods * 100) : 0;
                             return (
-                              <div key={m.method_name} className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 border-b border-neutral-50 last:border-b-0">
+                              <div key={m.method_name} className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 border-b border-[var(--w-separator-l)] last:border-b-0">
                                 <span className="text-xs text-neutral-800 truncate">{m.method_name}</span>
                                 <span className="text-xs font-semibold text-neutral-900 num text-right">{formatFCFA(m.amount)}</span>
                                 <span className="text-xs text-neutral-500 num text-right w-12">{pct.toFixed(0)}%</span>
@@ -4606,7 +4594,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'reglements' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.invoicePayments.map((p, i) => (
                         <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
@@ -4644,7 +4632,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'encDirect' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'income').map((m, i) => (
                         <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
@@ -4679,7 +4667,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'acomptes' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'customer_prepayment').map((m, i) => (
                         <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
@@ -4714,7 +4702,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'depenses' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'refund').map((m, i) => (
                         <div key={`ref-${i}`} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
@@ -4755,7 +4743,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'retraits' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'customer_withdrawal').map((m, i) => (
                         <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
@@ -4787,7 +4775,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'prets' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'customer_loan').map((m, i) => (
                         <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
@@ -4819,7 +4807,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'vaultIn' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'vault_withdrawal').map((m, i) => (
                         <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
@@ -4851,7 +4839,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'vaultOut' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.movements.filter(m => m.kind === 'vault_deposit').map((m, i) => (
                         <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
                           <div className="min-w-0 flex-1">
@@ -4883,7 +4871,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     </div>
                   </button>
                   {statsExpanded === 'articles' && (
-                    <div className="pb-3 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {statsData.topArticles.map((a, i) => (
                         <div key={a.name} className="py-2 pl-1">
                           <div className="text-[11px] font-medium text-neutral-800 leading-snug">{a.name}</div>
@@ -4914,28 +4902,24 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         <div className="space-y-3">
           <div className="group">
             <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Type</div>
-            <select value={regType} onChange={e => setRegType(e.target.value as any)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 appearance-none">
+            <select value={regType} onChange={e => setRegType(e.target.value as any)} className="w-select-ul text-[13px]">
               <option value="manquant">Manquant (déficit)</option>
               <option value="excedent">Excédent (surplus)</option>
               <option value="depot">Dépôt</option>
               <option value="retrait">Retrait</option>
             </select>
-            <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
           </div>
           <div className="group">
             <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant (FCFA)</div>
-            <input type="number" value={regAmount || ''} onChange={e => setRegAmount(Number(e.target.value))} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" min="0" />
-            <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+            <input type="number" value={regAmount || ''} onChange={e => setRegAmount(Number(e.target.value))} className="w-input-ul text-[13px]" min="0" />
           </div>
           <div className="group">
             <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Motif *</div>
-            <input value={regReason} onChange={e => setRegReason(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" placeholder="Ex: Écart de monnaie, dépôt initial…" />
-            <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+            <input value={regReason} onChange={e => setRegReason(e.target.value)} className="w-input-ul text-[13px]" placeholder="Ex: Écart de monnaie, dépôt initial…" />
           </div>
           <div className="group">
             <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Note (optionnel)</div>
-            <input value={regNote} onChange={e => setRegNote(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-[13px] text-neutral-900 placeholder:text-neutral-400" />
-            <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+            <input value={regNote} onChange={e => setRegNote(e.target.value)} className="w-input-ul text-[13px]" />
           </div>
         </div>
       </Modal>
@@ -5116,8 +5100,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             )}
 
             <div className="group">
-              <textarea value={closingNote} onChange={e => setClosingNote(e.target.value)} className="w-full px-0 py-2 border-0 rounded-none bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm text-neutral-900 placeholder:text-neutral-400 resize-none" rows={4} placeholder="Note de clôture (optionnel)" />
-              <div className="h-px w-full bg-neutral-300 group-focus-within:bg-neutral-900 transition-colors" />
+              <textarea value={closingNote} onChange={e => setClosingNote(e.target.value)} className="w-input-ul text-sm resize-none" rows={4} placeholder="Note de clôture (optionnel)" />
             </div>
             <div className="flex items-start gap-2 py-2 text-[11px] text-amber-600">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -5427,14 +5410,14 @@ function PaymentScreen({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="h-px bg-neutral-100" />
+        <div className="h-px bg-[var(--w-separator-l)]" />
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
 
           {/* Customer + IPM compact banner */}
           {(customer || ipmInfo) && (
-            <div className="px-4 py-2 flex items-center gap-2 text-[11px] border-b border-neutral-50">
+            <div className="px-4 py-2 flex items-center gap-2 text-[11px] border-b border-[var(--w-separator-l)]">
               {customer && <><User className="w-3 h-3 text-neutral-400" /><span className="font-semibold text-neutral-700">{customer.name}</span>{
                 Number((customer as any).balance || 0) !== 0 && <span className="text-amber-700 font-bold num">({formatFCFA(Number((customer as any).balance || 0))})</span>
               }</>}

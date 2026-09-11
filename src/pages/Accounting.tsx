@@ -362,13 +362,13 @@ function JournalsTab() {
             )}
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <thead className="bg-[var(--w-surface-el)] text-xs uppercase text-slate-500">
                   <tr><th className="px-4 py-2 text-left">Compte</th><th className="px-4 py-2 text-left">Libellé</th><th className="px-4 py-2 text-right">Débit</th><th className="px-4 py-2 text-right">Crédit</th></tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {lines.map(l => <tr key={l.id}><td className="px-4 py-2.5 font-mono text-xs text-brand-700">{l.account_code}</td><td className="px-4 py-2.5 text-slate-600">{l.label || l.account_name}</td><td className="px-4 py-2.5 text-right font-mono text-xs">{l.debit > 0 ? Number(l.debit).toLocaleString('fr-FR') : '—'}</td><td className="px-4 py-2.5 text-right font-mono text-xs">{l.credit > 0 ? Number(l.credit).toLocaleString('fr-FR') : '—'}</td></tr>)}
                 </tbody>
-                <tfoot className="bg-slate-50 border-t border-slate-200 text-xs font-semibold">
+                <tfoot className="bg-[var(--w-surface-el)] border-t border-slate-200 text-xs font-semibold">
                   <tr><td className="px-4 py-2" colSpan={2}>TOTAL</td><td className="px-4 py-2 text-right font-mono">{Number(selected.total_debit).toLocaleString('fr-FR')}</td><td className="px-4 py-2 text-right font-mono">{Number(selected.total_credit).toLocaleString('fr-FR')}</td></tr>
                 </tfoot>
               </table>
@@ -514,7 +514,7 @@ function BalanceTab() {
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {data.map((r: any) => (
-                    <tr key={r.account_code} className="hover:bg-slate-50/60">
+                    <tr key={r.account_code} className="hover:bg-[var(--w-surface-el)]/60">
                       <td className="px-4 py-2.5 font-mono text-xs text-brand-700">{r.account_code}</td>
                       <td className="px-4 py-2.5 text-neutral-700">{r.account_name}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-xs">{Number(r.total_debit) > 0 ? Number(r.total_debit).toLocaleString('fr-FR') : '—'}</td>
@@ -637,7 +637,7 @@ function GrandLivreTab() {
                           <th className="px-4 py-2 text-right">Crédit</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-50">
+                      <tbody className="divide-y divide-[var(--w-separator-l)]">
                         {group.lines.map((l: any, idx: number) => (
                           <tr key={idx} className="hover:bg-neutral-50/40">
                             <td className="px-4 py-2 text-xs text-neutral-600">{formatDate(l.entry_date)}</td>
@@ -731,7 +731,7 @@ function TiersTab() {
                     <th className="px-3 py-2 text-right">Solde</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-50">
+                <tbody className="divide-y divide-[var(--w-separator-l)]">
                   {tiers.length === 0 && (
                     <tr><td colSpan={5} className="px-4 py-8 text-center text-neutral-400">Aucun tiers trouvé</td></tr>
                   )}
@@ -775,12 +775,12 @@ function TiersTab() {
                       <th className="px-3 py-2 text-right">Solde</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-50">
+                  <tbody className="divide-y divide-[var(--w-separator-l)]">
                     {extrait.length === 0 && (
                       <tr><td colSpan={6} className="px-4 py-8 text-center text-neutral-400">Aucune écriture</td></tr>
                     )}
                     {extrait.map((e: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-slate-50/40">
+                      <tr key={idx} className="hover:bg-[var(--w-surface-el)]/40">
                         <td className="px-3 py-2 text-xs text-neutral-600">{formatDate(e.entry_date)}</td>
                         <td className="px-3 py-2 font-mono text-xs text-neutral-500">{e.entry_number}</td>
                         <td className="px-3 py-2 text-neutral-700 text-xs">{e.label || '—'}</td>
@@ -871,7 +871,7 @@ function SearchTab() {
                   <th className="px-4 py-2 text-center">Statut</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-[var(--w-separator-l)]">
                 {results.map((r: any, idx: number) => (
                   <tr key={idx} onClick={() => setDetail(r)} className="hover:bg-neutral-50/60 cursor-pointer">
                     <td className="px-4 py-2 text-xs text-neutral-600">{formatDate(r.entry_date)}</td>

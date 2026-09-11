@@ -42,7 +42,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
                 setLocale(l.code as AppLocale);
                 setOpen(false);
               }}
-              className={`w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-slate-50 transition-colors ${
+              className={`w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-[var(--w-surface-el)] transition-colors ${
                 locale === l.code ? 'text-blue-600 font-semibold' : 'text-slate-700'
               }`}
             >

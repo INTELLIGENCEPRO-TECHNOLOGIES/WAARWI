@@ -238,16 +238,16 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
         ? `Commande ${documentNumber || ''}`
         : 'Nouvelle commande fournisseur';
 
-  const inputCls = 'w-full text-xs h-7 px-2 bg-white border border-neutral-300 rounded focus:border-neutral-500 focus:ring-1 focus:ring-neutral-200 outline-none transition-all';
-  const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-[#C9C9C9] focus:border-black outline-none transition-colors';
+  const inputCls = 'w-full text-xs h-7 px-2 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded focus:border-[var(--w-text-muted)] focus:ring-1 focus:ring-[var(--w-separator)] outline-none transition-all text-[var(--w-text)]';
+  const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-colors text-[var(--w-text)]';
 
   const selectedSupplier = suppliers.find(s => s.id === headerForm.supplier_id);
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-white animate-fade-in">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in">
 
       {/* ═══ Title bar ═══ */}
-      <div className="flex items-center justify-between px-4 h-11 border-b border-[#D4D4D4] flex-shrink-0">
+      <div className="flex items-center justify-between px-4 h-11 border-b border-[var(--w-separator)] flex-shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           {(onPrev || onNext) && (
             <div className="flex items-center gap-0.5 mr-1">
@@ -344,7 +344,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
       {/* ═══ Column headers ═══ */}
       {!isReceive && (
-        <div className="flex-shrink-0 border-b border-[#D4D4D4] bg-[#F8F8F8]">
+        <div className="flex-shrink-0 border-b border-[var(--w-separator)] bg-[var(--w-hover)]">
           <div className="flex items-center px-2 h-7">
             <div className="w-8 shrink-0" />
             {COLS.map(col => (
@@ -359,7 +359,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
       {/* ═══ Input row (create/edit only) ═══ */}
       {canEdit && (
-        <div className="flex-shrink-0 border-b-2 border-[#D4D4D4] bg-neutral-50/40">
+        <div className="flex-shrink-0 border-b-2 border-[var(--w-separator)] bg-[var(--w-hover)]">
           <div className="flex items-center px-2 py-1">
             <div className="w-8 shrink-0 text-center">
               {editingIdx !== null ? (
@@ -476,9 +476,9 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
                 <div
                   key={vIdx}
                   onClick={() => { if (canEdit && !isEditingThis) startEdit(vIdx); }}
-                  className={`flex items-center px-2 border-b border-[#D4D4D4] transition-colors group ${
+                  className={`flex items-center px-2 border-b border-[var(--w-separator)] transition-colors group ${
                     canEdit ? 'cursor-pointer' : ''
-                  } ${isEditingThis ? 'bg-amber-50/50' : vIdx % 2 === 1 ? 'bg-[#FAFAFA]' : ''} ${canEdit && !isEditingThis ? 'hover:bg-neutral-50' : ''}`}
+                  } ${isEditingThis ? 'bg-amber-50/50' : vIdx % 2 === 1 ? 'bg-[var(--w-hover)]' : ''} ${canEdit && !isEditingThis ? 'hover:bg-[var(--w-hover)]' : ''}`}
                   style={{ height: '28px' }}
                 >
                   <div className="w-8 shrink-0 text-center">
@@ -519,7 +519,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
       </div>
 
       {/* ═══ Footer ═══ */}
-      <div className="border-t border-[#D4D4D4] bg-white px-4 py-2 flex flex-col gap-1 flex-shrink-0">
+      <div className="border-t border-[var(--w-separator)] bg-[var(--w-surface)] px-4 py-2 flex flex-col gap-1 flex-shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-neutral-500 tabular-nums">
             {validItems.length} ligne{validItems.length !== 1 ? 's' : ''}
@@ -715,7 +715,7 @@ function ReceiveRows({ items, articles, receiveQty, setReceiveQty, receiveLotDat
                       ...p,
                       [itemId]: { ...(p[itemId] || { batch_number: '', expiry_date: '' }), batch_number: e.target.value },
                     }))}
-                    className="w-full text-xs h-7 px-2 bg-white border border-neutral-300 rounded focus:border-neutral-500 outline-none transition-all mt-0.5"
+                    className="w-input-ul text-xs h-7 px-2 mt-0.5"
                   />
                 </div>
                 <div className="flex-1 max-w-[200px]">
@@ -727,7 +727,7 @@ function ReceiveRows({ items, articles, receiveQty, setReceiveQty, receiveLotDat
                       ...p,
                       [itemId]: { ...(p[itemId] || { batch_number: '', expiry_date: '' }), expiry_date: e.target.value },
                     }))}
-                    className="w-full text-xs h-7 px-2 bg-white border border-neutral-300 rounded focus:border-neutral-500 outline-none transition-all mt-0.5"
+                    className="w-input-ul text-xs h-7 px-2 mt-0.5"
                   />
                 </div>
               </div>
@@ -865,7 +865,7 @@ function ArticleSearchModal({ articles, initialQuery, onSelect, onClose }: {
                 key={a.id}
                 onClick={() => setHighlighted(i)}
                 onDoubleClick={() => onSelect(a)}
-                className={`flex items-center px-4 border-b border-neutral-50 cursor-pointer transition-colors ${
+                className={`flex items-center px-4 border-b border-[var(--w-separator-l)] cursor-pointer transition-colors ${
                   i === highlighted ? 'bg-neutral-100' : 'hover:bg-neutral-50'
                 }`}
                 style={{ height: '30px' }}
@@ -956,7 +956,7 @@ function SupplierSearchDropdown({ suppliers, value, onSelect }: {
           onFocus={() => { setQuery(''); setOpen(true); }}
           onKeyDown={handleKeyDown}
           placeholder="Rechercher fournisseur..."
-          className="w-full text-xs h-8 pl-8 pr-2 bg-transparent border-b border-[#C9C9C9] focus:border-black outline-none transition-colors"
+          className="w-full text-xs h-8 pl-8 pr-2 bg-transparent border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-colors text-[var(--w-text)]"
           autoComplete="off"
         />
       </div>

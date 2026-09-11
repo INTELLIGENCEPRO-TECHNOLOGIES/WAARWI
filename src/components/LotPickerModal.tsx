@@ -120,7 +120,7 @@ export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selec
             const shortage = s.needed - totalAssigned;
             return (
               <div key={s.article_id} className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="px-3 py-2 bg-[var(--w-surface-el)] border-b border-slate-200 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-slate-800">{s.article_name}</span>
                     <span className="text-[10px] text-slate-500 ml-2">Besoin: {s.needed}</span>
@@ -135,7 +135,7 @@ export function LotPickerModal({ open, onClose, items, onConfirm, title = 'Selec
                     <AlertTriangle className="w-3.5 h-3.5" /> Aucun lot disponible pour cet article
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-[var(--w-separator)]">
                     {s.assignments.map((a, li) => {
                       const isExpired = a.expiry_date && a.expiry_date <= today;
                       return (

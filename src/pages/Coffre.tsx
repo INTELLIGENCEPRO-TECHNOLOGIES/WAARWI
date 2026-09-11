@@ -592,7 +592,7 @@ export function Coffre() {
         <div className="space-y-3 pt-2">
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Solde initial</label>
-            <input type="number" min={0} value={initAmount} onChange={e => setInitAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
+            <input type="number" min={0} value={initAmount} onChange={e => setInitAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
           </div>
         </div>
       </Modal>
@@ -611,15 +611,15 @@ export function Coffre() {
         <div className="space-y-3 pt-2">
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
-            <input type="number" min={0} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
+            <input type="number" min={0} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Date effective</label>
-            <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
+            <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} className="w-input-ul py-1.5 text-sm" />
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Provenance / référence (facultatif)</label>
-            <input value={depositRef} onChange={e => setDepositRef(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="Ex. apport propriétaire" />
+            <input value={depositRef} onChange={e => setDepositRef(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="Ex. apport propriétaire" />
           </div>
         </div>
       </Modal>
@@ -639,11 +639,11 @@ export function Coffre() {
           <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
-            <input type="number" min={0} value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
+            <input type="number" min={0} value={transferAmount} onChange={e => setTransferAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
-            <input value={transferRef} onChange={e => setTransferRef(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
+            <input value={transferRef} onChange={e => setTransferRef(e.target.value)} className="w-input-ul py-1.5 text-sm" />
           </div>
         </div>
       </Modal>
@@ -663,19 +663,19 @@ export function Coffre() {
           <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
-            <input type="number" min={0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
+            <input type="number" min={0} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Date effective</label>
-            <input type="date" value={withdrawDate} onChange={e => setWithdrawDate(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
+            <input type="date" value={withdrawDate} onChange={e => setWithdrawDate(e.target.value)} className="w-input-ul py-1.5 text-sm" />
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Motif ou destination</label>
-            <input value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="Ex. dépôt à la banque" />
+            <input value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="Ex. dépôt à la banque" />
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
-            <input value={withdrawRef} onChange={e => setWithdrawRef(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
+            <input value={withdrawRef} onChange={e => setWithdrawRef(e.target.value)} className="w-input-ul py-1.5 text-sm" />
           </div>
         </div>
       </Modal>
@@ -695,7 +695,7 @@ export function Coffre() {
           <p className="text-xs text-neutral-500">Solde disponible : <span className="font-semibold text-neutral-900">{formatFCFA(balance)}</span></p>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Fournisseur</label>
-            <select value={paySupplier} onChange={e => setPaySupplier(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm">
+            <select value={paySupplier} onChange={e => setPaySupplier(e.target.value)} className="w-input-ul py-1.5 text-sm">
               <option value="">Sélectionner…</option>
               {suppliers.map(s => (
                 <option key={s.id} value={s.id}>{s.name}{s.balance ? ` — ${formatFCFA(s.balance)}` : ''}</option>
@@ -704,17 +704,17 @@ export function Coffre() {
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Mode de paiement</label>
-            <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm">
+            <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="w-input-ul py-1.5 text-sm">
               {methods.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Montant</label>
-            <input type="number" min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" placeholder="0" />
+            <input type="number" min={0} value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-input-ul py-1.5 text-sm" placeholder="0" />
           </div>
           <div>
             <label className="text-[10px] text-neutral-400 leading-none mb-1 block">Référence (facultatif)</label>
-            <input value={payRef} onChange={e => setPayRef(e.target.value)} className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-800 focus:outline-none py-1.5 text-sm" />
+            <input value={payRef} onChange={e => setPayRef(e.target.value)} className="w-input-ul py-1.5 text-sm" />
           </div>
         </div>
       </Modal>

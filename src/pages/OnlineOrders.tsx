@@ -315,9 +315,8 @@ export function OnlineOrders() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="N°, nom ou téléphone…"
-              className="bare-input w-full text-sm py-1.5"
+              className="w-input-ul w-full text-sm py-1.5"
             />
-            <div className="h-px bg-neutral-200 mt-1" />
           </div>
           {query && (
             <button onClick={() => setQuery('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">

@@ -77,7 +77,7 @@ export function PremiumDateRangePicker({ open, onClose, from, to, onApply, extra
                 className={`relative aspect-square flex items-center justify-center text-[11px] font-semibold rounded-md transition-all
                   ${isEnd ? 'bg-black text-white scale-105 z-10' : ''}
                   ${inRange ? 'bg-slate-100 text-slate-900 rounded-none' : ''}
-                  ${!isEnd && !inRange ? 'text-slate-700 hover:bg-slate-50' : ''}
+                  ${!isEnd && !inRange ? 'text-slate-700 hover:bg-[var(--w-surface-el)]' : ''}
                   ${isToday && !isEnd && !inRange ? 'ring-1 ring-slate-300 font-bold' : ''}
                   ${fromD && isEnd && toD && d < toD ? 'rounded-r-none' : ''}
                   ${toD && isEnd && fromD && d > fromD ? 'rounded-l-none' : ''}

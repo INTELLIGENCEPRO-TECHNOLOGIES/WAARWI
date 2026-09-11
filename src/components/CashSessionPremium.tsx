@@ -185,7 +185,7 @@ export function RecentCashSessionsList({
       )}
 
       {!loading && !errorMsg && items && items.length === 0 && (
-        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/60 px-3 py-2.5 flex items-center gap-2 text-slate-500">
+        <div className="rounded-md border border-dashed border-slate-300 bg-[var(--w-surface-el)]/60 px-3 py-2.5 flex items-center gap-2 text-slate-500">
           <History className="w-3.5 h-3.5 shrink-0" />
           <p className="text-[11px] font-semibold">Aucune session récente</p>
         </div>

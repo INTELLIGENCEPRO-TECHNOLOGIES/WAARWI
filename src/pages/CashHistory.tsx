@@ -259,8 +259,7 @@ export function CashHistory() {
         <div className="flex items-center gap-2">
           <Search className="w-4 h-4 text-neutral-400 shrink-0" />
           <div className="flex-1 min-w-0">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="bare-input w-full text-sm py-1.5" />
-            <div className="h-px bg-neutral-200 mt-1" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher…" className="w-input-ul w-full text-sm py-1.5" />
           </div>
           {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-4 h-4" /></button>}
           <button onClick={() => setPickerOpen(true)} className={`shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-colors ${dateFrom || dateTo ? 'text-brand-700' : 'text-neutral-500 hover:text-neutral-700'}`}>
@@ -576,7 +575,7 @@ export function CashHistory() {
                   </div>
                 </button>
                 {detailExpanded === 'reglements' && (
-                  <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="pb-2 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                     {detail.invoicePayments.map(p => (
                       <div key={p.id} className="flex items-center justify-between py-1.5 pl-6 gap-2">
                         <div className="min-w-0 flex-1">
@@ -620,7 +619,7 @@ export function CashHistory() {
                     </div>
                   </button>
                   {detailExpanded === id && (
-                    <div className="pb-2 max-h-72 overflow-y-auto divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="pb-2 max-h-72 overflow-y-auto divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                       {items.map(m => (
                         <div key={m.id} className="flex items-center justify-between py-1.5 pl-6 gap-2">
                           <div className="min-w-0 flex-1">
@@ -662,7 +661,7 @@ export function CashHistory() {
                 </div>
               </button>
               {detailExpanded === 'ventes' && (
-                <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="pb-2 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                   {detail.sales.length === 0 ? (
                     <div className="py-3 text-center text-xs text-neutral-400">Aucune vente.</div>
                   ) : detail.sales.map(s => (
@@ -691,7 +690,7 @@ export function CashHistory() {
                   <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 shrink-0 ${detailExpanded === 'controle' ? 'rotate-90' : ''}`} />
                 </button>
                 {detailExpanded === 'controle' && (
-                  <div className="pb-2 divide-y divide-neutral-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="pb-2 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
                     {Number(detail.session.opening_amount) > 0 && (
                       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 py-1.5 pl-6 text-xs">
                         <span className="text-neutral-500">Fond d'ouverture</span>

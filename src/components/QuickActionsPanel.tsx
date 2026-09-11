@@ -180,7 +180,7 @@ export function QuickActionsPanel({ onClose }: { onClose: () => void }) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Rechercher une action…"
-              className="bare-input w-full text-sm py-1"
+              className="w-input-ul w-full text-sm py-1"
             />
             {search && (
               <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600">
@@ -188,7 +188,6 @@ export function QuickActionsPanel({ onClose }: { onClose: () => void }) {
               </button>
             )}
           </div>
-          <div className="h-px bg-neutral-200 mt-1" />
         </div>
 
         {/* Content */}
@@ -258,7 +257,7 @@ export function QuickActionsPanel({ onClose }: { onClose: () => void }) {
             <>
               {/* Favorites */}
               {!search && favoriteActions.length > 0 && (
-                <div className="-mx-4 -mt-3 px-4 py-4 bg-gradient-to-br from-white via-neutral-50 to-neutral-200">
+                <div className="-mx-4 -mt-3 px-4 py-4 bg-[var(--w-hover)]">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Mes actions</div>
                   <div className="grid grid-cols-2 gap-1">
                     {favoriteActions.slice(0, 8).map(a => {

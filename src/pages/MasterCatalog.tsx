@@ -420,9 +420,8 @@ export function MasterCatalog() {
             value={searchInput}
             onChange={e => handleSearchInput(e.target.value)}
             placeholder="Désignation, marque, référence…"
-            className="bare-input w-full text-sm py-1.5"
+            className="w-input-ul w-full text-sm py-1.5"
           />
-          <div className="h-px bg-neutral-200 mt-1" />
         </div>
         {search && (
           <button onClick={() => { setSearch(''); setSearchInput(''); }} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>
@@ -464,7 +463,7 @@ export function MasterCatalog() {
           {lotOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setLotOpen(false)} />
-              <div className="absolute top-full left-0 mt-1 z-50 bg-white rounded-xl shadow-premium border border-slate-100 py-1 min-w-[150px] animate-scale-in origin-top-left">
+              <div className="absolute top-full left-0 mt-1 z-50 bg-white rounded-xl shadow-premium border border-[var(--w-separator)] py-1 min-w-[150px] animate-scale-in origin-top-left">
                 {[100, 200, 300, 400, 500].map(n => (
                   <button
                     key={n}
@@ -534,7 +533,7 @@ export function MasterCatalog() {
         <>
         {/* Desktop: thin list with header */}
         <div className="hidden md:block">
-          <div className="grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-neutral-200 sticky top-[52px] z-10 bg-slate-50/95 backdrop-blur-sm">
+          <div className="grid grid-cols-[28px_1fr_120px_140px_100px_90px_36px] gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-neutral-200 sticky top-[52px] z-10 bg-[var(--w-surface-el)]/95 backdrop-blur-sm">
             <div></div>
             <div>Désignation</div>
             <div>Marque</div>
@@ -671,7 +670,7 @@ export function MasterCatalog() {
             <div className="mt-1 grid grid-cols-3 gap-1.5">
               {(['all', 'available', 'imported'] as FilterStatus[]).map(s => (
                 <button key={s} onClick={() => setStatusFilter(s)}
-                  className={`px-2 py-2 rounded-xl text-[11px] font-semibold transition ${statusFilter === s ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}>
+                  className={`px-2 py-2 rounded-xl text-[11px] font-semibold transition ${statusFilter === s ? 'bg-brand-600 text-white' : 'bg-[var(--w-surface-el)] text-slate-600 hover:bg-slate-100'}`}>
                   {s === 'all' ? 'Tous' : s === 'available' ? 'Disponibles' : 'Déjà importés'}
                 </button>
               ))}
@@ -742,7 +741,7 @@ export function MasterCatalog() {
                 <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Importés</div>
                 <div className="text-2xl font-bold text-emerald-800 num mt-1">{lastResult.imported}</div>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="p-3 rounded-xl bg-[var(--w-surface-el)] border border-slate-200">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ignorés (doublons)</div>
                 <div className="text-2xl font-bold text-slate-700 num mt-1">{lastResult.skipped}</div>
               </div>

@@ -200,7 +200,7 @@ export function MobileBillingWizard({
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Rechercher un article..."
-                className="w-full h-11 pl-6 pr-4 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none bg-transparent border-b border-neutral-300 focus:border-neutral-500 transition-colors"
+                className="w-input-ul h-11 pl-6 pr-4 text-sm"
               />
             </div>
           </div>
@@ -270,7 +270,7 @@ function Step1Header({ fields, values, onChange, onCreateCustomer }: {
   onChange: (key: string, val: string) => void;
   onCreateCustomer?: (name: string) => void;
 }) {
-  const inputCls = 'w-full h-11 px-1 bg-transparent border-b border-neutral-300 focus:border-neutral-500 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none transition-colors';
+  const inputCls = 'w-input-ul h-11 px-1 text-sm';
   return (
     <div className="px-4 py-4 space-y-2.5">
       {fields.map(f => (

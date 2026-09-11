@@ -894,7 +894,7 @@ export function Stock() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Page Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-2 pt-3 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-1.5 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-2 pt-3 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-surface)] space-y-1.5 border-b border-neutral-100">
 
         {/* Row 1: Title + stock value + view toggle + More menu */}
         <div className="flex items-center gap-2">
@@ -1048,7 +1048,7 @@ export function Stock() {
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => setCatPickerOpen(true)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${categoryFilter ? 'bg-blue-50 text-blue-700' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100'}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${categoryFilter ? 'bg-[var(--w-active)] text-[var(--w-text)]' : 'text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100'}`}
               >
                 <Filter className="w-3.5 h-3.5" />
                 {categoryFilter ? (categories.find(c => c.id === categoryFilter)?.name || 'Catégorie') : 'Catégorie'}
@@ -1192,7 +1192,7 @@ export function Stock() {
           />
           {/* Pagination (list mode) */}
           {totalCount > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-2 py-3 border-t border-slate-100">
+            <div className="flex items-center justify-between px-2 py-3 border-t border-[var(--w-separator)]">
               <span className="text-[11px] text-slate-500">
                 {stkPage * PAGE_SIZE + 1}–{Math.min((stkPage + 1) * PAGE_SIZE, totalCount)} sur {totalCount} articles
               </span>
@@ -1244,7 +1244,7 @@ export function Stock() {
           </div>
           {/* Pagination */}
           {totalCount > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-2 py-3 border-t border-slate-100">
+            <div className="flex items-center justify-between px-2 py-3 border-t border-[var(--w-separator)]">
               <span className="text-[11px] text-slate-500">
                 {stkPage * PAGE_SIZE + 1}–{Math.min((stkPage + 1) * PAGE_SIZE, totalCount)} sur {totalCount} articles
               </span>
@@ -1335,7 +1335,7 @@ export function Stock() {
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
             <span className="shrink-0 text-neutral-500 num">{mvTotalCount} mouvement{mvTotalCount > 1 ? 's' : ''}</span>
             {movementSearch && (
-              <span className="shrink-0 text-blue-600 inline-flex items-center gap-1 normal-case tracking-normal text-[10px]">
+              <span className="shrink-0 text-[var(--w-text-sec)] inline-flex items-center gap-1 normal-case tracking-normal text-[10px]">
                 Filtre: "{movementSearch}"
               </span>
             )}
@@ -1627,7 +1627,7 @@ export function Stock() {
                   <select
                     value={adjSiteId}
                     onChange={e => setAdjSiteId(e.target.value)}
-                    className="bare-input text-sm py-2 w-full pr-6"
+                    className="w-select-ul text-sm py-2 w-full pr-6"
                   >
                     {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
                     {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
@@ -1636,7 +1636,6 @@ export function Stock() {
                   </select>
                   <ChevronDown className="w-4 h-4 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
-                <div className="h-px bg-neutral-200 mt-1" />
               </div>
             )}
 
@@ -1649,14 +1648,12 @@ export function Stock() {
                 placeholder="Rechercher un article..."
                 noBorder
               />
-              <div className="h-px bg-neutral-200 mt-1" />
             </div>
 
             {adjMode === 'inventory' ? (
               <div>
                 <label className="label">Quantité réelle comptée</label>
-                <input type="number" min={0} value={adjInventoryQty} onChange={e => setAdjInventoryQty(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-lg font-semibold py-2" autoFocus={desktopAutoFocus} />
-                <div className="h-px bg-neutral-200 mt-1" />
+                <input type="number" min={0} value={adjInventoryQty} onChange={e => setAdjInventoryQty(e.target.value === '' ? '' : Number(e.target.value))} className="w-input-ul text-lg font-semibold py-2" autoFocus={desktopAutoFocus} />
                 {adjInventoryQty !== '' && <p className="text-xs mt-1 text-slate-500">Écart : {Number(adjInventoryQty) - adjRow.quantity > 0 ? '+' : ''}{Number(adjInventoryQty) - adjRow.quantity}</p>}
               </div>
             ) : adjMode === 'transfer' ? (
@@ -1667,7 +1664,7 @@ export function Stock() {
                     <select
                       value={adjSiteId}
                       onChange={e => setAdjSiteId(e.target.value)}
-                      className="bare-input text-sm py-2 w-full pr-6"
+                      className="w-select-ul text-sm py-2 w-full pr-6"
                     >
                       {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
                       {depots.filter(d => d.parent_site_id === currentSite?.id).map(d => (
@@ -1676,7 +1673,6 @@ export function Stock() {
                     </select>
                     <ChevronDown className="w-4 h-4 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
-                  <div className="h-px bg-neutral-200 mt-1" />
                 </div>
                 <div>
                   <label className="label">Destination</label>
@@ -1690,45 +1686,38 @@ export function Stock() {
                     searchable={false}
                     noBorder
                   />
-                  <div className="h-px bg-neutral-200 mt-1" />
                 </div>
                 <div>
                   <label className="label">Quantité à transférer</label>
-                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-sm py-2" autoFocus={desktopAutoFocus} />
-                  <div className="h-px bg-neutral-200 mt-1" />
+                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="w-input-ul text-sm py-2" autoFocus={desktopAutoFocus} />
                 </div>
               </>
             ) : (
               <>
                 <div>
                   <label className="label">Quantité</label>
-                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-lg font-semibold py-2" autoFocus={desktopAutoFocus} />
-                  <div className="h-px bg-neutral-200 mt-1" />
+                  <input type="number" min={1} value={adjQty} onChange={e => setAdjQty(e.target.value === '' ? '' : Number(e.target.value))} className="w-input-ul text-lg font-semibold py-2" autoFocus={desktopAutoFocus} />
                 </div>
                 {adjMode === 'in' && stockMethod === 'lot' && (
                   <>
                     <div>
                       <label className="label">N° de lot *</label>
-                      <input value={adjBatchNumber} onChange={e => setAdjBatchNumber(e.target.value)} className="bare-input text-sm py-2" placeholder="Ex: LOT-2026-001" />
-                      <div className="h-px bg-neutral-200 mt-1" />
+                      <input value={adjBatchNumber} onChange={e => setAdjBatchNumber(e.target.value)} className="w-input-ul text-sm py-2" placeholder="Ex: LOT-2026-001" />
                     </div>
                     <div>
                       <label className="label">Date de péremption</label>
-                      <input type="date" value={adjExpiryDate} onChange={e => setAdjExpiryDate(e.target.value)} className="bare-input text-sm py-2" />
-                      <div className="h-px bg-neutral-200 mt-1" />
+                      <input type="date" value={adjExpiryDate} onChange={e => setAdjExpiryDate(e.target.value)} className="w-input-ul text-sm py-2" />
                     </div>
                     <div>
                       <label className="label">Prix d'achat (lot)</label>
-                      <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-sm py-2" placeholder="FCFA" />
-                      <div className="h-px bg-neutral-200 mt-1" />
+                      <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="w-input-ul text-sm py-2" placeholder="FCFA" />
                     </div>
                   </>
                 )}
                 {adjMode === 'in' && stockMethod === 'cmup' && (
                   <div>
                     <label className="label">Prix d'achat (cette entrée)</label>
-                    <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bare-input text-sm py-2" placeholder="FCFA" />
-                    <div className="h-px bg-neutral-200 mt-1" />
+                    <input type="number" min={0} value={adjPurchasePrice} onChange={e => setAdjPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="w-input-ul text-sm py-2" placeholder="FCFA" />
                     <p className="text-[10px] text-slate-500 mt-1">Le CMUP sera recalculé automatiquement</p>
                   </div>
                 )}
@@ -1737,8 +1726,7 @@ export function Stock() {
 
             <div>
               <label className="label">Note / motif</label>
-              <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="bare-input text-sm py-2" placeholder="Achat, retour, perte, correction…" />
-              <div className="h-px bg-neutral-200 mt-1" />
+              <input value={adjNote} onChange={e => setAdjNote(e.target.value)} className="w-input-ul text-sm py-2" placeholder="Achat, retour, perte, correction…" />
             </div>
           </div>
         )}
@@ -1802,7 +1790,7 @@ export function Stock() {
           {bulkDoneItems.length <= 10 && (
             <div className="text-left mt-3 space-y-1 max-h-40 overflow-y-auto">
               {bulkDoneItems.map((item, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-50 text-[11px]">
+                <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[var(--w-surface-el)] text-[11px]">
                   <span className="font-semibold text-slate-800 truncate mr-2">{item.name}</span>
                   <span className="shrink-0 font-bold text-slate-600 num">{item.quantity}</span>
                 </div>
@@ -1963,8 +1951,7 @@ export function Stock() {
             </div>
             <div>
               <label className="label">Note du document</label>
-              <input value={docEditNote} onChange={e => setDocEditNote(e.target.value)} className="bare-input text-sm py-2" placeholder="Note globale" />
-              <div className="h-px bg-neutral-200 mt-1" />
+              <input value={docEditNote} onChange={e => setDocEditNote(e.target.value)} className="w-input-ul text-sm py-2" placeholder="Note globale" />
             </div>
             <div className="divide-y divide-neutral-100">
               {docEditEntries.map((entry, idx) => (
@@ -2102,7 +2089,7 @@ export function Stock() {
                 Cette opération sera effectuée dans :
               </p>
             </div>
-            <div className="h-px bg-neutral-200 my-3" />
+            <div className="h-px bg-[var(--w-separator)] my-3" />
             <div className="text-center">
               <p className="text-base font-bold text-neutral-900">{pendingSiteChange.newSiteName}</p>
               {pendingSiteChange.isDepot && currentSite && (
@@ -2111,7 +2098,7 @@ export function Stock() {
                 </p>
               )}
             </div>
-            <div className="h-px bg-neutral-200 my-3" />
+            <div className="h-px bg-[var(--w-separator)] my-3" />
             <p className="text-[11px] text-neutral-500 text-center">
               Les saisies en cours seront réinitialisées.
             </p>
@@ -2202,7 +2189,7 @@ function LotsView({ lots, stockMethod }: { lots: LotRow[]; stockMethod: StockMet
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Rechercher lot, article..."
-          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
+          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-[var(--w-surface)] border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400"
         />
         <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">{filtered.length} lot{filtered.length > 1 ? 's' : ''}</span>
       </div>
@@ -2221,7 +2208,7 @@ function LotsView({ lots, stockMethod }: { lots: LotRow[]; stockMethod: StockMet
             const isExpired = l.expiry_date && l.expiry_date <= today;
             const isSoon = l.expiry_date && !isExpired && l.expiry_date <= soon;
             return (
-              <div key={l.id} className={`p-3 rounded-xl border bg-white ${isExpired ? 'border-red-200 bg-red-50/50' : isSoon ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'}`}>
+              <div key={l.id} className={`p-3 rounded-xl border bg-[var(--w-surface)] ${isExpired ? 'border-red-200 bg-red-50/50' : isSoon ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'}`}>
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -2496,7 +2483,7 @@ function StockListEditView({
                   <select
                     value={listSourceSite || currentSite?.id || ''}
                     onChange={e => setListSourceSite(e.target.value)}
-                    className="bare-input text-xs font-semibold py-1 w-full pr-5"
+                    className="w-select-ul text-xs font-semibold py-1 w-full pr-5"
                   >
                     {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
                     {ownDepots.map((d: any) => (
@@ -2505,7 +2492,7 @@ function StockListEditView({
                   </select>
                   <ChevronDown className="w-3 h-3 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
-                <div className="h-px bg-neutral-200 flex-1" />
+                <div className="h-px bg-[var(--w-separator)] flex-1" />
               </div>
             )}
             {isTransfer && (
@@ -2515,7 +2502,7 @@ function StockListEditView({
                   <select
                     value={listTransferTarget}
                     onChange={e => setListTransferTarget(e.target.value)}
-                    className="bare-input text-xs font-semibold py-1 w-full pr-5"
+                    className="w-select-ul text-xs font-semibold py-1 w-full pr-5"
                   >
                     <option value="">-- Choisir --</option>
                     {(() => {
@@ -2539,7 +2526,7 @@ function StockListEditView({
                   </select>
                   <ChevronDown className="w-3 h-3 text-neutral-400 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
-                <div className="h-px bg-neutral-200 flex-1" />
+                <div className="h-px bg-[var(--w-separator)] flex-1" />
               </div>
             )}
             <button onClick={saveBulk} disabled={editCount === 0 || listSaving} className="shrink-0 inline-flex items-center gap-1.5 text-[12px] font-semibold text-neutral-700 hover:text-brand-700 hover:bg-neutral-100 rounded-lg px-2 py-1.5 transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed" title={`Enregistrer${editCount > 0 ? ` (${editCount})` : ''}`}>
@@ -2553,7 +2540,7 @@ function StockListEditView({
       <div className="flex-1 min-h-0 overflow-auto">
         <table className="w-full text-left">
           <thead className="sticky top-0 z-[5]">
-            <tr className="border-b border-slate-100 bg-slate-50">
+            <tr className="border-b border-[var(--w-separator)] bg-[var(--w-surface-el)]">
               <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 w-[30%] cursor-pointer select-none hover:text-brand-700" onClick={() => onSort('name')}>
                 <span className="inline-flex items-center gap-0.5">Article {sortCol === 'name' && (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</span>
               </th>
@@ -2578,7 +2565,7 @@ function StockListEditView({
                 const out = displayQty <= 0;
                 const low = !out && displayQty <= r.stock_min;
                 return (
-                  <tr key={r.article_id} className={`border-b border-slate-50 transition-colors ${hasValue ? 'bg-brand-50/30' : 'hover:bg-slate-50/50'}`}>
+                  <tr key={r.article_id} className={`border-b border-[var(--w-separator-l)] transition-colors ${hasValue ? 'bg-brand-50/30' : 'hover:bg-[var(--w-surface-el)]/50'}`}>
                     <td className="px-3 py-1.5 w-[30%]">
                       <div className="text-[11px] font-semibold text-neutral-900 leading-tight">{r.name}</div>
                     </td>
@@ -2596,7 +2583,7 @@ function StockListEditView({
                         value={edit?.qty ?? ''}
                         onChange={e => updateEdit(r.article_id, e.target.value === '' ? '' : Number(e.target.value), edit?.note, edit?.lot_number)}
                         onKeyDown={e => handleKeyDown(e, idx)}
-                        className="w-full text-center text-xs font-bold num bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-900 outline-none pb-1 pt-1 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-input-ul text-center text-xs font-bold num pb-1 pt-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
                     {lotMode && listEditMode === 'in' && (
@@ -2606,10 +2593,10 @@ function StockListEditView({
                           placeholder="LOT-…"
                           value={edit?.lot_number ?? ''}
                           onChange={e => updateEdit(r.article_id, edit?.qty ?? '', edit?.note, e.target.value)}
-                          className={`w-full text-[10px] bg-transparent border-0 border-b outline-none pb-1 pt-1 transition-colors ${
+                          className={`w-input-ul text-[10px] pb-1 pt-1 ${
                             hasValue && !edit?.lot_number?.trim()
-                              ? 'border-red-400 focus:border-red-500'
-                              : 'border-neutral-200 focus:border-neutral-900'
+                              ? '!border-b-red-400 focus:!border-b-red-500'
+                              : ''
                           }`}
                         />
                       </td>
@@ -2620,7 +2607,7 @@ function StockListEditView({
                         placeholder="..."
                         value={edit?.note ?? ''}
                         onChange={e => updateEdit(r.article_id, edit?.qty ?? '', e.target.value, edit?.lot_number)}
-                        className="w-full text-[10px] bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-900 outline-none pb-1 pt-1 transition-colors"
+                        className="w-input-ul text-[10px] pb-1 pt-1"
                       />
                     </td>
                     <td className="px-2 py-1.5 w-[30px]">
@@ -2632,7 +2619,7 @@ function StockListEditView({
             </tbody>
           </table>
           {tableTotalPages > 1 && (
-            <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+            <div className="flex items-center justify-between px-3 py-2 border-t border-[var(--w-separator)]">
               <span className="text-[10px] text-slate-500">
                 {((tablePage - 1) * TABLE_PAGE) + 1}–{Math.min(tablePage * TABLE_PAGE, filtered.length)} / {filtered.length}
               </span>

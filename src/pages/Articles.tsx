@@ -864,9 +864,8 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
               value={searchInput}
               onChange={e => handleSearchInput(e.target.value)}
               placeholder="Rechercher par N°, référence, désignation…"
-              className="bare-input w-full text-sm py-1.5"
+              className="w-input-ul w-full text-sm py-1.5"
             />
-            <div className="h-px bg-neutral-200 mt-1" />
           </div>
           {search && (
             <button onClick={() => { setSearch(''); setSearchInput(''); }} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600">
@@ -1195,10 +1194,10 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
               <div><div className="text-xs font-bold text-slate-900">Exporter mes articles</div><div className="text-[10px] text-slate-500">{totalCount} articles</div></div>
             </button>
           </div>
-          <div className="bg-slate-50 rounded-xl p-3">
+          <div className="bg-[var(--w-surface-el)] rounded-xl p-3">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Colonnes attendues</div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-              {TENANT_IMPORT_HEADERS.map(h => (<div key={h.key} className={`text-[10px] px-2 py-1 rounded-md ${h.required ? 'bg-brand-50 border border-brand-200 font-bold text-brand-800' : 'bg-white border border-slate-100 text-slate-600'}`}>{h.label}</div>))}
+              {TENANT_IMPORT_HEADERS.map(h => (<div key={h.key} className={`text-[10px] px-2 py-1 rounded-md ${h.required ? 'bg-brand-50 border border-brand-200 font-bold text-brand-800' : 'bg-white border border-[var(--w-separator)] text-slate-600'}`}>{h.label}</div>))}
             </div>
           </div>
           <label className="flex flex-col items-center justify-center gap-2 p-5 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition">
@@ -1214,7 +1213,7 @@ export function Articles({ onNavigate }: { onNavigate?: (route: string) => void 
                 <div className="p-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-center"><div className="text-[9px] font-bold uppercase text-neutral-700">Mis à jour</div><div className="text-lg font-bold text-neutral-800 num">{importResult.updated}</div></div>
                 <div className="p-2.5 rounded-xl bg-red-50 border border-red-100 text-center"><div className="text-[9px] font-bold uppercase text-red-700">Erreurs</div><div className="text-lg font-bold text-red-800 num">{importResult.errors?.length || 0}</div></div>
               </div>
-              {importResult.errors && importResult.errors.length > 0 && <div className="max-h-32 overflow-auto bg-slate-50 rounded-xl p-2 space-y-0.5">{importResult.errors.map((e: any, i: number) => <div key={i} className="text-[10px] text-red-700">Ligne {e.row}: {e.error}</div>)}</div>}
+              {importResult.errors && importResult.errors.length > 0 && <div className="max-h-32 overflow-auto bg-[var(--w-surface-el)] rounded-xl p-2 space-y-0.5">{importResult.errors.map((e: any, i: number) => <div key={i} className="text-[10px] text-red-700">Ligne {e.row}: {e.error}</div>)}</div>}
             </div>
           )}
         </div>

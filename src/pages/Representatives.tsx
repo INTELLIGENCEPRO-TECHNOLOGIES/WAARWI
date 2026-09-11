@@ -327,8 +327,7 @@ export function Representatives() {
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par code, prénom, nom…"
-              className="bare-input w-full text-sm py-1.5" />
-            <div className="h-px bg-neutral-200 mt-1" />
+              className="w-input-ul w-full text-sm py-1.5" />
           </div>
           {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
           {tab === 'stats' && can('rep_export') && (
@@ -384,7 +383,7 @@ export function Representatives() {
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-50">
+                  <tbody className="divide-y divide-[var(--w-separator-l)]">
                     {filteredReps.map(r => {
                       const a = aggByRep.get(r.id) || { count: 0, ca: 0, commission: 0, cancelled: 0 };
                       const rule = effectiveRule(r, settings);
@@ -476,7 +475,7 @@ export function Representatives() {
                       <th className="px-4 py-3 font-semibold">Statut</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-50">
+                  <tbody className="divide-y divide-[var(--w-separator-l)]">
                     {statSales.slice(0, 300).map(s => (
                       <tr key={s.id} className={`hover:bg-neutral-50/60 transition-colors ${s.status === 'cancelled' ? 'opacity-60' : ''}`}>
                         <td className="px-4 py-2.5 font-semibold text-neutral-900 num">{s.sale_number}</td>

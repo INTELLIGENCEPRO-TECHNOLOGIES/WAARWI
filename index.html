@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icone.png" />
@@ -27,6 +27,9 @@
     <meta name="twitter:image" content="/waarwi-mark.png">
 </head>
   <body>
+    <script>
+      (function(){try{var m=localStorage.getItem('waarwi:theme');var r=m==='dark'?'dark':m==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',r);if(r==='dark'){document.querySelector('meta[name="theme-color"]').setAttribute('content','#111111')}}catch(e){}})();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>

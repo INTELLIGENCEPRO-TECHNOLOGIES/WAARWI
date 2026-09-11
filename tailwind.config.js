@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   // RTL variant: use `rtl:` prefix to apply styles only in RTL mode
   // e.g. `rtl:text-right` or `rtl:flex-row-reverse`

@@ -1446,7 +1446,7 @@ function PlansSection() {
         </div>
         <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[var(--w-active)] flex items-center justify-center">
               <Clock className="w-4 h-4 text-blue-500" />
             </div>
           </div>
@@ -1769,11 +1769,11 @@ function SubscriptionsSection() {
     const map: Record<string, string> = {
       active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       expired: 'bg-orange-50 text-orange-700 border-orange-200',
-      completed: 'bg-slate-50 text-slate-500 border-slate-200',
+      completed: 'bg-[var(--w-surface-el)] text-slate-500 border-slate-200',
       suspended: 'bg-red-50 text-red-700 border-red-200',
-      trial: 'bg-blue-50 text-blue-600 border-blue-200',
+      trial: 'bg-[var(--w-active)] text-blue-600 border-blue-200',
     };
-    return map[s] || 'bg-slate-50 text-slate-600 border-slate-200';
+    return map[s] || 'bg-[var(--w-surface-el)] text-slate-600 border-slate-200';
   };
   const cycleLabel = (c: string) => {
     const map: Record<string, string> = { monthly: 'Mensuel', yearly: 'Annuel', lifetime: 'Illimité', trial: 'Essai' };
@@ -2286,10 +2286,10 @@ function ActivitySection() {
     <div className="space-y-4">
       {/* Tab toggles */}
       <div className="inline-flex rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-        <button onClick={() => setTab('overview')} className={`px-4 py-2 text-xs font-bold transition-all ${tab === 'overview' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+        <button onClick={() => setTab('overview')} className={`px-4 py-2 text-xs font-bold transition-all ${tab === 'overview' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-[var(--w-surface-el)]'}`}>
           <Eye className="w-3.5 h-3.5 inline mr-1.5" />Vue globale
         </button>
-        <button onClick={() => setTab('log')} className={`px-4 py-2 text-xs font-bold border-l border-slate-200 transition-all ${tab === 'log' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+        <button onClick={() => setTab('log')} className={`px-4 py-2 text-xs font-bold border-l border-slate-200 transition-all ${tab === 'log' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-[var(--w-surface-el)]'}`}>
           <Activity className="w-3.5 h-3.5 inline mr-1.5" />Journal
         </button>
       </div>
@@ -2318,7 +2318,7 @@ function ActivitySection() {
 
           {/* Activity table */}
           <div className="bg-white border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+            <div className="p-4 border-b border-[var(--w-separator)] flex items-center gap-2">
               <LineChart className="w-4 h-4 text-brand-700" />
               <h3 className="text-sm font-bold text-slate-900">Activite des tenants approuves</h3>
               <span className="ml-auto text-xs text-slate-500">{activity.length} tenants</span>
@@ -2326,7 +2326,7 @@ function ActivitySection() {
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/80">
+                  <tr className="border-b border-[var(--w-separator)] bg-[var(--w-surface-el)]/80">
                     <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Tenant</th>
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Utilisateurs</th>
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Articles</th>
@@ -2343,7 +2343,7 @@ function ActivitySection() {
                     const statusLabel = lastMs === null ? 'Jamais connecte' : isActive ? 'Actif' : isRecent ? 'Recemment' : 'Inactif';
                     const statusColor = lastMs === null ? 'bg-slate-100 text-slate-600' : isActive ? 'bg-emerald-100 text-emerald-700' : isRecent ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
                     return (
-                      <tr key={a.tenant_id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <tr key={a.tenant_id} className="border-b border-[var(--w-separator-l)] hover:bg-[var(--w-surface-el)]/50 transition-colors">
                         <td className="px-4 py-2.5">
                           <div className="text-xs font-semibold text-slate-900">{a.tenant_name}</div>
                           <div className="text-[10px] text-slate-400">Cree {formatDate(a.created_at)}</div>
@@ -2565,7 +2565,7 @@ function LoginConfigSection() {
                 />
                 <p className="text-[10px] text-slate-400 mt-1">Texte en petites capitales au-dessus du titre principal</p>
               </div>
-              <div className="border-t border-slate-100 pt-4 mt-2">
+              <div className="border-t border-[var(--w-separator)] pt-4 mt-2">
                 <p className="text-xs font-bold text-slate-700 mb-3">Zone de connexion (droite)</p>
                 <div className="space-y-3">
                   <div>
@@ -2594,7 +2594,7 @@ function LoginConfigSection() {
                   {loginBgUrl && (
                     <img src={loginBgUrl} alt="Fond" className="w-24 h-14 object-cover rounded-xl border border-slate-200" />
                   )}
-                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-[var(--w-surface-el)] hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
                     <ImagePlus className="w-4 h-4 text-slate-500" />
                     {loginBgUrl ? 'Changer' : 'Uploader une image'}
                     <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={async (e) => {
@@ -2646,7 +2646,7 @@ function LoginConfigSection() {
 
               <div className="space-y-3 max-h-[400px] overflow-y-auto -mr-1 pr-1">
                 {textAccents.map((accent, idx) => (
-                  <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 space-y-2.5 group">
+                  <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-2.5 group">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-slate-400 uppercase w-5 shrink-0">#{idx + 1}</span>
                       <input
@@ -2696,7 +2696,7 @@ function LoginConfigSection() {
                     </div>
                     {/* Preview */}
                     {accent.text && (
-                      <div className="pt-1 border-t border-slate-100">
+                      <div className="pt-1 border-t border-[var(--w-separator)]">
                         <p className="text-[10px] text-slate-400 mb-1">Aperçu :</p>
                         <span className="text-sm font-bold text-slate-900 relative inline-block" style={
                           accent.effect === 'underline' ? {
@@ -2805,7 +2805,7 @@ function LoginConfigSection() {
                 {modules.map((mod, idx) => {
                   const IconComp = ICON_MAP_ADMIN[mod.icon] || Shield;
                   return (
-                    <div key={idx} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 group space-y-2">
+                    <div key={idx} className="p-2.5 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group space-y-2">
                       <div className="flex items-center gap-2">
                         {/* Drag handle / order */}
                         <div className="flex flex-col gap-0.5 shrink-0">
@@ -2862,7 +2862,7 @@ function LoginConfigSection() {
         {/* Right: Live Preview */}
         <div className="sticky top-4">
           <div className="bg-white border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-[var(--w-separator)] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-xs font-bold text-slate-700">Aperçu en direct</span>
@@ -2930,7 +2930,7 @@ function LoginConfigSection() {
                     { label: 'Modules total', val: `${previewModules.length}` },
                     { label: 'Groupes de 3', val: `${totalSlides}` },
                   ].map((s, i) => (
-                    <div key={i} className="rounded-lg p-1.5 bg-slate-50 border border-slate-100">
+                    <div key={i} className="rounded-lg p-1.5 bg-[var(--w-surface-el)] border border-[var(--w-separator)]">
                       <p className="text-[7px] text-slate-400 font-medium uppercase">{s.label}</p>
                       <p className="text-[9px] font-black text-slate-700">{s.val}</p>
                     </div>

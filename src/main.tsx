@@ -5,13 +5,16 @@ import App from './App.tsx';
 import './index.css';
 import i18n from './i18n';
 import { LocaleProvider } from './context/LocaleContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <I18nextProvider i18n={i18n}>
-      <LocaleProvider>
-        <App />
-      </LocaleProvider>
-    </I18nextProvider>
+    <ThemeProvider>
+      <I18nextProvider i18n={i18n}>
+        <LocaleProvider>
+          <App />
+        </LocaleProvider>
+      </I18nextProvider>
+    </ThemeProvider>
   </StrictMode>
 );

@@ -151,7 +151,7 @@ export function ExpenseCategoriesTab() {
                       value={editName}
                       onChange={e => setEditName(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') rename(c.id); if (e.key === 'Escape') setEditingId(null); }}
-                      className="flex-1 border-0 border-b border-neutral-300 bg-transparent px-0 py-1 text-sm text-neutral-900 outline-none focus:border-neutral-900 transition"
+                      className="flex-1 w-input-ul bg-transparent px-0 py-1 text-sm text-neutral-900 outline-none focus:border-neutral-900 transition"
                     />
                     <button onClick={() => rename(c.id)} className="p-1.5 rounded-md hover:bg-neutral-100 text-emerald-600 transition" title="Valider">
                       <Check className="w-3.5 h-3.5" />
@@ -163,7 +163,7 @@ export function ExpenseCategoriesTab() {
                 ) : (
                   <>
                     <span className={`flex-1 text-sm font-medium truncate ${c.is_active ? 'text-neutral-900' : 'text-neutral-400 line-through'}`}>{c.name}</span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${c.site_id ? 'bg-blue-50 text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{c.site_id ? (allStores.find((s: any) => s.id === c.site_id)?.name || 'Site') : 'Global'}</span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${c.site_id ? 'bg-[var(--w-active)] text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{c.site_id ? (allStores.find((s: any) => s.id === c.site_id)?.name || 'Site') : 'Global'}</span>
                     {(isOwner || (c.site_id && c.site_id === rootSiteId)) ? (<>
                     <button
                       onClick={() => { setEditingId(c.id); setEditName(c.name); }}

@@ -151,12 +151,12 @@ export function SearchableSelect({
   }
 
   const dropdownCls = isUnderline
-    ? 'bg-white border border-neutral-200 rounded-lg shadow-md overflow-hidden'
-    : 'bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-200/60 overflow-hidden';
+    ? 'bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg shadow-md overflow-hidden'
+    : 'bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl shadow-lg shadow-slate-200/60 overflow-hidden';
 
   const searchInputCls = isUnderline
-    ? 'w-full pl-8 pr-3 py-2 text-sm bg-transparent border-b border-neutral-200 focus:border-neutral-400 outline-none transition-all rounded-none'
-    : 'w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-100 bg-slate-50 focus:bg-white focus:border-teal-300 focus:ring-1 focus:ring-teal-100 outline-none transition-all';
+    ? 'w-full pl-8 pr-3 py-2 text-sm bg-transparent border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-all rounded-none'
+    : 'w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-[var(--w-separator)] bg-[var(--w-hover)] focus:bg-[var(--w-surface)] focus:border-brand-400 focus:ring-1 focus:ring-brand-100 outline-none transition-all';
 
   const dropdown = open ? createPortal(
     <div
@@ -165,7 +165,7 @@ export function SearchableSelect({
       className={dropdownCls}
     >
       {searchable && (
-        <div className={isUnderline ? 'p-2' : 'p-2 border-b border-slate-100'}>
+        <div className={isUnderline ? 'p-2' : 'p-2 border-b border-[var(--w-separator)]'}>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input
@@ -185,7 +185,7 @@ export function SearchableSelect({
           <div className="px-3 py-6 text-center text-sm text-slate-400">Aucun resultat</div>
         ) : (
           isUnderline ? (
-            <div className="divide-y divide-neutral-100">
+            <div className="divide-y divide-[var(--w-separator)]">
               {filtered.map((opt, idx) => {
                 const isSelected = opt.value === value;
                 const isHighlighted = idx === highlightIdx;
@@ -222,15 +222,15 @@ export function SearchableSelect({
                   onClick={() => { onChange(opt.value); setOpen(false); setQuery(''); }}
                   onMouseEnter={() => setHighlightIdx(idx)}
                   className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors
-                    ${isHighlighted ? 'bg-teal-50' : ''}
-                    ${isSelected ? 'text-teal-700 font-medium' : 'text-slate-700'}
+                    ${isHighlighted ? 'bg-[var(--w-hover)]' : ''}
+                    ${isSelected ? 'text-brand-700 font-medium' : 'text-[var(--w-text-sec)]'}
                   `}
                 >
                   <div className="flex-1 min-w-0">
                     <div className={wrapLabels ? 'break-words' : 'truncate'}>{opt.label}</div>
                     {opt.sublabel && <div className={`text-[11px] text-slate-400 mt-0.5 ${wrapLabels ? 'break-words' : 'truncate'}`}>{opt.sublabel}</div>}
                   </div>
-                  {isSelected && <Check className="w-4 h-4 text-teal-600 shrink-0" />}
+                  {isSelected && <Check className="w-4 h-4 text-brand-600 shrink-0" />}
                 </button>
               );
             })
@@ -243,11 +243,11 @@ export function SearchableSelect({
 
   const triggerCls = isUnderline
     ? `w-full flex items-center justify-between gap-2 px-1 py-2.5 rounded-none border-0 border-b text-left text-sm transition-all bg-transparent
-       ${open ? 'border-neutral-500' : 'border-neutral-300'}
+       ${open ? 'border-[var(--w-text)]' : 'border-[var(--w-separator)]'}
        ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`
     : `w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left text-sm transition-all
-       ${noBorder ? 'border-transparent bg-transparent hover:bg-slate-50' : open ? 'border-teal-400 ring-2 ring-teal-100 bg-white' : 'border-slate-200 bg-white hover:border-slate-300'}
-       ${disabled ? 'opacity-60 cursor-not-allowed bg-slate-50' : 'cursor-pointer'}`;
+       ${noBorder ? 'border-transparent bg-transparent hover:bg-[var(--w-hover)]' : open ? 'border-brand-400 ring-2 ring-brand-100 bg-[var(--w-surface)]' : 'border-[var(--w-separator)] bg-[var(--w-surface)] hover:border-[var(--w-text-muted)]'}
+       ${disabled ? 'opacity-60 cursor-not-allowed bg-[var(--w-surface-el)]' : 'cursor-pointer'}`;
 
   return (
     <div className={isUnderline ? '' : className}>

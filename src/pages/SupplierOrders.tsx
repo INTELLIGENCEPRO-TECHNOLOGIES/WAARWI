@@ -719,8 +719,7 @@ export function SupplierOrders() {
           <div className="flex-1 min-w-0 relative">
             <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une commande…"
-              className="bare-input w-full text-sm py-1.5 pl-5" />
-            <div className="h-px bg-neutral-200 mt-1" />
+              className="w-input-ul w-full text-sm py-1.5 pl-5" />
           </div>
           {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
           <button onClick={() => load(true)} className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 transition" title="Rafraîchir">
@@ -1242,7 +1241,7 @@ function MobileOrderDetail({
                     <input
                       type="number" min={0} max={remaining} value={todayQty}
                       onChange={e => setReceiveQty(prev => ({ ...prev, [itemId]: Math.max(0, Math.min(remaining, Number(e.target.value) || 0)) }))}
-                      className="w-full text-sm font-semibold num bg-transparent border-b border-neutral-300 focus:border-neutral-500 outline-none py-1 focus:ring-0"
+                      className="w-input-ul text-sm font-semibold num py-1"
                     />
                   </div>
                   {stockMethod === 'lot' && (
@@ -1252,7 +1251,7 @@ function MobileOrderDetail({
                         <input
                           value={lotData.batch_number} placeholder="LOT-..."
                           onChange={e => setReceiveLotData(prev => ({ ...prev, [itemId]: { ...lotData, batch_number: e.target.value } }))}
-                          className="w-full text-xs bg-transparent border-b border-neutral-300 focus:border-neutral-500 outline-none py-1 focus:ring-0"
+                          className="w-input-ul text-xs py-1"
                         />
                       </div>
                       <div>
@@ -1260,7 +1259,7 @@ function MobileOrderDetail({
                         <input
                           type="date" value={lotData.expiry_date}
                           onChange={e => setReceiveLotData(prev => ({ ...prev, [itemId]: { ...lotData, expiry_date: e.target.value } }))}
-                          className="w-full text-xs bg-transparent border-b border-neutral-300 focus:border-neutral-500 outline-none py-1 focus:ring-0"
+                          className="w-input-ul text-xs py-1"
                         />
                       </div>
                     </div>

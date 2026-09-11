@@ -1928,9 +1928,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={tab === 'invoices' ? 'N° facture, client ou montant\u2026' : tab === 'quotes' ? 'N° devis, client ou montant\u2026' : 'N°, client ou vente li\u00e9e\u2026'}
-            className="bare-input w-full text-sm py-1.5"
+            className="w-input-ul w-full text-sm py-1.5"
           />
-          <div className="h-px bg-neutral-200 mt-1" />
         </div>
         {search && (
           <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
@@ -2095,7 +2094,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   {filteredQuotes.map(q => {
                     const st = QUOTE_STATUS[q.status] || QUOTE_STATUS.draft;
                     return (
-                      <div key={q.id} onClick={() => openQuoteDetail(q)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50">
+                      <div key={q.id} onClick={() => openQuoteDetail(q)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-[var(--w-surface-el)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
                         <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{q.quote_number}</span>
                         <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-24">{formatDate(q.created_at)}</span>
                         <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{q.customers?.name || <span className="text-slate-400">—</span>}</span>
@@ -2167,7 +2166,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     const st = invoiceStatus(inv);
                     const solde = Math.max(0, Number(inv.total) - Number(inv.paid));
                     return (
-                      <div key={inv.id} onClick={() => openInvoiceForView(inv)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50">
+                      <div key={inv.id} onClick={() => openInvoiceForView(inv)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-[var(--w-surface-el)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
                         <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{inv.sale_number}</span>
                         <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-32">{formatDateTime(inv.created_at)}</span>
                         <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{inv.customers?.name || <span className="text-slate-400">Client comptoir</span>}</span>
@@ -2249,7 +2248,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                     const isCredit = tab === 'credits';
                     const used = Number(r.credit_used || 0);
                     return (
-                      <div key={r.id} onClick={() => openReturnDetail(r)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50">
+                      <div key={r.id} onClick={() => openReturnDetail(r)} className="flex items-center gap-3 px-2 py-1.5 hover:bg-[var(--w-surface-el)] transition-colors cursor-pointer border-b border-[var(--w-separator-l)]">
                         <span className="doc-number text-[12px] font-bold text-slate-700 shrink-0 w-28 truncate">{r.return_number}</span>
                         <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden lg:inline w-32">{formatDateTime(r.created_at)}</span>
                         <span className="text-[12px] text-slate-700 truncate flex-1 min-w-0">{r.customers?.name || <span className="text-slate-400">—</span>}</span>
@@ -2775,7 +2774,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                   total={Number(quoteDetail.total)}
                 />
               </div>
-              {quoteDetail.note && <div className="p-3 bg-slate-50 rounded-xl text-sm text-slate-600 border border-slate-200/70"><span className="font-semibold">Note :</span> {quoteDetail.note}</div>}
+              {quoteDetail.note && <div className="p-3 bg-[var(--w-surface-el)] rounded-xl text-sm text-slate-600 border border-slate-200/70"><span className="font-semibold">Note :</span> {quoteDetail.note}</div>}
             </div>
           );
         })()}
@@ -2841,7 +2840,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               </div>
             )}
 
-            <label className="flex items-center gap-2 cursor-pointer p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">
+            <label className="flex items-center gap-2 cursor-pointer p-3 rounded-xl border border-slate-200 hover:bg-[var(--w-surface-el)] transition-colors">
               <input type="checkbox" checked={convertPayNow} onChange={e => setConvertPayNow(e.target.checked)} className="w-4 h-4 rounded" />
               <div className="flex-1">
                 <div className="text-sm font-semibold text-slate-800">Encaisser immédiatement</div>
@@ -2866,7 +2865,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               </div>
             )}
 
-            <div className="text-[11px] text-slate-500 p-3 rounded-xl bg-slate-50 border border-slate-200/70">
+            <div className="text-[11px] text-slate-500 p-3 rounded-xl bg-[var(--w-surface-el)] border border-slate-200/70">
               Le devis sera marqué comme <strong>converti</strong> et une nouvelle facture sera créée avec les mêmes articles.
               {convertIpmCalc && <span className="block mt-1 text-teal-700 font-medium">La prise en charge IPM ({formatFCFA(convertIpmCalc.part_ipm)}) sera enregistrée automatiquement.</span>}
             </div>
@@ -3098,7 +3097,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         </>}>
         {invoiceDetail && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--w-separator)]">
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700/70">Solde dû</div>
                 <div className="doc-number text-sm font-bold text-amber-900 mt-0.5">{invoiceDetail.sale_number}</div>
@@ -3536,7 +3535,7 @@ function InvoiceSearchModal({ tenant, currentSite, onClose, query, setQuery, onS
       <div className="relative bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="px-4 pt-4 pb-2">
           <input autoFocus type="text" placeholder="Rechercher une facture (n°, client, montant)…"
-            className="w-full text-sm outline-none border-0 border-b border-slate-200 focus:border-slate-900 pb-2 bg-transparent placeholder:text-slate-400 transition-colors"
+            className="w-input-ul text-sm pb-2"
             value={query} onChange={e => setQuery(e.target.value)} />
         </div>
         <div className="overflow-y-auto flex-1 px-2 pb-2">
@@ -3549,7 +3548,7 @@ function InvoiceSearchModal({ tenant, currentSite, onClose, query, setQuery, onS
           ) : (
             results.map(inv => (
               <button key={inv.id} onClick={() => onSelect(inv)}
-                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between gap-3">
+                className="w-full text-left px-3 py-2.5 hover:bg-[var(--w-surface-el)] rounded-lg transition-colors flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-slate-900 doc-number">{inv.sale_number}</div>
                   <div className="text-[11px] text-slate-500 truncate">{inv.customers?.name || 'Client comptoir'}</div>

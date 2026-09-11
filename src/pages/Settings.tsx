@@ -8,6 +8,7 @@ import { RepCommissionSettingsTab } from '../components/RepCommissionSettingsTab
 import { ExpenseCategoriesTab } from '../components/ExpenseCategoriesTab';
 import { TicketHeaderConfigTab } from '../components/TicketHeaderConfigTab';
 import { ShopAppearanceSettings } from '../components/shop/ShopAppearanceSettings';
+import { ThemeToggle } from '../components/ThemeToggle';
 import type { ShopSettings } from '../lib/shopTypes';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -30,8 +31,8 @@ export function Settings() {
     {
       title: 'Votre entreprise',
       tiles: [
-        ...(isOwner ? [{ k: 'company' as TabKey, label: 'Identification', icon: Building2, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' }] : []),
-        { k: 'subscription', label: 'Abonnement', icon: CreditCard, color: 'text-blue-700', bg: 'bg-blue-50/80 border-blue-200' },
+        ...(isOwner ? [{ k: 'company' as TabKey, label: 'Identification', icon: Building2, color: 'text-slate-700', bg: 'bg-[var(--w-surface-el)] border-[var(--w-separator)]' }] : []),
+        { k: 'subscription', label: 'Abonnement', icon: CreditCard, color: 'text-blue-700', bg: 'bg-[var(--w-active)] border-[var(--w-separator)]' },
         { k: 'users', label: 'Utilisateurs', icon: Users, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
         { k: 'permissions', label: 'Permissions', icon: Shield, color: 'text-rose-700', bg: 'bg-rose-50/80 border-rose-200' },
         { k: 'sites', label: 'Magasins', icon: Store, color: 'text-emerald-700', bg: 'bg-emerald-50/80 border-emerald-200' },
@@ -65,7 +66,7 @@ export function Settings() {
   if (tab === 'home') {
     return (
       <div className="space-y-5">
-        <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm flex items-center gap-2.5">
+        <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-bg)]/95 backdrop-blur-sm flex items-center gap-2.5">
           <SettingsIcon className="w-5 h-5 text-slate-600" />
           <div>
             <h1 className="text-lg font-bold text-slate-900 tracking-tight">Paramètres</h1>
@@ -86,7 +87,7 @@ export function Settings() {
                   <button
                     key={t.k}
                     onClick={() => setTab(t.k)}
-                    className="group flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-slate-100/60 hover:-translate-y-0.5 transition-all duration-200"
+                    className="group flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[var(--w-hover)] hover:-translate-y-0.5 transition-all duration-200"
                   >
                     <Icon className={`w-5 h-5 ${t.color} group-hover:scale-110 transition-transform`} />
                     <span className="text-[10px] sm:text-[11px] font-semibold text-slate-600 text-center leading-tight">{t.label}</span>
@@ -104,7 +105,7 @@ export function Settings() {
 
   return (
     <div className="space-y-4">
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 py-2 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-slate-50/95 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 py-2 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-bg)]/95 backdrop-blur-sm">
       <button onClick={() => setTab('home')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900 transition-colors">
         <ArrowLeft className="w-3.5 h-3.5" />Paramètres / {currentLabel}
       </button>
@@ -407,7 +408,7 @@ function BoutiqueTab() {
           <div className="flex items-center gap-2">
             <span className="text-sm text-neutral-400 font-mono">/shop/</span>
             <input value={slugInput} onChange={e => setSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
-              className="flex-1 border-0 border-b border-neutral-300 bg-transparent px-0 py-1 text-sm font-mono text-neutral-900 outline-none focus:border-neutral-900 transition" placeholder="mon-entreprise" autoFocus
+              className="flex-1 w-input-ul px-0 py-1 text-sm font-mono text-[var(--w-text)] transition" placeholder="mon-entreprise" autoFocus
               onKeyDown={e => { if (e.key === 'Enter') saveSlug(); if (e.key === 'Escape') setEditingSlug(false); }} />
             <button onClick={saveSlug} disabled={saving} className="text-xs font-medium text-neutral-900 hover:text-neutral-700 transition">OK</button>
             <button onClick={() => setEditingSlug(false)} className="text-xs text-neutral-400 hover:text-neutral-600 transition">Annuler</button>
@@ -450,7 +451,11 @@ function BoutiqueTab() {
       </div>
 
       {/* Apparence */}
-      <div className="pt-6">
+      <div className="pt-6 space-y-6">
+        <div>
+          <h3 className="text-sm font-semibold text-neutral-900 mb-3">Thème de l'interface</h3>
+          <ThemeToggle />
+        </div>
         <ShopAppearanceSettings
           settings={settings as ShopSettings}
           onSettingsChange={(s) => setSettings(s)}
@@ -830,7 +835,7 @@ function CategoriesTab() {
                     <tr key={cat.id} className="bg-neutral-50/60 hover:bg-neutral-100/60">
                       <td className="px-3 py-2 font-semibold text-neutral-900 text-sm">{cat.name}</td>
                       <td className="px-3 py-2 font-mono text-xs hidden sm:table-cell text-neutral-500">{cat.code}</td>
-                      <td className="px-3 py-2 text-center"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${cat.site_id ? 'bg-blue-50 text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{cat.site_id ? (allStores.find((s: any) => s.id === cat.site_id)?.name || 'Site') : 'Global'}</span></td>
+                      <td className="px-3 py-2 text-center"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${cat.site_id ? 'bg-[var(--w-active)] text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{cat.site_id ? (allStores.find((s: any) => s.id === cat.site_id)?.name || 'Site') : 'Global'}</span></td>
                       <td className="px-3 py-2 text-center"><span className={`text-[10px] font-bold ${cat.is_active ? 'text-emerald-600' : 'text-neutral-400'}`}>{cat.is_active ? 'Active' : 'Inactive'}</span></td>
                       <td className="px-3 py-2 text-right">
                         {(isOwner || (cat.site_id && cat.site_id === rootSiteId)) ? <div className="inline-flex gap-0.5">
@@ -844,7 +849,7 @@ function CategoriesTab() {
                       <tr key={sub.id} className="hover:bg-neutral-50/60">
                         <td className="px-3 py-2 pl-7 text-neutral-600 text-sm">↳ {sub.name}</td>
                         <td className="px-3 py-2 font-mono text-xs hidden sm:table-cell text-neutral-400">{sub.code}</td>
-                        <td className="px-3 py-2 text-center"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${sub.site_id ? 'bg-blue-50 text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{sub.site_id ? (allStores.find((s: any) => s.id === sub.site_id)?.name || 'Site') : 'Global'}</span></td>
+                        <td className="px-3 py-2 text-center"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${sub.site_id ? 'bg-[var(--w-active)] text-blue-700' : 'bg-neutral-100 text-neutral-500'}`}>{sub.site_id ? (allStores.find((s: any) => s.id === sub.site_id)?.name || 'Site') : 'Global'}</span></td>
                         <td className="px-3 py-2 text-center"><span className={`text-[10px] font-bold ${sub.is_active ? 'text-emerald-600' : 'text-neutral-400'}`}>{sub.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td className="px-3 py-2 text-right">
                           {(isOwner || (sub.site_id && sub.site_id === rootSiteId)) ? <div className="inline-flex gap-0.5">
@@ -1359,7 +1364,7 @@ function UsersTab() {
                 {allSites.filter(s => s.is_active).map(site => {
                   const checked = (form.assigned_site_ids || []).includes(site.id);
                   return (
-                    <label key={site.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                    <label key={site.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--w-hover)] cursor-pointer transition-colors">
                       <input type="checkbox" checked={checked}
                         onChange={e => {
                           const ids = form.assigned_site_ids || [];

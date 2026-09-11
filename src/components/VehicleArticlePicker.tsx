@@ -245,7 +245,7 @@ export function VehicleArticlePicker({ open, onClose, onSelect, priceMode = 'sal
       <div className="relative w-full max-w-2xl bg-white sm:rounded-2xl shadow-elevated animate-slide-up max-h-[95vh] flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3.5 border-b border-slate-100 bg-white sm:rounded-t-2xl">
+        <div className="flex items-center gap-2 px-4 py-3.5 border-b border-[var(--w-separator)] bg-white sm:rounded-t-2xl">
           {step !== 'brand' && (
             <button onClick={goBack} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 shrink-0 transition-colors">
               <ArrowLeft className="w-4 h-4" />
@@ -273,7 +273,7 @@ export function VehicleArticlePicker({ open, onClose, onSelect, priceMode = 'sal
 
         {/* Search bar — shown on brand, model, articles */}
         {showSearch && (
-          <div className="px-4 py-2.5 border-b border-slate-100 bg-white">
+          <div className="px-4 py-2.5 border-b border-[var(--w-separator)] bg-white">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -356,12 +356,12 @@ function BrandGrid({ brands, onSelect }: { brands: VehicleBrand[]; onSelect: (b:
 function ModelList({ models, onSelect }: { models: VehicleModel[]; onSelect: (m: VehicleModel) => void }) {
   if (models.length === 0) return <EmptyMsg text="Aucun modèle disponible" />;
   return (
-    <div className="divide-y divide-slate-100">
+    <div className="divide-y divide-[var(--w-separator)]">
       {models.map(m => (
         <button
           key={m.id}
           onClick={() => onSelect(m)}
-          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 text-left transition-colors group"
+          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-[var(--w-surface-el)] text-left transition-colors group"
         >
           <div>
             <div className="text-sm font-semibold text-slate-900 group-hover:text-brand-700 transition-colors">{m.name}</div>
@@ -415,7 +415,7 @@ function CategoryGrid({ compatibleArticles, onSelect }: {
               className={`relative flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all group ${
                 hasItems
                   ? 'border-slate-200 bg-white hover:border-brand-400 hover:bg-brand-50/60 hover:shadow-sm'
-                  : 'border-slate-150 bg-slate-50/40 opacity-60'
+                  : 'border-slate-150 bg-[var(--w-surface-el)]/40 opacity-60'
               }`}
             >
               <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${hasItems ? 'bg-brand-50 text-brand-700 group-hover:bg-brand-100' : 'bg-slate-100 text-slate-400'} transition-colors`}>
@@ -483,11 +483,11 @@ function ArticleList({ articles, totalCompatible, selectedCategoryLabel, priceMo
 
   return (
     <div>
-      <div className="px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+      <div className="px-4 py-2.5 bg-[var(--w-surface-el)]/80 border-b border-[var(--w-separator)] flex items-center justify-between">
         <span className="text-xs text-slate-500">{articles.length} pièce{articles.length > 1 ? 's' : ''}</span>
         <span className="text-xs text-emerald-600 font-medium">{inStockCount} en stock</span>
       </div>
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-[var(--w-separator)]">
         {articles.map(a => {
           const price = priceMode === 'sale' ? a.sale_price : a.purchase_price;
           const inStock = a.stock_available > 0;
@@ -496,7 +496,7 @@ function ArticleList({ articles, totalCompatible, selectedCategoryLabel, priceMo
             <button
               key={a.id}
               onClick={() => onSelect(a)}
-              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 text-left transition-colors group"
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--w-surface-el)] text-left transition-colors group"
             >
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                 inStock ? (lowStock ? 'bg-amber-50' : 'bg-emerald-50') : 'bg-red-50'

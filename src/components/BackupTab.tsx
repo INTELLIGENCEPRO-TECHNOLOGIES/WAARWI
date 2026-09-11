@@ -74,7 +74,7 @@ function StatusBadge({ status }: { status: BackupStatus | null }) {
   if (!status) return null;
   const cfg: Record<string, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
     verified: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Vérifié', icon: <CheckCircle2 className="w-3 h-3" /> },
-    creating: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'En cours', icon: <Loader2 className="w-3 h-3 animate-spin" /> },
+    creating: { bg: 'bg-[var(--w-active)]', text: 'text-blue-700', label: 'En cours', icon: <Loader2 className="w-3 h-3 animate-spin" /> },
     failed: { bg: 'bg-red-50', text: 'text-red-700', label: 'Échec', icon: <XCircle className="w-3 h-3" /> },
     legacy: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Legacy v1', icon: <AlertTriangle className="w-3 h-3" /> },
     incompatible: { bg: 'bg-red-50', text: 'text-red-700', label: 'Incompatible', icon: <XCircle className="w-3 h-3" /> },

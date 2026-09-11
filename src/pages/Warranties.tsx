@@ -311,9 +311,8 @@ export function Warranties() {
               value={globalSearch}
               onChange={e => setGlobalSearch(e.target.value)}
               placeholder="Rechercher IMEI, facture, client, téléphone…"
-              className="bare-input w-full text-sm py-1.5"
+              className="w-input-ul w-full text-sm py-1.5"
             />
-            <div className="h-px bg-neutral-200 mt-1" />
           </div>
           {globalSearch && (
             <button onClick={() => setGlobalSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600">

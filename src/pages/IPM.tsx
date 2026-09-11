@@ -230,7 +230,7 @@ function IpmDashboard({ tenantId }: { tenantId: string }) {
           <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2.5">Top organismes</h3>
           <div className="space-y-0">
             {stats.topOrganismes.map((o: any, i: number) => (
-              <div key={i} className="flex items-center justify-between py-1.5 border-b border-neutral-50 last:border-0">
+              <div key={i} className="flex items-center justify-between py-1.5 border-b border-[var(--w-separator-l)] last:border-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-4 h-4 rounded-full bg-neutral-100 text-neutral-600 text-[9px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
                   <span className="text-xs text-neutral-700 truncate">{o.nom}</span>
@@ -322,8 +322,7 @@ function IpmOrganismes({ tenantId }: { tenantId: string }) {
       <div className="flex items-center gap-2">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
         <div className="flex-1 min-w-0">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un organisme..." className="bare-input w-full text-sm py-1.5" />
-          <div className="h-px bg-neutral-200 mt-1" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un organisme..." className="w-input-ul w-full text-sm py-1.5" />
         </div>
         {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
         <button onClick={openNew} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" title="Nouvel organisme">
@@ -527,8 +526,7 @@ function IpmConventions({ tenantId }: { tenantId: string }) {
       <div className="flex items-center gap-2">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
         <div className="flex-1 min-w-0">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une convention..." className="bare-input w-full text-sm py-1.5" />
-          <div className="h-px bg-neutral-200 mt-1" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une convention..." className="w-input-ul w-full text-sm py-1.5" />
         </div>
         {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
         <button onClick={openNew} disabled={organismes.length === 0} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 disabled:opacity-40 transition-colors" title="Nouvelle convention">
@@ -737,8 +735,7 @@ function IpmBeneficiaires({ tenantId }: { tenantId: string }) {
       <div className="flex items-center gap-2">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
         <div className="flex-1 min-w-0">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par nom, matricule..." className="bare-input w-full text-sm py-1.5" />
-          <div className="h-px bg-neutral-200 mt-1" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher par nom, matricule..." className="w-input-ul w-full text-sm py-1.5" />
         </div>
         {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
         <button onClick={openNew} disabled={organismes.length === 0} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 disabled:opacity-40 transition-colors" title="Nouveau bénéficiaire">
@@ -1112,8 +1109,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
       <div className="flex items-center gap-2">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
         <div className="flex-1 min-w-0">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un bordereau..." className="bare-input w-full text-sm py-1.5" />
-          <div className="h-px bg-neutral-200 mt-1" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un bordereau..." className="w-input-ul w-full text-sm py-1.5" />
         </div>
         {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
         <button onClick={() => setShowCreate(true)} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" title="Générer un bordereau">
@@ -1583,8 +1579,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:10px;co
       <div className="flex items-center gap-2">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
         <div className="flex-1 min-w-0">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une facture..." className="bare-input w-full text-sm py-1.5" />
-          <div className="h-px bg-neutral-200 mt-1" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une facture..." className="w-input-ul w-full text-sm py-1.5" />
         </div>
         {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
         <button onClick={() => setShowCreate(true)} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" title="Nouvelle facture IPM">
@@ -1824,8 +1819,7 @@ function IpmReglements({ tenantId }: { tenantId: string }) {
       <div className="flex items-center gap-2">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
         <div className="flex-1 min-w-0">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un règlement..." className="bare-input w-full text-sm py-1.5" />
-          <div className="h-px bg-neutral-200 mt-1" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un règlement..." className="w-input-ul w-full text-sm py-1.5" />
         </div>
         {search && <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600"><X className="w-4 h-4" /></button>}
         <button onClick={() => setShowCreate(true)} className="shrink-0 p-1.5 text-neutral-500 hover:text-brand-700 transition-colors" title="Enregistrer un règlement">
@@ -2281,7 +2275,7 @@ function IpmRejets({ tenantId }: { tenantId: string }) {
                     <th className="text-center px-3 py-2.5 text-[9px] font-bold uppercase tracking-wider text-neutral-400 w-24">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-50">
+                <tbody className="divide-y divide-[var(--w-separator-l)]">
                   {ventes.map(v => {
                     const ecart = Number(v.ecart_ipm || 0);
                     const hasEcart = ecart !== 0 && v.date_retour_ipm;

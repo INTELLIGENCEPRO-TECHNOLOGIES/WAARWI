@@ -23,7 +23,6 @@ export function Field({ label, children, hint, className = '' }: { label: string
     <div className={className}>
       <label className="block text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-1">{label}</label>
       {children}
-      <div className="h-px bg-neutral-200 mt-1" />
       {hint && <p className="text-[10px] text-neutral-400 mt-1">{hint}</p>}
     </div>
   );
@@ -93,7 +92,7 @@ export function CategoryFilterSheet({ categories, value, onChange, onClose }: {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in">
       <div className="absolute inset-0 bg-neutral-900/40" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-white rounded-t-xl sm:rounded-xl shadow-lg max-h-[70vh] flex flex-col animate-sheet-up">
+      <div className="relative w-full max-w-sm bg-[var(--w-surface)] rounded-t-xl sm:rounded-xl shadow-lg max-h-[70vh] flex flex-col animate-sheet-up">
         <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
           <h3 className="font-bold text-neutral-900 text-sm">Filtrer par catégorie</h3>
           <button onClick={onClose} className="p-1.5 text-neutral-400 hover:text-neutral-600 transition-colors"><X className="w-5 h-5" /></button>
@@ -231,7 +230,7 @@ export function CategoryPickerModal({ open, onClose, categories, onSelect, selec
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-fade-in" onClick={onClose}>
       <div className="absolute inset-0 bg-neutral-900/40" />
-      <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl animate-sheet-up max-h-[70vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="relative w-full max-w-sm bg-[var(--w-surface)] rounded-2xl shadow-xl animate-sheet-up max-h-[70vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Dark header */}
         <div className="bg-neutral-900 px-5 pt-4 pb-3 shrink-0 rounded-t-2xl">
           <div className="flex items-center justify-between">
@@ -279,7 +278,7 @@ export function CategoryPickerModal({ open, onClose, categories, onSelect, selec
             <>
               {flatResults.map(item => (
                 <button key={item.id} onClick={() => handleSelect(item.id)}
-                  className={`w-full text-left flex items-center gap-2 px-3 py-2.5 border-b border-neutral-100 transition-colors ${selected === item.id ? 'bg-blue-50' : 'hover:bg-neutral-50'}`}>
+                  className={`w-full text-left flex items-center gap-2 px-3 py-2.5 border-b border-neutral-100 transition-colors ${selected === item.id ? 'bg-[var(--w-active)]' : 'hover:bg-neutral-50'}`}>
                   <div className="flex-1 min-w-0">
                     {item.breadcrumb && (
                       <div className="flex items-center gap-1 mb-0.5">
@@ -287,9 +286,9 @@ export function CategoryPickerModal({ open, onClose, categories, onSelect, selec
                         <ChevronRight className="w-2.5 h-2.5 text-neutral-300 shrink-0" />
                       </div>
                     )}
-                    <span className={`text-xs truncate block ${selected === item.id ? 'font-bold text-blue-700' : 'text-neutral-800'}`}>{item.name}</span>
+                    <span className={`text-xs truncate block ${selected === item.id ? 'font-bold text-[var(--w-text)]' : 'text-neutral-800'}`}>{item.name}</span>
                   </div>
-                  {selected === item.id && <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />}
+                  {selected === item.id && <CheckCircle2 className="w-4 h-4 text-[var(--w-text-sec)] shrink-0" />}
                 </button>
               ))}
               {flatResults.length === 0 && (
@@ -314,13 +313,13 @@ export function CategoryPickerModal({ open, onClose, categories, onSelect, selec
                     </button>
                   ) : <span className="w-8 shrink-0" />}
                   <button onClick={() => handleSelect(parent.id)}
-                    className={`flex-1 text-left flex items-center justify-between px-2 py-2.5 transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-neutral-50'}`}>
-                    <span className={`text-xs truncate ${isSelected ? 'font-bold text-blue-700' : 'font-semibold text-neutral-800'}`}>
+                    className={`flex-1 text-left flex items-center justify-between px-2 py-2.5 transition-colors ${isSelected ? 'bg-[var(--w-active)]' : 'hover:bg-neutral-50'}`}>
+                    <span className={`text-xs truncate ${isSelected ? 'font-bold text-[var(--w-text)]' : 'font-semibold text-neutral-800'}`}>
                       {parent.name}
                     </span>
                     <span className="flex items-center gap-1.5">
                       {hasChildren && <span className="text-[10px] text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded-full tabular-nums">{children.length}</span>}
-                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />}
+                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[var(--w-text-sec)]" />}
                     </span>
                   </button>
                 </div>
@@ -330,9 +329,9 @@ export function CategoryPickerModal({ open, onClose, categories, onSelect, selec
                       const childSelected = selected === child.id;
                       return (
                         <button key={child.id} onClick={() => handleSelect(child.id)}
-                          className={`w-full text-left flex items-center justify-between px-3 py-2 transition-colors ${childSelected ? 'bg-blue-50' : 'hover:bg-neutral-50'}`}>
-                          <span className={`text-xs truncate ${childSelected ? 'font-bold text-blue-700' : 'text-neutral-600'}`}>{child.name}</span>
-                          {childSelected && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                          className={`w-full text-left flex items-center justify-between px-3 py-2 transition-colors ${childSelected ? 'bg-[var(--w-active)]' : 'hover:bg-neutral-50'}`}>
+                          <span className={`text-xs truncate ${childSelected ? 'font-bold text-[var(--w-text)]' : 'text-neutral-600'}`}>{child.name}</span>
+                          {childSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[var(--w-text-sec)] shrink-0" />}
                         </button>
                       );
                     })}
@@ -914,10 +913,10 @@ function ColumnSettingsDropdown({ visible, onToggle }: { visible: Set<ColumnKey>
         <Settings2 className="w-3.5 h-3.5" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-50 animate-fade-in">
+        <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--w-surface)] rounded-xl shadow-lg border border-[var(--w-separator)] py-1.5 z-50 animate-fade-in">
           <div className="px-3 py-1.5 text-[9px] uppercase tracking-wider text-slate-400 font-bold">Colonnes visibles</div>
           {ALL_OPTIONAL_COLUMNS.map(col => (
-            <button key={col.key} onClick={() => onToggle(col.key)} className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 transition-colors">
+            <button key={col.key} onClick={() => onToggle(col.key)} className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--w-surface-el)] transition-colors">
               {visible.has(col.key) ? <Eye className="w-3.5 h-3.5 text-brand-600" /> : <EyeOff className="w-3.5 h-3.5 text-slate-300" />}
               <span className={`text-xs ${visible.has(col.key) ? 'text-slate-800 font-medium' : 'text-slate-400'}`}>{col.label}</span>
             </button>
@@ -962,65 +961,65 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
   const showCol = (k: ColumnKey) => visibleCols.has(k) && (k !== 'stock' || showStock) && (k !== 'purchase_price' || _showPurchase);
 
   return (
-    <div className="rounded-2xl bg-white shadow-card border border-slate-100 overflow-hidden">
+    <div className="rounded-2xl bg-[var(--w-surface)] shadow-card border border-[var(--w-separator)] overflow-hidden">
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
         <table className="w-full text-xs">
-          <thead className="bg-slate-50/70 text-[9px] uppercase text-slate-500 tracking-wider border-b border-slate-100 sticky top-0 z-10">
+          <thead className="bg-[var(--w-surface-el)]/70 text-[9px] uppercase text-slate-500 tracking-wider border-b border-[var(--w-separator)] sticky top-0 z-10">
             <tr>
               {selectionMode && (
-                <th className="px-2 py-2.5 w-8 bg-slate-50">
+                <th className="px-2 py-2.5 w-8 bg-[var(--w-surface-el)]">
                   <button onClick={onSelectAll} className="text-brand-700">{allSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}</button>
                 </th>
               )}
-              <th className="px-2 py-2.5 text-left font-semibold min-w-[280px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('name')}>
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[280px] bg-[var(--w-surface-el)] cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('name')}>
                 <span className="inline-flex items-center gap-1">Désignation <SortIcon col="name" /></span>
               </th>
               {showCol('internal_ref') && (
-                <th className="px-2 py-2.5 text-left font-semibold min-w-[110px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('ref')}>
+                <th className="px-2 py-2.5 text-left font-semibold min-w-[110px] bg-[var(--w-surface-el)] cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('ref')}>
                   <span className="inline-flex items-center gap-1">Réf. interne <SortIcon col="ref" /></span>
                 </th>
               )}
               {showCol('oem_ref') && (
-                <th className="px-2 py-2.5 text-left font-semibold min-w-[110px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('oem_ref')}>
+                <th className="px-2 py-2.5 text-left font-semibold min-w-[110px] bg-[var(--w-surface-el)] cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('oem_ref')}>
                   <span className="inline-flex items-center gap-1">Réf. OEM <SortIcon col="oem_ref" /></span>
                 </th>
               )}
               {showCol('category') && (
-                <th className="px-2 py-2.5 text-left font-semibold min-w-[120px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('category')}>
+                <th className="px-2 py-2.5 text-left font-semibold min-w-[120px] bg-[var(--w-surface-el)] cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('category')}>
                   <span className="inline-flex items-center gap-1">Catégorie <SortIcon col="category" /></span>
                 </th>
               )}
               {showCol('brand') && (
-                <th className="px-2 py-2.5 text-left font-semibold min-w-[100px] bg-slate-50">
+                <th className="px-2 py-2.5 text-left font-semibold min-w-[100px] bg-[var(--w-surface-el)]">
                   <span className="inline-flex items-center gap-1">Marque</span>
                 </th>
               )}
               {showCol('barcode') && (
-                <th className="px-2 py-2.5 text-left font-semibold min-w-[120px] bg-slate-50">
+                <th className="px-2 py-2.5 text-left font-semibold min-w-[120px] bg-[var(--w-surface-el)]">
                   <span className="inline-flex items-center gap-1">Code barre</span>
                 </th>
               )}
               {showCol('unit') && (
-                <th className="px-2 py-2.5 text-left font-semibold min-w-[70px] bg-slate-50">
+                <th className="px-2 py-2.5 text-left font-semibold min-w-[70px] bg-[var(--w-surface-el)]">
                   <span className="inline-flex items-center gap-1">Unité</span>
                 </th>
               )}
               {showCol('sale_price') && (
-                <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('price')}>
+                <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-[var(--w-surface-el)] cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('price')}>
                   <span className="inline-flex items-center gap-1 justify-end">Prix de vente <SortIcon col="price" /></span>
                 </th>
               )}
               {showCol('purchase_price') && (
-                <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('purchase_price')}>
+                <th className="px-2 py-2.5 text-right font-semibold min-w-[90px] bg-[var(--w-surface-el)] cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('purchase_price')}>
                   <span className="inline-flex items-center gap-1 justify-end">Prix d'achat <SortIcon col="purchase_price" /></span>
                 </th>
               )}
               {showCol('stock') && (
-                <th className="px-2 py-2.5 text-right font-semibold min-w-[50px] bg-slate-50 cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('stock')}>
+                <th className="px-2 py-2.5 text-right font-semibold min-w-[50px] bg-[var(--w-surface-el)] cursor-pointer select-none hover:text-brand-700 transition-colors" onClick={() => onSort?.('stock')}>
                   <span className="inline-flex items-center gap-1 justify-end">Stock <SortIcon col="stock" /></span>
                 </th>
               )}
-              <th className="px-2 py-2.5 text-center font-semibold w-20 bg-slate-50">
+              <th className="px-2 py-2.5 text-center font-semibold w-20 bg-[var(--w-surface-el)]">
                 <div className="inline-flex items-center gap-1">
                   <span>Actions</span>
                   <ColumnSettingsDropdown visible={visibleCols} onToggle={toggleCol} />
@@ -1028,14 +1027,14 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-[var(--w-separator-l)]">
             {articles.map(a => {
               const edited = listEdits.has(a.id);
               const qty = stockMap[a.id] || 0;
               const tracksStock = (a as any).track_stock !== false;
               const mStatus = tracksStock ? stockStatus(qty, Number(a.stock_min || 0)) : { badge: 'text-slate-400', dot: 'bg-slate-300', label: 'Service' };
               return (
-                <tr key={a.id} className={`group transition-colors ${edited ? 'bg-brand-50/40' : 'hover:bg-slate-50/60'} ${selectedIds.has(a.id) ? 'bg-brand-50/60' : ''}`}>
+                <tr key={a.id} className={`group transition-colors ${edited ? 'bg-brand-50/40' : 'hover:bg-[var(--w-surface-el)]/60'} ${selectedIds.has(a.id) ? 'bg-brand-50/60' : ''}`}>
                   {selectionMode && (
                     <td className="px-2 py-1.5">
                       <button onClick={() => onToggleSelect(a.id)} className="text-brand-700">{selectedIds.has(a.id) ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5 text-slate-400" />}</button>
@@ -1045,8 +1044,8 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                     <div className="flex items-center gap-1.5">
                       <input value={getVal(a, 'name') || ''} onChange={e => onUpdateEdit(a.id, 'name', e.target.value)}
                         title={getVal(a, 'name') || ''}
-                        className="flex-1 min-w-0 bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-semibold text-slate-900 outline-none transition" />
-                      {!tracksStock && <span className="shrink-0 text-[8px] font-bold text-purple-600 whitespace-nowrap">Service</span>}
+                        className="w-input-ul flex-1 min-w-0 text-xs font-semibold text-slate-900" />
+                      {!tracksStock && <span className="shrink-0 text-[8px] font-bold text-[var(--w-text-muted)] whitespace-nowrap">Service</span>}
                     </div>
                   </td>
                   {showCol('internal_ref') && (
@@ -1062,7 +1061,7 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                   {showCol('category') && (
                     <td className="px-2 py-1.5">
                       <button onClick={() => { setCatPickArticle(a.id); setCatPickOpen(true); }}
-                        className="w-full text-left bg-transparent border-0 border-b border-transparent hover:border-slate-200 px-0.5 py-0.5 rounded text-xs text-slate-600 outline-none transition truncate">
+                        className="w-input-ul text-left px-0.5 py-0.5 text-xs truncate">
                         {(() => { const cid = getVal(a, 'category_id'); const cat = categories.find(c => c.id === cid); return cat ? cat.name : '—'; })()}
                       </button>
                     </td>
@@ -1070,31 +1069,31 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                   {showCol('brand') && (
                     <td className="px-2 py-1.5">
                       <input value={getVal(a, 'brand' as any) || ''} onChange={e => onUpdateEdit(a.id, 'brand', e.target.value)}
-                        className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs text-slate-600 outline-none transition" />
+                        className="w-input-ul w-full text-xs text-slate-600" />
                     </td>
                   )}
                   {showCol('barcode') && (
                     <td className="px-2 py-1.5">
                       <input value={getVal(a, 'barcode' as any) || ''} onChange={e => onUpdateEdit(a.id, 'barcode', e.target.value)}
-                        className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-mono text-slate-600 outline-none transition" />
+                        className="w-input-ul w-full text-xs font-mono text-slate-600" />
                     </td>
                   )}
                   {showCol('unit') && (
                     <td className="px-2 py-1.5">
                       <input value={getVal(a, 'unit' as any) || ''} onChange={e => onUpdateEdit(a.id, 'unit', e.target.value)}
-                        className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs text-slate-600 outline-none transition" />
+                        className="w-input-ul w-full text-xs text-slate-600" />
                     </td>
                   )}
                   {showCol('sale_price') && (
                     <td className="px-2 py-1.5">
                       <input type="number" value={getVal(a, 'sale_price') || ''} onChange={e => onUpdateEdit(a.id, 'sale_price', e.target.value)}
-                        className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-bold text-right text-slate-900 num outline-none transition" min="0" />
+                        className="w-input-ul w-full text-xs font-bold text-right text-slate-900 num" min="0" />
                     </td>
                   )}
                   {showCol('purchase_price') && (
                     <td className="px-2 py-1.5">
                       <input type="number" value={getVal(a, 'purchase_price') || ''} onChange={e => onUpdateEdit(a.id, 'purchase_price', e.target.value)}
-                        className="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-400 focus:bg-white px-1 py-0.5 rounded text-xs font-bold text-right text-slate-900 num outline-none transition" min="0" />
+                        className="w-input-ul w-full text-xs font-bold text-right text-slate-900 num" min="0" />
                     </td>
                   )}
                   {showCol('stock') && (
@@ -1102,7 +1101,7 @@ export function DesktopListView({ articles, categoryMap: _categoryMap, stockMap,
                       {tracksStock ? (
                         <span className={`text-[10px] font-bold num ${mStatus.badge}`}>{qty}</span>
                       ) : (
-                        <span className="text-[9px] font-semibold text-purple-500">—</span>
+                        <span className="text-[9px] font-semibold text-[var(--w-text-muted)]">—</span>
                       )}
                     </td>
                   )}

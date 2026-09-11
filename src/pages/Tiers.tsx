@@ -119,17 +119,17 @@ export function Tiers() {
     >
       <button
         onClick={() => { openCustCreate(); setCreateMenuOpen(false); }}
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-sm text-[var(--w-text)] hover:bg-[var(--w-hover)] transition-colors"
       >
-        <Users className="w-4 h-4 text-slate-500 shrink-0" />
-        <span className="font-semibold text-slate-900 whitespace-nowrap">Nouveau client</span>
+        <Users className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
+        <span className="font-semibold text-[var(--w-text)] whitespace-nowrap">Nouveau client</span>
       </button>
       <button
         onClick={() => { openSupCreate(); setCreateMenuOpen(false); }}
         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-sm text-black hover:bg-neutral-100 transition-colors"
       >
-        <Truck className="w-4 h-4 text-slate-500 shrink-0" />
-        <span className="font-semibold text-slate-900 whitespace-nowrap">Nouveau fournisseur</span>
+        <Truck className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
+        <span className="font-semibold text-[var(--w-text)] whitespace-nowrap">Nouveau fournisseur</span>
       </button>
     </div>,
     document.body
@@ -821,27 +821,27 @@ export function Tiers() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Top bar ── */}
-      <div className="shrink-0 bg-white border-b border-neutral-100 px-4 sm:px-5 py-3 sm:py-4">
+      <div className="shrink-0 bg-[var(--w-surface)] border-b border-[var(--w-separator-l)] px-4 sm:px-5 py-3 sm:py-4">
         {/* Row 1: title + action buttons (desktop: all on one row) */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <h1 className="text-lg font-bold text-neutral-900 leading-tight whitespace-nowrap">Tiers</h1>
+          <h1 className="text-lg font-bold text-[var(--w-text)] leading-tight whitespace-nowrap">Tiers</h1>
           {/* Search — hidden on mobile row 1, shown on desktop */}
           <div className="hidden sm:flex flex-1 min-w-0 items-center gap-1.5 px-1 py-1.5">
-            <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+            <Search className="w-4 h-4 text-[var(--w-text-disabled)] shrink-0" />
             <input
               value={searchInput}
               onChange={e => { setSearchInput(e.target.value); if (searchTimerRef.current) clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearch(e.target.value), 250); }}
               placeholder="Rechercher"
-              className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none placeholder:text-neutral-400"
+              className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none placeholder:text-[var(--w-text-disabled)]"
             />
             {searchInput && (
-              <button onClick={() => { setSearchInput(''); setSearch(''); }} className="p-0.5 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>
+              <button onClick={() => { setSearchInput(''); setSearch(''); }} className="p-0.5 text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]"><X className="w-3.5 h-3.5" /></button>
             )}
           </div>
           <div className="flex-1 sm:hidden" />
           <button
             onClick={() => setStatusFilter(prev => prev === 'active' ? '' : 'active')}
-            className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors"
+            className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-[var(--w-text-muted)] hover:text-[var(--w-text)] transition-colors"
             title="Afficher uniquement les tiers actifs"
           >
             <span className="relative inline-flex items-center">
@@ -850,34 +850,35 @@ export function Tiers() {
             </span>
             <span className="hidden md:inline">Actifs</span>
           </button>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <button onClick={reconcileBalances} disabled={reconciling} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 disabled:opacity-40 transition-colors" title="Rapprochement des soldes"><RotateCcw className={`w-3.5 h-3.5 ${reconciling ? 'animate-spin' : ''}`} /><span className="hidden lg:inline">Rapprochement</span></button>
             <button onClick={exportTiers} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 transition-colors" title="Exporter"><Download className="w-3.5 h-3.5" /><span className="hidden lg:inline">Exporter</span></button>
             <button onClick={() => { setImportRows([]); setImportFilename(''); setImportResult(null); setImportExportOpen(true); }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-transparent text-xs font-semibold text-black hover:bg-neutral-100 transition-colors" title="Importer"><Upload className="w-3.5 h-3.5" /><span className="hidden lg:inline">Importer</span></button>
-            <button onClick={openCustCreate} className={`inline-flex items-center gap-1.5 text-xs font-semibold text-black hover:text-brand-700 transition-colors ${tab === 'suppliers' ? 'hidden' : ''}`}><UserPlus className="w-4 h-4" /><span className="hidden lg:inline">Nouveau client</span></button>
-            <button onClick={openSupCreate} className={`inline-flex items-center gap-1.5 text-xs font-semibold text-black hover:text-brand-700 transition-colors ${tab === 'customers' ? 'hidden' : ''}`}><Truck className="w-4 h-4" /><span className="hidden lg:inline">Nouveau fournisseur</span></button>
+            <div className="w-px h-5 bg-[var(--w-separator)] mx-1" />
+            <button onClick={openCustCreate} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-black hover:text-brand-700 hover:bg-neutral-100 transition-colors ${tab === 'suppliers' ? 'hidden' : ''}`}><UserPlus className="w-4 h-4" /><span className="hidden lg:inline">Nouveau client</span></button>
+            <button onClick={openSupCreate} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-black hover:text-brand-700 hover:bg-neutral-100 transition-colors ${tab === 'customers' ? 'hidden' : ''}`}><Truck className="w-4 h-4" /><span className="hidden lg:inline">Nouveau fournisseur</span></button>
           </div>
         </div>
         {/* Row 2: search bar (mobile only) */}
         <div className="sm:hidden mt-2 flex items-center gap-1.5 px-1 py-1.5">
-          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <Search className="w-3.5 h-3.5 text-[var(--w-text-disabled)] shrink-0" />
           <input
             value={searchInput}
             onChange={e => { setSearchInput(e.target.value); if (searchTimerRef.current) clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearch(e.target.value), 250); }}
             placeholder="Rechercher"
-            className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-slate-400"
+            className="flex-1 min-w-0 bg-transparent text-xs focus:outline-none placeholder:text-[var(--w-text-disabled)]"
           />
           {searchInput && (
-            <button onClick={() => { setSearchInput(''); setSearch(''); }} className="p-0.5 text-slate-400 hover:text-slate-600"><X className="w-3 h-3" /></button>
+            <button onClick={() => { setSearchInput(''); setSearch(''); }} className="p-0.5 text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]"><X className="w-3 h-3" /></button>
           )}
         </div>
         {/* Row 3: filter tabs (mobile only, wrapping) */}
-        <div className="sm:hidden mt-2 flex items-center divide-x divide-slate-200">
+        <div className="sm:hidden mt-2 flex items-center divide-x divide-[var(--w-separator)]">
           {filterTabs.map(ft => (
             <button
               key={ft.k}
               onClick={() => { setTab(ft.k); setSelectedRow(null); }}
-              className={`flex-1 inline-flex items-center justify-center gap-1 px-2 py-1 text-[11px] font-semibold transition-colors ${tab === ft.k ? 'text-black' : 'text-slate-400'}`}
+              className={`flex-1 inline-flex items-center justify-center gap-1 px-2 py-1 text-[11px] font-semibold transition-colors ${tab === ft.k ? 'text-black' : 'text-[var(--w-text-disabled)]'}`}
             >
               {ft.l} <span className="num">{ft.count}</span>
             </button>
@@ -888,14 +889,14 @@ export function Tiers() {
       {/* ── Body: filter panel + table ── */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left filter panel — desktop */}
-        <aside className="hidden md:flex flex-col w-48 shrink-0 bg-white border-r border-slate-200 py-3 divide-y divide-slate-100">
+        <aside className="hidden md:flex flex-col w-48 shrink-0 bg-[var(--w-surface)] border-r border-[var(--w-separator)] py-3 divide-y divide-[var(--w-separator)]">
           {filterTabs.map(ft => {
             const active = tab === ft.k;
             return (
               <button
                 key={ft.k}
                 onClick={() => { setTab(ft.k); setSelectedRow(null); }}
-                className={`flex items-center gap-2 px-3 py-2.5 text-left text-xs font-medium transition-colors ${active ? 'text-black font-bold' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`flex items-center gap-2 px-3 py-2.5 text-left text-xs font-medium transition-colors ${active ? 'text-black font-bold' : 'text-[var(--w-text-muted)] hover:text-[var(--w-text)]'}`}
               >
                 <ft.Icon className="w-3.5 h-3.5 shrink-0" />
                 <span className="flex-1">{ft.l}</span>
@@ -908,7 +909,7 @@ export function Tiers() {
         {/* Table area */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {loading ? (
-            <div className="flex-1 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
+            <div className="flex-1 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[var(--w-text-disabled)]" /></div>
           ) : unifiedRows.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <EmptyState
@@ -923,12 +924,12 @@ export function Tiers() {
               {/* Desktop table */}
               <table className="w-full text-xs hidden sm:table">
                 <thead className="sticky top-0 z-[5]">
-                  <tr className="bg-white border-b border-slate-200">
-                    <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[110px]">N° tiers</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[60px]">Type</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-600">Intitulé</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-600">Téléphone</th>
-                    <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[120px]">Solde</th>
+                  <tr className="bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
+                    <th className="px-3 py-2 text-left font-semibold text-[var(--w-text-sec)] w-[110px]">N° tiers</th>
+                    <th className="px-3 py-2 text-left font-semibold text-[var(--w-text-sec)] w-[60px]">Type</th>
+                    <th className="px-3 py-2 text-left font-semibold text-[var(--w-text-sec)]">Intitulé</th>
+                    <th className="px-3 py-2 text-left font-semibold text-[var(--w-text-sec)]">Téléphone</th>
+                    <th className="px-3 py-2 text-right font-semibold text-[var(--w-text-sec)] w-[120px]">Solde</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -943,18 +944,18 @@ export function Tiers() {
                           if (row.type === 'customer') setCustView({ c: row.raw as Customer, key: 'info' });
                           else setSupView({ s: row.raw as Supplier, key: 'info' });
                         }}
-                        className={`border-b border-slate-100 cursor-pointer transition-colors ${isSelected ? 'bg-black text-white' : 'hover:bg-slate-50'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
+                        className={`border-b border-[var(--w-separator-l)] cursor-pointer transition-colors ${isSelected ? 'bg-black text-white' : 'hover:bg-[var(--w-hover)]'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
                       >
-                        <td className={`px-3 py-2 font-mono text-[11px] ${isSelected ? 'text-slate-200' : 'text-slate-500'}`}>{row.accountCode || '—'}</td>
+                        <td className={`px-3 py-2 font-mono text-[11px] ${isSelected ? 'text-slate-200' : 'text-[var(--w-text-muted)]'}`}>{row.accountCode || '—'}</td>
                         <td className="px-3 py-2">
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase ${isSelected ? 'text-slate-300' : row.type === 'customer' ? 'text-brand-700' : 'text-amber-600'}`}>
                             {row.type === 'customer' ? <Users className="w-3 h-3" /> : <Truck className="w-3 h-3" />}
                             <span className="hidden lg:inline">{row.type === 'customer' ? 'Client' : 'Fourn.'}</span>
                           </span>
                         </td>
-                        <td className={`px-3 py-2 font-medium ${isSelected ? 'text-white' : 'text-slate-900'}`}>{row.name}</td>
-                        <td className={`px-3 py-2 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>{row.phone || '—'}</td>
-                        <td className={`px-3 py-2 text-right font-semibold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <td className={`px-3 py-2 font-medium ${isSelected ? 'text-white' : 'text-[var(--w-text)]'}`}>{row.name}</td>
+                        <td className={`px-3 py-2 ${isSelected ? 'text-slate-300' : 'text-[var(--w-text-muted)]'}`}>{row.phone || '—'}</td>
+                        <td className={`px-3 py-2 text-right font-semibold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
                           <div className="leading-tight">{formatFCFA(Math.abs(row.balance))}</div>
                           <div className={`text-[9px] font-bold uppercase tracking-wide ${isSelected ? 'text-slate-300' : row.balance > 0 ? 'text-amber-500' : row.balance < 0 ? 'text-emerald-500' : 'text-slate-300'}`}>{row.balance > 0 ? 'Solde dû' : row.balance < 0 ? 'Crédit dispo.' : 'Solde'}</div>
                         </td>
@@ -965,34 +966,29 @@ export function Tiers() {
               </table>
 
               {/* Mobile card list */}
-              <div className="sm:hidden divide-y divide-slate-100">
+              <div className="sm:hidden divide-y divide-[var(--w-separator)]">
                 {unifiedRows.map(row => {
                   const isSelected = selectedRow?.id === row.id;
                   return (
                     <button
                       key={`m-${row.type}-${row.id}`}
                       onClick={() => handleRowClick(row)}
-                      className={`w-full text-left px-3 py-2.5 transition-colors ${isSelected ? 'bg-black' : 'active:bg-slate-50'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
+                      className={`w-full text-left px-3 py-2.5 transition-colors ${isSelected ? 'bg-black' : 'active:bg-[var(--w-hover)]'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
                     >
                       <div className="flex items-start gap-2">
-                        <span className={`mt-0.5 inline-flex items-center justify-center w-6 h-6 rounded-full shrink-0 ${isSelected ? 'bg-neutral-800' : row.type === 'customer' ? 'bg-brand-50' : 'bg-amber-50'}`}>
-                          {row.type === 'customer'
-                            ? <Users className={`w-3 h-3 ${isSelected ? 'text-slate-300' : 'text-brand-700'}`} />
-                            : <Truck className={`w-3 h-3 ${isSelected ? 'text-slate-300' : 'text-amber-600'}`} />
-                          }
-                        </span>
                         <div className="flex-1 min-w-0">
-                          <div className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : 'text-slate-900'}`} style={{ wordBreak: 'break-word' }}>
+                          <div className={`text-[13px] font-semibold leading-tight ${isSelected ? 'text-white' : 'text-[var(--w-text)]'}`} style={{ wordBreak: 'break-word' }}>
                             {row.name}
                           </div>
-                          <div className={`text-[11px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>
+                          <div className={`text-[11px] mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0 ${isSelected ? 'text-[var(--w-text-disabled)]' : 'text-[var(--w-text-muted)]'}`}>
                             {row.accountCode && <span className="font-mono">{row.accountCode}</span>}
+                            {row.accountCode && row.phone && <span className="text-[var(--w-text-disabled)]">|</span>}
                             {row.phone && <span>{row.phone}</span>}
                             {!row.isActive && <span className="text-red-400 font-semibold">Inactif</span>}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className={`text-[12px] font-bold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          <div className={`text-[12px] font-bold num ${isSelected ? 'text-white' : row.balance > 0 ? 'text-amber-600' : row.balance < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
                             {formatFCFA(Math.abs(row.balance))}
                           </div>
                           <div className={`text-[9px] font-bold uppercase tracking-wide ${isSelected ? 'text-slate-300' : row.balance > 0 ? 'text-amber-500' : row.balance < 0 ? 'text-emerald-500' : 'text-slate-300'}`}>{row.balance > 0 ? 'Solde dû' : row.balance < 0 ? 'Crédit dispo.' : 'Solde'}</div>
@@ -1007,7 +1003,7 @@ export function Tiers() {
 
           {/* ── Bottom summary ── */}
           {!loading && unifiedRows.length > 0 && (
-            <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-1.5 hidden sm:flex items-center gap-4 text-[11px] text-slate-500">
+            <div className="shrink-0 border-t border-[var(--w-separator)] bg-[var(--w-surface)] px-4 py-1.5 hidden sm:flex items-center gap-4 text-[11px] text-[var(--w-text-muted)]">
               <span className="num font-semibold">{unifiedRows.length}</span> tiers affichés
               {tab !== 'suppliers' && <span>| <span className="num font-semibold">{filteredCustomers.length}</span> clients</span>}
               {tab !== 'customers' && <span>| <span className="num font-semibold">{filteredSuppliers.length}</span> fournisseurs</span>}
@@ -1017,16 +1013,16 @@ export function Tiers() {
       </div>
 
       {/* ── Desktop action bar (always visible) ── */}
-      <div className="hidden sm:flex shrink-0 border-t border-slate-200 bg-white px-4 py-2 items-center gap-2">
+      <div className="hidden sm:flex shrink-0 border-t border-[var(--w-separator)] bg-[var(--w-surface)] px-4 py-2 items-center gap-2">
         {selectedRow ? (
           <>
-            <span className="text-xs font-bold text-slate-900 truncate max-w-[200px]">
+            <span className="text-xs font-bold text-[var(--w-text)] truncate max-w-[200px]">
               {selectedRow.type === 'customer' ? (selectedRow.data as Customer).name : (selectedRow.data as Supplier).name}
             </span>
-            <span className="text-[10px] font-semibold uppercase text-slate-400 shrink-0">{selectedRow.type === 'customer' ? 'Client' : 'Fournisseur'}</span>
+            <span className="text-[10px] font-semibold uppercase text-[var(--w-text-disabled)] shrink-0">{selectedRow.type === 'customer' ? 'Client' : 'Fournisseur'}</span>
           </>
         ) : (
-          <span className="text-[11px] text-slate-400">Sélectionnez un tiers pour agir</span>
+          <span className="text-[11px] text-[var(--w-text-disabled)]">Sélectionnez un tiers pour agir</span>
         )}
         <div className="flex-1" />
         <div className="flex items-center gap-1">
@@ -1061,54 +1057,54 @@ export function Tiers() {
 
       {/* ── Mobile action modal (full screen) ── */}
       {selectedRow && (
-        <div className="sm:hidden fixed inset-0 z-[60] flex flex-col bg-white animate-fade-in">
-          <div className="shrink-0 border-b border-slate-200 px-4 py-3 flex items-center gap-3">
-            <button onClick={() => setSelectedRow(null)} className="p-1 -ml-1 text-slate-500 hover:text-slate-800">
+        <div className="sm:hidden fixed inset-0 z-[60] flex flex-col bg-[var(--w-surface)] animate-fade-in">
+          <div className="shrink-0 border-b border-[var(--w-separator)] px-4 py-3 flex items-center gap-3">
+            <button onClick={() => setSelectedRow(null)} className="p-1 -ml-1 text-[var(--w-text-muted)] hover:text-slate-800">
               <X className="w-5 h-5" />
             </button>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-slate-900" style={{ wordBreak: 'break-word' }}>
+              <div className="text-sm font-bold text-[var(--w-text)]" style={{ wordBreak: 'break-word' }}>
                 {selectedRow.type === 'customer' ? (selectedRow.data as Customer).name : (selectedRow.data as Supplier).name}
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
+              <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">
                 {selectedRow.type === 'customer' ? 'Client' : 'Fournisseur'}
                 {(selectedRow.data as any).account_code && <span className="ml-1.5 font-mono">{(selectedRow.data as any).account_code}</span>}
               </div>
             </div>
-            <div className={`text-sm font-bold num ${(selectedRow.data as any).balance > 0 ? 'text-amber-600' : (selectedRow.data as any).balance < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+            <div className={`text-sm font-bold num ${(selectedRow.data as any).balance > 0 ? 'text-amber-600' : (selectedRow.data as any).balance < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
               {formatFCFA(Number((selectedRow.data as any).balance || 0))}
             </div>
           </div>
           <div className="flex-1 overflow-auto">
             <div>
-              <button onClick={() => { handleActionInterroger(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+              <button onClick={() => { handleActionInterroger(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <Info className="w-4 h-4 text-brand-700 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-slate-900">Interroger le compte</div><div className="text-[11px] text-slate-500 mt-0.5">Voir le détail comptable, commercial et statistiques</div></div>
+                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Interroger le compte</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Voir le détail comptable, commercial et statistiques</div></div>
               </button>
-              <button onClick={() => { handleActionBalance(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+              <button onClick={() => { handleActionBalance(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <Scale className="w-4 h-4 text-brand-700 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-slate-900">Positionner le solde</div><div className="text-[11px] text-slate-500 mt-0.5">Ajuster manuellement le solde du tiers</div></div>
+                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Positionner le solde</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Ajuster manuellement le solde du tiers</div></div>
               </button>
               {selectedRow.type === 'customer' && (
-                <button onClick={() => { handleActionPricing(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+                <button onClick={() => { handleActionPricing(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                   <Tag className="w-4 h-4 text-brand-700 shrink-0" />
-                  <div><div className="text-[13px] font-semibold text-slate-900">Tarifs d'exception</div><div className="text-[11px] text-slate-500 mt-0.5">Gérer les prix spéciaux pour ce client</div></div>
+                  <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Tarifs d'exception</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Gérer les prix spéciaux pour ce client</div></div>
                 </button>
               )}
-              <button onClick={() => { handleActionPayment(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+              <button onClick={() => { handleActionPayment(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <Wallet className="w-4 h-4 text-brand-700 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-slate-900">Saisir un règlement</div><div className="text-[11px] text-slate-500 mt-0.5">Enregistrer un paiement reçu ou versé</div></div>
+                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Saisir un règlement</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Enregistrer un paiement reçu ou versé</div></div>
               </button>
-              <button onClick={() => { handleActionDocs(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
+              <button onClick={() => { handleActionDocs(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <FileText className="w-4 h-4 text-brand-700 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-slate-900">Documents</div><div className="text-[11px] text-slate-500 mt-0.5">Consulter les factures et bons de commande</div></div>
+                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Documents</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Consulter les factures et bons de commande</div></div>
               </button>
-              <button onClick={() => { handleActionEdit(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-neutral-50 transition-colors text-left">
-                <Edit2 className="w-4 h-4 text-slate-600 shrink-0" />
-                <div><div className="text-[13px] font-semibold text-slate-900">Modifier la fiche</div><div className="text-[11px] text-slate-500 mt-0.5">Éditer les informations du tiers</div></div>
+              <button onClick={() => { handleActionEdit(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
+                <Edit2 className="w-4 h-4 text-[var(--w-text-sec)] shrink-0" />
+                <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Modifier la fiche</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Éditer les informations du tiers</div></div>
               </button>
               {can('delete_customers') && (
-                <button onClick={() => { handleActionDeactivate(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-red-50 transition-colors text-left">
+                <button onClick={() => { handleActionDeactivate(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-red-950/20 transition-colors text-left">
                   <Trash2 className="w-4 h-4 text-red-500 shrink-0" />
                   <div><div className="text-sm font-semibold text-red-600">Supprimer</div><div className="text-[11px] text-red-400 mt-0.5">Désactiver ou supprimer ce tiers</div></div>
                 </button>
@@ -1147,7 +1143,7 @@ export function Tiers() {
             />
             {custEdit && (
               <FormField label={t('tiers.status')}>
-                <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-slate-200 cursor-pointer">
+                <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-[var(--w-separator)] cursor-pointer">
                   <input type="checkbox" checked={custForm.is_active !== false} onChange={e => setCustForm((f: any) => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4" />
                   <span className="text-sm">{t('common.active')}</span>
                 </label>
@@ -1201,7 +1197,7 @@ export function Tiers() {
             <FormField label={t('tiers.blockCredit')}>
               <label className="flex items-center gap-2 h-10 px-3 border-b border-neutral-200 cursor-pointer">
                 <input type="checkbox" checked={custForm.credit_blocked === true} onChange={e => setCustField('credit_blocked', e.target.checked)} className="w-4 h-4" />
-                <span className="text-sm text-slate-700">{t('tiers.blockCreditCustomer')}</span>
+                <span className="text-sm text-[var(--w-text)]">{t('tiers.blockCreditCustomer')}</span>
               </label>
             </FormField>
             </div>
@@ -1298,7 +1294,7 @@ export function Tiers() {
             <FormField label={t('tiers.blockCredit')}>
               <label className="flex items-center gap-2 h-10 px-3 border-b border-neutral-200 cursor-pointer">
                 <input type="checkbox" checked={(supForm as any).credit_blocked === true} onChange={e => setSupField('credit_blocked', e.target.checked)} className="w-4 h-4" />
-                <span className="text-sm text-slate-700">{t('tiers.blockCreditSupplier')}</span>
+                <span className="text-sm text-[var(--w-text)]">{t('tiers.blockCreditSupplier')}</span>
               </label>
             </FormField>
             </div>
@@ -1355,7 +1351,7 @@ export function Tiers() {
                 <button onClick={downloadTemplate} className="btn-icon" title="Télécharger le modèle">
                   <Download className="w-4 h-4" />
                 </button>
-                <span className="text-xs text-slate-500">Télécharger le modèle</span>
+                <span className="text-xs text-[var(--w-text-muted)]">Télécharger le modèle</span>
               </div>
               <div
                 className="py-8 text-center cursor-pointer"
@@ -1363,15 +1359,15 @@ export function Tiers() {
                 onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleImportFile(f); }}
                 onClick={() => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.csv'; inp.onchange = () => { if (inp.files?.[0]) handleImportFile(inp.files[0]); }; inp.click(); }}
               >
-                <Upload className="w-7 h-7 text-slate-400 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-slate-700">Glissez un fichier Excel ici</p>
-                <p className="text-xs text-slate-400 mt-1">ou cliquez pour parcourir (.xlsx, .xls, .csv)</p>
+                <Upload className="w-7 h-7 text-[var(--w-text-disabled)] mx-auto mb-2" />
+                <p className="text-sm font-semibold text-[var(--w-text)]">Glissez un fichier Excel ici</p>
+                <p className="text-xs text-[var(--w-text-disabled)] mt-1">ou cliquez pour parcourir (.xlsx, .xls, .csv)</p>
               </div>
               {importFilename && (
                 <div className="flex items-center gap-2 py-2.5 border-y border-neutral-100">
-                  <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-                  <span className="text-xs font-medium text-slate-700 truncate flex-1">{importFilename}</span>
-                  <span className="text-xs text-slate-500">{importRows.length} ligne{importRows.length > 1 ? 's' : ''}</span>
+                  <FileText className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
+                  <span className="text-xs font-medium text-[var(--w-text)] truncate flex-1">{importFilename}</span>
+                  <span className="text-xs text-[var(--w-text-muted)]">{importRows.length} ligne{importRows.length > 1 ? 's' : ''}</span>
                 </div>
               )}
               {importRows.length > 0 && (
@@ -1379,21 +1375,21 @@ export function Tiers() {
                   <table className="w-full text-[11px]">
                     <thead className="border-b border-neutral-200">
                       <tr>
-                        <th className="px-1 py-1.5 text-left font-semibold text-slate-600">Nom</th>
-                        <th className="px-1 py-1.5 text-left font-semibold text-slate-600">Tél</th>
-                        <th className="px-1 py-1.5 text-right font-semibold text-slate-600">Solde</th>
+                        <th className="px-1 py-1.5 text-left font-semibold text-[var(--w-text-sec)]">Nom</th>
+                        <th className="px-1 py-1.5 text-left font-semibold text-[var(--w-text-sec)]">Tél</th>
+                        <th className="px-1 py-1.5 text-right font-semibold text-[var(--w-text-sec)]">Solde</th>
                       </tr>
                     </thead>
                     <tbody>
                       {importRows.slice(0, 20).map((r, i) => (
                         <tr key={i} className="border-b border-neutral-100">
                           <td className="px-1 py-1 text-slate-800 font-medium">{r.nom}</td>
-                          <td className="px-2 py-1 text-slate-500">{r.telephone || '-'}</td>
-                          <td className="px-2 py-1 text-right text-slate-700 num">{Number(r.solde || 0) ? formatFCFA(Number(r.solde)) : '-'}</td>
+                          <td className="px-2 py-1 text-[var(--w-text-muted)]">{r.telephone || '-'}</td>
+                          <td className="px-2 py-1 text-right text-[var(--w-text)] num">{Number(r.solde || 0) ? formatFCFA(Number(r.solde)) : '-'}</td>
                         </tr>
                       ))}
                       {importRows.length > 20 && (
-                        <tr><td colSpan={3} className="px-2 py-1.5 text-center text-slate-400 italic">+{importRows.length - 20} autres lignes...</td></tr>
+                        <tr><td colSpan={3} className="px-2 py-1.5 text-center text-[var(--w-text-disabled)] italic">+{importRows.length - 20} autres lignes...</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1440,21 +1436,21 @@ export function Tiers() {
         {balanceTarget && (
           <div className="space-y-4">
             <div className="pb-3 border-b border-neutral-100">
-              <div className="text-xs text-slate-500 mb-0.5">{balanceTarget.type === 'customer' ? 'Client' : 'Fournisseur'}</div>
+              <div className="text-xs text-[var(--w-text-muted)] mb-0.5">{balanceTarget.type === 'customer' ? 'Client' : 'Fournisseur'}</div>
               <div className="text-sm font-bold text-black">{balanceTarget.name}</div>
               {(() => {
                 const net = balanceTarget.currentBalance - balanceTarget.prepay - balanceTarget.avoir;
                 if (balanceTarget.prepay > 0 || balanceTarget.avoir > 0) {
                   return (
                     <div className="mt-1.5 space-y-0.5">
-                      <div className="text-xs text-slate-500">Dette comptable: <span className="font-bold num text-amber-600">{formatFCFA(balanceTarget.currentBalance)}</span></div>
-                      {balanceTarget.prepay > 0 && <div className="text-xs text-slate-500">Acompte disponible: <span className="font-bold num text-emerald-600">{formatFCFA(balanceTarget.prepay)}</span></div>}
-                      {balanceTarget.avoir > 0 && <div className="text-xs text-slate-500">Avoir disponible: <span className="font-bold num text-teal-600">{formatFCFA(balanceTarget.avoir)}</span></div>}
-                      <div className="text-xs text-slate-700 pt-1 border-t border-slate-200 mt-1">Position nette: <span className={`font-bold num ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-slate-500'}`}>{formatFCFA(net)}</span></div>
+                      <div className="text-xs text-[var(--w-text-muted)]">Dette comptable: <span className="font-bold num text-amber-600">{formatFCFA(balanceTarget.currentBalance)}</span></div>
+                      {balanceTarget.prepay > 0 && <div className="text-xs text-[var(--w-text-muted)]">Acompte disponible: <span className="font-bold num text-emerald-600">{formatFCFA(balanceTarget.prepay)}</span></div>}
+                      {balanceTarget.avoir > 0 && <div className="text-xs text-[var(--w-text-muted)]">Avoir disponible: <span className="font-bold num text-teal-600">{formatFCFA(balanceTarget.avoir)}</span></div>}
+                      <div className="text-xs text-[var(--w-text)] pt-1 border-t border-[var(--w-separator)] mt-1">Position nette: <span className={`font-bold num ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-[var(--w-text-muted)]'}`}>{formatFCFA(net)}</span></div>
                     </div>
                   );
                 }
-                return <div className="text-xs text-slate-500 mt-1">Solde actuel: <span className="font-bold num">{formatFCFA(balanceTarget.currentBalance)}</span></div>;
+                return <div className="text-xs text-[var(--w-text-muted)] mt-1">Solde actuel: <span className="font-bold num">{formatFCFA(balanceTarget.currentBalance)}</span></div>;
               })()}
             </div>
             <div>
@@ -1463,15 +1459,15 @@ export function Tiers() {
                 type="number"
                 value={balanceAmount}
                 onChange={e => setBalanceAmount(e.target.value)}
-                className="input"
+                className="w-input-ul text-lg font-bold num py-2"
                 placeholder="0"
                 autoFocus
               />
-              <p className="text-[10px] text-slate-400 mt-1">Positionnez la dette comptable. Les acomptes et avoirs réduisent automatiquement la position nette. Positif = le tiers doit; Négatif = vous devez au tiers.</p>
+              <p className="text-[10px] text-[var(--w-text-disabled)] mt-1">Positionnez la dette comptable. Les acomptes et avoirs réduisent automatiquement la position nette. Positif = le tiers doit; Négatif = vous devez au tiers.</p>
             </div>
             <div>
               <label className="label">Note (optionnel)</label>
-              <input value={balanceNote} onChange={e => setBalanceNote(e.target.value)} className="input" placeholder="Reprise de solde comptable..." />
+              <input value={balanceNote} onChange={e => setBalanceNote(e.target.value)} className="w-input-ul py-2" placeholder="Reprise de solde comptable..." />
             </div>
           </div>
         )}
@@ -1495,12 +1491,12 @@ export function Tiers() {
 /* ───────────────────────── UI primitives ───────────────────────── */
 function Badge({ tone, children }: { tone: 'neutral' | 'emerald' | 'amber' | 'red' | 'slate' | 'sky'; children: React.ReactNode }) {
   const tones: Record<string, string> = {
-    neutral: 'bg-slate-100 text-slate-700',
+    neutral: 'bg-[var(--w-surface-el)] text-[var(--w-text)]',
     emerald: 'bg-emerald-50 text-emerald-700',
     amber: 'bg-amber-50 text-amber-700',
     red: 'bg-red-50 text-red-700',
-    slate: 'bg-slate-100 text-slate-500',
-    sky: 'bg-neutral-50 text-neutral-700',
+    slate: 'bg-[var(--w-surface-el)] text-[var(--w-text-muted)]',
+    sky: 'bg-neutral-50 text-[var(--w-text)]',
   };
   return <span className={`badge ${tones[tone]} capitalize`}>{children}</span>;
 }
@@ -1518,7 +1514,7 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, prepayMap, avoir
       : <div className="card"><EmptyState icon={Users} title="Aucun résultat" description="Aucun client ne correspond à votre recherche." /></div>;
   }
   return (
-    <div className="space-y-1 sm:space-y-0">
+    <div className="space-y-2 sm:space-y-0">
       {list.map(c => {
         const inactive = (c as any).is_active === false;
         const limit = Number((c as any).credit_limit || 0);
@@ -1534,45 +1530,40 @@ function CustomerList({ list, total, dueMap, paidMap, totalMap, prepayMap, avoir
           <button
             key={c.id}
             onClick={() => onClickRow(c)}
-            className={`w-full text-left transition-colors ${inactive ? 'opacity-50' : ''} sm:hover:bg-slate-50 sm:rounded-none sm:px-2 sm:py-1.5 bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-brand-300 active:scale-[0.99] px-3.5 py-2.5`}
+            className={`w-full text-left transition-colors ${inactive ? 'opacity-50' : ''} sm:hover:bg-[var(--w-hover)] sm:rounded-none sm:px-2 sm:py-1.5 bg-[var(--w-surface)] rounded-2xl border border-[var(--w-separator)] active:scale-[0.99] px-3.5 py-3`}
           >
             {/* Desktop: single flat line */}
             <div className="hidden sm:flex items-center gap-3">
               <div className="w-5 h-5 shrink-0 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center text-[10px] font-bold">{c.name.charAt(0).toUpperCase()}</div>
-              <p className="text-[12px] font-bold text-slate-900 truncate flex-1 min-w-0">{c.name}</p>
-              {c.phone && <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden md:inline">{c.phone}</span>}
+              <p className="text-[12px] font-bold text-[var(--w-text)] truncate flex-1 min-w-0">{c.name}</p>
+              {c.phone && <span className="text-[11px] text-[var(--w-text-disabled)] shrink-0 tabular-nums hidden md:inline">{c.phone}</span>}
               <div className="flex items-center gap-1 shrink-0">
                 {blocked && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
                 {!blocked && overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
                 {!blocked && nearLimit && !overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
-                {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200">Inactif</span>}
+                {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[var(--w-surface-el)] text-[var(--w-text-disabled)] border border-[var(--w-separator)]">Inactif</span>}
               </div>
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 shrink-0 hidden lg:inline">{netLabel}</span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--w-text-disabled)] shrink-0 hidden lg:inline">{netLabel}</span>
               <span className={`text-[12px] font-black tabular-nums shrink-0 w-28 text-right ${netColor}`}>{formatFCFA(netAmount)}</span>
             </div>
             {/* Mobile: card layout */}
             <div className="sm:hidden">
               <div className="flex items-start gap-2 mb-1.5">
-                <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
-                  {c.name.charAt(0).toUpperCase()}
-                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-bold text-slate-900 leading-snug">{c.name}</p>
+                  <p className="text-[13px] font-bold text-[var(--w-text)] leading-snug">{c.name}</p>
                   {c.phone && (
-                    <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                      <Phone className="w-2.5 h-2.5 shrink-0" />{c.phone}
-                    </div>
+                    <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">{c.phone}</div>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {blocked && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Bloqué</span>}
                   {!blocked && overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">Plafond</span>}
                   {!blocked && nearLimit && !overLimit && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Limite</span>}
-                  {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200">Inactif</span>}
+                  {inactive && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[var(--w-surface-el)] text-[var(--w-text-disabled)] border border-[var(--w-separator)]">Inactif</span>}
                 </div>
               </div>
-              <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">{netLabel}</span>
+              <div className="flex items-center justify-between border-t border-[var(--w-separator-l)] pt-1.5 mt-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--w-text-disabled)]">{netLabel}</span>
                 <span className={`text-[12px] font-black tabular-nums ${netColor}`}>{formatFCFA(netAmount)}</span>
               </div>
             </div>
@@ -1595,7 +1586,7 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
       : <div className="card"><EmptyState icon={Truck} title="Aucun résultat" description="Aucun fournisseur ne correspond à votre recherche." /></div>;
   }
   return (
-    <div className="space-y-1 sm:space-y-0">
+    <div className="space-y-2 sm:space-y-0">
       {list.map(s => {
         const balance = Number((s as any).balance || 0);
         const netColor = balance > 0 ? 'text-red-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-300';
@@ -1603,35 +1594,30 @@ function SupplierList({ list, total, dueMap, onCreate, onClickRow }: {
           <button
             key={s.id}
             onClick={() => onClickRow(s)}
-            className={`w-full text-left transition-colors ${!s.is_active ? 'opacity-50' : ''} sm:hover:bg-slate-50 sm:rounded-none sm:px-2 sm:py-1.5 bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 active:scale-[0.99] px-3.5 py-2.5`}
+            className={`w-full text-left transition-colors ${!s.is_active ? 'opacity-50' : ''} sm:hover:bg-[var(--w-hover)] sm:rounded-none sm:px-2 sm:py-1.5 bg-[var(--w-surface)] rounded-2xl border border-[var(--w-separator)] active:scale-[0.99] px-3.5 py-3`}
           >
             {/* Desktop: single flat line */}
             <div className="hidden sm:flex items-center gap-3">
-              <div className="w-5 h-5 shrink-0 rounded-md bg-neutral-100 text-neutral-700 flex items-center justify-center text-[10px] font-bold">{s.name.charAt(0).toUpperCase()}</div>
-              <p className="text-[12px] font-bold text-slate-900 truncate flex-1 min-w-0">{s.name}</p>
-              {s.phone && <span className="text-[11px] text-slate-400 shrink-0 tabular-nums hidden md:inline">{s.phone}</span>}
-              {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200 shrink-0">Inactif</span>}
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 shrink-0 hidden lg:inline">Solde comptable</span>
+              <div className="w-5 h-5 shrink-0 rounded-md bg-neutral-100 text-[var(--w-text)] flex items-center justify-center text-[10px] font-bold">{s.name.charAt(0).toUpperCase()}</div>
+              <p className="text-[12px] font-bold text-[var(--w-text)] truncate flex-1 min-w-0">{s.name}</p>
+              {s.phone && <span className="text-[11px] text-[var(--w-text-disabled)] shrink-0 tabular-nums hidden md:inline">{s.phone}</span>}
+              {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[var(--w-surface-el)] text-[var(--w-text-disabled)] border border-[var(--w-separator)] shrink-0">Inactif</span>}
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--w-text-disabled)] shrink-0 hidden lg:inline">Solde comptable</span>
               <span className={`text-[12px] font-black tabular-nums shrink-0 w-28 text-right ${netColor}`}>{formatFCFA(balance)}</span>
             </div>
             {/* Mobile: card layout */}
             <div className="sm:hidden">
               <div className="flex items-start gap-2 mb-1.5">
-                <div className="w-6 h-6 shrink-0 rounded-lg bg-gradient-to-br from-neutral-50 to-neutral-100 text-neutral-700 flex items-center justify-center text-[10px] font-bold mt-0.5">
-                  {s.name.charAt(0).toUpperCase()}
-                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-bold text-slate-900 leading-snug">{s.name}</p>
+                  <p className="text-[13px] font-bold text-[var(--w-text)] leading-snug">{s.name}</p>
                   {s.phone && (
-                    <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                      <Phone className="w-2.5 h-2.5 shrink-0" />{s.phone}
-                    </div>
+                    <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">{s.phone}</div>
                   )}
                 </div>
-                {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-slate-100 text-slate-400 border border-slate-200 shrink-0">Inactif</span>}
+                {!s.is_active && <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[var(--w-surface-el)] text-[var(--w-text-disabled)] border border-[var(--w-separator)] shrink-0">Inactif</span>}
               </div>
-              <div className="flex items-center justify-between pl-8 border-t border-slate-100 pt-1.5">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Solde comptable</span>
+              <div className="flex items-center justify-between border-t border-[var(--w-separator-l)] pt-1.5 mt-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--w-text-disabled)]">Solde comptable</span>
                 <span className={`text-[12px] font-black tabular-nums ${netColor}`}>{formatFCFA(balance)}</span>
               </div>
             </div>
@@ -1661,27 +1647,27 @@ function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate,
         <div className="sm:hidden sheet-handle" />
         <div className="px-5 pt-3 sm:pt-4 pb-3 flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-base font-bold text-slate-900 truncate">{title}</div>
-            {subtitle && <div className="text-xs text-slate-500 mt-0.5">{subtitle}</div>}
+            <div className="text-base font-bold text-[var(--w-text)] truncate">{title}</div>
+            {subtitle && <div className="text-xs text-[var(--w-text-muted)] mt-0.5">{subtitle}</div>}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-[var(--w-hover)] text-[var(--w-text-muted)]"><X className="w-5 h-5" /></button>
         </div>
         <div className="px-3 pb-2 space-y-1">
           {actions.map((a, i) => {
             const Icon = a.icon;
             return (
-              <button key={i} onClick={a.onClick} className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-slate-50 active:bg-slate-100 transition-colors text-left">
+              <button key={i} onClick={a.onClick} className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-[var(--w-hover)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <span className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0"><Icon className="w-5 h-5" /></span>
                 <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-semibold text-slate-900">{a.label}</span>
-                  {a.desc && <span className="block text-xs text-slate-500 mt-0.5">{a.desc}</span>}
+                  <span className="block text-sm font-semibold text-[var(--w-text)]">{a.label}</span>
+                  {a.desc && <span className="block text-xs text-[var(--w-text-muted)] mt-0.5">{a.desc}</span>}
                 </span>
                 <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
               </button>
             );
           })}
         </div>
-        <div className="px-3 pb-4 pt-1 border-t border-slate-100 flex gap-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        <div className="px-3 pb-4 pt-1 border-t border-[var(--w-separator-l)] flex gap-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           {onEdit && <button onClick={onEdit} className="flex-1 btn-icon justify-center" title="Modifier"><Edit2 className="w-4 h-4" /></button>}
           {onReactivate && <button onClick={onReactivate} className="flex-1 btn-icon-success" title="Réactiver"><RotateCcw className="w-4 h-4" /></button>}
           {onDeactivate && <button onClick={onDeactivate} className="flex-1 btn-icon-danger" title="Supprimer"><Trash2 className="w-4 h-4" /></button>}
@@ -2107,14 +2093,14 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
       <>
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4 animate-fade-in">
         <div className="scrim" onClick={onClose} />
-        <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-white sm:rounded-lg border border-slate-200 shadow-lg flex flex-col overflow-hidden">
+        <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-[var(--w-surface)] sm:rounded-lg border border-[var(--w-separator)] shadow-lg flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 bg-white">
-            <button onClick={() => goToCustomer(prevCust)} disabled={!prevCust} className="p-1 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client précédent"><ChevronLeft className="w-4 h-4" /></button>
+          <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-[var(--w-separator)] bg-[var(--w-surface-el)]">
+            <button onClick={() => goToCustomer(prevCust)} disabled={!prevCust} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client précédent"><ChevronLeft className="w-4 h-4" /></button>
             <div className="flex-1 min-w-0">
               <SearchableSelect variant="underline" searchable menuWidth={380} wrapLabels options={custOptions} value={activeCustomer.id} onChange={(id) => goToCustomer(customerList.find(x => x.id === id) || null)} placeholder="Rechercher un client…" />
             </div>
-            <button onClick={() => goToCustomer(nextCust)} disabled={!nextCust} className="p-1 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client suivant"><ChevronRight className="w-4 h-4" /></button>
+            <button onClick={() => goToCustomer(nextCust)} disabled={!nextCust} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client suivant"><ChevronRight className="w-4 h-4" /></button>
             <div className="text-right shrink-0">
               {!loading && (
                 netDebt > 0 ? (
@@ -2135,20 +2121,20 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
                 )
               )}
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"><X className="w-5 h-5" /></button>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors"><X className="w-5 h-5" /></button>
           </div>
 
           {/* Body: left nav + content */}
           <div className="flex-1 flex min-h-0">
             {/* Left nav — desktop */}
-            <aside className="hidden md:flex flex-col w-44 shrink-0 bg-white border-r border-neutral-100 py-3 px-2 gap-0">
+            <aside className="hidden md:flex flex-col w-44 shrink-0 bg-[var(--w-surface)] border-r border-[var(--w-separator-l)] py-3 px-2 gap-0">
               {([
                 { k: 'comptable' as const, l: 'Comptable', icon: FileText },
                 { k: 'commerciale' as const, l: 'Commerciale', icon: ShoppingBag },
                 { k: 'statistiques' as const, l: 'Statistiques', icon: TrendingUp },
               ]).map(t => (
                 <button key={t.k} onClick={() => setInfoTab(t.k)}
-                  className={`flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-neutral-400 hover:text-black border-b-2 border-transparent'}`}>
+                  className={`flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-[var(--w-text-disabled)] hover:text-black border-b-2 border-transparent'}`}>
                   <t.icon className="w-3.5 h-3.5 shrink-0" />
                   {t.l}
                 </button>
@@ -2156,14 +2142,14 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
             </aside>
 
             {/* Mobile tabs */}
-            <div className="md:hidden absolute top-[3.25rem] left-0 right-0 z-10 bg-white border-b border-neutral-100 px-3 py-1.5 flex gap-1.5">
+            <div className="md:hidden absolute top-[3.25rem] left-0 right-0 z-10 bg-[var(--w-surface)] border-b border-[var(--w-separator-l)] px-3 py-1.5 flex gap-1.5">
               {([
                 { k: 'comptable' as const, l: 'Comptable' },
                 { k: 'commerciale' as const, l: 'Commerciale' },
                 { k: 'statistiques' as const, l: 'Statistiques' },
               ]).map(t => (
                 <button key={t.k} onClick={() => setInfoTab(t.k)}
-                  className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-neutral-400 border-b-2 border-transparent'}`}>
+                  className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-[var(--w-text-disabled)] border-b-2 border-transparent'}`}>
                   {t.l}
                 </button>
               ))}
@@ -2172,7 +2158,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
             {/* Content */}
             <div className="flex-1 min-w-0 overflow-auto p-4 md:pt-4 pt-12">
               {loading ? (
-                <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+                <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>
               ) : (
                 <>
                   {infoTab === 'comptable' && (
@@ -2184,26 +2170,26 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
                     <div>
                       <div className="flex items-center gap-4 mb-4 pb-3 border-b border-neutral-100 text-xs">
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Factures</div>
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--w-text-disabled)] font-bold">Factures</div>
                           <div className="text-sm font-bold text-black num">{commercialeSummary.rows.length}</div>
                         </div>
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">CA total</div>
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--w-text-disabled)] font-bold">CA total</div>
                           <div className="text-sm font-bold text-black num">{formatFCFA(commercialeSummary.totalCA)}</div>
                         </div>
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Marge</div>
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--w-text-disabled)] font-bold">Marge</div>
                           <div className="text-sm font-bold text-black num">{formatFCFA(commercialeSummary.totalMarge)}</div>
                         </div>
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Articles</div>
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--w-text-disabled)] font-bold">Articles</div>
                           <div className="text-sm font-bold text-black num">{commercialeSummary.totalQty.toLocaleString('fr-FR')}</div>
                         </div>
                       </div>
                       <div className="overflow-hidden">
-                        <div className="max-h-[55vh] overflow-auto">
+                        <div>
                           <table className="w-full text-xs">
-                            <thead className="sticky top-0 z-[2] bg-white border-b border-neutral-200">
+                            <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
                               <tr>
                                 <th className="px-3 py-2 text-left font-semibold text-black">N° Facture</th>
                                 <th className="px-3 py-2 text-left font-semibold text-black">Date</th>
@@ -2228,7 +2214,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
                                 );
                               })}
                               {commercialeSummary.rows.length === 0 && (
-                                <tr><td colSpan={6} className="px-3 py-8 text-center text-neutral-400">Aucune vente enregistrée.</td></tr>
+                                <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--w-text-disabled)]">Aucune vente enregistrée.</td></tr>
                               )}
                             </tbody>
                             {commercialeSummary.rows.length > 0 && (
@@ -2338,7 +2324,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-bold text-black">{c.name}</div>
-            <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 mt-0.5">
+            <div className="text-[9px] font-semibold tracking-wider uppercase text-[var(--w-text-disabled)] mt-0.5">
               {key === 'payment' && 'Encaissement avec imputation'}
               {key === 'docs' && 'Documents de ventes · statistiques'}
               {key === 'pricing' && 'Prix spéciaux par article'}
@@ -2357,7 +2343,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
                 <div className="text-sm font-bold tabular-nums leading-none mt-0.5">{formatFCFA(creditAvailable)}</div>
               </div>
             ) : (
-              <div className="text-slate-500">
+              <div className="text-[var(--w-text-muted)]">
                 <div className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Solde</div>
                 <div className="text-sm font-bold tabular-nums leading-none mt-0.5">0 FCFA</div>
               </div>
@@ -2457,12 +2443,12 @@ function LedgerView({ customerName, statement, statementLoading, netDebt, credit
   const opening = Number(statement?.opening_balance || 0);
 
   if (statementLoading && !statement) {
-    return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
+    return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>;
   }
   if (!statement) {
     return (
       <div className="py-10 text-center">
-        <div className="text-sm font-medium text-slate-500">Relevé indisponible pour {customerName}.</div>
+        <div className="text-sm font-medium text-[var(--w-text-muted)]">Relevé indisponible pour {customerName}.</div>
       </div>
     );
   }
@@ -2478,20 +2464,20 @@ function LedgerView({ customerName, statement, statementLoading, netDebt, credit
           ) : 'Période'}
         </button>
         {(dateFrom || dateTo) && (
-          <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5" title="Effacer"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={onClearDates} className="text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)] p-0.5" title="Effacer"><X className="w-3.5 h-3.5" /></button>
         )}
-        <button onClick={onPrint} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-slate-500 hover:text-black hover:underline transition-colors" title="Imprimer le relevé">
+        <button onClick={onPrint} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-[var(--w-text-muted)] hover:text-black hover:underline transition-colors" title="Imprimer le relevé">
           <Printer className="w-3.5 h-3.5" /> Imprimer
         </button>
         <div className="flex items-center gap-0.5 ml-auto">
           {[{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }, { v: 'avoir' as const, l: 'Avoirs' }, { v: 'allocation' as const, l: 'Imputations' }, { v: 'loan' as const, l: 'Prêts' }].map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
-              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-slate-900 border-b-2 border-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
+              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-[var(--w-text)] border-b-2 border-slate-900' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               {o.l}
             </button>
           ))}
         </div>
-        <span className="text-[10px] text-slate-400 ml-2 num">{filteredRows.length} ligne{filteredRows.length > 1 ? 's' : ''}</span>
+        <span className="text-[10px] text-[var(--w-text-disabled)] ml-2 num">{filteredRows.length} ligne{filteredRows.length > 1 ? 's' : ''}</span>
       </div>
 
       {/* Flat accounting table */}
@@ -2510,18 +2496,18 @@ function LedgerView({ customerName, statement, statementLoading, netDebt, credit
             </thead>
             <tbody>
               <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                <td className="px-3 py-1.5 text-slate-500" colSpan={3}>Solde d'ouverture</td>
+                <td className="px-3 py-1.5 text-[var(--w-text-muted)]" colSpan={3}>Solde d'ouverture</td>
                 <td className="px-3 py-1.5" />
                 <td className="px-3 py-1.5" />
                 <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(opening)}</td>
               </tr>
               {filteredRows.map((r, i) => (
-                <tr key={i} className={`border-b border-neutral-100 hover:bg-neutral-50/50${!r.affects ? ' bg-slate-50/60' : ''}`}>
+                <tr key={i} className={`border-b border-neutral-100 hover:bg-neutral-50/50${!r.affects ? ' bg-[var(--w-surface-el)]/60' : ''}`}>
                   <td className="px-3 py-1.5 text-black whitespace-nowrap">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                   <td className="px-3 py-1.5 font-mono text-black hidden sm:table-cell">{r.piece || '—'}</td>
-                  <td className={`px-3 py-1.5 font-medium${!r.affects ? ' text-slate-500 italic' : ' text-black'}`}>{r.label}</td>
-                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-slate-400' : ' text-black'}`}>{Number(r.debit) > 0 ? formatFCFA(Number(r.debit)) : ''}</td>
-                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-slate-400' : ' text-black'}`}>{Number(r.credit) > 0 ? formatFCFA(Number(r.credit)) : ''}</td>
+                  <td className={`px-3 py-1.5 font-medium${!r.affects ? ' text-[var(--w-text-muted)] italic' : ' text-black'}`}>{r.label}</td>
+                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-black'}`}>{Number(r.debit) > 0 ? formatFCFA(Number(r.debit)) : ''}</td>
+                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-black'}`}>{Number(r.credit) > 0 ? formatFCFA(Number(r.credit)) : ''}</td>
                   <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(Number(r.running))}</td>
                 </tr>
               ))}
@@ -2556,7 +2542,7 @@ function RecentPaymentsAccordion({ label, children }: { label: string; children:
   return (
     <div className="mt-4">
       <button type="button" onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1 text-[10px] uppercase font-semibold text-slate-500 tracking-wide hover:text-slate-700 transition-colors">
+        className="flex items-center gap-1 text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide hover:text-[var(--w-text)] transition-colors">
         <ChevronRight className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
         {label}
       </button>
@@ -2585,24 +2571,24 @@ function PaymentForm({
       {/* Montant à régler | Dû — deux colonnes, trait vertical fin */}
       <div className="grid grid-cols-2 py-1">
         <div className="pr-4">
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Montant à régler</label>
+          <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">Montant à régler</label>
           <div className="mt-1 flex items-baseline gap-1">
             <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-              className="text-lg font-bold text-slate-900 focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
-            <span className="text-xs text-slate-500 font-medium">FCFA</span>
+              className="text-lg font-bold text-[var(--w-text)] focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
+            <span className="text-xs text-[var(--w-text-muted)] font-medium">FCFA</span>
           </div>
         </div>
         <div className="pl-4 border-l border-neutral-200">
           {selected ? (
             <>
-              <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">{isBalance ? 'Report de solde' : 'Dû'}</div>
+              <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">{isBalance ? 'Report de solde' : 'Dû'}</div>
               <div className="mt-1 text-sm font-bold text-slate-800 num">{formatFCFA(due)}</div>
-              {amt > 0 && <div className="text-[11px] text-slate-500 mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
+              {amt > 0 && <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
             </>
           ) : (
             <>
-              <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Imputation</div>
-              <div className="mt-1 text-xs text-slate-400">Aucune facture</div>
+              <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">Imputation</div>
+              <div className="mt-1 text-xs text-[var(--w-text-disabled)]">Aucune facture</div>
             </>
           )}
         </div>
@@ -2610,7 +2596,7 @@ function PaymentForm({
 
       {/* Imputer sur — champ underline */}
       <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Imputer sur</label>
+        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Imputer sur</label>
         <SearchableSelect
           variant="underline"
           options={[
@@ -2626,7 +2612,7 @@ function PaymentForm({
         />
         {unpaid.some((s: any) => s.id === '__balance__') && (
           <button type="button" onClick={() => { setPaySale('__balance__'); onSelectSale('__balance__'); }}
-            className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-700'}`}>
+            className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-muted)] hover:text-[var(--w-text)]'}`}>
             Report de solde · {formatFCFA(unpaid.find((s: any) => s.id === '__balance__')?.total || 0)}
           </button>
         )}
@@ -2635,11 +2621,11 @@ function PaymentForm({
 
       {/* Modes de règlement — une seule ligne, soulignement du mode actif */}
       <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Mode</label>
+        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Mode</label>
         <div className="flex items-center gap-4">
           {methods.map((m: any) => (
             <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-slate-900 text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               {m.name}
             </button>
           ))}
@@ -2648,14 +2634,14 @@ function PaymentForm({
 
       {/* Référence — bare-input */}
       <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Référence (optionnel)</label>
+        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Référence (optionnel)</label>
         <input value={payRef} onChange={e => setPayRef(e.target.value)}
           className="bare-input text-sm py-1.5"
           placeholder="N° bordereau, transaction…" />
       </div>
 
       {/* Imputé sur la caisse du jour */}
-      <div className="mt-3 text-[11px] text-slate-500">
+      <div className="mt-3 text-[11px] text-[var(--w-text-muted)]">
         Imputé sur la caisse du jour
       </div>
 
@@ -2663,9 +2649,9 @@ function PaymentForm({
         <RecentPaymentsAccordion label="Derniers encaissements">
           {recentPayments.map((p: any) => (
             <div key={p.id} className="py-1.5 border-b border-neutral-100 last:border-0">
-              <div className="text-xs text-slate-600 line-clamp-2 leading-snug">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
+              <div className="text-xs text-[var(--w-text-sec)] line-clamp-2 leading-snug">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
               <div className="flex items-center justify-between mt-0.5">
-                <div className="text-xs text-slate-400">{p.sale_number || 'Acompte'}</div>
+                <div className="text-xs text-[var(--w-text-disabled)]">{p.sale_number || 'Acompte'}</div>
                 <div className="text-xs font-bold text-emerald-700 num">{formatFCFA(p.amount)}</div>
               </div>
             </div>
@@ -2685,11 +2671,11 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
           <Calendar className="w-3 h-3 text-black" />
           {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
         </button>
-        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5"><X className="w-3.5 h-3.5" /></button>}
-        <span className="ml-auto text-[10px] text-slate-400 num">{kpis.count} factures | CA {formatFCFA(kpis.ca)} | Marge {formatFCFA(kpis.marge)} ({kpis.margePct.toFixed(1)}%)</span>
+        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)] p-0.5"><X className="w-3.5 h-3.5" /></button>}
+        <span className="ml-auto text-[10px] text-[var(--w-text-disabled)] num">{kpis.count} factures | CA {formatFCFA(kpis.ca)} | Marge {formatFCFA(kpis.marge)} ({kpis.margePct.toFixed(1)}%)</span>
       </div>
       {docs.length === 0 ? (
-        <div className="text-sm text-slate-500 py-10 text-center">Aucun document sur cette période.</div>
+        <div className="text-sm text-[var(--w-text-muted)] py-10 text-center">Aucun document sur cette période.</div>
       ) : (
         <div>
           <div className="max-h-[60vh] overflow-auto">
@@ -2737,19 +2723,19 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
   return (
     <div className="fixed inset-0 z-[55] bg-white flex flex-col">
       <div className="flex items-center justify-between px-4 h-12 border-b border-neutral-200 shrink-0">
-        <button onClick={onClose} className="p-1"><X className="w-5 h-5 text-neutral-700" /></button>
+        <button onClick={onClose} className="p-1"><X className="w-5 h-5 text-[var(--w-text)]" /></button>
         <div className="text-center flex-1 min-w-0">
-          <div className="text-sm font-bold text-neutral-900 truncate">{order.order_number}</div>
+          <div className="text-sm font-bold text-[var(--w-text)] truncate">{order.order_number}</div>
         </div>
         <StatusBadgeOrder order={order} />
       </div>
 
       <div className="px-4 py-3 border-b border-neutral-100 space-y-1">
-        <div className="flex items-center gap-2 text-xs text-neutral-700">
-          <Truck className="w-3.5 h-3.5 text-neutral-400" />
+        <div className="flex items-center gap-2 text-xs text-[var(--w-text)]">
+          <Truck className="w-3.5 h-3.5 text-[var(--w-text-disabled)]" />
           <span className="font-medium">{supplierName}</span>
         </div>
-        <div className="flex items-center gap-1 text-xs text-neutral-500">
+        <div className="flex items-center gap-1 text-xs text-[var(--w-text-muted)]">
           <Calendar className="w-3 h-3" />
           {formatDate(order.created_at)}
         </div>
@@ -2761,18 +2747,18 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
             <div key={idx} className="px-4 py-2.5">
               <div className="text-sm font-medium text-neutral-800">{item.name}</div>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-neutral-500">{Number(item.quantity_ordered)} x {formatFCFA(item.unit_price)}</span>
-                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(item.total)}</span>
+                <span className="text-xs text-[var(--w-text-muted)]">{Number(item.quantity_ordered)} x {formatFCFA(item.unit_price)}</span>
+                <span className="text-sm font-bold text-[var(--w-text)] num">{formatFCFA(item.total)}</span>
               </div>
             </div>
           ))}
         </div>
 
         <div className="px-4 py-3 border-t border-neutral-100 space-y-1.5">
-          <div className="flex items-center justify-between text-xs text-neutral-500">
+          <div className="flex items-center justify-between text-xs text-[var(--w-text-muted)]">
             <span>Sous-total</span><span className="num font-semibold">{formatFCFA(subtotal)}</span>
           </div>
-          <div className="flex items-center justify-between text-sm font-bold text-neutral-900">
+          <div className="flex items-center justify-between text-sm font-bold text-[var(--w-text)]">
             <span>Total</span><span className="num">{formatFCFA(order.total)}</span>
           </div>
           {paidTotal > 0 && (
@@ -2789,12 +2775,12 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
 
         {pays.length > 0 && (
           <div className="px-4 py-2.5 border-t border-neutral-100">
-            <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-1.5">Règlements</div>
+            <div className="text-[10px] uppercase tracking-wider text-[var(--w-text-muted)] font-bold mb-1.5">Règlements</div>
             <div className="space-y-1">
               {pays.map((p: any, i: number) => (
                 <div key={i} className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-600">{p.method_name}</span>
-                  <span className="text-neutral-900 font-semibold num">{formatFCFA(p.amount)}</span>
+                  <span className="text-[var(--w-text-sec)]">{p.method_name}</span>
+                  <span className="text-[var(--w-text)] font-semibold num">{formatFCFA(p.amount)}</span>
                 </div>
               ))}
             </div>
@@ -2804,8 +2790,8 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
 
       <div className="border-t border-neutral-200 px-4 py-3 shrink-0 bg-white">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-neutral-500">{validItems.length} article{validItems.length > 1 ? 's' : ''}</span>
-          <span className="text-base font-extrabold text-neutral-900 num">{formatFCFA(order.total)}</span>
+          <span className="text-xs text-[var(--w-text-muted)]">{validItems.length} article{validItems.length > 1 ? 's' : ''}</span>
+          <span className="text-base font-extrabold text-[var(--w-text)] num">{formatFCFA(order.total)}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="flex-1" />
@@ -3081,44 +3067,44 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       <>
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4 animate-fade-in">
         <div className="scrim" onClick={onClose} />
-        <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-white sm:rounded-lg border border-slate-200 shadow-lg flex flex-col overflow-hidden">
+        <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-[var(--w-surface)] sm:rounded-lg border border-[var(--w-separator)] shadow-lg flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-[var(--w-separator)] bg-white">
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-slate-900 truncate">{s.name}</div>
-              <div className="text-[10px] text-slate-500 font-mono">{(s as any).account_code || ''}</div>
+              <div className="text-sm font-bold text-[var(--w-text)] truncate">{s.name}</div>
+              <div className="text-[10px] text-[var(--w-text-muted)] font-mono">{(s as any).account_code || ''}</div>
             </div>
             <div className={`text-right shrink-0 text-black`}>
               <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Solde</div>
               <div className="text-sm font-bold num">{loading ? '...' : formatFCFA(supplierBalance)}</div>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"><X className="w-5 h-5" /></button>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors"><X className="w-5 h-5" /></button>
           </div>
 
           {/* Body */}
           <div className="flex-1 flex min-h-0">
-            <aside className="hidden md:flex flex-col w-44 shrink-0 bg-white border-r border-neutral-100 py-3 px-2 gap-0">
+            <aside className="hidden md:flex flex-col w-44 shrink-0 bg-[var(--w-surface)] border-r border-[var(--w-separator-l)] py-3 px-2 gap-0">
               {([
                 { k: 'comptable' as const, l: 'Comptable', icon: FileText },
                 { k: 'commerciale' as const, l: 'Commerciale', icon: ShoppingBag },
                 { k: 'statistiques' as const, l: 'Statistiques', icon: TrendingUp },
               ]).map(t => (
                 <button key={t.k} onClick={() => setInfoTab(t.k)}
-                  className={`flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-neutral-400 hover:text-black border-b-2 border-transparent'}`}>
+                  className={`flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-[var(--w-text-disabled)] hover:text-black border-b-2 border-transparent'}`}>
                   <t.icon className="w-3.5 h-3.5 shrink-0" />
                   {t.l}
                 </button>
               ))}
             </aside>
 
-            <div className="md:hidden absolute top-[3.25rem] left-0 right-0 z-10 bg-white border-b border-neutral-100 px-3 py-1.5 flex gap-1.5">
+            <div className="md:hidden absolute top-[3.25rem] left-0 right-0 z-10 bg-[var(--w-surface)] border-b border-[var(--w-separator-l)] px-3 py-1.5 flex gap-1.5">
               {([
                 { k: 'comptable' as const, l: 'Comptable' },
                 { k: 'commerciale' as const, l: 'Commerciale' },
                 { k: 'statistiques' as const, l: 'Statistiques' },
               ]).map(t => (
                 <button key={t.k} onClick={() => setInfoTab(t.k)}
-                  className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-neutral-400 border-b-2 border-transparent'}`}>
+                  className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${infoTab === t.k ? 'text-black font-bold border-b-2 border-black' : 'text-[var(--w-text-disabled)] border-b-2 border-transparent'}`}>
                   {t.l}
                 </button>
               ))}
@@ -3126,7 +3112,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 
             <div className="flex-1 min-w-0 overflow-auto p-4 md:pt-4 pt-12">
               {loading ? (
-                <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+                <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>
               ) : (
                 <>
                   {infoTab === 'comptable' && (
@@ -3138,24 +3124,24 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
                     <div>
                       <div className="flex items-center gap-4 mb-4 pb-3 border-b border-neutral-100 text-xs">
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Commandes</div>
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--w-text-disabled)] font-bold">Commandes</div>
                           <div className="text-sm font-bold text-black num">{commercialeSummary.rows.length}</div>
                         </div>
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Achats</div>
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--w-text-disabled)] font-bold">Achats</div>
                           <div className="text-sm font-bold text-black num">{formatFCFA(commercialeSummary.totalAchats)}</div>
                         </div>
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Payé</div>
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--w-text-disabled)] font-bold">Payé</div>
                           <div className="text-sm font-bold text-black num">{formatFCFA(commercialeSummary.totalPaid)}</div>
                         </div>
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Dette</div>
+                          <div className="text-[9px] uppercase tracking-wider text-[var(--w-text-disabled)] font-bold">Dette</div>
                           <div className="text-sm font-bold text-black num">{formatFCFA(commercialeSummary.totalDue)}</div>
                         </div>
                       </div>
                       <div className="overflow-hidden">
-                        <div className="max-h-[55vh] overflow-auto">
+                        <div>
                           <table className="w-full text-xs">
                             <thead className="sticky top-0 bg-white z-[2] border-b border-neutral-200">
                               <tr>
@@ -3182,7 +3168,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
                                 );
                               })}
                               {commercialeSummary.rows.length === 0 && (
-                                <tr><td colSpan={6} className="px-3 py-8 text-center text-neutral-400">Aucune commande enregistrée.</td></tr>
+                                <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--w-text-disabled)]">Aucune commande enregistrée.</td></tr>
                               )}
                             </tbody>
                             {commercialeSummary.rows.length > 0 && (
@@ -3293,7 +3279,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-bold text-black">{s.name}</div>
-            <div className="text-[9px] font-semibold tracking-wider uppercase text-neutral-400 mt-0.5">
+            <div className="text-[9px] font-semibold tracking-wider uppercase text-[var(--w-text-disabled)] mt-0.5">
               {key === 'payment' && 'Règlement avec imputation'}
               {key === 'docs' && 'Documents d\'achats · statistiques'}
               {key === 'articles' && `${articles.length} article${articles.length > 1 ? 's' : ''} lié${articles.length > 1 ? 's' : ''}`}
@@ -3306,7 +3292,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
         </div>
       </div>
 
-      {loading ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div> : (
+      {loading ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div> : (
         <>
           {key === 'payment' && (
             <SupplierPaymentForm
@@ -3335,17 +3321,17 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
             articles.length === 0 ? (
               <EmptyState icon={ShoppingBag} title="Aucun article lié" description="Aucun article du catalogue n'est rattaché à ce fournisseur pour l'instant." />
             ) : (
-              <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white">
+              <div className="rounded-2xl border border-[var(--w-separator)] overflow-hidden bg-white">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <thead className="bg-[var(--w-surface-el)] text-xs uppercase text-[var(--w-text-muted)]">
                     <tr><th className="px-3 py-2 text-left">Réf.</th><th className="px-3 py-2 text-left">Désignation</th><th className="px-3 py-2 text-left">Réf. fourn.</th><th className="px-3 py-2 text-right">Prix vente</th><th className="px-3 py-2 text-center">Statut</th></tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-[var(--w-separator)]">
                     {articles.map(a => (
                       <tr key={a.id}>
-                        <td className="px-3 py-2 font-mono text-xs text-slate-700">{a.internal_ref}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-[var(--w-text)]">{a.internal_ref}</td>
                         <td className="px-3 py-2">{a.name}</td>
-                        <td className="px-3 py-2 text-xs text-slate-500">{a.supplier_ref || '—'}</td>
+                        <td className="px-3 py-2 text-xs text-[var(--w-text-muted)]">{a.supplier_ref || '—'}</td>
                         <td className="px-3 py-2 text-right">{formatFCFA(a.sale_price)}</td>
                         <td className="px-3 py-2 text-center">{a.is_active ? <Badge tone="emerald">Actif</Badge> : <Badge tone="slate">Inactif</Badge>}</td>
                       </tr>
@@ -3419,7 +3405,7 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
   const filteredDette = filteredAchats - filteredRegle;
 
   if (ledger.length === 0) {
-    return <div className="py-10 text-center text-sm text-slate-500">Aucun mouvement pour {supplierName}.</div>;
+    return <div className="py-10 text-center text-sm text-[var(--w-text-muted)]">Aucun mouvement pour {supplierName}.</div>;
   }
 
   return (
@@ -3431,16 +3417,16 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
             <span>{dateFrom && new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} — {dateTo && new Date(dateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>
           ) : 'Période'}
         </button>
-        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5"><X className="w-3.5 h-3.5" /></button>}
+        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)] p-0.5"><X className="w-3.5 h-3.5" /></button>}
         <div className="flex items-center gap-0.5 ml-auto">
           {[{ v: '' as const, l: 'Tout' }, { v: 'order' as const, l: 'Achats' }, { v: 'payment' as const, l: 'Règlements' }].map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
-              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-slate-900 border-b-2 border-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
+              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-[var(--w-text)] border-b-2 border-slate-900' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               {o.l}
             </button>
           ))}
         </div>
-        <span className="text-[10px] text-slate-400 ml-2 num">{sortedLedger.length} ligne{sortedLedger.length > 1 ? 's' : ''}</span>
+        <span className="text-[10px] text-[var(--w-text-disabled)] ml-2 num">{sortedLedger.length} ligne{sortedLedger.length > 1 ? 's' : ''}</span>
       </div>
 
       <div className="">
@@ -3504,24 +3490,24 @@ function SupplierPaymentForm({
       {/* Montant à régler | Imputation — deux colonnes, trait vertical fin, pas de carte */}
       <div className="grid grid-cols-2 py-1">
         <div className="pr-4">
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Montant à régler</label>
+          <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">Montant à régler</label>
           <div className="mt-1 flex items-baseline gap-1">
             <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-              className="text-lg font-bold text-slate-900 focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
-            <span className="text-xs text-slate-500 font-medium">FCFA</span>
+              className="text-lg font-bold text-[var(--w-text)] focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
+            <span className="text-xs text-[var(--w-text-muted)] font-medium">FCFA</span>
           </div>
         </div>
         <div className="pl-4 border-l border-neutral-200">
           {selected ? (
             <>
-              <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">{isBalance ? 'Solde positionné' : 'Dû'}</div>
+              <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">{isBalance ? 'Solde positionné' : 'Dû'}</div>
               <div className="mt-1 text-sm font-bold text-slate-800 num">{formatFCFA(due)}</div>
-              {amt > 0 && <div className="text-[11px] text-slate-500 mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
+              {amt > 0 && <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
             </>
           ) : (
             <>
-              <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide">Imputation</div>
-              <div className="mt-1 text-xs text-slate-400">Aucune commande</div>
+              <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">Imputation</div>
+              <div className="mt-1 text-xs text-[var(--w-text-disabled)]">Aucune commande</div>
             </>
           )}
         </div>
@@ -3529,7 +3515,7 @@ function SupplierPaymentForm({
 
       {/* Imputer sur — champ underline */}
       <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Imputer sur</label>
+        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Imputer sur</label>
         <SearchableSelect
           variant="underline"
           options={[
@@ -3545,7 +3531,7 @@ function SupplierPaymentForm({
         />
         {unpaid.some((o: any) => o.id === '__balance__') && (
           <button type="button" onClick={() => { setPayOrder('__balance__'); onSelectOrder('__balance__'); }}
-            className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-700'}`}>
+            className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-muted)] hover:text-[var(--w-text)]'}`}>
             Solde positionné · {formatFCFA(unpaid.find((o: any) => o.id === '__balance__')?.total || 0)}
           </button>
         )}
@@ -3554,11 +3540,11 @@ function SupplierPaymentForm({
 
       {/* Modes de règlement — une seule ligne, texte compact, soulignement du mode actif */}
       <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Mode</label>
+        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Mode</label>
         <div className="flex items-center gap-4">
           {methods.map((m: any) => (
             <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-slate-900 text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               {m.name}
             </button>
           ))}
@@ -3567,7 +3553,7 @@ function SupplierPaymentForm({
 
       {/* Référence — input underline */}
       <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Référence (optionnel)</label>
+        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Référence (optionnel)</label>
         <input value={payRef} onChange={e => setPayRef(e.target.value)}
           className="bare-input text-sm py-1.5"
           placeholder="N° chèque, virement…" />
@@ -3575,14 +3561,14 @@ function SupplierPaymentForm({
 
       {vaultEnabled && (
         <div className="mt-3">
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide mb-1 block">Source des fonds</label>
+          <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Source des fonds</label>
           <div className="flex items-center gap-4">
             <button type="button" onClick={() => setPayFunding('cash')}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'cash' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'cash' ? 'border-slate-900 text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               Caisse
             </button>
             <button type="button" onClick={() => setPayFunding('vault')}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'vault' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'vault' ? 'border-slate-900 text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               Coffre
             </button>
           </div>
@@ -3590,7 +3576,7 @@ function SupplierPaymentForm({
       )}
 
       {/* Imputation — texte seul, pas de point vert */}
-      <div className="mt-3 text-[11px] text-slate-500">
+      <div className="mt-3 text-[11px] text-[var(--w-text-muted)]">
         {payFunding === 'vault' ? 'Imputé sur le coffre' : 'Imputé sur la caisse du jour'}
       </div>
 
@@ -3598,8 +3584,8 @@ function SupplierPaymentForm({
         <RecentPaymentsAccordion label="Derniers règlements">
           {recentPayments.map((p: any) => (
             <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-neutral-100 last:border-0">
-              <div className="text-xs text-slate-600">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
-              <div className="text-xs text-slate-400">{p.order_number || 'Acompte'}</div>
+              <div className="text-xs text-[var(--w-text-sec)]">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
+              <div className="text-xs text-[var(--w-text-disabled)]">{p.order_number || 'Acompte'}</div>
               <div className="text-xs font-bold text-emerald-700 num">{formatFCFA(p.amount)}</div>
             </div>
           ))}
@@ -3618,7 +3604,7 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
   return (
     <div>
       <div className="mb-3">
-        <button onClick={() => setStatsOpen(v => !v)} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 hover:text-slate-800">
+        <button onClick={() => setStatsOpen(v => !v)} className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--w-text-sec)] hover:text-slate-800">
           <ChevronRight className={`w-3 h-3 transition-transform ${statsOpen ? 'rotate-90' : ''}`} />
           Statistiques {yearStats.year}
         </button>
@@ -3659,12 +3645,12 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
           <Calendar className="w-3 h-3 text-black" />
           {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
         </button>
-        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-slate-400 hover:text-slate-600 p-0.5"><X className="w-3.5 h-3.5" /></button>}
-        <span className="ml-auto text-[10px] text-slate-400 num">{kpis.count} commandes | Achats {formatFCFA(kpis.achats)} | Dette {formatFCFA(kpis.due)}</span>
+        {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)] p-0.5"><X className="w-3.5 h-3.5" /></button>}
+        <span className="ml-auto text-[10px] text-[var(--w-text-disabled)] num">{kpis.count} commandes | Achats {formatFCFA(kpis.achats)} | Dette {formatFCFA(kpis.due)}</span>
       </div>
 
       {docs.length === 0 ? (
-        <div className="text-sm text-slate-500 py-10 text-center">Aucun document sur cette période.</div>
+        <div className="text-sm text-[var(--w-text-muted)] py-10 text-center">Aucun document sur cette période.</div>
       ) : (
         <div>
           <div className="max-h-[60vh] overflow-auto">
@@ -3765,14 +3751,14 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
   const existingArticleIds = new Set(prices.map((p: any) => p.article_id));
   const availableArticles = articles.filter(a => !existingArticleIds.has(a.id));
 
-  if (loading) return <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
+  if (loading) return <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>;
 
   return (
     <div>
       {/* Add row */}
-      <div className="flex flex-wrap items-end gap-3 mb-4 pb-4 border-b border-slate-200">
+      <div className="flex flex-wrap items-end gap-3 mb-4 pb-4 border-b border-[var(--w-separator)]">
         <div className="flex-1 min-w-[200px]">
-          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">Article</label>
+          <label className="text-[10px] font-semibold text-[var(--w-text-muted)] uppercase mb-1 block">Article</label>
           <SearchableSelect
             variant="underline"
             menuWidth={600}
@@ -3788,12 +3774,12 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
           />
         </div>
         <div className="w-[120px]">
-          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">Prix d'exception</label>
-          <input type="number" min={0} value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="w-full px-1 py-2 text-sm border-0 border-b border-slate-300 focus:border-slate-500 outline-none bg-transparent" placeholder="FCFA" />
+          <label className="text-[10px] font-semibold text-[var(--w-text-muted)] uppercase mb-1 block">Prix d'exception</label>
+          <input type="number" min={0} value={newPrice} onChange={e => setNewPrice(Number(e.target.value))} className="w-input-ul px-1 py-2 text-sm" placeholder="FCFA" />
         </div>
         <div className="w-[160px] hidden sm:block">
-          <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">Note</label>
-          <input value={newNote} onChange={e => setNewNote(e.target.value)} className="w-full px-1 py-2 text-sm border-0 border-b border-slate-300 focus:border-slate-500 outline-none bg-transparent" placeholder="Optionnelle" />
+          <label className="text-[10px] font-semibold text-[var(--w-text-muted)] uppercase mb-1 block">Note</label>
+          <input value={newNote} onChange={e => setNewNote(e.target.value)} className="w-input-ul px-1 py-2 text-sm" placeholder="Optionnelle" />
         </div>
         <button onClick={addPrice} disabled={saving || !newArticleId || newPrice === ''} className="h-[38px] px-4 rounded-md bg-slate-900 text-white text-xs font-semibold hover:bg-slate-700 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
@@ -3803,18 +3789,18 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
 
       {/* Flat table of existing prices */}
       {prices.length === 0 ? (
-        <div className="text-center py-10 text-sm text-slate-400">Aucun tarif d'exception configuré.</div>
+        <div className="text-center py-10 text-sm text-[var(--w-text-disabled)]">Aucun tarif d'exception configuré.</div>
       ) : (
         <div>
           <table className="w-full text-xs">
-            <thead className="border-b border-slate-300">
+            <thead className="border-b border-[var(--w-separator)]">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[110px]">Référence</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-600">Désignation</th>
-                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[110px]">Prix normal</th>
-                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[120px]">Prix d'exception</th>
-                <th className="px-3 py-2 text-right font-semibold text-slate-600 w-[90px] hidden sm:table-cell">Écart</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-600 w-[160px] hidden sm:table-cell">Note</th>
+                <th className="px-3 py-2 text-left font-semibold text-[var(--w-text-sec)] w-[110px]">Référence</th>
+                <th className="px-3 py-2 text-left font-semibold text-[var(--w-text-sec)]">Désignation</th>
+                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text-sec)] w-[110px]">Prix normal</th>
+                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text-sec)] w-[120px]">Prix d'exception</th>
+                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text-sec)] w-[90px] hidden sm:table-cell">Écart</th>
+                <th className="px-3 py-2 text-left font-semibold text-[var(--w-text-sec)] w-[160px] hidden sm:table-cell">Note</th>
                 <th className="px-3 py-2 w-10"></th>
               </tr>
             </thead>
@@ -3825,22 +3811,22 @@ function ExceptionPricingView({ customerId }: { customerId: string }) {
                 const diff = Number(p.exception_price) - normalPrice;
                 const pct = normalPrice > 0 ? ((diff / normalPrice) * 100).toFixed(1) : '0';
                 return (
-                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/60">
-                    <td className="px-3 py-2 font-mono text-slate-500 align-top whitespace-nowrap">{art?.internal_ref || '-'}</td>
+                  <tr key={p.id} className="border-b border-[var(--w-separator-l)] hover:bg-[var(--w-hover)]/60">
+                    <td className="px-3 py-2 font-mono text-[var(--w-text-muted)] align-top whitespace-nowrap">{art?.internal_ref || '-'}</td>
                     <td className="px-3 py-2 font-medium text-slate-800 align-top">{art?.name || 'Article supprimé'}</td>
-                    <td className="px-3 py-2 text-right num text-slate-500 align-top whitespace-nowrap">{formatFCFA(normalPrice)}</td>
-                    <td className="px-3 py-2 text-right num font-semibold text-slate-900 align-top whitespace-nowrap">{formatFCFA(p.exception_price)}</td>
-                    <td className={`px-3 py-2 text-right num font-medium align-top hidden sm:table-cell whitespace-nowrap ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{diff < 0 ? '' : '+'}{pct}%</td>
-                    <td className="px-3 py-2 text-slate-400 align-top hidden sm:table-cell">{p.note || '—'}</td>
+                    <td className="px-3 py-2 text-right num text-[var(--w-text-muted)] align-top whitespace-nowrap">{formatFCFA(normalPrice)}</td>
+                    <td className="px-3 py-2 text-right num font-semibold text-[var(--w-text)] align-top whitespace-nowrap">{formatFCFA(p.exception_price)}</td>
+                    <td className={`px-3 py-2 text-right num font-medium align-top hidden sm:table-cell whitespace-nowrap ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-rose-600' : 'text-[var(--w-text-disabled)]'}`}>{diff < 0 ? '' : '+'}{pct}%</td>
+                    <td className="px-3 py-2 text-[var(--w-text-disabled)] align-top hidden sm:table-cell">{p.note || '—'}</td>
                     <td className="px-3 py-2 align-top">
-                      <button onClick={() => removePrice(p.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => removePrice(p.id)} className="p-1 text-[var(--w-text-disabled)] hover:text-red-600 transition-colors" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          <div className="px-3 py-2 text-[10px] text-slate-400">
+          <div className="px-3 py-2 text-[10px] text-[var(--w-text-disabled)]">
             {prices.length} tarif{prices.length > 1 ? 's' : ''} configuré{prices.length > 1 ? 's' : ''}
           </div>
         </div>
@@ -3875,7 +3861,7 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
           autoFocus
         />
         <div className="max-h-72 overflow-y-auto divide-y divide-neutral-100">
-          {items.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Aucun résultat</p>}
+          {items.length === 0 && <p className="text-xs text-[var(--w-text-disabled)] text-center py-4">Aucun résultat</p>}
           {items.map((item: any) => (
             <button
               key={item.id}
@@ -3883,8 +3869,8 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
               className="w-full flex items-center justify-between gap-2 py-2.5 hover:bg-neutral-50 transition-all text-left"
             >
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-slate-900 truncate">{item.name}</div>
-                <div className="text-[10px] text-slate-400">{item.phone || item.email || '-'}</div>
+                <div className="text-xs font-semibold text-[var(--w-text)] truncate">{item.name}</div>
+                <div className="text-[10px] text-[var(--w-text-disabled)]">{item.phone || item.email || '-'}</div>
               </div>
               <div className="text-right shrink-0">
                 {(() => {
@@ -3896,19 +3882,19 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
                   if (prepay > 0 || avoir > 0) {
                     return (
                       <>
-                        <div className={`text-xs font-bold num ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <div className={`text-xs font-bold num ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
                           {formatFCFA(net)}
                         </div>
-                        <div className="text-[9px] text-slate-400">position nette</div>
+                        <div className="text-[9px] text-[var(--w-text-disabled)]">position nette</div>
                       </>
                     );
                   }
                   return (
                     <>
-                      <div className={`text-xs font-bold num ${bal > 0 ? 'text-amber-600' : bal < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <div className={`text-xs font-bold num ${bal > 0 ? 'text-amber-600' : bal < 0 ? 'text-emerald-600' : 'text-[var(--w-text-disabled)]'}`}>
                         {formatFCFA(bal)}
                       </div>
-                      <div className="text-[9px] text-slate-400">solde actuel</div>
+                      <div className="text-[9px] text-[var(--w-text-disabled)]">solde actuel</div>
                     </>
                   );
                 })()}

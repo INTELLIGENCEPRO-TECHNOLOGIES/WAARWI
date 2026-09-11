@@ -166,7 +166,7 @@ function CardImageManager({
   return (
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-2.5">
       <div className="flex items-start gap-3">
-        <div className="shrink-0 w-24 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+        <div className="shrink-0 w-24 h-16 rounded-lg overflow-hidden border border-slate-200 bg-[var(--w-surface-el)] flex items-center justify-center">
           {has ? (
             <img src={imageUrl!} alt={imageAlt || ''} className="w-full h-full object-cover" style={{ objectPosition: pos }} />
           ) : (
@@ -567,7 +567,7 @@ export function LandingConfigSection() {
             </div>
             <p className="text-xs text-slate-500">Contenu de la page d'accueil publique. Tout est dynamique : textes, captures, preuves, FAQ et contact.</p>
           </div>
-          <a href="https://waarwi.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
+          <a href="https://waarwi.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-[var(--w-surface-el)] hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
             <Eye className="w-3.5 h-3.5" /> Voir la landing
           </a>
         </div>
@@ -603,7 +603,7 @@ export function LandingConfigSection() {
             <div className="space-y-3">
               <label className="block text-xs font-semibold text-slate-700">Image hero (version bureau)</label>
               <div className="flex items-start gap-3">
-                <div className="w-32 h-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0 flex items-center justify-center">
+                <div className="w-32 h-20 rounded-lg overflow-hidden border border-slate-200 bg-[var(--w-surface-el)] flex-shrink-0 flex items-center justify-center">
                   {heroImageUrl ? (
                     <img src={heroImageUrl} alt="Hero desktop" className="w-full h-full object-cover" />
                   ) : (
@@ -627,7 +627,7 @@ export function LandingConfigSection() {
               <p className="text-[10px] text-slate-400">Laisser vide pour utiliser l'image par défaut (<code>/desktop.png</code>).</p>
             </div>
 
-            <div className="space-y-3 border-t border-slate-100 pt-3">
+            <div className="space-y-3 border-t border-[var(--w-separator)] pt-3">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-semibold text-slate-700">Superposition mobile (petite image flottante)</label>
                 <button type="button" onClick={() => setHeroMobileVisible(v => !v)}
@@ -638,7 +638,7 @@ export function LandingConfigSection() {
               {heroMobileVisible && (
                 <>
                   <div className="flex items-start gap-3">
-                    <div className="w-16 h-28 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0 flex items-center justify-center">
+                    <div className="w-16 h-28 rounded-lg overflow-hidden border border-slate-200 bg-[var(--w-surface-el)] flex-shrink-0 flex items-center justify-center">
                       {heroMobileImageUrl ? (
                         <img src={heroMobileImageUrl} alt="Hero mobile" className="w-full h-full object-cover" />
                       ) : (
@@ -664,7 +664,7 @@ export function LandingConfigSection() {
               )}
             </div>
           </div>
-          <div className="border-t border-slate-100 pt-4">
+          <div className="border-t border-[var(--w-separator)] pt-4">
             <p className="text-xs font-bold text-slate-700 mb-3">Libellés des statistiques</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -681,11 +681,11 @@ export function LandingConfigSection() {
               </div>
             </div>
           </div>
-          <div className="border-t border-slate-100 pt-4">
+          <div className="border-t border-[var(--w-separator)] pt-4">
             <label className="block text-xs font-semibold text-slate-700 mb-1">Tagline footer</label>
             <input value={footerTagline} onChange={e => setFooterTagline(e.target.value)} placeholder="Conçu au Sénégal..." className={inputCls} />
           </div>
-          <div className="border-t border-slate-100 pt-4">
+          <div className="border-t border-[var(--w-separator)] pt-4">
             <p className="text-xs font-bold text-slate-700 mb-3">Coordonnées de contact</p>
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -714,7 +714,7 @@ export function LandingConfigSection() {
               </div>
             </div>
           </div>
-          <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
+          <div className="border-t border-[var(--w-separator)] pt-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-slate-700">Section tarifs visible</p>
               <p className="text-[10px] text-slate-400">Affiche les plans publics sur la landing</p>
@@ -752,7 +752,7 @@ export function LandingConfigSection() {
             {features.map((f, idx) => {
               const IconComp = ICON_MAP_ADMIN[f.icon] || Shield;
               return (
-                <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 group space-y-2.5">
+                <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group space-y-2.5">
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col gap-0.5 shrink-0">
                       <button onClick={() => setFeatures(move(features, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
@@ -809,7 +809,7 @@ export function LandingConfigSection() {
               {sectors.map((s) => {
                 const SecIcon = SECTOR_ICONS_ADMIN[s.slug] || Store;
                 return (
-                  <div key={s.id} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 space-y-2.5">
+                  <div key={s.id} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-2.5">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
                         <SecIcon className="w-3.5 h-3.5 text-teal-600" />
@@ -872,7 +872,7 @@ export function LandingConfigSection() {
             ) : (
               <div className="space-y-2">
                 {clientLogos.map((logo, idx) => (
-                  <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 group">
+                  <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group">
                     <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
                       {logo.logo_url ? <img src={logo.logo_url} alt={logo.name} className="w-full h-full object-contain" /> : <ImageIcon className="w-4 h-4 text-slate-300" />}
                     </div>
@@ -904,7 +904,7 @@ export function LandingConfigSection() {
             ) : (
               <div className="space-y-3">
                 {testimonials.map((t, idx) => (
-                  <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 space-y-2 group">
+                  <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-2 group">
                     <textarea value={t.quote} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, quote: e.target.value } : x))} rows={2} placeholder="Citation..." className="w-full px-2.5 py-2 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400 resize-none" />
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <input value={t.author} onChange={e => setTestimonials(testimonials.map((x, i) => i === idx ? { ...x, author: e.target.value } : x))} placeholder="Auteur" className="h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-400" />
@@ -943,7 +943,7 @@ export function LandingConfigSection() {
               {whyWaarwi.map((w, idx) => {
                 const IconComp = ICON_MAP_ADMIN[w.icon] || Shield;
                 return (
-                  <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 group space-y-2.5">
+                  <div key={idx} className="p-3 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group space-y-2.5">
                     <div className="flex items-start gap-2">
                       <div className="flex flex-col gap-0.5 shrink-0 pt-1">
                         <button onClick={() => setWhyWaarwi(move(whyWaarwi, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
@@ -994,7 +994,7 @@ export function LandingConfigSection() {
             </div>
             <div className="space-y-2 max-h-[400px] overflow-y-auto -mr-1 pr-1">
               {faqItems.map((f, idx) => (
-                <div key={idx} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 space-y-1.5 group">
+                <div key={idx} className="p-2.5 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 space-y-1.5 group">
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col gap-0.5 shrink-0">
                       <button onClick={() => setFaqItems(move(faqItems, idx, -1))} disabled={idx === 0} className="text-slate-300 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUpRight className="w-3 h-3 rotate-[-90deg]" /></button>
@@ -1082,9 +1082,9 @@ export function LandingConfigSection() {
               <RotateCcw className="w-3.5 h-3.5" /> Réinitialiser les effets
             </button>
           </div>
-          <div className="border-t border-slate-100 pt-4">
+          <div className="border-t border-[var(--w-separator)] pt-4">
             <p className="text-xs font-bold text-slate-700 mb-2">Aperçu</p>
-            <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+            <div className="rounded-xl overflow-hidden border border-slate-200 bg-[var(--w-surface-el)]">
               <img src={heroImageUrl || '/desktop.png'} alt="Aperçu effet" className="w-full h-48 object-cover transition-all duration-300"
                 style={{ filter: buildFilterString(globalEffects) }} />
             </div>
@@ -1130,7 +1130,7 @@ function DemoColumn({ title, kind, items, setItems, onUpload, onReplace, uploadi
       ) : (
         <div className="space-y-2">
           {items.map((shot, idx) => (
-            <div key={idx} className="flex items-center gap-2 p-2 rounded-xl border border-slate-100 bg-slate-50/60 group">
+            <div key={idx} className="flex items-center gap-2 p-2 rounded-xl border border-[var(--w-separator)] bg-[var(--w-surface-el)]/60 group">
               <div className={`shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-white ${kind === 'desktop' ? 'w-16 h-10' : 'w-10 h-16'}`}>
                 <img src={shot.src} alt={shot.alt || shot.label} className="w-full h-full object-cover" />
               </div>
@@ -1200,7 +1200,7 @@ function MarkdownEditorPanel({ label, slug, value, onChange, onReset }: {
   );
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/40 overflow-hidden">
+    <div className="rounded-2xl border border-slate-200 bg-[var(--w-surface-el)]/40 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-white">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-900 truncate">{label}</div>

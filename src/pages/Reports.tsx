@@ -317,13 +317,16 @@ export function Reports() {
             </div>
             <div ref={previewContainerRef} className="flex-1 min-h-0 overflow-y-auto bg-neutral-100 p-4 sm:p-8 flex justify-center">
               <div
-                className="bg-white origin-top"
+                className="print-preview origin-top"
                 style={{
                   width: '793px',
                   minHeight: `${Math.round(1122 * previewScale)}px`,
                   padding: '68px',
                   transform: `scale(${previewScale})`,
                   transformOrigin: 'top center',
+                  background: '#fff',
+                  color: '#111',
+                  colorScheme: 'light',
                 }}
               >
                 <style>{a4Style()}</style>

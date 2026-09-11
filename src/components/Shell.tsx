@@ -4,7 +4,7 @@ import {
   BookOpen, Settings, LogOut, Menu, ChevronDown, Calculator,
   Receipt, ShoppingBag, History, FileText, TrendingUp, Globe, Bell, Crown, Library, Truck,
   Plus, CreditCard, Wallet, ChevronRight, BarChart3, ClipboardList, Star,
-  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, Palette, ArrowRightLeft, UserCheck,
+  PanelLeftClose, PanelLeftOpen, Search, Lock, HeartPulse, ShieldCheck, ArrowRightLeft, UserCheck,
   X, Monitor, Check, Activity,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { QuickActionsPanel } from './QuickActionsPanel';
 import { QuickActionProvider, useQuickAction } from '../context/QuickActionContext';
+import { CompactThemeToggle } from './ThemeToggle';
 
 
 export type Route =
@@ -219,16 +220,18 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [fabOpen, setFabOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarDark, setSidebarDark] = useState(() => {
-    try { return localStorage.getItem('sidebar_dark') === '1'; } catch { return false; }
-  });
-  const toggleSidebarTheme = () => {
-    setSidebarDark(prev => {
-      const next = !prev;
-      try { localStorage.setItem('sidebar_dark', next ? '1' : '0'); } catch {}
-      return next;
-    });
-  };
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    const onVis = () => { if (!document.hidden) setNow(new Date()); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', onVis); };
+  }, []);
 
   const sectionStorageKey = tenant?.id && profile?.id ? `sidebar_sections_${tenant.id}_${profile.id}` : null;
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -369,7 +372,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const touch = useRef<{ x: number; y: number; active: boolean; dx: number }>({ x: 0, y: 0, active: false, dx: 0 });
   const openTouch = useRef<{ x: number; y: number; active: boolean; moved: boolean }>({ x: 0, y: 0, active: false, moved: false });
-  const lastHeaderTap = useRef<number>(0);
+
 
   const onMainTouchStart = (e: React.TouchEvent) => {
     if (mobileOpen) return;
@@ -450,16 +453,16 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   }, []);
 
   const navList = (
-    <nav className={`flex-1 overflow-y-auto py-4 space-y-4 side-scroll ${sidebarDark ? 'side-scroll-dark' : ''} ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
+    <nav className={`flex-1 overflow-y-auto py-4 space-y-4 side-scroll ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
       {isSuperAdmin ? (
         <div>
-          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Plateforme</div>}
+          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Plateforme</div>}
           <button
             onClick={() => { onRoute('platform_admin'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'platform_admin' ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarCollapsed ? t('nav.platform') : undefined}
           >
-            <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+            <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
             {!sidebarCollapsed && <span>{t('nav.platform')}</span>}
           </button>
         </div>
@@ -469,7 +472,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         <div className="px-1 mb-1">
           {searchExpanded ? (
             <div className="relative flex items-center">
-              <Search className={`absolute left-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+              <Search className={`absolute left-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--w-text-muted)]`} />
               <input
                 ref={navSearchRef}
                 autoFocus
@@ -479,14 +482,14 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => { setTimeout(() => setSearchFocused(false), 150); if (!navSearch) setSearchExpanded(false); }}
                 placeholder={t('nav.search')}
-                className={`w-full pl-7 pr-6 py-1.5 text-[13px] outline-none bg-transparent border-0 transition-colors ${sidebarDark ? 'text-white placeholder:text-white/50' : 'text-neutral-700 placeholder-neutral-400'}`}
+                className={`w-full pl-7 pr-6 py-1.5 text-[13px] outline-none bg-transparent border-0 transition-colors text-[var(--w-text)] placeholder:text-[var(--w-text-muted)]`}
               />
               {navSearch ? (
-                <button onClick={() => { setNavSearch(''); navSearchRef.current?.focus(); }} className={`absolute right-1 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                <button onClick={() => { setNavSearch(''); navSearchRef.current?.focus(); }} className={`absolute right-1 top-1/2 -translate-y-1/2 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)]`}>
                   <X className="w-3.5 h-3.5" />
                 </button>
               ) : (
-                <button onClick={() => setSearchExpanded(false)} className={`absolute right-1 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                <button onClick={() => setSearchExpanded(false)} className={`absolute right-1 top-1/2 -translate-y-1/2 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)]`}>
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -494,7 +497,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           ) : (
             <button
               onClick={() => { setSearchExpanded(true); setTimeout(() => navSearchRef.current?.focus(), 10); }}
-              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${sidebarDark ? 'text-white/50 hover:bg-white/8 hover:text-white/80' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700'}`}
+              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
               title={t('nav.search')}
             >
               <Search className="w-4 h-4" />
@@ -503,11 +506,11 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </div>
       )}
       {!sidebarCollapsed && !navSearch.trim() && (
-        <div className={`border-b ${sidebarDark ? 'border-white/8' : 'border-neutral-100'}`} />
+        <div className={`border-b border-[var(--w-separator-l)]`} />
       )}
       {navSearch.trim() && searchResults.length > 0 && (
         <div className="space-y-0.5 px-1">
-          {!sidebarCollapsed && <div className={`px-2 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.searchResults')}</div>}
+          {!sidebarCollapsed && <div className={`px-2 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.searchResults')}</div>}
           {searchResults.map(item => {
             const Icon = item.icon;
             const active = route === item.key;
@@ -515,9 +518,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               <button
                 key={item.key}
                 onClick={() => { onRoute(item.key); setNavSearch(''); setMobileOpen(false); }}
-                className={`nav-item ${active ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
+                className={`nav-item ${active ? 'nav-item-active' : 'nav-item-idle'}`}
               >
-                <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+                <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                 {!sidebarCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
               </button>
             );
@@ -525,7 +528,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </div>
       )}
       {navSearch.trim() && searchResults.length === 0 && !sidebarCollapsed && (
-        <div className={`px-3 py-4 text-center text-[13px] ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.noResults')}</div>
+        <div className={`px-3 py-4 text-center text-[13px] text-[var(--w-text-muted)]`}>{t('nav.noResults')}</div>
       )}
       {!navSearch.trim() && sortedNav.map(group => {
         const sectionOpen = sidebarCollapsed || isSectionOpen(group.titleKey);
@@ -538,7 +541,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               onClick={() => toggleSection(group.titleKey)}
               aria-expanded={sectionOpen}
               aria-controls={sectionId}
-              className={`w-full flex items-center gap-1.5 px-3 mb-1 py-1 rounded text-[11px] font-semibold tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-0 ${sidebarDark ? 'text-white/40 hover:text-white/70 focus-visible:ring-white/40' : 'text-neutral-400 hover:text-neutral-600 focus-visible:ring-neutral-400'}`}
+              className={`w-full flex items-center gap-1.5 px-3 mb-1 py-1 rounded text-[11px] font-semibold tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-0 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)] focus-visible:ring-neutral-400`}
             >
               {sectionOpen
                 ? <ChevronDown className="w-4 h-4 flex-shrink-0" />
@@ -560,13 +563,13 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       if (hasChildren) { setDesktopAcctOpen(o => !o); }
                       else { onRoute(item.key); setMobileOpen(false); }
                     }}
-                    className={`nav-item ${(active || childActive) ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                    className={`nav-item ${(active || childActive) ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
                     title={sidebarCollapsed ? t(item.labelKey) : undefined}
                   >
-                    <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+                    <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                     {!sidebarCollapsed && <span className="whitespace-normal break-words">{t(item.labelKey)}</span>}
                     {!sidebarCollapsed && hasChildren && (
-                      <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${desktopAcctOpen ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+                      <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${desktopAcctOpen ? 'rotate-180' : ''} text-[var(--w-text-muted)]`} />
                     )}
                     {!sidebarCollapsed && !hasChildren && badge > 0 && (
                       <span className={`ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-neutral-900' : 'bg-red-500 text-white'}`}>{badge > 99 ? '99+' : badge}</span>
@@ -584,9 +587,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                           <button
                             key={child.key}
                             onClick={() => { onRoute(child.key); setMobileOpen(false); }}
-                            className={`nav-item text-[13px] ${childActive2 ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/60 hover:bg-white/8 hover:text-white' : 'nav-item-idle')}`}
+                            className={`nav-item text-[13px] ${childActive2 ? 'nav-item-active' : 'nav-item-idle'}`}
                           >
-                            <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
+                            <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                             <span className="whitespace-normal break-words">{t(child.labelKey)}</span>
                           </button>
                         );
@@ -602,13 +605,13 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       })}
       {routeVisible('settings') && (
         <div>
-          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.system')}</div>}
+          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.system')}</div>}
           <button
             onClick={() => { onRoute('settings'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'settings' ? (sidebarDark ? 'nav-item-active-dark' : 'nav-item-active') : (sidebarDark ? 'text-white/70 hover:bg-white/8 hover:text-white' : 'nav-item-idle')} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nav-item ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarCollapsed ? t('nav.settings') : undefined}
           >
-            <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+            <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
             {!sidebarCollapsed && <span className="whitespace-normal break-words">{t('nav.settings')}</span>}
           </button>
         </div>
@@ -642,7 +645,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           {shellSubInfo && (
             <button onClick={() => onRoute('settings')} className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity">
               <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                shellSubInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600'
+                shellSubInfo.status === 'trial_active' ? 'bg-[var(--w-active)] text-blue-600'
                   : shellSubInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
                   : shellSubInfo.status === 'expired' ? 'bg-transparent text-red-600'
                   : 'bg-amber-50 text-amber-600'
@@ -751,6 +754,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     <button onClick={() => { setUserOpen(false); onRoute('settings'); }} className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 transition-colors">
                       <Settings className="w-4 h-4 text-neutral-400" /> {t('nav.settings')}
                     </button>
+                    <CompactThemeToggle />
                     <button onClick={signOut} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
                       <LogOut className="w-4 h-4" /> Déconnexion
                     </button>
@@ -765,31 +769,21 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Desktop sidebar */}
       <aside
-        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[72px]' : 'w-[240px]'} ${sidebarDark ? 'border-white/10' : 'border-neutral-200'}`}
-        style={sidebarDark
-          ? { background: '#000000' }
-          : { background: '#ffffff' }
-        }
+        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[72px]' : 'w-[240px]'} border-[var(--w-separator)]`}
+        style={{ background: 'var(--w-surface)' }}
       >
         {navList}
-        <div className={`p-3 border-t space-y-2 ${sidebarDark ? 'border-white/10' : 'border-neutral-100'}`}>
-          <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarCollapsed ? 'justify-center' : ''} ${sidebarDark ? 'text-white/50 hover:bg-white/8 hover:text-white/80' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}>
+        <div className={`p-3 border-t space-y-2 border-[var(--w-separator-l)]`}>
+          <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarCollapsed ? 'justify-center' : ''} text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)]`}>
             <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarCollapsed && 'Déconnexion'}
           </button>
           <div className={`flex items-center ${sidebarCollapsed ? 'flex-col gap-1' : 'gap-1'}`}>
             <button
               onClick={() => setSidebarCollapsed(v => !v)}
-              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center ${sidebarDark ? 'text-white/40 hover:bg-white/8 hover:text-white/70' : 'text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700'}`}
+              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
               title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
             >
               {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={toggleSidebarTheme}
-              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${sidebarDark ? 'text-white/40 hover:bg-white/8 hover:text-white/70' : 'text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700'}`}
-              title="Changer le thème du menu"
-            >
-              <Palette className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -812,25 +806,27 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           >
             <div
               className="float-sidebar-content"
-              style={sidebarDark ? { background: '#000000', border: '1px solid rgba(255,255,255,0.08)' } : undefined}
             >
-              <div className={`flex items-center justify-between px-4 pt-4 pb-3 border-b ${sidebarDark ? 'border-white/8' : 'border-neutral-100'}`}
-                onTouchEnd={(e) => {
-                  if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('img')) return;
-                  const now = Date.now();
-                  if (now - lastHeaderTap.current < 350) { toggleSidebarTheme(); lastHeaderTap.current = 0; }
-                  else { lastHeaderTap.current = now; }
-                }}
-              >
-                <div className="flex items-center min-w-0">
+              <div className={`flex items-center px-4 pt-3.5 pb-3 border-b border-[var(--w-separator-l)]`}>
+                <div className="flex items-center min-w-0 shrink-0">
                   {tenant?.logo_url ? (
                     <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain shrink-0" />
                   ) : (
-                    <img src="/newlogo.png" alt="WAARWI" className={`h-7 w-auto max-w-[110px] object-contain shrink-0 ${sidebarDark ? 'brightness-0 invert' : ''}`} />
+                    <img src="/newlogo.png" alt="WAARWI" className={`h-7 w-auto max-w-[110px] object-contain shrink-0`} />
                   )}
                 </div>
-                <div className="flex-1" />
-                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${sidebarDark ? 'text-white/60 hover:bg-white/10' : 'text-neutral-500 hover:bg-neutral-100'}`}>
+                <div className="flex-1 flex flex-col items-center justify-center px-2 min-w-0">
+                  <span className="text-lg font-bold tabular-nums text-[var(--w-text)] leading-none tracking-tight">
+                    {now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                  <span className="text-[10px] font-medium text-[var(--w-text-muted)] capitalize leading-tight mt-0.5">
+                    {now.toLocaleDateString('fr-FR', { weekday: 'long' })}
+                  </span>
+                  <span className="text-[9px] text-[var(--w-text-disabled)] capitalize leading-tight">
+                    {now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </span>
+                </div>
+                <button onClick={() => { onRoute('settings'); closeDrawer(); }} className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)]`}>
                   <Settings className="w-4 h-4" />
                 </button>
               </div>
@@ -838,12 +834,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               <div className="flex-1 min-h-0 overflow-y-auto px-2.5 pb-1 space-y-1.5 scrollbar-hide">
                 {isSuperAdmin && (
                   <div>
-                    <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Plateforme</div>
+                    <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Plateforme</div>
                     <button
                       onClick={() => { onRoute('platform_admin'); closeDrawer(); }}
-                      className={`float-nav-item-compact ${route === 'platform_admin' ? (sidebarDark ? 'float-nav-item-active-dark' : 'float-nav-item-active') : (sidebarDark ? 'float-nav-dark' : '')}`}
+                      className={`float-nav-item-compact ${route === 'platform_admin' ? 'float-nav-item-active' : ''}`}
                     >
-                      <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-400')}`} />
+                      <Crown className={`w-4 h-4 shrink-0 ${route === 'platform_admin' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                       <span className="truncate">{t('nav.platform')}</span>
                     </button>
                   </div>
@@ -852,7 +848,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   <div className="px-1 mb-1">
                     {searchExpanded ? (
                       <div className="relative flex items-center">
-                        <Search className={`absolute left-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+                        <Search className={`absolute left-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--w-text-muted)]`} />
                         <input
                           ref={navSearchRef}
                           autoFocus
@@ -861,14 +857,14 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                           onChange={e => setNavSearch(e.target.value)}
                           onBlur={() => { if (!navSearch) setSearchExpanded(false); }}
                           placeholder={t('nav.search')}
-                          className={`w-full pl-7 pr-6 py-2 text-[13px] outline-none bg-transparent border-0 ${sidebarDark ? 'text-white placeholder:text-white/50' : 'text-neutral-700 placeholder-neutral-400'}`}
+                          className={`w-full pl-7 pr-6 py-2 text-[13px] outline-none bg-transparent border-0 text-[var(--w-text)] placeholder:text-[var(--w-text-muted)]`}
                         />
                         {navSearch ? (
-                          <button onClick={() => { setNavSearch(''); navSearchRef.current?.focus(); }} className={`absolute right-1 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                          <button onClick={() => { setNavSearch(''); navSearchRef.current?.focus(); }} className={`absolute right-1 top-1/2 -translate-y-1/2 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)]`}>
                             <X className="w-3.5 h-3.5" />
                           </button>
                         ) : (
-                          <button onClick={() => setSearchExpanded(false)} className={`absolute right-1 top-1/2 -translate-y-1/2 ${sidebarDark ? 'text-white/40 hover:text-white/70' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                          <button onClick={() => setSearchExpanded(false)} className={`absolute right-1 top-1/2 -translate-y-1/2 text-[var(--w-text-muted)] hover:text-[var(--w-text-sec)]`}>
                             <X className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -876,7 +872,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     ) : (
                       <button
                         onClick={() => { setSearchExpanded(true); setTimeout(() => navSearchRef.current?.focus(), 10); }}
-                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${sidebarDark ? 'text-white/50 hover:bg-white/8 hover:text-white/80' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700'}`}
+                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
                         title={t('nav.search')}
                       >
                         <Search className="w-4 h-4" />
@@ -886,7 +882,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 )}
                 {navSearch.trim() && searchResults.length > 0 && (
                   <div className="space-y-0.5 px-1">
-                    <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.searchResults')}</div>
+                    <div className={`px-2.5 mb-0.5 text-[9px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.searchResults')}</div>
                     {searchResults.map(item => {
                       const Icon = item.icon;
                       const active = route === item.key;
@@ -894,9 +890,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                         <button
                           key={item.key}
                           onClick={() => { onRoute(item.key); setNavSearch(''); closeDrawer(); }}
-                          className={`float-nav-item-compact ${active ? (sidebarDark ? 'float-nav-item-active-dark' : 'float-nav-item-active') : (sidebarDark ? 'float-nav-dark' : '')}`}
+                          className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''}`}
                         >
-                          <Icon className={`w-4 h-4 shrink-0 ${active ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
+                          <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                           <span className="truncate">{t(item.labelKey)}</span>
                         </button>
                       );
@@ -904,7 +900,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   </div>
                 )}
                 {navSearch.trim() && searchResults.length === 0 && (
-                  <div className={`px-3 py-4 text-center text-[13px] ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>{t('nav.noResults')}</div>
+                  <div className={`px-3 py-4 text-center text-[13px] text-[var(--w-text-muted)]`}>{t('nav.noResults')}</div>
                 )}
                 {!isSuperAdmin && !navSearch.trim() && sortedNav.map(group => {
                   const sectionOpen = isSectionOpen(group.titleKey);
@@ -916,7 +912,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       onClick={() => toggleSection(group.titleKey)}
                       aria-expanded={sectionOpen}
                       aria-controls={sectionId}
-                      className={`w-full flex items-center gap-1.5 px-2.5 mb-0.5 py-1 rounded text-[9px] font-semibold tracking-widest uppercase transition-colors focus:outline-none focus-visible:ring-1 ${sidebarDark ? 'text-white/40 focus-visible:ring-white/40' : 'text-neutral-400 focus-visible:ring-neutral-400'}`}
+                      className={`w-full flex items-center gap-1.5 px-2.5 mb-0.5 py-1 rounded text-[9px] font-semibold tracking-widest uppercase transition-colors focus:outline-none focus-visible:ring-1 text-[var(--w-text-muted)] focus-visible:ring-neutral-400`}
                     >
                       {sectionOpen
                         ? <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
@@ -937,12 +933,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                                 if (hasChildren) { setMobileAcctOpen(o => o === item.key ? null : item.key); }
                                 else { onRoute(item.key); closeDrawer(); }
                               }}
-                              className={`float-nav-item-compact ${(active || childActive) ? (sidebarDark ? 'float-nav-item-active-dark' : 'float-nav-item-active') : (sidebarDark ? 'float-nav-dark' : '')}`}
+                              className={`float-nav-item-compact ${(active || childActive) ? 'float-nav-item-active' : ''}`}
                             >
-                              <Icon className={`w-4 h-4 shrink-0 ${(active || childActive) ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/50' : 'text-neutral-500')}`} />
+                              <Icon className={`w-4 h-4 shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                               <span className="truncate">{t(item.labelKey)}</span>
                               {hasChildren && (
-                                <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${mobileAcctOpen === item.key ? 'rotate-180' : ''} ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`} />
+                                <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${mobileAcctOpen === item.key ? 'rotate-180' : ''} text-[var(--w-text-muted)]`} />
                               )}
                               {!hasChildren && badge > 0 && (
                                 <span className="ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold bg-red-500 text-white">{badge > 99 ? '99+' : badge}</span>
@@ -957,9 +953,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                                     <button
                                       key={child.key}
                                       onClick={() => { onRoute(child.key); closeDrawer(); }}
-                                      className={`float-nav-item-compact text-[13px] ${childActive2 ? (sidebarDark ? 'float-nav-item-active-dark' : 'float-nav-item-active') : (sidebarDark ? 'float-nav-dark' : '')}`}
+                                      className={`float-nav-item-compact text-[13px] ${childActive2 ? 'float-nav-item-active' : ''}`}
                                     >
-                                      <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/40' : 'text-neutral-400')}`} />
+                                      <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
                                       <span className="truncate">{t(child.labelKey)}</span>
                                     </button>
                                   );
@@ -975,25 +971,25 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                 })}
               </div>
 
-              <div className={`px-3 pt-2 pb-2.5 border-t space-y-1.5 ${sidebarDark ? 'border-white/10' : 'border-neutral-100'}`} style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+              <div className={`px-3 pt-2 pb-2.5 border-t space-y-1.5 border-[var(--w-separator-l)]`} style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
                 {sites.length > 0 && (
                   <div>
-                    <div className={`px-1 mb-1 text-[9px] font-semibold tracking-widest uppercase ${sidebarDark ? 'text-white/40' : 'text-neutral-400'}`}>Point de vente</div>
+                    <div className={`px-1 mb-1 text-[9px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Point de vente</div>
                     <div className="max-h-28 overflow-auto space-y-0.5">
                       {sites.map(s => {
                         const isDefault = (profile as any)?.default_site_id === s.id;
                         return (
-                          <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors ${sidebarDark ? 'hover:bg-white/6' : 'hover:bg-neutral-50'}`}>
+                          <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors hover:bg-[var(--w-hover)]`}>
                             <button
                               onClick={() => { if (s.id === currentSite?.id) { closeDrawer(); return; } setSiteConfirmPending(s); closeDrawer(); }}
-                              className={`flex-1 flex items-center px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? (sidebarDark ? 'text-white font-semibold' : 'text-neutral-900 font-semibold') : (sidebarDark ? 'text-white/70' : 'text-neutral-600')}`}
+                              className={`flex-1 flex items-center px-2.5 py-1.5 text-[12px] font-medium transition-colors ${currentSite?.id === s.id ? 'text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-sec)]'}`}
                             >
                               <span className="truncate flex-1 text-left">{s.name}</span>
                             </button>
                             <button
                               onClick={() => { setDefaultSite(s); closeDrawer(); }}
                               title={isDefault ? 'Défaut' : 'Définir défaut'}
-                              className={`shrink-0 p-1.5 transition-colors ${isDefault ? (sidebarDark ? 'text-white' : 'text-neutral-900') : (sidebarDark ? 'text-white/30 hover:text-white/60' : 'text-neutral-300 hover:text-neutral-600')}`}
+                              className={`shrink-0 p-1.5 transition-colors ${isDefault ? 'text-[var(--w-text)]' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}
                             >
                               <Star className="w-3 h-3" fill={isDefault ? 'currentColor' : 'none'} />
                             </button>
@@ -1003,7 +999,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     </div>
                   </div>
                 )}
-                <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sidebarDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'}`}>
+                <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-red-600 hover:bg-red-50`}>
                   <LogOut className="w-4 h-4" />
                   <span>Déconnexion</span>
                 </button>
@@ -1115,6 +1111,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   <button onClick={() => { setUserOpen(false); onRoute('settings'); }} className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 transition-colors">
                     <Settings className="w-4 h-4 text-neutral-400" /> Paramètres
                   </button>
+                  <CompactThemeToggle />
                   <button onClick={signOut} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2 transition-colors">
                     <LogOut className="w-4 h-4" /> Déconnexion
                   </button>
@@ -1150,7 +1147,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         {!isPlatformAdmin && (
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="pointer-events-auto">
-            <div className="relative flex items-center justify-around h-[52px] bg-white border-t border-neutral-200">
+            <div className="relative flex items-center justify-around h-[52px] bg-[var(--w-surface)] border-t border-neutral-200">
               <div className="absolute top-0 inset-x-0 h-px bg-neutral-100" />
               {(() => {
                 const tabs = isSuperAdmin ? [{ key: 'platform_admin' as Route, labelKey: 'nav.platform', icon: Crown }] : visibleMobileTabs;
@@ -1228,12 +1225,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               width: '48px',
               height: '48px',
               borderRadius: '50%',
-              background: '#0a0a0a',
+              background: 'var(--w-accent)',
               boxShadow: '0 4px 12px -2px rgba(0,0,0,0.25)',
-              border: 'none',
+              border: '1px solid var(--w-accent-border)',
             }}
           >
-            <ShoppingCart className="w-5 h-5 text-white" strokeWidth={2} />
+            <ShoppingCart className="w-5 h-5" style={{ color: 'var(--w-accent-text)' }} strokeWidth={2} />
             {posCartCount > 0 && !posCartOpen && (
               <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{posCartCount}</span>
             )}
@@ -1248,12 +1245,12 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
               width: '48px',
               height: '48px',
               borderRadius: '50%',
-              background: '#0a0a0a',
+              background: 'var(--w-accent)',
               boxShadow: '0 4px 12px -2px rgba(0,0,0,0.25)',
-              border: 'none',
+              border: '1px solid var(--w-accent-border)',
             }}
           >
-            <Plus className="w-5 h-5 text-white" strokeWidth={2} />
+            <Plus className="w-5 h-5" style={{ color: 'var(--w-accent-text)' }} strokeWidth={2} />
           </button>
         ))}
       </div>

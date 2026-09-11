@@ -590,7 +590,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
                       <span className="text-[9px] font-bold text-neutral-900 num">{fmt(svcUV)}</span>
                     </div>
                   </div>
-                  <div className="mt-1.5 pt-1 border-t border-neutral-50">
+                  <div className="mt-1.5 pt-1 border-t border-[var(--w-separator-l)]">
                     <span className="text-[8px] text-neutral-400">{svcOps} op.</span>
                   </div>
                 </div>
@@ -627,7 +627,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
                       <span className="text-[11px] font-black text-neutral-900 num">{fmt(svcUV)}</span>
                     </div>
                   </div>
-                  <div className="mt-1.5 pt-1 border-t border-neutral-50">
+                  <div className="mt-1.5 pt-1 border-t border-[var(--w-separator-l)]">
                     <span className="text-[8px] text-neutral-400">{svcOps} opération{svcOps > 1 ? 's' : ''}</span>
                   </div>
                 </div>
@@ -734,7 +734,7 @@ function MTDashboard({ isInitialized, onGoInit }: { isInitialized: boolean; onGo
                         <span className="text-[11px] font-black text-neutral-900 num">{fmt(pt.uv)}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-neutral-50">
+                    <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-[var(--w-separator-l)]">
                       <span className="text-[8px] text-neutral-400">{pt.opsCount} opération{pt.opsCount > 1 ? 's' : ''}</span>
                       <span className="text-[8px] text-neutral-400">{pt.servicesCount} service{pt.servicesCount > 1 ? 's' : ''}</span>
                     </div>

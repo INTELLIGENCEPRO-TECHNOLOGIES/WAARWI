@@ -160,7 +160,7 @@ function ActivitiesTab({ activities, onChange }: { activities: ActivityType[]; o
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Slug (identifiant unique)</label>
-              <input value={editing.slug} disabled={!isNew} onChange={e => setEditing({ ...editing, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 font-mono disabled:bg-slate-50 disabled:text-slate-500" />
+              <input value={editing.slug} disabled={!isNew} onChange={e => setEditing({ ...editing, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 font-mono disabled:bg-[var(--w-surface-el)] disabled:text-slate-500" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</label>
@@ -271,7 +271,7 @@ function CatalogsTab({ catalogs, activities, onChange, selectedId, onSelect }: {
           <div className="space-y-3">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Type d'activité</label>
-              <select value={editing.business_activity_type_id} disabled={!isNew} onChange={e => setEditing({ ...editing, business_activity_type_id: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 disabled:bg-slate-50">
+              <select value={editing.business_activity_type_id} disabled={!isNew} onChange={e => setEditing({ ...editing, business_activity_type_id: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 disabled:bg-[var(--w-surface-el)]">
                 {activities.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
@@ -363,7 +363,7 @@ function CategoriesTab({ catalogs, categories, selectedCatalogId, onSelectCatalo
               {subs.length > 0 && (
                 <div className="mt-2 ml-6 space-y-1">
                   {subs.map(sub => (
-                    <div key={sub.id} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50">
+                    <div key={sub.id} className="flex items-center gap-2 p-2 rounded-lg bg-[var(--w-surface-el)]">
                       <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-semibold text-slate-800 truncate">{sub.name}</div>
@@ -627,7 +627,7 @@ function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, on
                       <button onClick={() => setDeleteId(i.id)} className="p-1.5 rounded-lg hover:bg-red-50"><Trash2 className="w-3.5 h-3.5 text-red-600" /></button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 mt-1.5 border-t border-slate-100">
+                  <div className="grid grid-cols-3 gap-1.5 pt-1.5 mt-1.5 border-t border-[var(--w-separator)]">
                     <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Achat</div><div className="text-[11px] font-bold text-slate-800 num mt-0.5">{formatFCFA(i.purchase_price)}</div></div>
                     <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vente</div><div className="text-[11px] font-bold text-brand-700 num mt-0.5">{formatFCFA(i.sale_price)}</div></div>
                     <div><div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">TVA</div><div className="text-[11px] font-semibold text-slate-600 num mt-0.5">{i.vat_rate}%</div></div>
@@ -641,9 +641,9 @@ function ItemsTab({ catalogs, categories, selectedCatalogId, onSelectCatalog, on
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-1 pt-2">
-              <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 disabled:opacity-40 hover:bg-slate-50 transition">Préc.</button>
+              <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 disabled:opacity-40 hover:bg-[var(--w-surface-el)] transition">Préc.</button>
               <span className="px-3 py-1.5 text-xs font-bold text-slate-700">Page {page + 1} / {totalPages}</span>
-              <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 disabled:opacity-40 hover:bg-slate-50 transition">Suiv.</button>
+              <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 disabled:opacity-40 hover:bg-[var(--w-surface-el)] transition">Suiv.</button>
             </div>
           )}
         </>
@@ -891,7 +891,7 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
         <div className="text-xs font-bold text-slate-900 mb-2">Colonnes attendues</div>
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-1.5">
           {IMPORT_HEADERS.map(h => (
-            <div key={h.key} className={`text-[11px] px-2 py-1.5 rounded-lg ${h.required ? 'bg-brand-50 border border-brand-200 font-bold text-brand-800' : 'bg-slate-50 border border-slate-100 text-slate-600'}`}>
+            <div key={h.key} className={`text-[11px] px-2 py-1.5 rounded-lg ${h.required ? 'bg-brand-50 border border-brand-200 font-bold text-brand-800' : 'bg-[var(--w-surface-el)] border border-[var(--w-separator)] text-slate-600'}`}>
               {h.label}
             </div>
           ))}
@@ -964,7 +964,7 @@ function ImportTab({ catalogs, selectedCatalogId, onSelectCatalog, onChange }: {
             <div className="p-3 rounded-xl bg-red-50 border border-red-100"><div className="text-[10px] font-bold uppercase text-red-700">Erreurs</div><div className="text-2xl font-bold text-red-800 num mt-1">{result.errors?.length || 0}</div></div>
           </div>
           {result.errors && result.errors.length > 0 && (
-            <div className="max-h-40 overflow-auto bg-slate-50 rounded-xl p-2 space-y-1">
+            <div className="max-h-40 overflow-auto bg-[var(--w-surface-el)] rounded-xl p-2 space-y-1">
               {result.errors.map((e: any, i: number) => (
                 <div key={i} className="text-[11px] text-red-700 break-words">Ligne {e.row}: {e.error}</div>
               ))}

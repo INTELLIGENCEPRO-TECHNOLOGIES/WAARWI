@@ -246,7 +246,7 @@ export function DocItems({ items, showReceived = false, qtyLabel = 'Qté' }: Doc
               </div>
 
               {/* Ligne quantité / PU / Total — Qté compact, PU et Total prennent l'espace */}
-              <div className="flex divide-x divide-slate-100 border-t border-neutral-100">
+              <div className="flex divide-x divide-[var(--w-separator)] border-t border-neutral-100">
                 {/* Qté — largeur fixe compacte */}
                 <div className="px-2.5 py-2 shrink-0" style={{ width: '52px' }}>
                   <div className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">{qtyLabel}</div>
@@ -287,7 +287,7 @@ export function DocItems({ items, showReceived = false, qtyLabel = 'Qté' }: Doc
               <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-neutral-500 w-[19%]">Total</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-[var(--w-separator)]">
             {items.map((item, idx) => {
               const lineTotal = item.total ?? (item.quantity * item.unit_price - (item.discount ?? 0));
               const ref = item.supplier_ref || item.internal_ref;

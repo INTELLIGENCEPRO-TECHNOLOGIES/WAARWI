@@ -394,7 +394,7 @@ function UnderlineInput({
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
-          className={`w-full h-11 bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-900 focus:outline-none focus:ring-0 text-[15px] text-neutral-900 placeholder:text-neutral-300 transition-colors ${Icon ? 'pl-6' : 'pl-0'} pr-0`}
+          className={`w-input-ul h-11 text-[15px] ${Icon ? 'pl-6' : 'pl-0'} pr-0`}
         />
       </div>
       {hint && <p className="mt-1 text-[11px] text-neutral-400">{hint}</p>}
@@ -436,7 +436,7 @@ function UnderlinePassword({
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full h-11 bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-900 focus:outline-none focus:ring-0 text-[15px] text-neutral-900 placeholder:text-neutral-300 transition-colors pl-0 pr-8"
+          className="w-input-ul h-11 text-[15px] pl-0 pr-8"
         />
         <button
           type="button"
@@ -501,7 +501,7 @@ function ActivityTypeSelect({
       <button
         type="button"
         onClick={() => { setOpen(!open); setSearch(''); }}
-        className="w-full h-11 bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-900 focus:outline-none text-left text-[15px] text-neutral-900 transition-colors cursor-pointer relative pr-8"
+        className="w-input-ul h-11 text-left text-[15px] cursor-pointer relative pr-8"
       >
         <span className={value ? 'text-neutral-900' : 'text-neutral-300'}>{selectedLabel}</span>
         <ChevronDown className={`absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -1262,7 +1262,7 @@ export function Auth() {
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       placeholder="Votre mot de passe"
-                      className="w-full h-11 bg-transparent border-0 border-b border-neutral-200 focus:border-neutral-900 focus:outline-none focus:ring-0 text-[15px] text-neutral-900 placeholder:text-neutral-300 transition-colors pl-0 pr-8"
+                      className="w-input-ul h-11 text-[15px] pl-0 pr-8"
                     />
                     <button
                       type="button"

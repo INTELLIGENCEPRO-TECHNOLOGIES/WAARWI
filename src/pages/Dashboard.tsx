@@ -176,15 +176,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       return next;
     });
   };
-  const [heroLight, setHeroLight] = useState(() => {
-    try { return localStorage.getItem('dashboard_hero_light') === '1'; } catch { return false; }
-  });
-  const toggleHeroTheme = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const next = !heroLight;
-    setHeroLight(next);
-    try { localStorage.setItem('dashboard_hero_light', next ? '1' : '0'); } catch {}
-  };
   const { can } = usePermissions();
 
   const [period, setPeriod] = useState<string>('today');
@@ -840,33 +831,33 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
   if (loading || !stats) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#0B0F19] z-[9999] overflow-hidden">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--w-bg)] z-[9999] overflow-hidden">
         {/* Ambient glow orbs */}
-        <div className="absolute top-1/4 left-1/4 w-[50vw] h-[50vw] rounded-full bg-teal-500/8 blur-[120px] animate-[dashPulse_3s_ease-in-out_infinite]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[40vw] h-[40vw] rounded-full bg-cyan-500/6 blur-[100px] animate-[dashPulse_3s_ease-in-out_infinite_1.5s]" />
+        <div className="absolute top-1/4 left-1/4 w-[50vw] h-[50vw] rounded-full bg-brand-500/8 blur-[120px] animate-[dashPulse_3s_ease-in-out_infinite]" />
+        <div className="absolute bottom-1/4 right-1/4 w-[40vw] h-[40vw] rounded-full bg-brand-400/6 blur-[100px] animate-[dashPulse_3s_ease-in-out_infinite_1.5s]" />
 
         {/* Dashboard icon with orbiting rings */}
         <div className="relative flex items-center justify-center mb-8">
           <div className="absolute w-24 h-24 rounded-full border border-white/5" />
           <div className="absolute w-16 h-16 rounded-full border border-white/10 animate-[dashSpin_2s_linear_infinite]" style={{ borderTopColor: 'rgba(20,184,166,0.6)' }} />
           <div className="absolute w-20 h-20 rounded-full border border-white/5 animate-[dashSpin_3s_linear_infinite_reverse]" style={{ borderBottomColor: 'rgba(6,182,212,0.4)' }} />
-          <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center shadow-[0_0_30px_rgba(20,184,166,0.4)]">
+          <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-brand-md">
             <LayoutDashboard className="w-6 h-6 text-white" />
           </div>
         </div>
 
         {/* Progress dots */}
         <div className="flex items-center gap-1.5 mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-[dashBounce_1.4s_ease-in-out_infinite]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-[dashBounce_1.4s_ease-in-out_infinite_0.2s]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-[dashBounce_1.4s_ease-in-out_infinite_0.4s]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-[dashBounce_1.4s_ease-in-out_infinite]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-[dashBounce_1.4s_ease-in-out_infinite_0.2s]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-[dashBounce_1.4s_ease-in-out_infinite_0.4s]" />
         </div>
 
         {/* Status text */}
-        <p className="text-[13px] font-medium text-slate-300 tracking-wide">
+        <p className="text-[13px] font-medium text-[var(--w-text-sec)] tracking-wide">
           Préparation de votre tableau de bord
         </p>
-        <p className="text-[10px] text-slate-600 mt-1 tracking-[0.15em] uppercase">
+        <p className="text-[10px] text-[var(--w-text-muted)] mt-1 tracking-[0.15em] uppercase">
           Chargement des données
         </p>
       </div>
@@ -896,8 +887,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           nav={nav}
           balanceHidden={balanceHidden || !can('view_dashboard_stats')}
           toggleBalanceHidden={toggleBalanceHidden}
-          heroLight={heroLight}
-          toggleHeroTheme={toggleHeroTheme}
           canViewMargin={can('view_margins')}
           viewMode={viewMode}
           toggleViewMode={toggleViewMode}
@@ -926,8 +915,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           setShowPeriodMenu={setShowPeriodMenu}
           periodOptions={periodOptions}
           periodLabel={periodLabel}
-          heroLight={heroLight}
-          toggleHeroTheme={toggleHeroTheme}
           canViewMargin={can('view_margins')}
           viewMode={viewMode}
           toggleViewMode={toggleViewMode}
@@ -942,7 +929,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
  * ════════════════════════════════════════════════════════════════════════════ */
 function MobileDashboard({
   stats, shopInfo, dayDelta, marginPct, dayMarginPct, nav,
-  balanceHidden, toggleBalanceHidden, heroLight, toggleHeroTheme, canViewMargin,
+  balanceHidden, toggleBalanceHidden, canViewMargin,
   viewMode, toggleViewMode, period, setPeriod, periodLabel, periodOptions, showPeriodMenu, setShowPeriodMenu,
 }: any) {
   const { tenant, currentSite, sites, setCurrentSite } = useApp();
@@ -1213,21 +1200,14 @@ function MobileDashboard({
       ) : (
       <button
         onClick={() => nav('sales')}
-        className={`w-full text-left relative overflow-hidden rounded-xl p-3.5 mt-4 active:scale-[0.985] transition-transform duration-200 ${heroLight ? '' : ''}`}
-        style={heroLight
-          ? { background: '#ffffff', boxShadow: '0 1px 4px rgba(15,23,42,0.06), 0 0 0 1px rgba(226,232,240,0.5)' }
-          : { background: '#000000', boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }
-        }
+        className="w-full text-left relative overflow-hidden rounded-xl p-3.5 mt-4 active:scale-[0.985] transition-transform duration-200"
+        style={{ background: 'var(--w-surface)', boxShadow: '0 1px 4px rgba(15,23,42,0.06), 0 0 0 1px var(--w-separator)' }}
       >
-        {!heroLight && (
-          <div className="absolute inset-0 pointer-events-none" />
-        )}
-
         <div className="relative">
           {/* Header row */}
           <div className="flex items-center justify-between mb-1.5">
             {viewMode === 'session' && (
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${heroLight ? 'text-neutral-400' : 'text-white/60'}`}>Session de caisse</span>
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--w-text-muted)]`}>Session de caisse</span>
             )}
             {viewMode !== 'session' && <div />}
             <div className="flex items-center gap-2">
@@ -1237,7 +1217,7 @@ function MobileDashboard({
                   className="active:scale-90 transition-transform"
                   aria-label="Partager la boutique"
                 >
-                  <Share2 className={`w-3 h-3 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />
+                  <Share2 className={`w-3 h-3 text-[var(--w-text-muted)]`} />
                 </button>
               )}
               <button
@@ -1245,35 +1225,29 @@ function MobileDashboard({
                 className="active:scale-90 transition-transform"
               >
                 {balanceHidden
-                  ? <Eye className={`w-3 h-3 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />
-                  : <EyeOff className={`w-3 h-3 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />}
+                  ? <Eye className={`w-3 h-3 text-[var(--w-text-muted)]`} />
+                  : <EyeOff className={`w-3 h-3 text-[var(--w-text-muted)]`} />}
               </button>
-              <button
-                onClick={toggleHeroTheme}
-                className={`text-[10px] font-semibold active:scale-95 transition-transform ${heroLight ? 'text-neutral-400 hover:text-neutral-700' : 'text-white/40 hover:text-white/80'}`}
-                aria-label="Changer le thème"
-              >
-                {heroLight ? 'Clair' : 'Sombre'}
-              </button>
+
             </div>
           </div>
 
           {/* Main amount + delta */}
           <div className="flex items-end gap-3 mb-2.5">
-            <div className={`num font-black leading-none tracking-tight ${heroLight ? 'text-neutral-900' : 'text-white'}`} style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
+            <div className={`num font-black leading-none tracking-tight text-[var(--w-text)]`} style={{ fontSize: 'clamp(22px, 7vw, 30px)' }}>
               {balanceHidden ? '••••••' : formatFCFA(viewMode === 'session' ? stats.sessionCaNet : stats.todayCollected)}
             </div>
             <div className="flex items-center gap-1.5 mb-0.5">
-              <span className={`text-[8px] num ${heroLight ? 'text-neutral-500' : 'text-white/45'}`}>{viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount} ticket{(viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount) > 1 ? 's' : ''}</span>
+              <span className={`text-[8px] num text-[var(--w-text-muted)]`}>{viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount} ticket{(viewMode === 'session' ? stats.sessionNbVentes : stats.todayCount) > 1 ? 's' : ''}</span>
             </div>
           </div>
 
           {/* Stats rows list */}
-          <div style={{ borderTop: heroLight ? '1px solid rgba(226,232,240,0.8)' : '1px solid rgba(255,255,255,0.08)' }} className="pt-2 space-y-0">
+          <div style={{ borderTop: '1px solid var(--w-separator)' }} className="pt-2 space-y-0">
 
             {/* Session info */}
             {stats.sessionInfo && (
-              <div className={`flex items-center gap-1 mb-1.5 text-[8px] font-semibold uppercase tracking-[0.1em] ${heroLight ? 'text-neutral-400' : 'text-white/40'}`}>
+              <div className={`flex items-center gap-1 mb-1.5 text-[8px] font-semibold uppercase tracking-[0.1em] text-[var(--w-text-muted)]`}>
                 <Clock className="w-2.5 h-2.5" />
                 Session depuis {new Date(stats.sessionInfo.openedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
               </div>
@@ -1281,103 +1255,103 @@ function MobileDashboard({
 
             {viewMode === 'session' ? (<>
             {/* SESSION: Encaissements */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Encaissements</span>
+                <Wallet className={`w-2.5 h-2.5 text-[var(--w-text-sec)]`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Encaissements</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
+              <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.sessionEncaissements)}
               </span>
             </div>
             {/* SESSION: Marge brute */}
             {canViewMargin && (
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Marge brute</span>
+                <TrendingUp className={`w-2.5 h-2.5 text-[var(--w-text-sec)]`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Marge brute</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/85'}`}>
+                <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                   {balanceHidden ? '•••' : formatFCFA(stats.sessionMargeBrute)}
                 </span>
-                {stats.sessionTauxMarge > 0 && <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{Math.round(stats.sessionTauxMarge)}%</span>}
+                {stats.sessionTauxMarge > 0 && <span className={`text-[8px] font-bold num text-[var(--w-text-muted)]`}>{Math.round(stats.sessionTauxMarge)}%</span>}
               </div>
             </div>
             )}
             {/* SESSION: Ventes à crédit */}
             {stats.sessionCreditCount > 0 && (
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <Users className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Ventes à crédit</span>
+                <Users className={`w-2.5 h-2.5 text-amber-600`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Ventes à crédit</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`num text-[13px] font-black ${heroLight ? 'text-amber-700' : 'text-amber-200'}`}>
+                <span className={`num text-[13px] font-black text-amber-700`}>
                   {balanceHidden ? '•••' : formatFCFA(stats.sessionCreditTotal)}
                 </span>
-                <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{stats.sessionCreditCount}</span>
+                <span className={`text-[8px] font-bold num text-[var(--w-text-muted)]`}>{stats.sessionCreditCount}</span>
               </div>
             </div>
             )}
             {/* SESSION: Dépenses */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
+                <ArrowUpLeft className={`w-2.5 h-2.5 text-rose-500`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Dépenses</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
+              <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.sessionDepenses)}
               </span>
             </div>
             {/* SESSION: Caisse théorique */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Caisse théorique</span>
+                <Wallet className={`w-2.5 h-2.5 text-[var(--w-text-sec)]`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Caisse théorique</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
+              <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                 {balanceHidden ? '•••' : formatFCFA((stats.sessionInfo?.openingAmount || 0) + stats.sessionEncaissements + stats.sessionEntreesDirectes - stats.sessionDepenses - stats.sessionRemboursements - stats.sessionRetraits - stats.sessionPretsClients)}
               </span>
             </div>
             </>) : (<>
             {/* PÉRIODE: CA net */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <Receipt className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>CA net</span>
+                <Receipt className={`w-2.5 h-2.5 text-[var(--w-text-sec)]`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>CA net</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/85'}`}>
+              <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.todaySales)}
               </span>
             </div>
             {/* PÉRIODE: Encaissements directs */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Encaiss. directs</span>
+                <Wallet className={`w-2.5 h-2.5 text-[var(--w-text-sec)]`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Encaiss. directs</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
+              <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.todayDirectCash)}
               </span>
             </div>
             {/* PÉRIODE: Dépenses */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <ArrowUpLeft className={`w-2.5 h-2.5 ${heroLight ? 'text-rose-500' : 'text-rose-300'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Dépenses</span>
+                <ArrowUpLeft className={`w-2.5 h-2.5 text-rose-500`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Dépenses</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-800' : 'text-white/80'}`}>
+              <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.periodExpenses)}
               </span>
             </div>
             {/* PÉRIODE: Solde caisse */}
-            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
               <div className="flex items-center gap-2">
-                <Wallet className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
-                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Solde caisse</span>
+                <Wallet className={`w-2.5 h-2.5 text-[var(--w-text-sec)]`} />
+                <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Solde caisse</span>
               </div>
-              <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
+              <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                 {balanceHidden ? '•••' : formatFCFA(stats.periodCashBalance)}
               </span>
             </div>
@@ -1385,32 +1359,32 @@ function MobileDashboard({
 
             {/* CRÉANCES CLIENTS row - period only */}
             {viewMode !== 'session' && stats.receivables > 0 && (
-              <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
                 <div className="flex items-center gap-2">
-                  <Users className={`w-2.5 h-2.5 ${heroLight ? 'text-amber-600' : 'text-amber-300'}`} />
-                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Créances</span>
+                  <Users className={`w-2.5 h-2.5 text-amber-600`} />
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Créances</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`num text-[13px] font-black ${heroLight ? 'text-amber-700' : 'text-amber-200'}`}>
+                  <span className={`num text-[13px] font-black text-amber-700`}>
                     {balanceHidden ? '•••' : formatFCFA(stats.receivables)}
                   </span>
-                  <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''}</span>
+                  <span className={`text-[8px] font-bold num text-[var(--w-text-muted)]`}>{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''}</span>
                 </div>
               </div>
             )}
 
             {/* MARGE DU JOUR row - period only */}
             {viewMode !== 'session' && !balanceHidden && dayMarginPct > 0 && (
-              <div className="flex items-center justify-between py-1.5" style={{ borderBottom: heroLight ? '1px solid rgba(226,232,240,0.6)' : '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--w-separator)' }}>
                 <div className="flex items-center gap-2">
-                  <TrendingUp className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-700' : 'text-white/80'}`} />
-                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-600' : 'text-white/70'}`}>Marge jour</span>
+                  <TrendingUp className={`w-2.5 h-2.5 text-[var(--w-text-sec)]`} />
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-sec)]`}>Marge jour</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-900' : 'text-white'}`}>
+                  <span className={`num text-[13px] font-black text-[var(--w-text)]`}>
                     {formatFCFA(stats.todayMargin)}
                   </span>
-                  <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{dayMarginPct}%</span>
+                  <span className={`text-[8px] font-bold num text-[var(--w-text-muted)]`}>{dayMarginPct}%</span>
                 </div>
               </div>
             )}
@@ -1419,12 +1393,12 @@ function MobileDashboard({
             {!balanceHidden && (
               <div className="flex items-center justify-between py-1.5">
                 <div className="flex items-center gap-2">
-                  <BarChart3 className={`w-2.5 h-2.5 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`} />
-                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>CA du mois</span>
+                  <BarChart3 className={`w-2.5 h-2.5 text-[var(--w-text-muted)]`} />
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.07em] text-[var(--w-text-muted)]`}>CA du mois</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`num text-[13px] font-black ${heroLight ? 'text-neutral-700' : 'text-white/70'}`}>{formatCompactFCFA(stats.monthSales)}</span>
-                  {marginPct > 0 && <span className={`text-[8px] font-bold num ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>marge {marginPct}%</span>}
+                  <span className={`num text-[13px] font-black text-[var(--w-text-sec)]`}>{formatCompactFCFA(stats.monthSales)}</span>
+                  {marginPct > 0 && <span className={`text-[8px] font-bold num text-[var(--w-text-muted)]`}>marge {marginPct}%</span>}
                 </div>
               </div>
             )}
@@ -1698,25 +1672,25 @@ function MobileDashboard({
 /* ════════════════════════════════════════════════════════════════════════════
  *  KPI helpers — divider-separated inline KPIs (no mini-cards)
  * ════════════════════════════════════════════════════════════════════════════ */
-function KpiItem({ light, label, value, sub, negative, accent }: {
-  light: boolean; label: string; value: string; sub?: string; negative?: boolean; accent?: 'amber';
+function KpiItem({ label, value, sub, negative, accent }: {
+  label: string; value: string; sub?: string; negative?: boolean; accent?: 'amber';
 }) {
   const valColor = negative
-    ? (light ? 'text-red-600' : 'text-rose-300')
+    ? 'text-red-600'
     : accent === 'amber'
-      ? (light ? 'text-amber-700' : 'text-amber-200')
-      : (light ? 'text-neutral-900' : 'text-white');
+      ? 'text-amber-700'
+      : 'text-[var(--w-text)]';
   return (
     <div className="flex flex-col">
-      <p className={`text-[10px] font-medium uppercase tracking-wide mb-0.5 ${light ? 'text-neutral-500' : 'text-white/50'}`}>{label}</p>
+      <p className={`text-[10px] font-medium uppercase tracking-wide mb-0.5 text-[var(--w-text-muted)]`}>{label}</p>
       <p className={`text-lg font-bold num leading-tight ${valColor}`}>{value}</p>
-      {sub && <p className={`text-[9px] mt-0.5 ${light ? 'text-neutral-400' : 'text-white/40'}`}>{sub}</p>}
+      {sub && <p className={`text-[9px] mt-0.5 text-[var(--w-text-disabled)]`}>{sub}</p>}
     </div>
   );
 }
 
-function KpiDivider({ light }: { light: boolean }) {
-  return <div className={`self-stretch w-px ${light ? 'bg-neutral-200' : 'bg-white/10'}`} style={{ minHeight: 36 }} />;
+function KpiDivider() {
+  return <div className={`self-stretch w-px bg-[var(--w-separator)]`} style={{ minHeight: 36 }} />;
 }
 
 
@@ -1895,7 +1869,7 @@ function WeekBarChart({ data }: { data: { day: string; total: number }[] }) {
   );
 }
 
-function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, heroLight, toggleHeroTheme, canViewMargin, viewMode, toggleViewMode }: any) {
+function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarginPct, marginPct, nav, period, setPeriod, showPeriodMenu, setShowPeriodMenu, periodOptions, periodLabel, canViewMargin, viewMode, toggleViewMode }: any) {
   const { tenant, currentSite, sites, setCurrentSite, profile, signOut } = useApp();
   const { can } = usePermissions();
 
@@ -2186,7 +2160,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           {subInfo && (
             <button onClick={() => nav('settings', { target: 'subscription' })} className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity">
               <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                subInfo.status === 'trial_active' ? 'bg-blue-50 text-blue-600'
+                subInfo.status === 'trial_active' ? 'bg-[var(--w-active)] text-blue-600'
                   : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
                   : subInfo.status === 'expired' ? 'bg-red-50 text-red-600'
                   : 'bg-amber-50 text-amber-600'
@@ -2331,82 +2305,68 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           {/* Situation du jour */}
           <div
             className="relative overflow-hidden rounded-xl p-5 flex flex-col transition-all duration-300"
-            style={heroLight
-              ? { background: '#ffffff', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 0 0 1px rgba(226,232,240,0.6)' }
-              : { background: '#000000', boxShadow: '0 16px 32px -8px rgba(0,0,0,0.55), 0 6px 12px -4px rgba(0,0,0,0.25)' }
-            }
+            style={{ background: 'var(--w-surface)', boxShadow: '0 4px 20px rgba(15,23,42,0.08), 0 0 0 1px var(--w-separator)' }}
           >
-            {!heroLight && (
-              <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
-                <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-white/5 to-transparent blur-3xl" />
-                <div className="absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-gradient-to-tr from-white/3 to-transparent blur-3xl" />
-              </div>
-            )}
+
             <div className="relative flex flex-col h-full">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <TrendingUp className={`w-5 h-5 ${heroLight ? 'text-neutral-700' : 'text-white/70'}`} />
-                <h2 className={`text-base font-bold ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{viewMode === 'session' ? 'Session de caisse' : `Situation ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}`}</h2>
+                <TrendingUp className={`w-5 h-5 text-[var(--w-text-sec)]`} />
+                <h2 className={`text-base font-bold text-[var(--w-text)]`}>{viewMode === 'session' ? 'Session de caisse' : `Situation ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : ''}`}</h2>
               </div>
-              <button
-                onClick={toggleHeroTheme}
-                className={`text-xs font-semibold active:scale-95 transition-transform ${heroLight ? 'text-neutral-400 hover:text-neutral-700' : 'text-white/40 hover:text-white/80'}`}
-                aria-label="Changer le thème"
-              >
-                {heroLight ? 'Clair' : 'Sombre'}
-              </button>
+
             </div>
 
             <div className="grid grid-cols-[minmax(185px,1.35fr)_minmax(0,4fr)] items-center gap-5 flex-1 min-h-0">
               {/* Main amount */}
               <div>
-                <p className={`text-[11px] font-medium mb-1 ${heroLight ? 'text-neutral-400' : 'text-white/50'}`}>{viewMode === 'session' ? 'CA net session' : `Encaissements ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}`}</p>
-                <p className={`text-3xl font-bold num tracking-tight leading-none ${heroLight ? 'text-neutral-900' : 'text-white'}`}>{formatFCFA(viewMode === 'session' ? stats.sessionCaNet : stats.todayCollected)}</p>
+                <p className={`text-[11px] font-medium mb-1 text-[var(--w-text-muted)]`}>{viewMode === 'session' ? 'CA net session' : `Encaissements ${period === 'today' ? 'du jour' : period === 'yesterday' ? "d'hier" : 'de la période'}`}</p>
+                <p className={`text-3xl font-bold num tracking-tight leading-none text-[var(--w-text)]`}>{formatFCFA(viewMode === 'session' ? stats.sessionCaNet : stats.todayCollected)}</p>
               </div>
 
               {/* KPI Line — divider-separated, no mini-cards */}
               {viewMode === 'session' ? (
                 <div className="flex items-center gap-3 min-w-0">
-                  <KpiItem light={heroLight} label="Nb ventes" value={String(stats.sessionNbVentes)} />
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Encaissements" value={formatCompactFCFA(stats.sessionEncaissements)} />
+                  <KpiItem label="Nb ventes" value={String(stats.sessionNbVentes)} />
+                  <KpiDivider />
+                  <KpiItem label="Encaissements" value={formatCompactFCFA(stats.sessionEncaissements)} />
                   {canViewMargin && <>
-                    <KpiDivider light={heroLight} />
-                    <KpiItem light={heroLight} label="Marge brute" value={formatCompactFCFA(stats.sessionMargeBrute)} sub={stats.sessionTauxMarge > 0 ? `${Math.round(stats.sessionTauxMarge)}%` : undefined} />
+                    <KpiDivider />
+                    <KpiItem label="Marge brute" value={formatCompactFCFA(stats.sessionMargeBrute)} sub={stats.sessionTauxMarge > 0 ? `${Math.round(stats.sessionTauxMarge)}%` : undefined} />
                   </>}
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Ventes à crédit" value={String(stats.sessionCreditCount)} sub={formatCompactFCFA(stats.sessionCreditTotal)} />
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Dépenses" value={formatCompactFCFA(stats.sessionDepenses)} negative />
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Caisse théorique" value={formatCompactFCFA((stats.sessionInfo?.openingAmount || 0) + stats.sessionEncaissements + stats.sessionEntreesDirectes - stats.sessionDepenses - stats.sessionRemboursements - stats.sessionRetraits - stats.sessionPretsClients)} />
+                  <KpiDivider />
+                  <KpiItem label="Ventes à crédit" value={String(stats.sessionCreditCount)} sub={formatCompactFCFA(stats.sessionCreditTotal)} />
+                  <KpiDivider />
+                  <KpiItem label="Dépenses" value={formatCompactFCFA(stats.sessionDepenses)} negative />
+                  <KpiDivider />
+                  <KpiItem label="Caisse théorique" value={formatCompactFCFA((stats.sessionInfo?.openingAmount || 0) + stats.sessionEncaissements + stats.sessionEntreesDirectes - stats.sessionDepenses - stats.sessionRemboursements - stats.sessionRetraits - stats.sessionPretsClients)} />
                 </div>
               ) : (
                 <div className="flex items-center gap-3 min-w-0">
-                  <KpiItem light={heroLight} label="CA net" value={formatCompactFCFA(stats.todaySales)} />
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Encaiss. directs" value={formatCompactFCFA(stats.todayDirectCash)} />
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Ventes" value={String(stats.todayCount)} />
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Solde caisse" value={formatCompactFCFA(stats.periodCashBalance)} />
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Dépenses" value={formatCompactFCFA(stats.periodExpenses)} negative />
-                  <KpiDivider light={heroLight} />
-                  <KpiItem light={heroLight} label="Créances" value={formatCompactFCFA(stats.receivables)} sub={`${stats.customersToChase} client${stats.customersToChase > 1 ? 's' : ''}`} accent={stats.receivables > 0 ? 'amber' : undefined} />
+                  <KpiItem label="CA net" value={formatCompactFCFA(stats.todaySales)} />
+                  <KpiDivider />
+                  <KpiItem label="Encaiss. directs" value={formatCompactFCFA(stats.todayDirectCash)} />
+                  <KpiDivider />
+                  <KpiItem label="Ventes" value={String(stats.todayCount)} />
+                  <KpiDivider />
+                  <KpiItem label="Solde caisse" value={formatCompactFCFA(stats.periodCashBalance)} />
+                  <KpiDivider />
+                  <KpiItem label="Dépenses" value={formatCompactFCFA(stats.periodExpenses)} negative />
+                  <KpiDivider />
+                  <KpiItem label="Créances" value={formatCompactFCFA(stats.receivables)} sub={`${stats.customersToChase} client${stats.customersToChase > 1 ? 's' : ''}`} accent={stats.receivables > 0 ? 'amber' : undefined} />
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div className={`flex items-center justify-between pt-3 mt-3 border-t ${heroLight ? 'border-neutral-100' : 'border-white/10'}`}>
+            <div className={`flex items-center justify-between pt-3 mt-3 border-t border-[var(--w-separator-l)]`}>
               {lastSaleTime && (
-                <div className={`flex items-center gap-1.5 text-xs ${heroLight ? 'text-neutral-400' : 'text-white/40'}`}>
+                <div className={`flex items-center gap-1.5 text-xs text-[var(--w-text-muted)]`}>
                   <Clock className="w-3.5 h-3.5" />
                   Dernière vente à {lastSaleTime}
                 </div>
               )}
-              <button onClick={() => nav('sales')} className={`flex items-center gap-1 text-xs font-semibold transition-colors ml-auto ${heroLight ? 'text-neutral-900 hover:text-neutral-600' : 'text-white/80 hover:text-white'}`}>
+              <button onClick={() => nav('sales')} className={`flex items-center gap-1 text-xs font-semibold transition-colors ml-auto text-[var(--w-text)] hover:text-[var(--w-text-sec)]`}>
                 Voir le détail <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -2543,7 +2503,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                     <th className="text-right py-2.5 pl-3 pr-2">État</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-50">
+                <tbody className="divide-y divide-[var(--w-separator-l)]">
                   {multiSiteStats.map((site: any) => {
                     const isCurrent = site.id === currentSite?.id;
                     return (
@@ -2622,7 +2582,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                         return topArticles.map((art, idx) => {
                           const pct = Math.round((art.total / maxTotal) * 100);
                           return (
-                            <tr key={art.article_id} className="hover:bg-neutral-50/50 transition-colors">
+                            <tr key={art.article_id} className="hover:bg-[var(--w-hover)] transition-colors">
                               <td className="px-4 py-3">
                                 <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${idx === 0 ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-600'}`}>
                                   {idx + 1}
@@ -2665,7 +2625,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             </div>
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 pr-1.5 -mr-1.5" style={{ scrollbarGutter: 'stable' } as React.CSSProperties}>
               <table className="w-full">
-                <thead className="sticky top-0 bg-white z-10">
+                <thead className="sticky top-0 bg-[var(--w-surface)] z-10">
                   <tr className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100">
                     <th className="text-left py-2 pr-1 w-10">Type</th>
                     <th className="text-left py-2 pr-2">Réf</th>
@@ -2695,7 +2655,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
                       ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
                       : '';
                     return (
-                      <tr key={act.id} onClick={() => nav(act.route, act.highlightId ? { highlightId: act.highlightId, ...(act.routeCtx || {}) } : act.routeCtx)} className="border-b border-neutral-50 hover:bg-neutral-50/50 cursor-pointer transition-colors whitespace-nowrap">
+                      <tr key={act.id} onClick={() => nav(act.route, act.highlightId ? { highlightId: act.highlightId, ...(act.routeCtx || {}) } : act.routeCtx)} className="border-b border-[var(--w-separator-l)] hover:bg-[var(--w-hover)] cursor-pointer transition-colors whitespace-nowrap">
                         <td className="py-2 pr-1">
                           <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide">{codeMap[act.type]}</span>
                         </td>
