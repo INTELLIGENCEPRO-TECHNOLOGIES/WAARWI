@@ -641,6 +641,13 @@ p { line-height: 1.6; }
 
   .header-logo-reveal { animation: tenant-logo-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+  .w-platform-logo {
+    display: block;
+  }
+  [data-theme="dark"] .w-platform-logo {
+    filter: invert(1) brightness(2);
+  }
+
   .card-premium {
     @apply relative rounded-xl transition-all duration-200;
     background: var(--w-surface);

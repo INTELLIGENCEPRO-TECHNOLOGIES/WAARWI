@@ -329,8 +329,8 @@ function Inner() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#F8FAFC]">
-        <img src="/newlogo.png" alt="" className="w-[140px] h-auto object-contain" />
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center" style={{ background: 'var(--w-bg)' }}>
+        <img src="/newlogo.png" alt="" className="w-[140px] h-auto object-contain w-platform-logo" />
       </div>
     );
   }

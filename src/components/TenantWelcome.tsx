@@ -34,7 +34,7 @@ export function TenantWelcome({ logoUrl, name, onDone }: Props) {
         <img
           src={logoUrl || '/newlogo.png'}
           alt=""
-          className="relative w-44 h-44 object-contain welcome-logo-reveal"
+          className="relative w-44 h-44 object-contain welcome-logo-reveal w-platform-logo"
         />
 
         <div className="relative mt-4 text-xs sm:text-sm font-medium text-slate-600 text-center welcome-name-reveal tracking-wide">

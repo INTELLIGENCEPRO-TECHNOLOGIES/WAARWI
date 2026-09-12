@@ -43,7 +43,7 @@ type Plan = {
 function AuthLoadingOverlay({ logoSrc, brandName }: { logoSrc: string; brandName: string }) {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white">
-      <img src={logoSrc} alt={brandName} className="h-8 w-auto object-contain mb-6" />
+      <img src={logoSrc} alt={brandName} className="h-8 w-auto object-contain mb-6 w-platform-logo" />
       <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
     </div>
   );
@@ -880,7 +880,7 @@ export function Auth() {
         <div className="w-full max-w-[520px]">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
-            <img src={logoSrc} alt={brandName} className="h-7 w-auto object-contain" />
+            <img src={logoSrc} alt={brandName} className="h-7 w-auto object-contain w-platform-logo" />
             <button
               onClick={() => { setMode('login'); setStep(1); }}
               className="text-[13px] font-medium text-neutral-400 hover:text-neutral-900 transition-colors"
@@ -1139,7 +1139,7 @@ export function Auth() {
     <div className="min-h-[100dvh] flex flex-col bg-white">
       {/* Top: logo left aligned, desktop only */}
       <header className="hidden lg:flex items-center px-10 pt-8">
-        <img src={logoSrc} alt={brandName} className="h-8 w-auto" />
+        <img src={logoSrc} alt={brandName} className="h-8 w-auto w-platform-logo" />
       </header>
 
       <main className="flex-1 flex items-center justify-center px-4 py-8 lg:px-10">
@@ -1219,7 +1219,7 @@ export function Auth() {
             <div className="w-full max-w-[400px] mx-auto lg:mx-0">
               {/* Mobile logo */}
               <div className="lg:hidden flex justify-center mb-12">
-                <img src={logoSrc} alt={brandName} className="h-9 w-auto" />
+                <img src={logoSrc} alt={brandName} className="h-9 w-auto w-platform-logo" />
               </div>
 
               <div className="mb-8">

@@ -96,17 +96,17 @@ export function PlatformAdmin() {
         <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <aside className={`fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-screen w-[220px] bg-white border-r border-[#E8E8E8] flex flex-col overflow-y-auto transition-transform lg:transition-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="h-14 flex items-center gap-2.5 px-5 border-b border-[#E8E8E8] shrink-0">
-          <img src="/newlogo.png" alt="Waarwi" className="w-6 h-6 object-contain" />
-          <span className="text-[13px] font-semibold text-[#111]">Waarwi</span>
-          <span className="text-[10px] text-[#999] font-medium ml-auto">Admin</span>
+      <aside className={`fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-screen w-[220px] bg-[var(--w-surface)] border-r border-[var(--w-separator)] flex flex-col overflow-y-auto transition-transform lg:transition-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="h-14 flex items-center gap-2.5 px-5 border-b border-[var(--w-separator)] shrink-0">
+          <img src="/newlogo.png" alt="Waarwi" className="w-6 h-6 object-contain w-platform-logo" />
+          <span className="text-[13px] font-semibold text-[var(--w-text)]">Waarwi</span>
+          <span className="text-[10px] text-[var(--w-text-muted)] font-medium ml-auto">Admin</span>
         </div>
 
         <nav className="flex-1 py-4 space-y-5 overflow-y-auto">
           {sidebarGroups.map(group => (
             <div key={group.label}>
-              <div className="text-[10px] font-semibold text-[#999] tracking-wider uppercase px-5 mb-1">{group.label}</div>
+              <div className="text-[10px] font-semibold text-[var(--w-text-muted)] tracking-wider uppercase px-5 mb-1">{group.label}</div>
               {group.items.map(item => {
                 const I = item.icon;
                 const active = section === item.k;
@@ -116,8 +116,8 @@ export function PlatformAdmin() {
                     onClick={() => { setSection(item.k); setSidebarOpen(false); }}
                     className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-[7px] text-[13px] transition-colors border-l-2 ${
                       active
-                        ? 'border-[#111] text-[#111] font-semibold bg-[#FAFAFA]'
-                        : 'border-transparent text-[#666] hover:text-[#111] hover:bg-[#FAFAFA] font-medium'
+                        ? 'border-[#111] text-[var(--w-text)] font-semibold bg-[var(--w-surface-el)]'
+                        : 'border-transparent text-[var(--w-text-sec)] hover:text-[var(--w-text)] hover:bg-[var(--w-hover)] font-medium'
                     }`}
                   >
                     <I className="w-[15px] h-[15px] shrink-0" />
@@ -129,25 +129,25 @@ export function PlatformAdmin() {
           ))}
         </nav>
 
-        <div className="px-5 py-3 border-t border-[#E8E8E8] shrink-0">
-          <div className="flex items-center gap-1.5 text-[11px] text-[#999]">
+        <div className="px-5 py-3 border-t border-[var(--w-separator)] shrink-0">
+          <div className="flex items-center gap-1.5 text-[11px] text-[var(--w-text-muted)]">
             <Shield className="w-3 h-3" />
             <span>Super admin</span>
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 bg-white">
-        <header className="sticky top-0 z-30 h-14 bg-white border-b border-[#E8E8E8] px-5 sm:px-8 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 text-[#666] hover:text-[#111]">
+      <main className="flex-1 min-w-0 bg-[var(--w-surface)]">
+        <header className="sticky top-0 z-30 h-14 bg-[var(--w-surface)] border-b border-[var(--w-separator)] px-5 sm:px-8 flex items-center gap-3">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 text-[var(--w-text-sec)] hover:text-[var(--w-text)]">
             <Layers className="w-5 h-5" />
           </button>
-          <h1 className="text-[15px] font-semibold text-[#111] flex-1 min-w-0">
+          <h1 className="text-[15px] font-semibold text-[var(--w-text)] flex-1 min-w-0">
             {sidebarGroups.flatMap(g => g.items).find(i => i.k === section)?.l || 'Console'}
           </h1>
           <button
             onClick={() => supabase.auth.signOut()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-[#666] hover:text-[#111] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-[var(--w-text-sec)] hover:text-[var(--w-text)] transition-colors"
             title="Déconnexion"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -187,7 +187,7 @@ function OverviewSection() {
     })();
   }, []);
 
-  if (loading) return <div className="py-20 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#64748B]" /></div>;
+  if (loading) return <div className="py-20 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-sec)]" /></div>;
   if (!data) return null;
 
   const planColors: Record<string, string> = {
@@ -212,10 +212,10 @@ function OverviewSection() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Plan distribution */}
-        <div className="lg:col-span-2 bg-white border border-[#E5E7EB] rounded-xl p-5">
+        <div className="lg:col-span-2 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[#0F172A]">Répartition par plan</h3>
-            <span className="text-[11px] text-[#64748B] font-medium">{data.tenants_total} tenants</span>
+            <h3 className="text-sm font-semibold text-[var(--w-text)]">Répartition par plan</h3>
+            <span className="text-[11px] text-[var(--w-text-sec)] font-medium">{data.tenants_total} tenants</span>
           </div>
           <div className="space-y-3">
             {Object.entries(data.by_plan as Record<string, number>).map(([plan, count]) => {
@@ -223,10 +223,10 @@ function OverviewSection() {
               return (
                 <div key={plan}>
                   <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="capitalize font-medium text-[#0F172A]">{plan}</span>
-                    <span className="text-[#64748B]">{count} <span className="text-[#94A3B8]">({pct.toFixed(0)}%)</span></span>
+                    <span className="capitalize font-medium text-[var(--w-text)]">{plan}</span>
+                    <span className="text-[var(--w-text-sec)]">{count} <span className="text-[var(--w-text-muted)]">({pct.toFixed(0)}%)</span></span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-[#F1F5F9] overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-[var(--w-hover)] overflow-hidden">
                     <div className={`h-full rounded-full ${planColors[plan] || 'bg-[#94A3B8]'} transition-all duration-500`} style={{ width: `${Math.max(pct, 2)}%` }} />
                   </div>
                 </div>
@@ -236,21 +236,21 @@ function OverviewSection() {
         </div>
 
         {/* Expiring soon */}
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+        <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[#0F172A]">Expirations proches</h3>
+            <h3 className="text-sm font-semibold text-[var(--w-text)]">Expirations proches</h3>
             <Clock className="w-4 h-4 text-[#F59E0B]" />
           </div>
           {data.expiring_soon.length === 0 ? (
             <div className="py-8 text-center">
               <Check className="w-8 h-8 text-[#10B981] mx-auto mb-2 opacity-50" />
-              <p className="text-xs text-[#64748B]">Aucune expiration dans les 7 jours.</p>
+              <p className="text-xs text-[var(--w-text-sec)]">Aucune expiration dans les 7 jours.</p>
             </div>
           ) : (
             <div className="space-y-2">
               {data.expiring_soon.slice(0, 6).map((t: any) => (
-                <div key={t.id} className="flex items-center justify-between text-xs py-2 border-b border-[#F1F5F9] last:border-0">
-                  <span className="font-medium text-[#0F172A] truncate">{t.name}</span>
+                <div key={t.id} className="flex items-center justify-between text-xs py-2 border-b border-[var(--w-hover)] last:border-0">
+                  <span className="font-medium text-[var(--w-text)] truncate">{t.name}</span>
                   <span className="text-[#F59E0B] bg-[#FFFBEB] px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 ml-2">{formatDate(t.plan_expires_at)}</span>
                 </div>
               ))}
@@ -262,10 +262,10 @@ function OverviewSection() {
       {/* Actions and activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Actions a traiter */}
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+        <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[#0F172A]">Actions à traiter</h3>
-            <Bell className="w-4 h-4 text-[#64748B]" />
+            <h3 className="text-sm font-semibold text-[var(--w-text)]">Actions à traiter</h3>
+            <Bell className="w-4 h-4 text-[var(--w-text-sec)]" />
           </div>
           <div className="space-y-2">
             {data.tenants_suspended > 0 && (
@@ -280,21 +280,21 @@ function OverviewSection() {
             {data.tenants_suspended === 0 && (data.expiring_soon?.length || 0) === 0 && pendingTenants <= 0 && (
               <div className="py-6 text-center">
                 <Check className="w-8 h-8 text-[#10B981] mx-auto mb-2 opacity-50" />
-                <p className="text-xs text-[#64748B]">Aucune action en attente.</p>
+                <p className="text-xs text-[var(--w-text-sec)]">Aucune action en attente.</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Recent activity */}
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+        <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[#0F172A]">Activité récente</h3>
-            <Activity className="w-4 h-4 text-[#64748B]" />
+            <h3 className="text-sm font-semibold text-[var(--w-text)]">Activité récente</h3>
+            <Activity className="w-4 h-4 text-[var(--w-text-sec)]" />
           </div>
           {data.recent_events.length === 0 ? (
             <div className="py-6 text-center">
-              <p className="text-xs text-[#64748B]">Aucune activité récente.</p>
+              <p className="text-xs text-[var(--w-text-sec)]">Aucune activité récente.</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -313,7 +313,7 @@ function ActionItem({ icon: Icon, label, severity }: { icon: any; label: string;
   const styles = {
     critical: 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]',
     warning: 'bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]',
-    info: 'bg-[#F8FAFC] border-[#E2E8F0] text-[#475569]',
+    info: 'bg-[var(--w-surface-el)] border-[var(--w-separator)] text-[var(--w-text-sec)]',
   };
   return (
     <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-xs font-medium ${styles[severity]}`}>
@@ -325,15 +325,15 @@ function ActionItem({ icon: Icon, label, severity }: { icon: any; label: string;
 
 function KpiCard({ icon: Icon, label, value, sub, alert }: { icon: any; label: string; value: any; sub: string; alert?: boolean }) {
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+    <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${alert ? 'bg-[#FEF2F2] text-[#EF4444]' : 'bg-[#F8FAFC] text-[#64748B]'}`}>
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${alert ? 'bg-[#FEF2F2] text-[#EF4444]' : 'bg-[var(--w-surface-el)] text-[var(--w-text-sec)]'}`}>
           <Icon className="w-4 h-4" />
         </div>
       </div>
-      <div className="text-2xl font-bold text-[#0F172A] leading-tight">{value}</div>
-      <div className="text-[11px] font-medium text-[#64748B] mt-0.5">{label}</div>
-      <div className="text-[10px] text-[#94A3B8] mt-0.5">{sub}</div>
+      <div className="text-2xl font-bold text-[var(--w-text)] leading-tight">{value}</div>
+      <div className="text-[11px] font-medium text-[var(--w-text-sec)] mt-0.5">{label}</div>
+      <div className="text-[10px] text-[var(--w-text-muted)] mt-0.5">{sub}</div>
     </div>
   );
 }
@@ -348,15 +348,15 @@ function EventRow({ ev }: { ev: any }) {
   const I = icons[ev.action] || Activity;
   const tenantName = ev.tenants?.name || (ev.payload?.name) || (ev.tenant_id ? 'Tenant' : 'Plateforme');
   return (
-    <div className="flex items-center gap-2.5 text-[12px] py-2 border-b border-[#F1F5F9] last:border-0">
-      <div className="w-6 h-6 shrink-0 rounded-md bg-[#F8FAFC] text-[#64748B] flex items-center justify-center">
+    <div className="flex items-center gap-2.5 text-[12px] py-2 border-b border-[var(--w-hover)] last:border-0">
+      <div className="w-6 h-6 shrink-0 rounded-md bg-[var(--w-surface-el)] text-[var(--w-text-sec)] flex items-center justify-center">
         <I className="w-3 h-3" />
       </div>
       <div className="flex-1 min-w-0">
-        <span className="font-medium text-[#0F172A]">{ev.action}</span>
-        <span className="text-[#94A3B8] ml-1.5">{tenantName}</span>
+        <span className="font-medium text-[var(--w-text)]">{ev.action}</span>
+        <span className="text-[var(--w-text-muted)] ml-1.5">{tenantName}</span>
       </div>
-      <div className="text-[10px] text-[#94A3B8] shrink-0">{formatDateTime(ev.created_at)}</div>
+      <div className="text-[10px] text-[var(--w-text-muted)] shrink-0">{formatDateTime(ev.created_at)}</div>
     </div>
   );
 }
@@ -457,12 +457,12 @@ function TenantsSection() {
       {/* Search + filters */}
       <div className="space-y-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--w-text-muted)]" />
           <input
             value={q}
             onChange={e => setQ(e.target.value)}
             placeholder="Rechercher un tenant..."
-            className="w-full h-10 pl-10 pr-4 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A] transition-colors"
+            className="w-full h-10 pl-10 pr-4 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] placeholder:text-[var(--w-text-muted)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)] transition-colors"
           />
         </div>
         <div className="flex gap-1.5 overflow-x-auto pb-0.5">
@@ -471,7 +471,7 @@ function TenantsSection() {
               className={`relative px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
                 filter === f.k
                   ? 'bg-[#0F172A] text-white'
-                  : 'bg-white border border-[#E5E7EB] text-[#64748B] hover:border-[#CBD5E1] hover:text-[#0F172A]'
+                  : 'bg-[var(--w-surface)] border border-[var(--w-separator)] text-[var(--w-text-sec)] hover:border-[var(--w-text-disabled)] hover:text-[var(--w-text)]'
               }`}>
               {f.l}
               {f.k === 'pending' && pendingCount > 0 && filter !== f.k && (
@@ -484,13 +484,13 @@ function TenantsSection() {
 
       {/* Tenant count */}
       {!loading && (
-        <div className="text-[11px] text-[#94A3B8] font-medium">
+        <div className="text-[11px] text-[var(--w-text-muted)] font-medium">
           {filtered.length} tenant{filtered.length !== 1 ? 's' : ''} {filter !== 'all' ? 'filtrés' : 'au total'}
         </div>
       )}
 
       {loading ? (
-        <div className="py-20 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#64748B]" /></div>
+        <div className="py-20 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-sec)]" /></div>
       ) : (
         <div className="space-y-2">
           {filtered.map(t => {
@@ -505,55 +505,55 @@ function TenantsSection() {
             const neverConnected = !t.last_active_at;
 
             const getStatusBadge = () => {
-              if (isPending) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#F8FAFC] text-[#64748B] border border-[#E2E8F0] font-medium">En attente</span>;
+              if (isPending) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[var(--w-surface-el)] text-[var(--w-text-sec)] border border-[var(--w-separator)] font-medium">En attente</span>;
               if (isRejected) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Rejeté</span>;
               if (!t.is_active) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Suspendu</span>;
               if (expired) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] font-medium">Expiré</span>;
               if (expiringSoon) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] font-medium">Expire bientôt</span>;
-              if (neverConnected) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#F8FAFC] text-[#94A3B8] border border-[#E2E8F0] font-medium">Jamais connecté</span>;
+              if (neverConnected) return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[var(--w-surface-el)] text-[var(--w-text-muted)] border border-[var(--w-separator)] font-medium">Jamais connecté</span>;
               return <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0] font-medium">Actif</span>;
             };
 
             return (
-              <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-xl p-4 hover:border-[#CBD5E1] transition-colors">
+              <div key={t.id} className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4 hover:border-[var(--w-text-disabled)] transition-colors">
                 <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                   {/* Left: avatar + info */}
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className={`w-10 h-10 rounded-lg font-bold text-sm flex items-center justify-center shrink-0 ${
                       isPending ? 'bg-[#FEF3C7] text-[#D97706]'
                         : !t.is_active ? 'bg-[#FEE2E2] text-[#DC2626]'
-                        : 'bg-[#F1F5F9] text-[#0F172A]'
+                        : 'bg-[var(--w-hover)] text-[var(--w-text)]'
                     }`}>
                       {(t.name || '?').charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
                       {/* Row 1: Name + plan badge */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-[#0F172A] text-sm">{t.name}</span>
+                        <span className="font-semibold text-[var(--w-text)] text-sm">{t.name}</span>
                         <PlanBadge plan={plan} code={t.plan} />
                         {getStatusBadge()}
                       </div>
                       {/* Row 2: Details */}
-                      <div className="text-xs text-[#64748B] mt-0.5 leading-relaxed">
+                      <div className="text-xs text-[var(--w-text-sec)] mt-0.5 leading-relaxed">
                         {t.email || '—'}
-                        {t.whatsapp_phone && <><span className="text-[#CBD5E1] mx-1.5">|</span><span className="text-[#16A34A] font-medium">{t.whatsapp_phone}</span></>}
-                        <span className="text-[#CBD5E1] mx-1.5">|</span>
+                        {t.whatsapp_phone && <><span className="text-[var(--w-text-disabled)] mx-1.5">|</span><span className="text-[#16A34A] font-medium">{t.whatsapp_phone}</span></>}
+                        <span className="text-[var(--w-text-disabled)] mx-1.5">|</span>
                         {(t.profiles || []).length} utilisateur{(t.profiles || []).length !== 1 ? 's' : ''}
-                        <span className="text-[#CBD5E1] mx-1.5">|</span>
+                        <span className="text-[var(--w-text-disabled)] mx-1.5">|</span>
                         Créé {formatDate(t.created_at)}
-                        {t.last_active_at && <><span className="text-[#CBD5E1] mx-1.5">|</span>Actif {formatDate(t.last_active_at)}</>}
+                        {t.last_active_at && <><span className="text-[var(--w-text-disabled)] mx-1.5">|</span>Actif {formatDate(t.last_active_at)}</>}
                       </div>
                       {/* Row 3: Pending extra info */}
                       {isPending && (t.city || t.selected_plan_code) && (
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                          {t.city && <span className="text-[10px] text-[#64748B]">Ville: {t.city}</span>}
+                          {t.city && <span className="text-[10px] text-[var(--w-text-sec)]">Ville: {t.city}</span>}
                           {t.selected_plan_code && <span className="text-[10px] text-[#2563EB] font-medium">Plan souhaité: {t.selected_plan_code}</span>}
                         </div>
                       )}
                       {/* Expiration date if exists */}
                       {exp && (
                         <div className="mt-1">
-                          <span className={`text-[11px] font-medium ${expired ? 'text-[#DC2626]' : expiringSoon ? 'text-[#D97706]' : 'text-[#64748B]'}`}>
+                          <span className={`text-[11px] font-medium ${expired ? 'text-[#DC2626]' : expiringSoon ? 'text-[#D97706]' : 'text-[var(--w-text-sec)]'}`}>
                             {expired ? 'Expiré le' : 'Expire le'} {formatDate(exp)}
                           </span>
                         </div>
@@ -585,24 +585,24 @@ function TenantsSection() {
                     <div className="relative">
                       <button
                         onClick={() => setActionsOpen(actionsOpen === t.id ? null : t.id)}
-                        className="h-8 w-8 rounded-md border border-[#E5E7EB] text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] flex items-center justify-center transition-colors"
+                        className="h-8 w-8 rounded-md border border-[var(--w-separator)] text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)] flex items-center justify-center transition-colors"
                       >
                         <span className="text-sm leading-none font-bold tracking-wider">...</span>
                       </button>
                       {actionsOpen === t.id && (
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setActionsOpen(null)} />
-                          <div className="absolute right-0 top-full mt-1 z-50 w-44 bg-white border border-[#E5E7EB] rounded-lg shadow-lg py-1">
+                          <div className="absolute right-0 top-full mt-1 z-50 w-44 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg shadow-lg py-1">
                             {!isPending && t.is_active && (
                               <button
                                 onClick={() => { setActionsOpen(null); const reason = prompt('Raison de la suspension ?') || ''; suspend(t, reason); }}
-                                className="w-full text-left px-3 py-2 text-xs text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] flex items-center gap-2"
+                                className="w-full text-left px-3 py-2 text-xs text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)] flex items-center gap-2"
                               ><Pause className="w-3.5 h-3.5" />Suspendre</button>
                             )}
                             {!isPending && !t.is_active && (
                               <button
                                 onClick={() => { setActionsOpen(null); reactivate(t); }}
-                                className="w-full text-left px-3 py-2 text-xs text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] flex items-center gap-2"
+                                className="w-full text-left px-3 py-2 text-xs text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)] flex items-center gap-2"
                               ><Power className="w-3.5 h-3.5" />Réactiver</button>
                             )}
                             <button
@@ -620,11 +620,11 @@ function TenantsSection() {
           })}
           {filtered.length === 0 && (
             <div className="text-center py-16">
-              <Building2 className="w-10 h-10 text-[#E2E8F0] mx-auto mb-3" />
-              <p className="text-sm font-medium text-[#64748B]">Aucun tenant trouvé</p>
-              <p className="text-xs text-[#94A3B8] mt-1">Essayez de modifier votre recherche ou vos filtres.</p>
+              <Building2 className="w-10 h-10 text-[var(--w-text-disabled)] mx-auto mb-3" />
+              <p className="text-sm font-medium text-[var(--w-text-sec)]">Aucun tenant trouvé</p>
+              <p className="text-xs text-[var(--w-text-muted)] mt-1">Essayez de modifier votre recherche ou vos filtres.</p>
               {filter !== 'all' && (
-                <button onClick={() => { setFilter('all'); setQ(''); }} className="mt-3 text-xs font-medium text-[#0F172A] hover:underline">
+                <button onClick={() => { setFilter('all'); setQ(''); }} className="mt-3 text-xs font-medium text-[var(--w-text)] hover:underline">
                   Réinitialiser les filtres
                 </button>
               )}
@@ -644,7 +644,7 @@ function TenantsSection() {
                 <AlertTriangle className="w-5 h-5 text-[#DC2626]" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-[#0F172A]">Supprimer définitivement</h3>
+                <h3 className="text-base font-bold text-[var(--w-text)]">Supprimer définitivement</h3>
                 <p className="text-xs text-[#DC2626]">Cette action est irréversible</p>
               </div>
             </div>
@@ -664,23 +664,23 @@ function TenantsSection() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#0F172A] mb-1">Motif de la suppression</label>
+              <label className="block text-xs font-medium text-[var(--w-text)] mb-1">Motif de la suppression</label>
               <input
                 value={deleteReason}
                 onChange={e => setDeleteReason(e.target.value)}
-                className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
+                className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] placeholder:text-[var(--w-text-muted)] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
                 placeholder="Ex: Demande du client, compte test, doublon..."
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#0F172A] mb-1">
+              <label className="block text-xs font-medium text-[var(--w-text)] mb-1">
                 Tapez <span className="font-mono font-bold bg-[#FEF2F2] text-[#DC2626] px-1.5 py-0.5 rounded">{normalizeName(deleting.name)}</span> pour confirmer
               </label>
               <input
                 value={deleteConfirmName}
                 onChange={e => setDeleteConfirmName(e.target.value)}
-                className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] font-mono placeholder:text-[#94A3B8] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
+                className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] font-mono placeholder:text-[var(--w-text-muted)] focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
                 placeholder={normalizeName(deleting.name)}
                 autoComplete="off"
                 spellCheck={false}
@@ -710,13 +710,13 @@ function TenantsSection() {
 
 function PlanBadge({ plan, code }: { plan: any; code: string }) {
   const colors: Record<string, string> = {
-    trial: 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]',
-    starter: 'bg-[#F8FAFC] text-[#0F172A] border-[#E2E8F0]',
+    trial: 'bg-[var(--w-surface-el)] text-[var(--w-text-sec)] border-[var(--w-separator)]',
+    starter: 'bg-[var(--w-surface-el)] text-[var(--w-text)] border-[var(--w-separator)]',
     pro: 'bg-[#F0FDF4] text-[#16A34A] border-[#BBF7D0]',
     enterprise: 'bg-[#FFFBEB] text-[#D97706] border-[#FDE68A]',
   };
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold border ${colors[code] || 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]'}`}>
+    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold border ${colors[code] || 'bg-[var(--w-surface-el)] text-[var(--w-text-sec)] border-[var(--w-separator)]'}`}>
       {plan?.name || code}
     </span>
   );
@@ -786,8 +786,8 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h4 className="text-sm font-semibold text-[#0F172A]">Type de commerce</h4>
-            <p className="text-[11px] text-[#64748B] mt-0.5">Determine le catalogue maitre importable pour ce tenant.</p>
+            <h4 className="text-sm font-semibold text-[var(--w-text)]">Type de commerce</h4>
+            <p className="text-[11px] text-[var(--w-text-sec)] mt-0.5">Determine le catalogue maitre importable pour ce tenant.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -798,12 +798,12 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
             const I = ACTIVITY_ICONS[a.slug] || ACTIVITY_ICONS[a.legacy_business_type || ''] || Store_;
             return (
               <button key={a.id} onClick={() => selectActivity(a)}
-                className={`text-left p-3 rounded-lg border transition-all ${active ? 'border-[#0F172A] bg-[#0F172A] text-white' : 'border-[#E5E7EB] bg-white hover:border-[#CBD5E1]'}`}>
+                className={`text-left p-3 rounded-lg border transition-all ${active ? 'border-[#0F172A] bg-[#0F172A] text-white' : 'border-[var(--w-separator)] bg-[var(--w-surface)] hover:border-[var(--w-text-disabled)]'}`}>
                 <div className="flex items-center gap-2 mb-0.5">
-                  <I className={`w-3.5 h-3.5 ${active ? 'text-white/70' : 'text-[#64748B]'}`} />
+                  <I className={`w-3.5 h-3.5 ${active ? 'text-white/70' : 'text-[var(--w-text-sec)]'}`} />
                   <span className="font-medium text-xs">{a.name}</span>
                 </div>
-                {a.description && <div className={`text-[10px] leading-snug ${active ? 'text-white/60' : 'text-[#94A3B8]'}`}>{a.description}</div>}
+                {a.description && <div className={`text-[10px] leading-snug ${active ? 'text-white/60' : 'text-[var(--w-text-muted)]'}`}>{a.description}</div>}
               </button>
             );
           })}
@@ -814,11 +814,11 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h4 className="text-sm font-semibold text-[#0F172A]">Modules accessibles</h4>
-            <p className="text-[11px] text-[#64748B] mt-0.5">Pages visibles dans la barre laterale du tenant.</p>
+            <h4 className="text-sm font-semibold text-[var(--w-text)]">Modules accessibles</h4>
+            <p className="text-[11px] text-[var(--w-text-sec)] mt-0.5">Pages visibles dans la barre laterale du tenant.</p>
           </div>
           <div className="flex gap-1.5">
-            <button onClick={minimal} className="text-[11px] px-2.5 py-1 rounded-md border border-[#E5E7EB] text-[#64748B] hover:bg-[#F8FAFC] font-medium">Minimal</button>
+            <button onClick={minimal} className="text-[11px] px-2.5 py-1 rounded-md border border-[var(--w-separator)] text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] font-medium">Minimal</button>
             <button onClick={allOn} className="text-[11px] px-2.5 py-1 rounded-md bg-[#0F172A] text-white hover:bg-[#1E293B] font-medium">Tout activer</button>
           </div>
         </div>
@@ -828,16 +828,16 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
             const I = m.icon;
             return (
               <button key={m.key} onClick={() => toggle(m.key)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${on ? 'border-[#0F172A] bg-[#F8FAFC]' : 'border-[#E5E7EB] bg-white hover:border-[#CBD5E1]'}`}>
-                <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${on ? 'bg-[#0F172A] text-white' : 'bg-[#F1F5F9] text-[#64748B]'}`}>
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${on ? 'border-[#0F172A] bg-[var(--w-surface-el)]' : 'border-[var(--w-separator)] bg-[var(--w-surface)] hover:border-[var(--w-text-disabled)]'}`}>
+                <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${on ? 'bg-[#0F172A] text-white' : 'bg-[var(--w-hover)] text-[var(--w-text-sec)]'}`}>
                   <I className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-xs text-[#0F172A] truncate">{m.name}</div>
-                  <div className="text-[10px] text-[#94A3B8] truncate">{m.desc}</div>
+                  <div className="font-medium text-xs text-[var(--w-text)] truncate">{m.name}</div>
+                  <div className="text-[10px] text-[var(--w-text-muted)] truncate">{m.desc}</div>
                 </div>
                 <div className={`shrink-0 w-8 h-4.5 rounded-full relative transition-colors ${on ? 'bg-[#0F172A]' : 'bg-[#E2E8F0]'}`}>
-                  <span className={`absolute top-0.5 ${on ? 'right-0.5' : 'left-0.5'} w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-all`} />
+                  <span className={`absolute top-0.5 ${on ? 'right-0.5' : 'left-0.5'} w-3.5 h-3.5 bg-[var(--w-surface)] rounded-full shadow-sm transition-all`} />
                 </div>
               </button>
             );
@@ -847,8 +847,8 @@ function ModulesTab({ form, setForm, onSave, saving, usage }: any) {
 
       {/* Usage */}
       {usage && (
-        <div className="rounded-lg border border-[#E5E7EB] p-4 bg-[#F8FAFC]">
-          <div className="text-[11px] font-semibold text-[#64748B] mb-3">Usage vs limites du plan ({usage.plan_code || 'aucun'})</div>
+        <div className="rounded-lg border border-[var(--w-separator)] p-4 bg-[var(--w-surface-el)]">
+          <div className="text-[11px] font-semibold text-[var(--w-text-sec)] mb-3">Usage vs limites du plan ({usage.plan_code || 'aucun'})</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <UsageBar label="Magasins" current={usage.sites_count} limit={usage.plan_limits?.sites} />
             <UsageBar label="Utilisateurs" current={usage.users_count} limit={usage.plan_limits?.users} />
@@ -871,14 +871,14 @@ function UsageBar({ label, current, limit }: { label: string; current: number; l
   const pct = unlimited ? 20 : Math.min(100, (current / Math.max(1, limit!)) * 100);
   const reached = !unlimited && current >= limit!;
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
+    <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg p-2.5">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-medium text-[#64748B]">{label}</span>
-        <span className={`text-[11px] font-semibold ${reached ? 'text-[#DC2626]' : 'text-[#0F172A]'}`}>
+        <span className="text-[10px] font-medium text-[var(--w-text-sec)]">{label}</span>
+        <span className={`text-[11px] font-semibold ${reached ? 'text-[#DC2626]' : 'text-[var(--w-text)]'}`}>
           {current}{unlimited ? ' / --' : ` / ${limit}`}
         </span>
       </div>
-      <div className="h-1 rounded-full bg-[#F1F5F9] overflow-hidden">
+      <div className="h-1 rounded-full bg-[var(--w-hover)] overflow-hidden">
         <div className={`h-full rounded-full ${reached ? 'bg-[#DC2626]' : 'bg-[#0F172A]'} transition-all`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -1002,9 +1002,9 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
     <Modal open onClose={onClose} title={tenant.name} size="lg" footer={null} fullMobile>
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="shrink-0 px-3 pt-3 pb-0 bg-white border-b border-[#E5E7EB] sm:px-5 sm:pt-5">
+        <div className="shrink-0 px-3 pt-3 pb-0 bg-[var(--w-surface)] border-b border-[var(--w-separator)] sm:px-5 sm:pt-5">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-[#F1F5F9] text-[#0F172A] font-bold text-sm flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-[var(--w-hover)] text-[var(--w-text)] font-bold text-sm flex items-center justify-center shrink-0">
               {tenant.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -1016,7 +1016,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                   <span className="text-[10px] px-2 py-0.5 rounded bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA] font-medium">Suspendu</span>
                 )}
               </div>
-              <div className="text-xs text-[#64748B] truncate mt-0.5">{tenant.email || '—'}</div>
+              <div className="text-xs text-[var(--w-text-sec)] truncate mt-0.5">{tenant.email || '—'}</div>
             </div>
           </div>
 
@@ -1026,8 +1026,8 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
               <button key={t.k} onClick={() => setTab(t.k)}
                 className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
                   tab === t.k
-                    ? 'border-[#0F172A] text-[#0F172A]'
-                    : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
+                    ? 'border-[#0F172A] text-[var(--w-text)]'
+                    : 'border-transparent text-[var(--w-text-sec)] hover:text-[var(--w-text)]'
                 } ${t.k === 'danger' ? 'ml-auto text-[#DC2626]' : ''}`}>
                 {t.l}
               </button>
@@ -1036,54 +1036,54 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-[#F8FAFC]">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-[var(--w-surface-el)]">
           {!detail ? (
-            <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#64748B]" /></div>
+            <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-sec)]" /></div>
           ) : (
             <>
               {tab === 'info' && (
-                <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+                <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Nom</label>
-                      <input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Nom</label>
+                      <input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Raison sociale</label>
-                      <input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Raison sociale</label>
+                      <input value={form.legal_name || ''} onChange={e => setForm({ ...form, legal_name: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Email</label>
-                      <input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Email</label>
+                      <input value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Téléphone</label>
-                      <input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Téléphone</label>
+                      <input value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">WhatsApp</label>
-                      <input value={form.whatsapp_phone || ''} onChange={e => setForm({ ...form, whatsapp_phone: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">WhatsApp</label>
+                      <input value={form.whatsapp_phone || ''} onChange={e => setForm({ ...form, whatsapp_phone: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Statut</label>
-                      <select value={form.status || 'active'} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]">
+                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Statut</label>
+                      <select value={form.status || 'active'} onChange={e => setForm({ ...form, status: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]">
                         <option value="active">Actif</option><option value="suspended">Suspendu</option><option value="cancelled">Annulé</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Sous-domaine</label>
+                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Sous-domaine</label>
                       <div className="flex items-center gap-1.5">
-                        <input value={form.subdomain || ''} onChange={e => setForm({ ...form, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} placeholder="nom" className="flex-1 h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
-                        <span className="text-[11px] text-[#94A3B8]">.votreapp.com</span>
+                        <input value={form.subdomain || ''} onChange={e => setForm({ ...form, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} placeholder="nom" className="flex-1 h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
+                        <span className="text-[11px] text-[var(--w-text-muted)]">.votreapp.com</span>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">Domaine personnalisé</label>
-                      <input value={form.custom_domain || ''} onChange={e => setForm({ ...form, custom_domain: e.target.value.toLowerCase().trim() })} placeholder="caisse.domain.sn" className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                      <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Domaine personnalisé</label>
+                      <input value={form.custom_domain || ''} onChange={e => setForm({ ...form, custom_domain: e.target.value.toLowerCase().trim() })} placeholder="caisse.domain.sn" className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="flex items-center gap-2 text-xs text-[#0F172A] cursor-pointer">
-                        <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-[#E5E7EB]" />
+                      <label className="flex items-center gap-2 text-xs text-[var(--w-text)] cursor-pointer">
+                        <input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-[var(--w-separator)]" />
                         Tenant actif (accès à l'application)
                       </label>
                     </div>
@@ -1099,34 +1099,34 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
               {tab === 'sub' && (
                 <div className="space-y-4">
                   {/* Current state */}
-                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
-                    <div className="text-[11px] font-medium text-[#64748B] mb-2">État actuel</div>
+                  <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
+                    <div className="text-[11px] font-medium text-[var(--w-text-sec)] mb-2">État actuel</div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-[#0F172A]">Plan {tenant.plan || '—'}</span>
+                      <span className="text-sm font-semibold text-[var(--w-text)]">Plan {tenant.plan || '—'}</span>
                       <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${
                         tenant.subscription_status === 'active' ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#BBF7D0]'
                           : tenant.subscription_status === 'trial_active' ? 'bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]'
                           : tenant.subscription_status === 'expired' ? 'bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA]'
                           : 'bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]'
                       }`}>{tenant.subscription_status || 'N/A'}</span>
-                      <span className="text-xs text-[#64748B]">{tenant.billing_cycle === 'yearly' ? 'Annuel' : tenant.billing_cycle === 'lifetime' ? 'A vie' : 'Mensuel'}</span>
-                      {tenant.plan_expires_at && <span className="text-xs text-[#64748B]">Expire : {formatDate(tenant.plan_expires_at)}</span>}
-                      {tenant.auto_renew && <span className="text-[10px] bg-[#F1F5F9] text-[#64748B] px-1.5 py-0.5 rounded border border-[#E5E7EB]">Auto-renew</span>}
+                      <span className="text-xs text-[var(--w-text-sec)]">{tenant.billing_cycle === 'yearly' ? 'Annuel' : tenant.billing_cycle === 'lifetime' ? 'A vie' : 'Mensuel'}</span>
+                      {tenant.plan_expires_at && <span className="text-xs text-[var(--w-text-sec)]">Expire : {formatDate(tenant.plan_expires_at)}</span>}
+                      {tenant.auto_renew && <span className="text-[10px] bg-[var(--w-hover)] text-[var(--w-text-sec)] px-1.5 py-0.5 rounded border border-[var(--w-separator)]">Auto-renew</span>}
                     </div>
                   </div>
 
                   {/* Plan picker */}
-                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
-                    <div className="text-[11px] font-medium text-[#64748B] mb-3">Sélectionner un plan</div>
+                  <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
+                    <div className="text-[11px] font-medium text-[var(--w-text-sec)] mb-3">Sélectionner un plan</div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {plans.map(p => {
                         const active = subForm.plan_code === p.code;
                         return (
                           <button key={p.code} onClick={() => setSubForm({ ...subForm, plan_code: p.code, amount: subForm.billing_cycle === 'lifetime' ? (p.price_lifetime || 0) : subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly })}
-                            className={`text-left p-3 rounded-lg border transition-all ${active ? 'border-[#0F172A] bg-[#0F172A] text-white' : 'border-[#E5E7EB] bg-white hover:border-[#CBD5E1]'}`}>
-                            <div className={`text-[10px] font-medium ${active ? 'text-white/60' : 'text-[#94A3B8]'}`}>{p.code}</div>
+                            className={`text-left p-3 rounded-lg border transition-all ${active ? 'border-[#0F172A] bg-[#0F172A] text-white' : 'border-[var(--w-separator)] bg-[var(--w-surface)] hover:border-[var(--w-text-disabled)]'}`}>
+                            <div className={`text-[10px] font-medium ${active ? 'text-white/60' : 'text-[var(--w-text-muted)]'}`}>{p.code}</div>
                             <div className="font-semibold text-sm mt-0.5">{p.name}</div>
-                            <div className={`text-[11px] mt-1 ${active ? 'text-white/70' : 'text-[#64748B]'}`}>
+                            <div className={`text-[11px] mt-1 ${active ? 'text-white/70' : 'text-[var(--w-text-sec)]'}`}>
                               {subForm.billing_cycle === 'lifetime' ? `${formatCompactFCFA(p.price_lifetime || 0)} (a vie)` : `${formatCompactFCFA(subForm.billing_cycle === 'yearly' ? p.price_yearly : p.price_monthly)}/${subForm.billing_cycle === 'yearly' ? 'an' : 'mois'}`}
                             </div>
                           </button>
@@ -1136,47 +1136,47 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                       <div>
-                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Cycle</label>
+                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Cycle</label>
                         <select value={subForm.billing_cycle} onChange={e => {
                           const plan = plans.find(p => p.code === subForm.plan_code);
                           const cycle = e.target.value;
                           const amount = plan ? (cycle === 'lifetime' ? (plan.price_lifetime || 0) : cycle === 'yearly' ? plan.price_yearly : plan.price_monthly) : subForm.amount;
                           setSubForm({ ...subForm, billing_cycle: cycle, amount, ends_at: cycle === 'lifetime' ? '' : subForm.ends_at });
-                        }} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]">
+                        }} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]">
                           <option value="monthly">Mensuel</option><option value="yearly">Annuel</option><option value="lifetime">A vie</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Montant (FCFA)</label>
-                        <input type="number" value={subForm.amount || 0} onChange={e => setSubForm({ ...subForm, amount: Number(e.target.value) })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Montant (FCFA)</label>
+                        <input type="number" value={subForm.amount || 0} onChange={e => setSubForm({ ...subForm, amount: Number(e.target.value) })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Début</label>
-                        <input type="date" value={subForm.started_at} onChange={e => setSubForm({ ...subForm, started_at: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Début</label>
+                        <input type="date" value={subForm.started_at} onChange={e => setSubForm({ ...subForm, started_at: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Fin</label>
-                        <input type="date" value={subForm.ends_at} onChange={e => setSubForm({ ...subForm, ends_at: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" />
+                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Fin</label>
+                        <input type="date" value={subForm.ends_at} onChange={e => setSubForm({ ...subForm, ends_at: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" />
                       </div>
-                      <label className="sm:col-span-2 flex items-center gap-2 text-xs text-[#0F172A] cursor-pointer">
-                        <input type="checkbox" checked={subForm.auto_renew} onChange={e => setSubForm({ ...subForm, auto_renew: e.target.checked })} className="rounded border-[#E5E7EB]" />
+                      <label className="sm:col-span-2 flex items-center gap-2 text-xs text-[var(--w-text)] cursor-pointer">
+                        <input type="checkbox" checked={subForm.auto_renew} onChange={e => setSubForm({ ...subForm, auto_renew: e.target.checked })} className="rounded border-[var(--w-separator)]" />
                         Renouvellement automatique
                       </label>
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-medium text-[#64748B] mb-1">Notes</label>
-                        <input value={subForm.notes || ''} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} className="w-full h-9 px-3 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#0F172A] focus:outline-none focus:border-[#0F172A] focus:ring-1 focus:ring-[#0F172A]" placeholder="Réf. facture, conditions..." />
+                        <label className="block text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Notes</label>
+                        <input value={subForm.notes || ''} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} className="w-full h-9 px-3 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg text-sm text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)] focus:ring-1 focus:ring-[var(--w-text)]" placeholder="Réf. facture, conditions..." />
                       </div>
                     </div>
 
                     {/* Custom limits */}
-                    <div className="mt-4 pt-4 border-t border-[#F1F5F9]">
-                      <div className="text-[11px] font-medium text-[#64748B] mb-1">Limites personnalisées (override)</div>
-                      <p className="text-[10px] text-[#94A3B8] mb-2">Laisser vide pour utiliser les limites du plan.</p>
+                    <div className="mt-4 pt-4 border-t border-[var(--w-hover)]">
+                      <div className="text-[11px] font-medium text-[var(--w-text-sec)] mb-1">Limites personnalisées (override)</div>
+                      <p className="text-[10px] text-[var(--w-text-muted)] mb-2">Laisser vide pour utiliser les limites du plan.</p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {([['articles', 'Articles'], ['sites', 'Magasins'], ['users', 'Utilisateurs']] as [string, string][]).map(([key, label]) => (
                           <div key={key}>
-                            <label className="text-[10px] font-medium text-[#94A3B8]">{label}</label>
-                            <input type="number" placeholder="plan" value={subForm.custom_limits?.[key] ?? ''} onChange={e => setSubForm({ ...subForm, custom_limits: { ...(subForm.custom_limits || {}), [key]: e.target.value === '' ? undefined : Number(e.target.value) } })} className="w-full h-8 px-2 bg-white border border-[#E5E7EB] rounded-md text-xs text-[#0F172A] focus:outline-none focus:border-[#0F172A]" />
+                            <label className="text-[10px] font-medium text-[var(--w-text-muted)]">{label}</label>
+                            <input type="number" placeholder="plan" value={subForm.custom_limits?.[key] ?? ''} onChange={e => setSubForm({ ...subForm, custom_limits: { ...(subForm.custom_limits || {}), [key]: e.target.value === '' ? undefined : Number(e.target.value) } })} className="w-full h-8 px-2 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-md text-xs text-[var(--w-text)] focus:outline-none focus:border-[var(--w-text)]" />
                           </div>
                         ))}
                       </div>
@@ -1188,18 +1188,18 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                   </div>
 
                   {/* Subscription history */}
-                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
-                    <div className="text-[11px] font-medium text-[#64748B] mb-3">Historique d'abonnements</div>
+                  <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
+                    <div className="text-[11px] font-medium text-[var(--w-text-sec)] mb-3">Historique d'abonnements</div>
                     <div className="space-y-1.5">
                       {(detail.subscriptions || []).map((s: any) => (
-                        <div key={s.id} className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg px-3 py-2 text-xs">
+                        <div key={s.id} className="flex items-center gap-2 bg-[var(--w-surface-el)] border border-[var(--w-separator)] rounded-lg px-3 py-2 text-xs">
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.status === 'active' ? 'bg-[#16A34A]' : s.status === 'cancelled' ? 'bg-[#DC2626]' : 'bg-[#94A3B8]'}`} />
-                          <span className="font-semibold text-[#0F172A] uppercase">{s.plan_code}</span>
-                          <span className="text-[#94A3B8]">·</span>
-                          <span className="text-[#64748B]">{formatFCFA(s.amount)} {s.billing_cycle === 'lifetime' ? '(a vie)' : `/ ${s.billing_cycle === 'yearly' ? 'an' : 'mois'}`}</span>
-                          <span className="text-[#94A3B8]">·</span>
-                          <span className="text-[#64748B]">{formatDate(s.started_at)}{s.ends_at ? ` → ${formatDate(s.ends_at)}` : ''}</span>
-                          <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-medium ${s.status === 'active' ? 'bg-[#F0FDF4] text-[#16A34A]' : 'bg-[#F8FAFC] text-[#64748B]'}`}>{s.status}</span>
+                          <span className="font-semibold text-[var(--w-text)] uppercase">{s.plan_code}</span>
+                          <span className="text-[var(--w-text-muted)]">·</span>
+                          <span className="text-[var(--w-text-sec)]">{formatFCFA(s.amount)} {s.billing_cycle === 'lifetime' ? '(a vie)' : `/ ${s.billing_cycle === 'yearly' ? 'an' : 'mois'}`}</span>
+                          <span className="text-[var(--w-text-muted)]">·</span>
+                          <span className="text-[var(--w-text-sec)]">{formatDate(s.started_at)}{s.ends_at ? ` → ${formatDate(s.ends_at)}` : ''}</span>
+                          <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-medium ${s.status === 'active' ? 'bg-[#F0FDF4] text-[#16A34A]' : 'bg-[var(--w-surface-el)] text-[var(--w-text-sec)]'}`}>{s.status}</span>
                           {s.status === 'active' && (
                             <button onClick={() => cancelSub(s.id)} className="text-[#DC2626] hover:bg-[#FEF2F2] p-1 rounded" title="Annuler">
                               <X className="w-3.5 h-3.5" />
@@ -1207,7 +1207,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                           )}
                         </div>
                       ))}
-                      {(detail.subscriptions || []).length === 0 && <div className="text-xs text-[#94A3B8] py-4 text-center">Aucun abonnement.</div>}
+                      {(detail.subscriptions || []).length === 0 && <div className="text-xs text-[var(--w-text-muted)] py-4 text-center">Aucun abonnement.</div>}
                     </div>
                   </div>
                 </div>
@@ -1218,22 +1218,22 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
               )}
 
               {tab === 'users' && (
-                <div className="bg-white border border-[#E5E7EB] rounded-xl divide-y divide-[#F1F5F9]">
+                <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl divide-y divide-[#F1F5F9]">
                   {(detail.users || []).length === 0 ? (
                     <div className="py-10 text-center">
-                      <Users className="w-8 h-8 text-[#E2E8F0] mx-auto mb-2" />
-                      <p className="text-xs text-[#94A3B8]">Aucun utilisateur.</p>
+                      <Users className="w-8 h-8 text-[var(--w-text-disabled)] mx-auto mb-2" />
+                      <p className="text-xs text-[var(--w-text-muted)]">Aucun utilisateur.</p>
                     </div>
                   ) : (detail.users || []).map((u: any) => (
                     <div key={u.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="w-8 h-8 rounded-md bg-[#F1F5F9] text-[#0F172A] font-semibold text-xs flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-md bg-[var(--w-hover)] text-[var(--w-text)] font-semibold text-xs flex items-center justify-center shrink-0">
                         {(u.full_name || u.email).charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-[#0F172A] truncate">{u.full_name || u.email}</div>
-                        <div className="text-[11px] text-[#64748B] truncate">{u.email}</div>
+                        <div className="text-sm font-medium text-[var(--w-text)] truncate">{u.full_name || u.email}</div>
+                        <div className="text-[11px] text-[var(--w-text-sec)] truncate">{u.email}</div>
                       </div>
-                      <span className="text-[10px] font-medium text-[#64748B] bg-[#F8FAFC] border border-[#E5E7EB] px-2 py-0.5 rounded">{u.role}</span>
+                      <span className="text-[10px] font-medium text-[var(--w-text-sec)] bg-[var(--w-surface-el)] border border-[var(--w-separator)] px-2 py-0.5 rounded">{u.role}</span>
                       {!u.is_active && <span className="text-[10px] bg-[#FEF2F2] text-[#DC2626] px-1.5 py-0.5 rounded font-medium">Inactif</span>}
                     </div>
                   ))}
@@ -1241,11 +1241,11 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
               )}
 
               {tab === 'history' && (
-                <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                <div className="bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-xl p-4">
                   {(detail.events || []).length === 0 ? (
                     <div className="py-10 text-center">
-                      <Activity className="w-8 h-8 text-[#E2E8F0] mx-auto mb-2" />
-                      <p className="text-xs text-[#94A3B8]">Aucun historique disponible pour ce tenant.</p>
+                      <Activity className="w-8 h-8 text-[var(--w-text-disabled)] mx-auto mb-2" />
+                      <p className="text-xs text-[var(--w-text-muted)]">Aucun historique disponible pour ce tenant.</p>
                     </div>
                   ) : (
                     <div className="space-y-0.5">
@@ -1257,23 +1257,23 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
 
               {tab === 'danger' && (
                 <div className="space-y-4">
-                  <div className="bg-white border border-[#FECACA] rounded-xl p-5">
+                  <div className="bg-[var(--w-surface)] border border-[#FECACA] rounded-xl p-5">
                     <div className="flex items-start gap-3 mb-4">
                       <div className="w-9 h-9 rounded-lg bg-[#FEF2F2] flex items-center justify-center shrink-0">
                         <AlertTriangle className="w-4.5 h-4.5 text-[#DC2626]" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-[#0F172A]">Zone de danger</h4>
-                        <p className="text-[11px] text-[#64748B] mt-0.5">Ces actions peuvent affecter l'acces du tenant ou supprimer definitivement ses donnees.</p>
+                        <h4 className="text-sm font-semibold text-[var(--w-text)]">Zone de danger</h4>
+                        <p className="text-[11px] text-[var(--w-text-sec)] mt-0.5">Ces actions peuvent affecter l'acces du tenant ou supprimer definitivement ses donnees.</p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       {/* Activation lock for backup/restore */}
-                      <div className="flex items-center justify-between py-3 border-t border-[#F1F5F9]">
+                      <div className="flex items-center justify-between py-3 border-t border-[var(--w-hover)]">
                         <div>
-                          <div className="text-xs font-medium text-[#0F172A]">Verrou sauvegarde / restauration</div>
-                          <div className="text-[11px] text-[#64748B]">Autorise les opérations destructrices (restauration, réinitialisation, import) pour ce tenant.</div>
+                          <div className="text-xs font-medium text-[var(--w-text)]">Verrou sauvegarde / restauration</div>
+                          <div className="text-[11px] text-[var(--w-text-sec)]">Autorise les opérations destructrices (restauration, réinitialisation, import) pour ce tenant.</div>
                         </div>
                         <button
                           onClick={toggleActivation}
@@ -1281,16 +1281,16 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                           className="shrink-0 relative"
                         >
                           <div className={`w-9 h-5 rounded-full transition-colors relative ${activationLock ? 'bg-[#16A34A]' : 'bg-[#D1D5DB]'}`}>
-                            <div className={`absolute top-0.5 bg-white rounded-full h-4 w-4 transition-transform shadow-sm ${activationLock ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                            <div className={`absolute top-0.5 bg-[var(--w-surface)] rounded-full h-4 w-4 transition-transform shadow-sm ${activationLock ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
                           </div>
                         </button>
                       </div>
 
                       {/* Suspend / Reactivate */}
-                      <div className="flex items-center justify-between py-3 border-t border-[#F1F5F9]">
+                      <div className="flex items-center justify-between py-3 border-t border-[var(--w-hover)]">
                         <div>
-                          <div className="text-xs font-medium text-[#0F172A]">{tenant.is_active ? 'Suspendre le tenant' : 'Réactiver le tenant'}</div>
-                          <div className="text-[11px] text-[#64748B]">{tenant.is_active ? 'Bloque l\'acces a l\'application pour tous les utilisateurs.' : 'Restaure l\'acces a l\'application.'}</div>
+                          <div className="text-xs font-medium text-[var(--w-text)]">{tenant.is_active ? 'Suspendre le tenant' : 'Réactiver le tenant'}</div>
+                          <div className="text-[11px] text-[var(--w-text-sec)]">{tenant.is_active ? 'Bloque l\'acces a l\'application pour tous les utilisateurs.' : 'Restaure l\'acces a l\'application.'}</div>
                         </div>
                         {tenant.is_active ? (
                           <button
@@ -1310,7 +1310,7 @@ function TenantDetailModal({ tenant, plans, onClose, onRefresh, onDelete }: { te
                         <div className="flex items-center justify-between py-3 border-t border-[#FECACA]">
                           <div>
                             <div className="text-xs font-medium text-[#DC2626]">Supprimer definitivement</div>
-                            <div className="text-[11px] text-[#64748B]">Supprime toutes les donnees du tenant de maniere irreversible.</div>
+                            <div className="text-[11px] text-[var(--w-text-sec)]">Supprime toutes les donnees du tenant de maniere irreversible.</div>
                           </div>
                           <button
                             onClick={() => { onClose(); setTimeout(() => onDelete(tenant), 150); }}
@@ -1396,15 +1396,15 @@ function PlansSection() {
 
   const publicPlans = plans.filter(p => p.is_public !== false).length;
 
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#0F172A]" /></div>;
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text)]" /></div>;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[#0F172A]">Plans & tarifs</h2>
-          <p className="text-sm text-[#64748B] mt-0.5">Configurez les offres commerciales de Waarwi</p>
+          <h2 className="text-xl font-semibold text-[var(--w-text)]">Plans & tarifs</h2>
+          <p className="text-sm text-[var(--w-text-sec)] mt-0.5">Configurez les offres commerciales de Waarwi</p>
         </div>
         <button
           onClick={() => { setForm({ features: '', is_public: true, sort_order: plans.length, limits: { articles: -1, sites: 1, users: 2, max_clients: -1, max_suppliers: -1, max_invoices_month: -1, monthly_sales: -1, online_shop: false, accounting: false, supplier_orders: false, has_whatsapp: false, has_multi_store: false, has_advanced_reports: false, has_accounting_export: false } }); setOpen(true); }}
@@ -1417,41 +1417,41 @@ function PlansSection() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
-              <Layers className="w-4 h-4 text-[#0F172A]" />
+              <Layers className="w-4 h-4 text-[var(--w-text)]" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A]">{publicPlans}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">Plans actifs</div>
+          <div className="text-2xl font-bold text-[var(--w-text)]">{publicPlans}</div>
+          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Plans actifs</div>
         </div>
-        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
               <TrendingUp className="w-4 h-4 text-emerald-600" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A] truncate">{mostUsedPlan}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">Plan le plus utilisé</div>
+          <div className="text-2xl font-bold text-[var(--w-text)] truncate">{mostUsedPlan}</div>
+          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Plan le plus utilisé</div>
         </div>
-        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-[#64748B]" />
+              <Building2 className="w-4 h-4 text-[var(--w-text-sec)]" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A]">{tenants.length}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">Tenants abonnés</div>
+          <div className="text-2xl font-bold text-[var(--w-text)]">{tenants.length}</div>
+          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Tenants abonnés</div>
         </div>
-        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-[var(--w-active)] flex items-center justify-center">
               <Clock className="w-4 h-4 text-blue-500" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A]">{tenants.filter(t => t.plan === 'trial' || t.plan === 'free').length}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">Tenants en essai</div>
+          <div className="text-2xl font-bold text-[var(--w-text)]">{tenants.filter(t => t.plan === 'trial' || t.plan === 'free').length}</div>
+          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Tenants en essai</div>
         </div>
       </div>
 
@@ -1462,31 +1462,31 @@ function PlansSection() {
           const isPopular = p.code === mostUsedPlan && usage > 0;
           const isInactive = p.is_public === false;
           return (
-            <div key={p.code} className={`relative bg-white rounded-lg border border-[#E5E7EB] p-5 transition-all hover:shadow-sm ${isInactive ? 'opacity-60' : ''}`}>
+            <div key={p.code} className={`relative bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-5 transition-all hover:shadow-sm ${isInactive ? 'opacity-60' : ''}`}>
               {/* Header row */}
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-[#0F172A]">{p.name}</h3>
+                    <h3 className="text-lg font-semibold text-[var(--w-text)]">{p.name}</h3>
                     {isPopular && <span className="text-[10px] font-medium bg-[#0F172A] text-white px-2 py-0.5 rounded">Populaire</span>}
-                    {isInactive && <span className="text-[10px] font-medium bg-slate-100 text-[#64748B] border border-[#E5E7EB] px-2 py-0.5 rounded">Inactif</span>}
+                    {isInactive && <span className="text-[10px] font-medium bg-slate-100 text-[var(--w-text-sec)] border border-[var(--w-separator)] px-2 py-0.5 rounded">Inactif</span>}
                   </div>
-                  <div className="text-[11px] font-mono text-[#94A3B8] mt-0.5">{p.code}</div>
+                  <div className="text-[11px] font-mono text-[var(--w-text-muted)] mt-0.5">{p.code}</div>
                 </div>
                 <div className="relative">
                   <button
                     onClick={() => setMenuOpen(menuOpen === p.code ? null : p.code)}
-                    className="p-1.5 rounded-md hover:bg-[#F7F8FA] text-[#64748B] transition-colors"
+                    className="p-1.5 rounded-md hover:bg-[#F7F8FA] text-[var(--w-text-sec)] transition-colors"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="4" r="2"/><circle cx="10" cy="10" r="2"/><circle cx="10" cy="16" r="2"/></svg>
                   </button>
                   {menuOpen === p.code && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(null)} />
-                      <div className="absolute right-0 top-8 z-20 bg-white border border-[#E5E7EB] rounded-lg shadow-lg py-1 w-40">
+                      <div className="absolute right-0 top-8 z-20 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg shadow-lg py-1 w-40">
                         <button
                           onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); setMenuOpen(null); }}
-                          className="w-full text-left px-3 py-2 text-sm text-[#0F172A] hover:bg-[#F7F8FA] flex items-center gap-2"
+                          className="w-full text-left px-3 py-2 text-sm text-[var(--w-text)] hover:bg-[#F7F8FA] flex items-center gap-2"
                         >
                           <Edit2 className="w-3.5 h-3.5" />Modifier
                         </button>
@@ -1503,29 +1503,29 @@ function PlansSection() {
               </div>
 
               {/* Description */}
-              {p.description && <p className="text-xs text-[#64748B] mb-4 line-clamp-2">{p.description}</p>}
+              {p.description && <p className="text-xs text-[var(--w-text-sec)] mb-4 line-clamp-2">{p.description}</p>}
 
               {/* Pricing */}
-              <div className="mb-4 pb-4 border-b border-[#E5E7EB]">
+              <div className="mb-4 pb-4 border-b border-[var(--w-separator)]">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold text-[#0F172A]">{formatCompactFCFA(p.price_monthly)}</span>
-                  <span className="text-sm text-[#64748B]">/ mois</span>
+                  <span className="text-2xl font-bold text-[var(--w-text)]">{formatCompactFCFA(p.price_monthly)}</span>
+                  <span className="text-sm text-[var(--w-text-sec)]">/ mois</span>
                 </div>
                 {p.price_yearly > 0 && (
-                  <div className="text-xs text-[#94A3B8] mt-0.5">{formatCompactFCFA(p.price_yearly)} / an</div>
+                  <div className="text-xs text-[var(--w-text-muted)] mt-0.5">{formatCompactFCFA(p.price_yearly)} / an</div>
                 )}
               </div>
 
               {/* Limits */}
               {p.limits && (
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[#0F172A] border border-[#E5E7EB] px-2 py-1 rounded">
+                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[var(--w-text)] border border-[var(--w-separator)] px-2 py-1 rounded">
                     {p.limits.users === -1 ? 'Illimité' : p.limits.users} utilisateur{(p.limits.users !== 1) ? 's' : ''}
                   </span>
-                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[#0F172A] border border-[#E5E7EB] px-2 py-1 rounded">
+                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[var(--w-text)] border border-[var(--w-separator)] px-2 py-1 rounded">
                     {p.limits.sites === -1 ? 'Illimité' : p.limits.sites} site{(p.limits.sites !== 1) ? 's' : ''}
                   </span>
-                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[#0F172A] border border-[#E5E7EB] px-2 py-1 rounded">
+                  <span className="text-[11px] font-medium bg-[#F7F8FA] text-[var(--w-text)] border border-[var(--w-separator)] px-2 py-1 rounded">
                     {p.limits.articles === -1 ? 'Illimité' : p.limits.articles} article{(p.limits.articles !== 1) ? 's' : ''}
                   </span>
                 </div>
@@ -1535,20 +1535,20 @@ function PlansSection() {
               {Array.isArray(p.features) && p.features.length > 0 && (
                 <div className="space-y-1.5 mb-4">
                   {p.features.slice(0, 5).map((f: string, i: number) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-[#64748B]">
+                    <div key={i} className="flex items-start gap-2 text-xs text-[var(--w-text-sec)]">
                       <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
                       <span>{f}</span>
                     </div>
                   ))}
                   {p.features.length > 5 && (
-                    <div className="text-[11px] text-[#94A3B8] pl-5">+{p.features.length - 5} fonctionnalité{p.features.length - 5 > 1 ? 's' : ''}</div>
+                    <div className="text-[11px] text-[var(--w-text-muted)] pl-5">+{p.features.length - 5} fonctionnalité{p.features.length - 5 > 1 ? 's' : ''}</div>
                   )}
                 </div>
               )}
 
               {/* Footer */}
-              <div className="flex items-center justify-between pt-3 border-t border-[#E5E7EB]">
-                <span className="text-[11px] text-[#94A3B8]">{usage} tenant{usage !== 1 ? 's' : ''}</span>
+              <div className="flex items-center justify-between pt-3 border-t border-[var(--w-separator)]">
+                <span className="text-[11px] text-[var(--w-text-muted)]">{usage} tenant{usage !== 1 ? 's' : ''}</span>
                 <button
                   onClick={() => { setForm({ ...p, features: (p.features || []).join('\n'), limits: p.limits || {} }); setOpen(true); }}
                   className="btn-icon-primary"
@@ -1563,10 +1563,10 @@ function PlansSection() {
       </div>
 
       {plans.length === 0 && (
-        <div className="bg-white rounded-lg border border-[#E5E7EB] py-12 text-center">
-          <Layers className="w-8 h-8 text-[#94A3B8] mx-auto mb-2" />
-          <div className="text-sm text-[#64748B]">Aucun plan configuré</div>
-          <p className="text-xs text-[#94A3B8] mt-1">Créez votre premier plan pour démarrer.</p>
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] py-12 text-center">
+          <Layers className="w-8 h-8 text-[var(--w-text-muted)] mx-auto mb-2" />
+          <div className="text-sm text-[var(--w-text-sec)]">Aucun plan configuré</div>
+          <p className="text-xs text-[var(--w-text-muted)] mt-1">Créez votre premier plan pour démarrer.</p>
         </div>
       )}
 
@@ -1579,67 +1579,67 @@ function PlansSection() {
         <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
           {/* General info */}
           <div>
-            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-3">Informations générales</p>
+            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-3">Informations générales</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] font-mono focus:outline-none focus:ring-1 focus:ring-[#0F172A]" placeholder="starter" /></div>
-              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
-              <div className="sm:col-span-2"><label className="text-[11px] font-medium text-[#64748B] block mb-1">Description</label><input value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
+              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Code *</label><input value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" placeholder="starter" /></div>
+              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Nom *</label><input value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
+              <div className="sm:col-span-2"><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Description</label><input value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
             </div>
           </div>
 
           {/* Pricing */}
-          <div className="border-t border-[#E5E7EB] pt-4">
-            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-3">Tarifs</p>
+          <div className="border-t border-[var(--w-separator)] pt-4">
+            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-3">Tarifs</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Prix mensuel (FCFA)</label><input type="number" value={form.price_monthly || 0} onChange={e => setForm({ ...form, price_monthly: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
-              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Prix annuel (FCFA)</label><input type="number" value={form.price_yearly || 0} onChange={e => setForm({ ...form, price_yearly: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
+              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Prix mensuel (FCFA)</label><input type="number" value={form.price_monthly || 0} onChange={e => setForm({ ...form, price_monthly: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
+              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Prix annuel (FCFA)</label><input type="number" value={form.price_yearly || 0} onChange={e => setForm({ ...form, price_yearly: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
             </div>
           </div>
 
           {/* Limits */}
-          <div className="border-t border-[#E5E7EB] pt-4">
-            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">Limites</p>
-            <p className="text-[11px] text-[#94A3B8] mb-3">-1 = illimité</p>
+          <div className="border-t border-[var(--w-separator)] pt-4">
+            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-1">Limites</p>
+            <p className="text-[11px] text-[var(--w-text-muted)] mb-3">-1 = illimité</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {([['articles', 'Articles max'], ['sites', 'Magasins max'], ['users', 'Utilisateurs max'], ['max_clients', 'Clients max'], ['max_suppliers', 'Fournisseurs max'], ['max_invoices_month', 'Factures/mois max'], ['monthly_sales', 'Ventes/mois max']] as [string, string][]).map(([key, label]) => (
                 <div key={key}>
-                  <label className="text-[11px] font-medium text-[#64748B] block mb-1">{label}</label>
-                  <input type="number" value={form.limits?.[key] ?? ''} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.value === '' ? -1 : Number(e.target.value) } })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" placeholder="-1" />
+                  <label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">{label}</label>
+                  <input type="number" value={form.limits?.[key] ?? ''} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.value === '' ? -1 : Number(e.target.value) } })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" placeholder="-1" />
                 </div>
               ))}
             </div>
           </div>
 
           {/* Modules */}
-          <div className="border-t border-[#E5E7EB] pt-4">
-            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">Modules inclus</p>
-            <p className="text-[11px] text-[#94A3B8] mb-3">Les modules liés au type d'activité sont gérés au niveau du tenant.</p>
+          <div className="border-t border-[var(--w-separator)] pt-4">
+            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-1">Modules inclus</p>
+            <p className="text-[11px] text-[var(--w-text-muted)] mb-3">Les modules liés au type d'activité sont gérés au niveau du tenant.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {([['online_shop', 'Boutique en ligne'], ['accounting', 'Comptabilité'], ['supplier_orders', 'Achats'], ['has_whatsapp', 'Notifications WhatsApp'], ['has_multi_store', 'Multi-magasins'], ['has_advanced_reports', 'Rapports avancés'], ['has_accounting_export', 'Export comptable']] as [string, string][]).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[#E5E7EB] hover:bg-[#F7F8FA] transition-colors">
-                  <input type="checkbox" checked={!!form.limits?.[key]} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.checked } })} className="rounded border-[#E5E7EB] text-[#0F172A] focus:ring-[#0F172A]" />
-                  <span className="text-[#0F172A] text-xs">{label}</span>
+                <label key={key} className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[var(--w-separator)] hover:bg-[#F7F8FA] transition-colors">
+                  <input type="checkbox" checked={!!form.limits?.[key]} onChange={e => setForm({ ...form, limits: { ...form.limits, [key]: e.target.checked } })} className="rounded border-[var(--w-separator)] text-[var(--w-text)] focus:ring-[var(--w-text)]" />
+                  <span className="text-[var(--w-text)] text-xs">{label}</span>
                 </label>
               ))}
             </div>
           </div>
 
           {/* Marketing features */}
-          <div className="border-t border-[#E5E7EB] pt-4">
-            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">Fonctionnalités marketing</p>
-            <p className="text-[11px] text-[#94A3B8] mb-3">Texte affiché aux clients (une par ligne)</p>
-            <textarea value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] resize-none focus:outline-none focus:ring-1 focus:ring-[#0F172A]" rows={4} placeholder="Une fonctionnalité par ligne" />
+          <div className="border-t border-[var(--w-separator)] pt-4">
+            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-1">Fonctionnalités marketing</p>
+            <p className="text-[11px] text-[var(--w-text-muted)] mb-3">Texte affiché aux clients (une par ligne)</p>
+            <textarea value={form.features || ''} onChange={e => setForm({ ...form, features: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" rows={4} placeholder="Une fonctionnalité par ligne" />
           </div>
 
           {/* Status */}
-          <div className="border-t border-[#E5E7EB] pt-4">
-            <p className="text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-3">Statut</p>
+          <div className="border-t border-[var(--w-separator)] pt-4">
+            <p className="text-xs font-semibold text-[var(--w-text)] uppercase tracking-wider mb-3">Statut</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-[11px] font-medium text-[#64748B] block mb-1">Ordre d'affichage</label><input type="number" value={form.sort_order || 0} onChange={e => setForm({ ...form, sort_order: e.target.value })} className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-md bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]" /></div>
+              <div><label className="text-[11px] font-medium text-[var(--w-text-sec)] block mb-1">Ordre d'affichage</label><input type="number" value={form.sort_order || 0} onChange={e => setForm({ ...form, sort_order: e.target.value })} className="w-full px-3 py-2 text-sm border border-[var(--w-separator)] rounded-md bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]" /></div>
               <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[#E5E7EB] hover:bg-[#F7F8FA] transition-colors">
-                  <input type="checkbox" checked={form.is_public !== false} onChange={e => setForm({ ...form, is_public: e.target.checked })} className="rounded border-[#E5E7EB] text-[#0F172A] focus:ring-[#0F172A]" />
-                  <span className="text-xs text-[#0F172A]">Visible publiquement</span>
+                <label className="flex items-center gap-2.5 text-sm cursor-pointer py-2 px-3 rounded-md border border-[var(--w-separator)] hover:bg-[#F7F8FA] transition-colors">
+                  <input type="checkbox" checked={form.is_public !== false} onChange={e => setForm({ ...form, is_public: e.target.checked })} className="rounded border-[var(--w-separator)] text-[var(--w-text)] focus:ring-[var(--w-text)]" />
+                  <span className="text-xs text-[var(--w-text)]">Visible publiquement</span>
                 </label>
               </div>
             </div>
@@ -1815,15 +1815,15 @@ function SubscriptionsSection() {
     });
   };
 
-  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#0F172A]" /></div>;
+  if (loading) return <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text)]" /></div>;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[#0F172A]">Abonnements</h2>
-          <p className="text-sm text-[#64748B] mt-0.5">Vue en temps réel de chaque client</p>
+          <h2 className="text-xl font-semibold text-[var(--w-text)]">Abonnements</h2>
+          <p className="text-sm text-[var(--w-text-sec)] mt-0.5">Vue en temps réel de chaque client</p>
         </div>
         <button
           onClick={runLifecycle}
@@ -1837,73 +1837,73 @@ function SubscriptionsSection() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-[#F7F8FA] flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-[#0F172A]" />
+              <TrendingUp className="w-4 h-4 text-[var(--w-text)]" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A]">{formatCompactFCFA(totalMRR)}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">MRR (revenu mensuel)</div>
+          <div className="text-2xl font-bold text-[var(--w-text)]">{formatCompactFCFA(totalMRR)}</div>
+          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">MRR (revenu mensuel)</div>
         </div>
-        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
               <Check className="w-4 h-4 text-emerald-600" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A]">{activeCount}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">Actifs</div>
+          <div className="text-2xl font-bold text-[var(--w-text)]">{activeCount}</div>
+          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Actifs</div>
         </div>
-        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4 text-orange-500" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A]">{expiredCount}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">Expirés</div>
+          <div className="text-2xl font-bold text-[var(--w-text)]">{expiredCount}</div>
+          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Expirés</div>
         </div>
-        <div className="bg-white rounded-lg border border-[#E5E7EB] p-4">
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
               <Bell className="w-4 h-4 text-orange-500" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-[#0F172A]">{expiring.length}</div>
-          <div className="text-xs text-[#64748B] mt-0.5">Expirations proches</div>
+          <div className="text-2xl font-bold text-[var(--w-text)]">{expiring.length}</div>
+          <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Expirations proches</div>
         </div>
       </div>
 
       {/* Auto-Suspension Settings */}
-      <div className="bg-white rounded-lg border border-[#E5E7EB] p-5">
+      <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
               <Ban className="w-4.5 h-4.5 text-red-500" />
             </div>
             <div>
-              <div className="text-sm font-semibold text-[#0F172A]">Suspension automatique</div>
-              <div className="text-xs text-[#64748B] mt-0.5">Suspendre automatiquement les clients après expiration + délai de grâce</div>
+              <div className="text-sm font-semibold text-[var(--w-text)]">Suspension automatique</div>
+              <div className="text-xs text-[var(--w-text-sec)] mt-0.5">Suspendre automatiquement les clients après expiration + délai de grâce</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-[#64748B]">Délai :</span>
+              <span className="text-xs text-[var(--w-text-sec)]">Délai :</span>
               <input
                 type="number" min={1} max={90} value={autoSuspendDays}
                 onChange={e => setAutoSuspendDays(Number(e.target.value) || 7)}
-                className="w-14 text-center text-xs border border-[#E5E7EB] rounded-md px-2 py-1.5 bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]"
+                className="w-14 text-center text-xs border border-[var(--w-separator)] rounded-md px-2 py-1.5 bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]"
               />
-              <span className="text-xs text-[#64748B]">jours</span>
+              <span className="text-xs text-[var(--w-text-sec)]">jours</span>
             </div>
             <button
               onClick={() => { setAutoSuspendEnabled(!autoSuspendEnabled); setTimeout(saveAutoSuspend, 100); }}
               className={`relative w-11 h-6 rounded-full transition-colors ${autoSuspendEnabled ? 'bg-red-500' : 'bg-slate-200'}`}
             >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoSuspendEnabled ? 'translate-x-5' : ''}`} />
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-[var(--w-surface)] rounded-full shadow transition-transform ${autoSuspendEnabled ? 'translate-x-5' : ''}`} />
             </button>
-            <button onClick={saveAutoSuspend} className="text-xs font-medium px-3 py-1.5 rounded-md border border-[#E5E7EB] hover:bg-[#F7F8FA] text-[#0F172A]">
+            <button onClick={saveAutoSuspend} className="text-xs font-medium px-3 py-1.5 rounded-md border border-[var(--w-separator)] hover:bg-[#F7F8FA] text-[var(--w-text)]">
               Sauvegarder
             </button>
           </div>
@@ -1919,17 +1919,17 @@ function SubscriptionsSection() {
       )}
 
       {/* Payment Reminders */}
-      <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E5E7EB]">
+      <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--w-separator)]">
           <div className="flex items-center gap-2.5">
-            <Bell className="w-4 h-4 text-[#0F172A]" />
-            <span className="text-sm font-semibold text-[#0F172A]">Rappels de paiement</span>
+            <Bell className="w-4 h-4 text-[var(--w-text)]" />
+            <span className="text-sm font-semibold text-[var(--w-text)]">Rappels de paiement</span>
             {expiring.length > 0 && <span className="text-[11px] font-medium bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">{expiring.length}</span>}
           </div>
           <select
             value={reminderDays}
             onChange={e => { const d = Number(e.target.value); setReminderDays(d); loadExpiring(d); }}
-            className="text-xs border border-[#E5E7EB] rounded-md px-2.5 py-1.5 bg-white text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#0F172A]"
+            className="text-xs border border-[var(--w-separator)] rounded-md px-2.5 py-1.5 bg-[var(--w-surface)] text-[var(--w-text)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)]"
           >
             <option value={3}>3 jours</option>
             <option value={5}>5 jours</option>
@@ -1939,7 +1939,7 @@ function SubscriptionsSection() {
           </select>
         </div>
         {expiring.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-[#64748B]">Aucun rappel de paiement pour le moment.</div>
+          <div className="px-5 py-8 text-center text-sm text-[var(--w-text-sec)]">Aucun rappel de paiement pour le moment.</div>
         ) : (
           <div className="divide-y divide-[#E5E7EB]">
             {expiring.map(t => {
@@ -1948,12 +1948,12 @@ function SubscriptionsSection() {
               return (
                 <div key={t.id} className="px-5 py-3.5 flex items-center gap-4 hover:bg-[#F7F8FA] transition-colors">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-[#0F172A] truncate">{t.name}</div>
-                    <div className="text-xs text-[#64748B] mt-0.5 flex items-center gap-2 flex-wrap">
+                    <div className="text-sm font-medium text-[var(--w-text)] truncate">{t.name}</div>
+                    <div className="text-xs text-[var(--w-text-sec)] mt-0.5 flex items-center gap-2 flex-wrap">
                       <span>Plan {t.plan}</span>
-                      <span className="text-[#E5E7EB]">|</span>
+                      <span className="text-[var(--w-separator)]">|</span>
                       <span>{t.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'}</span>
-                      <span className="text-[#E5E7EB]">|</span>
+                      <span className="text-[var(--w-separator)]">|</span>
                       <span className={`font-medium ${isUrgent ? 'text-red-600' : 'text-orange-600'}`}>
                         {days <= 0 ? 'Expiré' : `Expire dans ${days}j`}
                       </span>
@@ -1986,12 +1986,12 @@ function SubscriptionsSection() {
       {/* Search + Filters */}
       <div className="space-y-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--w-text-muted)]" />
           <input
             value={q}
             onChange={e => setQ(e.target.value)}
             placeholder="Rechercher par tenant, plan ou statut..."
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-[#E5E7EB] rounded-lg bg-white text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-1 focus:ring-[#0F172A] focus:border-[#0F172A]"
+            className="w-full pl-10 pr-4 py-2.5 text-sm border border-[var(--w-separator)] rounded-lg bg-[var(--w-surface)] text-[var(--w-text)] placeholder:text-[var(--w-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--w-text)] focus:border-[var(--w-text)]"
           />
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2002,7 +2002,7 @@ function SubscriptionsSection() {
               className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
                 statusFilter === f.key
                   ? 'bg-[#111111] text-white border-[#111111]'
-                  : 'bg-white text-[#64748B] border-[#E5E7EB] hover:border-[#0F172A] hover:text-[#0F172A]'
+                  : 'bg-[var(--w-surface)] text-[var(--w-text-sec)] border-[var(--w-separator)] hover:border-[#0F172A] hover:text-[var(--w-text)]'
               }`}
             >
               {f.label}
@@ -2013,24 +2013,24 @@ function SubscriptionsSection() {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-lg border border-[#E5E7EB] py-12 text-center">
-          <div className="text-sm text-[#64748B]">Aucun abonnement trouvé</div>
-          <p className="text-xs text-[#94A3B8] mt-1">Essayez de modifier votre recherche ou vos filtres.</p>
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] py-12 text-center">
+          <div className="text-sm text-[var(--w-text-sec)]">Aucun abonnement trouvé</div>
+          <p className="text-xs text-[var(--w-text-muted)] mt-1">Essayez de modifier votre recherche ou vos filtres.</p>
           {(q || statusFilter !== 'all') && (
-            <button onClick={resetFilters} className="mt-3 text-xs font-medium text-[#0F172A] border border-[#E5E7EB] px-3 py-1.5 rounded-md hover:bg-[#F7F8FA] transition-colors">
+            <button onClick={resetFilters} className="mt-3 text-xs font-medium text-[var(--w-text)] border border-[var(--w-separator)] px-3 py-1.5 rounded-md hover:bg-[#F7F8FA] transition-colors">
               Réinitialiser les filtres
             </button>
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-hidden">
-          <div className="hidden md:grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3 bg-[#F7F8FA] border-b border-[#E5E7EB]">
-            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Client</div>
-            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Plan</div>
-            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Cycle</div>
-            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider text-right">Montant</div>
-            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Échéance</div>
-            <div className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Statut</div>
+        <div className="bg-[var(--w-surface)] rounded-lg border border-[var(--w-separator)] overflow-hidden">
+          <div className="hidden md:grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3 bg-[#F7F8FA] border-b border-[var(--w-separator)]">
+            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Client</div>
+            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Plan</div>
+            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Cycle</div>
+            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider text-right">Montant</div>
+            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Échéance</div>
+            <div className="text-[11px] font-semibold text-[var(--w-text-sec)] uppercase tracking-wider">Statut</div>
           </div>
           <div className="divide-y divide-[#E5E7EB]">
             {filtered.map(r => {
@@ -2041,27 +2041,27 @@ function SubscriptionsSection() {
                   {/* Main row (desktop) */}
                   <div className="hidden md:grid grid-cols-[1.4fr_0.8fr_0.7fr_0.8fr_1fr_0.7fr] gap-3 px-5 py-3.5 items-center hover:bg-[#F7F8FA] transition-colors">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-[#0F172A] truncate">{r.tenant_name}</div>
+                      <div className="text-sm font-medium text-[var(--w-text)] truncate">{r.tenant_name}</div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {r.auto_renew && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">auto</span>}
                         {hasHistory && (
-                          <button onClick={() => toggleHistory(r.tenant_id)} className="text-[10px] text-[#64748B] hover:text-[#0F172A] underline">
+                          <button onClick={() => toggleHistory(r.tenant_id)} className="text-[10px] text-[var(--w-text-sec)] hover:text-[var(--w-text)] underline">
                             {showHistory ? 'Masquer' : `${r._history.length} ancien(s)`}
                           </button>
                         )}
                       </div>
                     </div>
-                    <div><span className="text-xs font-medium text-[#0F172A] bg-[#F7F8FA] border border-[#E5E7EB] px-2 py-0.5 rounded">{r.plan_code}</span></div>
-                    <div className="text-xs text-[#64748B]">{cycleLabel(r.billing_cycle)}</div>
-                    <div className="text-sm font-semibold text-[#0F172A] text-right">{formatFCFA(r.amount)}</div>
-                    <div className="text-xs text-[#64748B]">{r.ends_at ? formatDate(r.ends_at) : '-'}</div>
+                    <div><span className="text-xs font-medium text-[var(--w-text)] bg-[#F7F8FA] border border-[var(--w-separator)] px-2 py-0.5 rounded">{r.plan_code}</span></div>
+                    <div className="text-xs text-[var(--w-text-sec)]">{cycleLabel(r.billing_cycle)}</div>
+                    <div className="text-sm font-semibold text-[var(--w-text)] text-right">{formatFCFA(r.amount)}</div>
+                    <div className="text-xs text-[var(--w-text-sec)]">{r.ends_at ? formatDate(r.ends_at) : '-'}</div>
                     <div><span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border ${statusStyle(r.status)}`}>{statusLabel(r.status)}</span></div>
                   </div>
                   {/* Mobile card */}
                   <div className="md:hidden p-4">
                     <div className="flex items-start justify-between mb-2">
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-[#0F172A] truncate">{r.tenant_name}</div>
+                        <div className="text-sm font-medium text-[var(--w-text)] truncate">{r.tenant_name}</div>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {r.auto_renew && <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded">auto</span>}
                         </div>
@@ -2069,24 +2069,24 @@ function SubscriptionsSection() {
                       <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${statusStyle(r.status)}`}>{statusLabel(r.status)}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-y-2 gap-x-4 mt-3">
-                      <div><div className="text-[10px] uppercase text-[#94A3B8] font-medium">Plan</div><div className="text-xs text-[#0F172A] font-medium mt-0.5">{r.plan_code}</div></div>
-                      <div><div className="text-[10px] uppercase text-[#94A3B8] font-medium">Cycle</div><div className="text-xs text-[#64748B] mt-0.5">{cycleLabel(r.billing_cycle)}</div></div>
-                      <div><div className="text-[10px] uppercase text-[#94A3B8] font-medium">Montant</div><div className="text-sm font-semibold text-[#0F172A] mt-0.5">{formatFCFA(r.amount)}</div></div>
-                      <div><div className="text-[10px] uppercase text-[#94A3B8] font-medium">Échéance</div><div className="text-xs text-[#64748B] mt-0.5">{r.ends_at ? formatDate(r.ends_at) : '-'}</div></div>
+                      <div><div className="text-[10px] uppercase text-[var(--w-text-muted)] font-medium">Plan</div><div className="text-xs text-[var(--w-text)] font-medium mt-0.5">{r.plan_code}</div></div>
+                      <div><div className="text-[10px] uppercase text-[var(--w-text-muted)] font-medium">Cycle</div><div className="text-xs text-[var(--w-text-sec)] mt-0.5">{cycleLabel(r.billing_cycle)}</div></div>
+                      <div><div className="text-[10px] uppercase text-[var(--w-text-muted)] font-medium">Montant</div><div className="text-sm font-semibold text-[var(--w-text)] mt-0.5">{formatFCFA(r.amount)}</div></div>
+                      <div><div className="text-[10px] uppercase text-[var(--w-text-muted)] font-medium">Échéance</div><div className="text-xs text-[var(--w-text-sec)] mt-0.5">{r.ends_at ? formatDate(r.ends_at) : '-'}</div></div>
                     </div>
                     {hasHistory && (
-                      <button onClick={() => toggleHistory(r.tenant_id)} className="mt-2 text-[11px] text-[#64748B] hover:text-[#0F172A] underline">
+                      <button onClick={() => toggleHistory(r.tenant_id)} className="mt-2 text-[11px] text-[var(--w-text-sec)] hover:text-[var(--w-text)] underline">
                         {showHistory ? 'Masquer historique' : `Voir historique (${r._history.length})`}
                       </button>
                     )}
                   </div>
                   {/* Expanded history */}
                   {showHistory && r._history && (
-                    <div className="bg-[#FAFBFC] border-t border-[#E5E7EB] px-5 py-2">
-                      <div className="text-[10px] uppercase font-semibold text-[#94A3B8] tracking-wider mb-2">Historique</div>
+                    <div className="bg-[#FAFBFC] border-t border-[var(--w-separator)] px-5 py-2">
+                      <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wider mb-2">Historique</div>
                       {r._history.map((h: any) => (
-                        <div key={h.id} className="flex items-center gap-4 py-1.5 text-xs text-[#64748B]">
-                          <span className="font-medium text-[#0F172A]">{h.plan_code}</span>
+                        <div key={h.id} className="flex items-center gap-4 py-1.5 text-xs text-[var(--w-text-sec)]">
+                          <span className="font-medium text-[var(--w-text)]">{h.plan_code}</span>
                           <span>{cycleLabel(h.billing_cycle)}</span>
                           <span>{formatDate(h.started_at)} - {h.ends_at ? formatDate(h.ends_at) : '...'}</span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusStyle(h.status)}`}>{statusLabel(h.status)}</span>
@@ -2150,7 +2150,7 @@ function MessagesSection() {
             const sev = SEV[m.severity as keyof typeof SEV] || SEV.info;
             const expired = m.expires_at && new Date(m.expires_at) < new Date();
             return (
-              <div key={m.id} className={`bg-white border-l-4 ${sev.border} border-y border-r border-slate-200/70 rounded-2xl p-4 shadow-card`}>
+              <div key={m.id} className={`bg-[var(--w-surface)] border-l-4 ${sev.border} border-y border-r border-slate-200/70 rounded-2xl p-4 shadow-card`}>
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 rounded-xl ${sev.bg} ${sev.icon} flex items-center justify-center shrink-0 border ${sev.border}`}>
                     {m.severity === 'critical' ? <AlertTriangle className="w-5 h-5" /> : m.severity === 'warning' ? <AlertTriangle className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}
@@ -2285,7 +2285,7 @@ function ActivitySection() {
   return (
     <div className="space-y-4">
       {/* Tab toggles */}
-      <div className="inline-flex rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+      <div className="inline-flex rounded-2xl border border-slate-200 bg-[var(--w-surface)] overflow-hidden shadow-sm">
         <button onClick={() => setTab('overview')} className={`px-4 py-2 text-xs font-bold transition-all ${tab === 'overview' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-[var(--w-surface-el)]'}`}>
           <Eye className="w-3.5 h-3.5 inline mr-1.5" />Vue globale
         </button>
@@ -2298,26 +2298,26 @@ function ActivitySection() {
         <div className="space-y-4">
           {/* KPI */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-card">
+            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-2xl p-4 shadow-card">
               <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Tenants actifs (7j)</div>
               <div className="text-2xl font-extrabold text-emerald-700 mt-1">{activeCount}</div>
             </div>
-            <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-card">
+            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-2xl p-4 shadow-card">
               <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Inactifs (30j+)</div>
               <div className="text-2xl font-extrabold text-red-600 mt-1">{inactiveCount}</div>
             </div>
-            <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-card">
+            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-2xl p-4 shadow-card">
               <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Total ventes</div>
               <div className="text-2xl font-extrabold text-slate-800 mt-1">{activity.reduce((s, a) => s + (a.total_sales || 0), 0)}</div>
             </div>
-            <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-card">
+            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-2xl p-4 shadow-card">
               <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Total articles</div>
               <div className="text-2xl font-extrabold text-slate-800 mt-1">{activity.reduce((s, a) => s + (a.total_articles || 0), 0)}</div>
             </div>
           </div>
 
           {/* Activity table */}
-          <div className="bg-white border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
+          <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
             <div className="p-4 border-b border-[var(--w-separator)] flex items-center gap-2">
               <LineChart className="w-4 h-4 text-brand-700" />
               <h3 className="text-sm font-bold text-slate-900">Activite des tenants approuves</h3>
@@ -2371,7 +2371,7 @@ function ActivitySection() {
       )}
 
       {tab === 'log' && (
-        <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
+        <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-4 h-4 text-brand-700" />
             <h3 className="text-sm font-bold text-slate-900">Journal d'activite plateforme</h3>
@@ -2490,7 +2490,7 @@ function LoginConfigSection() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card">
+      <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card">
         <div className="flex items-center gap-2 mb-1">
           <Eye className="w-4 h-4 text-brand-700" />
           <h3 className="text-sm font-bold text-slate-900">Interface de connexion</h3>
@@ -2505,26 +2505,26 @@ function LoginConfigSection() {
           <div className="flex bg-slate-100 rounded-xl p-1 border border-slate-200">
             <button
               onClick={() => setActiveTab('textes')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'textes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'textes' ? 'bg-[var(--w-surface)] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Textes
             </button>
             <button
               onClick={() => setActiveTab('effets')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'effets' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'effets' ? 'bg-[var(--w-surface)] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Effets
             </button>
             <button
               onClick={() => setActiveTab('modules')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'modules' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'modules' ? 'bg-[var(--w-surface)] text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Modules ({modules.length})
             </button>
           </div>
 
           {activeTab === 'textes' && (
-            <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Titre principal</label>
                 <input
@@ -2622,7 +2622,7 @@ function LoginConfigSection() {
           )}
 
           {activeTab === 'effets' && (
-            <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-bold text-slate-700">Effets graphiques sur le texte</p>
@@ -2667,7 +2667,7 @@ function LoginConfigSection() {
                       <select
                         value={accent.effect}
                         onChange={e => setTextAccents(prev => prev.map((a, i) => i === idx ? { ...a, effect: e.target.value as TextAccent['effect'] } : a))}
-                        className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400"
+                        className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-[var(--w-surface)] focus:outline-none focus:ring-1 focus:ring-brand-400"
                       >
                         <option value="underline">Soulignement peinture</option>
                         <option value="wavyUnderline">Soulignement ondule</option>
@@ -2770,7 +2770,7 @@ function LoginConfigSection() {
           )}
 
           {activeTab === 'modules' && (
-            <div className="bg-white border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
+            <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl p-5 shadow-card space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold text-slate-700">Modules affichés ({modules.length})</p>
@@ -2817,14 +2817,14 @@ function LoginConfigSection() {
                           </button>
                         </div>
                         {/* Icon preview */}
-                        <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-[var(--w-surface)] border border-slate-200 flex items-center justify-center shrink-0">
                           <IconComp className="w-3.5 h-3.5 text-teal-600" />
                         </div>
                         {/* Icon select */}
                         <select
                           value={mod.icon}
                           onChange={e => updateModule(idx, 'icon', e.target.value)}
-                          className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0"
+                          className="h-8 px-2 rounded-lg border border-slate-200 text-[11px] text-slate-800 bg-[var(--w-surface)] focus:outline-none focus:ring-1 focus:ring-brand-400 shrink-0"
                         >
                           {AVAILABLE_ICONS.map(ic => (
                             <option key={ic.value} value={ic.value}>{ic.label}</option>
@@ -2861,7 +2861,7 @@ function LoginConfigSection() {
 
         {/* Right: Live Preview */}
         <div className="sticky top-4">
-          <div className="bg-white border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
+          <div className="bg-[var(--w-surface)] border border-slate-200/70 rounded-3xl shadow-card overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--w-separator)] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -2871,7 +2871,7 @@ function LoginConfigSection() {
             </div>
             <div className="p-4 bg-[#f0f4f8]">
               {/* Mini mockup of login screen left panel */}
-              <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-4 space-y-3">
+              <div className="rounded-xl bg-[var(--w-surface)] border border-slate-200 shadow-sm p-4 space-y-3">
                 {/* Logo */}
                 <div>
                   <img src="/newlogo.png" alt="WAARWI" className="h-8 w-auto object-contain" />
@@ -3072,7 +3072,7 @@ function ReleasesSection() {
       ) : (
         <div className="space-y-3">
           {releases.map(r => (
-            <div key={r.id} className={`rounded-xl border p-4 transition-all ${r.is_published ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-white'}`}>
+            <div key={r.id} className={`rounded-xl border p-4 transition-all ${r.is_published ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-[var(--w-surface)]'}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

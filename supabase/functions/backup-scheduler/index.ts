@@ -18,6 +18,14 @@ function json(data: unknown, status = 200) {
 const MAX_RETRIES = 3;
 const CENTRALIZED_KINDS = ["auto", "platform_manual"];
 
+function isTimeoutError(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === "57014" ||
+    (typeof error.message === "string" &&
+      error.message.includes("canceling statement due to statement timeout"))
+  );
+}
+
 async function backupTenantWithRetry(
   admin: ReturnType<typeof createClient>,
   tenantId: string,
@@ -38,6 +46,29 @@ async function backupTenantWithRetry(
         total_rows?: number;
       };
     }
+
+    // On timeout, skip remaining retries and try the extended-timeout variant once
+    if (isTimeoutError(error)) {
+      const { data: extData, error: extError } = await admin.rpc(
+        "_br_create_backup_for_tenant_extended",
+        {
+          p_tenant_id: tenantId,
+          p_label: label,
+          p_kind: kind,
+        },
+      );
+      if (!extError) {
+        return extData as {
+          backup_id?: string;
+          size_bytes?: number;
+          total_rows?: number;
+        };
+      }
+      throw new Error(
+        `Extended backup failed: [${extError.code || "UNKNOWN"}] ${extError.message}`,
+      );
+    }
+
     lastError = new Error(error.message);
     if (attempt < MAX_RETRIES) {
       await new Promise((r) => setTimeout(r, 1000 * attempt));

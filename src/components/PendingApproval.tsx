@@ -61,7 +61,7 @@ export function PendingApproval() {
         <img
           src="/newlogo.png"
           alt="Waarwi"
-          className="h-8 w-auto object-contain"
+          className="h-8 w-auto object-contain w-platform-logo"
           onError={e => {
             (e.target as HTMLImageElement).style.display = 'none';
             const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement | null;

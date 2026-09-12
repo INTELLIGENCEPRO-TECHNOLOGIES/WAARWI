@@ -1179,9 +1179,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     supabase.from('sales_representatives').select('*').eq('tenant_id', tenant.id).eq('status', 'actif').order('code').then(({ data }) => {
       setPosReps((data as SalesRepresentative[]) || []);
     });
-    supabase.from('expense_categories').select('id, name').eq('tenant_id', tenant.id).eq('is_active', true).order('name').then(({ data }) => {
-      setExpenseCats((data as { id: string; name: string }[]) || []);
-    });
     supabase.from('rep_commission_settings').select('enabled, commission_type, commission_base, rate, fixed_amount').eq('tenant_id', tenant.id).maybeSingle().then(({ data }) => {
       if (data) {
         setPosRepSettings({
@@ -1194,6 +1191,18 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       }
     });
   }, [tenant?.id]);
+
+  useEffect(() => {
+    if (!tenant || !currentSite?.id) { setExpenseCats([]); return; }
+    supabase.rpc('get_effective_expense_categories', {
+      p_site_id: currentSite.id,
+      p_include_inactive: false,
+    }).then(({ data }) => {
+      const list = (data as { id: string; name: string }[]) || [];
+      setExpenseCats(list);
+      setMvExpenseCat(prev => list.some(c => c.id === prev) ? prev : '');
+    });
+  }, [tenant?.id, currentSite?.id]);
 
   const posRepLabel = (id?: string | null) => {
     const r = posReps.find(x => x.id === id);
@@ -3517,32 +3526,32 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             <div className="-mx-4 px-4 border-b border-neutral-200">
               <div className="flex items-stretch w-full">
                 <button type="button" onClick={() => setMvKind('expense')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'expense' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'expense' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
                   <ArrowUpRight className={`w-6 h-6 ${mvKind === 'expense' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'expense' ? 'text-neutral-950' : 'text-neutral-600'}`}>Dépense</span>
+                  <span className={`text-[12px] font-semibold ${mvKind === 'expense' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Dépense</span>
                 </button>
                 <button type="button" onClick={() => setMvKind('income')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'income' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'income' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
                   <ArrowDownRight className={`w-6 h-6 ${mvKind === 'income' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'income' ? 'text-neutral-950' : 'text-neutral-600'}`}>Entrée</span>
+                  <span className={`text-[12px] font-semibold ${mvKind === 'income' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Entrée</span>
                 </button>
                 <button type="button" onClick={() => setMvKind('customer_prepayment')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_prepayment' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_prepayment' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
                   <Banknote className={`w-6 h-6 ${mvKind === 'customer_prepayment' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_prepayment' ? 'text-neutral-950' : 'text-neutral-600'}`}>Acompte</span>
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_prepayment' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Acompte</span>
                 </button>
                 {can('pos_customer_withdrawal') && !!(tenant as any)?.settings?.enable_customer_withdrawals && (
                 <button type="button" onClick={() => { setMvKind('customer_withdrawal'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_withdrawal' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_withdrawal' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
                   <ArrowDownToLine className={`w-6 h-6 ${mvKind === 'customer_withdrawal' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_withdrawal' ? 'text-neutral-950' : 'text-neutral-600'}`}>Retrait</span>
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_withdrawal' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Retrait</span>
                 </button>
                 )}
                 {can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans && (
                 <button type="button" onClick={() => { setMvKind('customer_loan'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_loan' ? 'text-neutral-950 after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_loan' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
                   <HandCoins className={`w-6 h-6 ${mvKind === 'customer_loan' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_loan' ? 'text-neutral-950' : 'text-neutral-600'}`}>Prêt</span>
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_loan' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Prêt</span>
                 </button>
                 )}
               </div>
@@ -3641,14 +3650,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 <div className="group">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</div>
                   {mvKind === 'expense' && expenseCats.length > 0 ? (
-                    <div className="relative">
-                      <select value={mvExpenseCat} onChange={e => setMvExpenseCat(e.target.value)}
-                        className="w-select-ul py-2 text-[13px] pr-5">
-                        <option value="">Sélectionner…</option>
-                        {expenseCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-neutral-400 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
+                    <SearchableSelect
+                      value={mvExpenseCat}
+                      onChange={setMvExpenseCat}
+                      options={expenseCats.map(c => ({ value: c.id, label: c.name }))}
+                      placeholder="Sélectionner…"
+                    />
                   ) : (
                     <input value={mvReason} onChange={e => setMvReason(e.target.value)}
                       className="w-input-ul text-[13px]" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />

@@ -973,7 +973,19 @@ function OffsiteTab() {
     setProcessing(true);
     try {
       const r = await callOffsite('process_queue');
-      toast.success(`${r.processed ?? 0} transfert(s) traité(s)`);
+      const results: { id: string; status: string; error?: string }[] = r.results || [];
+      const verified = results.filter(x => x.status === 'verified').length;
+      const failed = results.filter(x => x.status === 'failed').length;
+      const skipped = results.filter(x => x.status === 'skipped').length;
+      if (results.length === 0) {
+        toast.success('Aucun transfert en attente');
+      } else if (failed === 0) {
+        toast.success(`${verified} transfert(s) réussi(s)${skipped ? `, ${skipped} ignoré(s)` : ''}`);
+      } else if (verified === 0) {
+        toast.error(`${failed} transfert(s) échoué(s)${skipped ? `, ${skipped} ignoré(s)` : ''}`);
+      } else {
+        toast.error(`${verified} réussi(s), ${failed} échoué(s)${skipped ? `, ${skipped} ignoré(s)` : ''}`);
+      }
       load();
     } catch (e: any) { toast.error(e.message); }
     finally { setProcessing(false); }
@@ -1069,7 +1081,12 @@ function OffsiteTab() {
                   <td className="py-2.5 hidden md:table-cell font-mono text-[9px] text-[#67707c]">
                     {formatBytes(tx.size_bytes)}
                   </td>
-                  <td className="py-2.5"><StatusLabel status={tx.status} /></td>
+                  <td className="py-2.5">
+                    <StatusLabel status={tx.status} />
+                    {tx.status === 'failed' && tx.error_message && (
+                      <div className="text-[8px] text-[#c73737] mt-0.5 max-w-[260px] truncate" title={tx.error_message}>{tx.error_message}</div>
+                    )}
+                  </td>
                   <td className="py-2.5 text-right">
                     <div className="inline-flex items-center gap-1">
                       {tx.status === 'failed' && (

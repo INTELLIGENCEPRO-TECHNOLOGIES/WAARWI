@@ -631,7 +631,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           {tenant?.logo_url ? (
             <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain flex-shrink-0" />
           ) : (
-            <img src="/newlogo.png" alt="WAARWI" className="h-7 w-auto max-w-[120px] object-contain flex-shrink-0" />
+            <img src="/newlogo.png" alt="WAARWI" className="h-7 w-auto max-w-[120px] object-contain flex-shrink-0 w-platform-logo" />
           )}
           {!sidebarCollapsed && (
             <div className="leading-tight">
@@ -812,7 +812,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   {tenant?.logo_url ? (
                     <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain shrink-0" />
                   ) : (
-                    <img src="/newlogo.png" alt="WAARWI" className={`h-7 w-auto max-w-[110px] object-contain shrink-0`} />
+                    <img src="/newlogo.png" alt="WAARWI" className={`h-7 w-auto max-w-[110px] object-contain shrink-0 w-platform-logo`} />
                   )}
                 </div>
                 <div className="flex-1 flex flex-col items-center justify-center px-2 min-w-0">
@@ -1037,7 +1037,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           {tenant?.logo_url ? (
             <img src={tenant.logo_url} alt="" className="h-8 w-8 object-contain rounded" />
           ) : (
-            <img src="/newlogo.png" alt="" className="h-5 w-auto max-w-[48px] object-contain" />
+            <img src="/newlogo.png" alt="" className="h-5 w-auto max-w-[48px] object-contain w-platform-logo" />
           )}
         </button>
         )}
