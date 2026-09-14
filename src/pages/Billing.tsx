@@ -227,6 +227,13 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [invoiceIpmVente, setInvoiceIpmVente] = useState<any>(null);
   const [accountingBusy, setAccountingBusy] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const payLayer = useTopLayer(payOpen);
+  useEffect(() => {
+    if (!payOpen) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && payLayer.isTop) setPayOpen(false); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [payOpen, payLayer.isTop]);
   const [payMethod, setPayMethod] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [paying, setPaying] = useState(false);
@@ -3420,37 +3427,50 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       </DocPanel>
 
       {/* ── Register payment modal ───────────────────────────── */}
-      <Modal open={payOpen} onClose={() => !paying && setPayOpen(false)} title="Encaisser la facture" size="sm" layer="top"
-        footer={<>
-          <button onClick={() => setPayOpen(false)} className="btn-icon" title="Annuler" disabled={paying}><X className="w-4 h-4" /></button>
-          <button onClick={registerPayment} disabled={paying} className="btn-icon-primary" title="Enregistrer">{paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}</button>
-        </>}>
-        {invoiceDetail && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-[var(--w-separator)]">
+      {payOpen && invoiceDetail && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-black/20" style={{ zIndex: payLayer.zIndex }} onClick={e => { if (e.target === e.currentTarget && !paying && payLayer.isTop) setPayOpen(false); }}>
+          <div className="bg-white w-full max-w-sm rounded-lg shadow-xl mx-4 flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 bg-neutral-900 rounded-t-lg flex items-center justify-between flex-shrink-0">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700/70">Solde dû</div>
-                <div className="doc-number text-sm font-bold text-amber-900 mt-0.5">{invoiceDetail.sale_number}</div>
+                <h3 className="text-sm font-bold text-white">Encaisser la facture</h3>
+                <p className="text-[11px] text-neutral-400 mt-0.5">{invoiceDetail.sale_number}</p>
               </div>
-              <div className="text-xl font-bold text-amber-700 num">{formatFCFA(invoiceDue)}</div>
+              <button onClick={() => !paying && setPayOpen(false)} className="p-1 rounded hover:bg-white/10 text-neutral-400"><X className="w-4 h-4" /></button>
             </div>
-            <div>
-              <label className="label">Mode de règlement</label>
-              <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="input">
-                {paymentMethods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Montant encaissé</label>
-              <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input num text-lg font-bold" />
-              <div className="flex gap-1.5 mt-1.5">
-                <button type="button" onClick={() => setPayAmount(String(invoiceDue))} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 uppercase tracking-wider">Solde total</button>
-                <button type="button" onClick={() => setPayAmount(String(Math.round(invoiceDue / 2)))} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 uppercase tracking-wider">Moitié</button>
+
+            <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+              <div className="flex items-center justify-between px-2 py-2 border-b border-neutral-200">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Solde dû</div>
+                <div className="num text-base font-bold text-neutral-900">{formatFCFA(invoiceDue)}</div>
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1 block">Mode de règlement</label>
+                <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="w-full text-xs h-8 px-1 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors">
+                  {paymentMethods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1 block">Montant encaissé</label>
+                <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-full text-xs h-8 px-1 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors num font-bold" />
+                <div className="flex gap-1.5 mt-2">
+                  <button type="button" onClick={() => setPayAmount(String(invoiceDue))} className="text-[10px] font-bold px-2 py-1 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 uppercase tracking-wider">Solde total</button>
+                  <button type="button" onClick={() => setPayAmount(String(Math.round(invoiceDue / 2)))} className="text-[10px] font-bold px-2 py-1 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 uppercase tracking-wider">Moitié</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-4 py-3 border-t border-neutral-100 flex items-center justify-end gap-2 flex-shrink-0">
+              <button onClick={() => setPayOpen(false)} disabled={paying} className="px-3 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors disabled:opacity-40">Annuler</button>
+              <button onClick={registerPayment} disabled={paying} className="px-4 py-1.5 text-xs font-semibold bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-40 transition-colors flex items-center gap-1">
+                {paying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Coins className="w-3 h-3" />} Encaisser
+              </button>
             </div>
           </div>
-        )}
-      </Modal>
+        </div>,
+        document.body
+      )}
 
       {/* ── Apply credit modal ──────────────────────────────── */}
       <Modal open={creditOpen} onClose={() => !applyingCredit && setCreditOpen(false)} title="Appliquer un avoir" size="sm"

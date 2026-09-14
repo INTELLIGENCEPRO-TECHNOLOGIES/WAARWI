@@ -161,7 +161,7 @@ export function SearchableSelect({
   const dropdown = open ? createPortal(
     <div
       ref={dropdownRef}
-      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 2147483000 }}
       className={dropdownCls}
     >
       {searchable && (
