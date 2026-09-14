@@ -1,5 +1,7 @@
 import { ReactNode, useEffect, useRef, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, GripVertical, Check, Trash2 } from 'lucide-react';
+import { useTopLayer } from './modalStack';
 
 type Props = {
   open: boolean;
@@ -16,22 +18,48 @@ type Props = {
 };
 
 export function Modal({ open, onClose, title, children, size = 'md', footer, layer = 'base', fullMobile = false, fullscreenMobile = false, variant = 'default', panelClassName = '' }: Props & { panelClassName?: string }) {
+  const isTopLayer = layer === 'top';
+  const { isTop, zIndex } = useTopLayer(open && isTopLayer);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
+    if (isTopLayer) {
+      returnFocusRef.current = document.activeElement as HTMLElement | null;
+    }
     document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
-  }, [open, onClose]);
+    return () => {
+      document.body.style.overflow = '';
+      if (isTopLayer && returnFocusRef.current && document.body.contains(returnFocusRef.current)) {
+        try { returnFocusRef.current.focus(); } catch { /* noop */ }
+      }
+    };
+  }, [open, isTopLayer]);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (isTopLayer && !isTop) return;
+      onClose();
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [open, onClose, isTopLayer, isTop]);
 
   if (!open) return null;
   const wBase = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' }[size];
   const w = fullscreenMobile ? wBase.replace('max-w-', 'sm:max-w-') : wBase;
-  const z = layer === 'top' ? 'z-[70]' : 'z-50';
+  const zCls = isTopLayer ? '' : 'z-50';
+  const zStyle = isTopLayer ? { zIndex } : undefined;
+  const handleScrim = () => {
+    if (isTopLayer && !isTop) return;
+    onClose();
+  };
 
-  return (
-    <div className={`fixed inset-0 ${z} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`}>
-      <div className="scrim" onClick={onClose} />
+  const node = (
+    <div className={`fixed inset-0 ${zCls} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`} style={zStyle}>
+      <div className="scrim" onClick={handleScrim} />
       <div className={`relative w-full ${w} bg-[var(--w-surface)] ${variant === 'flat' ? 'flat-modal' : ''} ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col ${panelClassName}`}>
         {!fullMobile && !fullscreenMobile && <div className="sm:hidden sheet-handle" />}
         <div className={`flex items-center justify-between border-b border-[var(--w-separator)] bg-[var(--w-surface-el)] ${fullscreenMobile ? 'px-4 py-3 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : fullMobile ? 'px-3 py-2.5 sm:px-5 sm:py-4 rounded-none sm:rounded-t-xl' : 'px-4 py-3 sm:px-5 sm:py-4 rounded-t-xl'}`}>
@@ -45,6 +73,8 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
       </div>
     </div>
   );
+
+  return isTopLayer && typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 }
 
 export function DocPanel({ open, onClose, title, children, footer, fullscreen = false, fullscreenMobile = false }: {

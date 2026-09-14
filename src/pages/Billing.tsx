@@ -11,6 +11,7 @@ import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog, DocPanel } from '../components/Modal';
+import { useTopLayer } from '../components/modalStack';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { EmptyState } from '../components/EmptyState';
@@ -378,6 +379,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   }, [currentSite?.id, isDesktop]);
 
   const [cancelTarget, setCancelTarget] = useState<Invoice | null>(null);
+  const cancelLayer = useTopLayer(!!cancelTarget);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelPaymentAction, setCancelPaymentAction] = useState<'keep_credit' | 'refund_cash' | 'none'>('none');
   const [invoiceSearchOpen, setInvoiceSearchOpen] = useState(false);
@@ -3708,7 +3710,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       )}
 
       {cancelTarget && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4" onClick={(e) => { if (e.target === e.currentTarget && !cancelling) { setCancelTarget(null); setCancelReason(''); } }}>
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 p-4" style={{ zIndex: cancelLayer.zIndex }} onClick={(e) => { if (e.target === e.currentTarget && !cancelling && cancelLayer.isTop) { setCancelTarget(null); setCancelReason(''); } }}>
           <div className="bg-white rounded-xl shadow-xl p-6 w-[min(90vw,420px)] space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0">

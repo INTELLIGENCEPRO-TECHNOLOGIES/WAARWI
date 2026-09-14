@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Check, Loader2, Lock, Trash2, Search, Package, Car,
   Printer, Link2, MessageCircle, Pencil, ArrowRight, CreditCard,
   Plus, Minus, ShieldCheck, Columns3, ChevronDown, RotateCcw,
   CheckCircle, RefreshCw, Coins, BookOpen, Ban, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import { useTopLayer } from './modalStack';
 import { formatFCFA, formatNum } from '../lib/format';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS } from './DocumentSettingsTab';
 import { type SalesRepresentative, repDisplayName } from '../lib/repCommission';
@@ -955,9 +957,16 @@ function ReturnConfigDialog({ lines, onConfirm, onClose }: {
   const setQty = (idx: number, q: number) => setLocalLines(p => p.map((x, i) => i === idx ? { ...x, quantity: Math.min(x.max_qty, Math.max(1, q)) } : x));
   const selected = localLines.filter(i => i.selected && i.quantity > 0);
   const total = selected.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const { isTop, zIndex } = useTopLayer(true);
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/20" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && isTop) onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [isTop, onClose]);
+
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center bg-black/20" style={{ zIndex }} onClick={e => { if (e.target === e.currentTarget && isTop) onClose(); }}>
       <div className="bg-white w-full max-w-sm rounded-lg shadow-xl mx-4 flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
         <div className="px-4 py-3 bg-neutral-900 rounded-t-lg flex items-center justify-between flex-shrink-0">
           <div>
@@ -1028,7 +1037,8 @@ function ReturnConfigDialog({ lines, onConfirm, onClose }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1448,9 +1458,10 @@ function ArticleSearchModal({ articles, initialQuery, onSelect, onClose, cols }:
   ];
 
   const activeCols = SEARCH_COLS.filter(c => visibleCols[c.key]);
+  const { isTop, zIndex } = useTopLayer(true);
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center bg-black/20" style={{ zIndex }} onClick={e => { if (e.target === e.currentTarget && isTop) onClose(); }}>
       <div className="bg-white w-full max-w-4xl h-[80vh] flex flex-col rounded-lg shadow-xl mx-4" onClick={e => e.stopPropagation()}>
         {/* Search header */}
         <div className="flex items-center gap-2 px-4 h-12 border-b border-neutral-200 flex-shrink-0">
@@ -1545,6 +1556,7 @@ function ArticleSearchModal({ articles, initialQuery, onSelect, onClose, cols }:
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
