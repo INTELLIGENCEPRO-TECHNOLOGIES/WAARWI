@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Loader2, CheckCircle, XCircle, WifiOff, Wifi, LogOut, ShieldX, Phone, Headphones, AlertCircle, Ban, Power } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
+import { WindowManagerProvider } from './context/WindowManagerContext';
 import { usePermissions, type PermissionKey } from './lib/permissions';
 import { ToastProvider } from './context/ToastContext';
 import { Auth } from './pages/Auth';
@@ -10,6 +11,8 @@ import { Dashboard } from './pages/Dashboard';
 import { TenantMessagePopup } from './components/TenantMessagePopup';
 import { PendingApproval } from './components/PendingApproval';
 import UpdateNotification from './components/UpdateNotification';
+import { useToast } from './context/ToastContext';
+import { installDraftFlushListeners, setDraftErrorHandler, hasAnyDraft, hasPendingWrite, flushAllPendingDrafts } from './lib/draftRecovery';
 
 function SuspendedTenant() {
   const { tenant, signOut } = useApp();
@@ -48,6 +51,12 @@ function lazyWithRetry<T extends React.ComponentType<any>>(factory: () => Promis
     const msg = String(err?.message || err);
     const isChunkErr = /Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg);
     if (isChunkErr && typeof window !== 'undefined') {
+      // Never silently reload if the user has unsaved work — either a draft
+      // already in sessionStorage or a debounced write still buffered in a
+      // pending timer. Flush pending writes first so they survive the manual
+      // reload the user will trigger from the ErrorBoundary.
+      try { flushAllPendingDrafts(); } catch {}
+      if (hasAnyDraft() || hasPendingWrite()) throw err;
       const KEY = '__chunk_retry__';
       if (!sessionStorage.getItem(KEY)) {
         sessionStorage.setItem(KEY, '1');
@@ -304,6 +313,10 @@ function Inner() {
   const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const [route, setRoute] = useState<Route>('dashboard');
+  const [billingMounted, setBillingMounted] = useState(false);
+  useEffect(() => { if (route === 'billing') setBillingMounted(true); }, [route]);
+  const [supplierOrdersMounted, setSupplierOrdersMounted] = useState(false);
+  useEffect(() => { if (route === 'supplier_orders') setSupplierOrdersMounted(true); }, [route]);
 
 
   const enabled: string[] = Array.isArray((tenant as any)?.enabled_modules)
@@ -359,8 +372,8 @@ function Inner() {
         {route === 'stock' && <Stock />}
         {route === 'sales' && <Sales onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'tiers' && <Tiers />}
-        {route === 'billing' && <Billing onNavigate={(r: string) => setRoute(r as any)} />}
-        {route === 'supplier_orders' && <SupplierOrders />}
+        {billingMounted && <Billing visible={route === 'billing'} onNavigate={(r: string) => setRoute(r as any)} />}
+        {supplierOrdersMounted && <SupplierOrders visible={route === 'supplier_orders'} onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'online_orders' && <OnlineOrders />}
         {route === 'cash_history' && <CashHistory />}
         {route === 'coffre' && <Coffre />}
@@ -486,10 +499,25 @@ export default function App() {
     <ErrorBoundary>
       <NetworkBanner />
       <ToastProvider>
+        <DraftRecoveryBootstrap />
         <AppProvider>
-          <Inner />
+          <WindowManagerProvider>
+            <Inner />
+          </WindowManagerProvider>
         </AppProvider>
       </ToastProvider>
     </ErrorBoundary>
   );
+}
+
+function DraftRecoveryBootstrap() {
+  const { error: toastError } = useToast();
+  const errRef = useRef(toastError);
+  errRef.current = toastError;
+  useEffect(() => {
+    installDraftFlushListeners();
+    setDraftErrorHandler((msg) => { errRef.current(msg); });
+    return () => { setDraftErrorHandler(null); };
+  }, []);
+  return null;
 }

@@ -1,5 +1,11 @@
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useTheme, type ThemeMode } from '../context/ThemeContext';
+import type { MouseEvent } from 'react';
+
+function clickCenter(e: MouseEvent): { x: number; y: number } {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
 
 const MODES: { key: ThemeMode; icon: typeof Sun; label: string }[] = [
   { key: 'light', icon: Sun, label: 'Clair' },
@@ -17,7 +23,7 @@ export function ThemeToggle() {
         return (
           <button
             key={m.key}
-            onClick={() => setMode(m.key)}
+            onClick={(e) => setMode(m.key, clickCenter(e))}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               active
                 ? 'bg-[var(--w-surface)] text-[var(--w-text)] shadow-sm'
@@ -40,7 +46,7 @@ export function CompactThemeToggle() {
   const label = mode === 'dark' ? 'Sombre' : mode === 'system' ? 'Système' : 'Clair';
   return (
     <button
-      onClick={() => setMode(next)}
+      onClick={(e) => setMode(next, clickCenter(e))}
       className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 flex items-center gap-2 transition-colors"
     >
       <Icon className="w-4 h-4 text-neutral-400" />

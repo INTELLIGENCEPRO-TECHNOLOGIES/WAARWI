@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
-  Plus, ShoppingBag, Loader2, Search, RefreshCw, ClipboardList,
+  ShoppingBag, Loader2, Search, RefreshCw, ClipboardList,
   CheckCircle, Truck, X, Calendar,
   User, MessageCircle, Link2,
-  Printer, Pencil, Ban, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle,
+  Printer, Pencil, Ban, ChevronLeft, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -11,13 +11,17 @@ import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
-import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 import { isAutoParts } from '../lib/types';
 import { formatFCFA, formatDate } from '../lib/format';
 import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
 import { MobileBillingWizard } from '../components/MobileBillingWizard';
-import { SupplierOrderEditor, type SOLineItem, type SOHeaderForm, type ReceiveQtyMap, type ReceiveLotMap } from '../components/SupplierOrderEditor';
+import { DesktopWindow } from '../components/DesktopWindow';
+import { useWindowManager } from '../context/WindowManagerContext';
+import { SupplierOrderInstance, type SupplierOrderWindowDescriptor } from '../components/supplier/SupplierOrderInstance';
+import type { SOLineItem, SOHeaderForm, ReceiveQtyMap, ReceiveLotMap, SOMode } from '../components/SupplierOrderEditor';
+import { loadLayout, saveLayout, clearFormDraft, type LayoutWindow } from '../lib/draftRecovery';
+import { RotateCcw } from 'lucide-react';
 
 type SupplierOrder = {
   id: string; order_number: string; total: number; status: string;
@@ -51,14 +55,42 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'cancelled', label: 'Annulée' },
 ];
 
-export function SupplierOrders() {
-  const { tenant, currentSite, sites, depots, dataTick } = useApp();
+const SUPPLIER_ORDERS_PAGE_ID = 'supplier-orders-page';
+const SUPPLIER_ORDERS_GROUP = 'supplier-orders';
+
+export function SupplierOrders({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void } = {}) {
+  const { tenant, currentSite, sites, depots, dataTick, profile, user } = useApp();
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
   const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+
+  // ── Window manager (desktop) ────────────────────────────────────
+  const {
+    windows: wmWindows,
+    tileVisibleWindows,
+    focus: focusWindow,
+    minimize: minimizeWindow,
+    minimizeGroup,
+    restore: restoreWindow,
+  } = useWindowManager();
+  const [windowsMap, setWindowsMap] = useState<Map<string, SupplierOrderWindowDescriptor>>(new Map());
+  const windowCounter = useRef(0);
+  const [pageWindowOpen, setPageWindowOpen] = useState(true);
+  const prevRouteRef = useRef<string | null>(null);
+  const prevVisible = useRef(visible);
+
+  // ── Draft recovery scope + pending offer ─────────────────
+  const userId = profile?.id || user?.id || '';
+  const scope = useMemo(
+    () => ({ userId, tenantId: tenant?.id || '', siteId: currentSite?.id || '' }),
+    [userId, tenant?.id, currentSite?.id],
+  );
+  const [pendingRecovery, setPendingRecovery] = useState<LayoutWindow[] | null>(null);
+  const [recoveryChecked, setRecoveryChecked] = useState(false);
+  const recoveryOfferedRef = useRef<string>('');
 
   // ── List state ──────────────────────────────────────────────────
   const PAGE_SIZE = 50;
@@ -109,8 +141,145 @@ export function SupplierOrders() {
   const [mobileForm, setMobileForm] = useState<{ supplier_id: string; expected_date: string; note: string }>({ supplier_id: '', expected_date: '', note: '' });
   const [mobileItems, setMobileItems] = useState<any[]>([{ article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }]);
 
-  // ── Vehicle picker ──────────────────────────────────────────────
-  const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
+
+
+  // ── Page window lifecycle: minimize group on leave, restore on return ──
+  useEffect(() => {
+    if (!isDesktop) { prevVisible.current = visible; return; }
+    if (prevVisible.current && !visible) minimizeGroup(SUPPLIER_ORDERS_GROUP);
+    if (!prevVisible.current && visible) {
+      if (!pageWindowOpen) setPageWindowOpen(true);
+      else restoreWindow(SUPPLIER_ORDERS_PAGE_ID);
+    }
+    prevVisible.current = visible;
+  }, [visible, isDesktop]);
+
+  useEffect(() => { if (!visible) prevRouteRef.current = null; }, [visible]);
+
+  const closeAchatsPage = useCallback(() => {
+    setPageWindowOpen(false);
+    onNavigate?.(prevRouteRef.current && prevRouteRef.current !== 'supplier_orders' ? prevRouteRef.current : 'dashboard');
+  }, [onNavigate]);
+
+  // Clear windows on tenant change.
+  const prevTenantId = useRef(tenant?.id);
+  useEffect(() => {
+    if (prevTenantId.current && tenant?.id !== prevTenantId.current) setWindowsMap(new Map());
+    prevTenantId.current = tenant?.id;
+  }, [tenant?.id]);
+
+  // Auto-minimize off-site windows on active-site change.
+  const prevSiteId = useRef(currentSite?.id);
+  useEffect(() => {
+    if (!currentSite?.id || currentSite.id === prevSiteId.current) { prevSiteId.current = currentSite?.id; return; }
+    prevSiteId.current = currentSite.id;
+    if (!isDesktop) return;
+    for (const w of wmWindows) {
+      if (w.siteId && w.siteId !== currentSite.id && !w.minimized) minimizeWindow(w.id);
+    }
+  }, [currentSite?.id, isDesktop]);
+
+  // ── Recovery offer: load layout once scope is fully known ───────
+  useEffect(() => {
+    if (!isDesktop) return;
+    if (!scope.userId || !scope.tenantId || !scope.siteId) return;
+    const key = `${scope.userId}|${scope.tenantId}|${scope.siteId}`;
+    if (recoveryOfferedRef.current === key) return;
+    recoveryOfferedRef.current = key;
+    const layout = loadLayout('supplier-orders', scope);
+    const matching = layout ? layout.windows.filter(w => w.kind === 'supplier_order') : [];
+    if (matching.length > 0) {
+      setPendingRecovery(matching);
+    } else {
+      setRecoveryChecked(true);
+    }
+  }, [isDesktop, scope.userId, scope.tenantId, scope.siteId]);
+
+  const acceptRecovery = useCallback(() => {
+    if (!pendingRecovery) return;
+    setWindowsMap(prev => {
+      const m = new Map(prev);
+      for (const w of pendingRecovery) {
+        const desc = w.descriptor as SupplierOrderWindowDescriptor;
+        if (!desc || m.has(w.windowId)) continue;
+        // Only rehydrate windows that belong to this active site.
+        if (desc.siteId && desc.siteId !== scope.siteId) continue;
+        m.set(w.windowId, desc);
+      }
+      return m;
+    });
+    setPendingRecovery(null);
+    setRecoveryChecked(true);
+  }, [pendingRecovery, scope.siteId]);
+
+  const dismissRecovery = useCallback(() => {
+    if (pendingRecovery) {
+      for (const w of pendingRecovery) clearFormDraft(scope, w.windowId);
+    }
+    setPendingRecovery(null);
+    setRecoveryChecked(true);
+    // Clear stored layout for this scope so we don't offer it again.
+    saveLayout('supplier-orders', { scope, pageWindowOpen: true, windows: [] });
+  }, [pendingRecovery, scope]);
+
+  // ── Persist layout on every windows / wm-rect change ──────────
+  useEffect(() => {
+    if (!isDesktop) return;
+    if (!recoveryChecked) return;
+    if (!scope.userId || !scope.tenantId || !scope.siteId) return;
+    const windowsList: LayoutWindow[] = Array.from(windowsMap.values()).map(desc => {
+      const wm = wmWindows.find(w => w.id === desc.windowId);
+      return {
+        windowId: desc.windowId,
+        kind: 'supplier_order',
+        descriptor: desc,
+        rect: wm?.rect,
+        minimized: wm?.minimized,
+      };
+    });
+    saveLayout('supplier-orders', { scope, pageWindowOpen, windows: windowsList });
+  }, [isDesktop, recoveryChecked, scope, pageWindowOpen, windowsMap, wmWindows]);
+
+  // ── Desktop window helpers ─────────────────────────────────────
+  const pushWindow = (orderId: string | null, mode: SOMode) => {
+    if (!tenant || !currentSite) return;
+    if (orderId) {
+      const existing = Array.from(windowsMap.values()).find(w => w.orderId === orderId);
+      if (existing) { restoreWindow(existing.windowId); focusWindow(existing.windowId); return; }
+    }
+    windowCounter.current += 1;
+    const id = `supplier-order-${Date.now()}-${windowCounter.current}`;
+    const desc: SupplierOrderWindowDescriptor = {
+      windowId: id, orderId, mode,
+      siteId: currentSite.id, tenantId: tenant.id,
+    };
+    setWindowsMap(prev => { const m = new Map(prev); m.set(id, desc); return m; });
+    if (windowsMap.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
+  };
+
+  const closeWindow = (id: string) => {
+    // User-initiated close: drop the form draft for this window.
+    if (scope.userId) clearFormDraft(scope, id);
+    setWindowsMap(prev => { const m = new Map(prev); m.delete(id); return m; });
+  };
+
+  const handleOrderCreated = (id: string, o: { id: string; order_number: string }) => {
+    setWindowsMap(prev => {
+      const m = new Map(prev);
+      const cur = m.get(id);
+      if (cur) m.set(id, { ...cur, orderId: o.id, mode: 'view' });
+      return m;
+    });
+  };
+
+  const handleModeChange = (id: string, mode: SOMode) => {
+    setWindowsMap(prev => {
+      const m = new Map(prev);
+      const cur = m.get(id);
+      if (cur) m.set(id, { ...cur, mode });
+      return m;
+    });
+  };
 
   // ── Debounce search ────────────────────────────────────────────
   useEffect(() => {
@@ -291,13 +460,10 @@ export function SupplierOrders() {
   const openCreate = () => {
     if (articles.length === 0) loadRefData();
     if (isDesktop) {
-      setEditorMode('create');
-      setEditorOrderId(null);
-      setEditorOrder(null);
-      setHeaderForm({ supplier_id: '', expected_date: '', note: '' });
-      setEditorItems([]);
-      setEditorOpen(true);
-    } else {
+      pushWindow(null, 'create');
+      return;
+    }
+    {
       setMobileForm({ supplier_id: '', expected_date: '', note: '' });
       setMobileItems([{ article_id: '', name: '', supplier_ref: '', quantity_ordered: 1, unit_price: 0, total: 0 }]);
       setMobileOpen(true);
@@ -321,6 +487,7 @@ export function SupplierOrders() {
   };
 
   const openOrderView = async (o: SupplierOrder) => {
+    if (isDesktop) { pushWindow(o.id, 'view'); return; }
     const items = await loadOrderItems(o.id);
     setEditorOrderId(o.id);
     setEditorOrder(o);
@@ -331,6 +498,7 @@ export function SupplierOrders() {
   };
 
   const openOrderEdit = async (o: SupplierOrder) => {
+    if (isDesktop) { pushWindow(o.id, 'edit'); return; }
     const items = await loadOrderItems(o.id);
     setEditorOrderId(o.id);
     setEditorOrder(o);
@@ -341,12 +509,12 @@ export function SupplierOrders() {
   };
 
   const openOrderReceive = async (o: SupplierOrder) => {
+    if (isDesktop) { pushWindow(o.id, 'receive'); return; }
     const items = await loadOrderItems(o.id);
     setEditorOrderId(o.id);
     setEditorOrder(o);
     setHeaderForm({ supplier_id: o.supplier_id || '', expected_date: o.expected_date || '', note: o.note || '' });
     setEditorItems(items);
-    // Default receive qty = remaining
     const rq: ReceiveQtyMap = {};
     items.forEach(it => {
       const remaining = Math.max(0, (it.quantity_ordered || 0) - (it.quantity_received || 0));
@@ -398,100 +566,6 @@ export function SupplierOrders() {
     setEditorOrder(null);
     setEditorItems([]);
     setHeaderForm({ supplier_id: '', expected_date: '', note: '' });
-  };
-
-  // ── Editor navigation ──────────────────────────────────────────
-
-  const editorNavIdx = editorOrderId ? filtered.findIndex(o => o.id === editorOrderId) : -1;
-
-  const goToPrev = () => {
-    if (editorNavIdx > 0) {
-      const prev = filtered[editorNavIdx - 1];
-      if (prev) openOrderView(prev);
-    }
-  };
-
-  const goToNext = () => {
-    if (editorNavIdx >= 0 && editorNavIdx < filtered.length - 1) {
-      const next = filtered[editorNavIdx + 1];
-      if (next) openOrderView(next);
-    }
-  };
-
-  // ── Save ────────────────────────────────────────────────────────
-
-  const saveOrder = async () => {
-    if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
-    if (!can('manage_supplier_orders')) { error('Vous n\'avez pas la permission de gérer les achats'); return; }
-    if (!headerForm.supplier_id) { error('Sélectionnez un fournisseur'); return; }
-    const validItems = editorItems.filter(i => i.name.trim());
-    if (validItems.length === 0) { error('Ajoutez au moins un article'); return; }
-    const total = validItems.reduce((s, i) => s + Number(i.total), 0);
-
-    // Credit check for new orders
-    if (!editorOrderId) {
-      const { data: freshSup } = await supabase.from('suppliers')
-        .select('id, balance, credit_limit, credit_blocked')
-        .eq('id', headerForm.supplier_id).maybeSingle();
-      if (freshSup) {
-        if (freshSup.credit_blocked === true) { error('Commandes à crédit bloquées pour ce fournisseur'); return; }
-        const limit = Number(freshSup.credit_limit || 0);
-        if (limit > 0) {
-          const { data: outstanding } = await supabase.from('supplier_orders')
-            .select('total').eq('supplier_id', headerForm.supplier_id)
-            .eq('tenant_id', tenant.id).not('status', 'in', '("cancelled","received")');
-          const currentDebt = (outstanding || []).reduce((s: number, o: any) => s + Number(o.total || 0), 0);
-          if ((currentDebt + total) > limit) {
-            error(`Plafond crédit fournisseur dépassé (${formatFCFA(limit)}). Encours actuel : ${formatFCFA(currentDebt)}`);
-            return;
-          }
-        }
-      }
-    }
-
-    setSaving(true);
-    if (editorOrderId) {
-      // Update existing
-      await supabase.from('supplier_orders').update({
-        supplier_id: headerForm.supplier_id,
-        subtotal: total, total,
-        expected_date: headerForm.expected_date || null, note: headerForm.note,
-      }).eq('id', editorOrderId);
-      await supabase.from('supplier_order_items').delete().eq('order_id', editorOrderId);
-      await supabase.from('supplier_order_items').insert(validItems.map(i => ({
-        tenant_id: tenant.id, order_id: editorOrderId,
-        article_id: i.article_id || null, name: i.name, supplier_ref: i.supplier_ref,
-        quantity_ordered: i.quantity_ordered, quantity_received: 0,
-        unit_price: i.unit_price, total: i.total,
-      })));
-      setSaving(false);
-      success('Commande mise à jour');
-      closeEditor();
-      load();
-    } else {
-      // Create new
-      const { data: numData } = await supabase.rpc('next_doc_number', {
-        p_tenant_id: tenant.id, p_kind: 'supplier_order', p_prefix: 'CMD',
-      });
-      const oNum = (numData as string) || ('CMD-' + Date.now());
-      const { data: o, error: e } = await supabase.from('supplier_orders').insert({
-        tenant_id: tenant.id, site_id: currentSite.id,
-        supplier_id: headerForm.supplier_id,
-        order_number: oNum, subtotal: total, discount: 0, total,
-        expected_date: headerForm.expected_date || null, note: headerForm.note, status: 'draft',
-      }).select().single();
-      if (e || !o) { error(e?.message || 'Erreur'); setSaving(false); return; }
-      await supabase.from('supplier_order_items').insert(validItems.map(i => ({
-        tenant_id: tenant.id, order_id: o.id,
-        article_id: i.article_id || null, name: i.name, supplier_ref: i.supplier_ref,
-        quantity_ordered: i.quantity_ordered, quantity_received: 0,
-        unit_price: i.unit_price, total: i.total,
-      })));
-      setSaving(false);
-      success('Commande créée');
-      closeEditor();
-      load();
-    }
   };
 
   // ── Status change ───────────────────────────────────────────────
@@ -705,17 +779,35 @@ export function SupplierOrders() {
 
   // ─── Render ────────────────────────────────────────────────────
 
-  return (
-    <div className="space-y-0">
+  const pageContent = (
+    <div className="space-y-0 px-3 sm:px-5 lg:px-8 py-4">
+      {isDesktop && pendingRecovery && pendingRecovery.length > 0 && (
+        <div className="mb-3 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-900">
+          <RotateCcw className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <div className="font-semibold">Travail non enregistré détecté</div>
+            <div className="mt-0.5">
+              {pendingRecovery.length} fenêtre{pendingRecovery.length > 1 ? 's' : ''} de la session précédente peut être restaurée. Aucun enregistrement ne sera relancé automatiquement.
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center gap-1">
+            <button onClick={acceptRecovery} className="px-2 py-1 rounded bg-neutral-900 text-white text-[11px] font-semibold hover:bg-neutral-800 transition">Restaurer</button>
+            <button onClick={dismissRecovery} className="px-2 py-1 rounded text-[11px] font-semibold text-amber-800 hover:bg-amber-100 transition">Ignorer</button>
+          </div>
+        </div>
+      )}
       {/* ═══ Header ═══ */}
       <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
-        <div className="flex items-start justify-between">
+        {/* Mobile: title + right-aligned action button (unchanged) */}
+        <div className="md:hidden flex items-start justify-between">
           <h1 className="text-lg font-bold text-neutral-900 leading-tight">Achats</h1>
           <button onClick={openCreate} className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors">
             <ClipboardList className="w-4 h-4" /><span className="hidden sm:inline">Nouvelle commande</span>
           </button>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Mobile: search row (unchanged) */}
+        <div className="md:hidden flex items-center gap-2">
           <div className="flex-1 min-w-0 relative">
             <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une commande…"
@@ -726,6 +818,48 @@ export function SupplierOrders() {
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
+
+        {/* Desktop: single compact toolbar row – search, refresh, action */}
+        <div className="hidden md:flex items-end gap-6">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="N° commande, fournisseur ou référence…"
+              className="w-input-ul w-full text-sm py-1.5 pl-5 pr-6"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {(serverPending.pending_count > 0 || totalPending > 0) && (
+            <div className="shrink-0 hidden lg:inline-flex items-center gap-3 pb-1.5 text-[11px] font-semibold">
+              {serverPending.pending_count > 0 && (
+                <span className="text-amber-600 num">{serverPending.pending_count} en attente</span>
+              )}
+              {totalPending > 0 && (
+                <span className="text-brand-700 num">{formatFCFA(totalPending)} à recevoir</span>
+              )}
+            </div>
+          )}
+          <button
+            onClick={() => load(true)}
+            className="shrink-0 inline-flex items-center justify-center pb-1.5 text-neutral-500 hover:text-neutral-800 transition-colors"
+            title="Rafraîchir"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={openCreate}
+            className="shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"
+          >
+            <ClipboardList className="w-4 h-4" /><span>Nouvelle commande</span>
+          </button>
+        </div>
+
         {/* Mobile: centered tabs with dividers, no counts/badges */}
         <div className="md:hidden flex items-stretch text-[13px] font-bold overflow-x-auto no-scrollbar">
           {FILTERS.map((f, i) => {
@@ -747,26 +881,27 @@ export function SupplierOrders() {
             );
           })}
         </div>
-        {/* Desktop: original filter bar with counts and stats */}
-        <div className="hidden md:flex items-center gap-3 text-[11px] font-semibold overflow-x-auto no-scrollbar whitespace-nowrap">
-          <span className="shrink-0 text-neutral-900 num">{allCount} commandes</span>
-          {serverPending.pending_count > 0 && (
-            <span className="shrink-0 text-amber-600 num">{serverPending.pending_count} en attente</span>
-          )}
-          {totalPending > 0 && (
-            <span className="shrink-0 text-brand-700 num">{formatFCFA(totalPending)} à recevoir</span>
-          )}
+
+        {/* Desktop: bigger, more impactful tab bar with counts */}
+        <div className="hidden md:flex items-center gap-1 border-b border-neutral-200 -mb-3 overflow-x-auto no-scrollbar whitespace-nowrap">
           {FILTERS.map(f => {
             const active = statusFilter === f.key;
             const count = counts[f.key] || 0;
-            if (count === 0 && !active && f.key) return null;
             return (
-              <button key={f.key} onClick={() => setStatusFilter(f.key)} className={`shrink-0 py-1 transition-all ${active ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
-                {f.label}{count > 0 && <span className="num"> {count}</span>}
+              <button
+                key={f.key}
+                onClick={() => setStatusFilter(f.key)}
+                className={`group shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+                  active
+                    ? 'text-neutral-900 border-neutral-900'
+                    : 'text-neutral-500 border-transparent hover:text-neutral-800 hover:border-neutral-200'
+                }`}
+              >
+                <span>{f.label}</span>
+                <span className={`num text-[11px] px-1.5 py-0.5 rounded-full min-w-[22px] text-center ${active ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-neutral-200'}`}>{count}</span>
               </button>
             );
           })}
-          {statusFilter && <button onClick={() => setStatusFilter('')} className="shrink-0 py-1 text-neutral-400 inline-flex items-center gap-1 hover:text-neutral-600 transition-all"><X className="w-3 h-3" />Effacer</button>}
         </div>
       </div>
 
@@ -874,51 +1009,6 @@ export function SupplierOrders() {
         </div>
       )}
 
-      {/* ═══ Full-screen editor (desktop) ═══ */}
-      {editorOpen && isDesktop && (
-        <SupplierOrderEditor
-          mode={editorMode}
-          articles={articles}
-          suppliers={suppliers}
-          headerForm={headerForm}
-          setHeaderForm={setHeaderForm}
-          items={editorItems}
-          setItems={setEditorItems}
-          subtotal={editorSubtotal}
-          saving={saving}
-          onSave={editorMode === 'create' || editorMode === 'edit' ? saveOrder : undefined}
-          onClose={closeEditor}
-          editingId={editorOrderId}
-          documentNumber={editorOrder?.order_number}
-          documentStatus={editorOrder?.status}
-          autoMode={autoMode}
-          onVehiclePicker={() => setVehiclePickerOpen(true)}
-          onEdit={editorOrderId && ['draft', 'sent', 'confirmed', 'partial'].includes(editorOrder?.status || '') ? () => {
-            if (editorOrder) openOrderEdit(editorOrder);
-          } : undefined}
-          onPrint={editorOrderId ? printFromEditor : undefined}
-          onCopyLink={editorOrder ? () => copyLinkFor(editorOrder) : undefined}
-          onWhatsApp={editorOrder?.suppliers ? () => sendWhatsAppFor(editorOrder!) : undefined}
-          onCancel={editorOrder && ['draft', 'sent'].includes(editorOrder.status) ? () => setToCancel(editorOrder) : undefined}
-          onChangeStatus={editorOrder ? (status: string) => {
-            changeStatus(editorOrder, status);
-            setEditorOrder({ ...editorOrder, status });
-          } : undefined}
-          onStartReceive={editorOrder && ['sent', 'confirmed', 'partial'].includes(editorOrder.status) ? () => {
-            if (editorOrder) openOrderReceive(editorOrder);
-          } : undefined}
-          receiveQty={receiveQty}
-          setReceiveQty={setReceiveQty}
-          receiveLotData={receiveLotData}
-          setReceiveLotData={setReceiveLotData}
-          stockMethod={stockMethod}
-          onConfirmReceive={editorMode === 'receive' ? confirmReceive : undefined}
-          hasPrev={editorNavIdx > 0}
-          hasNext={editorNavIdx >= 0 && editorNavIdx < filtered.length - 1}
-          onPrev={editorNavIdx > 0 ? goToPrev : undefined}
-          onNext={editorNavIdx >= 0 && editorNavIdx < filtered.length - 1 ? goToNext : undefined}
-        />
-      )}
 
       {/* ═══ Mobile view/receive ═══ */}
       {editorOpen && !isDesktop && editorMode !== 'create' && (
@@ -1090,23 +1180,85 @@ export function SupplierOrders() {
         </div>
       </Modal>
 
-      {/* ═══ Vehicle picker ═══ */}
-      {autoMode && tenant && currentSite && (
-        <VehicleArticlePicker
-          open={vehiclePickerOpen}
-          onClose={() => setVehiclePickerOpen(false)}
-          onSelect={a => {
-            setEditorItems(p => [...p, {
-              article_id: a.id, name: a.name, supplier_ref: a.supplier_ref || '',
-              quantity_ordered: 1, unit_price: a.purchase_price, total: a.purchase_price,
-            }]);
-          }}
-          priceMode="purchase"
-          tenantId={tenant.id}
-          siteId={currentSite.id}
-        />
-      )}
     </div>
+  );
+
+  return (
+    <>
+      {isDesktop && pageWindowOpen && (
+        <DesktopWindow
+          id={SUPPLIER_ORDERS_PAGE_ID}
+          title="Achats"
+          icon={<ShoppingBag className="w-4 h-4" />}
+          onClose={closeAchatsPage}
+          minW={480}
+          minH={320}
+          background
+          groupId={SUPPLIER_ORDERS_GROUP}
+        >
+          <div className="flex flex-col h-full min-h-0">
+            <div className="flex-1 min-h-0 overflow-auto">{pageContent}</div>
+            {(() => {
+              const groupMinimized = wmWindows.filter(w => w.groupId === SUPPLIER_ORDERS_GROUP && w.id !== SUPPLIER_ORDERS_PAGE_ID && w.minimized);
+              if (groupMinimized.length === 0) return null;
+              return (
+                <div className="shrink-0 h-9 border-t border-[var(--w-separator)] bg-[var(--w-surface-el)] flex items-center gap-1 px-2 overflow-x-auto">
+                  {groupMinimized.map(w => (
+                    <button
+                      key={w.id}
+                      onClick={() => { restoreWindow(w.id); focusWindow(w.id); }}
+                      className="flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-[var(--w-hover)] hover:bg-[var(--w-active)] text-xs font-medium text-[var(--w-text)] transition-colors truncate max-w-[220px]"
+                    >
+                      {w.icon && <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 text-[var(--w-text-muted)]">{w.icon}</span>}
+                      <span className="truncate">{w.title}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </DesktopWindow>
+      )}
+      {!isDesktop && visible && pageContent}
+
+      {isDesktop && Array.from(windowsMap.values()).map(desc => {
+        const titleOrder = list.find(o => o.id === desc.orderId);
+        const title = desc.orderId
+          ? `Commande ${titleOrder?.order_number || ''}`.trim()
+          : 'Nouvelle commande';
+        const idx = Array.from(windowsMap.keys()).indexOf(desc.windowId);
+        return (
+          <DesktopWindow
+            key={desc.windowId}
+            id={desc.windowId}
+            title={title}
+            icon={<ClipboardList className="w-4 h-4" />}
+            onClose={() => closeWindow(desc.windowId)}
+            siteId={desc.siteId || undefined}
+            initialRect={{ x: 60 + idx * 30, y: 20 + idx * 20, w: Math.min(1400, window.innerWidth - 100), h: Math.min(900, window.innerHeight - 60) }}
+            minW={600}
+            minH={400}
+            groupId={SUPPLIER_ORDERS_GROUP}
+          >
+            <SupplierOrderInstance
+              descriptor={desc}
+              articles={articles}
+              suppliers={suppliers}
+              sites={sites}
+              depots={depots}
+              autoMode={autoMode}
+              stockMethod={stockMethod}
+              sharedSuppliers={sharedSuppliers}
+              profileNames={profileNames}
+              onClose={() => closeWindow(desc.windowId)}
+              onSaved={() => load(true)}
+              onOrderCreated={handleOrderCreated}
+              onModeChange={handleModeChange}
+            />
+          </DesktopWindow>
+        );
+      })}
+    </>
   );
 }
 

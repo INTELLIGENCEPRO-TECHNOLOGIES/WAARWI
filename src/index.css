@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme view-transition (circular reveal) ────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) { z-index: 9999; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
+
 /* ══════════════════════════════════════════════════════════
    WAARWI GRAPHITE — Semantic Design Tokens
    ══════════════════════════════════════════════════════════ */
@@ -394,6 +408,10 @@ p { line-height: 1.6; }
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+  .chip[data-label=""]::after,
+  .chip:not([data-label])::after {
+    display: none;
+  }
   .chip-active {
     background: var(--w-hover);
     color: var(--w-text);
@@ -524,9 +542,26 @@ p { line-height: 1.6; }
     .side-group-anim { animation: none !important; }
   }
 
+/* ── Desktop sidebar hover-expand overlay ───────────── */
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-aside {
+    transition: width 180ms ease, box-shadow 180ms ease;
+  }
+  .sidebar-hover-open {
+    width: 240px;
+    box-shadow: 4px 0 16px -4px rgba(0,0,0,0.10);
+  }
+  [data-theme="dark"] .sidebar-hover-open {
+    box-shadow: 4px 0 16px -4px rgba(0,0,0,0.35);
+  }
+}
+@media not all and (hover: hover) and (pointer: fine) {
+  .sidebar-aside { transition: width 300ms ease; }
+}
+
   /* ── Product / cart cards ─────────────────────────────── */
   .product-card {
-    @apply relative rounded-md p-2 flex flex-col gap-1.5
+    @apply relative rounded-md flex flex-col
            transition-all duration-200 active:scale-[0.97] text-left overflow-hidden;
     background: var(--w-surface);
     border: 1px solid var(--w-separator);
@@ -542,6 +577,25 @@ p { line-height: 1.6; }
     border: 1px solid var(--w-separator);
   }
   .cart-line:hover { border-color: var(--w-text-disabled); }
+
+  /* ── POS command bar ─────────────────────────────────── */
+  .pos-command-bar {
+    background: var(--w-surface);
+  }
+  .pos-pop-item {
+    @apply flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium transition-colors;
+    color: var(--w-text);
+  }
+  .pos-pop-item:hover { background: var(--w-hover); }
+  .pos-sheet-item {
+    @apply flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm font-medium transition-colors;
+    color: var(--w-text);
+  }
+  .pos-sheet-item:hover { background: var(--w-hover); }
+
+  .animate-slide-up {
+    animation: slideUp 0.25s ease-out;
+  }
 
   /* ── Animations ───────────────────────────────────────── */
   @keyframes marquee-scroll {
@@ -1446,3 +1500,9 @@ html {
 /* --- Hex-literal screens --- */
 [data-theme="dark"] .bg-\[\#F8FAFC\]:not(.print-preview *) { background-color: var(--w-bg) !important; }
 [data-theme="dark"] .bg-\[\#f1f5f9\]:not(.print-preview *) { background-color: var(--w-bg) !important; }
+
+/* ── DocumentEditor: thin horizontal scrollbar for column area ── */
+.de-hscroll { scrollbar-width: thin; scrollbar-color: var(--w-scrollbar) transparent; }
+.de-hscroll::-webkit-scrollbar { height: 4px; }
+.de-hscroll::-webkit-scrollbar-thumb { background: var(--w-scrollbar); border-radius: 2px; }
+.de-hscroll::-webkit-scrollbar-track { background: transparent; }

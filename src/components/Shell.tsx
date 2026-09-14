@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Boxes, Users,
   BookOpen, Settings, LogOut, Menu, ChevronDown, Calculator,
@@ -14,6 +14,8 @@ import { useTranslation } from 'react-i18next';
 import { QuickActionsPanel } from './QuickActionsPanel';
 import { QuickActionProvider, useQuickAction } from '../context/QuickActionContext';
 import { CompactThemeToggle } from './ThemeToggle';
+import { WindowTaskbar } from './DesktopWindow';
+import { useWindowManager } from '../context/WindowManagerContext';
 
 
 export type Route =
@@ -182,7 +184,8 @@ function trackUsage(key: Route) {
 
 export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r: Route) => void; children: ReactNode }) {
   const { t } = useTranslation();
-  const { tenant, profile, signOut, sites, currentSite, setCurrentSite, setDefaultSite, posCartCount, posCartOpen, setPosCart } = useApp();
+  const { tenant, profile, signOut, sites, currentSite, setCurrentSite, setDefaultSite, localDefaultSiteId, posCartCount, posCartOpen, setPosCart } = useApp();
+  const effectiveDefaultSiteId = localDefaultSiteId ?? (profile as any)?.default_site_id ?? null;
   const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
   const isPharmacy = (tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie';
@@ -220,6 +223,80 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   const [fabOpen, setFabOpen] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarManualOverride, setSidebarManualOverride] = useState(false);
+
+  // Hover-expand: only on desktop with a real pointer
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  const canHoverRef = useRef(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    canHoverRef.current = mq.matches;
+    const h = (e: MediaQueryListEvent) => { canHoverRef.current = e.matches; if (!e.matches) setHoverExpanded(false); };
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onSidebarEnter = useCallback(() => {
+    if (!canHoverRef.current || !sidebarCollapsed) return;
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    setHoverExpanded(true);
+  }, [sidebarCollapsed]);
+  const onSidebarLeave = useCallback(() => {
+    if (!canHoverRef.current) return;
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    hoverTimeout.current = setTimeout(() => setHoverExpanded(false), 80);
+  }, []);
+  const onSidebarFocusIn = useCallback(() => {
+    if (!canHoverRef.current || !sidebarCollapsed) return;
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    setHoverExpanded(true);
+  }, [sidebarCollapsed]);
+  const onSidebarFocusOut = useCallback((e: React.FocusEvent) => {
+    if (!canHoverRef.current) return;
+    const aside = e.currentTarget as HTMLElement;
+    requestAnimationFrame(() => {
+      if (!aside.contains(document.activeElement)) setHoverExpanded(false);
+    });
+  }, []);
+  useEffect(() => {
+    if (!sidebarCollapsed) setHoverExpanded(false);
+  }, [sidebarCollapsed]);
+  const sidebarVisualCollapsed = sidebarCollapsed && !hoverExpanded;
+  const wm = useWindowManager();
+
+  // Publish work-area metrics to CSS vars so DesktopWindow can clamp/maximize within them.
+  useEffect(() => {
+    const root = document.documentElement;
+    const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+    const sidebarW = isDesktop ? (sidebarVisualCollapsed ? 72 : 240) : 0;
+    root.style.setProperty('--w-sidebar-w', `${sidebarW}px`);
+    root.style.setProperty('--w-topbar-h', `56px`);
+    const hasMinimized = wm.windows.some(w => w.minimized);
+    root.style.setProperty('--w-taskbar-h', hasMinimized ? '40px' : '0px');
+  }, [sidebarVisualCollapsed, wm.windows]);
+
+  // Menu click on Facturation/Achats: always restore/reopen its page window, even when already on that route.
+  const handleRoute = useCallback((r: Route) => {
+    if (r === 'billing') {
+      const hasPage = wm.windows.some(w => w.id === 'billing-page');
+      if (hasPage) wm.restore('billing-page');
+      if (route === 'billing') return;
+    }
+    if (r === 'supplier_orders') {
+      const hasPage = wm.windows.some(w => w.id === 'supplier-orders-page');
+      if (hasPage) wm.restore('supplier-orders-page');
+      if (route === 'supplier_orders') return;
+    }
+    onRoute(r);
+  }, [onRoute, route, wm]);
+
+  useEffect(() => {
+    if (route === 'pos') {
+      if (!sidebarManualOverride) setSidebarCollapsed(true);
+    } else {
+      setSidebarManualOverride(false);
+    }
+  }, [route]);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -453,22 +530,22 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
   }, []);
 
   const navList = (
-    <nav className={`flex-1 overflow-y-auto py-4 space-y-4 side-scroll ${sidebarCollapsed ? 'px-2' : 'px-3'}`}>
+    <nav className={`flex-1 overflow-y-auto py-4 space-y-4 side-scroll ${sidebarVisualCollapsed ? 'px-2' : 'px-3'}`}>
       {isSuperAdmin ? (
         <div>
-          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Plateforme</div>}
+          {!sidebarVisualCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Plateforme</div>}
           <button
             onClick={() => { onRoute('platform_admin'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-            title={sidebarCollapsed ? t('nav.platform') : undefined}
+            className={`nav-item ${route === 'platform_admin' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+            title={sidebarVisualCollapsed ? t('nav.platform') : undefined}
           >
             <Crown className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'platform_admin' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-            {!sidebarCollapsed && <span>{t('nav.platform')}</span>}
+            {!sidebarVisualCollapsed && <span>{t('nav.platform')}</span>}
           </button>
         </div>
       ) : (
       <>
-      {!sidebarCollapsed && (
+      {!sidebarVisualCollapsed && (
         <div className="px-1 mb-1">
           {searchExpanded ? (
             <div className="relative flex items-center">
@@ -505,37 +582,37 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           )}
         </div>
       )}
-      {!sidebarCollapsed && !navSearch.trim() && (
+      {!sidebarVisualCollapsed && !navSearch.trim() && (
         <div className={`border-b border-[var(--w-separator-l)]`} />
       )}
       {navSearch.trim() && searchResults.length > 0 && (
         <div className="space-y-0.5 px-1">
-          {!sidebarCollapsed && <div className={`px-2 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.searchResults')}</div>}
+          {!sidebarVisualCollapsed && <div className={`px-2 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.searchResults')}</div>}
           {searchResults.map(item => {
             const Icon = item.icon;
             const active = route === item.key;
             return (
               <button
                 key={item.key}
-                onClick={() => { onRoute(item.key); setNavSearch(''); setMobileOpen(false); }}
+                onClick={() => { handleRoute(item.key); setNavSearch(''); setMobileOpen(false); }}
                 className={`nav-item ${active ? 'nav-item-active' : 'nav-item-idle'}`}
               >
                 <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-                {!sidebarCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
+                {!sidebarVisualCollapsed && <span className="whitespace-nowrap">{t(item.labelKey)}</span>}
               </button>
             );
           })}
         </div>
       )}
-      {navSearch.trim() && searchResults.length === 0 && !sidebarCollapsed && (
+      {navSearch.trim() && searchResults.length === 0 && !sidebarVisualCollapsed && (
         <div className={`px-3 py-4 text-center text-[13px] text-[var(--w-text-muted)]`}>{t('nav.noResults')}</div>
       )}
       {!navSearch.trim() && sortedNav.map(group => {
-        const sectionOpen = sidebarCollapsed || isSectionOpen(group.titleKey);
+        const sectionOpen = sidebarVisualCollapsed || isSectionOpen(group.titleKey);
         const sectionId = `nav-section-${group.titleKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
         return (
         <div key={group.titleKey}>
-          {!sidebarCollapsed && (
+          {!sidebarVisualCollapsed && (
             <button
               type="button"
               onClick={() => toggleSection(group.titleKey)}
@@ -561,24 +638,24 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                   <button
                     onClick={() => {
                       if (hasChildren) { setDesktopAcctOpen(o => !o); }
-                      else { onRoute(item.key); setMobileOpen(false); }
+                      else { handleRoute(item.key); setMobileOpen(false); }
                     }}
-                    className={`nav-item ${(active || childActive) ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-                    title={sidebarCollapsed ? t(item.labelKey) : undefined}
+                    className={`nav-item ${(active || childActive) ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+                    title={sidebarVisualCollapsed ? t(item.labelKey) : undefined}
                   >
                     <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${(active || childActive) ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-                    {!sidebarCollapsed && <span className="whitespace-normal break-words">{t(item.labelKey)}</span>}
-                    {!sidebarCollapsed && hasChildren && (
+                    {!sidebarVisualCollapsed && <span className="whitespace-normal break-words">{t(item.labelKey)}</span>}
+                    {!sidebarVisualCollapsed && hasChildren && (
                       <ChevronDown className={`ml-auto w-3.5 h-3.5 transition-transform ${desktopAcctOpen ? 'rotate-180' : ''} text-[var(--w-text-muted)]`} />
                     )}
-                    {!sidebarCollapsed && !hasChildren && badge > 0 && (
+                    {!sidebarVisualCollapsed && !hasChildren && badge > 0 && (
                       <span className={`ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ${active ? 'bg-white text-neutral-900' : 'bg-red-500 text-white'}`}>{badge > 99 ? '99+' : badge}</span>
                     )}
-                    {sidebarCollapsed && !hasChildren && badge > 0 && (
+                    {sidebarVisualCollapsed && !hasChildren && badge > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">{badge > 9 ? '9+' : badge}</span>
                     )}
                   </button>
-                  {hasChildren && desktopAcctOpen && !sidebarCollapsed && (
+                  {hasChildren && desktopAcctOpen && !sidebarVisualCollapsed && (
                     <div className="ml-6 mt-0.5 space-y-0.5 animate-[fadeIn_0.15s_ease]">
                       {(item as NavItem).children!.filter(c => routeVisible(c.key)).map(child => {
                         const ChildIcon = child.icon;
@@ -586,7 +663,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                         return (
                           <button
                             key={child.key}
-                            onClick={() => { onRoute(child.key); setMobileOpen(false); }}
+                            onClick={() => { handleRoute(child.key); setMobileOpen(false); }}
                             className={`nav-item text-[13px] ${childActive2 ? 'nav-item-active' : 'nav-item-idle'}`}
                           >
                             <ChildIcon className={`w-[15px] h-[15px] flex-shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
@@ -605,14 +682,14 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       })}
       {routeVisible('settings') && (
         <div>
-          {!sidebarCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.system')}</div>}
+          {!sidebarVisualCollapsed && <div className={`px-3 mb-1 text-[10px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>{t('nav.system')}</div>}
           <button
             onClick={() => { onRoute('settings'); setMobileOpen(false); }}
-            className={`nav-item ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-            title={sidebarCollapsed ? t('nav.settings') : undefined}
+            className={`nav-item ${route === 'settings' ? 'nav-item-active' : 'nav-item-idle'} ${sidebarVisualCollapsed ? 'justify-center px-0' : ''}`}
+            title={sidebarVisualCollapsed ? t('nav.settings') : undefined}
           >
             <Settings className={`w-[17px] h-[17px] flex-shrink-0 ${route === 'settings' ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
-            {!sidebarCollapsed && <span className="whitespace-normal break-words">{t('nav.settings')}</span>}
+            {!sidebarVisualCollapsed && <span className="whitespace-normal break-words">{t('nav.settings')}</span>}
           </button>
         </div>
       )}
@@ -682,7 +759,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     <div className="px-3 py-1.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Magasins</div>
                     {sites.map(s => {
                       const isActive = currentSite?.id === s.id;
-                      const isDefault = profile?.default_site_id === s.id;
+                      const isDefault = effectiveDefaultSiteId === s.id;
                       return (
                         <div
                           key={s.id}
@@ -766,28 +843,36 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-      {/* Desktop sidebar */}
-      <aside
-        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} flex-col flex-shrink-0 h-full border-r transition-all duration-300 ${sidebarCollapsed ? 'w-[72px]' : 'w-[240px]'} border-[var(--w-separator)]`}
-        style={{ background: 'var(--w-surface)' }}
-      >
-        {navList}
-        <div className={`p-3 border-t space-y-2 border-[var(--w-separator-l)]`}>
-          <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarCollapsed ? 'justify-center' : ''} text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)]`}>
-            <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarCollapsed && 'Déconnexion'}
-          </button>
-          <div className={`flex items-center ${sidebarCollapsed ? 'flex-col gap-1' : 'gap-1'}`}>
-            <button
-              onClick={() => setSidebarCollapsed(v => !v)}
-              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
-              title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
-            >
-              {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-            </button>
-          </div>
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+      {/* Desktop sidebar: relative wrapper owns layout width, aside is absolute inside */}
+      {!((isDashboard && !dashMenuOpen) || isPlatformAdmin) && (
+        <div className={`hidden lg:block relative h-full flex-shrink-0 overflow-visible transition-[width] duration-200 ${sidebarCollapsed ? 'w-[72px]' : 'w-[240px]'}`}>
+          <aside
+            className={`absolute inset-y-0 left-0 z-40 flex flex-col h-full border-r sidebar-aside ${sidebarVisualCollapsed ? 'w-[72px]' : 'w-[240px]'} border-[var(--w-separator)]`}
+            style={{ background: 'var(--w-surface)' }}
+            onMouseEnter={onSidebarEnter}
+            onMouseLeave={onSidebarLeave}
+            onFocus={onSidebarFocusIn}
+            onBlur={onSidebarFocusOut}
+          >
+            {navList}
+            <div className={`p-3 border-t space-y-2 border-[var(--w-separator-l)]`}>
+              <button onClick={signOut} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${sidebarVisualCollapsed ? 'justify-center' : ''} text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text)]`}>
+                <LogOut className="w-4 h-4 flex-shrink-0" /> {!sidebarVisualCollapsed && 'Déconnexion'}
+              </button>
+              <div className={`flex items-center ${sidebarVisualCollapsed ? 'flex-col gap-1' : 'gap-1'}`}>
+                <button
+                  onClick={() => { setSidebarCollapsed(v => !v); if (isPOS) setSidebarManualOverride(true); }}
+                  className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors justify-center text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] hover:text-[var(--w-text-sec)]`}
+                  title={sidebarCollapsed ? 'Ouvrir le menu' : 'Réduire le menu'}
+                >
+                  {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </aside>
         </div>
-      </aside>
+      )}
 
       {/* Mobile floating sidebar */}
       {mobileOpen && (
@@ -889,7 +974,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                       return (
                         <button
                           key={item.key}
-                          onClick={() => { onRoute(item.key); setNavSearch(''); closeDrawer(); }}
+                          onClick={() => { handleRoute(item.key); setNavSearch(''); closeDrawer(); }}
                           className={`float-nav-item-compact ${active ? 'float-nav-item-active' : ''}`}
                         >
                           <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
@@ -931,7 +1016,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                             <button
                               onClick={() => {
                                 if (hasChildren) { setMobileAcctOpen(o => o === item.key ? null : item.key); }
-                                else { onRoute(item.key); closeDrawer(); }
+                                else { handleRoute(item.key); closeDrawer(); }
                               }}
                               className={`float-nav-item-compact ${(active || childActive) ? 'float-nav-item-active' : ''}`}
                             >
@@ -952,7 +1037,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                                   return (
                                     <button
                                       key={child.key}
-                                      onClick={() => { onRoute(child.key); closeDrawer(); }}
+                                      onClick={() => { handleRoute(child.key); closeDrawer(); }}
                                       className={`float-nav-item-compact text-[13px] ${childActive2 ? 'float-nav-item-active' : ''}`}
                                     >
                                       <ChildIcon className={`w-3.5 h-3.5 shrink-0 ${childActive2 ? 'text-[var(--w-text)]' : 'text-[var(--w-text-muted)]'}`} />
@@ -977,7 +1062,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
                     <div className={`px-1 mb-1 text-[9px] font-semibold tracking-widest uppercase text-[var(--w-text-muted)]`}>Point de vente</div>
                     <div className="max-h-28 overflow-auto space-y-0.5">
                       {sites.map(s => {
-                        const isDefault = (profile as any)?.default_site_id === s.id;
+                        const isDefault = effectiveDefaultSiteId === s.id;
                         return (
                           <div key={s.id} className={`flex items-center gap-1 rounded-lg transition-colors hover:bg-[var(--w-hover)]`}>
                             <button
@@ -1131,9 +1216,9 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           </div>
         )}
 
-        <main className={`flex-1 w-full min-h-0 ${isPOS || isTiers ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`}>
+        <main className={`flex-1 w-full min-h-0 ${isPOS || isTiers ? 'flex flex-col max-w-none p-0 overflow-hidden' : (isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'flex flex-col max-w-none p-0 overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hide' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'}`} style={{ paddingBottom: 'var(--w-taskbar-h, 0px)' }}>
           {isPOS || isTiers ? (
-            <div className="flex-1 flex flex-col min-h-0 pb-[60px] lg:pb-0">{children}</div>
+            <div className={`flex-1 flex flex-col min-h-0 ${isPOS && posCartOpen ? 'pb-0' : 'pb-[60px]'} lg:pb-0`}>{children}</div>
           ) : isPlatformAdmin ? (
             <div className="flex-1 min-h-0">{children}</div>
           ) : (isDashboard && !dashMenuOpen) ? (
@@ -1144,7 +1229,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </main>
 
         {/* Bottom nav */}
-        {!isPlatformAdmin && (
+        {!isPlatformAdmin && !(isPOS && posCartOpen) && (
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="pointer-events-auto">
             <div className="relative flex items-center justify-around h-[52px] bg-[var(--w-surface)] border-t border-neutral-200">
@@ -1215,7 +1300,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         {fabOpen && <QuickActionsPanel onClose={() => setFabOpen(false)} />}
 
         {/* FAB button */}
-        {!isPlatformAdmin && (route === 'pos' ? (
+        {!isPlatformAdmin && !(isPOS && posCartOpen) && (route === 'pos' ? (
           <button
             onClick={() => setPosCart(posCartCount, !posCartOpen)}
             className={`lg:hidden fixed z-[45] left-1/2 flex items-center justify-center transition-all duration-200 active:scale-90${posCartCount > 0 && !posCartOpen ? ' cart-fab-blink' : ''}`}
@@ -1304,6 +1389,10 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         </div>
       )}
     </div>
+    <WindowTaskbar onBeforeRestore={(id) => {
+      if (id === 'billing-page' && route !== 'billing') onRoute('billing');
+      if (id === 'supplier-orders-page' && route !== 'supplier_orders') onRoute('supplier_orders');
+    }} activeSiteId={currentSite?.id} />
     </QuickActionProvider>
   );
 }

@@ -19,8 +19,10 @@ type AppState = {
   depots: Site[];
   currentSite: Site | null;
   setCurrentSite: (site: Site) => void;
-  /** Marks a site as the persistent default for this user (saved to DB, cross-device) */
+  /** Per-browser preferred default for this user+tenant (localStorage). Not written to DB. */
   setDefaultSite: (site: Site) => Promise<void>;
+  /** Per-browser default site id (null when the user has never picked one on this browser). */
+  localDefaultSiteId: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null, extra?: { city?: string; whatsapp_phone?: string; responsible_title?: string; selected_plan?: string; billing_cycle?: string }) => Promise<void>;
   signOut: () => Promise<void>;
@@ -44,17 +46,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sites, setSites] = useState<Site[]>([]);
   const [depots, setDepots] = useState<Site[]>([]);
   const [currentSite, setCurrentSite] = useState<Site | null>(null);
+  const [localDefaultSiteId, setLocalDefaultSiteId] = useState<string | null>(null);
+  const lastLostSiteAlertRef = useRef<string | null>(null);
   const [dataTick, setDataTick] = useState(0);
   const [posCartCount, setPosCartCount] = useState(0);
   const [posCartOpen, setPosCartOpenState] = useState(false);
   const listenersRef = useRef<{ tables: Set<string>; cb: () => void }[]>([]);
   const [refData, setRefData] = useState<RefData | null>(null);
   const refDataTidRef = useRef<string | null>(null);
+  const activeSiteKey = (uid: string, tid: string) => `activeSiteId:${uid}:${tid}`;
+  const defaultSiteKey = (uid: string, tid: string) => `defaultSiteId:${uid}:${tid}`;
+  const readTabActive = (uid: string, tid: string): string | null => {
+    try { return sessionStorage.getItem(activeSiteKey(uid, tid)); } catch { return null; }
+  };
+  const readLocalDefault = (uid: string, tid: string): string | null => {
+    try { return localStorage.getItem(defaultSiteKey(uid, tid)); } catch { return null; }
+  };
+
   const loadSession = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const session = sessionData.session;
     if (!session) {
       setUser(null); setProfile(null); setTenant(null); setSites([]); setDepots([]); setCurrentSite(null);
+      setLocalDefaultSiteId(null);
+      lastLostSiteAlertRef.current = null;
       setLoading(false);
       return;
     }
@@ -91,17 +106,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSites(storeList);
       setDepots(depotList);
 
-      // Priority: DB default_site_id > localStorage fallback > first store > first depot (legacy fallback)
-      const defaultId: string | null = (prof as any).default_site_id || null;
-      const storedId = localStorage.getItem('currentSiteId');
-      const found =
-        (defaultId && storeList.find(x => x.id === defaultId)) ||
-        (storedId && storeList.find(x => x.id === storedId)) ||
-        storeList[0] ||
-        depotList[0] ||
-        null;
-      setCurrentSite(found);
-      if (found) localStorage.setItem('currentSiteId', found.id);
+      const uid = session.user.id;
+      const tid = prof.tenant_id;
+      const allAvailable = [...storeList, ...depotList];
+      const tabActiveId = readTabActive(uid, tid);
+      const localDefault = readLocalDefault(uid, tid);
+      setLocalDefaultSiteId(localDefault);
+      const dbDefaultId: string | null = (prof as any).default_site_id || null;
+
+      setCurrentSite(prev => {
+        if (prev && allAvailable.find(x => x.id === prev.id)) return prev;
+        const picked =
+          (tabActiveId && allAvailable.find(x => x.id === tabActiveId)) ||
+          (localDefault && allAvailable.find(x => x.id === localDefault)) ||
+          (dbDefaultId && allAvailable.find(x => x.id === dbDefaultId)) ||
+          storeList[0] ||
+          depotList[0] ||
+          null;
+        if (picked) {
+          try { sessionStorage.setItem(activeSiteKey(uid, tid), picked.id); } catch {}
+        }
+        return picked || null;
+      });
+      try { localStorage.removeItem('currentSiteId'); } catch {}
 
       // Track tenant activity
       supabase.rpc('touch_tenant_activity').then(() => {});
@@ -201,12 +228,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const depotList = filtered.filter(x => x.is_warehouse);
         setSites(storeList);
         setDepots(depotList);
-        // Never silently switch site: only update if prev no longer exists in the full list
         setCurrentSite(prev => {
           if (!prev) return storeList[0] || depotList[0] || null;
           const allAvailable = [...storeList, ...depotList];
           const stillExists = allAvailable.find(x => x.id === prev.id);
-          return stillExists || storeList[0] || depotList[0] || null;
+          if (stillExists) return prev;
+          if (lastLostSiteAlertRef.current !== prev.id) {
+            lastLostSiteAlertRef.current = prev.id;
+            const name = prev.name;
+            setTimeout(() => {
+              try { window.alert(`Le magasin "${name}" n'est plus accessible. Veuillez sélectionner un autre magasin.`); } catch {}
+            }, 0);
+          }
+          if (user?.id && profile?.tenant_id) {
+            try { sessionStorage.removeItem(activeSiteKey(user.id, profile.tenant_id)); } catch {}
+          }
+          return null;
         });
       } else if (s) {
         const storeList = s.filter(x => !x.is_warehouse);
@@ -217,7 +254,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (!prev) return storeList[0] || depotList[0] || null;
           const allAvailable = [...storeList, ...depotList];
           const stillExists = allAvailable.find(x => x.id === prev.id);
-          return stillExists || storeList[0] || depotList[0] || null;
+          if (stillExists) return prev;
+          if (lastLostSiteAlertRef.current !== prev.id) {
+            lastLostSiteAlertRef.current = prev.id;
+            const name = prev.name;
+            setTimeout(() => {
+              try { window.alert(`Le magasin "${name}" n'est plus accessible. Veuillez sélectionner un autre magasin.`); } catch {}
+            }, 0);
+          }
+          if (user?.id && profile?.tenant_id) {
+            try { sessionStorage.removeItem(activeSiteKey(user.id, profile.tenant_id)); } catch {}
+          }
+          return null;
         });
       }
       if (prof) setProfile(prof);
@@ -355,7 +403,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleSetCurrentSite = (site: Site) => {
     const prevId = currentSite?.id || null;
     setCurrentSite(site);
-    localStorage.setItem('currentSiteId', site.id);
+    lastLostSiteAlertRef.current = null;
+    if (user?.id && profile?.tenant_id) {
+      try { sessionStorage.setItem(activeSiteKey(user.id, profile.tenant_id), site.id); } catch {}
+    }
     if (prevId && prevId !== site.id && profile?.tenant_id && user?.id) {
       supabase.from('site_change_log').insert({
         tenant_id: profile.tenant_id,
@@ -369,13 +420,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const handleSetDefaultSite = async (site: Site) => {
     setCurrentSite(site);
-    localStorage.setItem('currentSiteId', site.id);
-    if (profile?.id) {
-      await supabase
-        .from('profiles')
-        .update({ default_site_id: site.id } as any)
-        .eq('id', profile.id);
-      setProfile(prev => prev ? { ...prev, default_site_id: site.id } as any : prev);
+    lastLostSiteAlertRef.current = null;
+    setLocalDefaultSiteId(site.id);
+    if (user?.id && profile?.tenant_id) {
+      try {
+        sessionStorage.setItem(activeSiteKey(user.id, profile.tenant_id), site.id);
+        localStorage.setItem(defaultSiteKey(user.id, profile.tenant_id), site.id);
+      } catch {}
     }
   };
 
@@ -389,6 +440,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loading, user, profile, tenant, sites, depots, currentSite,
       setCurrentSite: handleSetCurrentSite,
       setDefaultSite: handleSetDefaultSite,
+      localDefaultSiteId,
       signIn, signUp, signOut, refresh: loadSession,
       dataTick, onDataChange,
       posCartCount, posCartOpen, setPosCart,

@@ -1,11 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
   Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
   ChevronRight, ChevronLeft, ChevronDown, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
   FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
   Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin, Network,
-  TrendingUp, UserPlus, Store, History, Menu as MenuIcon
+  TrendingUp, UserPlus, Store, History, Menu as MenuIcon, BookOpen
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -18,7 +19,7 @@ import { EmptyState } from '../components/EmptyState';
 import { MarqueeText } from '../components/MarqueeText';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
-import { POSGuide, POSGuideCardTrigger, POSGuideInlineTrigger } from '../components/POSGuide';
+
 import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
 import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, printDecaissementTicket80, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
@@ -912,7 +913,8 @@ const posCache: {
   topScores: Record<string, number>;
   articleTiers: ArticleTier[];
   screen: 'open-form' | 'resume' | 'pos';
-} = { key: '', articles: [], customers: [], methods: [], session: null, categories: [], topScores: {}, articleTiers: [], screen: 'open-form' };
+  stockSiteId: string;
+} = { key: '', articles: [], customers: [], methods: [], session: null, categories: [], topScores: {}, articleTiers: [], screen: 'open-form', stockSiteId: '' };
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange, setCurrentSite } = useApp();
@@ -968,6 +970,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
 
+  const depotAllOptions = useMemo(() => {
+    const sharedCatalog = (tenant as any)?.settings?.shared_articles !== false;
+    const interDepot = !!(tenant as any)?.settings?.inter_depot_transfer;
+    const available = depots.filter(d => d.parent_site_id === currentSite?.id || (sharedCatalog && interDepot));
+    return [...(currentSite ? [currentSite] : []), ...available];
+  }, [tenant, currentSite, depots]);
+
   const posCacheKey = `${tenant?.id}:${currentSite?.id}`;
   const hasPosCache = posCache.key === posCacheKey && posCache.articles.length > 0;
 
@@ -1003,6 +1012,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [discount, setDiscount] = useState(0);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [sessionPopOpen, setSessionPopOpen] = useState(false);
+  const [desktopDepotOpen, setDesktopDepotOpen] = useState(false);
+  const [mobileDepotOpen, setMobileDepotOpen] = useState(false);
+  const mobileDepotTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [mobileDepotPos, setMobileDepotPos] = useState<{ top: number; left: number; flip: boolean }>({ top: 0, left: 0, flip: false });
+  const [stockSourceLoading, setStockSourceLoading] = useState(false);
+  const stockSourceLoadId = useRef(0);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [exceptionPrices, setExceptionPrices] = useState<Map<string, number>>(new Map());
   const [articleTiers, setArticleTiers] = useState<ArticleTier[]>([]);
   const [tierPickerOpen, setTierPickerOpen] = useState(false);
@@ -1088,10 +1105,39 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     return () => { setPosCart(0, false); };
   }, [setPosCart]);
 
-  // Sync saleSourceSiteId when currentSite changes (e.g. site switch)
+  // Always reset saleSourceSiteId when currentSite changes & close depot menus
   useEffect(() => {
-    if (currentSite && !saleSourceSiteId) setSaleSourceSiteId(currentSite.id);
+    if (currentSite) setSaleSourceSiteId(currentSite.id);
+    setDesktopDepotOpen(false);
+    setMobileDepotOpen(false);
   }, [currentSite?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reposition mobile depot dropdown on scroll/resize/rotation
+  useEffect(() => {
+    if (!mobileDepotOpen) return;
+    const reposition = () => {
+      const el = mobileDepotTriggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const menuH = depotAllOptions.length * 34 + 8;
+      const spaceBelow = window.innerHeight - r.bottom - 8;
+      const flip = spaceBelow < menuH && r.top > spaceBelow;
+      setMobileDepotPos({
+        top: flip ? Math.max(8, r.top - menuH - 4) : r.bottom + 4,
+        left: Math.max(8, Math.min(r.left, window.innerWidth - 184)),
+        flip,
+      });
+    };
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    const vv = window.visualViewport;
+    if (vv) { vv.addEventListener('resize', reposition); vv.addEventListener('scroll', reposition); }
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+      if (vv) { vv.removeEventListener('resize', reposition); vv.removeEventListener('scroll', reposition); }
+    };
+  }, [mobileDepotOpen, depotAllOptions.length]);
 
   // Held carts (mise en attente) — persisted in DB
   const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
@@ -1463,6 +1509,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     posCache.categories = newCategories;
     posCache.topScores = scores;
     posCache.articleTiers = newTiers;
+    posCache.stockSiteId = stockSiteId;
     } catch (err) {
       console.error('[POS] load error', err);
     } finally {
@@ -1474,6 +1521,58 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   }, [tenant?.id, currentSite?.id, saleSourceSiteId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Dedicated stock-only fetch for a given site — used by depot selector
+  const fetchStockForSite = useCallback(async (siteId: string) => {
+    if (!tenant) return null;
+    let all: any[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error: e } = await supabase.from('stock_levels')
+        .select('article_id, quantity')
+        .eq('tenant_id', tenant.id).eq('site_id', siteId)
+        .range(from, from + 999);
+      if (e || !data) return null;
+      all = all.concat(data);
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+    return all;
+  }, [tenant?.id]);
+
+  const handleStockSourceChange = useCallback(async (nextSiteId: string) => {
+    if (!tenant || !currentSite || nextSiteId === saleSourceSiteId) return;
+    setDesktopDepotOpen(false);
+    setMobileDepotOpen(false);
+    setStockSourceLoading(true);
+    const thisId = ++stockSourceLoadId.current;
+    try {
+      const stk = await fetchStockForSite(nextSiteId);
+      if (thisId !== stockSourceLoadId.current) return;
+      if (!stk) { error('Impossible de charger le stock de ce dépôt'); return; }
+      const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
+      setSaleSourceSiteId(nextSiteId);
+      setArticles(prev => prev.map(a => ({
+        ...a,
+        stock_available: qmap.get(a.id) ?? 0,
+        _stockLoaded: true,
+      })));
+      posCache.articles = posCache.articles.map(a => ({
+        ...a,
+        stock_available: qmap.get(a.id) ?? 0,
+        _stockLoaded: true,
+      }));
+      posCache.stockSiteId = nextSiteId;
+      setCart(prev => prev.map(item => ({
+        ...item,
+        stock_available: qmap.get(item.article_id) ?? 0,
+      })));
+    } catch {
+      if (thisId === stockSourceLoadId.current) error('Erreur lors du chargement du stock');
+    } finally {
+      if (thisId === stockSourceLoadId.current) setStockSourceLoading(false);
+    }
+  }, [tenant?.id, currentSite?.id, saleSourceSiteId, fetchStockForSite, error]);
 
   // Realtime: silently refresh stock + articles when another user makes changes (NOT customers)
   useEffect(() => {
@@ -1517,11 +1616,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           const [stk, newArts] = await Promise.all([fetchStk(), fetchArts()]);
           if (stk && newArts && newArts.length > 0) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
-            const prevMap = new Map(posCache.articles.map(a => [a.id, a.stock_available]));
             const updatedArticles = newArts.map((a: any) => ({
               id: a.id, internal_ref: a.internal_ref, name: a.name, oem_ref: a.oem_ref || '',
               sale_price: Number(a.sale_price), purchase_price: Number(a.purchase_price),
-              stock_available: qmap.has(a.id) ? Number(qmap.get(a.id)) : (prevMap.get(a.id) ?? 0),
+              stock_available: qmap.get(a.id) ?? 0,
               _stockLoaded: true,
               category_id: a.category_id || null,
               image_url: a.image_url || null,
@@ -1532,7 +1630,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             posCache.articles = updatedArticles;
           } else if (stk && stk.length > 0) {
             const qmap = new Map(stk.map((r: any) => [r.article_id, Number(r.quantity)]));
-            setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.has(a.id) ? Number(qmap.get(a.id)) : a.stock_available, _stockLoaded: true })));
+            setArticles(prev => prev.map(a => ({ ...a, stock_available: qmap.get(a.id) ?? 0, _stockLoaded: true })));
           }
         }, 600);
       }
@@ -1630,6 +1728,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const tracksStock = (a: ArticleLite) => a.track_stock !== false;
 
   const addToCart = (a: ArticleLite) => {
+    if (stockSourceLoading) return;
     const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     // If already in cart, just increment qty
     const existing = cart.find(i => i.article_id === a.id);
@@ -2958,30 +3057,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const CartPanel = (
     <div className="flex flex-col h-full bg-[var(--w-surface)]">
-      {/* Header — compact */}
-      <div className="px-3 py-2 border-b border-[var(--w-separator)] bg-[var(--w-surface)] flex items-center gap-2">
-        <span className="text-xs font-bold text-neutral-900 leading-none">{cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
-        <div className="flex-1" />
-        {heldCarts.length > 0 && (
-          <button onClick={() => setHoldOpen(true)} className="relative p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors" title="Tickets en attente">
-            <List className="w-3.5 h-3.5" />
-            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] rounded-full bg-amber-500 text-white flex items-center justify-center font-bold">{heldCarts.length}</span>
-          </button>
-        )}
-        {cart.length > 0 && (
-          <button onClick={() => setCart([])} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors" title="Vider">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        )}
-        <button onClick={() => setMobileCartOpen(false)} className="lg:hidden p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Customer selector — compact */}
+      {/* Header — single compact line: Panier | count | customer | add | held | clear */}
       <div className="px-3 py-1.5 border-b border-[var(--w-separator)] bg-[var(--w-surface)]">
-        <div className="flex items-stretch gap-1.5">
-          <div className="flex-1 min-w-0 [&>div>button]:rounded-none [&>div>button]:border-0 [&>div>button]:border-b [&>div>button]:border-[var(--w-field-border)] [&>div>button]:py-2.5 [&>div>button]:px-0 [&>div>button]:text-sm [&>div>button]:shadow-none">
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 min-w-0 [&>div>button]:rounded-none [&>div>button]:border-0 [&>div>button]:py-1.5 [&>div>button]:px-0 [&>div>button]:text-xs [&>div>button]:shadow-none [&>div>button]:h-8 [&>div>button]:justify-start">
             <SearchableSelect
               options={[{ value: '', label: 'Client comptoir' }, ...customers.map(c => ({ value: c.id, label: c.name, sublabel: (c as any).phone || undefined }))]}
               value={customer?.id || ''}
@@ -2990,9 +3069,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               maxResults={50}
             />
           </div>
-          <button onClick={() => { setQuickCustomerName(''); setQuickCustomerOpen(true); }} className="shrink-0 inline-flex items-center justify-center px-3 py-2.5 rounded-lg bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800 transition-all active:scale-95" title="Créer un client">
-            <UserPlus className="w-4 h-4" />
+          <button onClick={() => { setQuickCustomerName(''); setQuickCustomerOpen(true); }} className="shrink-0 p-1.5 rounded-md text-neutral-900 hover:bg-[var(--w-hover)] transition-all active:scale-95" title="Créer un client">
+            <UserPlus className="w-3.5 h-3.5" />
           </button>
+          {heldCarts.length > 0 && (
+            <button onClick={() => setHoldOpen(true)} className="relative shrink-0 p-1.5 rounded-md hover:bg-amber-50 text-amber-600 transition-colors" title="Tickets en attente">
+              <List className="w-3.5 h-3.5" />
+              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[9px] rounded-full bg-amber-500 text-white flex items-center justify-center font-bold">{heldCarts.length}</span>
+            </button>
+          )}
+          {cart.length > 0 && (
+            <button onClick={() => setCart([])} className="shrink-0 p-1.5 rounded-md hover:bg-red-50 text-red-400 transition-colors" title="Vider">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         {customer && (() => {
           const limit = Number((customer as any).credit_limit || 0);
@@ -3051,6 +3141,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       {/* Footer totals + pay button — MOBILE (unchanged) */}
       <div className="lg:hidden border-t border-[var(--w-separator)] px-3 pt-2 pb-3 bg-[var(--w-surface)] pb-safe space-y-1.5">
         <div className="flex items-center justify-between text-[11px]">
+          <span className="text-neutral-500">Panier {cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="flex items-center justify-between text-[11px]">
           <span className="text-neutral-500">Sous-total</span>
           <span className="font-semibold text-neutral-800 num">{formatFCFA(subtotal)}</span>
         </div>
@@ -3096,6 +3189,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         <div className="hidden lg:flex flex-col flex-shrink-0 border-t border-[var(--w-separator)] bg-[var(--w-surface)] pb-1">
           {/* Compact totals row */}
           <div className="px-3 py-1.5 space-y-0.5 shrink-0">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-neutral-500">Panier {cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
+            </div>
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-neutral-500">Sous-total</span>
               <span className="font-semibold text-neutral-800 num">{formatFCFA(subtotal)}</span>
@@ -3154,7 +3250,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     {isResumeScreen && session ? (
       <div className="flex-1 overflow-y-auto lg:overflow-y-auto">
         <div className="w-full max-w-[1600px] mx-auto px-1.5 sm:px-5 lg:px-8 pt-2 sm:pt-4 lg:pt-6 pb-2 lg:pb-8">
-          <POSGuide tenantId={tenant?.id} hasSession={true} businessType={(tenant as any)?.business_type} />
           <POSLandingResume
             session={session}
             currentSite={currentSite}
@@ -3186,165 +3281,218 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       </div>
     ) : (
     <>
-    <POSGuide tenantId={tenant?.id} hasSession={!!session} businessType={(tenant as any)?.business_type} />
     <div className="flex-1 flex flex-col overflow-hidden w-full min-h-0" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-top))' }}>
-      {/* Action bar */}
-      <div className="px-2 py-1.5 border-b border-neutral-200/70 glass shrink-0 relative z-20">
-        {/* Mobile: single compact row */}
-        <div className="flex items-center lg:hidden">
-          {can('pos_view_session_stats') && <><button onClick={openStats} className="pos-btn" title="Statistiques" data-label="Statistiques"><BarChart2 className="w-4 h-4" /></button><div className="w-px h-5 bg-neutral-200 shrink-0" /></>}
-          <button onClick={openTickets} className="pos-btn" title="Tickets" data-label="Tickets de la session"><List className="w-4 h-4" /></button>
-          {can('pos_returns') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openReturn} className="pos-btn" title="Retour" data-label="Retour client"><RotateCcw className="w-4 h-4" /></button></>}
-          <div className="w-px h-5 bg-neutral-200 shrink-0" />
-          <button onClick={openCustomerPayment} className="pos-btn" title="Encaisser" data-label="Encaisser"><Wallet className="w-4 h-4" /></button>
-          {can('pos_cash_movement') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openMovement} className="pos-btn" title="Mouvement" data-label="Mouvement de caisse"><ArrowDownRight className="w-4 h-4" /></button></>}
-          {hasModule('online_orders') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openWebOrders} className="pos-btn relative" title="Commandes web" data-label="Commandes web">
-            <Globe className="w-4 h-4" />
-            {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 text-[8px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}
-          </button></>}
-          <div className="w-px h-5 bg-neutral-200 shrink-0" />
-          <button onClick={holdCart} className="pos-btn" title="Pause" data-label="Mettre en pause"><Pause className="w-4 h-4" /></button>
-          <div className="w-px h-5 bg-neutral-200 shrink-0" />
-          <button onClick={leaveSession} className="pos-btn" title="Quitter" data-label="Quitter la session"><LogOut className="w-4 h-4" /></button>
-          {can('pos_close_session') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openCloseWorkflow} className="pos-btn" title="Clôturer" data-label="Clôturer la session"><Lock className="w-4 h-4" /></button></>}
-        </div>
-        {/* Desktop: EN SERVICE indicator + labeled chips */}
-        <div className="hidden lg:flex items-center">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className="relative w-2 h-2">
-              <div className="absolute inset-0 rounded-full bg-neutral-1000 animate-ping opacity-60" />
-              <div className="relative w-2 h-2 rounded-full bg-neutral-1000" />
-            </div>
-            <span className="text-[10px] font-bold text-neutral-800 tracking-wide">En service</span>
-            {session && <span className="text-[10px] text-neutral-400 ml-1">· Fond&nbsp;<span className="font-bold text-neutral-600 num">{formatFCFA(Number(session.opening_amount))}</span></span>}
+      {/* ── Unified command bar ─────────────────────────────────────── */}
+      <div className="pos-command-bar shrink-0 relative z-20 border-b border-[var(--w-separator)]">
+        {/* ═══ DESKTOP ═══ */}
+        <div className="hidden lg:flex items-center h-[52px] px-2 gap-1">
+          {/* Search — underline style */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 h-9 mx-1 self-end">
+            <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Rechercher…"
+              className="flex-1 min-w-0 w-0 bg-transparent text-sm text-[var(--w-text)] focus:outline-none placeholder:text-[var(--w-text-disabled)]"
+              autoFocus={desktopAutoFocus}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="shrink-0 p-1 text-[var(--w-text-muted)] hover:text-[var(--w-text)] transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-          <div className="flex-1" />
-          {can('pos_view_session_stats') && <><button onClick={openStats} className="chip" data-label="Statistiques"><BarChart2 className="w-3.5 h-3.5" /><span className="hidden xl:inline">Stats</span></button><div className="w-px h-5 bg-neutral-200 shrink-0" /></>}
-          <button onClick={openTickets} className="chip" data-label="Tickets de la session"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
-          {can('pos_returns') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openReturn} className="chip" data-label="Retour client"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button></>}
-          <div className="w-px h-5 bg-neutral-200 shrink-0" />
-          <button onClick={openCustomerPayment} className="chip" data-label="Encaisser un paiement"><Wallet className="w-3.5 h-3.5" /><span className="hidden xl:inline">Encaisser</span></button>
-          {can('pos_cash_movement') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openMovement} className="chip" data-label="Mouvement de caisse"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouvement</span></button></>}
-          {hasModule('online_orders') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openWebOrders} className="chip relative" data-label="Commandes web">
-            <Globe className="w-3.5 h-3.5" /><span className="hidden xl:inline">Commandes web</span>
-            {webOrdersCounts.a_transformer > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold border border-white">{webOrdersCounts.a_transformer}</span>}
-          </button></>}
-          <div className="w-px h-5 bg-neutral-200 shrink-0" />
-          <button onClick={holdCart} className="chip" data-label="Mettre le panier en pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
-          <div className="w-px h-5 bg-neutral-200 shrink-0" />
-          <button onClick={leaveSession} className="chip" data-label="Quitter la session"><LogOut className="w-3.5 h-3.5" /><span className="hidden xl:inline">Quitter</span></button>
-          {can('pos_close_session') && <><div className="w-px h-5 bg-neutral-200 shrink-0" /><button onClick={openCloseWorkflow} className="chip" data-label="Clôturer la session">
-            <Lock className="w-3.5 h-3.5" /><span>Clôturer</span>
-          </button></>}
+          {/* Source depot */}
+          {(() => {
+            if (depotAllOptions.length <= 1) return null;
+            const selectedName = depotAllOptions.find(o => o.id === saleSourceSiteId)?.name || currentSite?.name || 'Stock';
+            return (
+              <div className="relative shrink-0">
+                <button onClick={() => setDesktopDepotOpen(v => !v)} className="chip" title="Dépot source" disabled={stockSourceLoading}>
+                  {stockSourceLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  <span className="whitespace-nowrap">Dépot source: {selectedName}</span><ChevronDown className={`w-3 h-3 transition-transform ${desktopDepotOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {desktopDepotOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setDesktopDepotOpen(false)} />
+                    <div className="absolute left-0 top-full mt-1 z-[9999] w-48 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
+                      {depotAllOptions.map(o => (
+                        <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
+                          {o.id === saleSourceSiteId && <Check className="w-4 h-4" />}{o.name}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0" />
+          {/* Category */}
+          <button onClick={() => setCategoryPickerOpen(true)} className={`chip ${categoryId ? 'text-brand-700' : ''}`} title="Catégorie">
+            <Tag className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline max-w-[100px] truncate">{categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Cat.') : 'Catégorie'}</span>
+            {categoryId && <button onClick={e => { e.stopPropagation(); setCategoryId(''); }} className="ml-0.5 hover:text-red-500"><X className="w-3 h-3" /></button>}
+          </button>
+          {/* Top / Alpha */}
+          <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="chip" title={sortMode === 'top' ? 'Top ventes' : 'A→Z'}>
+            {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5 text-amber-500" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
+            <span className="hidden xl:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
+          </button>
+          {/* Grid / List */}
+          <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="chip" title={articleView === 'grid' ? 'Liste' : 'Grille'}>
+            {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+            <span className="hidden xl:inline">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
+          </button>
+          {autoMode && (
+            <button onClick={() => setVehiclePickerOpen(true)} className="chip" title="Par véhicule">
+              <Car className="w-3.5 h-3.5 text-brand-700" /><span className="hidden xl:inline">Véhicule</span>
+            </button>
+          )}
+          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 ml-auto" />
+          {/* ── Session actions ── */}
+          <button onClick={openTickets} className="chip" data-label="Tickets"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
+          {can('pos_returns') && <button onClick={openReturn} className="chip" data-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
+          {can('pos_cash_movement') && <button onClick={openMovement} className="chip" data-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouv.</span></button>}
+          <button onClick={holdCart} className="chip" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
+          {/* Session popover button */}
+          <div className="relative">
+            <button onClick={() => setSessionPopOpen(v => !v)} className="chip font-bold" data-label="Session">
+              <span>Session</span><ChevronDown className={`w-3 h-3 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {sessionPopOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setSessionPopOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in">
+                  {can('pos_view_session_stats') && <button onClick={() => { setSessionPopOpen(false); openStats(); }} className="pos-pop-item"><BarChart2 className="w-4 h-4" />Stats</button>}
+                  <button onClick={() => { setSessionPopOpen(false); openCustomerPayment(); }} className="pos-pop-item"><Wallet className="w-4 h-4" />Encaisser un client</button>
+                  {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
+                  <div className="h-px bg-[var(--w-separator)] my-1" />
+                  <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item"><LogOut className="w-4 h-4" />Quitter</button>
+                  {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item text-red-600"><Lock className="w-4 h-4" />Clôturer</button>}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ═══ MOBILE ═══ */}
+        <div className="lg:hidden">
+          {/* Line 1: search + filter + actions */}
+          <div className="flex items-center h-11 px-2 gap-1.5">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 h-9">
+              <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher…"
+                className="flex-1 min-w-0 w-0 bg-transparent text-sm text-[var(--w-text)] focus:outline-none placeholder:text-[var(--w-text-disabled)]"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="shrink-0 p-1 text-[var(--w-text-muted)] hover:text-[var(--w-text)] transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <button onClick={() => setCategoryPickerOpen(true)} className={`shrink-0 p-2 rounded-md transition-colors ${categoryId ? 'text-brand-700 bg-brand-50' : 'text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]'}`} title="Catégorie">
+              <Tag className="w-4.5 h-4.5" />
+            </button>
+            <button onClick={() => setMobileActionsOpen(true)} className="shrink-0 p-2 rounded-md text-[var(--w-text-sec)] hover:bg-[var(--w-hover)] transition-colors relative" title="Actions">
+              <MenuIcon className="w-4.5 h-4.5" />
+              {webOrdersCounts.a_transformer > 0 && <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />}
+            </button>
+          </div>
+          {/* Line 2: thin filter pills */}
+          <div className="flex items-center h-8 px-2 gap-1 border-t border-[var(--w-separator)] overflow-x-auto scrollbar-hide">
+            {(() => {
+              if (depotAllOptions.length <= 1) return null;
+              const selectedName = depotAllOptions.find(o => o.id === saleSourceSiteId)?.name || currentSite?.name || 'Stock';
+              return (
+                <div className="relative shrink-0">
+                  <button ref={mobileDepotTriggerRef} onClick={() => {
+                    const el = mobileDepotTriggerRef.current;
+                    if (el) {
+                      const r = el.getBoundingClientRect();
+                      const menuH = depotAllOptions.length * 34 + 8;
+                      const spaceBelow = window.innerHeight - r.bottom - 8;
+                      const flip = spaceBelow < menuH && r.top > spaceBelow;
+                      setMobileDepotPos({
+                        top: flip ? Math.max(8, r.top - menuH - 4) : r.bottom + 4,
+                        left: Math.max(8, Math.min(r.left, window.innerWidth - 184)),
+                        flip,
+                      });
+                    }
+                    setMobileDepotOpen(v => !v);
+                  }} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]" disabled={stockSourceLoading}>
+                    {stockSourceLoading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : null}
+                    <span className="whitespace-nowrap">Dépot source: {selectedName}</span><ChevronDown className={`w-2.5 h-2.5 transition-transform ${mobileDepotOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {mobileDepotOpen && ReactDOM.createPortal(
+                    <>
+                      <div className="fixed inset-0 z-[9998]" onClick={() => setMobileDepotOpen(false)} />
+                      <div className="fixed z-[9999] w-44 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg py-1 animate-fade-in" style={{ top: mobileDepotPos.top, left: mobileDepotPos.left }}>
+                        {depotAllOptions.map(o => (
+                          <button key={o.id} onClick={() => handleStockSourceChange(o.id)} className={`pos-pop-item text-[11px] ${o.id === saleSourceSiteId ? 'text-brand-700 font-semibold' : ''}`}>
+                            {o.id === saleSourceSiteId && <Check className="w-3.5 h-3.5" />}{o.name}
+                          </button>
+                        ))}
+                      </div>
+                    </>,
+                    document.body
+                  )}
+                </div>
+              );
+            })()}
+            {categoryId && (
+              <button onClick={() => setCategoryId('')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold">
+                {categories.find(c => c.id === categoryId)?.name} <X className="w-2.5 h-2.5" />
+              </button>
+            )}
+            <button onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
+              {sortMode === 'top' ? <TrendingUp className="w-3 h-3 text-amber-500" /> : <ArrowDownAZ className="w-3 h-3" />}
+              {sortMode === 'top' ? 'Top' : 'A→Z'}
+            </button>
+            <button onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
+              {articleView === 'grid' ? <List className="w-3 h-3" /> : <LayoutGrid className="w-3 h-3" />}
+              {articleView === 'grid' ? 'Liste' : 'Grille'}
+            </button>
+            {autoMode && (
+              <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-[var(--w-text-sec)] hover:bg-[var(--w-hover)]">
+                <Car className="w-3 h-3" />Véhicule
+              </button>
+            )}
+            <span className="text-[var(--w-text-disabled)] text-[10px] num shrink-0 ml-auto">{filtered.length} art.</span>
+          </div>
         </div>
       </div>
+
+      {/* ── Mobile actions bottom sheet ──────────────────────────────── */}
+      {mobileActionsOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden animate-fade-in">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setMobileActionsOpen(false)} />
+          <div className="absolute bottom-0 inset-x-0 bg-[var(--w-surface)] rounded-t-2xl shadow-lg animate-slide-up" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <div className="w-10 h-1 rounded-full bg-[var(--w-text-disabled)] mx-auto mt-2 mb-3" />
+            <div className="px-4 pb-4 space-y-0.5">
+              <button onClick={() => { setMobileActionsOpen(false); openTickets(); }} className="pos-sheet-item"><List className="w-5 h-5" />Tickets</button>
+              {can('pos_returns') && <button onClick={() => { setMobileActionsOpen(false); openReturn(); }} className="pos-sheet-item"><RotateCcw className="w-5 h-5" />Retour</button>}
+              {can('pos_cash_movement') && <button onClick={() => { setMobileActionsOpen(false); openMovement(); }} className="pos-sheet-item"><ArrowDownRight className="w-5 h-5" />Mouvement</button>}
+              <button onClick={() => { setMobileActionsOpen(false); openCustomerPayment(); }} className="pos-sheet-item"><Wallet className="w-5 h-5" />Encaisser un client</button>
+              {can('pos_view_session_stats') && <button onClick={() => { setMobileActionsOpen(false); openStats(); }} className="pos-sheet-item"><BarChart2 className="w-5 h-5" />Stats</button>}
+              <button onClick={() => { setMobileActionsOpen(false); holdCart(); }} className="pos-sheet-item"><Pause className="w-5 h-5" />Pause</button>
+              {hasModule('online_orders') && <button onClick={() => { setMobileActionsOpen(false); openWebOrders(); }} className="pos-sheet-item relative"><Globe className="w-5 h-5" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
+              <div className="h-px bg-[var(--w-separator)] my-1" />
+              <button onClick={() => { setMobileActionsOpen(false); leaveSession(); }} className="pos-sheet-item"><LogOut className="w-5 h-5" />Quitter</button>
+              {can('pos_close_session') && <button onClick={() => { setMobileActionsOpen(false); openCloseWorkflow(); }} className="pos-sheet-item text-red-600"><Lock className="w-5 h-5" />Clôturer</button>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <div className="px-3 sm:px-4 pt-4 pb-3 glass border-b border-neutral-200/60 sticky top-0 z-10">
-            <div className="flex gap-2">
-              <div className="flex-1 min-w-0 flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-lg bg-white transition-all">
-                <Search className="w-4 h-4 text-neutral-400 shrink-0" />
-                <input
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Rechercher…"
-                  className="flex-1 min-w-0 w-0 bg-transparent text-sm focus:outline-none placeholder:text-neutral-400 placeholder:animate-pulse"
-                  autoFocus={desktopAutoFocus}
-                />
-                {search && (
-                  <button onClick={() => setSearch('')} className="shrink-0 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <POSGuideInlineTrigger />
-                <button
-                  onClick={() => setCategoryPickerOpen(true)}
-                  className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold transition-all ${
-                    categoryId
-                      ? 'bg-brand-50 text-brand-700'
-                      : 'bg-transparent text-black hover:bg-neutral-100'
-                  }`}
-                  title="Filtrer par catégorie"
-                >
-                  <Tag className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline max-w-[120px] truncate">
-                    {categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Catégorie') : 'Catégorie'}
-                  </span>
-                </button>
-                <div className="w-px h-5 bg-neutral-200 shrink-0" />
-                <button
-                  onClick={() => setSortMode(m => m === 'top' ? 'alpha' : 'top')}
-                  className="shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold bg-transparent text-black hover:bg-neutral-100 transition-all"
-                  title={sortMode === 'top' ? 'Tri : meilleures ventes' : 'Tri : A → Z'}
-                >
-                  {sortMode === 'top' ? <TrendingUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
-                  <span className="hidden md:inline">{sortMode === 'top' ? 'Top' : 'A→Z'}</span>
-                </button>
-                <div className="w-px h-5 bg-neutral-200 shrink-0" />
-                <button
-                  onClick={() => setArticleView(v => v === 'grid' ? 'list' : 'grid')}
-                  className="shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] font-semibold bg-transparent text-black hover:bg-neutral-100 transition-all"
-                  title={articleView === 'grid' ? 'Vue liste' : 'Vue grille'}
-                >
-                  {articleView === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-                  <span className="hidden md:inline">{articleView === 'grid' ? 'Liste' : 'Grille'}</span>
-                </button>
-              </div>
-              {autoMode && (
-                <button onClick={() => setVehiclePickerOpen(true)} className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-md border border-neutral-200 bg-white hover:bg-brand-50 hover:border-brand-400 text-neutral-800 transition-all text-sm font-semibold active:scale-95 shadow-sm" title="Recherche par véhicule">
-                  <Car className="w-4 h-4 text-brand-700" />
-                  <span className="hidden sm:inline">Par véhicule</span>
-                </button>
-              )}
-            </div>
-            {(categoryId || sortMode !== 'top') && (
-              <div className="mt-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-                {sortMode === 'top' ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
-                    <TrendingUp className="w-3 h-3" />Meilleures ventes
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700">
-                    <ArrowDownAZ className="w-3 h-3" />A → Z
-                  </span>
-                )}
-                {categoryId && (
-                  <button onClick={() => setCategoryId('')} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">
-                    {categories.find(c => c.id === categoryId)?.name} <X className="w-3 h-3" />
-                  </button>
-                )}
-                <span className="text-neutral-400 num">· {filtered.length} article{filtered.length > 1 ? 's' : ''}</span>
-              </div>
-            )}
-            {(() => {
-              const sharedCatalog = (tenant as any)?.settings?.shared_articles !== false;
-              const interDepot = !!(tenant as any)?.settings?.inter_depot_transfer;
-              // Own depots always accessible; other depots only if shared catalog + inter-depot enabled
-              const availableDepots = depots.filter(d =>
-                d.parent_site_id === currentSite?.id || (sharedCatalog && interDepot)
-              );
-              if (availableDepots.length === 0) return null;
-              return (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Stock depuis :</span>
-                  <select
-                    value={saleSourceSiteId}
-                    onChange={e => { setSaleSourceSiteId(e.target.value); }}
-                    className="text-[11px] font-semibold bg-transparent border-b border-neutral-300 px-0 py-1 text-neutral-700 focus:outline-none focus:border-brand-400"
-                  >
-                    {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
-                    {availableDepots.map(d => (
-                      <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })()}
-          </div>
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
-            <div className="p-3 sm:p-4 w-full max-w-full mx-auto">
+            <div className="p-2 sm:p-3 w-full max-w-full mx-auto">
             {filtered.length === 0 ? (
               <div>
                 <EmptyState icon={Package} title="Aucun article" description="Créez des articles dans le catalogue." />
@@ -3363,11 +3511,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                     <button key={a.id} onClick={() => addToCart(a)} disabled={out}
                       className="product-card disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <div className="relative aspect-[4/3] bg-white rounded-md flex items-center justify-center overflow-hidden border border-neutral-100">
+                      <div className="relative aspect-[4/3] overflow-hidden" style={{ background: '#FFFFFF', margin: 0, padding: 0 }}>
                         {a.image_url ? (
-                          <img src={a.image_url} alt={a.name} className="w-full h-full object-contain p-1" loading="lazy" />
+                          <img src={a.image_url} alt={a.name} loading="lazy" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center', margin: 0, padding: 0 }} />
                         ) : (
-                          <Package className="w-7 h-7 text-neutral-300" />
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="w-7 h-7 text-neutral-300" />
+                          </div>
                         )}
                         {tracked && can('view_stock_levels') && (
                           <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${!a._stockLoaded ? 'bg-neutral-300 text-white' : a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
@@ -3375,9 +3525,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] font-semibold text-neutral-900 line-clamp-3 leading-[1.2] article-text">{a.name}</div>
-                      <div className="flex items-center justify-between mt-auto pt-0.5">
-                        <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(a.sale_price)}</span>
+                      <div className="h-px bg-neutral-200 dark:bg-neutral-600" />
+                      <div className="px-2 pt-1.5 pb-2 flex flex-col gap-1">
+                        <div className="text-[10px] font-semibold text-neutral-900 dark:text-neutral-100 line-clamp-3 leading-[1.2] article-text">{a.name}</div>
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className="text-[13px] font-bold text-neutral-900 dark:text-neutral-100 num">{formatFCFA(a.sale_price)}</span>
+                        </div>
                       </div>
                     </button>
                   );
@@ -3432,10 +3585,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
         {mobileCartOpen && (
           <div className="fixed inset-0 z-40 lg:hidden animate-fade-in">
-            <div className="absolute inset-0 bg-[var(--w-surface)] flex flex-col overflow-hidden" style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
-              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--w-separator-l)] shrink-0">
-                <span className="text-sm font-bold text-neutral-900">Panier</span>
-                <button onClick={() => setMobileCartOpen(false)} className="p-1.5 text-neutral-500 hover:text-neutral-800"><X className="w-5 h-5" /></button>
+            <div className="absolute inset-0 bg-[var(--w-surface)] flex flex-col overflow-hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+              <div className="flex items-center gap-2 px-3 h-11 border-b border-[var(--w-separator)] shrink-0">
+                <button onClick={() => setMobileCartOpen(false)} className="p-1 -ml-1 text-[var(--w-text-muted)] hover:text-[var(--w-text)]"><ChevronLeft className="w-5 h-5" /></button>
+                <span className="text-sm font-bold text-[var(--w-text)] leading-none">Panier</span>
+                <span className="text-[10px] font-semibold text-[var(--w-text-muted)] num">{cart.length} ligne{cart.length !== 1 ? 's' : ''}</span>
+                <div className="flex-1" />
+                {heldCarts.length > 0 && (
+                  <button onClick={openTickets} className="pos-btn relative" title="Paniers en pause">
+                    <Pause className="w-4 h-4" />
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 text-[8px] rounded-full bg-amber-500 text-white flex items-center justify-center font-bold">{heldCarts.length}</span>
+                  </button>
+                )}
+                {cart.length > 0 && (
+                  <button onClick={() => { setCart([]); setDiscount(0); setCustomer(null); }} className="pos-btn text-red-500" title="Vider"><Trash2 className="w-4 h-4" /></button>
+                )}
               </div>
               {CartPanel}
             </div>
@@ -5140,7 +5304,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   onClick={() => {
                     if (!active) {
                       setCurrentSite(s);
-                      localStorage.setItem('currentSiteId', s.id);
                       setSitePickerOpen(false);
                       setScreen('open-form');
                     }

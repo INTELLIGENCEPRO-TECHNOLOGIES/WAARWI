@@ -127,6 +127,8 @@ export type DocumentEditorProps = {
   postCreation?: { saleNumber: string; createdAt: string; createdBy: string } | null;
   onNewInvoice?: () => void;
   docCreatedInfo?: { createdAt: string; createdBy: string } | null;
+  embedded?: boolean;
+  inactive?: boolean;
 };
 
 export type ReturnLineItem = {
@@ -140,15 +142,51 @@ export type ReturnLineItem = {
   selected: boolean;
 };
 
+// ─── Container width hook ───────────────────────────────────────
+
+function useContainerWidth(ref: React.RefObject<HTMLElement | null>) {
+  const [width, setWidth] = useState(1200);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(el);
+    setWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, [ref]);
+  return width;
+}
+
+type WidthTier = 'wide' | 'medium' | 'narrow' | 'compact';
+function getWidthTier(w: number): WidthTier {
+  if (w >= 1000) return 'wide';
+  if (w >= 760) return 'medium';
+  if (w >= 600) return 'narrow';
+  return 'compact';
+}
+
 // ─── Column width constants (strict grid) ────────────────────────
 
-const COL_WIDTHS: Record<string, string> = {
-  article: 'w-[16%]',
-  designation: 'flex-1 min-w-0',
-  qty: 'w-[72px]',
-  unit_price: 'w-[110px]',
-  discount: 'w-[90px]',
-  total: 'w-[110px]',
+const COL_MIN_WIDTHS: Record<string, number> = {
+  article: 100,
+  designation: 120,
+  qty: 60,
+  unit_price: 90,
+  discount: 80,
+  total: 90,
+};
+
+const COL_PREFERRED_WIDTHS: Record<string, number> = {
+  article: 140,
+  designation: 0,
+  qty: 72,
+  unit_price: 110,
+  discount: 90,
+  total: 110,
 };
 
 const COL_ALIGN: Record<string, string> = {
@@ -160,8 +198,18 @@ const COL_ALIGN: Record<string, string> = {
   total: 'text-right',
 };
 
-function colClass(key: string) {
-  return `${COL_WIDTHS[key] || ''} ${COL_ALIGN[key] || 'text-left'}`;
+function colStyle(key: string): React.CSSProperties {
+  if (key === 'designation') return { flex: '1 1 0%', minWidth: COL_MIN_WIDTHS.designation };
+  return { width: COL_PREFERRED_WIDTHS[key], minWidth: COL_MIN_WIDTHS[key], flexShrink: 0 };
+}
+
+function colAlignCls(key: string) {
+  return COL_ALIGN[key] || 'text-left';
+}
+
+function needsHScroll(containerW: number, colCount: number): boolean {
+  const minTotal = 32 + colCount * 90 + 32;
+  return containerW < minTotal;
 }
 
 // ─── Doc type labels ─────────────────────────────────────────────
@@ -194,7 +242,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser,
     accountingStatus, invoiceDue = 0,
   } = props;
-  const { onPrev, onNext, hasPrev, hasNext, onSearchOpen, postCreation, onNewInvoice, docCreatedInfo } = props;
+  const { onPrev, onNext, hasPrev, hasNext, onSearchOpen, postCreation, onNewInvoice, docCreatedInfo, inactive } = props;
 
   const isView = mode === 'view';
   const isCreate = mode === 'create';
@@ -228,14 +276,23 @@ export function DocumentEditor(props: DocumentEditorProps) {
     return r ? repDisplayName(r) : '';
   }, [reps]);
 
-  // Lock body scroll
+  // Container width measurement
+  const containerRef = useRef<HTMLDivElement>(null);
+  const containerW = useContainerWidth(containerRef);
+  const tier: WidthTier = getWidthTier(containerW);
+  const hScroll = needsHScroll(containerW, cols.length);
+  const minRowWidth = hScroll ? Math.max(580, cols.length * 90 + 64) : undefined;
+
+  // Lock body scroll — only when NOT embedded (another window may be open)
   useEffect(() => {
+    if (props.embedded) return;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
-  }, []);
+  }, [props.embedded]);
 
   // Escape handler
   useEffect(() => {
+    if (inactive) return;
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (articleSearchOpen) { setArticleSearchOpen(false); return; }
@@ -245,7 +302,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [onClose, editingIdx, articleSearchOpen]);
+  }, [onClose, editingIdx, articleSearchOpen, inactive]);
 
   // ─── Line item logic ────────────────────────────────────────
 
@@ -267,7 +324,6 @@ export function DocumentEditor(props: DocumentEditorProps) {
     setInputRow(emptyInput);
     setArticleSearchQuery('');
     setTimeout(() => inputRefRef.current?.focus(), 30);
-    if (canEdit && docType === 'quote') setTimeout(() => onSave?.({ silent: true }), 100);
   };
 
   const startEdit = (vIdx: number) => {
@@ -339,29 +395,30 @@ export function DocumentEditor(props: DocumentEditorProps) {
   const headerInputCls = 'w-full text-xs h-8 px-2 bg-transparent border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-colors text-[var(--w-text)]';
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in">
+    <div ref={containerRef} className={props.embedded ? 'flex flex-col h-full bg-[var(--w-bg)]' : 'fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in'}>
 
       {/* ═══ Title bar ═══ */}
-      <div className="flex items-center justify-between px-4 h-11 border-b border-[var(--w-separator)] flex-shrink-0">
+      <div className={`flex items-center justify-between px-4 border-b border-[var(--w-separator)] flex-shrink-0 ${tier === 'compact' ? 'flex-wrap gap-y-1 py-1.5' : 'h-11'}`}>
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Navigation arrows */}
           {(onPrev || onNext) && (
             <div className="flex items-center gap-0.5 mr-1">
-              <button onClick={onPrev} disabled={!hasPrev} className="p-0.5 rounded hover:bg-neutral-100 text-neutral-500 disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Précédent">
+              <button onClick={onPrev} disabled={!hasPrev} className="p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Précédent">
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button onClick={onNext} disabled={!hasNext} className="p-0.5 rounded hover:bg-neutral-100 text-neutral-500 disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Suivant">
+              <button onClick={onNext} disabled={!hasNext} className="p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Suivant">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           )}
-          <h2 className="text-sm font-bold text-neutral-900 tracking-tight truncate">{title}</h2>
+          <h2 className="text-sm font-bold text-[var(--w-text)] tracking-tight truncate">{title}</h2>
           {documentStatus && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 uppercase tracking-wider">{documentStatus}</span>
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--w-hover)] text-[var(--w-text-muted)] uppercase tracking-wider">{documentStatus}</span>
           )}
-          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400 shrink-0" />}
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--w-text-disabled)] shrink-0" />}
         </div>
         <DocumentToolbar
+          tier={tier}
           docType={docType}
           mode={postCreation ? 'view' : mode}
           saving={saving}
@@ -407,6 +464,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
           />
         ) : (
           <EditableHeader
+            tier={tier}
             headerForm={headerForm}
             setHeaderForm={setHeaderForm}
             customers={customers}
@@ -425,16 +483,16 @@ export function DocumentEditor(props: DocumentEditorProps) {
       )}
 
       {isView && headerForm.customer_id && (
-        <div className="px-4 py-1.5 border-b border-neutral-100 bg-neutral-50/50 flex-shrink-0">
+        <div className="px-4 py-1.5 border-b border-[var(--w-separator-l)] bg-[var(--w-surface-el2)] flex-shrink-0">
           <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
-            {headerForm.customer_id && <span className="font-medium text-neutral-700">{customers.find((c: any) => c.id === headerForm.customer_id)?.name || ''}</span>}
-            {headerForm.doc_date && <span className="text-neutral-500">Date: {headerForm.doc_date}</span>}
-            {headerForm.reference && <span className="text-neutral-500">Ref: {headerForm.reference}</span>}
-            {headerForm.delivery_date && <span className="text-neutral-500">Livr: {headerForm.delivery_date}</span>}
-            {headerForm.warranty && <span className="text-neutral-500">Gar: {headerForm.warranty}</span>}
-            {headerForm.imei && <span className="text-neutral-500">IMEI: {headerForm.imei}</span>}
-            {headerForm.representative && <span className="text-neutral-500">Rep: {repLabel(headerForm.representative)}</span>}
-            {headerForm.note && <span className="text-neutral-400 italic truncate max-w-[200px]">"{headerForm.note}"</span>}
+            {headerForm.customer_id && <span className="font-medium text-[var(--w-text)]">{customers.find((c: any) => c.id === headerForm.customer_id)?.name || ''}</span>}
+            {headerForm.doc_date && <span className="text-[var(--w-text-muted)]">Date: {headerForm.doc_date}</span>}
+            {headerForm.reference && <span className="text-[var(--w-text-muted)]">Ref: {headerForm.reference}</span>}
+            {headerForm.delivery_date && <span className="text-[var(--w-text-muted)]">Livr: {headerForm.delivery_date}</span>}
+            {headerForm.warranty && <span className="text-[var(--w-text-muted)]">Gar: {headerForm.warranty}</span>}
+            {headerForm.imei && <span className="text-[var(--w-text-muted)]">IMEI: {headerForm.imei}</span>}
+            {headerForm.representative && <span className="text-[var(--w-text-muted)]">Rep: {repLabel(headerForm.representative)}</span>}
+            {headerForm.note && <span className="text-[var(--w-text-disabled)] italic truncate max-w-[200px]">"{headerForm.note}"</span>}
           </div>
         </div>
       )}
@@ -457,11 +515,11 @@ export function DocumentEditor(props: DocumentEditorProps) {
       )}
 
       {/* ═══ Column headers ═══ */}
-      <div className="flex-shrink-0 border-b border-[var(--w-separator)] bg-[var(--w-hover)]">
-        <div className="flex items-center px-2 h-7">
+      <div className="flex-shrink-0 border-b border-[var(--w-separator)] bg-[var(--w-hover)] overflow-x-auto de-hscroll">
+        <div className="flex items-center px-2 h-7" style={minRowWidth ? { minWidth: minRowWidth } : undefined}>
           <div className="w-8 shrink-0" />
           {cols.map(col => (
-            <div key={col.key} className={`px-2 text-[10px] font-bold text-[var(--w-text-sec)] uppercase tracking-wider ${colClass(col.key)}`}>
+            <div key={col.key} className={`px-2 text-[10px] font-bold text-[var(--w-text-sec)] uppercase tracking-wider ${colAlignCls(col.key)}`} style={colStyle(col.key)}>
               {col.label}
             </div>
           ))}
@@ -471,28 +529,28 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
       {/* ═══ Input row (create/edit only) ═══ */}
       {canEdit && (
-        <div className={`flex-shrink-0 border-b-2 border-[var(--w-separator)] bg-[var(--w-hover)] ${itemsLocked ? 'pointer-events-none opacity-30' : ''}`}>
+        <div className={`flex-shrink-0 border-b-2 border-[var(--w-separator)] bg-[var(--w-hover)] overflow-x-auto de-hscroll ${itemsLocked ? 'pointer-events-none opacity-30' : ''}`}>
           {itemsLocked ? (
             <div className="flex items-center justify-center py-3 gap-2">
-              <Lock className="w-4 h-4 text-neutral-300" />
-              <span className="text-xs text-neutral-400">Validez l'en-tête</span>
+              <Lock className="w-4 h-4 text-[var(--w-text-disabled)]" />
+              <span className="text-xs text-[var(--w-text-disabled)]">Validez l'en-tête</span>
             </div>
           ) : (
-            <div className="flex items-center px-2 py-1">
+            <div className="flex items-center px-2 py-1" style={minRowWidth ? { minWidth: minRowWidth } : undefined}>
               <div className="w-8 shrink-0 text-center">
                 {editingIdx !== null ? (
-                  <button onClick={cancelEdit} className="p-0.5 rounded hover:bg-neutral-200 text-neutral-400" title="Annuler"><X className="w-3 h-3" /></button>
+                  <button onClick={cancelEdit} className="p-0.5 rounded hover:bg-[var(--w-active)] text-[var(--w-text-disabled)]" title="Annuler"><X className="w-3 h-3" /></button>
                 ) : (
-                  <span className="text-[9px] font-bold text-neutral-300">+</span>
+                  <span className="text-[9px] font-bold text-[var(--w-text-disabled)]">+</span>
                 )}
               </div>
               {cols.map(col => {
-                const w = `${COL_WIDTHS[col.key] || ''} px-1`;
+                const st = colStyle(col.key);
                 switch (col.key) {
                   case 'article': return (
-                    <div key="article" className={w}>
+                    <div key="article" className="px-1" style={st}>
                       <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400 pointer-events-none" />
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--w-text-disabled)] pointer-events-none" />
                         <input
                           ref={inputRefRef}
                           value={articleSearchQuery}
@@ -509,7 +567,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     </div>
                   );
                   case 'designation': return (
-                    <div key="designation" className={w}>
+                    <div key="designation" className="px-1" style={st}>
                       <input
                         value={inputRow.name}
                         onChange={e => setInputRow(p => ({ ...p, name: e.target.value }))}
@@ -521,7 +579,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     </div>
                   );
                   case 'qty': return (
-                    <div key="qty" className={w}>
+                    <div key="qty" className="px-1" style={st}>
                       <input
                         ref={inputQtyRef}
                         type="number"
@@ -534,7 +592,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     </div>
                   );
                   case 'unit_price': return (
-                    <div key="unit_price" className={w}>
+                    <div key="unit_price" className="px-1" style={st}>
                       <input
                         type="number"
                         value={inputRow.unit_price || ''}
@@ -545,7 +603,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     </div>
                   );
                   case 'discount': return (
-                    <div key="discount" className={w}>
+                    <div key="discount" className="px-1" style={st}>
                       <input
                         type="number"
                         value={inputRow.discount || ''}
@@ -556,15 +614,15 @@ export function DocumentEditor(props: DocumentEditorProps) {
                     </div>
                   );
                   case 'total': return (
-                    <div key="total" className={`${COL_WIDTHS[col.key]} px-1 text-right`}>
-                      <span className="text-xs font-bold text-neutral-800 num leading-7">{formatNum(calc(inputRow.quantity, inputRow.unit_price, inputRow.discount))}</span>
+                    <div key="total" className="px-1 text-right" style={colStyle(col.key)}>
+                      <span className="text-xs font-bold text-[var(--w-text)] num leading-7">{formatNum(calc(inputRow.quantity, inputRow.unit_price, inputRow.discount))}</span>
                     </div>
                   );
                   default: return null;
                 }
               })}
               <div className="w-8 shrink-0 text-center">
-                <button onClick={commitRow} disabled={!inputRow.name.trim() || inputRow.unit_price <= 0} className="p-1 rounded bg-neutral-900 text-white disabled:opacity-20 hover:bg-neutral-700 transition-colors" title="Valider (Entree)"><Check className="w-3 h-3" /></button>
+                <button onClick={commitRow} disabled={!inputRow.name.trim() || inputRow.unit_price <= 0} className="p-1 rounded bg-[var(--w-accent)] text-[var(--w-accent-text)] disabled:opacity-20 hover:bg-[var(--w-accent-hover)] transition-colors" title="Valider (Entree)"><Check className="w-3 h-3" /></button>
               </div>
             </div>
           )}
@@ -572,9 +630,9 @@ export function DocumentEditor(props: DocumentEditorProps) {
       )}
 
       {/* ═══ Validated rows (scrollable) ═══ */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-auto min-h-0">
         {validItems.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-neutral-300 text-xs select-none">
+          <div className="flex items-center justify-center h-32 text-[var(--w-text-disabled)] text-xs select-none">
             {canEdit ? 'Saisissez un article et appuyez Entrée' : 'Aucun article'}
           </div>
         ) : (
@@ -588,35 +646,36 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   className={`flex items-center px-2 border-b border-[var(--w-separator-l)] transition-colors group ${
                     canEdit ? 'cursor-pointer' : ''
                   } ${isEditingThis ? 'bg-amber-50/50' : vIdx % 2 === 1 ? 'bg-[var(--w-hover)]' : ''} ${canEdit && !isEditingThis ? 'hover:bg-[var(--w-hover)]' : ''}`}
-                  style={{ height: '28px' }}
+                  style={{ height: 28, ...(minRowWidth ? { minWidth: minRowWidth } : {}) }}
                 >
                   <div className="w-8 shrink-0 text-center">
-                    <span className="text-[10px] text-neutral-300 group-hover:text-neutral-500 tabular-nums">{vIdx + 1}</span>
+                    <span className="text-[10px] text-[var(--w-text-disabled)] group-hover:text-[var(--w-text-muted)] tabular-nums">{vIdx + 1}</span>
                   </div>
                   {cols.map(col => {
-                    const base = `px-2 text-xs truncate ${colClass(col.key)}`;
+                    const base = `px-2 text-xs truncate ${colAlignCls(col.key)}`;
+                    const st = colStyle(col.key);
                     switch (col.key) {
                       case 'article': return (
-                        <div key="article" className={`${base} text-neutral-500`}>
+                        <div key="article" className={`${base} text-[var(--w-text-muted)]`} style={st}>
                           {it.article_id ? (articles.find((a: any) => a.id === it.article_id)?.internal_ref || '—') : '—'}
                         </div>
                       );
                       case 'designation': return (
-                        <div key="designation" className={`${base} font-medium text-neutral-800`}>
+                        <div key="designation" className={`${base} font-medium text-[var(--w-text)]`} style={st}>
                           {it.name}
-                          {it.tier_name && <span className="text-[9px] text-neutral-400 ml-1">{it.tier_name}</span>}
+                          {it.tier_name && <span className="text-[9px] text-[var(--w-text-disabled)] ml-1">{it.tier_name}</span>}
                         </div>
                       );
-                      case 'qty': return <div key="qty" className={`${base} text-neutral-700 num`}>{it.quantity}</div>;
-                      case 'unit_price': return <div key="unit_price" className={`${base} text-neutral-700 num`}>{formatNum(it.unit_price)}</div>;
-                      case 'discount': return <div key="discount" className={`${base} text-neutral-400 num`}>{it.discount > 0 ? formatNum(it.discount) : '—'}</div>;
-                      case 'total': return <div key="total" className={`${base} font-semibold text-neutral-900 num`}>{formatNum(it.total)}</div>;
+                      case 'qty': return <div key="qty" className={`${base} text-[var(--w-text-sec)] num`} style={st}>{it.quantity}</div>;
+                      case 'unit_price': return <div key="unit_price" className={`${base} text-[var(--w-text-sec)] num`} style={st}>{formatNum(it.unit_price)}</div>;
+                      case 'discount': return <div key="discount" className={`${base} text-[var(--w-text-disabled)] num`} style={st}>{it.discount > 0 ? formatNum(it.discount) : '—'}</div>;
+                      case 'total': return <div key="total" className={`${base} font-semibold text-[var(--w-text)] num`} style={st}>{formatNum(it.total)}</div>;
                       default: return null;
                     }
                   })}
                   {canEdit && (
                     <div className="w-8 shrink-0 text-center">
-                      <button onClick={e => { e.stopPropagation(); removeItem(vIdx); }} className="p-0.5 rounded text-neutral-200 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3 h-3" /></button>
+                      <button onClick={e => { e.stopPropagation(); removeItem(vIdx); }} className="p-0.5 rounded text-[var(--w-text-disabled)] hover:text-[var(--w-error)] hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3 h-3" /></button>
                     </div>
                   )}
                 </div>
@@ -651,22 +710,22 @@ export function DocumentEditor(props: DocumentEditorProps) {
         {(postCreation || docCreatedInfo) && (() => {
           const info = postCreation || docCreatedInfo!;
           return (
-            <div className="text-[10px] text-neutral-400">
+            <div className="text-[10px] text-[var(--w-text-disabled)]">
               Créée le {new Date(info.createdAt).toLocaleDateString('fr-FR')} à {new Date(info.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} par {info.createdBy}
             </div>
           );
         })()}
-        <div className="flex items-center justify-between">
-        <span className="text-[11px] text-neutral-500 tabular-nums">
+        <div className={`flex items-center ${tier === 'compact' ? 'flex-col gap-1 items-stretch' : 'justify-between'}`}>
+        <span className="text-[11px] text-[var(--w-text-muted)] tabular-nums">
           {validItems.length} ligne{validItems.length !== 1 ? 's' : ''}
           {(payments?.length || 0) > 0 && ` · ${payments!.length} règl.`}
         </span>
-        <div className="flex items-center gap-0 divide-x divide-neutral-200">
-          {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-xs font-bold text-teal-600 num px-3 min-w-[100px] text-right">IPM {formatFCFA(ipmPartIpm)}</span>}
-          {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-xs font-bold text-neutral-600 num px-3 min-w-[100px] text-right">Client {formatFCFA(ipmPartClient)}</span>}
-          {totalPaid > 0 && <span className="text-xs font-bold text-emerald-600 num px-3 min-w-[100px] text-right">Payé {formatFCFA(totalPaid)}</span>}
-          {balance > 0 && totalPaid > 0 && <span className="text-xs font-bold text-amber-600 num px-3 min-w-[100px] text-right">Reste {formatFCFA(balance)}</span>}
-          <span className="text-xs font-black text-neutral-900 num px-3 min-w-[100px] text-right">TOTAL {formatFCFA(subtotal)}</span>
+        <div className={`flex items-center gap-0 divide-x divide-[var(--w-separator)] ${tier === 'compact' ? 'flex-wrap justify-end' : ''}`}>
+          {ipmBeneficiaire && ipmPartIpm > 0 && <span className="text-xs font-bold text-teal-600 num px-3 min-w-[80px] text-right">IPM {formatFCFA(ipmPartIpm)}</span>}
+          {ipmBeneficiaire && ipmPartIpm > 0 && <span className={`text-xs font-bold text-[var(--w-text-sec)] num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>Client {formatFCFA(ipmPartClient)}</span>}
+          {totalPaid > 0 && <span className={`text-xs font-bold text-emerald-600 num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>Payé {formatFCFA(totalPaid)}</span>}
+          {balance > 0 && totalPaid > 0 && <span className={`text-xs font-bold text-amber-600 num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>Reste {formatFCFA(balance)}</span>}
+          <span className={`text-xs font-black text-[var(--w-text)] num px-3 ${tier === 'compact' ? 'min-w-[70px]' : 'min-w-[100px]'} text-right`}>TOTAL {formatFCFA(subtotal)}</span>
         </div>
         </div>
       </div>
@@ -687,7 +746,8 @@ export function DocumentEditor(props: DocumentEditorProps) {
 
 // ─── Toolbar ─────────────────────────────────────────────────────
 
-function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
+function DocumentToolbar({ tier, docType, mode, saving, onSave, onClose, onPrint, onConvert, onChangeStatus, documentStatus, editingId, ipmDocValidation, ipmBeneficiaire, onTransformToReturn, onTransformToAvoir, transformReturnLines, loadReturnLines, articles, onEdit, onPay, onCopyLink, onWhatsApp, onCancel, onDelete, onComptabiliser, accountingStatus, invoiceDue, onRefundCash, onApproveAvoir, onSearchOpen, onNewInvoice }: {
+  tier: WidthTier;
   docType: DocType;
   mode: DocMode;
   saving: boolean;
@@ -720,8 +780,9 @@ function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onCo
   onNewInvoice?: () => void;
 }) {
   const canEdit = mode === 'create' || mode === 'edit';
+  const compact = tier === 'compact' || tier === 'narrow';
   const btnCls = 'flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded transition-colors';
-  const btnLight = `${btnCls} text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100`;
+  const btnLight = `${btnCls} text-[var(--w-text-sec)] hover:text-[var(--w-text)] hover:bg-[var(--w-hover)]`;
 
   const [transformOpen, setTransformOpen] = useState(false);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
@@ -756,33 +817,33 @@ function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onCo
   const notAccounted = accountingStatus !== 'accounted';
 
   return (
-    <div className="flex items-center gap-0.5 shrink-0">
+    <div className={`flex items-center gap-0.5 shrink-0 ${compact ? 'flex-wrap justify-end' : ''}`}>
       {/* View-mode actions */}
       {isView && editingId && (
         <>
           {onEdit && notCancelled && notAccounted && (
-            <button onClick={onEdit} className={btnLight}><Pencil className="w-3 h-3" /> Modifier</button>
+            <button onClick={onEdit} className={btnLight} title="Modifier"><Pencil className="w-3 h-3" />{!compact && ' Modifier'}</button>
           )}
           {onPay && docType === 'invoice' && (invoiceDue ?? 0) > 0 && notCancelled && (
-            <button onClick={onPay} className={`${btnCls} text-emerald-700 hover:bg-emerald-50`}><Coins className="w-3 h-3" /> Régler</button>
+            <button onClick={onPay} className={`${btnCls} text-emerald-700 hover:bg-emerald-50`} title="Régler"><Coins className="w-3 h-3" />{!compact && ' Régler'}</button>
           )}
           {false && onComptabiliser && docType === 'invoice' && notAccounted && notCancelled && (
-            <button onClick={onComptabiliser} className={`${btnCls} text-teal-700 hover:bg-teal-50`}><BookOpen className="w-3 h-3" /> Comptabiliser</button>
+            <button onClick={onComptabiliser} className={`${btnCls} text-teal-700 hover:bg-teal-50`} title="Comptabiliser"><BookOpen className="w-3 h-3" />{!compact && ' Comptabiliser'}</button>
           )}
           {accountingStatus === 'accounted' && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />Comptabilisé</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200"><BookOpen className="w-3 h-3" />{!compact && 'Comptabilisé'}</span>
           )}
           {onCopyLink && (
-            <button onClick={onCopyLink} className={btnLight}><Link2 className="w-3 h-3" /> Lien</button>
+            <button onClick={onCopyLink} className={btnLight} title="Lien"><Link2 className="w-3 h-3" />{!compact && ' Lien'}</button>
           )}
           {onWhatsApp && (
-            <button onClick={onWhatsApp} className={`${btnCls} text-green-600 hover:bg-green-50`}><MessageCircle className="w-3 h-3" /> WhatsApp</button>
+            <button onClick={onWhatsApp} className={`${btnCls} text-green-600 hover:bg-green-50`} title="WhatsApp"><MessageCircle className="w-3 h-3" />{!compact && ' WhatsApp'}</button>
           )}
           {onCancel && notCancelled && notAccounted && (
-            <button onClick={onCancel} className={`${btnCls} text-rose-600 hover:bg-rose-50`}><Ban className="w-3 h-3" /> Annuler</button>
+            <button onClick={onCancel} className={`${btnCls} text-rose-600 hover:bg-rose-50`} title="Annuler"><Ban className="w-3 h-3" />{!compact && ' Annuler'}</button>
           )}
           {onDelete && notAccounted && (
-            <button onClick={onDelete} className={`${btnCls} text-red-600 hover:bg-red-50`}><Trash2 className="w-3 h-3" /> Supprimer</button>
+            <button onClick={onDelete} className={`${btnCls} text-red-600 hover:bg-red-50`} title="Supprimer"><Trash2 className="w-3 h-3" />{!compact && ' Supprimer'}</button>
           )}
         </>
       )}
@@ -791,10 +852,10 @@ function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onCo
       {docType === 'quote' && editingId && onChangeStatus && (
         <>
           {documentStatus === 'draft' && (
-            <button onClick={() => onChangeStatus('sent')} className={btnLight}><Check className="w-3 h-3" /> Envoyé</button>
+            <button onClick={() => onChangeStatus('sent')} className={btnLight} title="Envoyé"><Check className="w-3 h-3" />{!compact && ' Envoyé'}</button>
           )}
           {(documentStatus === 'draft' || documentStatus === 'sent') && (
-            <button onClick={() => onChangeStatus('accepted')} className={btnLight}><Check className="w-3 h-3" /> Accepter</button>
+            <button onClick={() => onChangeStatus('accepted')} className={btnLight} title="Accepter"><Check className="w-3 h-3" />{!compact && ' Accepter'}</button>
           )}
         </>
       )}
@@ -803,30 +864,30 @@ function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onCo
       {docType === 'return' && isView && editingId && documentStatus === 'pending' && (
         <>
           {onRefundCash && (
-            <button onClick={onRefundCash} className={`${btnCls} text-emerald-700 hover:bg-emerald-50`}><Coins className="w-3 h-3" /> Rembourser</button>
+            <button onClick={onRefundCash} className={`${btnCls} text-emerald-700 hover:bg-emerald-50`} title="Rembourser"><Coins className="w-3 h-3" />{!compact && ' Rembourser'}</button>
           )}
           {onApproveAvoir && (
-            <button onClick={onApproveAvoir} className={`${btnCls} text-blue-700 hover:bg-[var(--w-active)]`}><CreditCard className="w-3 h-3" /> Avoir</button>
+            <button onClick={onApproveAvoir} className={`${btnCls} text-blue-700 hover:bg-[var(--w-active)]`} title="Avoir"><CreditCard className="w-3 h-3" />{!compact && ' Avoir'}</button>
           )}
         </>
       )}
 
       {/* Print */}
       {onPrint && editingId && (
-        <button onClick={onPrint} className={btnLight}><Printer className="w-3 h-3" /> Imprimer</button>
+        <button onClick={onPrint} className={btnLight} title="Imprimer"><Printer className="w-3 h-3" />{!compact && ' Imprimer'}</button>
       )}
 
       {/* Transformer dropdown */}
       {hasTransformations && (
         <div className="relative" ref={transformRef}>
-          <button onClick={() => setTransformOpen(!transformOpen)} className={btnLight}>
-            <RefreshCw className="w-3 h-3" /> Transformer <ChevronDown className="w-2.5 h-2.5" />
+          <button onClick={() => setTransformOpen(!transformOpen)} className={btnLight} title="Transformer">
+            <RefreshCw className="w-3 h-3" />{!compact && ' Transformer'} <ChevronDown className="w-2.5 h-2.5" />
           </button>
           {transformOpen && (
-            <div className="absolute right-0 top-full mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg py-1 w-52 z-20">
+            <div className="absolute right-0 top-full mt-1 bg-[var(--w-surface)] border border-[var(--w-separator)] rounded-lg shadow-lg py-1 w-52 z-20">
               {transformations.map(t => (
-                <button key={t.key} onClick={t.action} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-neutral-50 text-neutral-700 transition-colors">
-                  <t.icon className="w-3.5 h-3.5 text-neutral-400" />
+                <button key={t.key} onClick={t.action} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-[var(--w-hover)] text-[var(--w-text-sec)] transition-colors">
+                  <t.icon className="w-3.5 h-3.5 text-[var(--w-text-disabled)]" />
                   {t.label}
                 </button>
               ))}
@@ -837,20 +898,20 @@ function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onCo
 
       {/* Search / jump to document */}
       {onSearchOpen && (
-        <button onClick={onSearchOpen} className={btnLight} title="Atteindre une facture"><Search className="w-3 h-3" /> Atteindre</button>
+        <button onClick={onSearchOpen} className={btnLight} title="Atteindre une facture"><Search className="w-3 h-3" />{!compact && ' Atteindre'}</button>
       )}
 
       {/* Separator */}
-      {editingId && <div className="w-px h-4 bg-neutral-200 mx-1" />}
+      {editingId && <div className="w-px h-4 bg-[var(--w-separator)] mx-1" />}
 
       {/* Nouveau (post-creation) */}
       {onNewInvoice && (
-        <button onClick={onNewInvoice} className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded transition-colors"><Plus className="w-3 h-3" />Nouveau</button>
+        <button onClick={onNewInvoice} className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-[var(--w-accent-text)] bg-[var(--w-accent)] hover:bg-[var(--w-accent-hover)] rounded transition-colors"><Plus className="w-3 h-3" />{!compact && 'Nouveau'}</button>
       )}
 
       {/* Close */}
-      <button onClick={onClose} className={`${btnCls} text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100`}>
-        Fermer
+      <button onClick={onClose} className={`${btnCls} text-[var(--w-text-muted)] hover:text-[var(--w-text)] hover:bg-[var(--w-hover)]`} title="Fermer">
+        {compact ? <X className="w-3 h-3" /> : 'Fermer'}
       </button>
 
       {/* Save */}
@@ -858,10 +919,10 @@ function DocumentToolbar({ docType, mode, saving, onSave, onClose, onPrint, onCo
         <button
           onClick={() => onSave()}
           disabled={saving || (ipmBeneficiaire && ipmDocValidation && !ipmDocValidation.valide)}
-          className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold bg-neutral-900 text-white rounded hover:bg-neutral-800 disabled:opacity-40 transition-colors"
+          className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold bg-[var(--w-accent)] text-[var(--w-accent-text)] rounded hover:bg-[var(--w-accent-hover)] disabled:opacity-40 transition-colors"
         >
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-          {editingId ? 'Mettre à jour' : 'Enregistrer'}
+          {compact ? (editingId ? 'MAJ' : 'OK') : (editingId ? 'Mettre à jour' : 'Enregistrer')}
         </button>
       )}
 
@@ -1001,7 +1062,8 @@ function ValidatedHeader({ headerForm, customers, docSettings, repLabel, onUnloc
 
 // ─── Editable Header ─────────────────────────────────────────────
 
-function EditableHeader({ headerForm, setHeaderForm, customers, docSettings, docType, autoMode, onVehiclePicker, onCreateCustomer, reps, headerInputCls, onValidate, postCreation, totalPaid }: {
+function EditableHeader({ tier, headerForm, setHeaderForm, customers, docSettings, docType, autoMode, onVehiclePicker, onCreateCustomer, reps, headerInputCls, onValidate, postCreation, totalPaid }: {
+  tier: WidthTier;
   headerForm: DocHeaderForm;
   setHeaderForm: (fn: any) => void;
   customers: any[];
@@ -1021,7 +1083,14 @@ function EditableHeader({ headerForm, setHeaderForm, customers, docSettings, doc
   return (
     <div
       className={`px-4 py-2 border-b flex-shrink-0 ${onValidate ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100'}`}
-      onKeyDown={e => { if (e.key === 'Enter' && onValidate && !isLocked) { e.preventDefault(); onValidate(); } }}
+      onKeyDown={e => {
+        if (e.key === 'Enter' && onValidate && !isLocked && !e.repeat) {
+          const active = document.activeElement;
+          if (active instanceof HTMLButtonElement) return;
+          e.preventDefault();
+          onValidate();
+        }
+      }}
     >
       {onValidate && (
         <div className="flex items-center gap-1.5 mb-2">
@@ -1029,7 +1098,7 @@ function EditableHeader({ headerForm, setHeaderForm, customers, docSettings, doc
           <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide">Valider l'en-tête avant la saisie</span>
         </div>
       )}
-      <div className="grid grid-cols-[1fr] sm:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2 items-end">
+      <div className={`grid gap-x-3 gap-y-2 items-end ${tier === 'wide' ? 'grid-cols-4' : tier === 'medium' ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div>
           <label className="text-[10px] font-medium text-[var(--w-text-muted)] mb-0.5 block">Client</label>
           {isLocked ? (

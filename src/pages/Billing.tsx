@@ -4,7 +4,7 @@ import {
   Plus, FileText, Loader2, Printer, CheckCircle, X, Trash2, Car,
   Receipt, RotateCcw, Wallet, Minus, Package, Filter, Check, Calendar, CalendarDays, User,
   CreditCard, ShoppingCart, ArrowRight, Coins, MessageCircle, Link2, Search, GripVertical, Lock, BookOpen, FilePlus,
-  Tag, ShieldCheck, Smartphone, Pencil, ChevronLeft, ChevronRight, RefreshCw, Ban,
+  Tag, ShieldCheck, Smartphone, Pencil, ChevronLeft, ChevronRight, RefreshCw, Ban, ClipboardList,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -29,6 +29,11 @@ import { type DocSettings, type DocColumn, DEFAULT_COLUMNS, DEFAULT_DOC_SETTINGS
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 import { DocumentEditor } from '../components/DocumentEditor';
+import { DesktopWindow } from '../components/DesktopWindow';
+import { InvoiceEditorInstance, type InvoiceWindowDescriptor } from '../components/billing/InvoiceEditorInstance';
+import { QuoteEditorInstance, type QuoteWindowDescriptor } from '../components/billing/QuoteEditorInstance';
+import { useWindowManager } from '../context/WindowManagerContext';
+import { loadLayout, saveLayout, clearFormDraft, type LayoutWindow } from '../lib/draftRecovery';
 
 const tenantForPrint = (t: any, site?: any): PrintTenant => buildPrintTenantForSite(t, site);
 
@@ -106,8 +111,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'credits',  label: 'Avoirs'   },
 ];
 
-export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
-  const { tenant, currentSite, sites, depots, dataTick, profile } = useApp();
+export function Billing({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void }) {
+  const { tenant, currentSite, sites, depots, dataTick, profile, user } = useApp();
   const { can } = usePermissions();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
@@ -146,6 +151,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [billHasMore, setBillHasMore] = useState(false);
   const [billCursors, setBillCursors] = useState<{ val: string | null; id: string | null }[]>([]);
   const [billTotalCount, setBillTotalCount] = useState(0);
+  const [tabCounts, setTabCounts] = useState<Record<Tab, number>>({ invoices: 0, quotes: 0, returns: 0, credits: 0 });
   const [billTotals, setBillTotals] = useState<any>({});
   const billReqIdRef = useRef(0);
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -165,7 +171,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [repSettings, setRepSettings] = useState<RepCommissionSettings>(DEFAULT_REP_SETTINGS);
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
 
-  // Quote modals
+  // Quote modals — mobile uses single state; desktop uses quoteWindows map
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quoteEditorMode, setQuoteEditorMode] = useState<'create' | 'edit' | 'view'>('create');
   const [quoteDetail, setQuoteDetail] = useState<Quote | null>(null);
@@ -179,7 +185,15 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
 
-  // IPM for quotes (pharmacy only) - state declarations only
+  // Multi-instance quote windows (desktop)
+  const [quoteWindows, setQuoteWindows] = useState<Map<string, QuoteWindowDescriptor>>(new Map());
+  const quoteWindowCounter = useRef(0);
+  // Callback ref for vehicle picker / tier picker targeting in quote windows
+  const activeQuoteVehicleCb = useRef<((art: any) => void) | null>(null);
+  const activeQuoteTierCb = useRef<((tierName: string, tierPrice: number, idx: number) => void) | null>(null);
+  const activeQuoteItemsSetter = useRef<((fn: any) => void) | null>(null);
+
+  // IPM for quotes (pharmacy only) — mobile path only
   const [quoteIpmBeneficiaire, setQuoteIpmBeneficiaire] = useState<any>(null);
   const [quoteIpmConvention, setQuoteIpmConvention] = useState<any>(null);
   const quoteIpmConfig = useMemo(() => parseConvention(quoteIpmConvention), [quoteIpmConvention]);
@@ -236,23 +250,150 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const [returnedQtys, setReturnedQtys] = useState<Record<string, number>>({});
   // returnedQtys no longer filters invoices — kept for compat but always empty
 
-  // Direct invoice creation
-  const [invoiceEditorOpen, setInvoiceEditorOpen] = useState(false);
-  const [invoiceEditorMode, setInvoiceEditorMode] = useState<'create' | 'edit' | 'view'>('create');
-  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
-  const [invoiceForm, setInvoiceForm] = useState<{ customer_id: string; doc_date: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
-  const [invoicePostCreation, setInvoicePostCreation] = useState<{ saleNumber: string; createdAt: string; createdBy: string } | null>(null);
+  // Multi-instance invoice windows (desktop)
+  const [invoiceWindows, setInvoiceWindows] = useState<Map<string, InvoiceWindowDescriptor>>(new Map());
+  const invoiceWindowCounter = useRef(0);
+  const { windows: wmWindows, tileVisibleWindows, focus: focusWindow, updateTitle: updateWindowTitle, minimize: minimizeWindow, minimizeGroup, restore: restoreWindow } = useWindowManager();
+  const [pageWindowOpen, setPageWindowOpen] = useState(true);
+  const BILLING_PAGE_ID = 'billing-page';
+  const BILLING_GROUP = 'billing';
+
+  const userId = profile?.id || user?.id || '';
+  const billingScope = useMemo(
+    () => ({ userId, tenantId: tenant?.id || '', siteId: currentSite?.id || '' }),
+    [userId, tenant?.id, currentSite?.id],
+  );
+  const [pendingRecovery, setPendingRecovery] = useState<LayoutWindow[] | null>(null);
+  const [pendingBillSourceSiteId, setPendingBillSourceSiteId] = useState<string | null>(null);
+  const [recoveryChecked, setRecoveryChecked] = useState(false);
+  const recoveryOfferedRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    if (!billingScope.userId || !billingScope.tenantId || !billingScope.siteId) return;
+    const key = `${billingScope.userId}|${billingScope.tenantId}|${billingScope.siteId}`;
+    if (recoveryOfferedRef.current === key) return;
+    recoveryOfferedRef.current = key;
+    const layout = loadLayout('billing', billingScope);
+    const matching = layout ? layout.windows.filter(w => w.kind === 'invoice' || w.kind === 'quote') : [];
+    if (matching.length > 0) {
+      setPendingRecovery(matching);
+      if (layout?.billSourceSiteId) setPendingBillSourceSiteId(layout.billSourceSiteId);
+    } else setRecoveryChecked(true);
+  }, [isDesktop, billingScope.userId, billingScope.tenantId, billingScope.siteId]);
+
+  const acceptBillingRecovery = useCallback(() => {
+    if (!pendingRecovery) return;
+    // Advance window counters past any restored ids so newly opened windows
+    // never collide with a restored `inv-new-N` or `quote-N`.
+    for (const w of pendingRecovery) {
+      const mi = /^inv-new-(\d+)$/.exec(w.windowId);
+      if (mi) invoiceWindowCounter.current = Math.max(invoiceWindowCounter.current, Number(mi[1]));
+      const mq = /^quote-(\d+)$/.exec(w.windowId);
+      if (mq) quoteWindowCounter.current = Math.max(quoteWindowCounter.current, Number(mq[1]));
+    }
+    setInvoiceWindows(prev => {
+      const m = new Map(prev);
+      for (const w of pendingRecovery) {
+        if (w.kind !== 'invoice') continue;
+        const desc = w.descriptor as InvoiceWindowDescriptor;
+        if (!desc || m.has(w.windowId)) continue;
+        if (desc.siteId && desc.siteId !== billingScope.siteId) continue;
+        m.set(w.windowId, desc);
+      }
+      return m;
+    });
+    setQuoteWindows(prev => {
+      const m = new Map(prev);
+      for (const w of pendingRecovery) {
+        if (w.kind !== 'quote') continue;
+        const desc = w.descriptor as QuoteWindowDescriptor;
+        if (!desc || m.has(w.windowId)) continue;
+        if (desc.siteId && desc.siteId !== billingScope.siteId) continue;
+        m.set(w.windowId, desc);
+      }
+      return m;
+    });
+    // Restore the "Stock depuis" depot chosen before the reload rather than
+    // silently keeping whatever is currently active.
+    if (pendingBillSourceSiteId) setBillSourceSiteId(pendingBillSourceSiteId);
+    setPendingBillSourceSiteId(null);
+    setPendingRecovery(null);
+    setRecoveryChecked(true);
+  }, [pendingRecovery, pendingBillSourceSiteId, billingScope.siteId]);
+
+  const dismissBillingRecovery = useCallback(() => {
+    if (pendingRecovery) {
+      for (const w of pendingRecovery) clearFormDraft(billingScope, w.windowId);
+    }
+    setPendingBillSourceSiteId(null);
+    setPendingRecovery(null);
+    setRecoveryChecked(true);
+    saveLayout('billing', { scope: billingScope, pageWindowOpen: true, windows: [] });
+  }, [pendingRecovery, billingScope]);
+  const prevRouteRef = useRef<string | null>(null);
+  // Auto-minimize billing-module windows only when navigating away; restore page on return
+  const prevVisible = useRef(visible);
+  useEffect(() => {
+    if (prevVisible.current && !visible && isDesktop) minimizeGroup(BILLING_GROUP);
+    if (!prevVisible.current && visible && isDesktop) {
+      if (!pageWindowOpen) setPageWindowOpen(true);
+      else restoreWindow(BILLING_PAGE_ID);
+    }
+    prevVisible.current = visible;
+  }, [visible]);
+
+  // Track previous allowed route so closing the billing page can navigate back to it.
+  useEffect(() => {
+    if (!visible) prevRouteRef.current = null;
+  }, [visible]);
+
+  const closeBillingPage = useCallback(() => {
+    setPageWindowOpen(false);
+    // Leave billing route without closing any document windows.
+    onNavigate?.(prevRouteRef.current && prevRouteRef.current !== 'billing' ? prevRouteRef.current : 'dashboard');
+  }, [onNavigate]);
+
+  // Clear all windows on tenant change
+  const prevTenantId = useRef(tenant?.id);
+  useEffect(() => {
+    if (prevTenantId.current && tenant?.id !== prevTenantId.current) {
+      setInvoiceWindows(new Map());
+      setQuoteWindows(new Map());
+    }
+    prevTenantId.current = tenant?.id;
+  }, [tenant?.id]);
+
+  // Auto-minimize off-site windows when active site changes
+  const prevSiteId = useRef(currentSite?.id);
+  useEffect(() => {
+    if (!currentSite?.id || currentSite.id === prevSiteId.current) { prevSiteId.current = currentSite?.id; return; }
+    prevSiteId.current = currentSite.id;
+    if (!isDesktop) return;
+    for (const w of wmWindows) {
+      if (w.siteId && w.siteId !== currentSite.id && !w.minimized) {
+        minimizeWindow(w.id);
+      }
+    }
+  }, [currentSite?.id, isDesktop]);
+
   const [cancelTarget, setCancelTarget] = useState<Invoice | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelPaymentAction, setCancelPaymentAction] = useState<'keep_credit' | 'refund_cash' | 'none'>('none');
+  const [invoiceSearchOpen, setInvoiceSearchOpen] = useState(false);
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState('');
+  // Mobile-only singleton state (kept for !isDesktop path)
+  const [mobileInvoiceOpen, setMobileInvoiceOpen] = useState(false);
+  const [mobileInvoiceMode, setMobileInvoiceMode] = useState<'create' | 'edit' | 'view'>('create');
+  const [mobileEditingInvoiceId, setMobileEditingInvoiceId] = useState<string | null>(null);
+  const [invoiceForm, setInvoiceForm] = useState<{ customer_id: string; doc_date: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string }>({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+  const [invoicePostCreation, setInvoicePostCreation] = useState<{ saleNumber: string; createdAt: string; createdBy: string } | null>(null);
   const [invoiceEditorItems, setInvoiceEditorItems] = useState<QuoteItem[]>([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
   const [invoicePayList, setInvoicePayList] = useState<{ method_id: string; method_name: string; amount: number; reference: string }[]>([]);
   const [invoiceIsCredit, setInvoiceIsCredit] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
   const editingInvoicePrevRep = useRef<string | null>(null);
   const [invoiceNavIdx, setInvoiceNavIdx] = useState(-1);
-  const [invoiceSearchOpen, setInvoiceSearchOpen] = useState(false);
-  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState('');
 
   // IPM (pharmacy only)
   const isPharmacy = (tenant?.business_activity_type_name || '').toLowerCase() === 'pharmacie';
@@ -429,6 +570,32 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [tenant, currentSite, tab, debouncedSearch, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount, billCursors]);
 
   useEffect(() => { loadTab(billPage); /* eslint-disable-next-line */ }, [billPage, tab, debouncedSearch, statusFilter, customerFilter, dateFrom, dateTo, minAmount, maxAmount, tenant?.id, currentSite?.id]);
+
+  // Load counts for all tabs so the tab bar shows real numbers without
+  // requiring the user to click each tab first.
+  useEffect(() => {
+    if (!tenant || !currentSite) return;
+    const tenantId = tenant.id;
+    const siteId = currentSite.id;
+    let cancelled = false;
+    (async () => {
+      const base = { p_tenant_id: tenantId, p_site_id: siteId, p_page_size: 1 };
+      const [inv, qte, ret, av] = await Promise.all([
+        supabase.rpc('rpc_paginated_invoices', base),
+        supabase.rpc('rpc_paginated_quotes',   base),
+        supabase.rpc('rpc_paginated_returns',  { ...base, p_refund_method: 'not_avoir' }),
+        supabase.rpc('rpc_paginated_returns',  { ...base, p_refund_method: 'avoir' }),
+      ]);
+      if (cancelled) return;
+      setTabCounts({
+        invoices: Number((inv.data as any)?.total_count || 0),
+        quotes:   Number((qte.data as any)?.total_count || 0),
+        returns:  Number((ret.data as any)?.total_count || 0),
+        credits:  Number((av.data  as any)?.total_count || 0),
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [tenant?.id, currentSite?.id, dataTick]);
 
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => loadTab(billPage, true), 400); return () => clearTimeout(t); } /* eslint-disable-next-line */ }, [dataTick]);
 
@@ -622,7 +789,6 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const addArticleWithSelectedTier = (tierName: string, tierPrice: number) => {
     if (!tierPickerArticle) return;
     if (tierPickerIdx !== null) {
-      // Update existing line at index
       const updateFn = (prev: QuoteItem[]) => {
         const next = [...prev];
         next[tierPickerIdx] = { ...next[tierPickerIdx], unit_price: tierPrice, tier_name: tierName || undefined };
@@ -630,10 +796,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         return next;
       };
       if (tierPickerTarget === 'invoice') setInvoiceEditorItems(updateFn);
+      else if (activeQuoteItemsSetter.current) activeQuoteItemsSetter.current(updateFn);
       else setQuoteItems(updateFn);
     } else {
       const newItem: QuoteItem = { article_id: tierPickerArticle.id, name: tierPickerArticle.name, quantity: 1, unit_price: tierPrice, discount: 0, total: tierPrice, tier_name: tierName || undefined };
       if (tierPickerTarget === 'invoice') setInvoiceEditorItems(p => [...p, newItem]);
+      else if (activeQuoteItemsSetter.current) activeQuoteItemsSetter.current((p: QuoteItem[]) => [...p, newItem]);
       else setQuoteItems(p => [...p, newItem]);
     }
     setTierPickerOpen(false);
@@ -775,7 +943,27 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setQuoteForm({ customer_id: '', valid_until: '', note: '', delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
   };
 
+  // Desktop: open or restore a quote window
+  const openDesktopQuoteWindow = (quoteId: string | null, mode: 'create' | 'edit' | 'view') => {
+    if (quoteId) {
+      const existing = Array.from(quoteWindows.values()).find(d => d.quoteId === quoteId);
+      if (existing) { focusWindow(existing.windowId); return; }
+    }
+    const wid = `quote-${++quoteWindowCounter.current}`;
+    const desc: QuoteWindowDescriptor = { windowId: wid, quoteId, mode, siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
+    setQuoteWindows(prev => { const next = new Map(prev); next.set(wid, desc); return next; });
+    if (quoteWindows.size + invoiceWindows.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
+  };
+  const closeQuoteWindow = (windowId: string) => {
+    clearFormDraft(billingScope, windowId);
+    setQuoteWindows(prev => { const next = new Map(prev); next.delete(windowId); return next; });
+  };
+
   const openQuoteForEdit = async (q: Quote) => {
+    if (isDesktop) {
+      openDesktopQuoteWindow(q.id, q.status === 'draft' || q.status === 'sent' ? 'edit' : 'view');
+      return;
+    }
     const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
     setEditingQuoteId(q.id);
     setEditingQuote(q);
@@ -790,6 +978,10 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   };
 
   const openQuoteForView = async (q: Quote) => {
+    if (isDesktop) {
+      openDesktopQuoteWindow(q.id, 'view');
+      return;
+    }
     const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('quote_id', q.id);
     setEditingQuoteId(q.id);
     setEditingQuote(q);
@@ -805,11 +997,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
   const openQuoteDetail = async (q: Quote) => {
     if (isDesktop) {
-      if (q.status === 'draft' || q.status === 'sent') {
-        openQuoteForEdit(q);
-      } else {
-        openQuoteForView(q);
-      }
+      openDesktopQuoteWindow(q.id, q.status === 'draft' || q.status === 'sent' ? 'edit' : 'view');
     } else {
       setQuoteDetail(q);
       const { data } = await supabase.from('quote_items').select('*, articles(internal_ref, oem_ref)').eq('quote_id', q.id);
@@ -896,31 +1084,75 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const invoiceEditorPaid = invoicePayList.reduce((s, p) => s + p.amount, 0);
 
   const openInvoiceEditor = () => {
-    setInvoiceEditorOpen(true);
-    setInvoiceEditorMode('create');
-    setEditingInvoiceId(null);
-    setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
-    setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
-    setInvoicePayList([]);
-    setInvoiceIsCredit(false);
-    setInvoicePostCreation(null);
+    if (isDesktop) {
+      const wid = `inv-new-${++invoiceWindowCounter.current}`;
+      const desc: InvoiceWindowDescriptor = { windowId: wid, invoiceId: null, mode: 'create', siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
+      setInvoiceWindows(prev => { const next = new Map(prev); next.set(wid, desc); return next; });
+      if (invoiceWindows.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
+    } else {
+      setMobileInvoiceOpen(true);
+      setMobileInvoiceMode('create');
+      setMobileEditingInvoiceId(null);
+      setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+      setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
+      setInvoicePayList([]);
+      setInvoiceIsCredit(false);
+      setInvoicePostCreation(null);
+    }
+  };
+  const closeInvoiceWindow = (windowId: string) => {
+    clearFormDraft(billingScope, windowId);
+    setInvoiceWindows(prev => { const next = new Map(prev); next.delete(windowId); return next; });
+  };
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    if (!recoveryChecked) return;
+    if (!billingScope.userId || !billingScope.tenantId || !billingScope.siteId) return;
+    const windowsList: LayoutWindow[] = [];
+    for (const desc of invoiceWindows.values()) {
+      const wm = wmWindows.find(w => w.id === desc.windowId);
+      windowsList.push({ windowId: desc.windowId, kind: 'invoice', descriptor: desc, rect: wm?.rect, minimized: wm?.minimized });
+    }
+    for (const desc of quoteWindows.values()) {
+      const wm = wmWindows.find(w => w.id === desc.windowId);
+      windowsList.push({ windowId: desc.windowId, kind: 'quote', descriptor: desc, rect: wm?.rect, minimized: wm?.minimized });
+    }
+    saveLayout('billing', { scope: billingScope, pageWindowOpen, windows: windowsList, billSourceSiteId });
+  }, [isDesktop, recoveryChecked, billingScope, pageWindowOpen, invoiceWindows, quoteWindows, wmWindows, billSourceSiteId]);
+  const closeWindowForInvoice = (invoiceId: string) => {
+    const entry = Array.from(invoiceWindows.entries()).find(([, d]) => d.invoiceId === invoiceId);
+    if (entry) closeInvoiceWindow(entry[0]);
+  };
+  const handleInvoiceCreated = (windowId: string, invoiceId: string, saleNumber: string) => {
+    setInvoiceWindows(prev => {
+      const next = new Map(prev);
+      const desc = next.get(windowId);
+      if (desc) next.set(windowId, { ...desc, invoiceId, mode: 'view' });
+      return next;
+    });
+    updateWindowTitle(windowId, `Facture ${saleNumber}`);
   };
   const closeInvoiceEditor = () => {
-    setInvoiceEditorOpen(false);
-    setInvoiceEditorMode('create');
-    setEditingInvoiceId(null);
-    setInvoicePostCreation(null);
-    setInvoiceDetail(null);
-    setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
-    setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
-    setInvoicePayList([]);
-    setInvoiceIsCredit(false);
-    setInvoicePostCreation(null);
+    if (isDesktop) {
+      setInvoiceWindows(new Map());
+    } else {
+      setMobileInvoiceOpen(false);
+      setMobileInvoiceMode('create');
+      setMobileEditingInvoiceId(null);
+      setInvoicePostCreation(null);
+      setInvoiceDetail(null);
+      setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
+      setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
+      setInvoicePayList([]);
+      setInvoiceIsCredit(false);
+      setInvoicePostCreation(null);
+    }
   };
   const handleNavTarget = useCallback((target: string) => {
     switch (target) {
       case 'newInvoice': setTabRaw('invoices'); openInvoiceEditor(); break;
-      case 'newQuote': setTabRaw('quotes'); setQuoteEditorMode('create'); setQuoteOpen(true); break;
+      case 'newQuote': setTabRaw('quotes'); if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); } break;
       case 'newReturn': setTabRaw('returns'); setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); break;
       case 'newAvoir': setTabRaw('credits'); setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); break;
     }
@@ -944,60 +1176,78 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [handleNavTarget]);
 
   const openInvoiceForEdit = async (inv: Invoice) => {
-    const [{ data: items }, { data: full }] = await Promise.all([
-      supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
-      supabase.from('sales').select('*, customers(name, phone, address)').eq('id', inv.id).maybeSingle(),
-    ]);
-    setInvoicePostCreation(null);
-    if (full) setInvoiceDetail(full as any);
-    setEditingInvoiceId(inv.id);
-    setInvoiceEditorMode('edit');
-    setInvoiceForm({
-      customer_id: inv.customer_id || '',
-      doc_date: (inv as any).doc_header?.doc_date || new Date(inv.created_at).toISOString().slice(0, 10),
-      delivery_date: (inv as any).doc_header?.delivery_date || '',
-      reference: (inv as any).doc_header?.reference || '',
-      warranty: (inv as any).doc_header?.warranty || '',
-      representative: (inv as any).representative_id || '',
-      imei: (inv as any).doc_header?.imei || '',
-    });
-    editingInvoicePrevRep.current = (inv as any).representative_id || null;
-    setInvoiceEditorItems((items || []).map((i: any) => ({
-      article_id: i.article_id, name: i.name,
-      quantity: Number(i.quantity), unit_price: Number(i.unit_price),
-      discount: Number(i.discount || 0), total: Number(i.total),
-    })));
-    setInvoicePayList([]);
-    setInvoiceIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
-    setInvoiceEditorOpen(true);
+    if (isDesktop) {
+      const existing = Array.from(invoiceWindows.values()).find(w => w.invoiceId === inv.id);
+      if (existing) { focusWindow(existing.windowId); return; }
+      const wid = `inv-edit-${inv.id}`;
+      const desc: InvoiceWindowDescriptor = { windowId: wid, invoiceId: inv.id, mode: 'edit', siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
+      setInvoiceWindows(prev => { const next = new Map(prev); next.set(wid, desc); return next; });
+      if (invoiceWindows.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
+    } else {
+      const [{ data: items }, { data: full }] = await Promise.all([
+        supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
+        supabase.from('sales').select('*, customers(name, phone, address)').eq('id', inv.id).maybeSingle(),
+      ]);
+      setInvoicePostCreation(null);
+      if (full) setInvoiceDetail(full as any);
+      setMobileEditingInvoiceId(inv.id);
+      setMobileInvoiceMode('edit');
+      setInvoiceForm({
+        customer_id: inv.customer_id || '',
+        doc_date: (inv as any).doc_header?.doc_date || new Date(inv.created_at).toISOString().slice(0, 10),
+        delivery_date: (inv as any).doc_header?.delivery_date || '',
+        reference: (inv as any).doc_header?.reference || '',
+        warranty: (inv as any).doc_header?.warranty || '',
+        representative: (inv as any).representative_id || '',
+        imei: (inv as any).doc_header?.imei || '',
+      });
+      editingInvoicePrevRep.current = (inv as any).representative_id || null;
+      setInvoiceEditorItems((items || []).map((i: any) => ({
+        article_id: i.article_id, name: i.name,
+        quantity: Number(i.quantity), unit_price: Number(i.unit_price),
+        discount: Number(i.discount || 0), total: Number(i.total),
+      })));
+      setInvoicePayList([]);
+      setInvoiceIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
+      setMobileInvoiceOpen(true);
+    }
   };
   const openInvoiceForView = async (inv: Invoice) => {
-    const [{ data: items }, { data: full }] = await Promise.all([
-      supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
-      supabase.from('sales').select('*, customers(name, phone, address)').eq('id', inv.id).maybeSingle(),
-    ]);
-    setEditingInvoiceId(inv.id);
-    setInvoiceNavIdx(invoices.findIndex(i => i.id === inv.id));
-    setInvoiceEditorMode('view');
-    setInvoiceForm({
-      customer_id: inv.customer_id || '',
-      doc_date: (inv as any).doc_header?.doc_date || new Date(inv.created_at).toISOString().slice(0, 10),
-      delivery_date: (inv as any).doc_header?.delivery_date || '',
-      reference: (inv as any).doc_header?.reference || '',
-      warranty: (inv as any).doc_header?.warranty || '',
-      representative: (inv as any).representative_id || '',
-      imei: (inv as any).doc_header?.imei || '',
-    });
-    setInvoiceEditorItems((items || []).map((i: any) => ({
-      article_id: i.article_id, name: i.name,
-      quantity: Number(i.quantity), unit_price: Number(i.unit_price),
-      discount: Number(i.discount || 0), total: Number(i.total),
-    })));
-    const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', inv.id);
-    setInvoicePayList((pp || []).map((p: any) => ({ method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: '' })));
-    setInvoiceIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
-    if (full) setInvoiceDetail(full as any);
-    setInvoiceEditorOpen(true);
+    if (isDesktop) {
+      const existing = Array.from(invoiceWindows.values()).find(w => w.invoiceId === inv.id);
+      if (existing) { focusWindow(existing.windowId); return; }
+      const wid = `inv-view-${inv.id}`;
+      const desc: InvoiceWindowDescriptor = { windowId: wid, invoiceId: inv.id, mode: 'view', siteId: currentSite?.id || '', tenantId: tenant?.id || '' };
+      setInvoiceWindows(prev => { const next = new Map(prev); next.set(wid, desc); return next; });
+      if (invoiceWindows.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
+    } else {
+      const [{ data: items }, { data: full }] = await Promise.all([
+        supabase.from('sale_items').select('*, articles(internal_ref, oem_ref, sale_price)').eq('sale_id', inv.id),
+        supabase.from('sales').select('*, customers(name, phone, address)').eq('id', inv.id).maybeSingle(),
+      ]);
+      setMobileEditingInvoiceId(inv.id);
+      setInvoiceNavIdx(invoices.findIndex(i => i.id === inv.id));
+      setMobileInvoiceMode('view');
+      setInvoiceForm({
+        customer_id: inv.customer_id || '',
+        doc_date: (inv as any).doc_header?.doc_date || new Date(inv.created_at).toISOString().slice(0, 10),
+        delivery_date: (inv as any).doc_header?.delivery_date || '',
+        reference: (inv as any).doc_header?.reference || '',
+        warranty: (inv as any).doc_header?.warranty || '',
+        representative: (inv as any).representative_id || '',
+        imei: (inv as any).doc_header?.imei || '',
+      });
+      setInvoiceEditorItems((items || []).map((i: any) => ({
+        article_id: i.article_id, name: i.name,
+        quantity: Number(i.quantity), unit_price: Number(i.unit_price),
+        discount: Number(i.discount || 0), total: Number(i.total),
+      })));
+      const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', inv.id);
+      setInvoicePayList((pp || []).map((p: any) => ({ method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: '' })));
+      setInvoiceIsCredit(inv.status === 'validated' && Number(inv.paid) === 0);
+      if (full) setInvoiceDetail(full as any);
+      setMobileInvoiceOpen(true);
+    }
   };
 
   const saveInvoice = async () => {
@@ -1009,13 +1259,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     if (nonCatalog.length > 0) { error(`Chaque ligne doit correspondre à un article du catalogue : ${nonCatalog.map(i => i.name).join(', ')}`); return; }
 
     // Edit existing invoice via RPC (handles stock + balance recalculation)
-    if (editingInvoiceId) {
+    if (mobileEditingInvoiceId) {
       setSavingInvoice(true);
       try {
         const invRepLabel = repLabelOf(invoiceForm.representative);
         const docHeader = { doc_date: invoiceForm.doc_date || null, delivery_date: invoiceForm.delivery_date || null, reference: invoiceForm.reference || null, warranty: invoiceForm.warranty || null, representative: invRepLabel, imei: invoiceForm.imei || null };
         const { data: result, error: rpcErr } = await supabase.rpc('update_sale_items_and_totals', {
-          p_sale_id: editingInvoiceId,
+          p_sale_id: mobileEditingInvoiceId,
           p_tenant_id: tenant.id,
           p_items: valid.map(i => ({
             article_id: i.article_id, name: i.name,
@@ -1033,11 +1283,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         await supabase.from('sales').update({
           representative_id: invoiceForm.representative || null,
           rep_commission: editSnapshot,
-        }).eq('id', editingInvoiceId);
+        }).eq('id', mobileEditingInvoiceId);
         if (editingInvoicePrevRep.current !== (invoiceForm.representative || null)) {
           await supabase.from('audit_logs').insert({
             tenant_id: tenant.id, user_id: profile?.id || null,
-            action: 'representative_change', module: 'billing', reference_id: editingInvoiceId,
+            action: 'representative_change', module: 'billing', reference_id: mobileEditingInvoiceId,
             old_value: { representative_id: editingInvoicePrevRep.current }, new_value: { representative_id: invoiceForm.representative || null },
           });
         }
@@ -1214,8 +1464,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
       success(`Facture ${invNum} créée${invoiceIsCredit ? ' (à crédit)' : ''}${ipmBeneficiaire && ipmPartIpm > 0 ? ` · Part IPM: ${formatFCFA(ipmPartIpm)}` : ''}`);
       setInvoicePostCreation({ saleNumber: invNum, createdAt: new Date().toISOString(), createdBy: profile?.full_name || profile?.email || '' });
-      setEditingInvoiceId(sale.id);
-      setInvoiceEditorMode('view');
+      setMobileEditingInvoiceId(sale.id);
+      setMobileInvoiceMode('view');
       const { data: newFull } = await supabase.from('sales').select('*, customers(name, phone, address)').eq('id', sale.id).maybeSingle();
       if (newFull) setInvoiceDetail(newFull as any);
       loadTab(billPage, true);
@@ -1429,7 +1679,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       setInvoiceDetail(data as any);
       const { data: pp } = await supabase.from('sale_payments').select('*').eq('sale_id', id);
       setInvoicePays(pp || []);
-      if (invoiceEditorOpen && editingInvoiceId === id) {
+      if (mobileInvoiceOpen && mobileEditingInvoiceId === id) {
         setInvoicePayList((pp || []).map((p: any) => ({ method_id: p.payment_method_id || '', method_name: p.method_name, amount: Number(p.amount), reference: '' })));
       }
     }
@@ -1563,7 +1813,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
     setCancelReason('');
     setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'cancelled' } : i));
     success(`Facture ${inv.sale_number} annulée`);
-    closeInvoiceEditor();
+    if (isDesktop) {
+      closeWindowForInvoice(inv.id);
+    } else {
+      closeInvoiceEditor();
+    }
   };
 
   const comptabiliserFromEditor = async (inv: Invoice) => {
@@ -1838,11 +2092,13 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const hasFilters = !!(search || statusFilter || customerFilter || dateFrom || dateTo || minAmount || maxAmount);
   const clearFilters = () => { setSearch(''); setStatusFilter(''); setCustomerFilter(''); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount(''); setFiltersOpen(false); };
 
-  const counts = {
-    quotes: tab === 'quotes' ? billTotalCount : 0,
-    invoices: tab === 'invoices' ? billTotalCount : 0,
-    returns: tab === 'returns' ? billTotalCount : 0,
-    credits: tab === 'credits' ? billTotalCount : 0,
+  // When a tab is active AND the user is filtering, show the filtered count
+  // for that tab; otherwise fall back to the site-wide total for that tab.
+  const counts: Record<Tab, number> = {
+    invoices: tab === 'invoices' && hasFilters ? billTotalCount : tabCounts.invoices,
+    quotes:   tab === 'quotes'   && hasFilters ? billTotalCount : tabCounts.quotes,
+    returns:  tab === 'returns'  && hasFilters ? billTotalCount : tabCounts.returns,
+    credits:  tab === 'credits'  && hasFilters ? billTotalCount : tabCounts.credits,
   };
 
   const statusOptions = useMemo(() => {
@@ -1866,7 +2122,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   const primaryAction = () => {
     if (tab === 'quotes') {
       if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; }
-      setQuoteEditorMode('create'); setQuoteOpen(true);
+      if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); }
     } else if (tab === 'invoices') {
       if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; }
       openInvoiceEditor();
@@ -1890,18 +2146,33 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
   }, [newMenuOpen]);
   const newMenuItems = [
     { key: 'invoice', label: 'Nouvelle facture', icon: FilePlus, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des factures'); return; } openInvoiceEditor(); } },
-    { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } setQuoteEditorMode('create'); setQuoteOpen(true); } },
+    { key: 'quote', label: 'Nouveau devis', icon: FileText, action: () => { if (!can('create_quotes')) { error('Vous n\'avez pas la permission de créer des devis'); return; } if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); } } },
     { key: 'return', label: 'Nouveau retour', icon: RotateCcw, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; } setReturnMode('return'); setReturnForm({ sale_id: '', reason: '', refund_method: 'cash', restock: true }); setReturnLines([]); setReturnOpen(true); } },
     { key: 'credit', label: 'Nouvel avoir', icon: CreditCard, action: () => { if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de créer des avoirs'); return; } setReturnMode('avoir'); setReturnForm({ sale_id: '', reason: '', refund_method: 'avoir', restock: true }); setReturnLines([]); setReturnOpen(true); } },
   ];
 
   const invoiceDue = invoiceDetail ? Math.max(0, Number(invoiceDetail.total) - Number(invoiceDetail.paid)) : 0;
 
-  return (
-    <div className="space-y-3 pb-6">
+  const pageContent = (
+    <div className={isDesktop ? "h-full overflow-y-auto px-4 sm:px-5 lg:px-6 pb-6 space-y-3" : "space-y-3 pb-6"}>
+      {isDesktop && pendingRecovery && pendingRecovery.length > 0 && (
+        <div className="mt-3 mb-1 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-900">
+          <RotateCcw className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <div className="font-semibold">Travail non enregistré détecté</div>
+            <div className="mt-0.5">
+              {pendingRecovery.length} fenêtre{pendingRecovery.length > 1 ? 's' : ''} de la session précédente peut être restaurée. Aucun enregistrement ne sera relancé automatiquement.
+            </div>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <button onClick={acceptBillingRecovery} className="px-2 py-1 rounded bg-neutral-900 text-white text-[11px] font-semibold hover:bg-neutral-800 transition">Restaurer</button>
+            <button onClick={dismissBillingRecovery} className="px-2 py-1 rounded text-[11px] font-semibold text-amber-800 hover:bg-amber-100 transition">Ignorer</button>
+          </div>
+        </div>
+      )}
       {/* ── Header ───────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
-      <div className="flex items-start justify-between">
+      <div className={`sticky top-0 z-20 pb-3 pt-4 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)] ${isDesktop ? '-mx-4 sm:-mx-5 lg:-mx-6 px-4 sm:px-5 lg:px-6' : '-mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
+      <div className="md:hidden flex items-start justify-between">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Facturation</h1>
         <div className="shrink-0">
           {(() => {
@@ -1921,7 +2192,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           })()}
         </div>
         </div>
-      <div className="flex items-center gap-2">
+      <div className="md:hidden flex items-center gap-2">
         <Search className="w-4 h-4 text-neutral-400 shrink-0" />
         <div className="flex-1 min-w-0">
           <input
@@ -1952,13 +2223,12 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       {(() => {
         const sharedCatalog = (tenant as any)?.settings?.shared_articles !== false;
         const interDepot = !!(tenant as any)?.settings?.inter_depot_transfer;
-        // Own depots always accessible; other depots only if shared catalog + inter-depot enabled
         const availableDepots = depots.filter(d =>
           d.parent_site_id === currentSite?.id || (sharedCatalog && interDepot)
         );
         if (availableDepots.length === 0) return null;
         return (
-          <div className="flex items-center gap-2">
+          <div className="md:hidden flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock depuis :</span>
             <select
               value={billSourceSiteId}
@@ -1970,6 +2240,75 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
                 <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
               ))}
             </select>
+          </div>
+        );
+      })()}
+
+      {/* Desktop: single compact toolbar row – search, filters, depot, action */}
+      {(() => {
+        const sharedCatalog = (tenant as any)?.settings?.shared_articles !== false;
+        const interDepot = !!(tenant as any)?.settings?.inter_depot_transfer;
+        const availableDepots = depots.filter(d =>
+          d.parent_site_id === currentSite?.id || (sharedCatalog && interDepot)
+        );
+        const actionItem = newMenuItems.find(i =>
+          (tab === 'invoices' && i.key === 'invoice') ||
+          (tab === 'quotes' && i.key === 'quote') ||
+          (tab === 'returns' && i.key === 'return') ||
+          (tab === 'credits' && i.key === 'credit')
+        );
+        const ActionIcon = actionItem?.icon;
+        const filtersActive = !!(statusFilter || customerFilter || dateFrom || dateTo || minAmount || maxAmount);
+        return (
+          <div className="hidden md:flex items-end gap-6">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={tab === 'invoices' ? 'N° facture, client ou montant…' : tab === 'quotes' ? 'N° devis, client ou montant…' : 'N°, client ou vente liée…'}
+                className="w-input-ul w-full text-sm py-1.5 pl-5 pr-6"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setFiltersOpen(true)}
+              className={`shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-xs font-semibold transition-colors ${
+                filtersActive
+                  ? 'text-brand-700 hover:text-brand-800'
+                  : 'text-neutral-500 hover:text-neutral-800'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Filtres</span>
+            </button>
+            {availableDepots.length > 0 && (
+              <div className="shrink-0 inline-flex items-center gap-2 pb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Stock</span>
+                <select
+                  value={billSourceSiteId}
+                  onChange={e => setBillSourceSiteId(e.target.value)}
+                  className="text-xs font-semibold bg-transparent border-0 px-0 py-0 text-neutral-800 focus:outline-none max-w-[200px] cursor-pointer"
+                >
+                  {currentSite && <option value={currentSite.id}>{currentSite.name} (Magasin)</option>}
+                  {availableDepots.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} (Dépôt)</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {actionItem && ActionIcon && (
+              <button
+                onClick={actionItem.action}
+                className="shrink-0 inline-flex items-center gap-1.5 pb-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"
+              >
+                <ActionIcon className="w-4 h-4" /><span>{actionItem.label}</span>
+              </button>
+            )}
           </div>
         );
       })()}
@@ -1996,8 +2335,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
             );
           })}
         </div>
-      {/* Desktop: original tab bar */}
-      <div className="hidden md:flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider overflow-x-auto no-scrollbar whitespace-nowrap">
+      {/* Desktop: bigger, more impactful tab bar */}
+      <div className="hidden md:flex items-center gap-1 border-b border-neutral-200 -mb-3 overflow-x-auto no-scrollbar whitespace-nowrap">
           {TABS.map(t => {
             const active = tab === t.key;
             const count = counts[t.key];
@@ -2005,14 +2344,14 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
               <button
                 key={t.key}
                 onClick={() => switchTab(t.key)}
-                className={`shrink-0 inline-flex items-center gap-1.5 py-1 transition-colors ${
+                className={`group shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
                   active
-                    ? 'text-neutral-900 font-bold'
-                    : 'text-slate-500 hover:text-slate-700'
+                    ? 'text-neutral-900 border-neutral-900'
+                    : 'text-neutral-500 border-transparent hover:text-neutral-800 hover:border-neutral-200'
                 }`}
               >
-                {t.label}
-                <span className="num">{count}</span>
+                <span>{t.label}</span>
+                <span className={`num text-[11px] px-1.5 py-0.5 rounded-full min-w-[22px] text-center ${active ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 group-hover:bg-neutral-200'}`}>{count}</span>
               </button>
             );
           })}
@@ -2047,7 +2386,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         )}
           {tab === 'quotes' && (
             filteredQuotes.length === 0 ? (
-              <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => { setQuoteEditorMode('create'); setQuoteOpen(true); }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />Nouveau devis</button>} />
+              <EmptyState icon={FileText} title="Aucun devis" description="Créez votre premier devis." action={<button onClick={() => { if (isDesktop) { openDesktopQuoteWindow(null, 'create'); } else { setQuoteEditorMode('create'); setQuoteOpen(true); } }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-brand-700 transition-colors"><Plus className="w-4 h-4" />Nouveau devis</button>} />
             ) : (
               <div className={flashTab === 'quotes' ? 'waarwi-flash waarwi-flash-scroll' : ''}>
                 <div className="md:hidden count-up">
@@ -2310,172 +2649,154 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           </div>
         }
       />
+    </div>
+  );
 
-      {/* ── Direct invoice full-screen panel ──────────────────────────────── */}
-      {invoiceEditorOpen && isDesktop && (
-        <DocumentEditor
-          docType="invoice"
-          mode={invoiceEditorMode}
-          articles={articles}
-          customers={customers}
-          headerForm={{ ...invoiceForm, valid_until: '', note: '', doc_date: invoiceForm.doc_date || '' }}
-          setHeaderForm={(fn: any) => setInvoiceForm((prev: any) => {
-            const next = typeof fn === 'function' ? fn(prev) : fn;
-            const { valid_until: _, ...rest } = next;
-            return rest;
-          })}
-          items={invoiceEditorItems}
-          setItems={setInvoiceEditorItems}
-          subtotal={invoiceEditorSubtotal}
-          saving={savingInvoice}
-          onSave={saveInvoice}
-          onClose={closeInvoiceEditor}
-          hasPrev={invoiceNavIdx > 0}
-          hasNext={invoiceNavIdx >= 0 && invoiceNavIdx < invoices.length - 1}
-          onPrev={invoiceNavIdx > 0 ? () => { const prev = invoices[invoiceNavIdx - 1]; if (prev) openInvoiceForView(prev); } : undefined}
-          onNext={invoiceNavIdx >= 0 && invoiceNavIdx < invoices.length - 1 ? () => { const next = invoices[invoiceNavIdx + 1]; if (next) openInvoiceForView(next); } : undefined}
-          onSearchOpen={() => setInvoiceSearchOpen(true)}
-          editingId={editingInvoiceId}
-          documentNumber={editingInvoiceId ? (invoices.find(i => i.id === editingInvoiceId)?.sale_number || undefined) : undefined}
-          documentStatus={editingInvoiceId ? (invoices.find(i => i.id === editingInvoiceId)?.status || undefined) : undefined}
-          accountingStatus={(invoices.find(i => i.id === editingInvoiceId) as any)?.accounting_status || undefined}
-          invoiceDue={editingInvoiceId ? Math.max(0, Number(invoices.find(i => i.id === editingInvoiceId)?.total || 0) - Number(invoices.find(i => i.id === editingInvoiceId)?.paid || 0)) : 0}
-          docSettings={docSettings}
-          autoMode={autoMode}
-          onVehiclePicker={(idx: number | null) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
-          paymentMethods={paymentMethods}
-          payments={invoicePayList}
-          setPayments={setInvoicePayList}
-          totalPaid={invoiceIsCredit ? 0 : invoiceEditorPaid}
-          isCredit={invoiceIsCredit}
-          setIsCredit={setInvoiceIsCredit}
-          isPharmacy={isPharmacy}
-          ipmLoading={ipmLoading}
-          ipmBeneficiaire={ipmBeneficiaire}
-          ipmTaux={ipmTaux}
-          ipmConvention={ipmConvention}
-          ipmPartIpm={ipmPartIpm}
-          ipmPartClient={ipmPartClient}
-          ipmConfig={ipmConfig}
-          ipmDocuments={ipmDocuments}
-          setIpmDocuments={setIpmDocuments}
-          ipmDocValidation={ipmDocValidation}
-          onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
-          onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
-          reps={activeReps}
-          postCreation={invoicePostCreation}
-          docCreatedInfo={editingInvoiceId ? (() => {
-            const inv = invoices.find(i => i.id === editingInvoiceId);
-            return inv ? { createdAt: inv.created_at, createdBy: creatorName(inv.user_id) } : null;
-          })() : null}
-          onNewInvoice={() => {
-            setInvoicePostCreation(null);
-            setEditingInvoiceId(null);
-            setInvoiceForm({ customer_id: '', doc_date: new Date().toISOString().slice(0, 10), delivery_date: '', reference: '', warranty: '', representative: '', imei: '' });
-            setInvoiceEditorItems([{ article_id: null, name: '', quantity: 1, unit_price: 0, discount: 0, total: 0 }]);
-            setInvoicePayList([]);
-            setInvoiceIsCredit(false);
-          }}
-          onEdit={editingInvoiceId ? () => {
-            setInvoicePostCreation(null);
-            const inv = invoices.find(i => i.id === editingInvoiceId);
-            if (inv) openInvoiceForEdit(inv);
-          } : undefined}
-          onPay={editingInvoiceId ? () => {
-            const inv = invoices.find(i => i.id === editingInvoiceId);
-            if (inv) openPay(inv);
-          } : undefined}
-          onCopyLink={editingInvoiceId ? () => {
-            const inv = invoices.find(i => i.id === editingInvoiceId);
-            if (inv) copyInvoiceLink(inv);
-          } : undefined}
-          onWhatsApp={editingInvoiceId ? (() => {
-            const inv = invoices.find(i => i.id === editingInvoiceId);
-            if (inv?.customers) return () => sendInvoiceWhatsApp(inv);
-            return undefined;
-          })() : undefined}
-          onCancel={editingInvoiceId ? () => {
-            const inv = invoices.find(i => i.id === editingInvoiceId);
-            if (inv) cancelInvoice(inv);
-          } : undefined}
-          onComptabiliser={editingInvoiceId ? () => {
-            const inv = invoices.find(i => i.id === editingInvoiceId);
-            if (inv) comptabiliserFromEditor(inv);
-          } : undefined}
-          onPrint={editingInvoiceId ? () => {
-            const inv = invoiceDetail || invoices.find(i => i.id === editingInvoiceId);
-            if (!inv || !tenant) return;
-            const pitems = invoiceEditorItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
-            const psubtotal = pitems.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-            printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'FACTURE', docNumber: inv.sale_number || '', docDate: new Date(inv.created_at).toLocaleDateString('fr-FR'), docCreatedAt: inv.created_at, customer: inv.customers ? { name: inv.customers.name, phone: (inv.customers as any).phone || undefined, address: (inv.customers as any).address || undefined } : null, items: pitems, subtotal: psubtotal, total: Number(inv.total), payments: invoicePayList.map(p => ({ method_name: p.method_name, amount: p.amount })), paid: Number(inv.paid), issuedBy: creatorName((inv as any).user_id), docHeader: invoiceForm.reference || invoiceForm.delivery_date || invoiceForm.warranty || invoiceForm.imei || repLabelOf(invoiceForm.representative) ? { reference: invoiceForm.reference || null, delivery_date: invoiceForm.delivery_date || null, warranty: invoiceForm.warranty || null, representative: repLabelOf(invoiceForm.representative), imei: invoiceForm.imei || null } : null });
-          } : undefined}
-          transformReturnLines={returnLines}
-          loadReturnLines={async (saleId: string) => { await loadSaleItems(saleId); }}
-          onTransformToReturn={async (config) => {
-            if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
-            if (!can('edit_invoices')) { error('Permission insuffisante'); return; }
-            if (!editingInvoiceId) return;
-            const sel = config.selectedItems.filter(i => i.selected && i.quantity > 0);
-            if (sel.length === 0) { error('Sélectionnez au moins un article'); return; }
-            setSaving(true);
-            const saleId = editingInvoiceId;
-            const localReturnTotal = sel.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0);
-            const { data: ipmVente } = await supabase.from('ipm_ventes')
-              .select('id, part_ipm, part_client, montant_total, bordereau_id, statut')
-              .eq('sale_id', saleId).limit(1).maybeSingle();
-            let refundTotal = localReturnTotal;
-            if (ipmVente && ipmVente.montant_total > 0) {
-              const ipmRatio = Number(ipmVente.part_client) / Number(ipmVente.montant_total);
-              refundTotal = Math.round(localReturnTotal * ipmRatio);
-            }
-            const { data: numData } = await supabase.rpc('next_doc_number', {
-              p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET',
-            });
-            const rNum = (numData as string) || ('RET-' + Date.now());
-            const sale = sales.find(s => s.id === saleId);
-            const { data: ret, error: e } = await supabase.from('sale_returns').insert({
-              tenant_id: tenant.id, site_id: currentSite.id,
-              sale_id: saleId, customer_id: sale?.customer_id || null,
-              return_number: rNum, total: refundTotal,
-              refund_method: 'pending', reason: config.reason,
-              restock: config.restock, status: 'pending',
-            }).select().single();
-            if (e || !ret) { error(e?.message || 'Erreur'); setSaving(false); return; }
-            await supabase.from('sale_return_items').insert(sel.map(i => ({
-              tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, sale_item_id: i.item_id, name: i.name,
-              quantity: i.quantity, unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, total: i.quantity * i.unit_price,
-            })));
-            if (config.restock) {
-              for (const item of sel) {
-                await supabase.rpc('adjust_stock', {
-                  p_article_id: item.article_id, p_site_id: billSourceSiteId || currentSite.id,
-                  p_quantity: item.quantity, p_movement_type: 'return_customer',
-                  p_note: `Retour ${rNum}`,
-                });
-              }
-            }
-            if (ipmVente) {
-              const saleTotal = Number(ipmVente.montant_total);
-              if (localReturnTotal >= saleTotal) {
-                await supabase.from('ipm_ventes').update({ statut: 'annulee', bordereau_id: null }).eq('id', ipmVente.id);
-              } else {
-                const newTotal = saleTotal - localReturnTotal;
-                const oldRatio = Number(ipmVente.part_ipm) / saleTotal;
-                await supabase.from('ipm_ventes').update({
-                  montant_total: newTotal, part_ipm: Math.round(newTotal * oldRatio),
-                  part_client: newTotal - Math.round(newTotal * oldRatio), bordereau_id: null,
-                }).eq('id', ipmVente.id);
-              }
-            }
-            setSaving(false);
-            success('Retour enregistré — choisissez le mode de remboursement');
-            closeInvoiceEditor();
-            await loadTab(billPage, true);
-            openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
-          }}
-        />
+  return (
+    <>
+      {/* ── Page window (desktop) / inline content (mobile) ──────────── */}
+      {isDesktop && pageWindowOpen && (
+        <DesktopWindow
+          id={BILLING_PAGE_ID}
+          title="Facturation"
+          icon={<ClipboardList className="w-4 h-4" />}
+          onClose={closeBillingPage}
+          minW={480}
+          minH={320}
+          background
+          groupId={BILLING_GROUP}
+        >
+          <div className="flex flex-col h-full min-h-0">
+            <div className="flex-1 min-h-0 overflow-hidden">{pageContent}</div>
+            {(() => {
+              const groupMinimized = wmWindows.filter(w => w.groupId === BILLING_GROUP && w.id !== BILLING_PAGE_ID && w.minimized);
+              if (groupMinimized.length === 0) return null;
+              return (
+                <div className="shrink-0 h-9 border-t border-[var(--w-separator)] bg-[var(--w-surface-el)] flex items-center gap-1 px-2 overflow-x-auto">
+                  {groupMinimized.map(w => (
+                    <button
+                      key={w.id}
+                      onClick={() => { restoreWindow(w.id); focusWindow(w.id); }}
+                      className="flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-[var(--w-hover)] hover:bg-[var(--w-active)] text-xs font-medium text-[var(--w-text)] transition-colors truncate max-w-[220px]"
+                    >
+                      {w.icon && <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 text-[var(--w-text-muted)]">{w.icon}</span>}
+                      <span className="truncate">{w.title}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </DesktopWindow>
       )}
-      {invoiceEditorOpen && !isDesktop && invoiceEditorMode === 'view' && (() => {
+      {!isDesktop && visible && pageContent}
+
+      {/* ── Multi-instance invoice windows (desktop) ────────────────────── */}
+      {isDesktop && Array.from(invoiceWindows.values()).map(desc => (
+        <DesktopWindow
+          key={desc.windowId}
+          id={desc.windowId}
+          title={desc.invoiceId ? `Facture ${invoices.find(i => i.id === desc.invoiceId)?.sale_number || ''}` : 'Nouvelle Facture'}
+          icon={<FileText className="w-4 h-4" />}
+          onClose={() => closeInvoiceWindow(desc.windowId)}
+          siteId={desc.siteId || undefined}
+          initialRect={{ x: 60 + (invoiceWindows.size - 1) * 30, y: 20 + (invoiceWindows.size - 1) * 20, w: Math.min(1400, window.innerWidth - 100), h: Math.min(900, window.innerHeight - 60) }}
+          minW={600}
+          minH={400}
+          groupId={BILLING_GROUP}
+        >
+          <InvoiceEditorInstance
+            descriptor={desc}
+            articles={articles}
+            customers={customers}
+            articleTiers={articleTiers}
+            invoices={invoices}
+            sales={sales}
+            paymentMethods={paymentMethods}
+            docSettings={docSettings}
+            autoMode={autoMode}
+            isPharmacy={isPharmacy}
+            activeReps={activeReps}
+            salesReps={salesReps}
+            repSettings={repSettings}
+            profileNames={profileNames}
+            billSourceSiteId={billSourceSiteId}
+            onClose={() => closeInvoiceWindow(desc.windowId)}
+            onSaved={() => loadTab(billPage, true)}
+            onInvoiceCreated={handleInvoiceCreated}
+            onOpenNew={() => openInvoiceEditor()}
+            onOpenPay={(inv) => openPay(inv)}
+            onCancelInvoice={(inv) => cancelInvoice(inv)}
+            onComptabiliser={(inv) => comptabiliserFromEditor(inv)}
+            onCopyLink={(inv) => copyInvoiceLink(inv)}
+            onWhatsApp={(inv) => sendInvoiceWhatsApp(inv)}
+            onReturnTransform={async (config, saleId) => {
+              if (!tenant || !currentSite) { error('Magasin introuvable'); return; }
+              if (!can('edit_invoices')) { error('Permission insuffisante'); return; }
+              const sel = config.selectedItems.filter((i: any) => i.selected && i.quantity > 0);
+              if (sel.length === 0) { error('Sélectionnez au moins un article'); return; }
+              setSaving(true);
+              const localReturnTotal = sel.reduce((s: number, i: any) => s + Number(i.quantity) * Number(i.unit_price), 0);
+              const { data: ipmVente } = await supabase.from('ipm_ventes')
+                .select('id, part_ipm, part_client, montant_total, bordereau_id, statut')
+                .eq('sale_id', saleId).limit(1).maybeSingle();
+              let refundTotal = localReturnTotal;
+              if (ipmVente && ipmVente.montant_total > 0) {
+                const ipmRatio = Number(ipmVente.part_client) / Number(ipmVente.montant_total);
+                refundTotal = Math.round(localReturnTotal * ipmRatio);
+              }
+              const { data: numData } = await supabase.rpc('next_doc_number', { p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET' });
+              const rNum = (numData as string) || ('RET-' + Date.now());
+              const sale = sales.find(s => s.id === saleId);
+              const { data: ret, error: e } = await supabase.from('sale_returns').insert({
+                tenant_id: tenant.id, site_id: currentSite.id,
+                sale_id: saleId, customer_id: sale?.customer_id || null,
+                return_number: rNum, total: refundTotal,
+                refund_method: 'pending', reason: config.reason,
+                restock: config.restock, status: 'pending',
+              }).select().single();
+              if (e || !ret) { error(e?.message || 'Erreur'); setSaving(false); return; }
+              await supabase.from('sale_return_items').insert(sel.map((i: any) => ({
+                tenant_id: tenant.id, return_id: ret.id, article_id: i.article_id, sale_item_id: i.item_id, name: i.name,
+                quantity: i.quantity, unit_price: i.unit_price, purchase_cost: i.purchase_cost || 0, total: i.quantity * i.unit_price,
+              })));
+              if (config.restock) {
+                for (const item of sel) {
+                  await supabase.rpc('adjust_stock', {
+                    p_article_id: item.article_id, p_site_id: billSourceSiteId || currentSite.id,
+                    p_quantity: item.quantity, p_movement_type: 'return_customer',
+                    p_note: `Retour ${rNum}`,
+                  });
+                }
+              }
+              if (ipmVente) {
+                const saleTotal = Number(ipmVente.montant_total);
+                if (localReturnTotal >= saleTotal) {
+                  await supabase.from('ipm_ventes').update({ statut: 'annulee', bordereau_id: null }).eq('id', ipmVente.id);
+                } else {
+                  const newTotal = saleTotal - localReturnTotal;
+                  const oldRatio = Number(ipmVente.part_ipm) / saleTotal;
+                  await supabase.from('ipm_ventes').update({
+                    montant_total: newTotal, part_ipm: Math.round(newTotal * oldRatio),
+                    part_client: newTotal - Math.round(newTotal * oldRatio), bordereau_id: null,
+                  }).eq('id', ipmVente.id);
+                }
+              }
+              setSaving(false);
+              success('Retour enregistré — choisissez le mode de remboursement');
+              closeInvoiceWindow(desc.windowId);
+              await loadTab(billPage, true);
+              openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
+            }}
+            onSearchOpen={() => setInvoiceSearchOpen(true)}
+            onVehiclePicker={(idx) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
+            onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
+            onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
+            onTierPicker={(art, idx) => { setTierPickerArticle(art); setTierPickerTarget('invoice'); setTierPickerIdx(idx); setTierPickerOpen(true); }}
+          />
+        </DesktopWindow>
+      ))}
+      {mobileInvoiceOpen && !isDesktop && mobileInvoiceMode === 'view' && (() => {
         const viewInv = invoices[invoiceNavIdx] || null;
         if (!viewInv) return null;
         const invDue = Math.max(0, Number(viewInv.total) - Number(viewInv.paid));
@@ -2538,11 +2859,11 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           />
         );
       })()}
-      {invoiceEditorOpen && !isDesktop && invoiceEditorMode !== 'view' && (
+      {mobileInvoiceOpen && !isDesktop && mobileInvoiceMode !== 'view' && (
         <MobileBillingWizard
           open={true}
           onClose={closeInvoiceEditor}
-          title={editingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}
+          title={mobileEditingInvoiceId ? 'Modifier la facture' : 'Nouvelle facture'}
           headerFields={[
             { key: 'customer_id', label: 'Client', type: 'select', options: customers.map(c => ({ value: c.id, label: c.name })), placeholder: 'Client comptoir' },
             { key: 'doc_date', label: 'Date', type: 'date' as const },
@@ -2562,7 +2883,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           saving={savingInvoice}
           onSave={saveInvoice}
           total={invoiceEditorSubtotal}
-          saveLabel={editingInvoiceId ? 'Mettre à jour' : 'Enregistrer facture'}
+          saveLabel={mobileEditingInvoiceId ? 'Mettre à jour' : 'Enregistrer facture'}
           onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
           onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
           banner={isPharmacy && invoiceForm.customer_id && ipmBeneficiaire ? (
@@ -2600,45 +2921,40 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           ) : undefined}
         />
       )}
-      {quoteOpen && isDesktop && (
-        <DocumentEditor
-          docType="quote"
-          mode={quoteEditorMode}
-          articles={articles}
-          customers={customers}
-          headerForm={{ customer_id: quoteForm.customer_id, note: quoteForm.note, delivery_date: quoteForm.delivery_date, reference: quoteForm.reference, warranty: quoteForm.warranty, representative: quoteForm.representative, imei: quoteForm.imei, valid_until: quoteForm.valid_until }}
-          setHeaderForm={(fn: any) => setQuoteForm((prev: any) => typeof fn === 'function' ? fn(prev) : fn)}
-          items={quoteItems}
-          setItems={setQuoteItems}
-          subtotal={quoteSubtotal}
-          saving={saving}
-          onSave={() => saveQuote()}
-          onClose={closeQuotePanel}
-          editingId={editingQuoteId}
-          documentNumber={editingQuote?.quote_number}
-          documentStatus={editingQuote?.status}
-          docSettings={quoteDocSettings}
-          autoMode={autoMode}
-          onVehiclePicker={(idx: number | null) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
-          onChangeStatus={(status: string) => { if (editingQuote) { changeQuoteStatus(editingQuote, status); setEditingQuote({ ...editingQuote, status }); } }}
-          onConvert={() => { if (editingQuote) openConvert(editingQuote); }}
-          isPharmacy={isPharmacy}
-          ipmBeneficiaire={quoteIpmBeneficiaire}
-          ipmTaux={quoteIpmTaux}
-          ipmPartIpm={quoteIpmPartIpm}
-          ipmPartClient={quoteIpmPartClient}
-          onPrint={() => {
-            if (!editingQuote || !tenant) return;
-            const pitems = quoteItems.filter(i => i.name.trim()).map(i => ({ name: i.name, supplier_ref: null, oem_ref: null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
-            const psubtotal = pitems.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-            printDocumentA4({ tenant: tenantForPrint(tenant, currentSite), docLabel: 'DEVIS', docNumber: editingQuote.quote_number || 'Brouillon', docDate: new Date(editingQuote.created_at).toLocaleDateString('fr-FR'), customer: editingQuote.customers ? { name: editingQuote.customers.name } : null, items: pitems, subtotal: psubtotal, total: psubtotal, payments: [], paid: 0, issuedBy: creatorName((editingQuote as any).user_id), docHeader: quoteForm.reference || quoteForm.delivery_date || quoteForm.warranty || repLabelOf(quoteForm.representative) ? { reference: quoteForm.reference || null, delivery_date: quoteForm.delivery_date || null, warranty: quoteForm.warranty || null, representative: repLabelOf(quoteForm.representative) } : null });
-          }}
-          onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
-          onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
-          reps={activeReps}
-          onEdit={editingQuote && quoteEditorMode === 'view' ? () => openQuoteForEdit(editingQuote) : undefined}
-        />
-      )}
+      {/* ── Multi-instance quote windows (desktop) ────────────────────── */}
+      {isDesktop && Array.from(quoteWindows.values()).map(desc => (
+        <DesktopWindow
+          key={desc.windowId}
+          id={desc.windowId}
+          title={desc.quoteId ? `Devis ${quotes.find(q => q.id === desc.quoteId)?.quote_number || ''}` : 'Nouveau Devis'}
+          icon={<FileText className="w-4 h-4" />}
+          onClose={() => closeQuoteWindow(desc.windowId)}
+          siteId={desc.siteId || undefined}
+          initialRect={{ x: 80 + (quoteWindows.size - 1) * 30, y: 40 + (quoteWindows.size - 1) * 20, w: Math.min(1400, window.innerWidth - 120), h: Math.min(900, window.innerHeight - 80) }}
+          minW={600}
+          minH={400}
+          groupId={BILLING_GROUP}
+        >
+          <QuoteEditorInstance
+            descriptor={desc}
+            articles={articles}
+            customers={customers}
+            articleTiers={articleTiers}
+            docSettings={quoteDocSettings}
+            autoMode={autoMode}
+            isPharmacy={isPharmacy}
+            activeReps={activeReps}
+            profileNames={profileNames}
+            onClose={() => closeQuoteWindow(desc.windowId)}
+            onSaved={() => loadTab(billPage, true)}
+            onConvert={(q) => openConvert(q)}
+            onVehiclePicker={(idx) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}
+            onCreateArticle={(name) => { setQuickArticleName(name); setQuickArticleOpen(true); }}
+            onCreateCustomer={(name) => { setQuickCustomerName(name); setQuickCustomerOpen(true); }}
+            onTierPicker={(art, idx) => { setTierPickerArticle(art); setTierPickerTarget('quote'); setTierPickerIdx(idx); setTierPickerOpen(true); }}
+          />
+        </DesktopWindow>
+      ))}
 
       {/* ── Quote create modal (mobile only) ──────────────────────────────── */}
       {quoteOpen && !isDesktop && (
@@ -2691,7 +3007,18 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
 
       {/* ── Return full-screen viewer ──────────────────────────────── */}
       {returnEditorOpen && returnDetail && (
+        <DesktopWindow
+          id="billing-return-viewer"
+          title={`Retour ${returnDetail.return_number || ''}`}
+          icon={<RotateCcw className="w-4 h-4" />}
+          onClose={() => { setReturnEditorOpen(false); setReturnDetail(null); }}
+          initialRect={{ x: 100, y: 50, w: Math.min(1200, window.innerWidth - 140), h: Math.min(800, window.innerHeight - 100) }}
+          minW={500}
+          minH={350}
+          groupId={BILLING_GROUP}
+        >
         <DocumentEditor
+          embedded
           docType="return"
           mode="view"
           articles={articles}
@@ -2729,6 +3056,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           onRefundCash={returnDetail.status === 'pending' ? () => setReturnCashConfirmOpen(true) : undefined}
           onApproveAvoir={returnDetail.status === 'pending' ? () => approveAsAvoir(returnDetail) : undefined}
         />
+        </DesktopWindow>
       )}
 
       {/* ── Quote detail ─────────────────────────────────────── */}
@@ -2911,7 +3239,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
       })()}
 
       {/* ── Invoice detail ───────────────────────────────────── */}
-      <DocPanel open={!!invoiceDetail && !invoiceEditorOpen} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
+      <DocPanel open={!!invoiceDetail && !mobileInvoiceOpen && invoiceWindows.size === 0} onClose={() => setInvoiceDetail(null)} title={invoiceDetail ? `Facture ${invoiceDetail.sale_number}` : ''}
         footer={<>
           <div className="flex gap-1.5 mr-auto">
             {invoiceDetail && invoiceDetail.status !== 'cancelled' && invoiceDetail.accounting_status !== 'accounted' && (
@@ -3450,8 +3778,8 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
           open={vehiclePickerOpen}
           onClose={() => setVehiclePickerOpen(false)}
           onSelect={a => {
-            const targetUpdate = invoiceEditorOpen ? updateInvoiceItem : updateQuoteItem;
-            const targetSet = invoiceEditorOpen ? setInvoiceEditorItems : setQuoteItems;
+            const targetUpdate = mobileInvoiceOpen ? updateInvoiceItem : updateQuoteItem;
+            const targetSet = mobileInvoiceOpen ? setInvoiceEditorItems : setQuoteItems;
             if (vehiclePickerTargetIdx !== null) {
               targetUpdate(vehiclePickerTargetIdx, 'article_id', a.id);
             } else {
@@ -3486,7 +3814,7 @@ export function Billing({ onNavigate }: { onNavigate?: (r: string) => void }) {
         setQuery={setInvoiceSearchQuery}
         onSelect={(inv) => { setInvoiceSearchOpen(false); setInvoiceSearchQuery(''); openInvoiceForView(inv); }}
       />}
-    </div>
+    </>
   );
 }
 

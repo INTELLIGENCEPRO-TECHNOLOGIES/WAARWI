@@ -69,6 +69,9 @@ export type SupplierOrderEditorProps = {
   onNext?: () => void;
   hasPrev?: boolean;
   hasNext?: boolean;
+  // Embedded inside a DesktopWindow (desktop windowed mode)
+  embedded?: boolean;
+  inactive?: boolean;
 };
 
 // ─── Column widths (matching DocumentEditor grid) ────────────────
@@ -118,6 +121,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
     receiveQty, setReceiveQty, receiveLotData, setReceiveLotData,
     stockMethod, onConfirmReceive, onStartReceive,
     onPrev, onNext, hasPrev, hasNext,
+    embedded = false, inactive = false,
   } = props;
 
   const isView = mode === 'view';
@@ -137,11 +141,13 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
   const totalQtyItems = validItems.reduce((s, i) => s + (i.quantity_ordered || 0), 0);
 
   useEffect(() => {
+    if (embedded) return;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
-  }, []);
+  }, [embedded]);
 
   useEffect(() => {
+    if (embedded) return;
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (articleSearchOpen) { setArticleSearchOpen(false); return; }
@@ -151,7 +157,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [onClose, editingIdx, articleSearchOpen]);
+  }, [onClose, editingIdx, articleSearchOpen, embedded]);
 
   // ─── Line item logic ────────────────────────────────────────
 
@@ -243,8 +249,25 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
   const selectedSupplier = suppliers.find(s => s.id === headerForm.supplier_id);
 
+  const rootCls = embedded
+    ? 'absolute inset-0 flex flex-col bg-[var(--w-bg)]'
+    : 'fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in';
+
+  const onLocalKeyDown = (e: React.KeyboardEvent) => {
+    if (!embedded) return;
+    if (e.key === 'Escape') {
+      if (articleSearchOpen) { setArticleSearchOpen(false); e.stopPropagation(); return; }
+      if (editingIdx !== null) { cancelEdit(); e.stopPropagation(); return; }
+      onClose();
+      e.stopPropagation();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--w-bg)] animate-fade-in">
+    <div className={rootCls} onKeyDown={onLocalKeyDown} tabIndex={-1}>
+      {inactive && (
+        <div className="absolute inset-0 bg-white/60 z-[5] cursor-not-allowed" />
+      )}
 
       {/* ═══ Title bar ═══ */}
       <div className="flex items-center justify-between px-4 h-11 border-b border-[var(--w-separator)] flex-shrink-0">
