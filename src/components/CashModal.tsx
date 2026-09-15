@@ -1,4 +1,5 @@
 import { ReactNode, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 type Props = {
@@ -21,9 +22,9 @@ export function CashModal({ open, onClose, title, children, footer, footerLeft, 
   }, [open, onClose]);
 
   if (!open) return null;
-  const z = layer === 'top' ? 'z-[70]' : 'z-50';
+  const z = layer === 'top' ? 'z-[10010]' : 'z-50';
 
-  return (
+  const node = (
     <div className={`fixed inset-0 ${z} flex items-center justify-center p-0 sm:p-4 animate-fade-in`}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full h-full sm:w-[520px] sm:h-[540px] bg-white sm:rounded-xl shadow-premium flex flex-col animate-scale-in sm:animate-scale-in">
@@ -49,4 +50,6 @@ export function CashModal({ open, onClose, title, children, footer, footerLeft, 
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 }

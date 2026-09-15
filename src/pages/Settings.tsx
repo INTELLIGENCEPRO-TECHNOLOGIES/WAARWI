@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown } from 'lucide-react';
+import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { PermissionsTab } from '../components/PermissionsTab';
@@ -66,7 +66,7 @@ export function Settings() {
   if (tab === 'home') {
     return (
       <div className="space-y-5">
-        <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-bg)]/95 backdrop-blur-sm flex items-center gap-2.5">
+        <div className="sticky -top-px z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-bg)] border-b border-transparent [&.scrolled]:border-[var(--w-separator)] flex items-center gap-2.5" ref={(el) => { if (!el) return; const obs = new IntersectionObserver(([e]) => el.classList.toggle('scrolled', e.intersectionRatio < 1), { threshold: [1] }); obs.observe(el); }}>
           <SettingsIcon className="w-5 h-5 text-slate-600" />
           <div>
             <h1 className="text-lg font-bold text-slate-900 tracking-tight">Paramètres</h1>
@@ -105,8 +105,8 @@ export function Settings() {
 
   return (
     <div className="space-y-4">
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 py-2 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-bg)]/95 backdrop-blur-sm">
-      <button onClick={() => setTab('home')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900 transition-colors">
+      <div className="sticky -top-px z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 py-2 pt-3 sm:pt-4 lg:pt-6 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-bg)] border-b border-transparent [&.scrolled]:border-[var(--w-separator)]" ref={(el) => { if (!el) return; const obs = new IntersectionObserver(([e]) => el.classList.toggle('scrolled', e.intersectionRatio < 1), { threshold: [1] }); obs.observe(el); }}>
+      <button onClick={() => setTab('home')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--w-text-sec)] hover:text-[var(--w-text)] transition-colors">
         <ArrowLeft className="w-3.5 h-3.5" />Paramètres / {currentLabel}
       </button>
       </div>
@@ -476,6 +476,10 @@ function SitesTab() {
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const siteLogoRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<'stores' | 'warehouses'>('stores');
+  const [storeSearch, setStoreSearch] = useState('');
+  const [depotSearch, setDepotSearch] = useState('');
+  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
 
   const load = async () => {
     if (!tenant) return;
@@ -492,9 +496,34 @@ function SitesTab() {
   const stores = list.filter(s => !s.is_warehouse);
   const depots = list.filter(s => s.is_warehouse);
 
+  const settings = (tenant as any)?.settings || {};
+  const sharedArticles = settings.shared_articles !== false;
+  const sharedCustomers = settings.shared_customers !== false;
+  const sharedSuppliers = settings.shared_suppliers !== false;
+
+  const filteredStores = stores.filter(s => {
+    if (!storeSearch.trim()) return true;
+    const q = storeSearch.toLowerCase();
+    return s.name.toLowerCase().includes(q) || (s.code || '').toLowerCase().includes(q);
+  });
+  const filteredDepots = depots.filter(d => {
+    if (!depotSearch.trim()) return true;
+    const q = depotSearch.toLowerCase();
+    const parent = stores.find(s => s.id === d.parent_site_id);
+    return d.name.toLowerCase().includes(q) || (d.code || '').toLowerCase().includes(q) || (parent?.name || '').toLowerCase().includes(q);
+  });
+
   const openCreateStore = () => { setEditing(null); setForm({ name: '', code: '', address: '', phone: '', is_warehouse: false, is_active: true, parent_site_id: null }); setOpen(true); };
   const openCreateDepot = () => { setEditing(null); setForm({ name: '', code: '', address: '', phone: '', is_warehouse: true, is_active: true, parent_site_id: stores[0]?.id || '' }); setOpen(true); };
-  const openEdit = (s: any) => { setEditing(s); setForm({ ...s }); setOpen(true); };
+  const openEdit = (s: any) => { setEditing(s); setForm({ ...s }); setOpen(true); setActionMenuId(null); };
+
+  const toggleActive = async (s: any) => {
+    setActionMenuId(null);
+    const { error: e } = await supabase.from('sites').update({ is_active: !s.is_active }).eq('id', s.id);
+    if (e) { error(e.message); return; }
+    success(s.is_active ? 'Désactivé' : 'Activé');
+    load(); refresh();
+  };
 
   const uploadSiteLogo = async (file: File) => {
     if (!tenant || !editing) return;
@@ -549,65 +578,295 @@ function SitesTab() {
     } else { success(editing ? 'Modifié' : 'Créé'); setOpen(false); load(); refresh(); }
   };
 
+  const isPrimary = (s: any) => stores.indexOf(s) === 0;
+  const activeStores = stores.filter(s => s.is_active).length;
+  const activeDepots = depots.filter(d => d.is_active).length;
+
+  const ActionMenu = ({ item, type }: { item: any; type: 'store' | 'depot' }) => {
+    const isOpen = actionMenuId === item.id;
+    return (
+      <div className="relative">
+        <button onClick={(e) => { e.stopPropagation(); setActionMenuId(isOpen ? null : item.id); }}
+          className="p-1.5 rounded-md hover:bg-neutral-100 transition text-neutral-500 hover:text-neutral-700">
+          <MoreHorizontal className="w-4 h-4" />
+        </button>
+        {isOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setActionMenuId(null)} />
+            <div className="absolute right-0 top-full mt-1 z-50 w-48 rounded-md border border-neutral-200 bg-white shadow-md py-1 animate-fade-in">
+              <button onClick={() => openEdit(item)} className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors">
+                <Edit2 className="w-3.5 h-3.5 text-neutral-400" />Modifier
+              </button>
+              <button onClick={() => toggleActive(item)} className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors">
+                {item.is_active ? <ToggleLeft className="w-3.5 h-3.5 text-neutral-400" /> : <ToggleRight className="w-3.5 h-3.5 text-neutral-400" />}
+                {item.is_active ? 'Désactiver' : 'Activer'}
+              </button>
+              {type === 'store' && (
+                <button onClick={() => { setActionMenuId(null); setActiveTab('warehouses'); setDepotSearch(item.name); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] text-neutral-700 hover:bg-neutral-50 transition-colors">
+                  <Warehouse className="w-3.5 h-3.5 text-neutral-400" />Voir les dépôts
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const ShareDot = ({ active, label }: { active: boolean; label: string }) => (
+    <span className={`inline-flex items-center gap-1.5 text-[13px] ${active ? 'text-neutral-700' : 'text-neutral-400'}`}>
+      <span className={`w-[6px] h-[6px] rounded-full ${active ? 'bg-neutral-800' : 'bg-neutral-300'}`} />
+      {label}
+    </span>
+  );
+
+  const StatusBadge = ({ active }: { active: boolean }) => (
+    <span className={`inline-flex items-center gap-1.5 text-[13px] font-semibold ${active ? 'text-emerald-700' : 'text-neutral-400'}`}>
+      {active && <span className="w-[6px] h-[6px] rounded-full bg-emerald-600" />}
+      {active ? 'Actif' : 'Inactif'}
+    </span>
+  );
+
   return (
-    <div className="space-y-8 max-w-none">
-      {/* Magasins section */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Magasins</h2>
-          {isOwner && <button onClick={openCreateStore} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold border-b border-neutral-200">
-              <tr><th className="px-3 py-2 text-left">Nom</th><th className="px-3 py-2 text-left">Code</th><th className="px-3 py-2 text-left hidden sm:table-cell">Telephone</th><th className="px-3 py-2 text-center">Statut</th><th className="px-3 py-2"></th></tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {stores.map(s => (
-                <tr key={s.id} className="hover:bg-neutral-50/60 transition-colors">
-                  <td className="px-3 py-2.5 font-medium text-sm text-neutral-900">{s.name}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-neutral-500">{s.code || '—'}</td>
-                  <td className="px-3 py-2.5 hidden sm:table-cell text-xs text-neutral-500">{s.phone || '—'}</td>
-                  <td className="px-3 py-2.5 text-center"><span className={`text-[10px] font-bold ${s.is_active ? 'text-emerald-600' : 'text-red-600'}`}>{s.is_active ? 'Actif' : 'Inactif'}</span></td>
-                  <td className="px-3 py-2.5 text-right"><button onClick={() => openEdit(s)} className="p-1.5 rounded-md hover:bg-neutral-100 transition"><Edit2 className="w-3.5 h-3.5 text-neutral-500" /></button></td>
+    <div className="max-w-none">
+      {/* Tabs */}
+      <div className="flex gap-8 border-b border-neutral-200 mt-4">
+        <button
+          onClick={() => setActiveTab('stores')}
+          className={`relative pb-3 text-[13px] font-bold transition-colors ${activeTab === 'stores' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'}`}
+        >
+          Magasins <span className="font-medium text-neutral-400 ml-1">{stores.length}</span>
+          {activeTab === 'stores' && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-neutral-900" />}
+        </button>
+        <button
+          onClick={() => setActiveTab('warehouses')}
+          className={`relative pb-3 text-[13px] font-bold transition-colors ${activeTab === 'warehouses' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'}`}
+        >
+          Dépôts & entrepôts <span className="font-medium text-neutral-400 ml-1">{depots.length}</span>
+          {activeTab === 'warehouses' && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-neutral-900" />}
+        </button>
+      </div>
+
+      {/* ═══ MAGASINS TAB ═══ */}
+      {activeTab === 'stores' && (
+        <section>
+          {/* Section header */}
+          <div className="flex items-center justify-between gap-4 py-6">
+            <div>
+              <h3 className="text-base sm:text-[17px] font-bold text-neutral-900 leading-snug">Vos magasins</h3>
+              <p className="hidden sm:block mt-1 text-[13px] text-neutral-500 leading-relaxed">Chaque magasin peut disposer de son propre catalogue ou partager les données avec un autre magasin.</p>
+            </div>
+            {isOwner && (
+              <button onClick={openCreateStore} className="inline-flex items-center gap-2 px-4 h-10 bg-neutral-900 text-white text-[13px] font-bold rounded-[5px] hover:bg-neutral-800 transition active:translate-y-px shrink-0">
+                <Plus className="w-4 h-4" /><span className="hidden sm:inline">Ajouter un magasin</span><span className="sm:hidden">Ajouter</span>
+              </button>
+            )}
+          </div>
+
+          {/* Search toolbar */}
+          <div className="flex items-center gap-4 h-[52px] border-t border-b border-neutral-200">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0 max-w-[500px]">
+              <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+              <input value={storeSearch} onChange={e => setStoreSearch(e.target.value)} placeholder="Rechercher un magasin..." className="w-full bg-transparent text-[13px] text-neutral-900 placeholder:text-neutral-400 outline-none" />
+              {storeSearch && <button onClick={() => setStoreSearch('')} className="p-0.5 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
+            </div>
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[780px]">
+              <thead>
+                <tr className="border-b border-neutral-200">
+                  <th className="py-3.5 pr-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Nom</th>
+                  <th className="py-3.5 px-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Code</th>
+                  <th className="py-3.5 px-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Catalogue</th>
+                  <th className="py-3.5 px-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Clients</th>
+                  <th className="py-3.5 px-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Fournisseurs</th>
+                  <th className="py-3.5 px-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Statut</th>
+                  <th className="py-3.5 pl-3 text-right text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500"></th>
                 </tr>
-              ))}
-              {stores.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-xs text-neutral-400">Aucun magasin</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Depots section */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Depots / Entrepots</h2>
-          {(isOwner || stores.length > 0) && <button onClick={openCreateDepot} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]"><Plus className="w-3.5 h-3.5" />Ajouter</button>}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold border-b border-neutral-200">
-              <tr><th className="px-3 py-2 text-left">Nom</th><th className="px-3 py-2 text-left">Code</th><th className="px-3 py-2 text-left">Magasin rattache</th><th className="px-3 py-2 text-center">Statut</th><th className="px-3 py-2"></th></tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {depots.map(d => {
-                const parentStore = stores.find(s => s.id === d.parent_site_id);
-                return (
-                  <tr key={d.id} className="hover:bg-neutral-50/60 transition-colors">
-                    <td className="px-3 py-2.5 font-medium text-sm text-neutral-900">{d.name}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-neutral-500">{d.code || '—'}</td>
-                    <td className="px-3 py-2.5 text-xs text-neutral-600">{parentStore?.name || <span className="text-amber-600 italic">Non rattache</span>}</td>
-                    <td className="px-3 py-2.5 text-center"><span className={`text-[10px] font-bold ${d.is_active ? 'text-emerald-600' : 'text-red-600'}`}>{d.is_active ? 'Actif' : 'Inactif'}</span></td>
-                    <td className="px-3 py-2.5 text-right"><button onClick={() => openEdit(d)} className="p-1.5 rounded-md hover:bg-neutral-100 transition"><Edit2 className="w-3.5 h-3.5 text-neutral-500" /></button></td>
+              </thead>
+              <tbody>
+                {filteredStores.map(s => (
+                  <tr key={s.id} className="border-b border-neutral-100 hover:bg-neutral-50/40 transition-colors">
+                    <td className="py-4 pr-3">
+                      <div className="text-sm font-bold text-neutral-900">{s.name}</div>
+                      <div className="text-[11.5px] text-neutral-400 mt-0.5">{isPrimary(s) ? 'Magasin principal' : 'Magasin secondaire'}</div>
+                    </td>
+                    <td className="py-4 px-3 font-mono text-[13px] text-neutral-500">{s.code || '—'}</td>
+                    <td className="py-4 px-3"><ShareDot active={sharedArticles} label={sharedArticles ? 'Partagé' : 'Indépendant'} /></td>
+                    <td className="py-4 px-3"><ShareDot active={sharedCustomers} label={sharedCustomers ? 'Partagés' : 'Indépendants'} /></td>
+                    <td className="py-4 px-3"><ShareDot active={sharedSuppliers} label={sharedSuppliers ? 'Partagés' : 'Indépendants'} /></td>
+                    <td className="py-4 px-3"><StatusBadge active={s.is_active} /></td>
+                    <td className="py-4 pl-3 text-right"><ActionMenu item={s} type="store" /></td>
                   </tr>
-                );
-              })}
-              {depots.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-xs text-neutral-400">Aucun depot cree</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                ))}
+                {filteredStores.length === 0 && (
+                  <tr><td colSpan={7} className="py-10 text-center text-[13px] text-neutral-400">{storeSearch ? 'Aucun magasin trouvé' : 'Aucun magasin'}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
 
+          {/* Mobile list */}
+          <div className="md:hidden">
+            {filteredStores.map(s => (
+              <div key={s.id} className="py-4 border-b border-neutral-200">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-[15px] font-bold text-neutral-900 leading-snug">{s.name}</div>
+                    <div className="text-[11.5px] text-neutral-400 mt-0.5">{isPrimary(s) ? 'Magasin principal' : 'Magasin secondaire'}</div>
+                  </div>
+                  <StatusBadge active={s.is_active} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <span className="block text-[10px] font-extrabold uppercase tracking-[0.07em] text-neutral-400 mb-1">Code</span>
+                    <span className="text-[12.5px] font-medium text-neutral-600 font-mono">{s.code || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-extrabold uppercase tracking-[0.07em] text-neutral-400 mb-1">Type</span>
+                    <span className="text-[12.5px] font-medium text-neutral-600">{isPrimary(s) ? 'Principal' : 'Secondaire'}</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-100">
+                  <div className="flex flex-wrap gap-4">
+                    <span className={`inline-flex items-center gap-1.5 text-[11px] ${sharedArticles ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                      <span className={`w-[5px] h-[5px] rounded-full ${sharedArticles ? 'bg-neutral-800' : 'bg-neutral-300'}`} />
+                      Catalogue {sharedArticles ? 'partagé' : 'indépendant'}
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 text-[11px] ${sharedCustomers ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                      <span className={`w-[5px] h-[5px] rounded-full ${sharedCustomers ? 'bg-neutral-800' : 'bg-neutral-300'}`} />
+                      Clients {sharedCustomers ? 'partagés' : 'indépendants'}
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 text-[11px] ${sharedSuppliers ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                      <span className={`w-[5px] h-[5px] rounded-full ${sharedSuppliers ? 'bg-neutral-800' : 'bg-neutral-300'}`} />
+                      Fournisseurs {sharedSuppliers ? 'partagés' : 'indépendants'}
+                    </span>
+                  </div>
+                  <ActionMenu item={s} type="store" />
+                </div>
+              </div>
+            ))}
+            {filteredStores.length === 0 && (
+              <div className="py-8 text-center text-[13px] text-neutral-400">{storeSearch ? 'Aucun magasin trouvé' : 'Aucun magasin'}</div>
+            )}
+          </div>
+
+          {/* Info note */}
+          <div className="flex gap-3 mt-6 pt-4 border-t border-neutral-200">
+            <Info className="w-4 h-4 text-neutral-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-neutral-500 leading-relaxed">Le magasin principal reste la référence du tenant. Les options de partage se configurent dans les onglets Gestion des stocks (catalogue) et Tiers (clients, fournisseurs) des paramètres.</p>
+          </div>
+        </section>
+      )}
+
+      {/* ═══ DEPOTS TAB ═══ */}
+      {activeTab === 'warehouses' && (
+        <section>
+          {/* Section header */}
+          <div className="flex items-center justify-between gap-4 py-6">
+            <div>
+              <h3 className="text-base sm:text-[17px] font-bold text-neutral-900 leading-snug">Dépôts & entrepôts</h3>
+              <p className="hidden sm:block mt-1 text-[13px] text-neutral-500 leading-relaxed">Rattachez chaque dépôt à un magasin afin de garder une lecture claire des stocks et mouvements.</p>
+            </div>
+            {(isOwner || stores.length > 0) && (
+              <button onClick={openCreateDepot} className="inline-flex items-center gap-2 px-4 h-10 bg-neutral-900 text-white text-[13px] font-bold rounded-[5px] hover:bg-neutral-800 transition active:translate-y-px shrink-0">
+                <Plus className="w-4 h-4" /><span className="hidden sm:inline">Ajouter un dépôt</span><span className="sm:hidden">Ajouter</span>
+              </button>
+            )}
+          </div>
+
+          {/* Search toolbar */}
+          <div className="flex items-center gap-4 h-[52px] border-t border-b border-neutral-200">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0 max-w-[500px]">
+              <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+              <input value={depotSearch} onChange={e => setDepotSearch(e.target.value)} placeholder="Rechercher un dépôt..." className="w-full bg-transparent text-[13px] text-neutral-900 placeholder:text-neutral-400 outline-none" />
+              {depotSearch && <button onClick={() => setDepotSearch('')} className="p-0.5 text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>}
+            </div>
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="border-b border-neutral-200">
+                  <th className="py-3.5 pr-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Nom</th>
+                  <th className="py-3.5 px-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Code</th>
+                  <th className="py-3.5 px-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Magasin rattaché</th>
+                  <th className="py-3.5 px-3 text-left text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500">Statut</th>
+                  <th className="py-3.5 pl-3 text-right text-[11px] font-extrabold uppercase tracking-[0.08em] text-neutral-500"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDepots.map(d => {
+                  const parentStore = stores.find(s => s.id === d.parent_site_id);
+                  return (
+                    <tr key={d.id} className="border-b border-neutral-100 hover:bg-neutral-50/40 transition-colors">
+                      <td className="py-4 pr-3">
+                        <div className="text-sm font-bold text-neutral-900">{d.name}</div>
+                      </td>
+                      <td className="py-4 px-3 font-mono text-[13px] text-neutral-500">{d.code || '—'}</td>
+                      <td className="py-4 px-3 text-[13px] text-neutral-700">{parentStore?.name || <span className="text-amber-600 italic text-[12px]">Non rattaché</span>}</td>
+                      <td className="py-4 px-3"><StatusBadge active={d.is_active} /></td>
+                      <td className="py-4 pl-3 text-right"><ActionMenu item={d} type="depot" /></td>
+                    </tr>
+                  );
+                })}
+                {filteredDepots.length === 0 && (
+                  <tr><td colSpan={5} className="py-10 text-center text-[13px] text-neutral-400">{depotSearch ? 'Aucun dépôt trouvé' : 'Aucun dépôt créé'}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile list */}
+          <div className="md:hidden">
+            {filteredDepots.map(d => {
+              const parentStore = stores.find(s => s.id === d.parent_site_id);
+              return (
+                <div key={d.id} className="py-4 border-b border-neutral-200">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-bold text-neutral-900 leading-snug">{d.name}</div>
+                    </div>
+                    <StatusBadge active={d.is_active} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <span className="block text-[10px] font-extrabold uppercase tracking-[0.07em] text-neutral-400 mb-1">Code</span>
+                      <span className="text-[12.5px] font-medium text-neutral-600 font-mono">{d.code || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-extrabold uppercase tracking-[0.07em] text-neutral-400 mb-1">Magasin</span>
+                      <span className="text-[12.5px] font-medium text-neutral-700">{parentStore?.name || <span className="text-amber-600 italic">Non rattaché</span>}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-100">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-neutral-500">
+                      <span className="w-[5px] h-[5px] rounded-full bg-neutral-800" />
+                      Rattaché {parentStore ? `à ${parentStore.name}` : '—'}
+                    </span>
+                    <ActionMenu item={d} type="depot" />
+                  </div>
+                </div>
+              );
+            })}
+            {filteredDepots.length === 0 && (
+              <div className="py-8 text-center text-[13px] text-neutral-400">{depotSearch ? 'Aucun dépôt trouvé' : 'Aucun dépôt créé'}</div>
+            )}
+          </div>
+
+          {/* Info note */}
+          <div className="flex gap-3 mt-6 pt-4 border-t border-neutral-200">
+            <Info className="w-4 h-4 text-neutral-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-neutral-500 leading-relaxed">Un dépôt appartient à un magasin. Les stocks, réceptions et transferts conservent ce rattachement pour garantir la traçabilité multi-magasins.</p>
+          </div>
+        </section>
+      )}
+
+      {/* ═══ EDIT / CREATE MODAL ═══ */}
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? (form.is_warehouse ? 'Modifier le dépôt' : 'Modifier le magasin') : (form.is_warehouse ? 'Nouveau dépôt' : 'Nouveau magasin')} size="md" fullscreenMobile
         footer={<><button onClick={() => setOpen(false)} className="text-xs font-medium text-neutral-500 hover:text-neutral-700 transition">Annuler</button><button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enregistrer'}</button></>}>
         <div className="flat-form space-y-4">
@@ -629,13 +888,11 @@ function SitesTab() {
             </div>
           )}
 
-          {/* Document header section (only for stores) */}
           {!form.is_warehouse && editing && (
             <div className="pt-3 border-t border-neutral-100 space-y-3">
-              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Entete documents (propre a ce magasin)</p>
-              <p className="text-[10px] text-neutral-400">Laisser vide pour utiliser les infos generales de l'entreprise.</p>
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">En-tête documents (propre à ce magasin)</p>
+              <p className="text-[10px] text-neutral-400">Laisser vide pour utiliser les infos générales de l'entreprise.</p>
 
-              {/* Logo upload */}
               <div>
                 <label className="label">Logo du magasin</label>
                 <div className="flex items-center gap-3">
@@ -650,7 +907,7 @@ function SitesTab() {
                   </div>
                   <div className="flex-1 min-w-0">
                     {!form.logo_url && tenant?.logo_url && (
-                      <p className="text-[10px] text-neutral-400 mb-1">Logo actuel : celui de l'entreprise (par defaut)</p>
+                      <p className="text-[10px] text-neutral-400 mb-1">Logo actuel : celui de l'entreprise (par défaut)</p>
                     )}
                     <p className="text-[10px] text-neutral-500 mb-1.5">PNG, JPG, WebP ou SVG — max 2 Mo</p>
                     <div className="flex items-center gap-2">
@@ -658,7 +915,7 @@ function SitesTab() {
                         onChange={e => { const f = e.target.files?.[0]; if (f) uploadSiteLogo(f); e.target.value = ''; }} />
                       <button type="button" onClick={() => siteLogoRef.current?.click()} disabled={uploadingLogo}
                         className="text-xs font-medium text-neutral-700 hover:text-neutral-900 transition">
-                        {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Telecharger'}
+                        {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Télécharger'}
                       </button>
                       {form.logo_url && (
                         <button type="button" onClick={removeSiteLogo} className="text-xs text-red-600 hover:text-red-800 transition">Retirer</button>
