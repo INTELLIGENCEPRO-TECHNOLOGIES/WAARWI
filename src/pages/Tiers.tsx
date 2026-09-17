@@ -148,11 +148,11 @@ export function Tiers() {
     if (!silent) setLoading(true);
     let custQuery = supabase.from('customers').select('id, name, phone, email, address, customer_type, whatsapp, is_active, tenant_id, site_id, credit_limit, balance, account_code').eq('tenant_id', tenant.id).order('name');
     if (!sharedCustomers && currentSite) {
-      custQuery = custQuery.eq('site_id', currentSite.id);
+      custQuery = custQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
     }
     let supQuery = supabase.from('suppliers').select('id, name, phone, email, address, whatsapp, is_active, tenant_id, site_id, balance, credit_limit, account_code').eq('tenant_id', tenant.id).order('name');
     if (!sharedSuppliers && currentSite) {
-      supQuery = supQuery.eq('site_id', currentSite.id);
+      supQuery = supQuery.or(`site_id.eq.${currentSite.id},site_id.is.null`);
     }
     const [cRes, sRes, salesRes, soRes, supPayRes, prepaysRes, avoirsRes] = await Promise.all([
       custQuery,

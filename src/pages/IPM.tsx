@@ -2537,7 +2537,7 @@ function FormField({ label, value, onChange, type = 'text', placeholder, multili
 function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex items-center gap-2 cursor-pointer select-none">
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="w-4 h-4 rounded border-neutral-300 text-neutral-700 focus:ring-neutral-900" />
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="w-4 h-4 rounded" />
       <span className="text-xs text-neutral-700">{label}</span>
     </label>
   );

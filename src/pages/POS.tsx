@@ -1425,7 +1425,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           .eq('tenant_id', tenant.id).eq('is_active', true)
           .order('name').order('id')
           .range(from, from + 999);
-        if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id);
+        if (!isSharedCust && currentSite) q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
         const { data, error: e } = await q;
         if (e) { console.error('[POS] customers fetch error', e, { from }); break; }
         if (!data) break;
@@ -1660,7 +1660,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               .eq('tenant_id', tenant.id).eq('is_active', true)
               .order('name').order('id')
               .range(from, from + 999);
-            if (!isSharedCust && currentSite) q = q.eq('site_id', currentSite.id);
+            if (!isSharedCust && currentSite) q = q.or(`site_id.eq.${currentSite.id},site_id.is.null`);
             const { data, error: e } = await q;
             if (e) { console.error('[POS] realtime customers fetch error', e, { from }); failed = true; break; }
             if (!data) break;
@@ -3670,7 +3670,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           footerLeft={
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" checked={mvPrint} onChange={e => setMvPrint(e.target.checked)}
-                className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-0 focus:ring-offset-0 accent-neutral-900" />
+                className="w-4 h-4 rounded" />
               <Printer className="w-4 h-4 text-neutral-400" />
               <span className="text-[12px] font-medium text-neutral-600 hidden sm:inline">Imprimer le reçu</span>
               <span className="text-[12px] font-medium text-neutral-600 sm:hidden">Imprimer</span>
@@ -3865,7 +3865,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             (custPayMode === 'direct' || (custPayMode === 'invoice' && custPayCustomer && custPayUnpaid.length > 0)) ? (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input type="checkbox" checked={custPayPrint} onChange={e => setCustPayPrint(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-neutral-300 text-neutral-900 focus:ring-0 focus:ring-offset-0 accent-neutral-900" />
+                  className="w-3.5 h-3.5 rounded" />
                 <Printer className="w-3.5 h-3.5 text-neutral-400" />
                 <span className="text-[12px] font-medium text-neutral-600"><span className="hidden sm:inline">Imprimer le reçu</span><span className="sm:hidden">Imprimer</span></span>
               </label>
@@ -5243,7 +5243,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                 ] as const).map(opt => (
                   <label key={opt.k} className="flex items-center gap-2 cursor-pointer">
                     <input type="radio" name="deposit-mode" checked={depositMode === opt.k}
-                      onChange={() => setDepositMode(opt.k)} className="accent-neutral-900" />
+                      onChange={() => setDepositMode(opt.k)} />
                     <span className="text-xs text-neutral-800">{opt.label}</span>
                   </label>
                 ))}

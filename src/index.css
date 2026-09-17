@@ -105,6 +105,13 @@ html, body, #root {
 
 * { box-sizing: border-box; }
 
+/* ── Global accent-color for native controls (checkbox, radio, range) ── */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--w-accent);
+}
+
 .article-text {
   overflow-wrap: break-word;
   word-break: normal;

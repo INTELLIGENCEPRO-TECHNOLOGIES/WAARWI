@@ -112,7 +112,7 @@ export function MobileBillingWizard({
     <div className="fixed inset-0 z-50 flex flex-col animate-fade-in bg-white">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-neutral-200 flex-shrink-0">
-        <button onClick={onClose} className="p-2 -ml-2 rounded-md hover:bg-neutral-100 text-neutral-600 active:scale-95 transition-all">
+        <button onClick={onClose} className="p-2 -ml-2 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] active:scale-95 transition-all">
           <X className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
@@ -189,7 +189,7 @@ export function MobileBillingWizard({
       {searchOpen && (
         <div className="fixed inset-0 z-[70] flex flex-col bg-white animate-sheet-up">
           <div className="flex items-center gap-3 px-4 py-2.5 border-b border-neutral-200 flex-shrink-0">
-            <button onClick={() => setSearchOpen(false)} className="p-2 -ml-2 rounded-md hover:bg-neutral-100 text-neutral-600 active:scale-95 transition-all">
+            <button onClick={() => setSearchOpen(false)} className="p-2 -ml-2 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] active:scale-95 transition-all">
               <X className="w-5 h-5" />
             </button>
             <div className="flex-1 relative">
@@ -215,7 +215,7 @@ export function MobileBillingWizard({
                 <button
                   key={a.id}
                   onClick={() => { onAddItem(a.id); setSearchOpen(false); }}
-                  className="w-full flex items-start gap-2.5 text-left active:scale-[0.98] transition-all px-4 py-2.5 hover:bg-neutral-50"
+                  className="w-full flex items-start gap-2.5 text-left active:scale-[0.98] transition-all px-4 py-2.5 hover:bg-[var(--w-hover)]"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-[12px] font-semibold text-neutral-900 leading-snug">{a.name}</div>
@@ -420,10 +420,10 @@ function EditArticlePanel({ item, idx, onUpdate, onRemove, onClose }: {
           <div className="flex items-start justify-between mb-2">
             <p className="text-[13px] font-bold text-neutral-900 leading-snug line-clamp-2 flex-1 pr-2">{item.name}</p>
             <div className="flex items-center gap-1 flex-shrink-0">
-              <button onClick={onRemove} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 active:scale-90 transition-all">
+              <button onClick={onRemove} className="p-1.5 rounded-lg text-red-500 hover:bg-[var(--w-hover)] active:scale-90 transition-all">
                 <Trash2 className="w-4 h-4" />
               </button>
-              <button onClick={onClose} className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100 active:scale-90 transition-all">
+              <button onClick={onClose} className="p-1.5 rounded-lg text-[var(--w-text-muted)] hover:bg-[var(--w-hover)] active:scale-90 transition-all">
                 <X className="w-4 h-4" />
               </button>
             </div>

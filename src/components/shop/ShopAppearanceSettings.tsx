@@ -209,7 +209,7 @@ export function ShopAppearanceSettings({ settings, onSettingsChange }: Props) {
                 {settings.cover_overlay !== 'none' && (
                   <div>
                     <label className="label">Intensité: {settings.cover_overlay_intensity}%</label>
-                    <input type="range" min={0} max={100} value={settings.cover_overlay_intensity} onChange={(e) => update({ cover_overlay_intensity: Number(e.target.value) })} className="w-full accent-neutral-900" />
+                    <input type="range" min={0} max={100} value={settings.cover_overlay_intensity} onChange={(e) => update({ cover_overlay_intensity: Number(e.target.value) })} className="w-full" />
                   </div>
                 )}
               </div>
@@ -283,7 +283,7 @@ export function ShopAppearanceSettings({ settings, onSettingsChange }: Props) {
       {/* Low stock threshold */}
       <div className="py-4 border-t border-neutral-200">
         <label className="label">Seuil stock faible: {settings.low_stock_threshold} unités</label>
-        <input type="range" min={1} max={20} value={settings.low_stock_threshold} onChange={(e) => update({ low_stock_threshold: Number(e.target.value) })} className="w-full accent-neutral-900" />
+        <input type="range" min={1} max={20} value={settings.low_stock_threshold} onChange={(e) => update({ low_stock_threshold: Number(e.target.value) })} className="w-full" />
       </div>
 
       {/* Commercial content */}

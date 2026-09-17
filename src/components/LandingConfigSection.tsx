@@ -1073,7 +1073,7 @@ export function LandingConfigSection() {
                 <input type="range" min={prop.min} max={prop.max} step={prop.step} value={globalEffects[prop.key]}
                   onChange={e => setGlobalEffects({ ...globalEffects, [prop.key]: Number(e.target.value) })}
                   disabled={!globalEffects.enabled}
-                  className="w-full accent-brand-700 disabled:opacity-40" />
+                  className="w-full disabled:opacity-40" />
               </div>
             )))}
           </div>

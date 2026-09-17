@@ -33,13 +33,54 @@ export function PremiumSelect({ value, onChange, options, placeholder }: {
   options: { value: string; label: string; bold?: boolean }[];
   placeholder?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const [highlighted, setHighlighted] = useState(-1);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  useEffect(() => { if (open) setHighlighted(-1); }, [open]);
+
+  const allOptions = placeholder ? [{ value: '', label: placeholder }, ...options] : options;
+  const selected = allOptions.find(o => o.value === value);
+  const label = selected?.label || placeholder || '— Choisir —';
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (open && highlighted >= 0) { onChange(allOptions[highlighted].value); setOpen(false); } else setOpen(true); }
+    else if (e.key === 'Escape') setOpen(false);
+    else if (e.key === 'ArrowDown') { e.preventDefault(); if (!open) setOpen(true); else setHighlighted(i => Math.min(i + 1, allOptions.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(i => Math.max(i - 1, 0)); }
+  };
+
   return (
-    <div className="relative">
-      <select value={value} onChange={e => onChange(e.target.value)} className="bare-input appearance-none pr-8 text-sm py-1.5 w-full">
-        {placeholder && <option value="">{placeholder}</option>}
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => setOpen(!open)} onKeyDown={handleKey}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-sm text-left transition-colors
+          border-[var(--w-separator)] bg-[var(--w-surface)] hover:bg-[var(--w-hover)]
+          ${!value && placeholder ? 'text-[var(--w-text-muted)]' : 'text-[var(--w-text)]'}`}>
+        <span className="truncate">{label}</span>
+        <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--w-text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-[var(--w-separator)] bg-[var(--w-surface)] shadow-lg max-h-60 overflow-y-auto py-1">
+          {allOptions.map((o, i) => (
+            <button key={o.value} type="button"
+              onMouseEnter={() => setHighlighted(i)}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors
+                ${o.bold ? 'font-semibold' : ''}
+                ${o.value === value ? 'text-brand-600 font-semibold' : 'text-[var(--w-text)]'}
+                ${i === highlighted ? 'bg-[var(--w-hover)]' : 'hover:bg-[var(--w-hover)]'}`}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

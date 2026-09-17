@@ -2175,7 +2175,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           </div>
           <div className="flex gap-1 shrink-0">
             <button onClick={acceptBillingRecovery} className="px-2 py-1 rounded bg-neutral-900 text-white text-[11px] font-semibold hover:bg-neutral-800 transition">Restaurer</button>
-            <button onClick={dismissBillingRecovery} className="px-2 py-1 rounded text-[11px] font-semibold text-amber-800 hover:bg-amber-100 transition">Ignorer</button>
+            <button onClick={dismissBillingRecovery} className="px-2 py-1 rounded text-[11px] font-semibold text-amber-600 hover:bg-[var(--w-hover)] transition">Ignorer</button>
           </div>
         </div>
       )}
@@ -2420,8 +2420,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                           {q.status === 'accepted' && (
                             <button onClick={e => { e.stopPropagation(); openConvert(q); }} className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-brand-600 text-white text-[10px] font-bold hover:bg-brand-700"><ArrowRight className="w-3 h-3" />Facturer</button>
                           )}
-                          {q.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeQuoteStatus(q, 'sent'); }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Marquer envoyé"><CheckCircle className="w-4 h-4" /></button>}
-                          {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={e => { e.stopPropagation(); setQuoteToCancel(q); }} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition" title="Refuser"><X className="w-4 h-4" /></button>}
+                          {q.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeQuoteStatus(q, 'sent'); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Marquer envoyé"><CheckCircle className="w-4 h-4" /></button>}
+                          {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={e => { e.stopPropagation(); setQuoteToCancel(q); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-red-500 transition" title="Refuser"><X className="w-4 h-4" /></button>}
                           <div className="flex-1" />
                           <div className="w-px h-5 bg-neutral-200 mx-1" />
                           <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(q.total)}</span>
@@ -2451,8 +2451,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                         <div className="flex items-center gap-0.5 shrink-0 w-16 justify-center" onClick={e => e.stopPropagation()}>
                           <button onClick={() => openQuoteDetail(q)} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
                           {q.status === 'accepted' && <button onClick={() => openConvert(q)} className="p-1 rounded hover:bg-brand-50 text-brand-700 transition" title="Convertir"><ArrowRight className="w-3.5 h-3.5" /></button>}
-                          {q.status === 'draft' && <button onClick={() => changeQuoteStatus(q, 'sent')} className="p-1 rounded hover:bg-neutral-50 text-neutral-700 transition" title="Envoyé"><CheckCircle className="w-3.5 h-3.5" /></button>}
-                          {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={() => setQuoteToCancel(q)} className="p-1 rounded hover:bg-red-50 text-red-500 transition" title="Refuser"><X className="w-3.5 h-3.5" /></button>}
+                          {q.status === 'draft' && <button onClick={() => changeQuoteStatus(q, 'sent')} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Envoyé"><CheckCircle className="w-3.5 h-3.5" /></button>}
+                          {q.status !== 'converted' && q.status !== 'rejected' && <button onClick={() => setQuoteToCancel(q)} className="p-1 rounded hover:bg-[var(--w-hover)] text-red-500 transition" title="Refuser"><X className="w-3.5 h-3.5" /></button>}
                         </div>
                       </div>
                     );
@@ -2488,8 +2488,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                         </div>
                         {/* Line 3: icons + paid + amount */}
                         <div className="flex items-center gap-1 mt-1.5">
-                          {inv.customers && <button onClick={e => { e.stopPropagation(); quickWhatsApp(inv); }} className="p-1.5 rounded-md hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>}
-                          <button onClick={e => { e.stopPropagation(); quickCopy(inv); }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
+                          {inv.customers && <button onClick={e => { e.stopPropagation(); quickWhatsApp(inv); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>}
+                          <button onClick={e => { e.stopPropagation(); quickCopy(inv); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
                           {solde > 0 && <span className="text-[10px] text-amber-700 font-bold num shrink-0">Solde {formatFCFA(solde)}</span>}
                           <div className="flex-1" />
                           <div className="w-px h-5 bg-neutral-200 mx-1" />
@@ -2524,8 +2524,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                         <span className={`text-[9px] font-bold uppercase ${st.pill} shrink-0 w-20 text-right`}>{st.label}</span>
                         {inv.accounting_status === 'accounted' && <span className="inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200 shrink-0 hidden xl:inline">OK</span>}
                         <div className="flex items-center gap-0.5 shrink-0 w-16 justify-center" onClick={e => e.stopPropagation()}>
-                          {inv.customers && <button onClick={() => quickWhatsApp(inv)} className="p-1 rounded hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>}
-                          <button onClick={() => quickCopy(inv)} className="p-1 rounded hover:bg-slate-100 text-slate-500 transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
+                          {inv.customers && <button onClick={() => quickWhatsApp(inv)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>}
+                          <button onClick={() => quickCopy(inv)} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Copier"><Link2 className="w-3.5 h-3.5" /></button>
                           <button onClick={() => openInvoiceForView(inv)} className="text-[10px] font-semibold text-slate-400 hover:text-brand-700 transition" title="Voir">Voir</button>
                         </div>
                       </div>
@@ -2621,15 +2621,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 {billPage * PAGE_SIZE + 1}–{Math.min((billPage + 1) * PAGE_SIZE, billTotalCount)} sur {billTotalCount}
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={() => setBillPage(0)} disabled={billPage === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
-                <button onClick={() => setBillPage(p => Math.max(0, p - 1))} disabled={billPage === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
+                <button onClick={() => setBillPage(0)} disabled={billPage === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)] disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
+                <button onClick={() => setBillPage(p => Math.max(0, p - 1))} disabled={billPage === 0} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)] disabled:opacity-30 disabled:cursor-not-allowed">
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
                 <span className="px-3 py-1 rounded-lg text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200">{billPage + 1} / {Math.max(1, Math.ceil(billTotalCount / PAGE_SIZE))}</span>
-                <button onClick={() => setBillPage(p => p + 1)} disabled={!billHasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">
+                <button onClick={() => setBillPage(p => p + 1)} disabled={!billHasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)] disabled:opacity-30 disabled:cursor-not-allowed">
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => setBillPage(Math.ceil(billTotalCount / PAGE_SIZE) - 1)} disabled={!billHasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
+                <button onClick={() => setBillPage(Math.ceil(billTotalCount / PAGE_SIZE) - 1)} disabled={!billHasMore} className="px-2 py-1 rounded-lg text-[11px] font-semibold text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)] disabled:opacity-30 disabled:cursor-not-allowed">{'>>'}</button>
               </div>
             </div>
           )}
@@ -3257,7 +3257,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Coins className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDetail.accounting_status !== 'accounted' && invoiceDetail.status !== 'cancelled' && (
-              <button onClick={comptabiliserFacture} disabled={accountingBusy} className="btn-icon text-teal-700 hover:bg-teal-50" title="Comptabiliser">
+              <button onClick={comptabiliserFacture} disabled={accountingBusy} className="btn-icon text-teal-500 hover:bg-[var(--w-hover)]" title="Comptabiliser">
                 {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
               </button>
             )}
@@ -3455,8 +3455,8 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                 <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1 block">Montant encaissé</label>
                 <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-full text-xs h-8 px-1 bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none transition-colors num font-bold" />
                 <div className="flex gap-1.5 mt-2">
-                  <button type="button" onClick={() => setPayAmount(String(invoiceDue))} className="text-[10px] font-bold px-2 py-1 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 uppercase tracking-wider">Solde total</button>
-                  <button type="button" onClick={() => setPayAmount(String(Math.round(invoiceDue / 2)))} className="text-[10px] font-bold px-2 py-1 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 uppercase tracking-wider">Moitié</button>
+                  <button type="button" onClick={() => setPayAmount(String(invoiceDue))} className="text-[10px] font-bold px-2 py-1 rounded bg-[var(--w-bg-secondary)] hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] uppercase tracking-wider">Solde total</button>
+                  <button type="button" onClick={() => setPayAmount(String(Math.round(invoiceDue / 2)))} className="text-[10px] font-bold px-2 py-1 rounded bg-[var(--w-bg-secondary)] hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] uppercase tracking-wider">Moitié</button>
                 </div>
               </div>
             </div>
@@ -3787,7 +3787,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <button disabled={cancelling} onClick={() => { setCancelTarget(null); setCancelReason(''); }} className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded transition-colors disabled:opacity-50">Non, garder</button>
+              <button disabled={cancelling} onClick={() => { setCancelTarget(null); setCancelReason(''); }} className="px-3 py-1.5 text-xs font-medium text-[var(--w-text-secondary)] hover:bg-[var(--w-hover)] rounded transition-colors disabled:opacity-50">Non, garder</button>
               <button disabled={cancelling || !cancelReason.trim()} onClick={confirmCancelInvoice} className="px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">{cancelling && <Loader2 className="w-3 h-3 animate-spin" />}Oui, annuler</button>
             </div>
           </div>

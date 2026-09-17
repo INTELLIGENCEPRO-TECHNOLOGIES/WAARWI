@@ -22,6 +22,8 @@ import { SupplierOrderInstance, type SupplierOrderWindowDescriptor } from '../co
 import type { SOLineItem, SOHeaderForm, ReceiveQtyMap, ReceiveLotMap, SOMode } from '../components/SupplierOrderEditor';
 import { loadLayout, saveLayout, clearFormDraft, type LayoutWindow } from '../lib/draftRecovery';
 import { RotateCcw } from 'lucide-react';
+import { DispatchStep, type DispatchLineItem } from '../components/supplier/DispatchStep';
+import { buildStockLevelMap, type StockLevelMap } from '../lib/autoDistribute';
 
 type SupplierOrder = {
   id: string; order_number: string; total: number; status: string;
@@ -135,6 +137,8 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
   const [dispatchOpen, setDispatchOpen] = useState(false);
   const [dispatchData, setDispatchData] = useState<Record<string, Record<string, number>>>({});
   const receiveIdemRef = useRef<string>('');
+  const [dispatchStockLevels, setDispatchStockLevels] = useState<StockLevelMap | null>(null);
+  const [dispatchStockLoading, setDispatchStockLoading] = useState(false);
 
   // ── Mobile create state ─────────────────────────────────────────
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -435,7 +439,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
     setArticles(all.map(a => ({ ...a, stock_quantity: stockMap[a.id] ?? null })));
 
     let sq = supabase.from('suppliers').select('id, name, phone, balance, credit_limit, credit_blocked').eq('tenant_id', tenant.id).eq('is_active', true).order('name');
-    if (!isSharedSup && currentSite) sq = sq.eq('site_id', currentSite.id);
+    if (!isSharedSup && currentSite) sq = sq.or(`site_id.eq.${currentSite.id},site_id.is.null`);
     const { data: supData, error: supError } = await sq;
     if (supError) console.error('[SupplierOrders] Impossible de charger les fournisseurs', supError);
     setSuppliers(supData || []);
@@ -609,6 +613,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
     if (receiveDestinations.length > 1) {
       setDispatchData(dd);
       setDispatchOpen(true);
+      loadStockForDispatch(editorItems, receiveDestinations.map(d => d.id));
     } else {
       await submitReception(dd);
     }
@@ -625,6 +630,35 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
     }
     return true;
   };
+
+  const loadStockForDispatch = async (lineItems: SOLineItem[], siteIds: string[]) => {
+    setDispatchStockLoading(true);
+    const articleIds = [...new Set(lineItems.filter(i => i.article_id).map(i => i.article_id!))];
+    const { data, error: e } = await supabase
+      .from('stock_levels')
+      .select('article_id, site_id, quantity')
+      .in('article_id', articleIds)
+      .in('site_id', siteIds);
+    setDispatchStockLoading(false);
+    if (e) { setDispatchStockLevels(null); return; }
+    setDispatchStockLevels(buildStockLevelMap(data || [], articleIds, siteIds));
+  };
+
+  const dispatchLineItems: DispatchLineItem[] = useMemo(
+    () => editorItems
+      .filter((it, idx) => {
+        const itemId = it.id || `idx-${idx}`;
+        return (receiveQty[itemId] || 0) > 0 && it.article_id;
+      })
+      .map((it, idx) => ({
+        itemId: it.id || `idx-${idx}`,
+        articleId: it.article_id!,
+        name: it.name,
+        supplierRef: it.supplier_ref || undefined,
+        receivedQty: Number(receiveQty[it.id || `idx-${idx}`] || 0),
+      })),
+    [editorItems, receiveQty],
+  );
 
   const submitReception = async (dd: Record<string, Record<string, number>>) => {
     if (!editorOrder || !tenant) return;
@@ -955,10 +989,10 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
                     <div className="w-[120px] text-right text-xs text-neutral-500 num whitespace-nowrap">{formatDate(o.created_at)}</div>
                     <div className="w-[130px] text-right text-sm font-extrabold text-neutral-900 num whitespace-nowrap">{formatFCFA(o.total)}</div>
                     <div className="w-[100px] flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={e => { e.stopPropagation(); sendWhatsAppFor(o); }} className="p-1.5 rounded-lg hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>
-                      <button onClick={e => { e.stopPropagation(); copyLinkFor(o); }} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition" title="Copier le lien"><Link2 className="w-3.5 h-3.5" /></button>
-                      {o.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeStatus(o, 'sent'); }} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition" title="Marquer envoyée"><CheckCircle className="w-3.5 h-3.5" /></button>}
-                      {canReceive && <button onClick={e => { e.stopPropagation(); openOrderReceive(o); }} className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600 transition" title="Réceptionner"><Truck className="w-3.5 h-3.5" /></button>}
+                      <button onClick={e => { e.stopPropagation(); sendWhatsAppFor(o); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>
+                      <button onClick={e => { e.stopPropagation(); copyLinkFor(o); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Copier le lien"><Link2 className="w-3.5 h-3.5" /></button>
+                      {o.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeStatus(o, 'sent'); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Marquer envoyée"><CheckCircle className="w-3.5 h-3.5" /></button>}
+                      {canReceive && <button onClick={e => { e.stopPropagation(); openOrderReceive(o); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-emerald-500 transition" title="Réceptionner"><Truck className="w-3.5 h-3.5" /></button>}
                     </div>
                   </div>
                   {/* Mobile: 3-line layout */}
@@ -973,10 +1007,10 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
                     </div>
                     {/* Line 3: icon buttons + amount */}
                     <div className="flex items-center gap-1 mt-1.5">
-                      <button onClick={e => { e.stopPropagation(); sendWhatsAppFor(o); }} className="p-1.5 rounded-md hover:bg-emerald-50 text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>
-                      <button onClick={e => { e.stopPropagation(); copyLinkFor(o); }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
-                      {o.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeStatus(o, 'sent'); }} className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-500 transition" title="Marquer envoyée"><CheckCircle className="w-4 h-4" /></button>}
-                      {canReceive && <button onClick={e => { e.stopPropagation(); openOrderReceive(o); }} className="p-1.5 rounded-md hover:bg-emerald-50 text-emerald-600 transition" title="Réceptionner"><Truck className="w-4 h-4" /></button>}
+                      <button onClick={e => { e.stopPropagation(); sendWhatsAppFor(o); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>
+                      <button onClick={e => { e.stopPropagation(); copyLinkFor(o); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
+                      {o.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeStatus(o, 'sent'); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Marquer envoyée"><CheckCircle className="w-4 h-4" /></button>}
+                      {canReceive && <button onClick={e => { e.stopPropagation(); openOrderReceive(o); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-emerald-500 transition" title="Réceptionner"><Truck className="w-4 h-4" /></button>}
                       <div className="flex-1" />
                       <div className="w-px h-5 bg-neutral-200 mx-1" />
                       <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(o.total)}</span>
@@ -1091,94 +1125,22 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
         danger
       />
 
-      {/* ═══ Dispatch modal for multi-site reception ═══ */}
-      <Modal
-        open={dispatchOpen}
-        onClose={() => setDispatchOpen(false)}
-        title="Répartition par emplacement"
-        size="lg"
-        layer="top"
-        footer={
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setDispatchOpen(false)}
-              className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded transition-colors"
-            >
-              <X className="w-4 h-4" />
-              <span>Annuler</span>
-            </button>
-            <button
-              onClick={() => submitReception(dispatchData)}
-              disabled={saving || !isDispatchValid()}
-              className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-bold text-neutral-900 hover:bg-neutral-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
-              <span>Confirmer la réception</span>
-            </button>
-          </div>
-        }
-      >
-        <div>
-          <p className="text-xs text-neutral-500 px-1 pb-3">
-            Répartissez la quantité reçue de chaque article entre le magasin principal et les emplacements autorisés ({receiveDestinations.length}).
-          </p>
-          <div className="divide-y divide-neutral-100 max-h-[60vh] overflow-y-auto">
-            {editorItems.filter((i, idx) => {
-              const itemId = i.id || `idx-${idx}`;
-              return (receiveQty[itemId] || 0) > 0 && i.article_id;
-            }).map((item, idx) => {
-              const itemId = item.id || `idx-${idx}`;
-              const totalQty = Number(receiveQty[itemId] || 0);
-              const allocated = Object.values(dispatchData[itemId] || {}).reduce((s, v) => s + v, 0);
-              const isValid = allocated === totalQty;
-              return (
-                <div key={itemId} className="py-3 px-1 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-neutral-900 truncate">{item.name}</div>
-                      {item.supplier_ref && <div className="text-[10px] text-neutral-400 font-mono">{item.supplier_ref}</div>}
-                    </div>
-                    <div className="text-right shrink-0 ml-2">
-                      <span className="text-[10px] text-neutral-400">Reçue </span>
-                      <span className="text-sm font-bold text-neutral-900 num">{totalQty}</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    {receiveDestinations.map(site => {
-                      const val = dispatchData[itemId]?.[site.id] || 0;
-                      return (
-                        <div key={site.id} className="flex items-center gap-2">
-                          <span className="text-xs text-neutral-600 flex-1 truncate">{site.name}</span>
-                          <input
-                            type="number" min={0} max={totalQty}
-                            value={val}
-                            onChange={e => {
-                              const v = Math.max(0, Math.min(totalQty, Number(e.target.value) || 0));
-                              setDispatchData(prev => ({ ...prev, [itemId]: { ...prev[itemId], [site.id]: v } }));
-                            }}
-                            className="w-20 text-xs num text-center bg-transparent border-b border-neutral-300 focus:border-neutral-900 outline-none py-1 focus:ring-0"
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="text-[10px] font-medium pt-0.5">
-                    {isValid ? (
-                      <span className="text-emerald-600 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> Répartition correcte
-                      </span>
-                    ) : (
-                      <span className="text-amber-600">
-                        Alloué : {allocated}/{totalQty} — {allocated < totalQty ? `${totalQty - allocated} restant(s)` : 'surplus'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {/* ═══ Dispatch step for multi-site reception ═══ */}
+      {dispatchOpen && (
+        <div className="fixed inset-0 z-[65] flex flex-col bg-[var(--w-bg)] animate-fade-in">
+          <DispatchStep
+            items={dispatchLineItems}
+            destinations={receiveDestinations}
+            dispatchData={dispatchData}
+            setDispatchData={setDispatchData}
+            stockLevels={dispatchStockLevels}
+            stockLoading={dispatchStockLoading}
+            onConfirm={() => submitReception(dispatchData)}
+            onBack={() => setDispatchOpen(false)}
+            saving={saving}
+          />
         </div>
-      </Modal>
+      )}
 
     </div>
   );
@@ -1309,10 +1271,10 @@ function MobileOrderDetail({
 
       {/* Receive banner */}
       {mode === 'receive' && (
-        <div className="px-4 py-2.5 bg-emerald-50 border-b border-emerald-200">
+        <div className="px-4 py-2.5 border-b border-[var(--w-separator)]">
           <div className="flex items-center gap-2">
-            <Truck className="w-4 h-4 text-emerald-700" />
-            <span className="text-xs font-semibold text-emerald-800">Réception en cours</span>
+            <Truck className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs font-semibold text-[var(--w-text)]">Mode réception</span>
           </div>
         </div>
       )}

@@ -790,7 +790,7 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
               {deliveryModes.map(mode => (
                 <label key={mode} className={`flex items-center gap-3 px-4 py-3 border cursor-pointer transition-all ${form.delivery_mode === mode ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 hover:border-neutral-300'}`}>
                   <input type="radio" name="delivery" value={mode} checked={form.delivery_mode === mode}
-                    onChange={() => patch({ delivery_mode: mode as any })} className="w-4 h-4 accent-neutral-900" />
+                    onChange={() => patch({ delivery_mode: mode as any })} className="w-4 h-4" />
                   <div>
                     <div className="font-medium text-sm text-neutral-900">{DELIVERY_LABELS[mode] || mode}</div>
                     {mode === 'retrait' && shopSettings?.address && <div className="text-xs text-neutral-500 mt-0.5">{shopSettings.address}</div>}
@@ -813,7 +813,7 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
               {paymentModes.map(mode => (
                 <label key={mode} className={`flex items-center gap-3 px-4 py-3 border cursor-pointer transition-all ${form.payment_mode === mode ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 hover:border-neutral-300'}`}>
                   <input type="radio" name="payment" value={mode} checked={form.payment_mode === mode}
-                    onChange={() => patch({ payment_mode: mode })} className="w-4 h-4 accent-neutral-900" />
+                    onChange={() => patch({ payment_mode: mode })} className="w-4 h-4" />
                   <div>
                     <div className="font-medium text-sm text-neutral-900">{PAYMENT_LABELS[mode] || mode}</div>
                     {['wave', 'orange_money', 'free_money'].includes(mode) && (

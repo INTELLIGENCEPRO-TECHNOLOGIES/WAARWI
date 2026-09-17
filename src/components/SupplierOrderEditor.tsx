@@ -274,10 +274,10 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
         <div className="flex items-center gap-2.5 min-w-0">
           {(onPrev || onNext) && (
             <div className="flex items-center gap-0.5 mr-1">
-              <button onClick={onPrev} disabled={!hasPrev} className="p-0.5 rounded hover:bg-neutral-100 text-neutral-500 disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Précédent">
+              <button onClick={onPrev} disabled={!hasPrev} className="p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Précédent">
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button onClick={onNext} disabled={!hasNext} className="p-0.5 rounded hover:bg-neutral-100 text-neutral-500 disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Suivant">
+              <button onClick={onNext} disabled={!hasNext} className="p-0.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-25 disabled:pointer-events-none transition-colors" title="Suivant">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -357,10 +357,11 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
       {/* ═══ Receive banner ═══ */}
       {isReceive && (
-        <div className="px-4 py-2 bg-emerald-50/80 border-b border-emerald-200 flex-shrink-0">
+        <div className="px-4 py-2 border-b border-[var(--w-separator)] flex-shrink-0">
           <div className="flex items-center gap-2">
-            <Truck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-xs font-semibold text-emerald-800">Mode réception — saisissez les quantités reçues pour chaque ligne</span>
+            <Truck className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="text-xs font-semibold text-[var(--w-text)]">Mode réception</span>
+            <span className="text-[10px] text-[var(--w-text-muted)]">Saisissez les quantités reçues pour chaque ligne</span>
           </div>
         </div>
       )}
@@ -528,7 +529,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
                     <div className="w-8 shrink-0 text-center">
                       <button
                         onClick={e => { e.stopPropagation(); removeItem(vIdx); }}
-                        className="p-0.5 rounded text-neutral-200 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                        className="p-0.5 rounded text-[var(--w-text-muted)] hover:text-red-500 hover:bg-[var(--w-hover)] opacity-0 group-hover:opacity-100 transition-all"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -591,7 +592,7 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
   const isReceive = mode === 'receive';
   const canEdit = mode === 'create' || mode === 'edit';
 
-  const btnCls = 'p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors';
+  const btnCls = 'p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition-colors';
 
   return (
     <div className="flex items-center gap-0.5">
@@ -608,12 +609,12 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
             <button onClick={() => onChangeStatus('sent')} className={btnCls} title="Marquer envoyée"><CheckCircle className="w-4 h-4" /></button>
           )}
           {['sent', 'confirmed', 'partial'].includes(documentStatus || '') && onStartReceive && (
-            <button onClick={onStartReceive} className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors" title="Réceptionner">
+            <button onClick={onStartReceive} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-emerald-500 transition-colors" title="Réceptionner">
               <Truck className="w-4 h-4" />
             </button>
           )}
           {['draft', 'sent'].includes(documentStatus || '') && onCancel && (
-            <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors" title="Annuler"><Ban className="w-4 h-4" /></button>
+            <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-red-500 transition-colors" title="Annuler"><Ban className="w-4 h-4" /></button>
           )}
         </>
       )}
@@ -624,7 +625,7 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
             <button
               onClick={onConfirmReceive}
               disabled={saving}
-              className="ml-1 h-7 px-2 text-xs font-bold text-neutral-900 hover:bg-neutral-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+              className="ml-1 h-7 px-2 text-xs font-bold text-[var(--w-text)] hover:bg-[var(--w-hover)] rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
               Confirmer réception
@@ -654,7 +655,7 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
           )}
         </>
       )}
-      <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500 transition-colors ml-0.5" title="Fermer">
+      <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors ml-0.5" title="Fermer">
         <X className="w-4 h-4" />
       </button>
     </div>
@@ -674,18 +675,54 @@ function ReceiveRows({ items, articles, receiveQty, setReceiveQty, receiveLotDat
 }) {
   const validItems = items.filter(it => it.name.trim());
 
+  const totals = useMemo(() => {
+    let ordered = 0, received = 0, remaining = 0, today = 0;
+    for (const it of validItems) {
+      const o = Number(it.quantity_ordered || 0);
+      const r = Number(it.quantity_received || 0);
+      const rem = Math.max(0, o - r);
+      const itemId = it.id || '';
+      ordered += o;
+      received += r;
+      remaining += rem;
+      today += Number(receiveQty[itemId] ?? rem);
+    }
+    return { ordered, received, remaining, today };
+  }, [validItems, receiveQty]);
+
+  const ulInput = 'w-16 text-xs h-7 px-1 bg-transparent border-0 border-b border-[var(--w-separator)] text-center num focus:border-[var(--w-text)] outline-none transition-colors';
+
   return (
-    <div className="divide-y divide-neutral-100">
-      {/* Column header for receive mode */}
-      <div className="flex items-center px-4 py-1.5 bg-neutral-50/70">
-        <div className="w-8 shrink-0" />
-        <div className="flex-1 min-w-0 text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Article</div>
-        <div className="w-[80px] text-center text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Commandé</div>
-        <div className="w-[80px] text-center text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Déjà reçu</div>
-        <div className="w-[80px] text-center text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Restant</div>
-        <div className="w-[120px] text-center text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Reçu auj.</div>
-        <div className="w-[110px] text-right text-[10px] font-bold text-neutral-500 uppercase tracking-wider pr-2">Total</div>
+    <div>
+      {/* ── Metrics strip ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px border-b border-[var(--w-separator)]">
+        {[
+          { label: 'Commandé', value: totals.ordered },
+          { label: 'Déjà reçu', value: totals.received },
+          { label: 'Restant', value: totals.remaining, accent: true },
+          { label: 'Reçu aujourd\'hui', value: totals.today, bold: true },
+        ].map(m => (
+          <div key={m.label} className="px-4 py-2.5 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-[var(--w-text-muted)] font-medium">{m.label}</div>
+            <div className={`text-lg tabular-nums font-semibold mt-0.5 ${m.accent ? 'text-amber-600' : m.bold ? 'text-[var(--w-text)]' : 'text-[var(--w-text-secondary)]'}`}>
+              {m.value}
+            </div>
+          </div>
+        ))}
       </div>
+
+      {/* ── Desktop header ── */}
+      <div className="hidden sm:flex items-center px-4 py-1.5 border-b border-[var(--w-separator)]">
+        <div className="w-7 shrink-0" />
+        <div className="flex-1 min-w-0 text-[10px] font-semibold text-[var(--w-text-muted)] uppercase tracking-wider">Article</div>
+        <div className="w-[72px] text-center text-[10px] font-semibold text-[var(--w-text-muted)] uppercase tracking-wider">Cmd</div>
+        <div className="w-[72px] text-center text-[10px] font-semibold text-[var(--w-text-muted)] uppercase tracking-wider">Reçu</div>
+        <div className="w-[72px] text-center text-[10px] font-semibold text-[var(--w-text-muted)] uppercase tracking-wider">Rest.</div>
+        <div className="w-[88px] text-center text-[10px] font-semibold text-[var(--w-text)] uppercase tracking-wider">Auj.</div>
+        <div className="w-[100px] text-right text-[10px] font-semibold text-[var(--w-text-muted)] uppercase tracking-wider pr-2">Total</div>
+      </div>
+
+      {/* ── Rows ── */}
       {validItems.map((it, idx) => {
         const ordered = Number(it.quantity_ordered || 0);
         const received = Number(it.quantity_received || 0);
@@ -695,62 +732,86 @@ function ReceiveRows({ items, articles, receiveQty, setReceiveQty, receiveLotDat
         const art = it.article_id ? articles.find((a: any) => a.id === it.article_id) : null;
 
         return (
-          <div key={itemId}>
-            <div className="flex items-center px-4 py-2 hover:bg-neutral-50/40 transition-colors">
-              <div className="w-8 shrink-0 text-center">
-                <span className="text-[10px] text-neutral-300 tabular-nums">{idx + 1}</span>
+          <div key={itemId} className="border-b border-[var(--w-separator)]">
+            {/* Desktop row */}
+            <div className="hidden sm:flex items-center px-4 py-2">
+              <div className="w-7 shrink-0 text-center">
+                <span className="text-[10px] text-[var(--w-text-muted)] tabular-nums">{idx + 1}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-neutral-800 truncate">{it.name}</div>
+                <div className="text-xs font-medium text-[var(--w-text)] truncate">{it.name}</div>
                 {(it.supplier_ref || art?.internal_ref) && (
-                  <div className="text-[10px] text-neutral-400 font-mono truncate">{it.supplier_ref || art?.internal_ref}</div>
+                  <div className="text-[10px] text-[var(--w-text-muted)] font-mono truncate">{it.supplier_ref || art?.internal_ref}</div>
                 )}
               </div>
-              <div className="w-[80px] text-center text-xs text-neutral-700 num">{ordered}</div>
-              <div className="w-[80px] text-center text-xs text-neutral-500 num">{received}</div>
-              <div className="w-[80px] text-center text-xs font-semibold text-amber-700 num">{remaining}</div>
-              <div className="w-[120px] flex justify-center">
+              <div className="w-[72px] text-center text-xs text-[var(--w-text-secondary)] num">{ordered}</div>
+              <div className="w-[72px] text-center text-xs text-[var(--w-text-muted)] num">{received}</div>
+              <div className="w-[72px] text-center text-xs font-semibold text-amber-600 num">{remaining}</div>
+              <div className="w-[88px] flex justify-center">
                 <input
-                  type="number"
-                  min={0}
-                  max={remaining}
-                  value={qty}
+                  type="number" min={0} max={remaining} value={qty}
                   onChange={e => setReceiveQty?.((p: ReceiveQtyMap) => ({
-                    ...p,
-                    [itemId]: Math.max(0, Math.min(remaining, Number(e.target.value) || 0)),
+                    ...p, [itemId]: Math.max(0, Math.min(remaining, Number(e.target.value) || 0)),
                   }))}
-                  className="w-16 text-xs h-7 px-2 bg-white border border-emerald-300 rounded text-center num focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 outline-none transition-all"
+                  className={ulInput}
                 />
               </div>
-              <div className="w-[110px] text-right text-xs font-semibold text-neutral-900 num pr-2">
+              <div className="w-[100px] text-right text-xs font-medium text-[var(--w-text)] num pr-2">
                 {formatNum(it.total)}
               </div>
             </div>
+
+            {/* Mobile row (stacked) */}
+            <div className="sm:hidden px-4 py-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-[var(--w-text)] leading-tight">{it.name}</div>
+                  {(it.supplier_ref || art?.internal_ref) && (
+                    <div className="text-[10px] text-[var(--w-text-muted)] font-mono mt-0.5">{it.supplier_ref || art?.internal_ref}</div>
+                  )}
+                </div>
+                <div className="text-right text-xs text-[var(--w-text-muted)] tabular-nums shrink-0">{formatNum(it.total)}</div>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] tabular-nums">
+                <span className="text-[var(--w-text-muted)]">Cmd <span className="font-medium text-[var(--w-text-secondary)]">{ordered}</span></span>
+                <span className="text-[var(--w-text-muted)]">Reçu <span className="font-medium">{received}</span></span>
+                <span className="text-amber-600 font-medium">Rest. {remaining}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-[var(--w-text-muted)]">Reçu auj.</span>
+                <input
+                  type="number" min={0} max={remaining} value={qty}
+                  onChange={e => setReceiveQty?.((p: ReceiveQtyMap) => ({
+                    ...p, [itemId]: Math.max(0, Math.min(remaining, Number(e.target.value) || 0)),
+                  }))}
+                  className={ulInput + ' w-20'}
+                />
+              </div>
+            </div>
+
+            {/* Lot fields */}
             {stockMethod === 'lot' && qty > 0 && (
-              <div className="flex items-center gap-3 px-12 pb-2">
+              <div className="flex items-center gap-3 px-4 sm:px-11 pb-2">
                 <div className="flex-1 max-w-[200px]">
-                  <label className="text-[10px] text-neutral-500 font-medium">N° Lot</label>
+                  <label className="text-[10px] text-[var(--w-text-muted)] font-medium">N° Lot</label>
                   <input
-                    type="text"
-                    placeholder="Batch..."
+                    type="text" placeholder="Batch..."
                     value={receiveLotData[itemId]?.batch_number || ''}
                     onChange={e => setReceiveLotData?.((p: ReceiveLotMap) => ({
-                      ...p,
-                      [itemId]: { ...(p[itemId] || { batch_number: '', expiry_date: '' }), batch_number: e.target.value },
+                      ...p, [itemId]: { ...(p[itemId] || { batch_number: '', expiry_date: '' }), batch_number: e.target.value },
                     }))}
-                    className="w-input-ul text-xs h-7 px-2 mt-0.5"
+                    className="w-full text-xs h-7 px-1 mt-0.5 bg-transparent border-0 border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-colors text-[var(--w-text)]"
                   />
                 </div>
                 <div className="flex-1 max-w-[200px]">
-                  <label className="text-[10px] text-neutral-500 font-medium">Date d'expiration</label>
+                  <label className="text-[10px] text-[var(--w-text-muted)] font-medium">Date d'expiration</label>
                   <input
                     type="date"
                     value={receiveLotData[itemId]?.expiry_date || ''}
                     onChange={e => setReceiveLotData?.((p: ReceiveLotMap) => ({
-                      ...p,
-                      [itemId]: { ...(p[itemId] || { batch_number: '', expiry_date: '' }), expiry_date: e.target.value },
+                      ...p, [itemId]: { ...(p[itemId] || { batch_number: '', expiry_date: '' }), expiry_date: e.target.value },
                     }))}
-                    className="w-input-ul text-xs h-7 px-2 mt-0.5"
+                    className="w-full text-xs h-7 px-1 mt-0.5 bg-transparent border-0 border-b border-[var(--w-separator)] focus:border-[var(--w-text)] outline-none transition-colors text-[var(--w-text)]"
                   />
                 </div>
               </div>
@@ -845,7 +906,7 @@ function ArticleSearchModal({ articles, initialQuery, onSelect, onClose }: {
           />
           {/* Column toggle */}
           <div className="relative" ref={colMenuRef}>
-            <button onClick={() => setShowColMenu(!showColMenu)} className="p-1.5 rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition-colors" title="Colonnes">
+            <button onClick={() => setShowColMenu(!showColMenu)} className="p-1.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] hover:text-[var(--w-text-secondary)] transition-colors" title="Colonnes">
               <Columns3 className="w-4 h-4" />
             </button>
             {showColMenu && (
@@ -864,7 +925,7 @@ function ArticleSearchModal({ articles, initialQuery, onSelect, onClose }: {
               </div>
             )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] hover:text-[var(--w-text-secondary)] transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -914,7 +975,7 @@ function ArticleSearchModal({ articles, initialQuery, onSelect, onClose }: {
         <div className="flex items-center justify-between px-4 h-10 border-t border-neutral-200 flex-shrink-0">
           <span className="text-[11px] text-neutral-500">{filtered.length} résultat{filtered.length !== 1 ? 's' : ''}</span>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-3 py-1 text-[11px] font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors">Annuler</button>
+            <button onClick={onClose} className="px-3 py-1 text-[11px] font-medium text-[var(--w-text-muted)] hover:text-[var(--w-text)] hover:bg-[var(--w-hover)] rounded transition-colors">Annuler</button>
             <button
               onClick={() => { if (filtered[highlighted]) onSelect(filtered[highlighted]); }}
               disabled={filtered.length === 0}

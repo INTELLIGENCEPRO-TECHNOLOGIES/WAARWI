@@ -577,7 +577,7 @@ export function Representatives() {
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input type="checkbox" checked={form.commission_override}
                   onChange={e => setForm(f => ({ ...f, commission_override: e.target.checked }))}
-                  className="w-3.5 h-3.5 accent-neutral-900" />
+                  className="w-3.5 h-3.5" />
                 <span className="text-[12px] font-semibold text-neutral-700">Règle de commission spécifique</span>
               </label>
               {form.commission_override && (
