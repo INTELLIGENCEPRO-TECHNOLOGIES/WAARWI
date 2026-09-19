@@ -632,7 +632,8 @@ export function printReturnTicket80(
   total: number,
   tenant: PrintTenant,
   cashier: string,
-  returnNumber?: string
+  returnNumber?: string,
+  customerName?: string | null
 ) {
   const itemsHtml = items
     .map(i => `<div class="item">
@@ -653,6 +654,7 @@ ${returnNumber ? `<div class="doc-num">N° ${esc(returnNumber)}</div>` : ''}
 <div class="doc-date">Réf. vente : ${esc(refSaleNumber)}</div>
 <div class="doc-date">${new Date().toLocaleString('fr-FR')}</div>
 <div class="info-row"><span>Caissier</span><span>${esc(cashier)}</span></div>
+${customerName ? `<div class="info-row"><span>Client</span><span>${esc(customerName)}</span></div>` : ''}
 <hr class="hr" />
 ${itemsHtml}
 <hr class="hr-solid" />
@@ -1289,6 +1291,10 @@ export function printCustomerStatementA4(opts: CustomerStatementPrintOpts) {
   const title = 'RELEVÉ DE COMPTE CLIENT';
   const fmtDate = (v: string) => new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+  const dirLabel = (v: number) => v > 0 ? 'Débiteur' : v < 0 ? 'Créditeur' : 'Équilibré';
+  const openDebit = Math.max(opts.openingBalance, 0);
+  const openCredit = Math.max(-opts.openingBalance, 0);
+
   const rowsHtml = opts.rows.map(r => {
     const muted = r.affects ? '' : 'color:#94a3b8;font-style:italic;';
     return `
@@ -1298,11 +1304,11 @@ export function printCustomerStatementA4(opts: CustomerStatementPrintOpts) {
       <td style="${muted}">${esc(r.label)}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums;${muted}">${r.debit > 0 ? fmtMoney(r.debit) : ''}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums;${muted}">${r.credit > 0 ? fmtMoney(r.credit) : ''}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">${fmtMoney(r.running)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">${r.affects ? `${fmtMoney(Math.abs(r.running))} ${dirLabel(r.running)}` : ''}</td>
     </tr>`;
   }).join('');
 
-  const finalLabel = opts.closingBalance > 0 ? 'Solde dû' : opts.closingBalance < 0 ? 'Crédit disponible' : 'Solde';
+  const finalLabel = dirLabel(opts.closingBalance);
   const finalValue = Math.abs(opts.closingBalance);
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)} - ${esc(opts.customer.name)}</title>
@@ -1360,22 +1366,24 @@ export function printCustomerStatementA4(opts: CustomerStatementPrintOpts) {
     </thead>
     <tbody>
       <tr class="opening-row">
-        <td colspan="5">Solde d'ouverture</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;">${fmtMoney(opts.openingBalance)}</td>
+        <td colspan="3">Solde d'ouverture</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${openDebit > 0 ? fmtMoney(openDebit) : ''}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${openCredit > 0 ? fmtMoney(openCredit) : ''}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${fmtMoney(Math.abs(opts.openingBalance))} ${dirLabel(opts.openingBalance)}</td>
       </tr>
       ${rowsHtml}
       <tr class="total-row">
         <td colspan="3" style="text-align:right;">TOTAUX</td>
-        <td style="text-align:right;">${fmtMoney(opts.totalDebit)}</td>
-        <td style="text-align:right;">${fmtMoney(opts.totalCredit)}</td>
-        <td style="text-align:right;">${fmtMoney(opts.closingBalance)}</td>
+        <td style="text-align:right;">${fmtMoney(opts.totalDebit + openDebit)}</td>
+        <td style="text-align:right;">${fmtMoney(opts.totalCredit + openCredit)}</td>
+        <td style="text-align:right;">${fmtMoney(Math.abs(opts.closingBalance))} ${dirLabel(opts.closingBalance)}</td>
       </tr>
     </tbody>
   </table>
 
   <div class="closing-box">
     <div class="inner">
-      <div class="lbl">${finalLabel}</div>
+      <div class="lbl">Solde client — ${finalLabel}</div>
       <div class="val">${fmtMoney(finalValue)} FCFA</div>
     </div>
   </div>

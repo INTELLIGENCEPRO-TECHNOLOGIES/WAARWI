@@ -287,6 +287,11 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
       if (hasPage) wm.restore('supplier-orders-page');
       if (route === 'supplier_orders') return;
     }
+    if (r === 'tiers') {
+      const hasPage = wm.windows.some(w => w.id === 'tiers-page');
+      if (hasPage) wm.restore('tiers-page');
+      if (route === 'tiers') return;
+    }
     onRoute(r);
   }, [onRoute, route, wm]);
 
@@ -1392,6 +1397,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     <WindowTaskbar onBeforeRestore={(id) => {
       if (id === 'billing-page' && route !== 'billing') onRoute('billing');
       if (id === 'supplier-orders-page' && route !== 'supplier_orders') onRoute('supplier_orders');
+      if (id === 'tiers-page' && route !== 'tiers') onRoute('tiers');
     }} activeSiteId={currentSite?.id} />
     </QuickActionProvider>
   );

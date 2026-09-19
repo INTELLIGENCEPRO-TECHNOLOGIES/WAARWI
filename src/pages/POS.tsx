@@ -2483,7 +2483,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       if (rpcErr) throw new Error(rpcErr.message);
 
       const retNum = result?.return_number || 'RET-?';
-      printReturnTicket80Shared(returnSelected.sale_number, lines, returnTotal, tenantForPrint, cashierName, retNum);
+      printReturnTicket80Shared(returnSelected.sale_number, lines, returnTotal, tenantForPrint, cashierName, retNum, returnSelected.customer_name);
 
       setReturnOpen(false);
       success(`Retour effectué: -${formatFCFA(returnTotal)} remboursé`);
@@ -2514,7 +2514,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         .order('created_at', { ascending: false }),
       supabase
         .from('sale_returns')
-        .select('id, return_number, total, created_at, sale_id')
+        .select('id, return_number, total, created_at, sale_id, customer_id, customers(name, phone, address)')
         .eq('tenant_id', tenant!.id)
         .eq('cash_session_id', session!.id)
         .order('created_at', { ascending: false }),
@@ -2547,7 +2547,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }));
     const returns: SessionSale[] = (retData || []).map((r: any) => ({
       id: r.id, sale_number: r.return_number, total: -Number(r.total), paid: -Number(r.total),
-      created_at: r.created_at, customer_name: null, customer_phone: null, customer_address: null, status: 'return',
+      created_at: r.created_at, customer_name: r.customers?.name || null, customer_phone: r.customers?.phone || null, customer_address: r.customers?.address || null, status: 'return',
       items: [],
     }));
     setSessionSales([...sales, ...returns].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));

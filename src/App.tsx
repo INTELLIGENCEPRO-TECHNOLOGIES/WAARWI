@@ -317,6 +317,8 @@ function Inner() {
   useEffect(() => { if (route === 'billing') setBillingMounted(true); }, [route]);
   const [supplierOrdersMounted, setSupplierOrdersMounted] = useState(false);
   useEffect(() => { if (route === 'supplier_orders') setSupplierOrdersMounted(true); }, [route]);
+  const [tiersMounted, setTiersMounted] = useState(false);
+  useEffect(() => { if (route === 'tiers') setTiersMounted(true); }, [route]);
 
 
   const enabled: string[] = Array.isArray((tenant as any)?.enabled_modules)
@@ -371,7 +373,7 @@ function Inner() {
         {route === 'master_catalog' && <MasterCatalog />}
         {route === 'stock' && <Stock />}
         {route === 'sales' && <Sales onNavigate={(r: string) => setRoute(r as any)} />}
-        {route === 'tiers' && <Tiers />}
+        {tiersMounted && <Tiers visible={route === 'tiers'} onNavigate={(r: string) => setRoute(r as any)} />}
         {billingMounted && <Billing visible={route === 'billing'} onNavigate={(r: string) => setRoute(r as any)} />}
         {supplierOrdersMounted && <SupplierOrders visible={route === 'supplier_orders'} onNavigate={(r: string) => setRoute(r as any)} />}
         {route === 'online_orders' && <OnlineOrders />}

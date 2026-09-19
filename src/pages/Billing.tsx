@@ -1986,10 +1986,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET',
     });
     const rNum = (numData as string) || ('RET-' + Date.now());
-    const sale = sales.find(s => s.id === returnForm.sale_id);
+    const { data: sale } = await supabase.from('sales').select('id, customer_id, sale_number, customers(name, phone, address)').eq('id', returnForm.sale_id).maybeSingle();
+    if (!sale) { error('Facture introuvable'); setSaving(false); return; }
     const { data: ret, error: e } = await supabase.from('sale_returns').insert({
       tenant_id: tenant.id, site_id: currentSite.id,
-      sale_id: returnForm.sale_id, customer_id: sale?.customer_id || null,
+      sale_id: returnForm.sale_id, customer_id: sale.customer_id || null,
       return_number: rNum, total: refundTotal,
       refund_method: 'pending', reason: returnForm.reason,
       restock: returnForm.restock, status: 'pending',
@@ -2046,7 +2047,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
       success('Avoir créé — disponible sur le compte client');
       await loadTab(billPage, true);
     }
-    openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
+    openReturnDetail({ ...ret, customers: sale?.customers || null, sales: { sale_number: sale.sale_number } } as SaleReturn);
   };
 
   const openReturnDetail = async (r: SaleReturn) => {
@@ -2756,10 +2757,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               }
               const { data: numData } = await supabase.rpc('next_doc_number', { p_tenant_id: tenant.id, p_kind: 'return', p_prefix: 'RET' });
               const rNum = (numData as string) || ('RET-' + Date.now());
-              const sale = sales.find(s => s.id === saleId);
+              const { data: sale } = await supabase.from('sales').select('id, customer_id, sale_number, customers(name, phone, address)').eq('id', saleId).maybeSingle();
+              if (!sale) { error('Facture introuvable'); setSaving(false); return; }
               const { data: ret, error: e } = await supabase.from('sale_returns').insert({
                 tenant_id: tenant.id, site_id: currentSite.id,
-                sale_id: saleId, customer_id: sale?.customer_id || null,
+                sale_id: saleId, customer_id: sale.customer_id || null,
                 return_number: rNum, total: refundTotal,
                 refund_method: 'pending', reason: config.reason,
                 restock: config.restock, status: 'pending',
@@ -2795,7 +2797,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
               success('Retour enregistré — choisissez le mode de remboursement');
               closeInvoiceWindow(desc.windowId);
               await loadTab(billPage, true);
-              openReturnDetail({ ...ret, customers: sale?.customers || null, sales: sale ? { sale_number: sale.sale_number } : null } as SaleReturn);
+              openReturnDetail({ ...ret, customers: sale?.customers || null, sales: { sale_number: sale.sale_number } } as SaleReturn);
             }}
             onSearchOpen={() => setInvoiceSearchOpen(true)}
             onVehiclePicker={(idx) => { setVehiclePickerTargetIdx(idx); setVehiclePickerOpen(true); }}

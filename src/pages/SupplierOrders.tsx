@@ -814,7 +814,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
   // ─── Render ────────────────────────────────────────────────────
 
   const pageContent = (
-    <div className="space-y-0 px-3 sm:px-5 lg:px-8 py-4">
+    <div className="space-y-3 pb-6">
       {isDesktop && pendingRecovery && pendingRecovery.length > 0 && (
         <div className="mb-3 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-900">
           <RotateCcw className="w-3.5 h-3.5 shrink-0 mt-0.5" />

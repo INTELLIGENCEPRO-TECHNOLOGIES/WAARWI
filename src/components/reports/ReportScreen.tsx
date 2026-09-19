@@ -234,7 +234,7 @@ function CustomersScreen({ stats, showMargin }: { stats: Extract<ReportData, { t
   const { rows, totals, asOf } = stats;
   const tn = (k: string) => Number(totals?.[k]) || 0;
   const asOfLabel = formatDate(asOf);
-  const activity = rows.filter((r) => r.nbVentes > 0 || r.retours > 0);
+  const activity = rows.filter((r) => r.nbVentes > 0 || r.retours > 0 || r.encaissements > 0);
   const withSituation = rows.filter((r) => r.montantDu > 0 || r.creditDisponible > 0);
 
   return (

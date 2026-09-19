@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Plus, Users, Truck, Loader2, CreditCard as Edit2, PowerOff, UserPlus,
@@ -26,6 +26,8 @@ import { SupplierOrderEditor, type SOLineItem, type SOHeaderForm, type SOMode } 
 import type { Customer } from '../lib/types';
 import { CollapsibleSection, FormField, ValidatedInput } from '../components/FormPrimitives';
 import { useTranslation } from 'react-i18next';
+import { DesktopWindow } from '../components/DesktopWindow';
+import { useWindowManager } from '../context/WindowManagerContext';
 
 type Supplier = {
   id: string; tenant_id: string; name: string; contact: string;
@@ -39,13 +41,73 @@ type CustomerOptionKey = 'info' | 'payment' | 'docs' | 'pricing' | null;
 type SupplierOptionKey = 'info' | 'payment' | 'docs' | 'articles' | null;
 type SelectedRow = { id: string; type: 'customer' | 'supplier'; data: Customer | Supplier } | null;
 
-export function Tiers() {
+const TIERS_PAGE_ID = 'tiers-page';
+const TIERS_GROUP = 'tiers';
+
+type LedgerWindowDescriptor = { windowId: string; customerId: string; customer: Customer; key: CustomerOptionKey };
+let ledgerWinCounter = 0;
+
+export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void } = {}) {
   const { tenant, currentSite, sites, profile, dataTick } = useApp();
   const { can } = usePermissions();
   const { t } = useTranslation();
   const { success, error } = useToast();
   const sharedCustomers = (tenant as any)?.settings?.shared_customers !== false;
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
+
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+  const { windows: wmWindows, tileVisibleWindows, focus: focusWindow, updateTitle: updateWindowTitle, minimizeGroup, restore: restoreWindow } = useWindowManager();
+  const [pageWindowOpen, setPageWindowOpen] = useState(true);
+  const [ledgerWindows, setLedgerWindows] = useState<Map<string, LedgerWindowDescriptor>>(new Map());
+  const prevVisible = useRef(visible);
+  const prevRouteRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isDesktop) { prevVisible.current = visible; return; }
+    if (prevVisible.current && !visible) minimizeGroup(TIERS_GROUP);
+    if (!prevVisible.current && visible) {
+      if (!pageWindowOpen) setPageWindowOpen(true);
+      else restoreWindow(TIERS_PAGE_ID);
+    }
+    prevVisible.current = visible;
+  }, [visible, isDesktop]);
+
+  useEffect(() => { if (!visible) prevRouteRef.current = null; }, [visible]);
+
+  const closeTiersPage = useCallback(() => {
+    setPageWindowOpen(false);
+    onNavigate?.(prevRouteRef.current && prevRouteRef.current !== 'tiers' ? prevRouteRef.current : 'dashboard');
+  }, [onNavigate]);
+
+  const openLedgerWindow = useCallback((customer: Customer) => {
+    const existing = Array.from(ledgerWindows.values()).find(w => w.customerId === customer.id);
+    if (existing) { restoreWindow(existing.windowId); focusWindow(existing.windowId); return; }
+    const wid = `tiers-ledger-${customer.id}`;
+    setLedgerWindows(prev => {
+      const next = new Map(prev);
+      next.set(wid, { windowId: wid, customerId: customer.id, customer, key: 'info' });
+      return next;
+    });
+    if (ledgerWindows.size >= 1) setTimeout(() => tileVisibleWindows(), 50);
+  }, [ledgerWindows, focusWindow, restoreWindow, tileVisibleWindows]);
+
+  const closeLedgerWindow = useCallback((wid: string) => {
+    setLedgerWindows(prev => { const next = new Map(prev); next.delete(wid); return next; });
+  }, []);
+
+  const updateLedgerCustomer = useCallback((wid: string, customer: Customer) => {
+    setLedgerWindows(prev => {
+      const desc = prev.get(wid);
+      if (!desc) return prev;
+      const existing = Array.from(prev.values()).find(w => w.customerId === customer.id && w.windowId !== wid);
+      if (existing) { restoreWindow(existing.windowId); focusWindow(existing.windowId); return prev; }
+      const next = new Map(prev);
+      next.set(wid, { ...desc, customerId: customer.id, customer });
+      return next;
+    });
+    updateWindowTitle(wid, `Grand livre — ${customer.name}`);
+  }, [updateWindowTitle, restoreWindow, focusWindow]);
+
   const [tab, setTab] = useState<TabKey>('all');
   const [selectedRow, setSelectedRow] = useState<SelectedRow>(null);
 
@@ -773,8 +835,10 @@ export function Tiers() {
 
   const handleActionInterroger = () => {
     if (!selectedRow) return;
-    if (selectedRow.type === 'customer') setCustView({ c: selectedRow.data as Customer, key: 'info' });
-    else setSupView({ s: selectedRow.data as Supplier, key: 'info' });
+    if (selectedRow.type === 'customer') {
+      if (isDesktop) openLedgerWindow(selectedRow.data as Customer);
+      else setCustView({ c: selectedRow.data as Customer, key: 'info' });
+    } else setSupView({ s: selectedRow.data as Supplier, key: 'info' });
   };
   const handleActionBalance = () => {
     if (!selectedRow) return;
@@ -818,7 +882,7 @@ export function Tiers() {
     { k: 'suppliers', l: 'Fournisseurs', count: activeSupCount, Icon: Truck },
   ];
 
-  return (
+  const pageContent = (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Top bar ── */}
       <div className="shrink-0 bg-[var(--w-surface)] border-b border-[var(--w-separator-l)] px-4 sm:px-5 py-3 sm:py-4">
@@ -941,8 +1005,10 @@ export function Tiers() {
                         onClick={() => handleRowClick(row)}
                         onDoubleClick={() => {
                           setSelectedRow({ id: row.id, type: row.type, data: row.raw });
-                          if (row.type === 'customer') setCustView({ c: row.raw as Customer, key: 'info' });
-                          else setSupView({ s: row.raw as Supplier, key: 'info' });
+                          if (row.type === 'customer') {
+                            if (isDesktop) openLedgerWindow(row.raw as Customer);
+                            else setCustView({ c: row.raw as Customer, key: 'info' });
+                          } else setSupView({ s: row.raw as Supplier, key: 'info' });
                         }}
                         className={`border-b border-[var(--w-separator-l)] cursor-pointer transition-colors ${isSelected ? 'bg-black text-white' : 'hover:bg-[var(--w-hover)]'} ${!row.isActive && !isSelected ? 'opacity-50' : ''}`}
                       >
@@ -1302,7 +1368,7 @@ export function Tiers() {
         </div>
       </Modal>
 
-      {custView && (
+      {custView && !(isDesktop && custView.key === 'info') && (
         <CustomerDetailModal
           view={custView}
           customerList={customers}
@@ -1324,6 +1390,7 @@ export function Tiers() {
         title="Supprimer le client ?"
         message={`"${toDeactivateCust?.name}" sera supprimé définitivement si aucune opération n'est liée, sinon il sera désactivé.`}
         danger
+        layer="top"
       />
       <ConfirmDialog
         open={!!toDeactivateSup}
@@ -1332,10 +1399,11 @@ export function Tiers() {
         title="Supprimer le fournisseur ?"
         message={`"${toDeactivateSup?.name}" sera supprimé définitivement si aucune opération n'est liée, sinon il sera désactivé.`}
         danger
+        layer="top"
       />
 
       {/* Import modal */}
-      <Modal open={importExportOpen} onClose={() => setImportExportOpen(false)} title={`Importer des ${tab === 'suppliers' ? 'fournisseurs' : 'clients'}`} size="sm" fullscreenMobile
+      <Modal open={importExportOpen} onClose={() => setImportExportOpen(false)} title={`Importer des ${tab === 'suppliers' ? 'fournisseurs' : 'clients'}`} size="sm" layer="top" fullscreenMobile
         footer={importRows.length > 0 && !importResult ? <>
           <button onClick={() => setImportExportOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
           <button onClick={runImport} disabled={importing} className="btn-icon-primary" title="Importer">
@@ -1485,6 +1553,43 @@ export function Tiers() {
         avoirMap={avoirMap}
       />
     </div>
+  );
+
+  return (
+    <>
+      {isDesktop && pageWindowOpen && (
+        <DesktopWindow id={TIERS_PAGE_ID} title="Tiers" icon={<Users className="w-4 h-4" />}
+          onClose={closeTiersPage} background groupId={TIERS_GROUP}>
+          {pageContent}
+          {(() => { const gm = wmWindows.filter(w => w.groupId === TIERS_GROUP && w.id !== TIERS_PAGE_ID && w.minimized); if (!gm.length) return null; return (
+            <div className="shrink-0 flex items-center gap-1 px-2 py-1 border-t border-[var(--w-separator-l)] bg-[var(--w-surface-el)]">
+              {gm.map(w => <button key={w.id} onClick={() => { restoreWindow(w.id); focusWindow(w.id); }} className="text-[11px] px-2 py-0.5 rounded bg-[var(--w-hover)] hover:bg-neutral-200 truncate max-w-[200px]">{w.title}</button>)}
+            </div>
+          ); })()}
+        </DesktopWindow>
+      )}
+      {!isDesktop && visible && pageContent}
+
+      {isDesktop && Array.from(ledgerWindows.values()).map(desc => {
+        const idx = Array.from(ledgerWindows.keys()).indexOf(desc.windowId);
+        return (
+          <DesktopWindow key={desc.windowId} id={desc.windowId}
+            title={`Grand livre \u2014 ${desc.customer.name}`}
+            icon={<FileText className="w-4 h-4" />}
+            onClose={() => closeLedgerWindow(desc.windowId)}
+            groupId={TIERS_GROUP} siteId={currentSite?.id}
+            initialRect={{ x: 80 + idx * 30, y: 40 + idx * 20, w: Math.min(1200, window.innerWidth - 120), h: Math.min(800, window.innerHeight - 80) }}>
+            <CustomerDetailModal
+              view={{ c: desc.customer, key: 'info' }}
+              customerList={customers}
+              onClose={() => closeLedgerWindow(desc.windowId)}
+              windowed
+              onCustomerChange={(c: Customer) => updateLedgerCustomer(desc.windowId, c)}
+            />
+          </DesktopWindow>
+        );
+      })}
+    </>
   );
 }
 
@@ -1678,7 +1783,7 @@ function OptionsSheet({ title, subtitle, onClose, actions, onEdit, onDeactivate,
 }
 
 /* ───────────────────────── Customer detail modal ───────────────────────── */
-function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Customer; key: CustomerOptionKey }; customerList: Customer[]; onClose: () => void }) {
+function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomerChange }: { view: { c: Customer; key: CustomerOptionKey }; customerList: Customer[]; onClose: () => void; windowed?: boolean; onCustomerChange?: (c: Customer) => void }) {
   const { c: viewC, key } = view;
   const [activeCustomer, setActiveCustomer] = useState<Customer>(viewC);
   const initialC = activeCustomer;
@@ -1706,6 +1811,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
   type Statement = { balance: number; opening_balance: number; closing_balance: number; total_debit: number; total_credit: number; rows: StatementRow[] };
   const [statement, setStatement] = useState<Statement | null>(null);
   const [statementLoading, setStatementLoading] = useState(false);
+  const [statementRefresh, setStatementRefresh] = useState(0);
 
   const [desktopEditorOpen, setDesktopEditorOpen] = useState(false);
   const [desktopEditorMode, setDesktopEditorMode] = useState<DocMode>('view');
@@ -1961,6 +2067,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
     success('Règlement enregistré · imputé sur la caisse du jour');
     setPaySale(''); setPayAmount(''); setPayRef('');
     reload();
+    setStatementRefresh(n => n + 1);
   };
 
   const openInvoice = async (saleId: string) => {
@@ -2008,8 +2115,8 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
   const ledgerNetBalance = ledger.length > 0 ? ledger[ledger.length - 1].running : 0;
   const netDebt = Math.max(0, customerBalance);
   const creditAvailable = Math.max(0, -customerBalance);
-  const excessPrepay = Math.min(totals.unusedPrepay, creditAvailable);
-  const excessAvoir = Math.min(totals.unusedAvoir, creditAvailable);
+  const excessPrepay = totals.unusedPrepay;
+  const excessAvoir = totals.unusedAvoir;
 
   const modalTitle = key === 'info' ? 'Interrogation client' : key === 'payment' ? 'Saisir un règlement' : key === 'pricing' ? 'Tarifs d\'exception' : 'Documents de ventes';
   const [infoTab, setInfoTab] = useState<'commerciale' | 'comptable' | 'statistiques'>('comptable');
@@ -2028,7 +2135,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
       setStatement(err || !data ? null : (data as Statement));
     });
     return () => { cancelled = true; };
-  }, [key, infoTab, tenant?.id, c.id, dateFrom, dateTo]);
+  }, [key, infoTab, tenant?.id, c.id, dateFrom, dateTo, statementRefresh]);
 
   const printStatement = () => {
     if (!tenant || !statement) return;
@@ -2063,6 +2170,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
     setStatement(null);
     setCustomerBalance(Number((next as any).balance || 0));
     setActiveCustomer(next);
+    if (windowed && onCustomerChange) onCustomerChange(next);
   };
 
   const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -2089,11 +2197,9 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
   }, [sales, saleItems]);
 
   if (key === 'info') {
-    return (
+    const infoContent = (
       <>
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4 animate-fade-in">
-        <div className="scrim" onClick={onClose} />
-        <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-[var(--w-surface)] sm:rounded-lg border border-[var(--w-separator)] shadow-lg flex flex-col overflow-hidden">
+      <div className={windowed ? 'flex flex-col h-full overflow-hidden' : 'relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-[var(--w-surface)] rounded-none sm:rounded-lg border-0 sm:border border-[var(--w-separator)] shadow-none sm:shadow-lg flex flex-col overflow-hidden'}>
           {/* Header */}
           <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-[var(--w-separator)] bg-[var(--w-surface-el)]">
             <button onClick={() => goToCustomer(prevCust)} disabled={!prevCust} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client précédent"><ChevronLeft className="w-4 h-4" /></button>
@@ -2104,9 +2210,9 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
             <div className="text-right shrink-0">
               {!loading && (
                 netDebt > 0 ? (
-                  <div className="text-black">
+                  <div className="text-[var(--w-text)]">
                     <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Solde dû</div>
-                    <div className="text-sm font-bold num">{formatFCFA(netDebt)}</div>
+                    <div className="text-sm font-bold num text-red-600">{formatFCFA(netDebt)}</div>
                   </div>
                 ) : creditAvailable > 0 ? (
                   <div className="text-emerald-700">
@@ -2114,14 +2220,14 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
                     <div className="text-sm font-bold num">{formatFCFA(creditAvailable)}</div>
                   </div>
                 ) : (
-                  <div className="text-black">
+                  <div className="text-[var(--w-text)]">
                     <div className="text-[9px] font-bold uppercase tracking-wider opacity-50">Solde</div>
                     <div className="text-sm font-bold num">0 FCFA</div>
                   </div>
                 )
               )}
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors"><X className="w-5 h-5" /></button>
+            {!windowed && <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition-colors"><X className="w-5 h-5" /></button>}
           </div>
 
           {/* Body: left nav + content */}
@@ -2162,7 +2268,7 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
               ) : (
                 <>
                   {infoTab === 'comptable' && (
-                    <LedgerView customerName={c.name} statement={statement} statementLoading={statementLoading} netDebt={netDebt} creditAvailable={creditAvailable} excessAvoir={excessAvoir} excessPrepay={excessPrepay}
+                    <LedgerView customerName={c.name} statement={statement} statementLoading={statementLoading}
                       dateFrom={dateFrom} dateTo={dateTo} onOpenPicker={() => setPickerOpen(true)} onClearDates={() => { setDateFrom(''); setDateTo(''); }} onPrint={printStatement} />
                   )}
 
@@ -2289,7 +2395,6 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
             </div>
           </div>
         </div>
-      </div>
 
       <PremiumDateRangePicker open={pickerOpen} onClose={() => setPickerOpen(false)} from={dateFrom} to={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); setPickerOpen(false); }} />
 
@@ -2303,6 +2408,17 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
         />
       )}
       </>
+    );
+
+    if (windowed) return infoContent;
+
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-0 sm:p-6">
+        <div className="absolute inset-0 bg-black/30 hidden sm:block" onClick={onClose} />
+        <div className="relative z-10 w-full h-full sm:h-[90vh] sm:max-w-5xl">
+          {infoContent}
+        </div>
+      </div>
     );
   }
 
@@ -2423,24 +2539,45 @@ function CustomerDetailModal({ view, customerList, onClose }: { view: { c: Custo
 }
 
 /* ───────────────────────── Ledger view (bank-style) ───────────────────────── */
-function LedgerView({ customerName, statement, statementLoading, netDebt, creditAvailable, excessAvoir, excessPrepay, dateFrom, dateTo, onOpenPicker, onClearDates, onPrint }: {
+function LedgerView({ customerName, statement, statementLoading, dateFrom, dateTo, onOpenPicker, onClearDates, onPrint }: {
   customerName: string;
-  statement: { balance: number; opening_balance: number; closing_balance: number; total_debit: number; total_credit: number; rows: { ts: string; piece: string; label: string; kind: string; debit: number; credit: number; running: number; affects: boolean }[] } | null;
+  statement: { balance: number; opening_balance: number; closing_balance: number; opening_debit?: number; opening_credit?: number; total_debit: number; total_credit: number; rows: { ts: string; piece: string; label: string; kind: string; debit: number; credit: number; running: number; affects: boolean }[] } | null;
   statementLoading: boolean;
-  netDebt: number; creditAvailable: number; excessAvoir: number; excessPrepay: number;
   dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void; onPrint: () => void;
 }) {
-  const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment' | 'loan' | 'avoir' | 'allocation'>('');
+  const [kindFilter, setKindFilter] = useState<'' | 'sale' | 'payment' | 'prepayment' | 'withdrawal' | 'loan' | 'avoir' | 'allocation'>('');
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const touchRef = useRef<{ x: number; y: number; idx: number } | null>(null);
 
   const rows = statement?.rows ?? [];
   const filteredRows = useMemo(() => kindFilter ? rows.filter(r => r.kind === kindFilter) : rows, [rows, kindFilter]);
 
   const filteredDebit = useMemo(() => filteredRows.filter(r => r.affects).reduce((s, r) => s + Number(r.debit), 0), [filteredRows]);
   const filteredCredit = useMemo(() => filteredRows.filter(r => r.affects).reduce((s, r) => s + Number(r.credit), 0), [filteredRows]);
-  const totalDebit = kindFilter ? filteredDebit : Number(statement?.total_debit || 0);
-  const totalCredit = kindFilter ? filteredCredit : Number(statement?.total_credit || 0);
-  const soldeCell = kindFilter ? filteredDebit - filteredCredit : Number(statement?.closing_balance || 0);
+  const mvtDebit = kindFilter ? filteredDebit : Number(statement?.total_debit || 0);
+  const mvtCredit = kindFilter ? filteredCredit : Number(statement?.total_credit || 0);
   const opening = Number(statement?.opening_balance || 0);
+  const openDebit = Number((statement as any)?.opening_debit || 0);
+  const openCredit = Number((statement as any)?.opening_credit || 0);
+  const closing = Number(statement?.closing_balance || 0);
+
+  const dirLabel = (v: number) => v > 0 ? 'Débiteur' : v < 0 ? 'Créditeur' : 'Équilibré';
+  const dirColor = (v: number) => v > 0 ? 'text-red-600' : v < 0 ? 'text-emerald-700' : 'text-[var(--w-text)]';
+
+  const toggleRow = (i: number) => setExpandedIdx(prev => prev === i ? null : i);
+
+  const handleTouchStart = (e: React.TouchEvent, i: number) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY, idx: i };
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchRef.current.x;
+    const dy = Math.abs(t.clientY - touchRef.current.y);
+    if (dx > 50 && dy < 30) toggleRow(touchRef.current.idx);
+    touchRef.current = null;
+  };
 
   if (statementLoading && !statement) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>;
@@ -2453,12 +2590,31 @@ function LedgerView({ customerName, statement, statementLoading, netDebt, credit
     );
   }
 
+  const balanceSummary = (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--w-text)] px-1">
+      <span className="font-semibold">Solde client :</span>
+      <span className={`font-bold num ${dirColor(Number(statement?.balance || 0))}`}>
+        {formatFCFA(Math.abs(Number(statement?.balance || 0)))} {dirLabel(Number(statement?.balance || 0))}
+      </span>
+      {(dateFrom || dateTo) && <>
+        <span className="mx-1 text-[var(--w-text-disabled)]">|</span>
+        <span className="font-semibold">Solde au {dateTo ? new Date(dateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'} :</span>
+        <span className={`font-bold num ${dirColor(closing)}`}>{formatFCFA(Math.abs(closing))} {dirLabel(closing)}</span>
+      </>}
+    </div>
+  );
+
+  const kindButtons = [{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }, { v: 'prepayment' as const, l: 'Acomptes' }, { v: 'withdrawal' as const, l: 'Retraits' }, { v: 'avoir' as const, l: 'Avoirs' }, { v: 'allocation' as const, l: 'Imputations' }, { v: 'loan' as const, l: 'Prêts' }];
+
   return (
     <div>
+      {/* Balance summary — shown above table on mobile, below on desktop */}
+      <div className="sm:hidden mb-2">{balanceSummary}</div>
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-black hover:underline">
-          <Calendar className="w-3 h-3 text-black" />
+        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-[var(--w-text)] hover:underline">
+          <Calendar className="w-3 h-3 text-[var(--w-text)]" />
           {dateFrom || dateTo ? (
             <span>{dateFrom && new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} — {dateTo && new Date(dateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>
           ) : 'Période'}
@@ -2466,72 +2622,133 @@ function LedgerView({ customerName, statement, statementLoading, netDebt, credit
         {(dateFrom || dateTo) && (
           <button onClick={onClearDates} className="text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)] p-0.5" title="Effacer"><X className="w-3.5 h-3.5" /></button>
         )}
-        <button onClick={onPrint} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-[var(--w-text-muted)] hover:text-black hover:underline transition-colors" title="Imprimer le relevé">
+        <button onClick={onPrint} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-[var(--w-text-muted)] hover:text-[var(--w-text)] hover:underline transition-colors" title="Imprimer le relevé">
           <Printer className="w-3.5 h-3.5" /> Imprimer
         </button>
-        <div className="flex items-center gap-0.5 ml-auto">
-          {[{ v: '' as const, l: 'Tout' }, { v: 'sale' as const, l: 'Ventes' }, { v: 'payment' as const, l: 'Règlements' }, { v: 'avoir' as const, l: 'Avoirs' }, { v: 'allocation' as const, l: 'Imputations' }, { v: 'loan' as const, l: 'Prêts' }].map(o => (
+        {/* Desktop: inline filter buttons */}
+        <div className="hidden sm:flex items-center gap-0.5 ml-auto">
+          {kindButtons.map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
-              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-[var(--w-text)] border-b-2 border-slate-900' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
+              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-[var(--w-text)] border-b-2 border-[var(--w-text)]' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               {o.l}
             </button>
           ))}
         </div>
-        <span className="text-[10px] text-[var(--w-text-disabled)] ml-2 num">{filteredRows.length} ligne{filteredRows.length > 1 ? 's' : ''}</span>
+        <span className="text-[10px] text-[var(--w-text-disabled)] ml-auto sm:ml-2 num">{filteredRows.length} ligne{filteredRows.length > 1 ? 's' : ''}</span>
+      </div>
+      {/* Mobile: horizontally scrollable filter tabs */}
+      <div className="sm:hidden -mx-4 px-4 mb-2 overflow-x-auto flex gap-0.5 pb-1 scrollbar-hide border-b border-[var(--w-separator-l)]">
+        {kindButtons.map(o => (
+          <button key={o.v} onClick={() => setKindFilter(o.v)}
+            className={`shrink-0 px-2.5 py-1.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-[var(--w-text)] border-b-2 border-[var(--w-text)]' : 'text-[var(--w-text-disabled)] border-b-2 border-transparent'}`}>
+            {o.l}
+          </button>
+        ))}
       </div>
 
       {/* Flat accounting table */}
-      <div className="">
+      <div>
         <div className="max-h-[60vh] overflow-auto">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 z-[2] bg-white border-b border-neutral-200">
+            <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-black w-[90px]">Date</th>
-                <th className="px-3 py-2 text-left font-semibold text-black w-[110px] hidden sm:table-cell">Pièce</th>
-                <th className="px-3 py-2 text-left font-semibold text-black">Libellé</th>
-                <th className="px-3 py-2 text-right font-semibold text-black w-[130px]">Débit</th>
-                <th className="px-3 py-2 text-right font-semibold text-black w-[130px]">Crédit</th>
-                <th className="px-3 py-2 text-right font-semibold text-black w-[140px] hidden sm:table-cell">Solde</th>
+                <th className="px-2 sm:px-3 py-2 text-left font-semibold text-[var(--w-text)] w-[90px]">Date</th>
+                <th className="px-3 py-2 text-left font-semibold text-[var(--w-text)] w-[110px] hidden sm:table-cell">Pièce</th>
+                <th className="px-3 py-2 text-left font-semibold text-[var(--w-text)] hidden sm:table-cell">Libellé</th>
+                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text)] w-[100px] sm:w-[130px]">Débit</th>
+                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text)] w-[100px] sm:w-[130px] border-l border-[var(--w-separator-l)]">Crédit</th>
+                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text)] w-[140px] hidden sm:table-cell border-l border-[var(--w-separator-l)]">Solde</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                <td className="px-3 py-1.5 text-[var(--w-text-muted)]" colSpan={3}>Solde d'ouverture</td>
-                <td className="px-3 py-1.5" />
-                <td className="px-3 py-1.5" />
-                <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(opening)}</td>
+              {/* Opening balance row */}
+              <tr className="border-b border-[var(--w-separator)] bg-[var(--w-hover)]">
+                <td className="px-2 sm:px-3 py-1.5 text-[var(--w-text-muted)] font-semibold sm:font-normal" colSpan={1}>
+                  <span className="sm:hidden">Ouvert.</span>
+                  <span className="hidden sm:inline">{(dateFrom || dateTo) ? (dateFrom ? new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '') : ''}</span>
+                </td>
+                <td className="px-3 py-1.5 text-[var(--w-text-muted)] hidden sm:table-cell">
+                  {(dateFrom || dateTo) ? (dateFrom ? new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '') : ''}
+                </td>
+                <td className="px-3 py-1.5 font-semibold text-[var(--w-text-muted)] hidden sm:table-cell">Solde d'ouverture</td>
+                <td className="px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] whitespace-nowrap">{openDebit > 0 ? formatFCFA(openDebit) : ''}</td>
+                <td className="px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] whitespace-nowrap border-l border-[var(--w-separator-l)]">{openCredit > 0 ? formatFCFA(openCredit) : ''}</td>
+                <td className="px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)]">{formatFCFA(Math.abs(opening))} {dirLabel(opening)}</td>
               </tr>
-              {filteredRows.map((r, i) => (
-                <tr key={i} className={`border-b border-neutral-100 hover:bg-neutral-50/50${!r.affects ? ' bg-[var(--w-surface-el)]/60' : ''}`}>
-                  <td className="px-3 py-1.5 text-black whitespace-nowrap">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-                  <td className="px-3 py-1.5 font-mono text-black hidden sm:table-cell">{r.piece || '—'}</td>
-                  <td className={`px-3 py-1.5 font-medium${!r.affects ? ' text-[var(--w-text-muted)] italic' : ' text-black'}`}>{r.label}</td>
-                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-black'}`}>{Number(r.debit) > 0 ? formatFCFA(Number(r.debit)) : ''}</td>
-                  <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-black'}`}>{Number(r.credit) > 0 ? formatFCFA(Number(r.credit)) : ''}</td>
-                  <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(Number(r.running))}</td>
-                </tr>
-              ))}
+              {filteredRows.map((r, i) => {
+                const isExpanded = expandedIdx === i;
+                return (
+                  <React.Fragment key={i}>
+                    {/* Main row — on mobile: tap or swipe-right to expand */}
+                    <tr
+                      className={`border-b border-[var(--w-separator)] sm:hover:bg-[var(--w-hover)] cursor-pointer sm:cursor-default${!r.affects ? ' bg-[var(--w-surface-el)]/60' : ''}${isExpanded ? ' bg-[var(--w-hover)]' : ''}`}
+                      onClick={() => { if (window.innerWidth < 640) toggleRow(i); }}
+                      onTouchStart={e => handleTouchStart(e, i)}
+                      onTouchEnd={handleTouchEnd}
+                    >
+                      <td className="px-2 sm:px-3 py-1.5 text-[var(--w-text)] whitespace-nowrap">
+                        <span className="sm:hidden inline-flex items-center gap-1">
+                          <ChevronRight className={`w-3 h-3 text-[var(--w-text-disabled)] transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
+                          {new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                        </span>
+                        <span className="hidden sm:inline">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+                      </td>
+                      <td className="px-3 py-1.5 font-mono text-[var(--w-text-sec)] hidden sm:table-cell">{r.piece || '—'}</td>
+                      <td className={`px-3 py-1.5 font-medium hidden sm:table-cell${!r.affects ? ' text-[var(--w-text-muted)] italic' : ' text-[var(--w-text)]'}`}>
+                        {r.label}{!r.affects && <span className="ml-1.5 text-[10px] text-[var(--w-text-disabled)] font-normal">Déjà comptabilisé</span>}
+                      </td>
+                      <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-[var(--w-text)]'}`}>{Number(r.debit) > 0 ? formatFCFA(Number(r.debit)) : ''}</td>
+                      <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap border-l border-[var(--w-separator-l)]${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-[var(--w-text)]'}`}>{Number(r.credit) > 0 ? formatFCFA(Number(r.credit)) : ''}</td>
+                      <td className="px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)]">{r.affects ? `${formatFCFA(Math.abs(Number(r.running)))} ${dirLabel(Number(r.running))}` : ''}</td>
+                    </tr>
+                    {/* Mobile expanded detail row */}
+                    {isExpanded && (
+                      <tr className="sm:hidden border-b border-[var(--w-separator)] bg-neutral-50">
+                        <td colSpan={3} className="px-3 py-2">
+                          <div className="pl-4 space-y-0.5 text-[11px]">
+                            <div className={`font-medium${!r.affects ? ' text-[var(--w-text-muted)] italic' : ' text-[var(--w-text)]'}`}>
+                              {r.label}
+                              {!r.affects && <span className="ml-1 text-[10px] text-[var(--w-text-disabled)] font-normal">Déjà comptabilisé</span>}
+                            </div>
+                            {r.piece ? (
+                              <div className="text-[var(--w-text-sec)]">Pièce : <span className="font-mono">{r.piece}</span></div>
+                            ) : (
+                              <div className="text-[var(--w-text-disabled)]">Pièce : —</div>
+                            )}
+                            {r.affects ? (
+                              <div className={`font-semibold num ${dirColor(Number(r.running))}`}>
+                                Solde : {formatFCFA(Math.abs(Number(r.running)))} {dirLabel(Number(r.running))}
+                              </div>
+                            ) : (
+                              <div className="text-[var(--w-text-disabled)] italic">Informatif — sans impact sur le solde</div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
+            <tfoot className="sticky bottom-0 z-[2] bg-[var(--w-surface)] border-t-2 border-[var(--w-text)]">
+              <tr>
+                <td className="px-2 sm:px-3 py-2.5 font-semibold text-[var(--w-text)]">
+                  <span className="sm:hidden">{kindFilter ? 'VAR.' : 'TOTAUX'}</span>
+                  <span className="hidden sm:inline">{kindFilter ? 'VARIATION' : 'TOTAUX'}</span>
+                </td>
+                <td className="px-3 py-2.5 hidden sm:table-cell" />
+                <td className="px-3 py-2.5 hidden sm:table-cell" />
+                <td className="px-3 py-2.5 text-right num font-bold text-[var(--w-text)] whitespace-nowrap">{formatFCFA(kindFilter ? filteredDebit : mvtDebit + openDebit)}</td>
+                <td className="px-3 py-2.5 text-right num font-bold text-[var(--w-text)] whitespace-nowrap border-l border-[var(--w-separator-l)]">{formatFCFA(kindFilter ? filteredCredit : mvtCredit + openCredit)}</td>
+                <td className={`px-3 py-2.5 text-right num font-bold hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)] ${dirColor(closing)}`}>{formatFCFA(Math.abs(closing))} {dirLabel(closing)}</td>
+              </tr>
+            </tfoot>
           </table>
-        </div>
-        {/* Totals row */}
-        <div className="border-t border-neutral-300 px-3 py-2.5 flex items-center text-xs gap-3">
-          <span className="font-semibold text-black w-[90px]">TOTAUX</span>
-          <span className="flex-1" />
-          <span className="num font-bold text-black w-[130px] text-right whitespace-nowrap">{formatFCFA(totalDebit)}</span>
-          <span className="num font-bold text-black w-[130px] text-right whitespace-nowrap">{formatFCFA(totalCredit)}</span>
-          <span className="num font-bold text-black w-[140px] text-right hidden sm:inline whitespace-nowrap">{formatFCFA(soldeCell)}</span>
         </div>
       </div>
 
-      {/* Balance summary line */}
-      <div className="mt-2 flex items-center gap-4 text-[11px] text-black px-1">
-        {netDebt > 0 && <span>Solde dû : <span className="font-bold text-black num">{formatFCFA(netDebt)}</span></span>}
-        {netDebt === 0 && creditAvailable > 0 && <span>Crédit disponible : <span className="font-bold text-emerald-700 num">{formatFCFA(creditAvailable)}</span></span>}
-        {netDebt === 0 && creditAvailable === 0 && <span>Solde : <span className="font-bold text-black num">0 FCFA</span></span>}
-        {excessPrepay > 0 && <span className="ml-auto">Acompte disponible : <span className="font-bold text-black num">{formatFCFA(excessPrepay)}</span></span>}
-        {excessAvoir > 0 && <span className="ml-auto">Avoir disponible : <span className="font-bold text-black num">{formatFCFA(excessAvoir)}</span></span>}
-      </div>
+      {/* Balance summary — desktop only (mobile shows it above) */}
+      <div className="hidden sm:block mt-2">{balanceSummary}</div>
     </div>
   );
 }
@@ -2625,7 +2842,7 @@ function PaymentForm({
         <div className="flex items-center gap-4">
           {methods.map((m: any) => (
             <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-slate-900 text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               {m.name}
             </button>
           ))}
@@ -2667,8 +2884,8 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-black hover:underline">
-          <Calendar className="w-3 h-3 text-black" />
+        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-[var(--w-text)] hover:underline">
+          <Calendar className="w-3 h-3 text-[var(--w-text)]" />
           {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
         </button>
         {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)] p-0.5"><X className="w-3.5 h-3.5" /></button>}
@@ -2680,7 +2897,7 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
         <div>
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 z-[2] bg-white border-b border-neutral-200">
+              <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
                 <tr>
                   <th className="px-2.5 py-2 text-left font-semibold text-black">Date</th>
                   <th className="px-2.5 py-2 text-left font-semibold text-black">N° document</th>
@@ -3411,8 +3628,8 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-black hover:underline">
-          <Calendar className="w-3 h-3 text-black" />
+        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-[var(--w-text)] hover:underline">
+          <Calendar className="w-3 h-3 text-[var(--w-text)]" />
           {dateFrom || dateTo ? (
             <span>{dateFrom && new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} — {dateTo && new Date(dateTo).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</span>
           ) : 'Période'}
@@ -3421,7 +3638,7 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
         <div className="flex items-center gap-0.5 ml-auto">
           {[{ v: '' as const, l: 'Tout' }, { v: 'order' as const, l: 'Achats' }, { v: 'payment' as const, l: 'Règlements' }].map(o => (
             <button key={o.v} onClick={() => setKindFilter(o.v)}
-              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-[var(--w-text)] border-b-2 border-slate-900' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
+              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-[var(--w-text)] border-b-2 border-[var(--w-text)]' : 'text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               {o.l}
             </button>
           ))}
@@ -3432,7 +3649,7 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
       <div className="">
         <div className="max-h-[60vh] overflow-auto">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 z-[2] bg-white border-b border-neutral-200">
+            <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-black w-[90px]">Date</th>
                 <th className="px-3 py-2 text-left font-semibold text-black w-[110px] hidden sm:table-cell">Pièce</th>
@@ -3544,7 +3761,7 @@ function SupplierPaymentForm({
         <div className="flex items-center gap-4">
           {methods.map((m: any) => (
             <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-slate-900 text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               {m.name}
             </button>
           ))}
@@ -3564,11 +3781,11 @@ function SupplierPaymentForm({
           <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Source des fonds</label>
           <div className="flex items-center gap-4">
             <button type="button" onClick={() => setPayFunding('cash')}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'cash' ? 'border-slate-900 text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'cash' ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               Caisse
             </button>
             <button type="button" onClick={() => setPayFunding('vault')}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'vault' ? 'border-slate-900 text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
+              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'vault' ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
               Coffre
             </button>
           </div>
@@ -3641,8 +3858,8 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-black hover:underline">
-          <Calendar className="w-3 h-3 text-black" />
+        <button onClick={onOpenPicker} className="inline-flex items-center gap-1.5 px-0 py-1 text-[11px] font-medium text-[var(--w-text)] hover:underline">
+          <Calendar className="w-3 h-3 text-[var(--w-text)]" />
           {dateFrom && dateTo ? `${formatDate(dateFrom)} → ${formatDate(dateTo)}` : dateFrom ? `Depuis ${formatDate(dateFrom)}` : dateTo ? `Jusqu'au ${formatDate(dateTo)}` : 'Période'}
         </button>
         {(dateFrom || dateTo) && <button onClick={onClearDates} className="text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)] p-0.5"><X className="w-3.5 h-3.5" /></button>}
@@ -3655,7 +3872,7 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
         <div>
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 z-[2] bg-white border-b border-neutral-200">
+              <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
                 <tr>
                   <th className="px-2.5 py-2 text-left font-semibold text-black">Date</th>
                   <th className="px-2.5 py-2 text-left font-semibold text-black">N° document</th>
@@ -3851,7 +4068,7 @@ function BalanceQuickSelect({ open, onClose, customers, suppliers, onSelect, tab
 
   if (!open) return null;
   return (
-    <Modal open={open} onClose={onClose} title="Positionner un solde" size="sm" fullscreenMobile>
+    <Modal open={open} onClose={onClose} title="Positionner un solde" size="sm" layer="top" fullscreenMobile>
       <div className="space-y-3">
         <input
           value={search}
