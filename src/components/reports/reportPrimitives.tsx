@@ -9,7 +9,7 @@ export function MetricStrip({ items }: { items: Metric[] }) {
     <div className="grid grid-cols-2 md:grid-cols-4 border-t border-neutral-900">
       {items.map((m, i) => {
         const cls = [
-          'px-3 py-3 md:px-4',
+          'px-1 sm:px-3 py-3 md:px-4',
           i % 2 !== 0 ? 'border-l border-neutral-200' : '',
           i >= 2 ? 'border-t border-neutral-200 md:border-t-0' : '',
           i % 4 !== 0 ? 'md:border-l md:border-neutral-200' : 'md:border-l-0',
@@ -41,14 +41,14 @@ export function SectionTitle({ children, note }: { children: ReactNode; note?: s
 
 // ── Table primitives ──────────────────────────────────────────────────────────
 
-export const thCls = 'text-[11px] font-semibold text-neutral-500 py-2 px-2 border-b border-neutral-900 whitespace-nowrap text-left';
+export const thCls = 'text-[11px] font-semibold text-neutral-500 py-2 px-1 sm:px-2 border-b border-neutral-900 whitespace-nowrap text-left';
 export const thR = thCls + ' text-right';
 export const thC = thCls + ' text-center';
-export const tdCls = 'text-[12px] text-neutral-800 py-2 px-2 border-b border-neutral-100 align-middle';
+export const tdCls = 'text-[12px] text-neutral-800 py-2 px-1 sm:px-2 border-b border-neutral-100 align-middle';
 export const tdR = tdCls + ' text-right tabular-nums';
 export const tdC = tdCls + ' text-center tabular-nums';
 export const tdMuted = tdCls + ' text-neutral-400';
-export const totalTd = 'text-[12px] font-bold text-neutral-900 py-2 px-2 border-t border-neutral-900';
+export const totalTd = 'text-[12px] font-bold text-neutral-900 py-2 px-1 sm:px-2 border-t border-neutral-900';
 export const totalTdR = totalTd + ' text-right tabular-nums';
 
 export function ReportTable({ children, minWidth }: { children: ReactNode; minWidth?: number }) {
@@ -100,7 +100,7 @@ export function ReportSkeleton() {
     <div className="animate-pulse">
       <div className="grid grid-cols-2 md:grid-cols-4 border-t border-neutral-900">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className={`px-3 py-3 md:px-4 ${i % 2 !== 0 ? 'border-l border-neutral-200' : ''} ${i >= 2 ? 'border-t border-neutral-200 md:border-t-0' : ''} ${i % 4 !== 0 ? 'md:border-l' : ''}`}>
+          <div key={i} className={`px-1 sm:px-3 py-3 md:px-4 ${i % 2 !== 0 ? 'border-l border-neutral-200' : ''} ${i >= 2 ? 'border-t border-neutral-200 md:border-t-0' : ''} ${i % 4 !== 0 ? 'md:border-l' : ''}`}>
             <div className="h-2.5 w-16 bg-neutral-200 rounded" />
             <div className="mt-2 h-4 w-24 bg-neutral-200 rounded" />
           </div>

@@ -2181,7 +2181,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         </div>
       )}
       {/* ── Header ───────────────────────────────────────────── */}
-      <div className={`sticky top-0 z-20 pb-3 pt-4 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)] ${isDesktop ? '-mx-4 sm:-mx-5 lg:-mx-6 px-4 sm:px-5 lg:px-6' : '-mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
+      <div className={`sticky top-0 z-20 pb-3 pt-4 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)] ${isDesktop ? '-mx-4 sm:-mx-5 lg:-mx-6 px-4 sm:px-5 lg:px-6' : '-mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
       <div className="md:hidden flex items-start justify-between">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Facturation</h1>
         <div className="shrink-0">
@@ -2406,7 +2406,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                       <button
                         key={q.id}
                         onClick={() => openQuoteDetail(q)}
-                        className="w-full text-left px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                        className="w-full text-left px-1 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
                       >
                         {/* Line 1: customer only */}
                         <div className="text-xs font-medium text-neutral-700 truncate">{q.customers?.name || 'Client comptoir'}</div>
@@ -2476,7 +2476,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                       <button
                         key={inv.id}
                         onClick={() => openInvoiceForView(inv)}
-                        className="w-full text-left px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                        className="w-full text-left px-1 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
                       >
                         {/* Line 1: customer only */}
                         <div className="text-xs font-medium text-neutral-700 truncate">{inv.customers?.name || 'Client comptoir'}</div>
@@ -2557,9 +2557,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                       <button
                         key={r.id}
                         onClick={() => openReturnDetail(r)}
-                        className="w-full text-left px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
+                        className="w-full text-left px-1 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors active:scale-[0.995]"
                       >
-                        {/* Line 1: customer only */}
+        {/* Line 1: customer only */}
                         <div className="text-xs font-medium text-neutral-700 truncate">{r.customers?.name || 'Client comptoir'}</div>
                         {/* Line 2: doc# + status */}
                         <div className="flex items-center gap-2 mt-0.5">
@@ -2617,7 +2617,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
           )}
           {/* ── Pagination ───────────────────────────────────────── */}
           {billTotalCount > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-4 py-3 mt-3">
+            <div className="flex items-center justify-between px-3 py-3 mt-3">
               <div className="text-xs text-slate-500">
                 {billPage * PAGE_SIZE + 1}–{Math.min((billPage + 1) * PAGE_SIZE, billTotalCount)} sur {billTotalCount}
               </div>

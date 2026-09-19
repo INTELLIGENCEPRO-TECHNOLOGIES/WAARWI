@@ -885,7 +885,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
   const pageContent = (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Top bar ── */}
-      <div className="shrink-0 bg-[var(--w-surface)] border-b border-[var(--w-separator-l)] px-4 sm:px-5 py-3 sm:py-4">
+      <div className="shrink-0 bg-[var(--w-surface)] border-b border-[var(--w-separator-l)] px-3 sm:px-5 py-3 sm:py-4">
         {/* Row 1: title + action buttons (desktop: all on one row) */}
         <div className="flex items-center gap-2 sm:gap-3">
           <h1 className="text-lg font-bold text-[var(--w-text)] leading-tight whitespace-nowrap">Tiers</h1>
@@ -1124,7 +1124,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       {/* ── Mobile action modal (full screen) ── */}
       {selectedRow && (
         <div className="sm:hidden fixed inset-0 z-[60] flex flex-col bg-[var(--w-surface)] animate-fade-in">
-          <div className="shrink-0 border-b border-[var(--w-separator)] px-4 py-3 flex items-center gap-3">
+          <div className="shrink-0 border-b border-[var(--w-separator)] px-3 py-3 flex items-center gap-3">
             <button onClick={() => setSelectedRow(null)} className="p-1 -ml-1 text-[var(--w-text-muted)] hover:text-slate-800">
               <X className="w-5 h-5" />
             </button>
@@ -1143,34 +1143,34 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
           </div>
           <div className="flex-1 overflow-auto">
             <div>
-              <button onClick={() => { handleActionInterroger(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
+              <button onClick={() => { handleActionInterroger(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <Info className="w-4 h-4 text-brand-700 shrink-0" />
                 <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Interroger le compte</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Voir le détail comptable, commercial et statistiques</div></div>
               </button>
-              <button onClick={() => { handleActionBalance(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
+              <button onClick={() => { handleActionBalance(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <Scale className="w-4 h-4 text-brand-700 shrink-0" />
                 <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Positionner le solde</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Ajuster manuellement le solde du tiers</div></div>
               </button>
               {selectedRow.type === 'customer' && (
-                <button onClick={() => { handleActionPricing(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
+                <button onClick={() => { handleActionPricing(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                   <Tag className="w-4 h-4 text-brand-700 shrink-0" />
                   <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Tarifs d'exception</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Gérer les prix spéciaux pour ce client</div></div>
                 </button>
               )}
-              <button onClick={() => { handleActionPayment(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
+              <button onClick={() => { handleActionPayment(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <Wallet className="w-4 h-4 text-brand-700 shrink-0" />
                 <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Saisir un règlement</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Enregistrer un paiement reçu ou versé</div></div>
               </button>
-              <button onClick={() => { handleActionDocs(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
+              <button onClick={() => { handleActionDocs(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <FileText className="w-4 h-4 text-brand-700 shrink-0" />
                 <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Documents</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Consulter les factures et bons de commande</div></div>
               </button>
-              <button onClick={() => { handleActionEdit(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
+              <button onClick={() => { handleActionEdit(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-[var(--w-separator-l)] active:bg-[var(--w-hover)] transition-colors text-left">
                 <Edit2 className="w-4 h-4 text-[var(--w-text-sec)] shrink-0" />
                 <div><div className="text-[13px] font-semibold text-[var(--w-text)]">Modifier la fiche</div><div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Éditer les informations du tiers</div></div>
               </button>
               {can('delete_customers') && (
-                <button onClick={() => { handleActionDeactivate(); }} className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-neutral-100 active:bg-red-950/20 transition-colors text-left">
+                <button onClick={() => { handleActionDeactivate(); }} className="w-full flex items-center gap-3 px-3 py-3.5 border-b border-neutral-100 active:bg-red-950/20 transition-colors text-left">
                   <Trash2 className="w-4 h-4 text-red-500 shrink-0" />
                   <div><div className="text-sm font-semibold text-red-600">Supprimer</div><div className="text-[11px] text-red-400 mt-0.5">Désactiver ou supprimer ce tiers</div></div>
                 </button>
@@ -2201,7 +2201,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
       <>
       <div className={windowed ? 'flex flex-col h-full overflow-hidden' : 'relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-[var(--w-surface)] rounded-none sm:rounded-lg border-0 sm:border border-[var(--w-separator)] shadow-none sm:shadow-lg flex flex-col overflow-hidden'}>
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-[var(--w-separator)] bg-[var(--w-surface-el)]">
+          <div className="shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2.5 border-b border-[var(--w-separator)] bg-[var(--w-surface-el)]">
             <button onClick={() => goToCustomer(prevCust)} disabled={!prevCust} className="p-1 rounded hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="Client précédent"><ChevronLeft className="w-4 h-4" /></button>
             <div className="flex-1 min-w-0">
               <SearchableSelect variant="underline" searchable menuWidth={380} wrapLabels options={custOptions} value={activeCustomer.id} onChange={(id) => goToCustomer(customerList.find(x => x.id === id) || null)} placeholder="Rechercher un client…" />
@@ -2262,7 +2262,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
             </div>
 
             {/* Content */}
-            <div className="flex-1 min-w-0 overflow-auto p-4 md:pt-4 pt-12">
+            <div className="flex-1 min-w-0 overflow-auto px-3 sm:px-4 pb-4 md:pt-4 pt-12">
               {loading ? (
                 <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>
               ) : (
@@ -2297,10 +2297,10 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
                           <table className="w-full text-xs">
                             <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
                               <tr>
-                                <th className="px-3 py-2 text-left font-semibold text-black">N° Facture</th>
-                                <th className="px-3 py-2 text-left font-semibold text-black">Date</th>
-                                <th className="px-3 py-2 text-right font-semibold text-black">Qté</th>
-                                <th className="px-3 py-2 text-right font-semibold text-black">Total</th>
+                                <th className="pl-0 pr-1 sm:px-3 py-2 text-left font-semibold text-black">N° Facture</th>
+                                <th className="px-1 sm:px-3 py-2 text-left font-semibold text-black">Date</th>
+                                <th className="px-1 sm:px-3 py-2 text-right font-semibold text-black">Qté</th>
+                                <th className="pl-1 pr-0 sm:px-3 py-2 text-right font-semibold text-black">Total</th>
                                 <th className="px-3 py-2 text-right font-semibold text-black hidden sm:table-cell">Coût</th>
                                 <th className="px-3 py-2 text-right font-semibold text-black hidden sm:table-cell">Marge</th>
                               </tr>
@@ -2310,25 +2310,25 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
                                 const marge = r.total - r.cost;
                                 return (
                                   <tr key={r.saleId} className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer" onClick={() => openInvoice(r.saleId)}>
-                                    <td className="px-3 py-2 font-mono font-semibold text-black">{r.saleNumber}</td>
-                                    <td className="px-3 py-2 text-black">{new Date(r.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}</td>
-                                    <td className="px-3 py-2 text-right num text-black">{r.qty.toLocaleString('fr-FR')}</td>
-                                    <td className="px-3 py-2 text-right num font-semibold text-black">{formatFCFA(r.total)}</td>
+                                    <td className="pl-0 pr-1 sm:px-3 py-2 font-mono font-semibold text-black">{r.saleNumber}</td>
+                                    <td className="px-1 sm:px-3 py-2 text-black">{new Date(r.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}</td>
+                                    <td className="px-1 sm:px-3 py-2 text-right num text-black">{r.qty.toLocaleString('fr-FR')}</td>
+                                    <td className="pl-1 pr-0 sm:px-3 py-2 text-right num font-semibold text-black">{formatFCFA(r.total)}</td>
                                     <td className="px-3 py-2 text-right num text-black hidden sm:table-cell">{formatFCFA(r.cost)}</td>
                                     <td className="px-3 py-2 text-right num font-semibold text-black hidden sm:table-cell">{formatFCFA(marge)}</td>
                                   </tr>
                                 );
                               })}
                               {commercialeSummary.rows.length === 0 && (
-                                <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--w-text-disabled)]">Aucune vente enregistrée.</td></tr>
+                                <tr><td colSpan={6} className="pl-0 pr-0 sm:px-3 py-8 text-center text-[var(--w-text-disabled)]">Aucune vente enregistrée.</td></tr>
                               )}
                             </tbody>
                             {commercialeSummary.rows.length > 0 && (
                               <tfoot className="border-t border-neutral-300 sticky bottom-0">
                                 <tr>
-                                  <td className="px-3 py-2 font-bold text-[11px] text-black" colSpan={2}>TOTAUX</td>
-                                  <td className="px-3 py-2 text-right num font-bold text-black">{commercialeSummary.totalQty.toLocaleString('fr-FR')}</td>
-                                  <td className="px-3 py-2 text-right num font-bold text-black">{formatFCFA(commercialeSummary.totalCA)}</td>
+                                  <td className="pl-0 pr-1 sm:px-3 py-2 font-bold text-[11px] text-black" colSpan={2}>TOTAUX</td>
+                                  <td className="px-1 sm:px-3 py-2 text-right num font-bold text-black">{commercialeSummary.totalQty.toLocaleString('fr-FR')}</td>
+                                  <td className="pl-1 pr-0 sm:px-3 py-2 text-right num font-bold text-black">{formatFCFA(commercialeSummary.totalCA)}</td>
                                   <td className="px-3 py-2 text-right num font-bold text-black hidden sm:table-cell">{formatFCFA(commercialeSummary.totalCost)}</td>
                                   <td className="px-3 py-2 text-right num font-bold text-black hidden sm:table-cell">{formatFCFA(commercialeSummary.totalMarge)}</td>
                                 </tr>
@@ -2347,11 +2347,11 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
                         <table className="w-full text-xs">
                           <thead className="border-b border-neutral-200">
                             <tr>
-                              <th className="px-3 py-2 text-left font-semibold text-black">Mois</th>
-                              <th className="px-3 py-2 text-right font-semibold text-black">Factures</th>
-                              <th className="px-3 py-2 text-right font-semibold text-black">CA</th>
+                              <th className="pl-0 pr-1 sm:px-3 py-2 text-left font-semibold text-black">Mois</th>
+                              <th className="px-1 sm:px-3 py-2 text-right font-semibold text-black">Factures</th>
+                              <th className="px-1 sm:px-3 py-2 text-right font-semibold text-black">CA</th>
                               <th className="px-3 py-2 text-right font-semibold text-black hidden sm:table-cell">Coût</th>
-                              <th className="px-3 py-2 text-right font-semibold text-black">Marge</th>
+                              <th className="pl-1 pr-0 sm:px-3 py-2 text-right font-semibold text-black">Marge</th>
                               <th className="px-3 py-2 w-24 font-semibold text-black hidden sm:table-cell"></th>
                             </tr>
                           </thead>
@@ -2362,11 +2362,11 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
                               const pct = m.total > 0 ? (m.total / maxTotal) * 100 : 0;
                               return (
                                 <tr key={m.m} className="border-b border-neutral-100">
-                                  <td className="px-3 py-2 font-semibold text-black">{monthNames[m.m]}</td>
-                                  <td className="px-3 py-2 text-right num text-black">{m.count}</td>
-                                  <td className="px-3 py-2 text-right num font-semibold text-black">{formatFCFA(m.total)}</td>
+                                  <td className="pl-0 pr-1 sm:px-3 py-2 font-semibold text-black">{monthNames[m.m]}</td>
+                                  <td className="px-1 sm:px-3 py-2 text-right num text-black">{m.count}</td>
+                                  <td className="px-1 sm:px-3 py-2 text-right num font-semibold text-black">{formatFCFA(m.total)}</td>
                                   <td className="px-3 py-2 text-right num text-black hidden sm:table-cell">{formatFCFA(m.cost)}</td>
-                                  <td className="px-3 py-2 text-right num font-semibold text-black">{formatFCFA(marge)}</td>
+                                  <td className="pl-1 pr-0 sm:px-3 py-2 text-right num font-semibold text-black">{formatFCFA(marge)}</td>
                                   <td className="px-3 py-2 hidden sm:table-cell">
                                     <div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
                                       <div className="h-full bg-black rounded-full transition-all" style={{ width: `${pct}%` }} />
@@ -2378,11 +2378,11 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
                           </tbody>
                           <tfoot className="border-t border-neutral-300">
                             <tr>
-                              <td className="px-3 py-2 font-bold text-black">TOTAL</td>
-                              <td className="px-3 py-2 text-right num font-bold text-black">{yearStats.months.reduce((a: number, m: any) => a + m.count, 0)}</td>
-                              <td className="px-3 py-2 text-right num font-bold text-black">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total, 0))}</td>
+                              <td className="pl-0 pr-1 sm:px-3 py-2 font-bold text-black">TOTAL</td>
+                              <td className="px-1 sm:px-3 py-2 text-right num font-bold text-black">{yearStats.months.reduce((a: number, m: any) => a + m.count, 0)}</td>
+                              <td className="px-1 sm:px-3 py-2 text-right num font-bold text-black">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total, 0))}</td>
                               <td className="px-3 py-2 text-right num font-bold text-black hidden sm:table-cell">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.cost, 0))}</td>
-                              <td className="px-3 py-2 text-right num font-bold text-black">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total - m.cost, 0))}</td>
+                              <td className="pl-1 pr-0 sm:px-3 py-2 text-right num font-bold text-black">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total - m.cost, 0))}</td>
                               <td className="hidden sm:table-cell" />
                             </tr>
                           </tfoot>
@@ -2637,7 +2637,7 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
         <span className="text-[10px] text-[var(--w-text-disabled)] ml-auto sm:ml-2 num">{filteredRows.length} ligne{filteredRows.length > 1 ? 's' : ''}</span>
       </div>
       {/* Mobile: horizontally scrollable filter tabs */}
-      <div className="sm:hidden -mx-4 px-4 mb-2 overflow-x-auto flex gap-0.5 pb-1 scrollbar-hide border-b border-[var(--w-separator-l)]">
+      <div className="sm:hidden -mx-3 px-3 mb-2 overflow-x-auto flex gap-0.5 pb-1 scrollbar-hide border-b border-[var(--w-separator-l)]">
         {kindButtons.map(o => (
           <button key={o.v} onClick={() => setKindFilter(o.v)}
             className={`shrink-0 px-2.5 py-1.5 text-[11px] font-medium transition-colors ${kindFilter === o.v ? 'text-[var(--w-text)] border-b-2 border-[var(--w-text)]' : 'text-[var(--w-text-disabled)] border-b-2 border-transparent'}`}>
@@ -2647,23 +2647,23 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
       </div>
 
       {/* Flat accounting table */}
-      <div>
+      <div className="-mr-3 sm:-mr-4">
         <div className="max-h-[60vh] overflow-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
               <tr>
-                <th className="px-2 sm:px-3 py-2 text-left font-semibold text-[var(--w-text)] w-[90px]">Date</th>
+                <th className="pl-0 pr-1 sm:px-3 py-2 text-left font-semibold text-[var(--w-text)] sm:w-[90px]">Date</th>
                 <th className="px-3 py-2 text-left font-semibold text-[var(--w-text)] w-[110px] hidden sm:table-cell">Pièce</th>
                 <th className="px-3 py-2 text-left font-semibold text-[var(--w-text)] hidden sm:table-cell">Libellé</th>
-                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text)] w-[100px] sm:w-[130px]">Débit</th>
-                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text)] w-[100px] sm:w-[130px] border-l border-[var(--w-separator-l)]">Crédit</th>
-                <th className="px-3 py-2 text-right font-semibold text-[var(--w-text)] w-[140px] hidden sm:table-cell border-l border-[var(--w-separator-l)]">Solde</th>
+                <th className="px-1 sm:px-3 py-2 text-right font-semibold text-[var(--w-text)] sm:w-[130px]">Débit</th>
+                <th className="pl-1 pr-2 sm:px-3 py-2 text-right font-semibold text-[var(--w-text)] sm:w-[130px] border-l border-[var(--w-separator-l)]">Crédit</th>
+                <th className="pl-3 pr-4 py-2 text-right font-semibold text-[var(--w-text)] hidden sm:table-cell border-l border-[var(--w-separator-l)]">Solde</th>
               </tr>
             </thead>
             <tbody>
               {/* Opening balance row */}
               <tr className="border-b border-[var(--w-separator)] bg-[var(--w-hover)]">
-                <td className="px-2 sm:px-3 py-1.5 text-[var(--w-text-muted)] font-semibold sm:font-normal" colSpan={1}>
+                <td className="pl-0 pr-1 sm:px-3 py-1.5 text-[var(--w-text-muted)] font-semibold sm:font-normal" colSpan={1}>
                   <span className="sm:hidden">Ouvert.</span>
                   <span className="hidden sm:inline">{(dateFrom || dateTo) ? (dateFrom ? new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '') : ''}</span>
                 </td>
@@ -2671,9 +2671,9 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
                   {(dateFrom || dateTo) ? (dateFrom ? new Date(dateFrom).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '') : ''}
                 </td>
                 <td className="px-3 py-1.5 font-semibold text-[var(--w-text-muted)] hidden sm:table-cell">Solde d'ouverture</td>
-                <td className="px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] whitespace-nowrap">{openDebit > 0 ? formatFCFA(openDebit) : ''}</td>
-                <td className="px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] whitespace-nowrap border-l border-[var(--w-separator-l)]">{openCredit > 0 ? formatFCFA(openCredit) : ''}</td>
-                <td className="px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)]">{formatFCFA(Math.abs(opening))} {dirLabel(opening)}</td>
+                <td className="px-1 sm:px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] whitespace-nowrap">{openDebit > 0 ? formatFCFA(openDebit) : ''}</td>
+                <td className="pl-1 pr-2 sm:px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] whitespace-nowrap border-l border-[var(--w-separator-l)]">{openCredit > 0 ? formatFCFA(openCredit) : ''}</td>
+                <td className="pl-3 pr-4 py-1.5 text-right num font-semibold text-[var(--w-text)] hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)]">{formatFCFA(Math.abs(opening))} {dirLabel(opening)}</td>
               </tr>
               {filteredRows.map((r, i) => {
                 const isExpanded = expandedIdx === i;
@@ -2686,7 +2686,7 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
                       onTouchStart={e => handleTouchStart(e, i)}
                       onTouchEnd={handleTouchEnd}
                     >
-                      <td className="px-2 sm:px-3 py-1.5 text-[var(--w-text)] whitespace-nowrap">
+                      <td className="pl-0 pr-1 sm:px-3 py-1.5 text-[var(--w-text)] whitespace-nowrap">
                         <span className="sm:hidden inline-flex items-center gap-1">
                           <ChevronRight className={`w-3 h-3 text-[var(--w-text-disabled)] transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
                           {new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
@@ -2697,9 +2697,9 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
                       <td className={`px-3 py-1.5 font-medium hidden sm:table-cell${!r.affects ? ' text-[var(--w-text-muted)] italic' : ' text-[var(--w-text)]'}`}>
                         {r.label}{!r.affects && <span className="ml-1.5 text-[10px] text-[var(--w-text-disabled)] font-normal">Déjà comptabilisé</span>}
                       </td>
-                      <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-[var(--w-text)]'}`}>{Number(r.debit) > 0 ? formatFCFA(Number(r.debit)) : ''}</td>
-                      <td className={`px-3 py-1.5 text-right num font-medium whitespace-nowrap border-l border-[var(--w-separator-l)]${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-[var(--w-text)]'}`}>{Number(r.credit) > 0 ? formatFCFA(Number(r.credit)) : ''}</td>
-                      <td className="px-3 py-1.5 text-right num font-semibold text-[var(--w-text)] hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)]">{r.affects ? `${formatFCFA(Math.abs(Number(r.running)))} ${dirLabel(Number(r.running))}` : ''}</td>
+                      <td className={`px-1 sm:px-3 py-1.5 text-right num font-medium whitespace-nowrap${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-[var(--w-text)]'}`}>{Number(r.debit) > 0 ? formatFCFA(Number(r.debit)) : ''}</td>
+                      <td className={`pl-1 pr-2 sm:px-3 py-1.5 text-right num font-medium whitespace-nowrap border-l border-[var(--w-separator-l)]${!r.affects ? ' text-[var(--w-text-disabled)]' : ' text-[var(--w-text)]'}`}>{Number(r.credit) > 0 ? formatFCFA(Number(r.credit)) : ''}</td>
+                      <td className="pl-3 pr-4 py-1.5 text-right num font-semibold text-[var(--w-text)] hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)]">{r.affects ? `${formatFCFA(Math.abs(Number(r.running)))} ${dirLabel(Number(r.running))}` : ''}</td>
                     </tr>
                     {/* Mobile expanded detail row */}
                     {isExpanded && (
@@ -2732,15 +2732,15 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
             </tbody>
             <tfoot className="sticky bottom-0 z-[2] bg-[var(--w-surface)] border-t-2 border-[var(--w-text)]">
               <tr>
-                <td className="px-2 sm:px-3 py-2.5 font-semibold text-[var(--w-text)]">
+                <td className="pl-0 pr-1 sm:px-3 py-2.5 font-semibold text-[var(--w-text)]">
                   <span className="sm:hidden">{kindFilter ? 'VAR.' : 'TOTAUX'}</span>
                   <span className="hidden sm:inline">{kindFilter ? 'VARIATION' : 'TOTAUX'}</span>
                 </td>
                 <td className="px-3 py-2.5 hidden sm:table-cell" />
                 <td className="px-3 py-2.5 hidden sm:table-cell" />
-                <td className="px-3 py-2.5 text-right num font-bold text-[var(--w-text)] whitespace-nowrap">{formatFCFA(kindFilter ? filteredDebit : mvtDebit + openDebit)}</td>
-                <td className="px-3 py-2.5 text-right num font-bold text-[var(--w-text)] whitespace-nowrap border-l border-[var(--w-separator-l)]">{formatFCFA(kindFilter ? filteredCredit : mvtCredit + openCredit)}</td>
-                <td className={`px-3 py-2.5 text-right num font-bold hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)] ${dirColor(closing)}`}>{formatFCFA(Math.abs(closing))} {dirLabel(closing)}</td>
+                <td className="px-1 sm:px-3 py-2.5 text-right num font-bold text-[var(--w-text)] whitespace-nowrap">{formatFCFA(kindFilter ? filteredDebit : mvtDebit + openDebit)}</td>
+                <td className="pl-1 pr-2 sm:px-3 py-2.5 text-right num font-bold text-[var(--w-text)] whitespace-nowrap border-l border-[var(--w-separator-l)]">{formatFCFA(kindFilter ? filteredCredit : mvtCredit + openCredit)}</td>
+                <td className={`pl-3 pr-4 py-2.5 text-right num font-bold hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)] ${dirColor(closing)}`}>{formatFCFA(Math.abs(closing))} {dirLabel(closing)}</td>
               </tr>
             </tfoot>
           </table>
@@ -2899,25 +2899,25 @@ function DocsView({ kpis, yearStats, docs, saleItems, dateFrom, dateTo, onOpenPi
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
                 <tr>
-                  <th className="px-2.5 py-2 text-left font-semibold text-black">Date</th>
-                  <th className="px-2.5 py-2 text-left font-semibold text-black">N° document</th>
-                  <th className="px-2.5 py-2 text-left font-semibold text-black">Statut</th>
-                  <th className="px-2.5 py-2 text-right font-semibold text-black">Total</th>
+                  <th className="pl-0 pr-1 sm:px-2.5 py-2 text-left font-semibold text-black">Date</th>
+                  <th className="px-1 sm:px-2.5 py-2 text-left font-semibold text-black">N° document</th>
+                  <th className="px-1 sm:px-2.5 py-2 text-left font-semibold text-black">Statut</th>
+                  <th className="pl-1 pr-0 sm:px-2.5 py-2 text-right font-semibold text-black">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {docs.map((s: any) => (
                   <tr key={s.id} onClick={() => onOpenInvoice(s.id)} className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer">
-                    <td className="px-2.5 py-1.5 text-black whitespace-nowrap">{new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-                    <td className="px-2.5 py-1.5 font-mono font-semibold text-black">{s.sale_number}</td>
-                    <td className="px-2.5 py-1.5"><StatusBadgeSale sale={s} /></td>
-                    <td className="px-2.5 py-1.5 text-right num font-semibold text-black">{formatFCFA(s.total)}</td>
+                    <td className="pl-0 pr-1 sm:px-2.5 py-1.5 text-black whitespace-nowrap">{new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                    <td className="px-1 sm:px-2.5 py-1.5 font-mono font-semibold text-black">{s.sale_number}</td>
+                    <td className="px-1 sm:px-2.5 py-1.5"><StatusBadgeSale sale={s} /></td>
+                    <td className="pl-1 pr-0 sm:px-2.5 py-1.5 text-right num font-semibold text-black">{formatFCFA(s.total)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="border-t border-neutral-300 px-2.5 py-1.5 flex items-center text-xs">
+          <div className="border-t border-neutral-300 pl-0 pr-0 sm:px-2.5 py-1.5 flex items-center text-xs">
             <span className="font-semibold text-black">TOTAL</span>
             <span className="flex-1" />
             <span className="num font-bold text-black">{formatFCFA(kpis.ca)}</span>
@@ -3286,7 +3286,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
         <div className="scrim" onClick={onClose} />
         <div className="relative w-full h-full sm:h-[90vh] sm:max-w-5xl bg-[var(--w-surface)] sm:rounded-lg border border-[var(--w-separator)] shadow-lg flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-[var(--w-separator)] bg-white">
+          <div className="shrink-0 flex items-center gap-3 px-3 sm:px-4 py-2.5 border-b border-[var(--w-separator)] bg-white">
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold text-[var(--w-text)] truncate">{s.name}</div>
               <div className="text-[10px] text-[var(--w-text-muted)] font-mono">{(s as any).account_code || ''}</div>
@@ -3327,7 +3327,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
               ))}
             </div>
 
-            <div className="flex-1 min-w-0 overflow-auto p-4 md:pt-4 pt-12">
+            <div className="flex-1 min-w-0 overflow-auto px-3 sm:px-4 pb-4 md:pt-4 pt-12">
               {loading ? (
                 <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div>
               ) : (
@@ -3362,10 +3362,10 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
                           <table className="w-full text-xs">
                             <thead className="sticky top-0 bg-white z-[2] border-b border-neutral-200">
                               <tr>
-                                <th className="px-3 py-2 text-left font-semibold text-black">N° Commande</th>
-                                <th className="px-3 py-2 text-left font-semibold text-black">Date</th>
-                                <th className="px-3 py-2 text-right font-semibold text-black">Qté</th>
-                                <th className="px-3 py-2 text-right font-semibold text-black">Total</th>
+                                <th className="pl-0 pr-1 sm:px-3 py-2 text-left font-semibold text-black">N° Commande</th>
+                                <th className="px-1 sm:px-3 py-2 text-left font-semibold text-black">Date</th>
+                                <th className="px-1 sm:px-3 py-2 text-right font-semibold text-black">Qté</th>
+                                <th className="pl-1 pr-0 sm:px-3 py-2 text-right font-semibold text-black">Total</th>
                                 <th className="px-3 py-2 text-right font-semibold text-black hidden sm:table-cell">Payé</th>
                                 <th className="px-3 py-2 text-right font-semibold text-black hidden sm:table-cell">Reste</th>
                               </tr>
@@ -3375,25 +3375,25 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
                                 const reste = Math.max(0, r.total - r.paid);
                                 return (
                                   <tr key={r.orderId} className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer" onClick={() => openOrder(r.orderId)}>
-                                    <td className="px-3 py-2 font-mono font-semibold text-black">{r.orderNumber}</td>
-                                    <td className="px-3 py-2 text-black">{new Date(r.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}</td>
-                                    <td className="px-3 py-2 text-right num text-black">{r.qty.toLocaleString('fr-FR')}</td>
-                                    <td className="px-3 py-2 text-right num font-semibold text-black">{formatFCFA(r.total)}</td>
+                                    <td className="pl-0 pr-1 sm:px-3 py-2 font-mono font-semibold text-black">{r.orderNumber}</td>
+                                    <td className="px-1 sm:px-3 py-2 text-black">{new Date(r.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}</td>
+                                    <td className="px-1 sm:px-3 py-2 text-right num text-black">{r.qty.toLocaleString('fr-FR')}</td>
+                                    <td className="pl-1 pr-0 sm:px-3 py-2 text-right num font-semibold text-black">{formatFCFA(r.total)}</td>
                                     <td className="px-3 py-2 text-right num text-black hidden sm:table-cell">{formatFCFA(r.paid)}</td>
                                     <td className="px-3 py-2 text-right num font-semibold text-black hidden sm:table-cell">{formatFCFA(reste)}</td>
                                   </tr>
                                 );
                               })}
                               {commercialeSummary.rows.length === 0 && (
-                                <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--w-text-disabled)]">Aucune commande enregistrée.</td></tr>
+                                <tr><td colSpan={6} className="pl-0 pr-0 sm:px-3 py-8 text-center text-[var(--w-text-disabled)]">Aucune commande enregistrée.</td></tr>
                               )}
                             </tbody>
                             {commercialeSummary.rows.length > 0 && (
                               <tfoot className="border-t border-neutral-300 sticky bottom-0">
                                 <tr>
-                                  <td className="px-3 py-2 font-bold text-[11px] text-black" colSpan={2}>TOTAUX</td>
-                                  <td className="px-3 py-2 text-right num font-bold text-black">{commercialeSummary.totalQty.toLocaleString('fr-FR')}</td>
-                                  <td className="px-3 py-2 text-right num font-bold text-black">{formatFCFA(commercialeSummary.totalAchats)}</td>
+                                  <td className="pl-0 pr-1 sm:px-3 py-2 font-bold text-[11px] text-black" colSpan={2}>TOTAUX</td>
+                                  <td className="px-1 sm:px-3 py-2 text-right num font-bold text-black">{commercialeSummary.totalQty.toLocaleString('fr-FR')}</td>
+                                  <td className="pl-1 pr-0 sm:px-3 py-2 text-right num font-bold text-black">{formatFCFA(commercialeSummary.totalAchats)}</td>
                                   <td className="px-3 py-2 text-right num font-bold text-black hidden sm:table-cell">{formatFCFA(commercialeSummary.totalPaid)}</td>
                                   <td className="px-3 py-2 text-right num font-bold text-black hidden sm:table-cell">{formatFCFA(commercialeSummary.totalDue)}</td>
                                 </tr>
@@ -3412,11 +3412,11 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
                         <table className="w-full text-xs">
                           <thead className="border-b border-neutral-200">
                             <tr>
-                              <th className="px-3 py-2 text-left font-semibold text-black">Mois</th>
-                              <th className="px-3 py-2 text-right font-semibold text-black">Commandes</th>
-                              <th className="px-3 py-2 text-right font-semibold text-black">Achats</th>
+                              <th className="pl-0 pr-1 sm:px-3 py-2 text-left font-semibold text-black">Mois</th>
+                              <th className="px-1 sm:px-3 py-2 text-right font-semibold text-black">Commandes</th>
+                              <th className="px-1 sm:px-3 py-2 text-right font-semibold text-black">Achats</th>
                               <th className="px-3 py-2 text-right font-semibold text-black hidden sm:table-cell">Payé</th>
-                              <th className="px-3 py-2 text-right font-semibold text-black">Dette</th>
+                              <th className="pl-1 pr-0 sm:px-3 py-2 text-right font-semibold text-black">Dette</th>
                               <th className="px-3 py-2 w-24 hidden sm:table-cell"></th>
                             </tr>
                           </thead>
@@ -3427,11 +3427,11 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
                               const pct = m.total > 0 ? (m.total / maxTotal) * 100 : 0;
                               return (
                                 <tr key={m.m} className="border-b border-neutral-100">
-                                  <td className="px-3 py-2 font-semibold text-black">{monthNames[m.m]}</td>
-                                  <td className="px-3 py-2 text-right num text-black">{m.count}</td>
-                                  <td className="px-3 py-2 text-right num font-semibold text-black">{formatFCFA(m.total)}</td>
+                                  <td className="pl-0 pr-1 sm:px-3 py-2 font-semibold text-black">{monthNames[m.m]}</td>
+                                  <td className="px-1 sm:px-3 py-2 text-right num text-black">{m.count}</td>
+                                  <td className="px-1 sm:px-3 py-2 text-right num font-semibold text-black">{formatFCFA(m.total)}</td>
                                   <td className="px-3 py-2 text-right num text-black hidden sm:table-cell">{formatFCFA(m.paid)}</td>
-                                  <td className="px-3 py-2 text-right num font-semibold text-black">{formatFCFA(due)}</td>
+                                  <td className="pl-1 pr-0 sm:px-3 py-2 text-right num font-semibold text-black">{formatFCFA(due)}</td>
                                   <td className="px-3 py-2 hidden sm:table-cell">
                                     <div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
                                       <div className="h-full bg-black rounded-full transition-all" style={{ width: `${pct}%` }} />
@@ -3443,11 +3443,11 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
                           </tbody>
                           <tfoot className="border-t border-neutral-300">
                             <tr>
-                              <td className="px-3 py-2 font-bold text-black">TOTAL</td>
-                              <td className="px-3 py-2 text-right num font-bold text-black">{yearStats.months.reduce((a: number, m: any) => a + m.count, 0)}</td>
-                              <td className="px-3 py-2 text-right num font-bold text-black">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total, 0))}</td>
+                              <td className="pl-0 pr-1 sm:px-3 py-2 font-bold text-black">TOTAL</td>
+                              <td className="px-1 sm:px-3 py-2 text-right num font-bold text-black">{yearStats.months.reduce((a: number, m: any) => a + m.count, 0)}</td>
+                              <td className="px-1 sm:px-3 py-2 text-right num font-bold text-black">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.total, 0))}</td>
                               <td className="px-3 py-2 text-right num font-bold text-black hidden sm:table-cell">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + m.paid, 0))}</td>
-                              <td className="px-3 py-2 text-right num font-bold text-black">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + Math.max(0, m.total - m.paid), 0))}</td>
+                              <td className="pl-1 pr-0 sm:px-3 py-2 text-right num font-bold text-black">{formatFCFA(yearStats.months.reduce((a: number, m: any) => a + Math.max(0, m.total - m.paid), 0))}</td>
                               <td className="hidden sm:table-cell" />
                             </tr>
                           </tfoot>
@@ -3607,6 +3607,7 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
   dateFrom: string; dateTo: string; onOpenPicker: () => void; onClearDates: () => void;
 }) {
   const [kindFilter, setKindFilter] = useState<'' | 'order' | 'payment'>('');
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const filteredLedger = useMemo(() => {
     let r = ledger;
@@ -3646,39 +3647,73 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
         <span className="text-[10px] text-[var(--w-text-disabled)] ml-2 num">{sortedLedger.length} ligne{sortedLedger.length > 1 ? 's' : ''}</span>
       </div>
 
-      <div className="">
+      <div className="-mr-3 sm:-mr-4">
         <div className="max-h-[60vh] overflow-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-black w-[90px]">Date</th>
-                <th className="px-3 py-2 text-left font-semibold text-black w-[110px] hidden sm:table-cell">Pièce</th>
-                <th className="px-3 py-2 text-left font-semibold text-black">Libellé</th>
-                <th className="px-3 py-2 text-right font-semibold text-black w-[130px]">Crédit</th>
-                <th className="px-3 py-2 text-right font-semibold text-black w-[130px]">Débit</th>
-                <th className="px-3 py-2 text-right font-semibold text-black w-[140px] hidden sm:table-cell">Solde</th>
+                <th className="pl-0 pr-1 sm:px-3 py-2 text-left font-semibold text-[var(--w-text)] sm:w-[90px]">Date</th>
+                <th className="px-3 py-2 text-left font-semibold text-[var(--w-text)] w-[110px] hidden sm:table-cell">Pièce</th>
+                <th className="px-3 py-2 text-left font-semibold text-[var(--w-text)] hidden sm:table-cell">Libellé</th>
+                <th className="px-1 sm:px-3 py-2 text-right font-semibold text-[var(--w-text)] sm:w-[130px]">Crédit</th>
+                <th className="pl-1 pr-2 sm:px-3 py-2 text-right font-semibold text-[var(--w-text)] sm:w-[130px] border-l border-[var(--w-separator-l)]">Débit</th>
+                <th className="pl-3 pr-4 py-2 text-right font-semibold text-[var(--w-text)] hidden sm:table-cell border-l border-[var(--w-separator-l)]">Solde</th>
               </tr>
             </thead>
             <tbody>
-              {sortedLedger.map(r => (
-                <tr key={r.id} className="border-b border-neutral-100 hover:bg-neutral-50/50">
-                  <td className="px-3 py-1.5 text-black whitespace-nowrap">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-                  <td className="px-3 py-1.5 font-mono text-black hidden sm:table-cell">{r.ref || '—'}</td>
-                  <td className="px-3 py-1.5 text-black font-medium truncate max-w-[200px]">{r.label}</td>
-                  <td className="px-3 py-1.5 text-right num font-medium text-black whitespace-nowrap">{r.credit > 0 ? formatFCFA(r.credit) : ''}</td>
-                  <td className="px-3 py-1.5 text-right num font-medium text-black whitespace-nowrap">{r.debit > 0 ? formatFCFA(r.debit) : ''}</td>
-                  <td className="px-3 py-1.5 text-right num font-semibold text-black hidden sm:table-cell whitespace-nowrap">{formatFCFA(r.running)}</td>
-                </tr>
+              {sortedLedger.map((r, i) => (
+                <React.Fragment key={r.id}>
+                  <tr
+                    className={`border-b border-[var(--w-separator)] sm:hover:bg-[var(--w-hover)] cursor-pointer sm:cursor-default${expandedIdx === i ? ' bg-[var(--w-hover)]' : ''}`}
+                    onClick={() => { if (window.innerWidth < 640) setExpandedIdx(prev => prev === i ? null : i); }}
+                  >
+                    <td className="pl-0 pr-1 sm:px-3 py-1.5 text-[var(--w-text)] whitespace-nowrap">
+                      <span className="sm:hidden inline-flex items-center gap-1">
+                        <ChevronRight className={`w-3 h-3 text-[var(--w-text-disabled)] transition-transform shrink-0 ${expandedIdx === i ? 'rotate-90' : ''}`} />
+                        {new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                      </span>
+                      <span className="hidden sm:inline">{new Date(r.ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+                    </td>
+                    <td className="px-3 py-1.5 font-mono text-[var(--w-text-sec)] hidden sm:table-cell">{r.ref || '—'}</td>
+                    <td className="px-3 py-1.5 font-medium text-[var(--w-text)] hidden sm:table-cell">{r.label}</td>
+                    <td className="px-1 sm:px-3 py-1.5 text-right num font-medium text-[var(--w-text)] whitespace-nowrap">{r.credit > 0 ? formatFCFA(r.credit) : ''}</td>
+                    <td className="pl-1 pr-2 sm:px-3 py-1.5 text-right num font-medium text-[var(--w-text)] whitespace-nowrap border-l border-[var(--w-separator-l)]">{r.debit > 0 ? formatFCFA(r.debit) : ''}</td>
+                    <td className="pl-3 pr-4 py-1.5 text-right num font-semibold text-[var(--w-text)] hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)]">{formatFCFA(r.running)}</td>
+                  </tr>
+                  {expandedIdx === i && (
+                    <tr className="sm:hidden border-b border-[var(--w-separator)] bg-neutral-50">
+                      <td colSpan={3} className="px-3 py-2">
+                        <div className="pl-4 space-y-0.5 text-[11px]">
+                          <div className="font-medium text-[var(--w-text)]">{r.label}</div>
+                          {r.ref ? (
+                            <div className="text-[var(--w-text-sec)]">Pièce : <span className="font-mono">{r.ref}</span></div>
+                          ) : (
+                            <div className="text-[var(--w-text-disabled)]">Pièce : —</div>
+                          )}
+                          <div className="font-semibold num text-[var(--w-text)]">
+                            Solde : {formatFCFA(Math.abs(r.running))} {r.running > 0 ? 'Dette' : r.running < 0 ? 'Avoir' : 'Équilibré'}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
+            <tfoot className="sticky bottom-0 z-[2] bg-[var(--w-surface)] border-t-2 border-[var(--w-text)]">
+              <tr>
+                <td className="pl-0 pr-1 sm:px-3 py-2.5 font-semibold text-[var(--w-text)]">
+                  <span className="sm:hidden">TOTAUX</span>
+                  <span className="hidden sm:inline">TOTAUX</span>
+                </td>
+                <td className="px-3 py-2.5 hidden sm:table-cell" />
+                <td className="px-3 py-2.5 hidden sm:table-cell" />
+                <td className="px-1 sm:px-3 py-2.5 text-right num font-bold text-[var(--w-text)] whitespace-nowrap">{formatFCFA(filteredAchats)}</td>
+                <td className="pl-1 pr-2 sm:px-3 py-2.5 text-right num font-bold text-[var(--w-text)] whitespace-nowrap border-l border-[var(--w-separator-l)]">{formatFCFA(filteredRegle)}</td>
+                <td className={`pl-3 pr-4 py-2.5 text-right num font-bold hidden sm:table-cell whitespace-nowrap border-l border-[var(--w-separator-l)] text-[var(--w-text)]`}>{formatFCFA(filteredDette)}</td>
+              </tr>
+            </tfoot>
           </table>
-        </div>
-        <div className="border-t border-neutral-300 px-3 py-2.5 flex items-center text-xs gap-3">
-          <span className="font-semibold text-black w-[90px]">TOTAUX</span>
-          <span className="flex-1" />
-          <span className="num font-bold text-black w-[130px] text-right whitespace-nowrap">{formatFCFA(filteredAchats)}</span>
-          <span className="num font-bold text-black w-[130px] text-right whitespace-nowrap">{formatFCFA(filteredRegle)}</span>
-          <span className="num font-bold text-black w-[140px] text-right hidden sm:inline whitespace-nowrap">{formatFCFA(filteredDette)}</span>
         </div>
       </div>
 
@@ -3830,11 +3865,11 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
             <table className="w-full text-[11px]">
               <thead className="border-b border-neutral-200">
                 <tr>
-                  <th className="px-2 py-1 text-left font-semibold text-black w-10">Mois</th>
-                  <th className="px-2 py-1 text-center font-semibold text-black w-8">Nb</th>
-                  <th className="px-2 py-1 text-left font-semibold text-black">Répartition</th>
-                  <th className="px-2 py-1 text-right font-semibold text-black">Total</th>
-                  <th className="px-2 py-1 text-right font-semibold text-black hidden sm:table-cell">Dû</th>
+                  <th className="pl-0 pr-1 sm:px-2 py-1 text-left font-semibold text-black w-10">Mois</th>
+                  <th className="px-1 sm:px-2 py-1 text-center font-semibold text-black w-8">Nb</th>
+                  <th className="px-1 sm:px-2 py-1 text-left font-semibold text-black">Répartition</th>
+                  <th className="pl-1 pr-0 sm:px-2 py-1 text-right font-semibold text-black">Total</th>
+                  <th className="px-1 sm:px-2 py-1 text-right font-semibold text-black hidden sm:table-cell">Dû</th>
                 </tr>
               </thead>
               <tbody>
@@ -3843,11 +3878,11 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
                   const due = Math.max(0, m.total - m.paid);
                   return (
                     <tr key={m.m} className="border-b border-neutral-100">
-                      <td className="px-2 py-1 font-medium text-black">{monthNames[m.m]}</td>
-                      <td className="px-2 py-1 text-center num text-black">{m.count}</td>
-                      <td className="px-2 py-1"><div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden"><div className="h-full bg-black" style={{ width: `${pct}%` }} /></div></td>
-                      <td className="px-2 py-1 text-right num font-medium text-black">{formatFCFA(m.total)}</td>
-                      <td className="px-2 py-1 text-right num font-medium text-black hidden sm:table-cell">{due > 0 ? formatFCFA(due) : 'Soldé'}</td>
+                      <td className="pl-0 pr-1 sm:px-2 py-1 font-medium text-black">{monthNames[m.m]}</td>
+                      <td className="px-1 sm:px-2 py-1 text-center num text-black">{m.count}</td>
+                      <td className="px-1 sm:px-2 py-1"><div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden"><div className="h-full bg-black" style={{ width: `${pct}%` }} /></div></td>
+                      <td className="pl-1 pr-0 sm:px-2 py-1 text-right num font-medium text-black">{formatFCFA(m.total)}</td>
+                      <td className="px-1 sm:px-2 py-1 text-right num font-medium text-black hidden sm:table-cell">{due > 0 ? formatFCFA(due) : 'Soldé'}</td>
                     </tr>
                   );
                 })}
@@ -3874,25 +3909,25 @@ function SupplierDocsView({ kpis, yearStats, docs, orderItems, dateFrom, dateTo,
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-[2] bg-[var(--w-surface)] border-b border-[var(--w-separator)]">
                 <tr>
-                  <th className="px-2.5 py-2 text-left font-semibold text-black">Date</th>
-                  <th className="px-2.5 py-2 text-left font-semibold text-black">N° document</th>
-                  <th className="px-2.5 py-2 text-left font-semibold text-black">Statut</th>
-                  <th className="px-2.5 py-2 text-right font-semibold text-black">Total</th>
+                  <th className="pl-0 pr-1 sm:px-2.5 py-2 text-left font-semibold text-black">Date</th>
+                  <th className="px-1 sm:px-2.5 py-2 text-left font-semibold text-black">N° document</th>
+                  <th className="px-1 sm:px-2.5 py-2 text-left font-semibold text-black">Statut</th>
+                  <th className="pl-1 pr-0 sm:px-2.5 py-2 text-right font-semibold text-black">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {docs.map((o: any) => (
                   <tr key={o.id} onClick={() => onOpenOrder(o.id)} className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer">
-                    <td className="px-2.5 py-1.5 text-black whitespace-nowrap">{new Date(o.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
-                    <td className="px-2.5 py-1.5 font-mono font-semibold text-black">{o.order_number}</td>
-                    <td className="px-2.5 py-1.5"><StatusBadgeOrder order={o} /></td>
-                    <td className="px-2.5 py-1.5 text-right num font-semibold text-black">{formatFCFA(o.total)}</td>
+                    <td className="pl-0 pr-1 sm:px-2.5 py-1.5 text-black whitespace-nowrap">{new Date(o.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                    <td className="px-1 sm:px-2.5 py-1.5 font-mono font-semibold text-black">{o.order_number}</td>
+                    <td className="px-1 sm:px-2.5 py-1.5"><StatusBadgeOrder order={o} /></td>
+                    <td className="pl-1 pr-0 sm:px-2.5 py-1.5 text-right num font-semibold text-black">{formatFCFA(o.total)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="border-t border-neutral-300 px-2.5 py-1.5 flex items-center text-xs">
+          <div className="border-t border-neutral-300 pl-0 pr-0 sm:px-2.5 py-1.5 flex items-center text-xs">
             <span className="font-semibold text-black">TOTAL</span>
             <span className="flex-1" />
             <span className="num font-bold text-black">{formatFCFA(kpis.achats)}</span>
