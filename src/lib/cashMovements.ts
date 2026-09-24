@@ -51,13 +51,20 @@ export function cashMovementLabel(kind: string): string {
   return CASH_MOVEMENT_LABELS[kind as CashMovementKind] || 'Mouvement';
 }
 
-// Un règlement de facture/vente enregistré comme income ne doit pas être recompté
-// comme une entrée directe : il est déjà couvert par les paiements de vente.
 export function isSaleSettlementIncome(kind: string, reason?: string | null): boolean {
   return (
     kind === 'income' &&
     !!reason &&
     reason.startsWith('Règlement ') &&
-    !reason.startsWith('Règlement solde')
+    !reason.startsWith('Règlement solde') &&
+    !reason.startsWith('Règlement report de solde')
+  );
+}
+
+export function isBalancePaymentIncome(kind: string, reason?: string | null): boolean {
+  return (
+    kind === 'income' &&
+    !!reason &&
+    reason.startsWith('Règlement report de solde')
   );
 }

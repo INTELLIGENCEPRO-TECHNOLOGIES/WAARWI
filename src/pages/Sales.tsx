@@ -535,7 +535,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
   return (
     <div className="space-y-3 pb-6">
       {/* ── Page Header ───────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
 
         {/* Row 1: Title */}
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Journal des ventes</h1>
@@ -794,7 +794,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
             onPrint={printInvoice}
             onCopyLink={() => copyInvoiceLink(selected)}
             onWhatsApp={selected.customers ? () => sendWhatsApp(selected) : undefined}
-            onComptabiliser={!isAccounted && !isCancelled ? comptabiliserVente : undefined}
+            onComptabiliser={!isAccounted && !isCancelled && can('manage_accounting') ? comptabiliserVente : undefined}
             accountingBusy={accounting}
             onCancel={!isCancelled && !isAccounted ? () => cancelInvoice(selected) : undefined}
           />
@@ -836,7 +836,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
           onPrint={printInvoice}
           onCopyLink={() => copyInvoiceLink(selected)}
           onWhatsApp={selected.customers ? () => sendWhatsApp(selected) : undefined}
-          onComptabiliser={selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' ? comptabiliserVente : undefined}
+          onComptabiliser={selected.accounting_status !== 'accounted' && selected.status !== 'cancelled' && can('manage_accounting') ? comptabiliserVente : undefined}
           onCancel={selected.status !== 'cancelled' && selected.accounting_status !== 'accounted' ? () => cancelInvoice(selected) : undefined}
           docCreatedInfo={{ createdAt: selected.created_at, createdBy: creatorName(selected.user_id) }}
         />

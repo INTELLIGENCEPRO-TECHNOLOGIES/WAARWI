@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 import { formatFCFA, formatCompactFCFA, formatDateTime } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
+import { isSaleSettlementIncome } from '../lib/cashMovements';
 import { Modal } from '../components/Modal';
 import { desktopAutoFocus } from '../lib/device';
 import {
@@ -320,7 +321,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const [{ data: periodPayments }, { data: periodMovs }] = await Promise.all([periodPaymentsQuery, periodMovsQuery]);
       const todayPaymentsTotal = (periodPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
       const todayMovIncome = (periodMovs || [])
-        .filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
+        .filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !isSaleSettlementIncome(m.kind, m.reason))
         .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
       const todayCollected = todayPaymentsTotal + todayMovIncome;
       const periodExpenses = (periodMovs || []).filter((m: any) => m.kind === 'expense').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
@@ -413,7 +414,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
           .eq('cash_session_id', currentSession.id);
         for (const m of (sessionMovs || []) as any[]) {
           if (m.kind === 'expense') sessionMovExpense += Number(m.amount || 0);
-          else if (m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))) sessionMovIncome += Number(m.amount || 0);
+          else if (m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !isSaleSettlementIncome(m.kind, m.reason)) sessionMovIncome += Number(m.amount || 0);
         }
       }
 
@@ -1018,7 +1019,7 @@ function MobileDashboard({
         const sf: any = sfData || {};
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
-        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !isSaleSettlementIncome(m.kind, m.reason)).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + todayDirectCash;
         const periodExpenses = (collectedMovs || []).filter((m: any) => m.kind === 'expense').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const periodRefunds = (collectedMovs || []).filter((m: any) => m.kind === 'refund').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
@@ -1958,7 +1959,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         const sf: any = sfData || {};
         const salesCount = (salesData || []).length;
         const todaySales = (salesData || []).reduce((s: number, r: any) => s + Number(r.total), 0);
-        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+        const todayDirectCash = (collectedMovs || []).filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'withdrawal' && m.kind !== 'customer_loan' && m.kind !== 'vault_withdrawal' && m.kind !== 'vault_deposit' && !isSaleSettlementIncome(m.kind, m.reason)).reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const todayCollected = (collectedPmts || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + todayDirectCash;
         const periodExpenses = (collectedMovs || []).filter((m: any) => m.kind === 'expense').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
         const periodRefunds = (collectedMovs || []).filter((m: any) => m.kind === 'refund').reduce((s: number, m: any) => s + Number(m.amount || 0), 0);

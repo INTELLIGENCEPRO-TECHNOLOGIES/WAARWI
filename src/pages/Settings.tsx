@@ -17,6 +17,7 @@ import { Modal, ConfirmDialog } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
+import { usePermissions } from '../lib/permissions';
 
 type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription' | 'rep_commissions' | 'expense_types';
 
@@ -1368,6 +1369,8 @@ function BrandsTab() {
 function AccountingTab() {
   const { tenant } = useApp();
   const { success, error } = useToast();
+  const { can } = usePermissions();
+  const canManage = can('manage_accounting');
   const [list, setList] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -1383,14 +1386,18 @@ function AccountingTab() {
 
   const save = async () => {
     if (!tenant || !form.code || !form.name) { error('Code et intitulé obligatoires'); return; }
-    if (form.code.length !== 7 || !/^\d+$/.test(form.code)) { error('Le code doit contenir exactement 7 chiffres'); return; }
+    if (!editing && (form.code.length !== 7 || !/^\d+$/.test(form.code))) { error('Le code doit contenir exactement 7 chiffres'); return; }
     setSaving(true);
-    const payload = { tenant_id: tenant.id, code: form.code, name: form.name, class: Number(form.code.charAt(0)), is_active: true };
-    const { error: e } = editing
-      ? await supabase.from('accounts').update({ name: form.name }).eq('id', editing.id)
-      : await supabase.from('accounts').insert(payload);
+    const { data, error: e } = await supabase.rpc('save_accounting_account', {
+      p_tenant_id: tenant.id,
+      p_account_id: editing?.id || null,
+      p_code: editing ? null : form.code,
+      p_name: form.name,
+    });
     setSaving(false);
-    if (e) error(e.message.includes('unique') ? 'Ce code existe déjà' : e.message); else { success(editing ? 'Modifié' : 'Créé'); setOpen(false); load(); }
+    if (e) { error(e.message); return; }
+    if (!(data as any)?.success) { error((data as any)?.error || 'Erreur'); return; }
+    success(editing ? 'Modifié' : 'Créé'); setOpen(false); load();
   };
 
   const byClass = [1, 2, 3, 4, 5, 6, 7, 8].map(cl => ({
@@ -1401,7 +1408,7 @@ function AccountingTab() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-neutral-500">{list.length} compte{list.length > 1 ? 's' : ''} — SYSCOHADA révisé</p>
-        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]" title="Nouveau compte"><Plus className="w-3.5 h-3.5" />Nouveau</button>
+{canManage && <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]" title="Nouveau compte"><Plus className="w-3.5 h-3.5" />Nouveau</button>}
       </div>
 
       <div className="space-y-6">
@@ -1418,7 +1425,7 @@ function AccountingTab() {
                   <tr key={a.id} className="hover:bg-neutral-50/60 transition-colors">
                     <td className="px-3 py-2 font-mono text-xs w-20 text-neutral-600">{a.code}</td>
                     <td className="px-3 py-2 text-xs font-medium text-neutral-900">{a.name}</td>
-                    <td className="px-3 py-2 text-right"><button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1.5 rounded-md hover:bg-neutral-100 transition"><Edit2 className="w-3.5 h-3.5 text-neutral-500" /></button></td>
+                    <td className="px-3 py-2 text-right">{canManage && <button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1.5 rounded-md hover:bg-neutral-100 transition"><Edit2 className="w-3.5 h-3.5 text-neutral-500" /></button>}</td>
                   </tr>
                 ))}
               </tbody>

@@ -3,6 +3,7 @@ import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckC
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
+import { usePermissions } from '../lib/permissions';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
@@ -47,6 +48,8 @@ export function Accounting({ section = 'plan' }: { section?: TabKey }) {
 function PlanTab() {
   const { tenant } = useApp();
   const { success, error } = useToast();
+  const { can } = usePermissions();
+  const canManage = can('manage_accounting');
   const [list, setList] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -69,15 +72,18 @@ function PlanTab() {
 
   const save = async () => {
     if (!tenant || !form.code || !form.name) { error('Code et intitulé obligatoires'); return; }
-    if (form.code.length !== 7 || !/^\d+$/.test(form.code)) { error('Le code doit contenir exactement 7 chiffres'); return; }
+    if (!editing && (form.code.length !== 7 || !/^\d+$/.test(form.code))) { error('Le code doit contenir exactement 7 chiffres'); return; }
     setSaving(true);
-    const payload = { tenant_id: tenant.id, code: form.code, name: form.name, class: Number(form.code.charAt(0)), is_active: true };
-    const { error: e } = editing
-      ? await supabase.from('accounts').update({ name: form.name }).eq('id', editing.id)
-      : await supabase.from('accounts').insert(payload);
+    const { data, error: e } = await supabase.rpc('save_accounting_account', {
+      p_tenant_id: tenant.id,
+      p_account_id: editing?.id || null,
+      p_code: editing ? null : form.code,
+      p_name: form.name,
+    });
     setSaving(false);
-    if (e) error(e.message.includes('unique') ? 'Ce code existe déjà' : e.message);
-    else { success(editing ? 'Modifié' : 'Créé'); setOpen(false); load(); }
+    if (e) { error(e.message); return; }
+    if (!(data as any)?.success) { error((data as any)?.error || 'Erreur'); return; }
+    success(editing ? 'Modifié' : 'Créé'); setOpen(false); load();
   };
 
   const byClass = [1, 2, 3, 4, 5, 6, 7, 8].map(cl => ({
@@ -92,7 +98,7 @@ function PlanTab() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un compte…" className="input pl-9" />
         </div>
-        <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-icon-primary" title="Nouveau compte"><Plus className="w-4 h-4" /></button>
+        {canManage && <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-icon-primary" title="Nouveau compte"><Plus className="w-4 h-4" /></button>}
       </div>
 
       <div className="space-y-3">
@@ -110,9 +116,9 @@ function PlanTab() {
                     <td className="px-1 md:px-4 py-2.5 font-mono text-xs w-24 text-brand-700">{a.code}</td>
                     <td className="px-1 md:px-4 py-2.5 font-medium">{a.name}</td>
                     <td className="px-1 md:px-4 py-2.5 text-right">
-                      <button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1 rounded hover:bg-slate-100">
+                      {canManage && <button onClick={() => { setEditing(a); setForm({ ...a }); setOpen(true); }} className="p-1 rounded hover:bg-slate-100">
                         <Edit2 className="w-3.5 h-3.5 text-slate-400" />
-                      </button>
+                      </button>}
                     </td>
                   </tr>
                 ))}
@@ -142,6 +148,8 @@ function PlanTab() {
 function JournalsTab() {
   const { tenant } = useApp();
   const { success, error } = useToast();
+  const { can } = usePermissions();
+  const canManage = can('manage_accounting');
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -196,18 +204,18 @@ function JournalsTab() {
     const validLines = entryLines.filter(l => l.account_code && (l.debit > 0 || l.credit > 0));
     if (validLines.length < 2) { error('Au moins 2 lignes sont nécessaires'); return; }
     setSaving(true);
-    const eNum = form.journal_type + '-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
-    const { data: entry, error: e } = await supabase.from('journal_entries').insert({
-      tenant_id: tenant.id, entry_number: eNum,
-      journal_type: form.journal_type, entry_date: form.entry_date,
-      description: form.description, reference: form.reference,
-      total_debit: totalDebit, total_credit: totalCredit, is_balanced: true,
-      status: 'posted', posted_at: new Date().toISOString(),
-    }).select().single();
-    if (e || !entry) { error(e?.message || 'Erreur'); setSaving(false); return; }
-    await supabase.from('journal_lines').insert(validLines.map(l => ({ tenant_id: tenant.id, entry_id: entry.id, account_code: l.account_code, account_name: l.account_name, debit: l.debit, credit: l.credit, label: l.label })));
+    const { data, error: e } = await supabase.rpc('create_manual_journal_entry', {
+      p_tenant_id: tenant.id,
+      p_journal_type: form.journal_type,
+      p_entry_date: form.entry_date,
+      p_description: form.description,
+      p_reference: form.reference || '',
+      p_lines: validLines.map(l => ({ account_code: l.account_code, debit: l.debit, credit: l.credit, label: l.label })),
+    });
     setSaving(false);
-    success('Écriture enregistrée');
+    if (e) { error(e.message); return; }
+    if (!(data as any)?.success) { error((data as any)?.error || 'Erreur'); return; }
+    success(`Écriture ${(data as any).piece_number} enregistrée`);
     setOpen(false);
     setEntryLines([{ account_code: '', account_name: '', debit: 0, credit: 0, label: '' }, { account_code: '', account_name: '', debit: 0, credit: 0, label: '' }]);
     setForm({ journal_type: 'OD', entry_date: new Date().toISOString().slice(0, 10), description: '', reference: '' });
@@ -227,7 +235,7 @@ function JournalsTab() {
           <option value="">Tous les journaux</option>
           {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        <button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouvelle écriture"><Plus className="w-4 h-4" /></button>
+        {canManage && <button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouvelle écriture"><Plus className="w-4 h-4" /></button>}
       </div>
 
       <div className="card overflow-hidden">
@@ -384,6 +392,8 @@ function JournalsTab() {
 function BalanceTab() {
   const { tenant } = useApp();
   const { success, error: toastError } = useToast();
+  const { can } = usePermissions();
+  const canManage = can('manage_accounting');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<'month' | 'year' | 'all'>('year');
@@ -475,7 +485,7 @@ function BalanceTab() {
           <option value="year">Exercice en cours</option>
           <option value="all">Tout</option>
         </select>
-        <div className="flex items-center gap-2 flex-wrap">
+        {canManage && <div className="flex items-center gap-2 flex-wrap">
           <button onClick={comptabiliserTout} disabled={bulkBusy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition disabled:opacity-50">
             {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Ventes
@@ -492,7 +502,7 @@ function BalanceTab() {
             {bulkPayFournBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
             Rglts fournisseurs
           </button>
-        </div>
+        </div>}
       </div>
 
       {loading ? <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
@@ -918,96 +928,19 @@ function SearchTab() {
 
 /* ===================== CLOTURES ===================== */
 function ClotureTab() {
-  const { tenant } = useApp();
-  const { success, error: toastError } = useToast();
-  const [journalType, setJournalType] = useState('VE');
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const [exercice, setExercice] = useState(() => String(new Date().getFullYear()));
-  const [busy, setBusy] = useState<string | null>(null);
-  const [confirmJournal, setConfirmJournal] = useState(false);
-  const [confirmExercice, setConfirmExercice] = useState(false);
-
-  async function clotureJournal() {
-    if (!tenant) return;
-    setBusy('journal');
-    const { data, error } = await supabase.rpc('cloturer_journal', {
-      p_tenant_id: tenant.id,
-      p_journal_type: journalType,
-      p_month: month + '-01',
-    });
-    if (error) toastError(error.message);
-    else success(`Journal ${journalType} clôturé pour ${month} — ${data?.closed_count || 0} écritures validées`);
-    setBusy(null);
-    setConfirmJournal(false);
-  }
-
-  async function clotureExercice() {
-    if (!tenant) return;
-    setBusy('exercice');
-    const { data, error } = await supabase.rpc('cloturer_exercice', {
-      p_tenant_id: tenant.id,
-      p_year: Number(exercice),
-    });
-    if (error) toastError(error.message);
-    else success(`Exercice ${exercice} clôturé — ${data?.closed_count || 0} écritures validées`);
-    setBusy(null);
-    setConfirmExercice(false);
-  }
-
   return (
     <div className="space-y-6">
-      {/* Clôture journal */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-        <h3 className="text-base font-semibold text-slate-800 mb-1">Clôture de journal</h3>
-        <p className="text-xs text-slate-500 mb-4">Valider toutes les écritures brouillon d'un journal pour un mois donné. Cette action est irréversible.</p>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Journal</label>
-            <select value={journalType} onChange={e => setJournalType(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none">
-              {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Mois</label>
-            <input type="month" value={month} onChange={e => setMonth(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" />
-          </div>
-          <button onClick={() => setConfirmJournal(true)} disabled={busy === 'journal'} className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition disabled:opacity-50">
-            {busy === 'journal' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-            Clôturer
-          </button>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 mb-3">
+          <Lock className="w-6 h-6 text-amber-600" />
         </div>
+        <h3 className="text-base font-semibold text-slate-800 mb-2">Clôtures temporairement indisponibles</h3>
+        <p className="text-sm text-slate-600 max-w-md mx-auto">
+          Les fonctions de clôture de journal et de clôture d'exercice sont en cours de finalisation
+          dans le moteur comptable. Elles seront réactivées une fois le processus complet mis en place.
+        </p>
+        <p className="text-xs text-slate-400 mt-3">Vos écritures comptables existantes ne sont pas affectées.</p>
       </div>
-
-      {/* Clôture exercice */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-        <h3 className="text-base font-semibold text-slate-800 mb-1">Clôture d'exercice</h3>
-        <p className="text-xs text-slate-500 mb-4">Valider toutes les écritures brouillon de l'année complète. Cette action est irréversible et concerne tous les journaux.</p>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Exercice</label>
-            <input type="number" min="2020" max="2030" value={exercice} onChange={e => setExercice(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm w-32 focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" />
-          </div>
-          <button onClick={() => setConfirmExercice(true)} disabled={busy === 'exercice'} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-50">
-            {busy === 'exercice' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-            Clôturer l'exercice
-          </button>
-        </div>
-      </div>
-
-      <ConfirmDialog
-        open={confirmJournal}
-        title="Confirmer la clôture"
-        message={`Vous allez clôturer le journal ${journalType} pour ${month}. Toutes les écritures brouillon seront validées et ne pourront plus être modifiées.`}
-        onConfirm={clotureJournal}
-        onClose={() => setConfirmJournal(false)}
-      />
-      <ConfirmDialog
-        open={confirmExercice}
-        title="Confirmer la clôture d'exercice"
-        message={`Vous allez clôturer l'exercice ${exercice} pour tous les journaux. Toutes les écritures brouillon de l'année seront validées et ne pourront plus être modifiées.`}
-        onConfirm={clotureExercice}
-        onClose={() => setConfirmExercice(false)}
-      />
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { EmptyState } from '../components/EmptyState';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { printXReport80, buildPrintTenantForSite } from '../lib/print';
 import { consumeNavContext } from '../lib/navHighlight';
-import type { CashMovementKind } from '../lib/cashMovements';
+import { isSaleSettlementIncome, type CashMovementKind } from '../lib/cashMovements';
 
 const tap = () => { if (navigator.vibrate) navigator.vibrate(8); };
 
@@ -183,8 +183,7 @@ export function CashHistory() {
     (pmtData || []).forEach((p: any) => { byMethodMap[p.method_name] = (byMethodMap[p.method_name] || 0) + Number(p.amount); });
     (mvData || []).forEach((m: any) => {
       if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
-      const isReglement = m.kind === 'income' && (m.reason || '').startsWith('Règlement ') && !m.reason.startsWith('Règlement solde');
-      if (isReglement) return;
+      if (isSaleSettlementIncome(m.kind, m.reason)) return;
       const method = m.method_name || 'Espèces';
       byMethodMap[method] = (byMethodMap[method] || 0) + Number(m.amount);
     });
@@ -207,7 +206,7 @@ export function CashHistory() {
       created_at: m.created_at,
     }));
     const movements = allMovements.filter(m =>
-      !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde'))
+      !isSaleSettlementIncome(m.kind, m.reason)
     );
     setDetail({
       session: s,
@@ -254,7 +253,7 @@ export function CashHistory() {
   return (
     <div className="space-y-3">
       {/* Premium unified search bar with embedded title + date picker */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Caisse</h1>
         <div className="flex items-center gap-2">
           <Search className="w-4 h-4 text-neutral-400 shrink-0" />

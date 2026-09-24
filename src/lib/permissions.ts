@@ -102,6 +102,8 @@ export const PERMISSION_KEYS = [
   'rep_commission_view',
   'rep_settings_edit',
   'rep_export',
+  // Comptabilité
+  'manage_accounting',
   // Backup & Restore
   'backup_create',
   'backup_restore',
@@ -210,6 +212,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   backup_download: 'Télécharger une sauvegarde',
   backup_delete: 'Supprimer une sauvegarde',
   backup_manage_schedule: 'Gérer la planification des sauvegardes automatiques',
+  manage_accounting: 'Gérer la comptabilité (écritures, comptes, comptabilisation)',
 };
 
 export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] = [
@@ -225,7 +228,7 @@ export const PERMISSION_CATEGORIES: { label: string; keys: PermissionKey[] }[] =
   },
   {
     label: 'Données financières',
-    keys: ['view_purchase_prices', 'view_margins', 'view_dashboard_stats', 'view_accounting', 'view_stock_levels', 'view_sales_history', 'view_cash_sessions'],
+    keys: ['view_purchase_prices', 'view_margins', 'view_dashboard_stats', 'view_accounting', 'manage_accounting', 'view_stock_levels', 'view_sales_history', 'view_cash_sessions'],
   },
   {
     label: 'Stock & Articles',

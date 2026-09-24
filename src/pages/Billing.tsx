@@ -1716,7 +1716,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   const comptabiliserFacture = async () => {
     if (!invoiceDetail || accountingBusy) return;
-    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de comptabiliser les factures'); return; }
+    if (!can('manage_accounting')) { error('Vous n\'avez pas la permission de comptabiliser les factures'); return; }
     setAccountingBusy(true);
     try {
       const { data, error } = await supabase.rpc('comptabiliser_vente', { p_sale_id: invoiceDetail.id });
@@ -1831,7 +1831,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   const comptabiliserFromEditor = async (inv: Invoice) => {
     if (accountingBusy) return;
-    if (!can('edit_invoices')) { error('Vous n\'avez pas la permission de comptabiliser les factures'); return; }
+    if (!can('manage_accounting')) { error('Vous n\'avez pas la permission de comptabiliser les factures'); return; }
     setAccountingBusy(true);
     try {
       const { data, error: rpcErr } = await supabase.rpc('comptabiliser_vente', { p_sale_id: inv.id });
@@ -2854,7 +2854,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             }}
             onCopyLink={() => copyInvoiceLink(viewInv)}
             onWhatsApp={viewInv.customers ? () => sendInvoiceWhatsApp(viewInv) : undefined}
-            onComptabiliser={can('edit_invoices') && !isAccounted && !isCancelled ? async () => {
+            onComptabiliser={can('manage_accounting') && !isAccounted && !isCancelled ? async () => {
               if (accountingBusy) return;
               setAccountingBusy(true);
               const { error: rpcErr } = await supabase.rpc('comptabiliser_vente', { p_sale_id: viewInv.id });
@@ -3258,7 +3258,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
             )}
             {invoiceDetail && invoiceDue > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openPay} className="btn-icon-success" title="Encaisser"><Coins className="w-4 h-4" /></button>}
             {invoiceDetail && invoiceDue > 0 && availableCredits.length > 0 && invoiceDetail.status !== 'cancelled' && <button onClick={openCreditApply} className="btn-icon" title="Appliquer avoir"><Wallet className="w-4 h-4" /></button>}
-            {invoiceDetail && invoiceDetail.accounting_status !== 'accounted' && invoiceDetail.status !== 'cancelled' && (
+            {invoiceDetail && invoiceDetail.accounting_status !== 'accounted' && invoiceDetail.status !== 'cancelled' && can('manage_accounting') && (
               <button onClick={comptabiliserFacture} disabled={accountingBusy} className="btn-icon text-teal-500 hover:bg-[var(--w-hover)]" title="Comptabiliser">
                 {accountingBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
               </button>

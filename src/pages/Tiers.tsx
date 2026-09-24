@@ -1801,10 +1801,10 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
   const [payMethod, setPayMethod] = useState<string>('');
   const [payRef, setPayRef] = useState('');
   const [paying, setPaying] = useState(false);
+  const balPayIdemRef = useRef<string>(crypto.randomUUID());
 
   const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [dateTo, setDateTo] = useState('');  const [pickerOpen, setPickerOpen] = useState(false);
   const [invoiceView, setInvoiceView] = useState<any | null>(null);
 
   type StatementRow = { ts: string; piece: string; label: string; kind: string; debit: number; credit: number; running: number; affects: boolean };
@@ -2046,10 +2046,11 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
 
     let e: any = null;
     if (paySale === '__balance__') {
-      const { error: rpcErr } = await supabase.rpc('register_customer_payment', {
+      const idemKey = balPayIdemRef.current;
+      const { error: rpcErr } = await supabase.rpc('register_customer_balance_payment', {
         p_customer_id: c.id, p_payment_method_id: pm.id, p_method_name: pm.name,
         p_amount: amt, p_reference: payRef || `Règlement solde · ${c.name}`,
-        p_cash_session_id: sess.id, p_sale_id: null,
+        p_cash_session_id: sess.id, p_idempotency_key: idemKey,
       });
       e = rpcErr;
     } else {
@@ -2064,6 +2065,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
 
     setPaying(false);
     if (e) { error(e.message); return; }
+    balPayIdemRef.current = crypto.randomUUID();
     success('Règlement enregistré · imputé sur la caisse du jour');
     setPaySale(''); setPayAmount(''); setPayRef('');
     reload();

@@ -167,7 +167,7 @@ function useDaySummary(tenantId?: string, siteId?: string, sessionId?: string) {
       }
       for (const m of movementsArr) {
         if (m.kind !== 'income' && m.kind !== 'customer_prepayment') continue;
-        if (m.kind === 'income' && (m.reason || '').startsWith('Règlement ') && !(m.reason || '').startsWith('Règlement solde')) continue;
+        if (isSaleSettlementIncome(m.kind, m.reason)) continue;
         const amt = Number(m.amount);
         const method = m.method_name || 'Espèces';
         byMethod[method] = (byMethod[method] || 0) + amt;
@@ -1285,6 +1285,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [custPayRef, setCustPayRef] = useState('');
   const [custPaySubmitting, setCustPaySubmitting] = useState(false);
   const [custPaySearch, setCustPaySearch] = useState('');
+  const custPayIdemRef = useRef<string>(crypto.randomUUID());
 
   // Return ticket
   const [returnOpen, setReturnOpen] = useState(false);
@@ -2167,22 +2168,37 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     const methodName = custPayMethod.name;
     const refValue = custPayRef;
     setCustPaySubmitting(true);
-    const { error: e } = await supabase.rpc('register_customer_payment', {
-      p_customer_id: custPayCustomer.id,
-      p_payment_method_id: custPayMethod.id,
-      p_method_name: custPayMethod.name,
-      p_amount: custPayAmount,
-      p_reference: custPayRef,
-      p_cash_session_id: session.id,
-      p_sale_id: (custPaySaleId && custPaySaleId !== '__balance__') ? custPaySaleId : null,
-    });
+    let e: any = null;
+    let pieceNumber: string | null = null;
+    if (custPaySaleId === '__balance__') {
+      const idemKey = custPayIdemRef.current;
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('register_customer_balance_payment', {
+        p_customer_id: custPayCustomer.id,
+        p_payment_method_id: custPayMethod.id,
+        p_method_name: custPayMethod.name,
+        p_amount: custPayAmount,
+        p_reference: custPayRef,
+        p_cash_session_id: session.id,
+        p_idempotency_key: idemKey,
+      });
+      e = rpcErr;
+      if (!rpcErr && rpcData) pieceNumber = (rpcData as any).piece_number || null;
+    } else {
+      const { error: rpcErr } = await supabase.rpc('register_customer_payment', {
+        p_customer_id: custPayCustomer.id,
+        p_payment_method_id: custPayMethod.id,
+        p_method_name: custPayMethod.name,
+        p_amount: custPayAmount,
+        p_reference: custPayRef,
+        p_cash_session_id: session.id,
+        p_sale_id: custPaySaleId || null,
+      });
+      e = rpcErr;
+    }
     if (e) { setCustPaySubmitting(false); error(e.message); return; }
 
     if (custPayPrint) {
-      const { data: numData } = await supabase.rpc('next_doc_number', {
-        p_tenant_id: tenant.id, p_kind: 'reglement_client', p_prefix: 'REG',
-      });
-      const recNum = (numData as string) || ('REG-' + Date.now());
+      const recNum = pieceNumber || ('REG-' + Date.now());
       try {
         printEncaissementTicket80({
           receiptNumber: recNum,
@@ -2198,6 +2214,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       } catch {}
     }
 
+    custPayIdemRef.current = crypto.randomUUID();
     setCustPaySubmitting(false);
     success('Règlement encaissé');
     setCustPayCustomer(null);
@@ -2558,7 +2575,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       method_name: m.method_name || '', reference: m.reference || '',
       customer_name: m.customers?.name || null,
       created_at: m.created_at || '',
-    })).filter(m => !(m.kind === 'income' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')));
+    })).filter(m => !isSaleSettlementIncome(m.kind, m.reason));
     setSessionMovements(movs);
     const invPayments = (pmtData || [])
       .filter((p: any) => (p.reference && p.reference.startsWith('Règlement facture')) || !p.sales || p.sales.cash_session_id !== session!.id)
@@ -2572,7 +2589,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setSessionInvPayments(invPayments);
     const pmtTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
     const movEncaisseTotal = (mvData || [])
-      .filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'customer_withdrawal' && m.kind !== 'customer_loan' && !(m.kind === 'income' && typeof m.reason === 'string' && m.reason.startsWith('Règlement ') && !m.reason.startsWith('Règlement solde')))
+      .filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'customer_withdrawal' && m.kind !== 'customer_loan' && !isSaleSettlementIncome(m.kind, m.reason))
       .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     setSessionEncaisse(pmtTotal + movEncaisseTotal);
     setTicketsExpanded('tickets');
