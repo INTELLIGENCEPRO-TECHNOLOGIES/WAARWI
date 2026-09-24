@@ -10,6 +10,8 @@ jobs:
   replay:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,6 +23,9 @@ jobs:
 
       - name: Show CLI version
         run: supabase --version
+
+      - name: Verify Docker registry
+        run: echo "Registry=$SUPABASE_INTERNAL_IMAGE_REGISTRY"
 
       - name: Start local Supabase with retry
         shell: bash
