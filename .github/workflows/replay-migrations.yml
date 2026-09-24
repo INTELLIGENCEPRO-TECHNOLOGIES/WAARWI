@@ -9,6 +9,7 @@ permissions:
 jobs:
   replay:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,8 +22,29 @@ jobs:
       - name: Show CLI version
         run: supabase --version
 
-      - name: Start local Supabase
-        run: supabase db start
+      - name: Start local Supabase with retry
+        shell: bash
+        run: |
+          set +e
+          for attempt in 1 2 3 4 5; do
+            echo "Tentative ${attempt}/5"
+            supabase db start
+            status=$?
+
+            if [ "$status" -eq 0 ]; then
+              echo "Supabase local démarré."
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 5 ]; then
+              supabase db stop --no-backup || true
+              delay=$((attempt * 60))
+              echo "Limite Docker rencontrée. Nouvelle tentative dans ${delay}s..."
+              sleep "$delay"
+            fi
+          done
+
+          exit "$status"
 
       - name: Replay all migrations
         run: supabase db reset --local --no-seed
