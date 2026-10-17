@@ -147,6 +147,7 @@ export type Site = {
   is_warehouse: boolean;
   is_active: boolean;
   parent_site_id: string | null;
+  logo_url?: string | null;
   ticket_header_config?: TicketHeaderItem[] | null;
   a4_header_config?: A4HeaderConfig | null;
   allow_negative_stock?: boolean;

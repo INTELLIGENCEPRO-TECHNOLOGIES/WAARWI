@@ -185,6 +185,8 @@ function trackUsage(key: Route) {
 export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r: Route) => void; children: ReactNode }) {
   const { t } = useTranslation();
   const { tenant, profile, signOut, sites, currentSite, setCurrentSite, setDefaultSite, localDefaultSiteId, posCartCount, posCartOpen, setPosCart } = useApp();
+  const brandLogo = currentSite?.logo_url || tenant?.logo_url;
+  const brandName = currentSite?.logo_url ? currentSite.name : tenant?.name;
   const effectiveDefaultSiteId = localDefaultSiteId ?? (profile as any)?.default_site_id ?? null;
   const { can, loading: permsLoading } = usePermissions();
   const isSuperAdmin = profile?.role === 'super_admin';
@@ -710,14 +712,14 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
         className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b border-neutral-200 bg-white sticky top-0 z-30 flex-shrink-0`}
       >
         <div className={`flex items-center gap-2.5 px-4 h-full transition-all duration-200 ${sidebarCollapsed ? 'w-[72px]' : ''}`}>
-          {tenant?.logo_url ? (
-            <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain flex-shrink-0" />
+          {brandLogo ? (
+            <img src={brandLogo} alt={brandName} className="w-9 h-9 object-contain flex-shrink-0" />
           ) : (
             <img src="/newlogo.png" alt="WAARWI" className="h-7 w-auto max-w-[120px] object-contain flex-shrink-0 w-platform-logo" />
           )}
           {!sidebarCollapsed && (
             <div className="leading-tight">
-              {tenant?.logo_url && <div className="text-sm font-bold text-neutral-900 tracking-tight whitespace-nowrap">{tenant?.name || 'WAARWI'}</div>}
+              {brandLogo && <div className="text-sm font-bold text-neutral-900 tracking-tight whitespace-nowrap">{brandName || 'WAARWI'}</div>}
               {tenant?.slogan && <div className="text-[10px] text-neutral-500 leading-tight whitespace-nowrap">{tenant.slogan}</div>}
             </div>
           )}
@@ -899,8 +901,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
             >
               <div className={`flex items-center px-4 pt-3.5 pb-3 border-b border-[var(--w-separator-l)]`}>
                 <div className="flex items-center min-w-0 shrink-0">
-                  {tenant?.logo_url ? (
-                    <img src={tenant.logo_url} alt={tenant.name} className="w-9 h-9 object-contain shrink-0" />
+                  {brandLogo ? (
+                    <img src={brandLogo} alt={brandName} className="w-9 h-9 object-contain shrink-0" />
                   ) : (
                     <img src="/newlogo.png" alt="WAARWI" className={`h-7 w-auto max-w-[110px] object-contain shrink-0 w-platform-logo`} />
                   )}
@@ -1124,8 +1126,8 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           aria-label="Menu"
         >
           <Menu className="w-5 h-5 text-neutral-800 shrink-0" strokeWidth={2.2} />
-          {tenant?.logo_url ? (
-            <img src={tenant.logo_url} alt="" className="h-8 w-8 object-contain rounded" />
+          {brandLogo ? (
+            <img src={brandLogo} alt="" className="h-8 w-8 object-contain rounded" />
           ) : (
             <img src="/newlogo.png" alt="" className="h-5 w-auto max-w-[48px] object-contain w-platform-logo" />
           )}

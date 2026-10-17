@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X, Check, Trash2 } from 'lucide-react';
+import { Plus, Loader2, Save, CreditCard as Edit2, Search, Eye, FileText, CheckCircle, PlayCircle, Lock, X, Check, Trash2, Download } from 'lucide-react';
+import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -7,6 +8,7 @@ import { usePermissions } from '../lib/permissions';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { formatDate } from '../lib/format';
+import { sanitizeCsvValue } from '../lib/csvSanitize';
 
 type TabKey = 'plan' | 'journals' | 'balance' | 'grandlivre' | 'tiers' | 'search' | 'cloture';
 
@@ -98,7 +100,10 @@ function PlanTab() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un compte…" className="input pl-9" />
         </div>
-        {canManage && <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-icon-primary" title="Nouveau compte"><Plus className="w-4 h-4" /></button>}
+        <div className="flex items-center gap-1.5">
+          <AccountingPlanIO accounts={list} onImportDone={load} />
+          {canManage && <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="btn-icon-primary" title="Nouveau compte"><Plus className="w-4 h-4" /></button>}
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -160,6 +165,17 @@ function JournalsTab() {
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
 
+  const canView = can('view_accounting');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportDateFrom, setExportDateFrom] = useState('');
+  const [exportDateTo, setExportDateTo] = useState('');
+  const [exportJournal, setExportJournal] = useState('');
+  const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [exportData, setExportData] = useState<{ rows: any[]; totalCount: number; totalDebitSum: number; totalCreditSum: number; entryCount: number } | null>(null);
+  const [exportError, setExportError] = useState('');
+
   const [form, setForm] = useState({ journal_type: 'OD', entry_date: new Date().toISOString().slice(0, 10), description: '', reference: '' });
   const [entryLines, setEntryLines] = useState<{ account_code: string; account_name: string; debit: number; credit: number; label: string }[]>([
     { account_code: '', account_name: '', debit: 0, credit: 0, label: '' },
@@ -180,6 +196,125 @@ function JournalsTab() {
     if (!tenant) return;
     supabase.from('accounts').select('code, name').eq('tenant_id', tenant.id).order('code').then(({ data }) => setAccounts(data || []));
   }, [tenant?.id]);
+  const openExportModal = () => {
+    const now = new Date();
+    setExportDateFrom(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
+    setExportDateTo(now.toISOString().slice(0, 10));
+    setExportJournal('');
+    setExportFormat('xlsx');
+    setExportError('');
+    setExportData(null);
+    setExportProgress(null);
+    setExportOpen(true);
+  };
+
+  const prepareExport = async () => {
+    if (!tenant) return;
+    setExportLoading(true);
+    setExportError('');
+    setExportProgress(null);
+    setExportData(null);
+    try {
+      const PAGE = 1000;
+      let offset = 0;
+      let allRows: any[] = [];
+      let totalCount = 0;
+
+      while (true) {
+        const { data, error: rpcErr } = await supabase.rpc('export_accounting_entries', {
+          p_tenant_id: tenant.id,
+          p_date_from: exportDateFrom,
+          p_date_to: exportDateTo,
+          p_journal_type: exportJournal || null,
+          p_page_size: PAGE,
+          p_offset: offset,
+        });
+        if (rpcErr) { setExportError(rpcErr.message); return; }
+        const res = data as any;
+        if (!res?.success) { setExportError(res?.error || 'Erreur serveur'); return; }
+        totalCount = res.total_count;
+        const rows = res.rows || [];
+        allRows = allRows.concat(rows);
+        setExportProgress({ loaded: allRows.length, total: totalCount });
+        if (allRows.length >= totalCount || rows.length < PAGE) break;
+        offset += PAGE;
+      }
+
+      if (allRows.length === 0) { setExportError('Aucune écriture validée sur cette période'); return; }
+
+      const totalDebitSum = allRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
+      const totalCreditSum = allRows.reduce((s: number, r: any) => s + Number(r.credit), 0);
+      const entryNumbers = new Set(allRows.map((r: any) => r.entry_number));
+      setExportData({ rows: allRows, totalCount, totalDebitSum, totalCreditSum, entryCount: entryNumbers.size });
+    } catch (e: any) {
+      setExportError(e.message || 'Erreur export');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const downloadExport = async () => {
+    if (!tenant || !exportData) return;
+    try {
+      const isCsv = exportFormat === 'csv';
+      const exportRows = exportData.rows.map(r => ({
+        'Date': isCsv ? sanitizeCsvValue(String(r.entry_date)) : String(r.entry_date),
+        'Journal': isCsv ? sanitizeCsvValue(String(r.journal_code)) : String(r.journal_code),
+        'N° Pièce': isCsv ? sanitizeCsvValue(String(r.entry_number)) : String(r.entry_number),
+        'Référence': isCsv ? sanitizeCsvValue(String(r.reference)) : String(r.reference),
+        'Compte': isCsv ? sanitizeCsvValue(String(r.account_code)) : String(r.account_code),
+        'Intitulé compte': isCsv ? sanitizeCsvValue(String(r.account_name)) : String(r.account_name),
+        'Libellé': isCsv ? sanitizeCsvValue(String(r.line_label)) : String(r.line_label),
+        'Débit': Number(r.debit),
+        'Crédit': Number(r.credit),
+        'Source': isCsv ? sanitizeCsvValue(String(r.source_type)) : String(r.source_type),
+      }));
+
+      const XLSX = await import('xlsx');
+      const tenantName = (tenant as any).name || (tenant as any).company_name || tenant.id.slice(0, 8);
+
+      if (!isCsv) {
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(exportRows);
+        ws['!cols'] = [{ wch: 12 }, { wch: 6 }, { wch: 16 }, { wch: 20 }, { wch: 10 }, { wch: 35 }, { wch: 35 }, { wch: 14 }, { wch: 14 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Écritures');
+
+        const infoRows = [
+          { 'Champ': 'Entreprise', 'Valeur': tenantName },
+          { 'Champ': 'Période du', 'Valeur': exportDateFrom },
+          { 'Champ': 'Période au', 'Valeur': exportDateTo },
+          { 'Champ': 'Journal', 'Valeur': exportJournal ? (JOURNAL_TYPES[exportJournal] || exportJournal) : 'Tous' },
+          { 'Champ': 'Écritures', 'Valeur': String(exportData.entryCount) },
+          { 'Champ': 'Lignes exportées', 'Valeur': String(exportData.totalCount) },
+          { 'Champ': 'Total débit', 'Valeur': exportData.totalDebitSum.toLocaleString('fr-FR') },
+          { 'Champ': 'Total crédit', 'Valeur': exportData.totalCreditSum.toLocaleString('fr-FR') },
+          { 'Champ': 'Équilibre', 'Valeur': Math.abs(exportData.totalDebitSum - exportData.totalCreditSum) < 0.01 ? 'Équilibré' : 'Non équilibré' },
+          { 'Champ': 'Date export', 'Valeur': new Date().toLocaleString('fr-FR') },
+        ];
+        const wsInfo = XLSX.utils.json_to_sheet(infoRows);
+        wsInfo['!cols'] = [{ wch: 20 }, { wch: 30 }];
+        XLSX.utils.book_append_sheet(wb, wsInfo, 'Informations');
+        XLSX.writeFile(wb, `ecritures_${tenantName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${exportDateFrom}_${exportDateTo}.xlsx`);
+      } else {
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(exportRows);
+        XLSX.utils.book_append_sheet(wb, ws, 'Écritures');
+        const csvContent = XLSX.utils.sheet_to_csv(ws, { FS: ';' });
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `ecritures_${tenantName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${exportDateFrom}_${exportDateTo}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      success('Export terminé');
+      setExportOpen(false);
+    } catch (e: any) {
+      error(e.message || 'Erreur export');
+    }
+  };
 
   const totalDebit = entryLines.reduce((s, l) => s + Number(l.debit), 0);
   const totalCredit = entryLines.reduce((s, l) => s + Number(l.credit), 0);
@@ -235,7 +370,10 @@ function JournalsTab() {
           <option value="">Tous les journaux</option>
           {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        {canManage && <button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouvelle écriture"><Plus className="w-4 h-4" /></button>}
+        <div className="flex items-center gap-2">
+          {canView && <button onClick={openExportModal} className="btn-icon" title="Exporter les écritures"><Download className="w-4 h-4" /></button>}
+          {canManage && <button onClick={() => setOpen(true)} className="btn-icon-primary" title="Nouvelle écriture"><Plus className="w-4 h-4" /></button>}
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -348,6 +486,97 @@ function JournalsTab() {
               <span className={isBalanced ? 'text-emerald-700 font-semibold' : 'text-red-600'}>{isBalanced ? 'Équilibrée' : `Écart : ${(totalDebit - totalCredit).toLocaleString('fr-FR')}`}</span>
             </div>
           </div>
+        </div>
+      </Modal>
+
+      {/* Export modal */}
+      <Modal open={exportOpen} onClose={() => !exportLoading && setExportOpen(false)} title="Exporter les écritures comptables" size="lg"
+        footer={<>
+          <button onClick={() => setExportOpen(false)} disabled={exportLoading} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
+          {!exportData ? (
+            <button onClick={prepareExport} disabled={exportLoading || !exportDateFrom || !exportDateTo} className="btn-icon-primary disabled:opacity-50" title="Préparer l'export">
+              {exportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            </button>
+          ) : (
+            <button onClick={downloadExport} className="btn-icon-primary" title="Télécharger">
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+        </>}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Date de début *</label>
+              <input type="date" value={exportDateFrom} onChange={e => { setExportDateFrom(e.target.value); setExportData(null); }} className="input" disabled={exportLoading} />
+            </div>
+            <div>
+              <label className="label">Date de fin *</label>
+              <input type="date" value={exportDateTo} onChange={e => { setExportDateTo(e.target.value); setExportData(null); }} className="input" disabled={exportLoading} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Journal</label>
+              <select value={exportJournal} onChange={e => { setExportJournal(e.target.value); setExportData(null); }} className="input" disabled={exportLoading}>
+                <option value="">Tous les journaux</option>
+                {Object.entries(JOURNAL_TYPES).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Format</label>
+              <select value={exportFormat} onChange={e => setExportFormat(e.target.value as 'xlsx' | 'csv')} className="input" disabled={exportLoading}>
+                <option value="xlsx">Excel (.xlsx)</option>
+                <option value="csv">CSV (séparateur ;)</option>
+              </select>
+            </div>
+          </div>
+
+          {exportError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+              <X className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{exportError}</span>
+            </div>
+          )}
+
+          {exportProgress && !exportData && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-neutral-500">
+                <span>Chargement des lignes…</span>
+                <span>{exportProgress.loaded.toLocaleString('fr-FR')} / {exportProgress.total.toLocaleString('fr-FR')}</span>
+              </div>
+              <div className="w-full bg-neutral-200 rounded-full h-2">
+                <div className="bg-brand-600 h-2 rounded-full transition-all" style={{ width: `${exportProgress.total > 0 ? Math.min(100, (exportProgress.loaded / exportProgress.total) * 100) : 0}%` }} />
+              </div>
+            </div>
+          )}
+
+          {exportData && (
+            <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>Export prêt — choisissez le format puis téléchargez</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-emerald-700">
+                <div><span className="font-medium">Période :</span> {exportDateFrom} au {exportDateTo}</div>
+                <div><span className="font-medium">Journal :</span> {exportJournal ? (JOURNAL_TYPES[exportJournal] || exportJournal) : 'Tous'}</div>
+                <div><span className="font-medium">Écritures :</span> {exportData.entryCount.toLocaleString('fr-FR')}</div>
+                <div><span className="font-medium">Lignes :</span> {exportData.totalCount.toLocaleString('fr-FR')}</div>
+                <div><span className="font-medium">Total débit :</span> {exportData.totalDebitSum.toLocaleString('fr-FR')}</div>
+                <div><span className="font-medium">Total crédit :</span> {exportData.totalCreditSum.toLocaleString('fr-FR')}</div>
+              </div>
+              <div className={`text-xs font-semibold ${Math.abs(exportData.totalDebitSum - exportData.totalCreditSum) < 0.01 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {Math.abs(exportData.totalDebitSum - exportData.totalCreditSum) < 0.01 ? 'Équilibré' : `Non équilibré — écart : ${(exportData.totalDebitSum - exportData.totalCreditSum).toLocaleString('fr-FR')}`}
+              </div>
+            </div>
+          )}
+
+          {!exportData && (
+            <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 text-xs text-neutral-500 space-y-1">
+              <p>Seules les écritures <strong>validées</strong> (statut « Validé ») sont exportées.</p>
+              <p>Un contrôle d'intégrité (équilibre débit/crédit) est effectué avant chaque export.</p>
+              <p>Période maximale : 366 jours.</p>
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -874,26 +1103,26 @@ function SearchTab() {
                   <th className="px-1 md:px-4 py-2 text-left">Date</th>
                   <th className="px-1 md:px-4 py-2 text-left">Pièce</th>
                   <th className="px-1 md:px-4 py-2 text-left">Journal</th>
-                  <th className="px-1 md:px-4 py-2 text-left">Compte</th>
-                  <th className="px-1 md:px-4 py-2 text-left">Libellé</th>
+                  <th className="px-1 md:px-4 py-2 text-left">Description</th>
+                  <th className="px-1 md:px-4 py-2 text-left hidden sm:table-cell">Référence</th>
                   <th className="px-1 md:px-4 py-2 text-right">Débit</th>
                   <th className="px-1 md:px-4 py-2 text-right">Crédit</th>
                   <th className="px-1 md:px-4 py-2 text-center">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--w-separator-l)]">
-                {results.map((r: any, idx: number) => (
-                  <tr key={idx} onClick={() => setDetail(r)} className="hover:bg-neutral-50/60 cursor-pointer">
+                {results.map((r: any) => (
+                  <tr key={r.entry_id} onClick={() => setDetail(r)} className="hover:bg-neutral-50/60 cursor-pointer">
                     <td className="px-1 md:px-4 py-2 text-xs text-neutral-600">{formatDate(r.entry_date)}</td>
                     <td className="px-1 md:px-4 py-2 font-mono text-xs text-neutral-500">{r.entry_number}</td>
                     <td className="px-1 md:px-4 py-2"><span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-neutral-100 text-neutral-600">{r.journal_type}</span></td>
-                    <td className="px-1 md:px-4 py-2 font-mono text-xs text-brand-700">{r.account_code}</td>
-                    <td className="px-1 md:px-4 py-2 text-neutral-700 text-xs max-w-[200px] truncate">{r.label || r.reference || '—'}</td>
-                    <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(r.debit) > 0 ? Number(r.debit).toLocaleString('fr-FR') : ''}</td>
-                    <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(r.credit) > 0 ? Number(r.credit).toLocaleString('fr-FR') : ''}</td>
+                    <td className="px-1 md:px-4 py-2 text-neutral-700 text-xs max-w-[200px] truncate">{r.description || '—'}</td>
+                    <td className="px-1 md:px-4 py-2 text-neutral-500 text-xs max-w-[140px] truncate hidden sm:table-cell">{r.reference || ''}</td>
+                    <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(r.total_debit) > 0 ? Number(r.total_debit).toLocaleString('fr-FR') : ''}</td>
+                    <td className="px-1 md:px-4 py-2 text-right font-mono text-xs">{Number(r.total_credit) > 0 ? Number(r.total_credit).toLocaleString('fr-FR') : ''}</td>
                     <td className="px-1 md:px-4 py-2 text-center">
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${r.status === 'validated' ? 'bg-emerald-100 text-emerald-700' : r.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {r.status === 'validated' ? 'OK' : r.status === 'cancelled' ? 'ANN' : 'BR'}
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${r.status === 'posted' ? 'bg-emerald-100 text-emerald-700' : r.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {r.status === 'posted' ? 'Validée' : r.status === 'cancelled' ? 'Annulée' : 'Brouillon'}
                       </span>
                     </td>
                   </tr>
@@ -904,25 +1133,114 @@ function SearchTab() {
         </div>
       )}
 
-      {detail && (
-        <Modal open onClose={() => setDetail(null)} title="Détail écriture">
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-2">
-              <div><span className="text-slate-500">Pièce:</span> <span className="font-mono font-semibold">{detail.entry_number}</span></div>
-              <div><span className="text-slate-500">Journal:</span> <span className="font-semibold">{detail.journal_type}</span></div>
-              <div><span className="text-slate-500">Date:</span> {formatDate(detail.entry_date)}</div>
-              <div><span className="text-slate-500">Compte:</span> <span className="font-mono text-brand-700">{detail.account_code}</span></div>
-            </div>
-            <div><span className="text-slate-500">Libellé:</span> {detail.label || '—'}</div>
-            <div className="flex gap-6">
-              <div><span className="text-slate-500">Débit:</span> <span className="font-mono font-semibold">{Number(detail.debit).toLocaleString('fr-FR')}</span></div>
-              <div><span className="text-slate-500">Crédit:</span> <span className="font-mono font-semibold">{Number(detail.credit).toLocaleString('fr-FR')}</span></div>
-            </div>
-            {detail.reference && <div><span className="text-slate-500">Référence:</span> {detail.reference}</div>}
-          </div>
-        </Modal>
-      )}
+      {detail && <SearchDetailModal entry={detail} tenant={tenant!} onClose={() => setDetail(null)} />}
     </div>
+  );
+}
+
+/* ===================== SEARCH DETAIL MODAL ===================== */
+function SearchDetailModal({ entry, tenant, onClose }: { entry: any; tenant: { id: string }; onClose: () => void }) {
+  const [lines, setLines] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from('journal_lines')
+      .select('id, created_at, account_code, account_name, label, debit, credit')
+      .eq('tenant_id', tenant.id)
+      .eq('entry_id', entry.entry_id)
+      .order('created_at')
+      .order('id')
+      .then(({ data, error }) => {
+        if (error) {
+          setLoadError(true);
+        } else {
+          setLines(data || []);
+        }
+        setLoading(false);
+      });
+  }, [entry.entry_id, tenant.id]);
+
+  const totalD = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
+  const totalC = lines.reduce((s, l) => s + Number(l.credit || 0), 0);
+  const hasLines = lines.length > 0;
+  const isBalanced = hasLines && totalD > 0 && totalC > 0 && Math.abs(totalD - totalC) < 0.01;
+
+  return (
+    <Modal open onClose={onClose} title={`Écriture ${entry.entry_number}`} size="lg"
+      footer={<button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>}>
+      <div className="space-y-4 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div><span className="text-slate-500">Pièce :</span> <span className="font-mono font-semibold">{entry.entry_number}</span></div>
+          <div><span className="text-slate-500">Journal :</span> <span className="font-semibold">{entry.journal_type}</span></div>
+          <div><span className="text-slate-500">Date :</span> {formatDate(entry.entry_date)}</div>
+          <div>
+            <span className="text-slate-500">Statut :</span>{' '}
+            <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${entry.status === 'posted' ? 'bg-emerald-100 text-emerald-700' : entry.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+              {entry.status === 'posted' ? 'Validée' : entry.status === 'cancelled' ? 'Annulée' : 'Brouillon'}
+            </span>
+          </div>
+        </div>
+        {entry.description && <div><span className="text-slate-500">Description :</span> {entry.description}</div>}
+        {entry.reference && <div><span className="text-slate-500">Référence :</span> {entry.reference}</div>}
+
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
+        ) : loadError ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center text-sm text-red-700">
+            Impossible de charger les lignes de cette écriture
+          </div>
+        ) : !hasLines ? (
+          <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4 text-center text-sm text-neutral-500">
+            Aucune ligne comptable
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-neutral-200 rounded-lg">
+            <table className="w-full text-sm">
+              <thead className="bg-neutral-50">
+                <tr className="text-xs text-neutral-500 uppercase">
+                  <th className="px-3 py-2 text-left">Compte</th>
+                  <th className="px-3 py-2 text-left">Intitulé</th>
+                  <th className="px-3 py-2 text-left">Libellé</th>
+                  <th className="px-3 py-2 text-right">Débit</th>
+                  <th className="px-3 py-2 text-right">Crédit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {lines.map((l) => (
+                  <tr key={l.id}>
+                    <td className="px-3 py-2 font-mono text-xs text-brand-700">{l.account_code}</td>
+                    <td className="px-3 py-2 text-neutral-700 text-xs">{l.account_name || '—'}</td>
+                    <td className="px-3 py-2 text-neutral-600 text-xs">{l.label || '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">{Number(l.debit) > 0 ? Number(l.debit).toLocaleString('fr-FR') : ''}</td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">{Number(l.credit) > 0 ? Number(l.credit).toLocaleString('fr-FR') : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-neutral-50 border-t border-neutral-200">
+                <tr className="text-xs font-semibold">
+                  <td colSpan={3} className="px-3 py-2 text-right">Total</td>
+                  <td className="px-3 py-2 text-right font-mono">{totalD.toLocaleString('fr-FR')}</td>
+                  <td className="px-3 py-2 text-right font-mono">{totalC.toLocaleString('fr-FR')}</td>
+                </tr>
+                {isBalanced ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-1 text-right text-xs font-semibold text-emerald-700">Équilibrée</td>
+                  </tr>
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-1 text-right text-xs font-semibold text-red-600">
+                      Écart : {(totalD - totalC).toLocaleString('fr-FR')}
+                    </td>
+                  </tr>
+                )}
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

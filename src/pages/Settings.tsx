@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
+import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { PermissionsTab } from '../components/PermissionsTab';
 import { DocumentSettingsTab } from '../components/DocumentSettingsTab';
@@ -1408,7 +1409,10 @@ function AccountingTab() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-neutral-500">{list.length} compte{list.length > 1 ? 's' : ''} — SYSCOHADA révisé</p>
-{canManage && <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]" title="Nouveau compte"><Plus className="w-3.5 h-3.5" />Nouveau</button>}
+<div className="flex items-center gap-1.5">
+          <AccountingPlanIO accounts={list} onImportDone={load} />
+          {canManage && <button onClick={() => { setEditing(null); setForm({}); setOpen(true); }} className="inline-flex items-center gap-1.5 px-3 py-2 bg-neutral-900 text-white text-xs font-medium rounded-md hover:bg-neutral-800 transition active:scale-[0.97]" title="Nouveau compte"><Plus className="w-3.5 h-3.5" />Nouveau</button>}
+        </div>
       </div>
 
       <div className="space-y-6">

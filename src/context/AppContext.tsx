@@ -115,7 +115,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const dbDefaultId: string | null = (prof as any).default_site_id || null;
 
       setCurrentSite(prev => {
-        if (prev && allAvailable.find(x => x.id === prev.id)) return prev;
+        if (prev) {
+          const fresh = allAvailable.find(x => x.id === prev.id);
+          if (fresh) return fresh;
+        }
         const picked =
           (tabActiveId && allAvailable.find(x => x.id === tabActiveId)) ||
           (localDefault && allAvailable.find(x => x.id === localDefault)) ||
@@ -231,8 +234,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentSite(prev => {
           if (!prev) return storeList[0] || depotList[0] || null;
           const allAvailable = [...storeList, ...depotList];
-          const stillExists = allAvailable.find(x => x.id === prev.id);
-          if (stillExists) return prev;
+          const fresh = allAvailable.find(x => x.id === prev.id);
+          if (fresh) return fresh;
           if (lastLostSiteAlertRef.current !== prev.id) {
             lastLostSiteAlertRef.current = prev.id;
             const name = prev.name;
@@ -253,8 +256,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentSite(prev => {
           if (!prev) return storeList[0] || depotList[0] || null;
           const allAvailable = [...storeList, ...depotList];
-          const stillExists = allAvailable.find(x => x.id === prev.id);
-          if (stillExists) return prev;
+          const fresh = allAvailable.find(x => x.id === prev.id);
+          if (fresh) return fresh;
           if (lastLostSiteAlertRef.current !== prev.id) {
             lastLostSiteAlertRef.current = prev.id;
             const name = prev.name;

@@ -92,12 +92,12 @@ function printXReport(
     movExpense?: number; movIncome?: number; movPrepay?: number; netTotal?: number;
   },
   regularizations: { reg_type: string; amount: number; reason: string }[],
-  tenantArg: { name: string; ninea?: string; rccm?: string; address?: string },
+  tenantArg: PrintTenant,
   cashier: string,
   siteName: string
 ) {
   printXReport80({
-    tenant: tenantArg as PrintTenant,
+    tenant: tenantArg,
     cashier,
     siteName,
     sessionId: session.id,
@@ -2992,7 +2992,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (statsData) {
       printXReport(
         { ...session, closing_note: closingNote } as any, controlLines, statsData, sessionRegs,
-        { name: tenant.name, ninea: (tenant as any).ninea, rccm: (tenant as any).rccm, address: (tenant as any).address },
+        tenantForPrint,
         profile?.full_name || profile?.email || '', currentSite?.name || ''
       );
     }
@@ -3028,8 +3028,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   // Screen: open form (no active session) — minimal full-screen view
   if (screen === 'open-form' && !menuOpen) {
     return <POSLandingOpenMinimal
-      tenantName={tenant?.name}
-      tenantLogo={tenant?.logo_url}
+      tenantName={currentSite?.logo_url ? currentSite.name : tenant?.name}
+      tenantLogo={currentSite?.logo_url || tenant?.logo_url}
       fundModalOpen={fundModalOpen}
       setFundModalOpen={setFundModalOpen}
       openingAmount={openingAmount}
@@ -3048,8 +3048,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       <div className="flex-1 overflow-y-auto lg:overflow-y-auto">
         <div className="w-full max-w-[1600px] mx-auto px-1.5 sm:px-5 lg:px-8 pt-2 sm:pt-4 lg:pt-6 pb-2 lg:pb-8">
           <POSLandingOpenInline
-            tenantName={tenant?.name}
-            tenantLogo={tenant?.logo_url}
+            tenantName={currentSite?.logo_url ? currentSite.name : tenant?.name}
+            tenantLogo={currentSite?.logo_url || tenant?.logo_url}
             fundModalOpen={fundModalOpen}
             setFundModalOpen={setFundModalOpen}
             openingAmount={openingAmount}
@@ -4689,7 +4689,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               session as any,
               methods.map(m => ({ payment_method_id: m.id, method_name: m.name, theoretical_amount: statsData.byMethod.find(b => b.method_name === m.name)?.amount || 0, counted_amount: 0 })),
               statsData, sessionRegs,
-              { name: tenant!.name, ninea: (tenant as any).ninea, rccm: (tenant as any).rccm, address: (tenant as any).address },
+              tenantForPrint,
               profile?.full_name || profile?.email || '', currentSite?.name || ''
             )} className="btn-icon-primary" title="Imprimer rapport">
               <Printer className="w-4 h-4" />
