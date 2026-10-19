@@ -163,6 +163,21 @@ function tenantHeader80(t: PrintTenant) {
   return parts.join('');
 }
 
+function tenantHeader80Compact(t: PrintTenant) {
+  const config = mergeTicketHeaderConfig(t.header_config);
+  const shown = (key: string) => config.some(i => i.key === key && i.show);
+  const logoItem = config.find(i => i.key === 'logo' && i.show);
+  const parts: string[] = [];
+  if (logoItem && t.logo_url) {
+    const px = logoItem.size === 'xl' ? 14 : logoItem.size === 'lg' ? 11 : logoItem.size === 'md' ? 9 : 7;
+    parts.push(`<div class="logo-wrap" style="margin-bottom:2px;"><img src="${esc(t.logo_url)}" alt="" style="max-height:${px}mm;max-width:40mm;object-fit:contain;" onerror="this.style.display='none'"/></div>`);
+  }
+  if (shown('name') && t.name) parts.push(`<div class="shop-name" style="font-size:13px;font-weight:900;">${esc(t.name)}</div>`);
+  const meta = [shown('phone') && t.phone ? `Tél: ${t.phone}` : '', shown('address') ? t.address || '' : ''].filter(Boolean);
+  if (meta.length) parts.push(`<div class="meta" style="font-size:10px;font-weight:600;">${esc(meta.join(' · '))}</div>`);
+  return parts.join('');
+}
+
 function tenantHeaderA4Lines(t: PrintTenant) {
   const config = mergeTicketHeaderConfig(t.header_config);
   const parts: string[] = [];
@@ -556,6 +571,20 @@ const ticketStyle = `
   .waarwi-footer .waarwi-tag { font-size: 8.5px; color: #000000; margin-top: 1px; }
 `;
 
+const compactTicketStyle = `${ticketStyle}
+  body { font-size: 11.5px; line-height: 1.25; }
+  .hr { margin: 3px 0; }
+  .hr-solid { border-top-width: 1px; margin: 3px 0; }
+  .doc-label { font-size: 12.5px; letter-spacing: 0.8px; margin: 2px 0 0; }
+  .doc-date { font-size: 10px; margin: 0; }
+  .row { font-size: 11px; padding: 0; }
+  .row.total { font-size: 13.5px; padding: 2px 0; margin: 2px 0; }
+  .section { font-size: 10.5px; margin: 2px 0 0; }
+  .line { font-size: 10.5px; font-weight: 600; color: #000; }
+  .footer { margin-top: 3px; line-height: 1.3; }
+  .footer .thanks { font-size: 11.5px; }
+`;
+
 export function printTicket80(
   sale: {
     sale_number: string;
@@ -636,34 +665,43 @@ export function printReturnTicket80(
   customerName?: string | null
 ) {
   const itemsHtml = items
-    .map(i => `<div class="item">
-      <div class="item-name">${esc(i.name)}</div>
-      <div class="item-line">
-        <span><span class="item-qty">- ${i.quantity}</span> <span class="item-pu">× ${fmtMoney(i.unit_price)} FCFA</span></span>
-        <span class="item-total">- ${fmtMoney(i.quantity * i.unit_price)} FCFA</span>
-      </div>
-    </div>`)
+    .map(i => `<div class="row"><span style="white-space:normal">${esc(i.name)} x${i.quantity}</span><span>- ${fmtMoney(i.quantity * i.unit_price)}</span></div>`)
     .join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Retour</title>
-<style>${ticketStyle}</style>${printFontLink}</head><body>
-${tenantHeader80(tenant)}
+<style>${compactTicketStyle}</style>${printFontLink}</head><body>
+${tenantHeader80Compact(tenant)}
 <hr class="hr-solid" />
-<div class="doc-label">TICKET DE RETOUR</div>
-${returnNumber ? `<div class="doc-num">N° ${esc(returnNumber)}</div>` : ''}
-<div class="doc-date">Réf. vente : ${esc(refSaleNumber)}</div>
-<div class="doc-date">${new Date().toLocaleString('fr-FR')}</div>
-<div class="info-row"><span>Caissier</span><span>${esc(cashier)}</span></div>
-${customerName ? `<div class="info-row"><span>Client</span><span>${esc(customerName)}</span></div>` : ''}
+<div class="doc-label">RETOUR${returnNumber ? ` · N° ${esc(returnNumber)}` : ''}</div>
+<div class="doc-date">${new Date().toLocaleString('fr-FR')} · Vente ${esc(refSaleNumber)}</div>
+<div class="line">Caissier: ${esc(cashier)}${customerName ? ` · Client: ${esc(customerName)}` : ''}</div>
 <hr class="hr" />
 ${itemsHtml}
-<hr class="hr-solid" />
 <div class="row total"><span>REMBOURSEMENT</span><span>- ${fmtMoney(total)} FCFA</span></div>
-<hr class="hr" />
-<div class="footer"><div class="thanks">Montant déduit de la caisse</div></div>
-${waarwiFooter80()}
 </body></html>`;
   printHtml(html);
+}
+
+function cashReceiptBody80(o: {
+  title: string;
+  receiptNumber: string;
+  date: Date;
+  cashier: string;
+  party?: string | null;
+  partyLabel: string;
+  label?: string;
+  reference?: string;
+  method: string;
+  totalLabel: string;
+  amountText: string;
+}) {
+  return `<hr class="hr-solid" />
+<div class="doc-label">${o.title} · N° ${esc(o.receiptNumber)}</div>
+<div class="doc-date">${o.date.toLocaleString('fr-FR')}</div>
+<div class="line">Caissier: ${esc(o.cashier)}${o.party ? ` · ${o.partyLabel}: ${esc(o.party)}` : ''}</div>
+${o.label ? `<div class="line">Motif: ${esc(o.label)}</div>` : ''}
+${o.reference ? `<div class="line">Réf: ${esc(o.reference)}</div>` : ''}
+<div class="row total"><span>${o.totalLabel} (${esc(o.method)})</span><span>${o.amountText} FCFA</span></div>`;
 }
 
 // ── 80mm Direct cash receipt ──────────────────────────────────────────────────
@@ -678,29 +716,23 @@ export function printEncaissementTicket80(opts: {
   tenant: PrintTenant;
   cashier: string;
 }) {
-  const date = opts.createdAt ? new Date(opts.createdAt) : new Date();
-
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recu ${esc(opts.receiptNumber)}</title>
-<style>${ticketStyle}</style>${printFontLink}</head><body>
-${tenantHeader80(opts.tenant)}
-<hr class="hr-solid" />
-<div class="doc-label">RECU D'ENCAISSEMENT</div>
-<div class="doc-num">N° ${esc(opts.receiptNumber)}</div>
-<div class="doc-date">${date.toLocaleString('fr-FR')}</div>
-<div class="info-row"><span>Caissier</span><span>${esc(opts.cashier)}</span></div>
-${opts.customerName ? `<div class="info-row"><span>Client</span><span>${esc(opts.customerName)}</span></div>` : ''}
-<hr class="hr" />
-${opts.label ? `<div class="section">Motif</div><div class="item-name" style="font-weight:700;font-size:12.5px;margin-bottom:4px;">${esc(opts.label)}</div>` : ''}
-${opts.reference ? `<div class="info-row"><span>Référence</span><span>${esc(opts.reference)}</span></div>` : ''}
-<hr class="hr" />
-<div class="row payment"><span>Mode</span><span>${esc(opts.method)}</span></div>
-<div class="row total"><span>MONTANT REÇU</span><span>${fmtMoney(opts.amount)} FCFA</span></div>
-<hr class="hr" />
-<div class="footer">
-  <div class="thanks">Merci de votre règlement</div>
-  <div>Conservez ce reçu</div>
-</div>
-${waarwiFooter80()}
+<style>${compactTicketStyle}</style>${printFontLink}</head><body>
+${tenantHeader80Compact(opts.tenant)}
+${cashReceiptBody80({
+    title: 'ENCAISSEMENT',
+    receiptNumber: opts.receiptNumber,
+    date: opts.createdAt ? new Date(opts.createdAt) : new Date(),
+    cashier: opts.cashier,
+    party: opts.customerName,
+    partyLabel: 'Client',
+    label: opts.label,
+    reference: opts.reference,
+    method: opts.method,
+    totalLabel: 'REÇU',
+    amountText: fmtMoney(opts.amount),
+  })}
+<div class="footer"><div class="thanks">Merci de votre règlement</div></div>
 </body></html>`;
   printHtml(html);
 }
@@ -717,33 +749,25 @@ export function printDecaissementTicket80(opts: {
   tenant: PrintTenant;
   cashier: string;
 }) {
-  const date = opts.createdAt ? new Date(opts.createdAt) : new Date();
-
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recu ${esc(opts.receiptNumber)}</title>
-<style>${ticketStyle}</style>${printFontLink}</head><body>
-${tenantHeader80(opts.tenant)}
-<hr class="hr-solid" />
-<div class="doc-label">BON DE DECAISSEMENT</div>
-<div class="doc-num">N° ${esc(opts.receiptNumber)}</div>
-<div class="doc-date">${date.toLocaleString('fr-FR')}</div>
-<div class="info-row"><span>Caissier</span><span>${esc(opts.cashier)}</span></div>
-${opts.beneficiary ? `<div class="info-row"><span>Bénéficiaire</span><span>${esc(opts.beneficiary)}</span></div>` : ''}
-<hr class="hr" />
-${opts.label ? `<div class="section">Motif</div><div class="item-name" style="font-weight:700;font-size:12.5px;margin-bottom:4px;">${esc(opts.label)}</div>` : ''}
-${opts.reference ? `<div class="info-row"><span>Référence</span><span>${esc(opts.reference)}</span></div>` : ''}
-<hr class="hr" />
-<div class="row payment"><span>Mode</span><span>${esc(opts.method)}</span></div>
-<div class="row total"><span>MONTANT VERSÉ</span><span>- ${fmtMoney(opts.amount)} FCFA</span></div>
-<hr class="hr" />
-<div class="footer">
-  <div class="thanks">Montant déduit de la caisse</div>
-  <div>Conservez ce reçu</div>
-</div>
-${waarwiFooter80()}
+<style>${compactTicketStyle}</style>${printFontLink}</head><body>
+${tenantHeader80Compact(opts.tenant)}
+${cashReceiptBody80({
+    title: 'DÉCAISSEMENT',
+    receiptNumber: opts.receiptNumber,
+    date: opts.createdAt ? new Date(opts.createdAt) : new Date(),
+    cashier: opts.cashier,
+    party: opts.beneficiary,
+    partyLabel: 'Bénéf.',
+    label: opts.label,
+    reference: opts.reference,
+    method: opts.method,
+    totalLabel: 'VERSÉ',
+    amountText: `- ${fmtMoney(opts.amount)}`,
+  })}
 </body></html>`;
   printHtml(html);
 }
-
 
 
 export type XReportControl = {
@@ -780,12 +804,25 @@ export function printXReport80(opts: {
   movements?: XReportMovement[];
   controls?: XReportControl[];
   regularizations?: XReportRegularization[];
-  topArticles?: { name: string; qty: number; total: number }[];
 }) {
   const movements = opts.movements || [];
   const controls = opts.controls || [];
   const regularizations = opts.regularizations || [];
-  const topArticles = opts.topArticles || [];
+
+  const movementGroups = new Map<string, { count: number; amount: number }>();
+  for (const m of movements) {
+    const g = movementGroups.get(m.kind) || { count: 0, amount: 0 };
+    g.count += 1;
+    g.amount += m.amount;
+    movementGroups.set(m.kind, g);
+  }
+  const regGroups = new Map<string, { count: number; amount: number }>();
+  for (const r of regularizations) {
+    const g = regGroups.get(r.reg_type) || { count: 0, amount: 0 };
+    g.count += 1;
+    g.amount += Number(r.amount);
+    regGroups.set(r.reg_type, g);
+  }
 
   const mvExpense = movements.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
   const mvRefund = movements.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
@@ -802,78 +839,49 @@ export function printXReport80(opts: {
 
   const movementsHtml = movements.length > 0 ? `
 <hr class="hr" />
-<div class="section">Mouvements de caisse</div>
-<div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)} FCFA</span></div>
-${movements.map(m => {
-    const label = cashMovementLabel(m.kind);
-    const sign = cashMovementSign(m.kind);
-    const reason = [m.customer_name, m.reason].filter(Boolean).join(' · ');
-    return `<div class="row"><span>${esc(label)}${reason ? ' : ' + esc(reason.slice(0, 22)) : ''}</span><span>${sign}${fmtMoney(m.amount)} FCFA</span></div>`;
-  }).join('')}
-<div class="row"><span>Sous-total entrées</span><span>+ ${fmtMoney(mvIncome + mvPrepay + mvVaultIn)} FCFA</span></div>
-<div class="row"><span>Sous-total sorties</span><span>- ${fmtMoney(mvExpense + mvRefund + mvWithdrawal + mvLoan + mvVaultOut)} FCFA</span></div>
-<hr class="hr" />
+<div class="section">Mouvements</div>
+${[...movementGroups].map(([kind, g]) =>
+    `<div class="row"><span>${esc(cashMovementLabel(kind))} (${g.count})</span><span>${cashMovementSign(kind)}${fmtMoney(g.amount)}</span></div>`
+  ).join('')}
+<div class="row"><span>Entrées / Sorties</span><span>+${fmtMoney(mvIncome + mvPrepay + mvVaultIn)} / -${fmtMoney(mvExpense + mvRefund + mvWithdrawal + mvLoan + mvVaultOut)}</span></div>
 <div class="row total"><span>Net caisse</span><span>${fmtMoney(netTotal)} FCFA</span></div>
 ` : '';
 
   const controlsHtml = controls.length > 0 ? `
 <hr class="hr" />
-<div class="section">Contrôle de caisse</div>
-<div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)} FCFA</span></div>
+<div class="section">Contrôle (théo. / compté / écart)</div>
 ${controls.map(c => {
     const diff = Number(c.difference_amount ?? (c.counted_amount - c.theoretical_amount));
-    return `<div style="margin-top:3px">
-<div style="font-weight:800;font-size:12px;color:#000">${esc(c.method_name)}</div>
-<div class="row"><span>  Théorique</span><span>${fmtMoney(c.theoretical_amount)} FCFA</span></div>
-<div class="row"><span>  Compté</span><span>${fmtMoney(c.counted_amount)} FCFA</span></div>
-<div class="row"><span>  Écart</span><span>${diff >= 0 ? '+' : ''}${fmtMoney(diff)} FCFA</span></div>
-</div>`;
+    return `<div class="row"><span>${esc(c.method_name)}</span><span>${fmtMoney(c.theoretical_amount)} / ${fmtMoney(c.counted_amount)} / ${diff >= 0 ? '+' : ''}${fmtMoney(diff)}</span></div>`;
   }).join('')}
-<hr class="hr" />
 <div class="row total"><span>Écart total</span><span>${variance >= 0 ? '+' : ''}${fmtMoney(variance)} FCFA</span></div>
 ` : '';
 
   const regularizationsHtml = regularizations.length > 0 ? `
 <hr class="hr" />
 <div class="section">Régularisations</div>
-${regularizations.map(r => `<div class="row"><span>${esc(r.reg_type)} : ${esc(r.reason)}</span><span>${fmtMoney(r.amount)} FCFA</span></div>`).join('')}
+${[...regGroups].map(([type, g]) => `<div class="row"><span>${esc(type)} (${g.count})</span><span>${fmtMoney(g.amount)}</span></div>`).join('')}
 ` : '';
 
-  const topArticlesHtml = topArticles.length > 0 ? `
-<hr class="hr" />
-<div class="section">Top articles</div>
-${topArticles.map(a => `<div class="row"><span>${esc(a.name.slice(0, 24))}</span><span>x${a.qty} · ${fmtMoney(a.total)}</span></div>`).join('')}
-` : '';
+  const fmtDt = (d: string | Date) => new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>X de Caisse</title>
-<style>${ticketStyle}</style>${printFontLink}</head><body>
-${tenantHeader80(opts.tenant)}
+<style>${compactTicketStyle}</style>${printFontLink}</head><body>
+${tenantHeader80Compact(opts.tenant)}
 <hr class="hr-solid" />
-<div class="doc-label">X DE CAISSE</div>
-<div class="doc-date">Session : ${esc(opts.sessionId.slice(0, 8).toUpperCase())}</div>
-<div class="info-row"><span>Point de vente</span><span>${esc(opts.siteName)}</span></div>
-<div class="info-row"><span>Caissier</span><span>${esc(opts.cashier)}</span></div>
-<div class="info-row"><span>Ouverture</span><span>${new Date(opts.openedAt).toLocaleString('fr-FR')}</span></div>
-${opts.closedAt ? `<div class="info-row"><span>Clôture</span><span>${new Date(opts.closedAt).toLocaleString('fr-FR')}</span></div>` : ''}
-<div class="info-row"><span>Impression</span><span>${new Date().toLocaleString('fr-FR')}</span></div>
+<div class="doc-label">X DE CAISSE · ${esc(opts.sessionId.slice(0, 8).toUpperCase())}</div>
+<div class="line">${esc(opts.siteName)} · ${esc(opts.cashier)}</div>
+<div class="line">Ouv. ${fmtDt(opts.openedAt)}${opts.closedAt ? ` · Clôt. ${fmtDt(opts.closedAt)}` : ''}</div>
+<div class="line">Imprimé ${fmtDt(new Date())}</div>
 <hr class="hr" />
-<div class="section">Résumé ventes</div>
-<div class="row"><span>Nombre de ventes</span><span>${opts.salesCount}</span></div>
-<div class="row total"><span>Total encaissé</span><span>${fmtMoney(opts.salesTotal)} FCFA</span></div>
-<hr class="hr" />
-<div class="section">Encaissements par mode</div>
+<div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)}</span></div>
+<div class="row"><span>Ventes (${opts.salesCount})</span><span>${fmtMoney(opts.salesTotal)}</span></div>
 ${opts.byMethod.length > 0
-    ? opts.byMethod.map(m => `<div class="row"><span>${esc(m.method_name)}</span><span>${fmtMoney(m.amount)} FCFA</span></div>`).join('')
-    : '<div style="font-size:11.5px;font-weight:600;color:#000">Aucun encaissement</div>'}
+    ? opts.byMethod.map(m => `<div class="row"><span>· ${esc(m.method_name)}</span><span>${fmtMoney(m.amount)}</span></div>`).join('')
+    : '<div class="line">Aucun encaissement</div>'}
 ${movementsHtml}
 ${controlsHtml}
 ${regularizationsHtml}
-${topArticlesHtml}
-<hr class="hr" />
-<div class="footer">
-  <div class="thanks">— Fin du rapport —</div>
-</div>
-${waarwiFooter80()}
 </body></html>`;
   printHtml(html);
 }
@@ -1402,50 +1410,28 @@ export function printStockMovement80(opts: StockMovementPrintOpts) {
   const title = MOVEMENT_TYPE_TITLES[opts.movementType] || 'MOUVEMENT STOCK';
   const totalQty = opts.items.reduce((s, i) => s + Math.abs(i.quantity), 0);
 
-  const itemsHtml = opts.items.map(item => `
-    <tr>
-      <td style="font-weight:600;padding:1.5mm 0;">${esc(item.name)}</td>
-      <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:1.5mm 0;">${Math.abs(item.quantity)}</td>
-    </tr>`).join('');
+  const itemsHtml = opts.items.map(item =>
+    `<div class="row"><span style="white-space:normal">${esc(item.name)}</span><span>${Math.abs(item.quantity)}</span></div>`
+  ).join('');
+
+  const sites = [
+    opts.siteOrigin ? `De: ${opts.siteOrigin}` : '',
+    opts.siteDestination ? `Vers: ${opts.siteDestination}` : '',
+    opts.siteName ? `Dépôt: ${opts.siteName}` : '',
+  ].filter(Boolean).join(' · ');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
-<style>
-  @page { margin: 0; size: 80mm auto; }
-  @media print { html, body { margin: 0 !important; } body { padding: 1.5mm 2mm !important; width: 80mm !important; } }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; width: 80mm; padding: 1.5mm 2mm; color: #000; line-height: 1.4; background: #fff; }
-  .center { text-align: center; }
-  .shop-name { text-align: center; font-weight: 900; font-size: 16px; margin-bottom: 2px; }
-  .meta { text-align: center; font-size: 10px; color: #000; }
-  .activity { text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; margin-top: 2px; margin-bottom: 5px; font-weight: 700; color: #000; }
-  .logo-wrap { display: flex; justify-content: center; margin-bottom: 6px; }
-  .logo-wrap img { max-width: 48mm; max-height: 22mm; object-fit: contain; }
-  .title { text-align: center; font-weight: 900; font-size: 14px; margin: 4mm 0 2mm; letter-spacing: 0.5px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 2mm 0; }
-  .info { font-size: 10px; margin: 2mm 0; }
-  .info span { font-weight: 700; font-family: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; font-variant-numeric: tabular-nums; }
-  table { width: 100%; border-collapse: collapse; margin: 2mm 0; }
-  table td { font-size: 11px; border-bottom: 1px dotted #ccc; }
-  .total { border-top: 1.5px solid #000; margin-top: 1mm; padding-top: 2mm; font-weight: 900; font-size: 13px; display: flex; justify-content: space-between; }
-  .footer { margin-top: 4mm; padding-top: 2mm; border-top: 1px dashed #000; text-align: center; font-size: 9px; color: #000; }
-</style>${printFontLink}</head><body>
-  ${tenantHeader80(t)}
-
-  <div class="title">${esc(title)}</div>
-
-  <div class="info">Réf : <span>${esc(opts.reference)}</span></div>
-  <div class="info">Date : <span>${esc(opts.date)}</span></div>
-  <div class="info">Opérateur : <span>${esc(opts.user)}</span></div>
-  ${opts.siteOrigin ? `<div class="info">Origine : <span>${esc(opts.siteOrigin)}</span></div>` : ''}
-  ${opts.siteDestination ? `<div class="info">Destination : <span>${esc(opts.siteDestination)}</span></div>` : ''}
-  ${opts.siteName ? `<div class="info">Dépôt : <span>${esc(opts.siteName)}</span></div>` : ''}
-
-  <table>${itemsHtml}</table>
-
-  <div class="total"><span>TOTAL</span><span>${totalQty} article${totalQty > 1 ? 's' : ''}</span></div>
-
-  ${opts.observation ? `<div class="info" style="margin-top:3mm;font-style:italic;">Obs: ${esc(opts.observation)}</div>` : ''}
-
-  <div class="footer">Propulsée par <strong>WAARWI</strong><br/>Plateforme Business 2.0</div>
+<style>${compactTicketStyle}</style>${printFontLink}</head><body>
+${tenantHeader80Compact(t)}
+<hr class="hr-solid" />
+<div class="doc-label">${esc(title)} · ${esc(opts.reference)}</div>
+<div class="doc-date">${esc(opts.date)}</div>
+<div class="line">Opérateur: ${esc(opts.user)}</div>
+${sites ? `<div class="line">${esc(sites)}</div>` : ''}
+<hr class="hr" />
+${itemsHtml}
+<div class="row total"><span>TOTAL</span><span>${totalQty} article${totalQty > 1 ? 's' : ''}</span></div>
+${opts.observation ? `<div class="line" style="font-style:italic;">Obs: ${esc(opts.observation)}</div>` : ''}
 </body></html>`;
   printHtml(html, 400);
 }

@@ -114,7 +114,6 @@ function printXReport(
       counted_amount: c.counted_amount,
     })),
     regularizations,
-    topArticles: salesStats.topArticles,
   });
 }
 
