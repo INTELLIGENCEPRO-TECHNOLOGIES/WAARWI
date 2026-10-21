@@ -3,11 +3,12 @@ import {
   ShoppingBag, Loader2, Search, RefreshCw, ClipboardList,
   CheckCircle, Truck, X, Calendar,
   User, MessageCircle, Link2,
-  Printer, Pencil, Ban, ChevronLeft, ChevronRight, AlertTriangle,
+  Printer, Pencil, Ban, ChevronLeft, ChevronRight, AlertTriangle, Trash2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
+import { useSupplierOrderRights, revertSupplierOrderReception, deleteSupplierOrder, RECEIVED_STATUSES } from '../lib/supplierOrderActions';
 import { useToast } from '../context/ToastContext';
 import { Modal, ConfirmDialog } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
@@ -63,6 +64,7 @@ const SUPPLIER_ORDERS_GROUP = 'supplier-orders';
 export function SupplierOrders({ visible = true, onNavigate }: { visible?: boolean; onNavigate?: (r: string) => void } = {}) {
   const { tenant, currentSite, sites, depots, dataTick, profile, user } = useApp();
   const { can } = usePermissions();
+  const { canEditStatus, canDelete } = useSupplierOrderRights();
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
@@ -111,6 +113,8 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
   const [serverPending, setServerPending] = useState<{ pending_count: number; pending_total: number }>({ pending_count: 0, pending_total: 0 });
   const [statusFilter, setStatusFilter] = useState('');
   const [toCancel, setToCancel] = useState<SupplierOrder | null>(null);
+  const [toDelete, setToDelete] = useState<SupplierOrder | null>(null);
+  const [toRevert, setToRevert] = useState<SupplierOrder | null>(null);
   const [flashList, setFlashList] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -572,6 +576,33 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
     setHeaderForm({ supplier_id: '', expected_date: '', note: '' });
   };
 
+  const requestEdit = (o: SupplierOrder) => {
+    if (RECEIVED_STATUSES.includes(o.status)) { setToRevert(o); return; }
+    openOrderEdit(o);
+  };
+
+  const revertAndEdit = async () => {
+    if (!toRevert) return;
+    const o = toRevert;
+    const err = await revertSupplierOrderReception(o.id);
+    setToRevert(null);
+    if (err) { error(err); return; }
+    success('Réception annulée : le stock a été corrigé. Vous pouvez modifier puis réceptionner à nouveau.');
+    load();
+    await openOrderEdit({ ...o, status: 'confirmed' });
+  };
+
+  const confirmDelete = async () => {
+    if (!toDelete) return;
+    const o = toDelete;
+    const err = await deleteSupplierOrder(o.id);
+    setToDelete(null);
+    if (err) { error(err); return; }
+    success(`Commande ${o.order_number} supprimée`);
+    if (editorOrder?.id === o.id) closeEditor();
+    load();
+  };
+
   // ── Status change ───────────────────────────────────────────────
 
   const changeStatus = async (o: SupplierOrder, status: string) => {
@@ -831,7 +862,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
         </div>
       )}
       {/* ═══ Header ═══ */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
         {/* Mobile: title + right-aligned action button (unchanged) */}
         <div className="md:hidden flex items-start justify-between">
           <h1 className="text-lg font-bold text-neutral-900 leading-tight">Achats</h1>
@@ -993,10 +1024,11 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
                       <button onClick={e => { e.stopPropagation(); copyLinkFor(o); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Copier le lien"><Link2 className="w-3.5 h-3.5" /></button>
                       {o.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeStatus(o, 'sent'); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Marquer envoyée"><CheckCircle className="w-3.5 h-3.5" /></button>}
                       {canReceive && <button onClick={e => { e.stopPropagation(); openOrderReceive(o); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-emerald-500 transition" title="Réceptionner"><Truck className="w-3.5 h-3.5" /></button>}
+                      {canDelete && <button onClick={e => { e.stopPropagation(); setToDelete(o); }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>}
                     </div>
                   </div>
                   {/* Mobile: 3-line layout */}
-                  <div className="lg:hidden px-4 py-2.5">
+                  <div className="lg:hidden px-1 py-2.5">
                     {/* Line 1: supplier only */}
                     <div className="text-xs font-medium text-neutral-700 truncate">{o.suppliers?.name || '—'}</div>
                     {/* Line 2: order#, date, status */}
@@ -1011,6 +1043,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
                       <button onClick={e => { e.stopPropagation(); copyLinkFor(o); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Copier le lien"><Link2 className="w-4 h-4" /></button>
                       {o.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeStatus(o, 'sent'); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-[var(--w-text-muted)] transition" title="Marquer envoyée"><CheckCircle className="w-4 h-4" /></button>}
                       {canReceive && <button onClick={e => { e.stopPropagation(); openOrderReceive(o); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-emerald-500 transition" title="Réceptionner"><Truck className="w-4 h-4" /></button>}
+                      {canDelete && <button onClick={e => { e.stopPropagation(); setToDelete(o); }} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition" title="Supprimer"><Trash2 className="w-4 h-4" /></button>}
                       <div className="flex-1" />
                       <div className="w-px h-5 bg-neutral-200 mx-1" />
                       <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(o.total)}</span>
@@ -1059,10 +1092,11 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
           onPrint={editorOrderId ? printFromEditor : undefined}
           onCopyLink={editorOrder ? () => copyLinkFor(editorOrder) : undefined}
           onWhatsApp={editorOrder?.suppliers ? () => sendWhatsAppFor(editorOrder!) : undefined}
-          onEdit={editorOrder && ['draft', 'sent', 'confirmed', 'partial'].includes(editorOrder.status) ? () => { if (editorOrder) openOrderEdit(editorOrder); } : undefined}
+          onEdit={editorOrder && canEditStatus(editorOrder.status) ? () => { if (editorOrder) requestEdit(editorOrder); } : undefined}
           onStartReceive={editorOrder && ['sent', 'confirmed', 'partial'].includes(editorOrder.status) ? () => { if (editorOrder) openOrderReceive(editorOrder); } : undefined}
           onChangeStatus={editorOrder ? (status: string) => { changeStatus(editorOrder, status); setEditorOrder({ ...editorOrder, status }); } : undefined}
           onCancel={editorOrder && ['draft', 'sent'].includes(editorOrder.status) ? () => setToCancel(editorOrder) : undefined}
+          onDelete={editorOrder && canDelete ? () => setToDelete(editorOrder) : undefined}
           receiveQty={receiveQty}
           setReceiveQty={setReceiveQty}
           receiveLotData={receiveLotData}
@@ -1122,6 +1156,24 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
         }}
         title="Annuler la commande ?"
         message={`La commande "${toCancel?.order_number}" sera annulée.`}
+        danger
+      />
+
+      <ConfirmDialog
+        open={!!toRevert}
+        onClose={() => setToRevert(null)}
+        onConfirm={revertAndEdit}
+        title="Modifier une commande réceptionnée ?"
+        message={`La réception de "${toRevert?.order_number || ''}" sera annulée : les quantités reçues seront retirées du stock et l'écriture comptable d'achat supprimée. Vous pourrez ensuite corriger la commande et la réceptionner à nouveau.`}
+        danger
+      />
+
+      <ConfirmDialog
+        open={!!toDelete}
+        onClose={() => setToDelete(null)}
+        onConfirm={confirmDelete}
+        title="Supprimer la commande ?"
+        message={`La commande "${toDelete?.order_number || ''}" sera définitivement supprimée.${toDelete && RECEIVED_STATUSES.includes(toDelete.status) ? " Les quantités reçues seront retirées du stock et l'écriture comptable supprimée." : ''}`}
         danger
       />
 
@@ -1238,7 +1290,7 @@ const MOBILE_STATUS_COLORS: Record<string, string> = {
 function MobileOrderDetail({
   mode, order, items, headerForm, subtotal, saving,
   onClose, onPrint, onCopyLink, onWhatsApp, onEdit, onStartReceive,
-  onChangeStatus, onCancel,
+  onChangeStatus, onCancel, onDelete,
   receiveQty, setReceiveQty, receiveLotData, setReceiveLotData,
   stockMethod, onConfirmReceive,
 }: {
@@ -1248,7 +1300,7 @@ function MobileOrderDetail({
   onClose: () => void;
   onPrint?: () => void; onCopyLink?: () => void; onWhatsApp?: () => void;
   onEdit?: () => void; onStartReceive?: () => void;
-  onChangeStatus?: (s: string) => void; onCancel?: () => void;
+  onChangeStatus?: (s: string) => void; onCancel?: () => void; onDelete?: () => void;
   receiveQty: ReceiveQtyMap; setReceiveQty: React.Dispatch<React.SetStateAction<ReceiveQtyMap>>;
   receiveLotData: ReceiveLotMap; setReceiveLotData: React.Dispatch<React.SetStateAction<ReceiveLotMap>>;
   stockMethod: string; onConfirmReceive?: () => void;
@@ -1407,6 +1459,9 @@ function MobileOrderDetail({
             )}
             {onCancel && (
               <button onClick={onCancel} className="btn-icon-danger" title="Annuler"><Ban className="w-4 h-4" /></button>
+            )}
+            {onDelete && (
+              <button onClick={onDelete} className="btn-icon-danger" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
             )}
             <span className="flex-1" />
             {onStartReceive && (

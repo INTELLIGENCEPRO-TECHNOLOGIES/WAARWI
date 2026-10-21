@@ -10,6 +10,7 @@ import { loadFormDraft, clearFormDraft, saveFormDraft, scheduleSaveFormDraft, ty
 import { formatFCFA, formatDate } from '../../lib/format';
 import { printDocumentA4, buildPrintTenantForSite, type PrintTenant } from '../../lib/print';
 import { Modal, ConfirmDialog } from '../Modal';
+import { useSupplierOrderRights, revertSupplierOrderReception, deleteSupplierOrder, RECEIVED_STATUSES } from '../../lib/supplierOrderActions';
 import { VehicleArticlePicker } from '../VehicleArticlePicker';
 import {
   SupplierOrderEditor,
@@ -60,6 +61,7 @@ export function SupplierOrderInstance({
 }: Props) {
   const { tenant, currentSite, profile, user } = useApp();
   const { can } = usePermissions();
+  const { canEditStatus, canDelete } = useSupplierOrderRights();
   const { success, error } = useToast();
 
   const [mode, setMode] = useState<SOMode>(descriptor.mode);
@@ -77,6 +79,8 @@ export function SupplierOrderInstance({
   const [dispatchStockLoading, setDispatchStockLoading] = useState(false);
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmRevert, setConfirmRevert] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const receiveIdemRef = useRef<string>('');
   const receivingRef = useRef(false);
 
@@ -151,6 +155,7 @@ export function SupplierOrderInstance({
       }));
       setOrder(o as any);
       setOrderId(o.id);
+      if (mode === 'edit' && RECEIVED_STATUSES.includes(o.status)) setMode('view');
       if (!hasRecoveredDraftRef.current) {
         setHeaderForm({ supplier_id: o.supplier_id || '', expected_date: o.expected_date || '', note: o.note || '' });
         setItems(loadedItems);
@@ -325,9 +330,38 @@ export function SupplierOrderInstance({
   };
 
   const startEdit = () => {
-    if (siteMismatch) return;
+    if (siteMismatch || !order) return;
+    if (RECEIVED_STATUSES.includes(order.status)) { setConfirmRevert(true); return; }
     setMode('edit');
     onModeChange?.(descriptor.windowId, 'edit');
+  };
+
+  const revertAndEdit = async () => {
+    if (!order) return;
+    setSaving(true);
+    const err = await revertSupplierOrderReception(order.id);
+    setSaving(false);
+    setConfirmRevert(false);
+    if (err) { error(err); return; }
+    setOrder(o => o ? { ...o, status: 'confirmed' } : o);
+    setItems(prev => prev.map(i => ({ ...i, quantity_received: 0 })));
+    success('Réception annulée : le stock a été corrigé. Vous pouvez modifier puis réceptionner à nouveau.');
+    onSaved();
+    setMode('edit');
+    onModeChange?.(descriptor.windowId, 'edit');
+  };
+
+  const doDelete = async () => {
+    if (!order) return;
+    setSaving(true);
+    const err = await deleteSupplierOrder(order.id);
+    setSaving(false);
+    setConfirmDelete(false);
+    if (err) { error(err); return; }
+    success(`Commande ${order.order_number} supprimée`);
+    clearFormDraft(scope, descriptor.windowId);
+    onSaved();
+    onClose();
   };
 
   const startReceive = () => {
@@ -529,7 +563,7 @@ export function SupplierOrderInstance({
 
   const canReceive = !!(order && ['sent', 'confirmed', 'partial'].includes(order.status));
   const canCancel = !!(order && ['draft', 'sent'].includes(order.status));
-  const canRestart = !!(order && ['draft', 'sent', 'confirmed', 'partial'].includes(order.status));
+  const canRestart = canEditStatus(order?.status);
 
   if (!loaded) {
     return (
@@ -586,6 +620,7 @@ export function SupplierOrderInstance({
           onCopyLink={order ? doCopyLink : undefined}
           onWhatsApp={order?.suppliers ? doWhatsApp : undefined}
           onCancel={canCancel && !siteMismatch ? () => setConfirmCancel(true) : undefined}
+          onDelete={order && canDelete && !siteMismatch ? () => setConfirmDelete(true) : undefined}
           onChangeStatus={order && !siteMismatch ? changeStatus : undefined}
           onStartReceive={canReceive && !siteMismatch ? startReceive : undefined}
           receiveQty={receiveQty}
@@ -619,6 +654,24 @@ export function SupplierOrderInstance({
         onConfirm={async () => { await changeStatus('cancelled'); setConfirmCancel(false); onClose(); }}
         title="Annuler la commande ?"
         message={`La commande "${order?.order_number || ''}" sera annulée.`}
+        danger
+      />
+
+      <ConfirmDialog
+        open={confirmRevert}
+        onClose={() => setConfirmRevert(false)}
+        onConfirm={revertAndEdit}
+        title="Modifier une commande réceptionnée ?"
+        message={`La réception de "${order?.order_number || ''}" sera annulée : les quantités reçues seront retirées du stock et l'écriture comptable d'achat supprimée. Vous pourrez ensuite corriger la commande et la réceptionner à nouveau.`}
+        danger
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={doDelete}
+        title="Supprimer la commande ?"
+        message={`La commande "${order?.order_number || ''}" sera définitivement supprimée.${order && RECEIVED_STATUSES.includes(order.status) ? " Les quantités reçues seront retirées du stock et l'écriture comptable supprimée." : ''}`}
         danger
       />
 

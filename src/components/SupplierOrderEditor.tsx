@@ -55,6 +55,7 @@ export type SupplierOrderEditorProps = {
   onCopyLink?: () => void;
   onWhatsApp?: () => void;
   onCancel?: () => void;
+  onDelete?: () => void;
   onChangeStatus?: (status: string) => void;
   // Receive mode
   receiveQty?: ReceiveQtyMap;
@@ -117,7 +118,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
     items, setItems, subtotal, saving, onSave, onClose,
     editingId, documentNumber, documentStatus,
     autoMode, onVehiclePicker,
-    onEdit, onPrint, onCopyLink, onWhatsApp, onCancel, onChangeStatus,
+    onEdit, onPrint, onCopyLink, onWhatsApp, onCancel, onDelete, onChangeStatus,
     receiveQty, setReceiveQty, receiveLotData, setReceiveLotData,
     stockMethod, onConfirmReceive, onStartReceive,
     onPrev, onNext, hasPrev, hasNext,
@@ -300,6 +301,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
           onCopyLink={onCopyLink}
           onWhatsApp={onWhatsApp}
           onCancel={onCancel}
+          onDelete={onDelete}
           onChangeStatus={onChangeStatus}
           documentStatus={documentStatus}
           editingId={editingId}
@@ -570,7 +572,7 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
 
 // ─── Toolbar ─────────────────────────────────────────────────────
 
-function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink, onWhatsApp, onCancel, onChangeStatus, documentStatus, editingId, autoMode, onVehiclePicker, onConfirmReceive, onStartReceive }: {
+function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink, onWhatsApp, onCancel, onDelete, onChangeStatus, documentStatus, editingId, autoMode, onVehiclePicker, onConfirmReceive, onStartReceive }: {
   mode: SOMode;
   saving: boolean;
   onSave?: () => void;
@@ -580,6 +582,7 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
   onCopyLink?: () => void;
   onWhatsApp?: () => void;
   onCancel?: () => void;
+  onDelete?: () => void;
   onChangeStatus?: (status: string) => void;
   documentStatus?: string;
   editingId?: string | null;
@@ -602,7 +605,7 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
           {onPrint && <button onClick={onPrint} className={btnCls} title="Imprimer"><Printer className="w-4 h-4" /></button>}
           {onCopyLink && <button onClick={onCopyLink} className={btnCls} title="Copier le lien"><Link2 className="w-4 h-4" /></button>}
           {onWhatsApp && <button onClick={onWhatsApp} className={`${btnCls} !text-[#25D366]`} title="WhatsApp"><MessageCircle className="w-4 h-4" /></button>}
-          {onEdit && ['draft', 'sent', 'confirmed', 'partial'].includes(documentStatus || '') && (
+          {onEdit && (
             <button onClick={onEdit} className={btnCls} title="Modifier"><Pencil className="w-4 h-4" /></button>
           )}
           {documentStatus === 'draft' && onChangeStatus && (
@@ -615,6 +618,9 @@ function SOToolbar({ mode, saving, onSave, onClose, onPrint, onEdit, onCopyLink,
           )}
           {['draft', 'sent'].includes(documentStatus || '') && onCancel && (
             <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-red-500 transition-colors" title="Annuler"><Ban className="w-4 h-4" /></button>
+          )}
+          {onDelete && (
+            <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
           )}
         </>
       )}
