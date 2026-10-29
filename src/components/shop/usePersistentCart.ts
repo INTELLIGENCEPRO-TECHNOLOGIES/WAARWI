@@ -1,42 +1,55 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { CartItem } from '../../lib/shopTypes';
+import type { CartItem, ShopArticle } from '../../lib/shopTypes';
 
 const PREFIX = 'waarwi_shop_cart_';
 
-function storageKey(tenantId: string): string {
-  return `${PREFIX}${tenantId}`;
+function storageKey(tenantId: string, siteId: string): string {
+  return `${PREFIX}${tenantId}_${siteId}`;
 }
 
-export function usePersistentCart(tenantId: string | null) {
+// Keeps only items still sold by this shop, with fresh price and stock.
+function pruneCart(items: CartItem[], catalog: ShopArticle[]): CartItem[] {
+  const byId = new Map(catalog.map((a) => [a.id, a]));
+  const out: CartItem[] = [];
+  for (const item of items) {
+    const fresh = item?.article?.id ? byId.get(item.article.id) : undefined;
+    if (!fresh || fresh.stock_qty <= 0) continue;
+    const qty = Math.min(Math.max(1, Math.floor(Number(item.qty) || 1)), fresh.stock_qty);
+    out.push({ article: fresh, qty, unit_price: fresh.sale_price });
+  }
+  return out;
+}
+
+export function usePersistentCart(tenantId: string | null, siteId: string | null, catalog: ShopArticle[] | null) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate from localStorage on tenant change
   useEffect(() => {
-    if (!tenantId) return;
+    setHydrated(false);
+    if (!tenantId || !siteId || !catalog) return;
     try {
-      const raw = localStorage.getItem(storageKey(tenantId));
-      if (raw) {
-        const parsed: CartItem[] = JSON.parse(raw);
-        if (Array.isArray(parsed)) setCart(parsed);
-      } else {
-        setCart([]);
-      }
+      const raw = localStorage.getItem(storageKey(tenantId, siteId));
+      const parsed = raw ? JSON.parse(raw) : [];
+      setCart(Array.isArray(parsed) ? pruneCart(parsed, catalog) : []);
     } catch {
       setCart([]);
     }
-    setHydrated(true);
-  }, [tenantId]);
-
-  // Persist on change (only after initial hydration to avoid overwriting)
-  useEffect(() => {
-    if (!tenantId || !hydrated) return;
     try {
-      localStorage.setItem(storageKey(tenantId), JSON.stringify(cart));
+      localStorage.removeItem(`${PREFIX}${tenantId}`);
     } catch {
-      // localStorage might be full or disabled — silently ignore
+      // storage unavailable
     }
-  }, [cart, tenantId, hydrated]);
+    setHydrated(true);
+  }, [tenantId, siteId, catalog]);
+
+  useEffect(() => {
+    if (!tenantId || !siteId || !hydrated) return;
+    try {
+      localStorage.setItem(storageKey(tenantId, siteId), JSON.stringify(cart));
+    } catch {
+      // localStorage might be full or disabled
+    }
+  }, [cart, tenantId, siteId, hydrated]);
 
   const addToCart = useCallback((article: CartItem['article']) => {
     setCart((prev) => {

@@ -2600,16 +2600,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const loadWebOrders = useCallback(async () => {
     if (!tenant) return;
     setWebOrdersLoading(true);
-    const { data } = await supabase
+    const webStoreId = currentSite ? (currentSite.is_warehouse ? currentSite.parent_site_id || null : currentSite.id) : null;
+    let q = supabase
       .from('online_orders')
       .select('id, order_number, status, payment_status, delivery_mode, delivery_address, payment_mode, customer_name, customer_phone, customer_whatsapp, customer_note, subtotal, delivery_fee, total, created_at, sale_id')
       .eq('tenant_id', tenant.id)
-      .in('status', ['nouvelle', 'confirmee', 'en_preparation', 'prete', 'livree'])
-      .order('created_at', { ascending: false })
-      .limit(200);
+      .in('status', ['nouvelle', 'confirmee', 'en_preparation', 'prete', 'livree']);
+    if (webStoreId) q = q.eq('site_id', webStoreId);
+    const { data } = await q.order('created_at', { ascending: false }).limit(200);
     setWebOrders((data || []) as WebOrder[]);
     setWebOrdersLoading(false);
-  }, [tenant]);
+  }, [tenant, currentSite]);
 
   // Fetch badge count on mount
   useEffect(() => { if (tenant) loadWebOrders(); }, [tenant, loadWebOrders]);

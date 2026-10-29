@@ -93,6 +93,9 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   const [categories, setCategories] = useState<Category[]>([]);
   const [vehicleBrands, setVehicleBrands] = useState<VehicleBrand[]>([]);
   const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([]);
+  const [shopSiteId, setShopSiteId] = useState<string | null>(null);
+  const [preview, setPreview] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // ── Filter state ──
   const [search, setSearch] = useState('');
@@ -107,8 +110,8 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   const [detail, setDetail] = useState<ShopArticle | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
 
-  // ── Cart (persisted in localStorage per tenant) ──
-  const { cart, addToCart, setCartQty, removeFromCart, clearCart } = usePersistentCart(tenant?.id || null);
+  // ── Cart (persisted per shop and source store, pruned to the current catalog) ──
+  const { cart, addToCart, setCartQty, removeFromCart, clearCart } = usePersistentCart(tenant?.id || null, shopSiteId, loading ? null : articles);
 
   // ── View ──
   const [view, setView] = useState<'shop' | 'checkout' | 'confirmation' | 'track'>(initialView);
@@ -122,112 +125,42 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   const loadShop = async (tenantSlug: string) => {
     setLoading(true);
     setNotFound(false);
+    setLoadError(false);
 
-    const { data: tenantRow } = await supabase
-      .from('tenants').select('id,name,legal_name,logo_url,phone,email,address,website,currency,enabled_modules,is_active,approval_status,business_type')
-      .eq('public_slug', tenantSlug).maybeSingle();
-    if (!tenantRow) { setNotFound(true); setLoading(false); return; }
-
-    const modules: string[] = Array.isArray((tenantRow as any).enabled_modules)
-      ? (tenantRow as any).enabled_modules
-      : [];
-    const moduleEnabled = modules.length === 0 || modules.includes('online_orders');
-    const tenantOk = (tenantRow as any).is_active !== false
-      && ((tenantRow as any).approval_status || 'approved') === 'approved';
-    if (!moduleEnabled || !tenantOk) { setNotFound(true); setLoading(false); return; }
-
-    setTenant(tenantRow);
-
-    let { data: settings } = await supabase
-      .from('shop_settings')
-      .select('*')
-      .eq('tenant_id', tenantRow.id).maybeSingle();
-    if (!settings) {
-      settings = {
-        shop_name: tenantRow.name, tagline: '', logo_url: tenantRow.logo_url || '',
-        phone: tenantRow.phone || '', whatsapp: '', address: '',
-        welcome_msg: '', footer_text: '',
-        delivery_modes: ['retrait', 'livraison'], payment_modes: ['livraison', 'retrait'],
-        primary_color: '#0f766e',
-        theme: 'premium_minimal', secondary_color: '#0f172a',
-        cover_image_url: '', cover_image_alt: '',
-        cover_focal_x: 50, cover_focal_y: 50,
-        cover_overlay: 'dark', cover_overlay_intensity: 40,
-        show_references: true, show_stock: true, low_stock_threshold: 3,
-        show_perks: true, card_density: 'comfortable',
-        section_order: ['hero', 'categories', 'products', 'perks', 'footer'],
-        appearance_config: {},
-      } as any;
-    }
-    setShopSettings(settings as ShopSettings);
-
-    const [
-      { data: arts }, { data: cats }, { data: vBrands }, { data: vModels },
-      { data: compats },
-    ] = await Promise.all([
-      supabase.from('articles').select('id,name,internal_ref,oem_ref,brand,category_id,sale_price,old_price,image_url,description,unit,condition').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
-      supabase.from('part_categories').select('id,name,parent_id').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
-      supabase.from('vehicle_brands').select('id,name').eq('tenant_id', tenantRow.id).eq('is_active', true).order('name'),
-      supabase.from('vehicle_models').select('id,name,brand_id').eq('tenant_id', tenantRow.id).order('name'),
-      supabase.from('article_compatibilities').select('article_id,brand_id,model_id,year_start,year_end').eq('tenant_id', tenantRow.id),
-    ]);
-
-    let stocks: any[] = [];
-    let sFrom = 0;
-    while (true) {
-      const { data, error: e } = await supabase.from('stock_levels').select('article_id,quantity').eq('tenant_id', tenantRow.id).range(sFrom, sFrom + 999);
-      if (e || !data || data.length === 0) break;
-      stocks = stocks.concat(data);
-      if (data.length < 1000) break;
-      sFrom += 1000;
+    const { data, error: rpcError } = await supabase.rpc('get_public_shop_catalog', { p_slug: tenantSlug });
+    if (rpcError) { setLoadError(true); setLoading(false); return; }
+    const payload = data as any;
+    if (!payload || !payload.tenant?.id || !payload.site?.id || !payload.settings || !Array.isArray(payload.articles)) {
+      setNotFound(true); setLoading(false); return;
     }
 
-    setCategories(cats || []);
-    setVehicleBrands(vBrands || []);
-    setVehicleModels(vModels || []);
-
-    const stockMap: Record<string, number> = {};
-    stocks.forEach((s: any) => { stockMap[s.article_id] = (stockMap[s.article_id] || 0) + Number(s.quantity); });
-
+    const vBrands: VehicleBrand[] = Array.isArray(payload.brands) ? payload.brands : [];
+    const vModels: VehicleModel[] = Array.isArray(payload.models) ? payload.models : [];
     const brandNameMap: Record<string, string> = {};
-    (vBrands || []).forEach((b: any) => { brandNameMap[b.id] = b.name; });
+    vBrands.forEach((b) => { brandNameMap[b.id] = b.name; });
     const modelNameMap: Record<string, string> = {};
-    (vModels || []).forEach((m: any) => { modelNameMap[m.id] = m.name; });
+    vModels.forEach((m) => { modelNameMap[m.id] = m.name; });
 
     const compatMap: Record<string, Compat[]> = {};
-    (compats || []).forEach((c: any) => {
+    (Array.isArray(payload.compatibilities) ? payload.compatibilities : []).forEach((c: any) => {
       if (!compatMap[c.article_id]) compatMap[c.article_id] = [];
       compatMap[c.article_id].push({ brand_name: brandNameMap[c.brand_id] || '', model_name: modelNameMap[c.model_id] || '', year_start: c.year_start || 0, year_end: c.year_end || 0 });
     });
 
-    setArticles((arts || []).map((a: any) => ({ ...a, stock_qty: stockMap[a.id] || 0, compatibilities: compatMap[a.id] || [] })));
-
-    // Fetch most-sold articles for featured row
-    try {
-      const { data: topSold } = await supabase
-        .from('sale_items')
-        .select('article_id, quantity')
-        .eq('tenant_id', tenantRow.id)
-        .order('quantity', { ascending: false })
-        .limit(200);
-
-      const { data: topOnline } = await supabase
-        .from('online_order_items')
-        .select('article_id, quantity')
-        .eq('tenant_id', tenantRow.id)
-        .limit(200);
-
-      const salesCount: Record<string, number> = {};
-      [...(topSold || []), ...(topOnline || [])].forEach((r: any) => {
-        salesCount[r.article_id] = (salesCount[r.article_id] || 0) + Number(r.quantity || 1);
-      });
-
-      const sorted = Object.entries(salesCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id]) => id);
-      setFeaturedIds(sorted);
-    } catch {
-      setFeaturedIds([]);
-    }
-
+    setTenant(payload.tenant as ShopTenant);
+    setShopSettings(payload.settings as ShopSettings);
+    setShopSiteId(payload.site.id);
+    setPreview(payload.preview === true);
+    setCategories(Array.isArray(payload.categories) ? payload.categories : []);
+    setVehicleBrands(vBrands);
+    setVehicleModels(vModels);
+    setFeaturedIds(Array.isArray(payload.featured_ids) ? payload.featured_ids : []);
+    setArticles(payload.articles.map((a: any) => ({
+      ...a,
+      internal_ref: a.internal_ref || '',
+      stock_qty: Number(a.stock_qty) || 0,
+      compatibilities: compatMap[a.id] || [],
+    })));
     setLoading(false);
   };
 
@@ -295,6 +228,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   }, [featuredIds, articles]);
 
   if (loading) return <ShopLoader />;
+  if (loadError) return <ShopLoadError onRetry={() => loadShop(slug)} />;
   if (notFound || !tenant) return <ShopNotFound slug={slug} />;
 
   // ── Checkout view ──
@@ -306,6 +240,7 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
         tenant={tenant}
         shopName={shopName}
         shopSettings={shopSettings}
+        preview={preview}
         onBack={() => setView('shop')}
         onConfirmed={handleOrderConfirmed}
       />
@@ -342,6 +277,11 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
   // ── Shop view ──
   return (
     <div className="min-h-screen bg-white shop-container">
+      {preview && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-xs font-medium text-amber-800">
+          Aperçu réservé à votre équipe : la boutique est désactivée et invisible pour les clients.
+        </div>
+      )}
       {/* Sticky header + search */}
       <div className="sticky top-0 z-40 bg-white border-b border-neutral-100">
         <header className="px-4 sm:px-6">
@@ -594,10 +534,11 @@ export function Shop({ slug, initialView = 'shop' }: { slug: string; initialView
 
 type CheckoutStep = 'client' | 'livraison' | 'recap';
 
-function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack, onConfirmed }: {
+function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, preview, onBack, onConfirmed }: {
   cart: CartItem[]; cartTotal: number;
   tenant: ShopTenant; shopName: string;
   shopSettings: ShopSettings | null;
+  preview: boolean;
   onBack: () => void;
   onConfirmed: (conf: OrderConfirmation) => void;
 }) {
@@ -640,50 +581,27 @@ function CheckoutFlow({ cart, cartTotal, tenant, shopName, shopSettings, onBack,
     setSubmitting(true);
     setFormError('');
     try {
-      const { data: numData } = await supabase.rpc('next_online_order_number', { p_tenant_id: tenant.id });
-      const orderNumber = numData || `WEB-${Date.now()}`;
-
-      const subtotal = cart.reduce((s, i) => s + i.unit_price * i.qty, 0);
-      const total = subtotal;
-
-      const orderPayload = {
-        tenant_id: tenant.id,
-        order_number: orderNumber,
-        customer_name: form.customer_name.trim(),
-        customer_phone: form.customer_phone.trim(),
-        customer_whatsapp: form.customer_whatsapp.trim(),
-        customer_email: form.customer_email.trim(),
-        customer_address: form.customer_address.trim(),
-        customer_note: form.customer_note.trim(),
-        delivery_mode: form.delivery_mode,
-        delivery_address: form.delivery_mode === 'livraison' ? form.delivery_address.trim() : '',
-        delivery_fee: 0,
-        payment_mode: form.payment_mode,
-        payment_status: ['wave', 'orange_money', 'free_money'].includes(form.payment_mode) ? 'en_attente' : 'non_paye',
-        subtotal,
-        total,
-        status: 'nouvelle',
-        internal_note: '',
-        sale_id: null,
-      };
-
-      const { data: order, error: orderErr } = await supabase
-        .from('online_orders').insert(orderPayload).select('id').single();
+      if (preview) throw new Error('Aperçu uniquement : la boutique est désactivée, aucune commande ne peut être passée.');
+      const { data, error: orderErr } = await supabase.rpc('create_online_order', {
+        p_tenant_id: tenant.id,
+        p_customer: {
+          customer_name: form.customer_name.trim(),
+          customer_phone: form.customer_phone.trim(),
+          customer_whatsapp: form.customer_whatsapp.trim(),
+          customer_email: form.customer_email.trim(),
+          customer_address: form.customer_address.trim(),
+          customer_note: form.customer_note.trim(),
+          delivery_mode: form.delivery_mode,
+          delivery_address: form.delivery_mode === 'livraison' ? form.delivery_address.trim() : '',
+          payment_mode: form.payment_mode,
+        },
+        p_items: cart.map(i => ({ article_id: i.article.id, quantity: i.qty })),
+      });
       if (orderErr) throw orderErr;
-
-      const items = cart.map(i => ({
-        tenant_id: tenant.id,
-        order_id: order.id,
-        article_id: i.article.id,
-        article_name: i.article.name,
-        internal_ref: i.article.internal_ref,
-        quantity: i.qty,
-        unit_price: i.unit_price,
-        line_total: i.unit_price * i.qty,
-      }));
-
-      const { error: itemsErr } = await supabase.from('online_order_items').insert(items);
-      if (itemsErr) throw itemsErr;
+      const result = data as { id?: string; order_number?: string; total?: number } | null;
+      if (!result?.order_number) throw new Error('Erreur lors de la commande. Réessayez.');
+      const orderNumber = result.order_number;
+      const total = Number(result.total) || 0;
 
       onConfirmed({
         order_number: orderNumber,
@@ -1024,6 +942,21 @@ function ShopLoader() {
           <div key={i} className="w-1.5 h-1.5 bg-neutral-900 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function ShopLoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-5 bg-white p-6 text-center">
+      <AlertCircle className="w-8 h-8 text-red-400" />
+      <div>
+        <h2 className="text-lg font-bold text-neutral-800 mb-1">Chargement impossible</h2>
+        <p className="text-sm text-neutral-500 max-w-xs">Le catalogue n'a pas pu être chargé. Vérifiez votre connexion puis réessayez.</p>
+      </div>
+      <button onClick={onRetry} className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white text-sm font-bold hover:bg-neutral-800 active:scale-[0.98] transition-all">
+        Réessayer
+      </button>
     </div>
   );
 }

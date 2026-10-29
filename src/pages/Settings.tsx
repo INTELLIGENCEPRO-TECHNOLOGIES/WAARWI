@@ -294,16 +294,28 @@ function BoutiqueTab() {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [shopSites, setShopSites] = useState<{ id: string; name: string }[]>([]);
+  const [pendingSiteId, setPendingSiteId] = useState<string | null>(null);
 
   const shopUrl = `${window.location.origin}/shop/${slug}`;
+
+  const shopSiteError = (msg: string) => {
+    if (msg.includes('SHOP_SITE_IS_DEPOT')) return 'Un dépôt ne peut pas alimenter la boutique : choisissez un magasin.';
+    if (msg.includes('SHOP_SITE_INACTIVE')) return 'Ce magasin est désactivé : choisissez un magasin actif.';
+    if (msg.includes('SHOP_SITE_INVALID')) return 'Ce magasin n\'appartient pas à votre entreprise.';
+    if (msg.includes('SHOP_SITE_REQUIRED') || msg.includes('shop_settings_active_requires_site')) return 'Choisissez d\'abord le magasin qui alimente la boutique.';
+    return msg;
+  };
 
   const load = async () => {
     if (!tenant) return;
     setLoading(true);
-    let [{ data: s }, { data: t }] = await Promise.all([
+    let [{ data: s }, { data: t }, { data: st }] = await Promise.all([
       supabase.from('shop_settings').select('*').eq('tenant_id', tenant.id).maybeSingle(),
       supabase.from('tenants').select('public_slug').eq('id', tenant.id).maybeSingle(),
+      supabase.from('sites').select('id,name').eq('tenant_id', tenant.id).eq('is_warehouse', false).eq('is_active', true).order('name'),
     ]);
+    setShopSites(st || []);
     if (!s) {
       const { data: created } = await supabase
         .from('shop_settings')
@@ -333,7 +345,23 @@ function BoutiqueTab() {
       footer_text: settings.footer_text,
     }).eq('tenant_id', tenant.id);
     setSaving(false);
-    if (e) error(e.message); else success('Paramètres boutique enregistrés');
+    if (e) error(shopSiteError(e.message)); else success('Paramètres boutique enregistrés');
+  };
+
+  const saveSite = async (siteId: string) => {
+    if (!tenant || !settings || !siteId) return;
+    setSaving(true);
+    const { error: e } = await supabase.from('shop_settings').update({ site_id: siteId }).eq('tenant_id', tenant.id);
+    setSaving(false);
+    if (e) { error(shopSiteError(e.message)); return; }
+    setSettings({ ...settings, site_id: siteId });
+    success('Magasin de la boutique mis à jour');
+  };
+
+  const requestSiteChange = (siteId: string) => {
+    if (!siteId || siteId === settings?.site_id) return;
+    if (settings?.is_active && settings?.site_id) setPendingSiteId(siteId);
+    else saveSite(siteId);
   };
 
   const saveSlug = async () => {
@@ -357,10 +385,11 @@ function BoutiqueTab() {
     if (!tenant || !settings) return;
     if (!slug) { error('Vous devez d\'abord définir un slug public pour activer la boutique.'); return; }
     const next = !settings.is_active;
+    if (next && !settings.site_id) { error('Choisissez d\'abord le magasin qui alimente la boutique.'); return; }
     setSaving(true);
     const { error: e } = await supabase.from('shop_settings').update({ is_active: next }).eq('tenant_id', tenant.id);
     setSaving(false);
-    if (e) error(e.message);
+    if (e) error(shopSiteError(e.message));
     else {
       setSettings({ ...settings, is_active: next });
       success(next ? 'Boutique activée — elle est maintenant accessible au public.' : 'Boutique désactivée.');
@@ -432,6 +461,29 @@ function BoutiqueTab() {
         )}
       </div>
 
+      {/* Magasin source */}
+      <div className="py-4 border-b border-neutral-200 flat-form">
+        <label className="label">Magasin alimentant la boutique <span className="text-red-500">*</span></label>
+        <select
+          value={settings.site_id || ''}
+          onChange={e => requestSiteChange(e.target.value)}
+          disabled={saving}
+          className="input"
+        >
+          <option value="" disabled>Choisir un magasin</option>
+          {settings.site_id && !shopSites.some(x => x.id === settings.site_id) && (
+            <option value={settings.site_id}>Magasin actuel (non accessible)</option>
+          )}
+          {shopSites.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <p className="text-[11px] text-neutral-500 mt-1.5">
+          La boutique affiche uniquement les articles de ce magasin, avec son stock et celui des dépôts qui lui sont rattachés.
+        </p>
+        {!settings.site_id && (
+          <p className="text-[11px] text-amber-700 mt-1">Aucun magasin choisi : la boutique ne peut pas être activée.</p>
+        )}
+      </div>
+
       {/* Informations boutique */}
       <div className="py-6 border-b border-neutral-200 flat-form">
         <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-4">Informations</h2>
@@ -463,6 +515,15 @@ function BoutiqueTab() {
           onSettingsChange={(s) => setSettings(s)}
         />
       </div>
+
+      <ConfirmDialog
+        open={!!pendingSiteId}
+        onClose={() => setPendingSiteId(null)}
+        onConfirm={() => { if (pendingSiteId) saveSite(pendingSiteId); }}
+        title="Changer le magasin de la boutique ?"
+        message={`La boutique en ligne est active. Elle affichera immédiatement les articles et le stock de « ${shopSites.find(x => x.id === pendingSiteId)?.name || ''} » à la place du magasin actuel. Les paniers en cours des clients seront vidés des articles non disponibles.`}
+        confirmLabel="Changer"
+      />
     </div>
   );
 }

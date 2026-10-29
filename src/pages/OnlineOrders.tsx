@@ -47,7 +47,8 @@ const STATUS_FLOW: OrderStatus[] = ['nouvelle', 'confirmee', 'en_preparation', '
 const STATUS_ORDER: OrderStatus[] = ['nouvelle', 'confirmee', 'en_preparation', 'prete', 'livree', 'annulee'];
 
 export function OnlineOrders() {
-  const { tenant, dataTick } = useApp();
+  const { tenant, dataTick, currentSite } = useApp();
+  const storeId = currentSite ? (currentSite.is_warehouse ? currentSite.parent_site_id || null : currentSite.id) : null;
   const { can } = usePermissions();
   const { success, error } = useToast();
 
@@ -67,14 +68,15 @@ export function OnlineOrders() {
   const load = useCallback(async (silent = false) => {
     if (!tenant) return;
     if (!silent) setLoading(true);
-    const { data, error: err } = await supabase
-      .from('online_orders').select('id, order_number, customer_name, customer_phone, customer_whatsapp, customer_email, customer_address, customer_note, delivery_mode, delivery_address, delivery_fee, payment_mode, payment_status, subtotal, total, status, internal_note, sale_id, created_at, updated_at')
-      .eq('tenant_id', tenant.id)
-      .order('created_at', { ascending: false }).limit(500);
+    let q = supabase
+      .from('online_orders').select('id, site_id, order_number, customer_name, customer_phone, customer_whatsapp, customer_email, customer_address, customer_note, delivery_mode, delivery_address, delivery_fee, payment_mode, payment_status, subtotal, total, status, internal_note, sale_id, created_at, updated_at')
+      .eq('tenant_id', tenant.id);
+    if (storeId) q = q.eq('site_id', storeId);
+    const { data, error: err } = await q.order('created_at', { ascending: false }).limit(500);
     if (err) error(err.message);
     setOrders((data || []) as OnlineOrder[]);
     if (!silent) setLoading(false);
-  }, [tenant, error]);
+  }, [tenant, storeId, error]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (dataTick > 0) { const t = setTimeout(() => load(true), 400); return () => clearTimeout(t); } }, [dataTick]);
@@ -307,7 +309,7 @@ export function OnlineOrders() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header unifié : titre intégré + recherche + filtre + refresh ─── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Commandes en ligne</h1>
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
