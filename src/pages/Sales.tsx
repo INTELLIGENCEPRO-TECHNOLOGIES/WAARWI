@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Calculator, Loader2, Printer, Plus, X, Calendar, Filter, Check, BookOpen, Pencil, Trash2, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, Ban, Wallet, RotateCcw } from 'lucide-react';
 import { PageSearch } from '../components/PageSearch';
 import { supabase } from '../lib/supabase';
+import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
@@ -331,11 +332,9 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
       let cashSessionId: string | null = null;
       if (cancelPaymentAction === 'refund_cash') {
         if (!currentSite) throw new Error('Aucun point de vente sélectionné');
-        const { data: sess } = await supabase.from('cash_sessions')
-          .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-          .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-        cashSessionId = sess?.id || null;
-        if (!cashSessionId) throw new Error("Aucune session de caisse ouverte : impossible de rembourser en espèces. Ouvrez une caisse ou choisissez « Conserver en crédit ».");
+        const cashCtx = await getOperationalCashContext(currentSite.id);
+        cashSessionId = cashCtx.session?.id || null;
+        if (!cashSessionId) throw new Error(missingSessionMessage(cashCtx, "Aucune session de caisse ouverte : impossible de rembourser en espèces. Ouvrez une caisse ou choisissez « Conserver en crédit »."));
       }
       const { data, error: e } = await supabase.rpc('cancel_sale', {
         p_sale_id: cancelModal.id,

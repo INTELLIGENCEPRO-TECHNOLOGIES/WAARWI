@@ -7,6 +7,7 @@ import {
   Tag, ShieldCheck, Smartphone, Pencil, ChevronLeft, ChevronRight, RefreshCw, Ban, ClipboardList,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
@@ -1357,10 +1358,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
       let sessionId: string | null = null;
       if (!invoiceIsCredit) {
-        const { data: sess } = await supabase.from('cash_sessions')
-          .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-          .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-        sessionId = sess?.id || null;
+        const cashCtx = await getOperationalCashContext(currentSite.id);
+        sessionId = cashCtx.session?.id || null;
+        if (!sessionId && totalPaid > 0 && (cashCtx.multiEnabled || cashCtx.error)) throw new Error(missingSessionMessage(cashCtx, ''));
       }
 
       const status = invoiceIsCredit
@@ -1396,29 +1396,28 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         })),
       });
       if (itemsErr) {
-        await supabase.from('sales').delete().eq('id', sale.id);
-        error(itemsErr.message || 'Erreur lors de l\'enregistrement des lignes de facture');
+        const { error: discardErr } = await supabase.rpc('discard_failed_billing_sale', { p_sale_id: sale.id });
+        error((itemsErr.message || 'Erreur lors de l\'enregistrement des lignes de facture')
+          + (discardErr ? ` — la facture ${invNum} n'a pas pu être annulée : ${discardErr.message}` : ''));
         return;
       }
 
       // Insert payments (skip if credit)
-      if (!invoiceIsCredit) {
-        let sessionPayTotal = 0;
-        for (const p of invoicePayList) {
-          await supabase.from('sale_payments').insert({
-            tenant_id: tenant.id, sale_id: sale.id,
-            cash_session_id: sessionId,
+      if (!invoiceIsCredit && invoicePayList.some(p => p.amount > 0)) {
+        const { data: payRes, error: payErr } = await supabase.rpc('register_initial_billing_payments', {
+          p_sale_id: sale.id,
+          p_cash_session_id: sessionId,
+          p_payments: invoicePayList.map(p => ({
             payment_method_id: p.method_id || null,
-            method_name: p.method_name, amount: p.amount,
+            amount: p.amount,
             reference: p.reference || '',
-          });
-          if (sessionId) sessionPayTotal += p.amount;
-        }
-        if (sessionId && sessionPayTotal > 0) {
-          await supabase.rpc('increment_session_theoretical', {
-            p_session_id: sessionId,
-            p_amount: sessionPayTotal,
-          });
+          })),
+        });
+        if (payErr || !payRes?.success) {
+          const { error: discardErr } = await supabase.rpc('discard_failed_billing_sale', { p_sale_id: sale.id });
+          error((payErr?.message || 'Erreur lors de l\'enregistrement des règlements')
+            + (discardErr ? ` — la facture ${invNum} n'a pas pu être annulée : ${discardErr.message}` : ''));
+          return;
         }
       }
 
@@ -1567,10 +1566,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     // Find active cash session for payment tracking
     let convertSessionId: string | null = null;
     if (currentSite && tenant) {
-      const { data: sess } = await supabase.from('cash_sessions')
-        .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-        .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-      convertSessionId = sess?.id || null;
+      const cashCtx = await getOperationalCashContext(currentSite.id);
+      convertSessionId = cashCtx.session?.id || null;
+      if (!convertSessionId && convertPayNow && Number(convertPayAmount) > 0 && (cashCtx.multiEnabled || cashCtx.error)) {
+        setConverting(false); error(missingSessionMessage(cashCtx, '')); return;
+      }
     }
 
     const payments: any[] = [];
@@ -1789,13 +1789,11 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     let cashSessionId: string | null = null;
     if (cancelPaymentAction === 'refund_cash') {
       if (!currentSite) { setCancelling(false); error('Aucun point de vente sélectionné'); return; }
-      const { data: sess } = await supabase.from('cash_sessions')
-        .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-        .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-      cashSessionId = sess?.id || null;
+      const cashCtx = await getOperationalCashContext(currentSite.id);
+      cashSessionId = cashCtx.session?.id || null;
       if (!cashSessionId) {
         setCancelling(false);
-        error("Aucune session de caisse ouverte : impossible de rembourser en espèces. Ouvrez une caisse ou choisissez « Conserver en crédit ».");
+        error(missingSessionMessage(cashCtx, "Aucune session de caisse ouverte : impossible de rembourser en espèces. Ouvrez une caisse ou choisissez « Conserver en crédit »."));
         return;
       }
     }
@@ -1864,11 +1862,9 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (!tenant || !currentSite) return;
     payingRef.current = true;
     setPaying(true);
-    const { data: sess } = await supabase.from('cash_sessions')
-      .select('id')
-      .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-      .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-    if (!sess) { payingRef.current = false; setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
+    const cashCtx = await getOperationalCashContext(currentSite.id);
+    const sess = cashCtx.session;
+    if (!sess) { payingRef.current = false; setPaying(false); error(missingSessionMessage(cashCtx, "La caisse doit être ouverte d'abord")); return; }
     const ref = `Règlement facture ${invoiceDetail.sale_number}${invoiceDetail.customers?.name ? ' · ' + invoiceDetail.customers.name : ''}`;
     const { error: e } = await supabase.rpc('register_sale_payment', {
       p_sale_id: invoiceDetail.id,
@@ -2071,7 +2067,15 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
     if (!can('edit_invoices')) { error('Vous n\'avez pas la permission d\'approuver les retours'); return; }
     setReturnCashConfirmOpen(false);
     setReturnWorkflowBusy(true);
-    const { error: e } = await supabase.rpc('process_return_as_cash', { p_return_id: r.id });
+    const cashCtx = currentSite ? await getOperationalCashContext(currentSite.id) : null;
+    if (cashCtx?.multiEnabled && !cashCtx.session) {
+      setReturnWorkflowBusy(false);
+      error(missingSessionMessage(cashCtx, ''));
+      return;
+    }
+    const { error: e } = await supabase.rpc('process_return_as_cash', cashCtx?.multiEnabled && cashCtx.session
+      ? { p_return_id: r.id, p_session_id: cashCtx.session.id }
+      : { p_return_id: r.id });
     setReturnWorkflowBusy(false);
     if (e) { error(e.message); return; }
     success('Remboursement enregistré en caisse');

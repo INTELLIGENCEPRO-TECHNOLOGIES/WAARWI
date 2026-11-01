@@ -97,6 +97,20 @@
   to { transform: translateY(0); }
 }
 
+@keyframes mcAnnounceIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes mcAnnounceScrimIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.mc-announce-panel { animation: mcAnnounceIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.mc-announce-scrim { animation: mcAnnounceScrimIn 180ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .mc-announce-panel, .mc-announce-scrim { animation: none; }
+}
+
 html, body, #root {
   height: 100%;
   max-width: 100%;

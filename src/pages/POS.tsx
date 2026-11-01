@@ -9,6 +9,7 @@ import {
   TrendingUp, UserPlus, Store, History, Menu as MenuIcon, BookOpen
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { fetchPrepayAvailable } from '../lib/customerCredit';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
@@ -33,6 +34,8 @@ import { QuickActionsPanel } from '../components/QuickActionsPanel';
 import { Activity } from 'lucide-react';
 import { CategoryPickerModal } from './ArticlesComponents';
 import { PosNumpad, type NumpadField } from '../components/PosNumpad';
+import { PosRegisterPicker } from '../components/PosRegisterPicker';
+import { newIdempotencyKey, registerLabel, registerText, type PosCashContext } from '../lib/cashSession';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
 
 type ArticleLite = {
@@ -297,8 +300,10 @@ function ActionIconBtn({ icon: Icon, label, onClick, disabled }: {
 function POSLandingOpenMinimal({
   tenantName, tenantLogo, fundModalOpen, setFundModalOpen,
   openingAmount, setOpeningAmount, openingSubmitting, openSessionSubmit,
-  siteName, cashierName, onMenu,
+  siteName, cashierName, onMenu, registerSlot, openDisabled,
 }: {
+  registerSlot?: React.ReactNode;
+  openDisabled?: boolean;
   tenantName?: string;
   tenantLogo?: string | null;
   fundModalOpen: boolean;
@@ -374,9 +379,11 @@ function POSLandingOpenMinimal({
           {siteName && <div className="text-sm sm:text-base font-semibold text-neutral-800"><span className="text-neutral-400 font-normal">Point de vente : </span>{siteName}</div>}
           {cashierName && <div className="text-[11px] leading-tight"><span className="text-neutral-400">Vendeur : </span><span className="font-semibold text-neutral-700">{cashierName}</span></div>}
         </div>
+        {registerSlot}
         <button
           onClick={() => setFundModalOpen(true)}
-          className="group flex flex-col items-center gap-3 px-8 py-7 rounded-xl bg-white shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
+          disabled={openDisabled}
+          className="disabled:opacity-40 disabled:pointer-events-none group flex flex-col items-center gap-3 px-8 py-7 rounded-xl bg-white shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
         >
           <ShoppingCart className="w-7 h-7 text-neutral-900 group-hover:text-brand-700 transition-colors" />
           <span className="text-sm font-bold text-neutral-900 group-hover:text-brand-700 transition-colors">Ouvrir la caisse</span>
@@ -456,8 +463,10 @@ function POSLandingOpenMinimal({
 function POSLandingOpenInline({
   tenantName, tenantLogo, fundModalOpen, setFundModalOpen,
   openingAmount, setOpeningAmount, openingSubmitting, openSessionSubmit,
-  siteName, cashierName, onBack,
+  siteName, cashierName, onBack, registerSlot, openDisabled,
 }: {
+  registerSlot?: React.ReactNode;
+  openDisabled?: boolean;
   tenantName?: string;
   tenantLogo?: string | null;
   fundModalOpen: boolean;
@@ -500,9 +509,11 @@ function POSLandingOpenInline({
         {cashierName && <div className="text-[11px] leading-tight"><span className="text-neutral-400">Vendeur : </span><span className="font-semibold text-neutral-700">{cashierName}</span></div>}
       </div>
 
+      {registerSlot}
       <button
         onClick={() => setFundModalOpen(true)}
-        className="group flex flex-col items-center gap-3 px-8 py-7 rounded-xl bg-white shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
+        disabled={openDisabled}
+        className="disabled:opacity-40 disabled:pointer-events-none group flex flex-col items-center gap-3 px-8 py-7 rounded-xl bg-white shadow-sm hover:shadow-md transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400"
       >
         <ShoppingCart className="w-7 h-7 text-neutral-900 group-hover:text-brand-700 transition-colors" />
         <span className="text-sm font-bold text-neutral-900 group-hover:text-brand-700 transition-colors">Ouvrir la caisse</span>
@@ -994,6 +1005,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [openingAmount, setOpeningAmount] = useState(0);
   const [openingNote, setOpeningNote] = useState('');
   const [openingSubmitting, setOpeningSubmitting] = useState(false);
+  const [posCashCtx, setPosCashCtx] = useState<PosCashContext | null>(null);
+  const [posCashCtxError, setPosCashCtxError] = useState('');
+  const [selectedRegisterId, setSelectedRegisterId] = useState<string | null>(null);
+  const openIdemRef = useRef<{ key: string; registerId: string | null }>({ key: '', registerId: null });
   const [fundModalOpen, setFundModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -1436,13 +1451,14 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       return all;
     };
 
-    const [allArts, allStk, csResult, allCust, topResult, tiersResult] = await Promise.all([
+    const [allArts, allStk, csResult, allCust, topResult, tiersResult, posCtxResult] = await Promise.all([
       fetchArticlesBatched(),
       fetchStockBatched(),
       supabase.from('cash_sessions').select('id, opening_amount, theoretical_amount, counted_cash, opened_at, status, user_id, site_id, tenant_id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle(),
       fetchCustomersBatched(),
       supabase.from('sale_items').select('article_id, quantity, sales!inner(tenant_id, created_at, status)').eq('tenant_id', tenant.id).gte('sales.created_at', since).neq('sales.status', 'cancelled').limit(5000),
       supabase.from('article_pricing_tiers').select('article_id, tier_name, price').eq('tenant_id', tenant.id).order('sort_order'),
+      supabase.rpc('cash_pos_context', { p_site_id: currentSite.id }),
     ]);
 
     // Abort if a newer load was started
@@ -1478,7 +1494,23 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       scores[r.article_id] = (scores[r.article_id] || 0) + Number(r.quantity || 0);
     }
     const newTiers = (tiers || []) as ArticleTier[];
-    const existingSession = cs || null;
+    const ctxData = posCtxResult.data as PosCashContext | null;
+    const ctxOk = !posCtxResult.error && !!ctxData && typeof ctxData === 'object';
+    const multiMode = ctxOk && !!ctxData!.multi_enabled;
+    // Mode multi-caisse : uniquement la session personnelle de l'utilisateur, jamais celle d'un collègue.
+    const existingSession = !ctxOk ? null : multiMode ? (ctxData!.my_session || null) : (cs || null);
+    setPosCashCtx(ctxOk ? ctxData : null);
+    setPosCashCtxError(ctxOk ? '' : (posCtxResult.error?.message || 'Impossible de vérifier l’état des caisses'));
+    if (multiMode) {
+      const usable = (ctxData!.registers || []).filter(r => r.status !== 'busy');
+      setSelectedRegisterId(prev => {
+        if (prev && usable.some(r => r.id === prev)) return prev;
+        const mine = usable.find(r => r.status === 'mine');
+        if (mine) return mine.id;
+        if (usable.length === 1) return usable[0].id;
+        return usable.find(r => r.is_default)?.id || null;
+      });
+    }
 
     setArticles(newArticles);
     setMethods(newMethods);
@@ -1494,6 +1526,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       const ctx = peekNavContext();
       if (ctx?.target === 'directPos' && existingSession) {
         consumeNavContext();
+        return 'pos';
+      }
+      if (multiMode && existingSession) {
+        posCache.screen = 'pos';
         return 'pos';
       }
       const newScreen = existingSession ? 'resume' : 'open-form';
@@ -1881,9 +1917,43 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // ─── Session open ─────────────────────────────────────────────────────────
 
+  const refreshPosCashCtx = async () => {
+    if (!currentSite) return;
+    const { data, error: e } = await supabase.rpc('cash_pos_context', { p_site_id: currentSite.id });
+    if (e || !data || typeof data !== 'object') { setPosCashCtxError(e?.message || 'Impossible de vérifier l’état des caisses'); return; }
+    setPosCashCtx(data as PosCashContext);
+    setPosCashCtxError('');
+  };
+
   const openSessionSubmit = async () => {
     if (!tenant || !currentSite || !profile) return;
     if (!can('pos_open_session')) { error('Vous n\'avez pas la permission d\'ouvrir une session'); return; }
+    if (posCashCtxError) { error(posCashCtxError); return; }
+    if (posCashCtx?.multi_enabled) {
+      if (!selectedRegisterId) { error('Choisissez une caisse avant de l’ouvrir'); return; }
+      if (!openIdemRef.current.key || openIdemRef.current.registerId !== selectedRegisterId) {
+        openIdemRef.current = { key: newIdempotencyKey(), registerId: selectedRegisterId };
+      }
+      setOpeningSubmitting(true);
+      const { data, error: e } = await supabase.rpc('cash_session_open', {
+        p_cash_register_id: selectedRegisterId,
+        p_opening_amount: openingAmount,
+        p_opening_note: openingNote,
+        p_idempotency_key: openIdemRef.current.key,
+      });
+      setOpeningSubmitting(false);
+      if (e || !data || typeof (data as any).id !== 'string') {
+        error(e?.message || 'Ouverture de la caisse impossible');
+        openIdemRef.current = { key: '', registerId: null };
+        refreshPosCashCtx();
+        return;
+      }
+      openIdemRef.current = { key: '', registerId: null };
+      setSession(data as any); setScreen('pos'); setFundModalOpen(false);
+      success((data as any).reused ? 'Votre session a été reprise' : 'Caisse ouverte');
+      refreshPosCashCtx();
+      return;
+    }
     setOpeningSubmitting(true);
     const { data: existing } = await supabase.from('cash_sessions').select('id, opening_amount, opened_at').eq('tenant_id', tenant.id).eq('site_id', currentSite.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1);
     if (existing && existing.length > 0) {
@@ -2953,7 +3023,22 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     if (!can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
     setClosing(true);
 
-    if (vaultCloseEnabled) {
+    if (posCashCtx?.multi_enabled) {
+      const { error: e } = await supabase.rpc('cash_session_close', {
+        p_session_id: session.id,
+        p_control_lines: controlLines.map(c => ({
+          payment_method_id: c.payment_method_id,
+          method_name: c.method_name,
+          theoretical_amount: c.theoretical_amount,
+          counted_amount: c.counted_amount,
+        })),
+        p_closing_note: closingNote,
+        p_vault_deposit_amount: vaultCloseEnabled ? depositAmount : 0,
+        p_idempotency_key: closeIdemRef.current,
+      });
+      setClosing(false);
+      if (e) { error(e.message); return; }
+    } else if (vaultCloseEnabled) {
       // Clôture atomique via RPC : lignes de contrôle + versement éventuel au coffre.
       const { error: e } = await supabase.rpc('close_cash_session_v2', {
         p_session_id: session.id,
@@ -3026,6 +3111,23 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   }
 
   // Screen: open form (no active session) — minimal full-screen view
+  const multiCash = !!posCashCtx?.multi_enabled;
+  const multiRegisters = posCashCtx?.registers || [];
+  const multiNotice = posCashCtxError
+    || (multiCash && posCashCtx?.can_open === false ? 'Vous n’avez pas l’autorisation d’ouvrir une caisse. Contactez votre administrateur.' : '');
+  const registerSlot = (multiCash || posCashCtxError) ? (
+    <PosRegisterPicker
+      registers={multiRegisters}
+      selectedId={selectedRegisterId}
+      onSelect={setSelectedRegisterId}
+      otherSession={posCashCtx?.other_session || null}
+      notice={multiNotice}
+    />
+  ) : undefined;
+  const openDisabled = !!posCashCtxError || (multiCash && (
+    !!multiNotice || !!posCashCtx?.other_session || !selectedRegisterId
+    || multiRegisters.find(r => r.id === selectedRegisterId)?.status === 'busy'
+  ));
   if (screen === 'open-form' && !menuOpen) {
     return <POSLandingOpenMinimal
       tenantName={currentSite?.logo_url ? currentSite.name : tenant?.name}
@@ -3039,6 +3141,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       siteName={currentSite?.name}
       cashierName={cashierName}
       onMenu={() => setMenuOpen(true)}
+      registerSlot={registerSlot}
+      openDisabled={openDisabled}
     />;
   }
 
@@ -3059,6 +3163,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
             siteName={currentSite?.name}
             cashierName={cashierName}
             onBack={() => setMenuOpen(false)}
+            registerSlot={registerSlot}
+            openDisabled={openDisabled}
           />
         </div>
       </div>
@@ -3375,7 +3481,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
           {/* Session popover button */}
           <div className="relative">
             <button onClick={() => setSessionPopOpen(v => !v)} className="chip font-bold" data-label="Session">
-              <span>Session</span><ChevronDown className={`w-3 h-3 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
+              <span>Session</span>{multiCash && ((session as any)?.register_code || (session as any)?.register_name) && <span title={registerText((session as any).register_code, (session as any).register_name)} className="text-[11px] px-1.5 py-0.5 rounded bg-neutral-900 text-white leading-none max-w-[12rem] truncate">{registerLabel((session as any).register_code, (session as any).register_name).primary}</span>}<ChevronDown className={`w-3 h-3 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
             </button>
             {sessionPopOpen && (
               <>
@@ -3770,9 +3876,13 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                           <button key={cu.id} onClick={async () => {
                             setMvCustomer(cu);
                             if (mvKind === 'customer_withdrawal') {
-                              const { data: ppData } = await supabase.from('customer_prepayments')
-                                .select('amount, amount_used').eq('tenant_id', tenant!.id).eq('customer_id', cu.id);
-                              const avail = (ppData || []).reduce((s, p) => s + Math.max(0, Number(p.amount) - Number(p.amount_used)), 0);
+                              let avail = 0;
+                              try {
+                                const ppMap = await fetchPrepayAvailable([cu.id]);
+                                avail = ppMap[cu.id] || 0;
+                              } catch (e: any) {
+                                error(`Acompte disponible indisponible : ${e.message}`);
+                              }
                               setMvCustPrepay(avail);
                               const custBalance = Math.max(0, Number(cu.balance || 0));
                               setMvCustBalance(custBalance);

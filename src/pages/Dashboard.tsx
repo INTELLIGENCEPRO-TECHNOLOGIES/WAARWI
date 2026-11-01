@@ -6,6 +6,7 @@ import { usePermissions } from '../lib/permissions';
 import { formatFCFA, formatCompactFCFA, formatDateTime } from '../lib/format';
 import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { isSaleSettlementIncome } from '../lib/cashMovements';
+import { getOperationalCashContext } from '../lib/cashSession';
 import { Modal } from '../components/Modal';
 import { desktopAutoFocus } from '../lib/device';
 import {
@@ -385,7 +386,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
       const customersToChaseCount = receivablesCustomerIds.size;
 
       const currentSession = (openSessions.data || []).length > 0
-        ? (openSessions.data as any[]).sort((a: any, b: any) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())[0]
+        ? (openSessions.data as any[]).sort((a: any, b: any) =>
+            (Number(b.user_id === profile?.id) - Number(a.user_id === profile?.id))
+            || (new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime()))[0]
         : null;
 
       let cashBalance = 0;
@@ -832,7 +835,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (route: string) => void
 
   if (loading || !stats) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--w-bg)] z-[9999] overflow-hidden">
+      <div data-app-overlay className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--w-bg)] z-[9999] overflow-hidden">
         {/* Ambient glow orbs */}
         <div className="absolute top-1/4 left-1/4 w-[50vw] h-[50vw] rounded-full bg-brand-500/8 blur-[120px] animate-[dashPulse_3s_ease-in-out_infinite]" />
         <div className="absolute bottom-1/4 right-1/4 w-[40vw] h-[40vw] rounded-full bg-brand-400/6 blur-[100px] animate-[dashPulse_3s_ease-in-out_infinite_1.5s]" />
@@ -1002,8 +1005,7 @@ function MobileDashboard({
       else if (period === 'last_month') { pStart = new Date(today.getFullYear(), today.getMonth() - 1, 1); pEnd = new Date(today.getFullYear(), today.getMonth(), 1); }
       const results: SiteStat[] = [];
       for (const site of sites) {
-        const { data: sessData } = await supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1);
-        const session = (sessData || [])[0];
+        const session = (await getOperationalCashContext(site.id)).session;
         const salesQ = supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', pStart.toISOString()).in('status', ['paid', 'partial', 'validated']);
         if (pEnd) salesQ.lt('created_at', pEnd.toISOString());
         const pmtQ = supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', pStart.toISOString());
@@ -1942,8 +1944,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
       else if (period === 'last_month') { pStart = new Date(today.getFullYear(), today.getMonth() - 1, 1); pEnd = new Date(today.getFullYear(), today.getMonth(), 1); }
       const results: SiteStat[] = [];
       for (const site of sites) {
-        const { data: sessData } = await supabase.from('cash_sessions').select('id, opening_amount, status').eq('tenant_id', tenant.id).eq('site_id', site.id).eq('status', 'open').order('opened_at', { ascending: false }).limit(1);
-        const session = (sessData || [])[0];
+        const session = (await getOperationalCashContext(site.id)).session;
         const salesQ = supabase.from('sales').select('total').eq('tenant_id', tenant.id).eq('site_id', site.id).gte('created_at', pStart.toISOString()).in('status', ['paid', 'partial', 'validated']);
         if (pEnd) salesQ.lt('created_at', pEnd.toISOString());
         const pmtQ = supabase.from('sale_payments').select('amount, sales!inner(site_id)').eq('tenant_id', tenant.id).eq('sales.site_id', site.id).gte('created_at', pStart.toISOString());

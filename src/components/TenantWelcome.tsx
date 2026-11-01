@@ -20,7 +20,7 @@ export function TenantWelcome({ logoUrl, name, onDone }: Props) {
   }, [onDone]);
 
   return (
-    <div
+    <div data-app-overlay
       className={`fixed inset-0 z-[100] flex items-center justify-center overflow-hidden transition-opacity duration-1000 ${leaving ? 'opacity-0' : 'opacity-100'}`}
       style={{
         background:

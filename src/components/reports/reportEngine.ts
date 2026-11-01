@@ -2,6 +2,7 @@ import { supabase } from '../../lib/supabase';
 import { formatDate } from '../../lib/format';
 import { BUSINESS_TYPE_LABELS } from '../../lib/types';
 import { renderA4Header, a4HeaderCss, buildPrintTenant } from '../../lib/print';
+import { UNASSIGNED_REGISTER_LABEL } from '../../lib/cashSession';
 
 // ── formatters ───────────────────────────────────────────────────────────────
 
@@ -136,16 +137,57 @@ export function printDoc(html: string): void {
 
 // ── Data fetching ────────────────────────────────────────────────────────────
 
+export type CashScopeFilter = { cashRegisterId?: string; userId?: string; cashSessionId?: string };
+
+export type CashBreakdownRow = {
+  key: string; id: string | null; bucket: string; label: string; nbSessions: number;
+  entrees: number; sorties: number; net: number;
+};
+
+export const UNASSIGNED_LABEL = UNASSIGNED_REGISTER_LABEL;
+export const GLOBAL_BALANCES_NOTE = 'Soldes globaux du client (toutes caisses) · les mouvements de la période suivent les filtres';
+
 export async function fetchCashStats(
-  _tenantId: string, siteId: string | undefined, from: string, to: string
+  _tenantId: string, siteId: string | undefined, from: string, to: string,
+  scope?: CashScopeFilter,
 ) {
-  const { data, error } = await supabase.rpc('get_cash_report', {
-    p_site_id: siteId || null, p_from: from, p_to: to,
-  });
+  const params: Record<string, unknown> = { p_site_id: siteId || null, p_from: from, p_to: to };
+  if (scope?.cashRegisterId) params.p_cash_register_id = scope.cashRegisterId;
+  if (scope?.userId) params.p_user_id = scope.userId;
+  if (scope?.cashSessionId) params.p_cash_session_id = scope.cashSessionId;
+  const { data, error } = await supabase.rpc('get_cash_report', params);
   if (error) throw error;
   const r = (data || {}) as any;
   const num = (v: any) => Number(v) || 0;
+  const breakdown = (rows: any[] | undefined, kind: 'register' | 'operator'): CashBreakdownRow[] | null =>
+    Array.isArray(rows) ? rows.map((b) => {
+      const bucket = String(b.bucket);
+      const id = kind === 'register' ? b.cash_register_id : b.user_id;
+      const label = bucket === 'no_session' ? UNASSIGNED_LABEL
+        : bucket === 'no_register' ? UNASSIGNED_LABEL
+        : kind === 'register' ? 'Caisse'
+        : (String(b.name || '') || 'Caissier');
+      return {
+        key: `${bucket}:${id ?? ''}`, id: id ? String(id) : null, bucket, label, nbSessions: num(b.nb_sessions),
+        entrees: num(b.entrees), sorties: num(b.sorties), net: num(b.net),
+      };
+    }) : null;
+  const mergeUnassigned = (rows: CashBreakdownRow[] | null) => {
+    if (!rows) return rows;
+    const out: CashBreakdownRow[] = [];
+    let un: CashBreakdownRow | null = null;
+    for (const b of rows) {
+      if (b.bucket !== 'no_session' && b.bucket !== 'no_register') { out.push(b); continue; }
+      if (!un) { un = { ...b, key: 'no_session:', id: null, bucket: 'no_session' }; continue; }
+      un = { ...un, nbSessions: un.nbSessions + b.nbSessions, entrees: un.entrees + b.entrees, sorties: un.sorties + b.sorties, net: un.net + b.net };
+    }
+    if (un) out.push(un);
+    return out;
+  };
   return {
+    parCaisse: mergeUnassigned(breakdown(r.par_caisse, 'register')),
+    parCaissier: breakdown(r.par_caissier, 'operator'),
+    includesUnassigned: r.scope ? !!r.scope.includes_unassigned : null,
     ventesValidees: num(r.ventes_validees),
     retours: num(r.retours),
     caNet: num(r.ca_net),
@@ -207,7 +249,9 @@ export type CustomerStatRow = {
   cost: number; marge: number; encaissements: number;
   soldeAnterieur: number; soldeADate: number; montantDu: number; creditDisponible: number;
 };
-export type CustomerStats = { asOf: string; rows: CustomerStatRow[]; totals: Record<string, number> };
+export type CustomerStats = {
+  asOf: string; rows: CustomerStatRow[]; totals: Record<string, number>; globalBalances: boolean;
+};
 
 export async function fetchCustomerStats(
   _tenantId: string, siteId: string | undefined, from: string, to: string
@@ -239,6 +283,7 @@ export async function fetchCustomerStats(
       creditDisponible: num(r.credit_disponible),
     })),
     totals: (p.totals || {}) as Record<string, number>,
+    globalBalances: p.balances_scope === 'global',
   };
 }
 
@@ -323,7 +368,9 @@ export async function fetchExpenseStats(
 }
 
 export type TiersRow = { id: string; name: string; net: number; due: number; credit: number };
-export type TiersStats = { asOf: string; customers: TiersRow[]; suppliers: TiersRow[]; totals: any };
+export type TiersStats = {
+  asOf: string; customers: TiersRow[]; suppliers: TiersRow[]; totals: any; globalBalances: boolean;
+};
 
 export async function fetchTiersBalanceStats(
   _tenantId: string, _from: string, to: string, siteId: string | null
@@ -339,6 +386,7 @@ export async function fetchTiersBalanceStats(
     customers: ((p.customers || []) as any[]).map(mapC),
     suppliers: ((p.suppliers || []) as any[]).map(mapS),
     totals: p.totals || {},
+    globalBalances: p.balances_scope === 'global',
   };
 }
 
@@ -368,9 +416,26 @@ export function buildCashReport(
     fondsOuverture, reglementsClients, autresEntrees, transfertsDepuisCoffre, versementsAuCoffre,
     reglementsFournisseurs, depensesPayees, remboursementsClients, autresSorties,
     totalEntrees, totalSorties, soldeTheorique, parMode, parJour, articles,
+    parCaisse, parCaissier,
   } = stats;
   const period = labelRange(range);
   const now = new Date().toLocaleString('fr-FR');
+
+  const breakdownTable = (title: string, head: string, rows: CashBreakdownRow[] | null) => {
+    if (!rows) return '';
+    const body = rows.map((b) => `<tr>
+      <td class="b">${esc(b.label)}</td>
+      <td class="r num">${b.bucket === 'no_session' ? '—' : fmtNum(b.nbSessions)}</td>
+      <td class="r num mc">${b.entrees > 0 ? '+ ' + fmtMoney(b.entrees) : '—'}</td>
+      <td class="r num ${b.sorties > 0 ? 'mr' : 'muted'}">${b.sorties > 0 ? '− ' + fmtMoney(b.sorties) : '—'}</td>
+      <td class="r num b">${fmtMoney(b.net)}</td>
+    </tr>`).join('');
+    return `<div class="section-title">${title}</div>
+    <table>
+      <thead><tr><th>${head}</th><th class="r">Sessions</th><th class="r">Entrées</th><th class="r">Sorties</th><th class="r">Net</th></tr></thead>
+      <tbody>${body || '<tr><td colspan="5" class="c muted">Aucun mouvement</td></tr>'}</tbody>
+    </table>`;
+  };
 
   const dayRows = parJour.map((d, i) => `<tr>
     <td class="num c">${i + 1}</td>
@@ -488,6 +553,9 @@ export function buildCashReport(
       <thead><tr><th>Mode de règlement</th><th class="r">Entrées</th><th class="r">Sorties</th><th class="r">Net</th></tr></thead>
       <tbody>${modeRows || '<tr><td colspan="4" class="c muted">Aucun mouvement</td></tr>'}</tbody>
     </table>
+
+    ${breakdownTable('Ventilation par caisse', 'Caisse', parCaisse)}
+    ${breakdownTable('Ventilation par caissier', 'Caissier', parCaissier)}
 
     <div class="section-title">Articles vendus — Top ${Math.min(50, articles.length)}</div>
     <table>
@@ -625,6 +693,7 @@ export function buildCustomerReport(
       <div class="kpi-cell"><div class="kpi-label">Crédit disponible</div><div class="kpi-value">${fmtMoney(tn('credit_disponible'))}</div></div>
       ${kpiMarginCell}
     </div>
+    ${stats.globalBalances ? `<div class="amount-note">${esc(GLOBAL_BALANCES_NOTE)}</div>` : ''}
 
     <div class="section-title">Activité de la période — CA net décroissant</div>
     <table>
@@ -840,6 +909,7 @@ export function buildTiersBalanceReport(
       <div class="kpi-cell"><div class="kpi-label">Dettes fournisseurs</div><div class="kpi-value">${fmtMoney(supDue)}</div></div>
       <div class="kpi-cell"><div class="kpi-label">Position nette</div><div class="kpi-value">${fmtMoney(netPosition)}</div></div>
     </div>
+    ${stats.globalBalances ? `<div class="amount-note">${esc(GLOBAL_BALANCES_NOTE)}</div>` : ''}
 
     <div class="section-title">Créances clients — Situation au ${esc(asOfLabel)}${hideZero ? ' (soldes non nuls)' : ''}</div>
     <table>

@@ -804,6 +804,7 @@ export function printXReport80(opts: {
   movements?: XReportMovement[];
   controls?: XReportControl[];
   regularizations?: XReportRegularization[];
+  registerLabel?: string;
 }) {
   const movements = opts.movements || [];
   const controls = opts.controls || [];
@@ -871,6 +872,7 @@ ${tenantHeader80Compact(opts.tenant)}
 <hr class="hr-solid" />
 <div class="doc-label">X DE CAISSE · ${esc(opts.sessionId.slice(0, 8).toUpperCase())}</div>
 <div class="line">${esc(opts.siteName)} · ${esc(opts.cashier)}</div>
+${opts.registerLabel ? `<div class="line">Caisse : ${esc(opts.registerLabel)}</div>` : ''}
 <div class="line">Ouv. ${fmtDt(opts.openedAt)}${opts.closedAt ? ` · Clôt. ${fmtDt(opts.closedAt)}` : ''}</div>
 <div class="line">Imprimé ${fmtDt(new Date())}</div>
 <hr class="hr" />

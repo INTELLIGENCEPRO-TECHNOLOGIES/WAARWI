@@ -91,7 +91,7 @@ export default function UpdateNotification() {
   });
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-white flex flex-col animate-in fade-in duration-300">
+    <div data-app-overlay className="fixed inset-0 z-[9999] bg-white flex flex-col animate-in fade-in duration-300">
       {/* Top bar */}
       <div className="shrink-0 border-b border-neutral-100">
         <div className="max-w-2xl mx-auto w-full px-6 sm:px-8 h-16 flex items-center justify-between">

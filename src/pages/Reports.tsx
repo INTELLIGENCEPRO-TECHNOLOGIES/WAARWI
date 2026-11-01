@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Printer, Eye, Calendar, ChevronDown, Store, Check, ArrowLeft, RefreshCw,
 } from 'lucide-react';
@@ -8,6 +8,11 @@ import { useToast } from '../context/ToastContext';
 import { PremiumDateRangePicker } from '../components/PremiumDateRangePicker';
 import { ReportScreen } from '../components/reports/ReportScreen';
 import { ReportSkeleton } from '../components/reports/reportPrimitives';
+import {
+  CashScopeFilters, EMPTY_SCOPE, parseScopeOptions, scopeLabel,
+  type CashScopeOptions, type CashScopeSelection,
+} from '../components/reports/CashScopeFilters';
+import { registerText } from '../lib/cashSession';
 import {
   a4Style, buildReportHtml, printDoc, isoDate, labelRange,
   fetchCashStats, fetchArticleStats, fetchCustomerStats,
@@ -46,6 +51,8 @@ export function Reports() {
   const [selectedSiteId, setSelectedSiteId] = useState<string | 'all'>('all');
   const [savingMargin, setSavingMargin] = useState(false);
   const [hideZeroBalances, setHideZeroBalances] = useState(false);
+  const [scopeOptions, setScopeOptions] = useState<CashScopeOptions | null>(null);
+  const [scope, setScope] = useState<CashScopeSelection>(EMPTY_SCOPE);
 
   const [showMargin, setShowMargin] = useState<boolean>(() =>
     !!(tenant as any)?.settings?.show_margin_in_reports
@@ -95,7 +102,41 @@ export function Reports() {
     business_type: (tenant as any)?.business_type,
   };
 
-  // Load only the active report; refresh on tab / period / site change.
+  const selectSite = (id: string | 'all') => {
+    setSelectedSiteId(id);
+    setScope(EMPTY_SCOPE);
+    setSiteDropOpen(false);
+  };
+
+  useEffect(() => {
+    if (!tenant) return;
+    let cancelled = false;
+    (async () => {
+      const { data: raw, error } = await supabase.rpc('get_cash_scope_options', {
+        p_site_id: siteIdParam ?? null,
+        p_cash_register_id: scope.registerId || null,
+        p_user_id: scope.userId || null,
+        p_from: isoDate(range.from),
+        p_to: isoDate(range.to),
+      });
+      if (cancelled) return;
+      const opts = error ? null : parseScopeOptions(raw);
+      setScopeOptions(opts);
+      if (!opts) { setScope(s => (s.registerId || s.userId || s.sessionId ? EMPTY_SCOPE : s)); return; }
+      setScope(s => {
+        const next = { ...s };
+        if (next.registerId && !opts.registers.some(r => r.id === next.registerId)) next.registerId = '';
+        if (next.userId && !opts.cashiers.some(c => c.id === next.userId)) next.userId = '';
+        if (next.sessionId && !opts.sessions.some(x => x.id === next.sessionId)) next.sessionId = '';
+        return next.registerId === s.registerId && next.userId === s.userId && next.sessionId === s.sessionId ? s : next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [tenant?.id, selectedSiteId, scope.registerId, scope.userId, range.from, range.to]);
+
+  const multi = !!scopeOptions;
+
+  // Load only the active report; refresh on tab / period / site / scope change.
   useEffect(() => {
     if (!tenant) return;
     const token = ++reqToken.current;
@@ -109,7 +150,14 @@ export function Reports() {
       try {
         let next: ReportData;
         if (reportType === 'cash') {
-          next = { type: 'cash', stats: await fetchCashStats(tenantId, siteIdParam, from, to) };
+          next = {
+            type: 'cash',
+            stats: await fetchCashStats(tenantId, siteIdParam, from, to, {
+              cashRegisterId: scope.registerId || undefined,
+              userId: scope.userId || undefined,
+              cashSessionId: scope.sessionId || undefined,
+            }),
+          };
         } else if (reportType === 'articles') {
           next = { type: 'articles', rows: await fetchArticleStats(tenantId, siteIdParam, from, to) };
         } else if (reportType === 'customers') {
@@ -132,7 +180,7 @@ export function Reports() {
         if (token === reqToken.current) setLoading(false);
       }
     })();
-  }, [tenant?.id, reportType, range.from, range.to, selectedSiteId]);
+  }, [tenant?.id, reportType, range.from, range.to, selectedSiteId, scope.registerId, scope.userId, scope.sessionId]);
 
   const reload = () => setRange(r => ({ ...r }));
 
@@ -159,9 +207,51 @@ export function Reports() {
   const def = REPORT_DEFS.find(d => d.key === reportType)!;
   const matches = data && data.type === reportType;
 
+  const [extraRegisters, setExtraRegisters] = useState<Record<string, { code: string; name: string }>>({});
+  useEffect(() => {
+    if (!data || data.type !== 'cash' || !data.stats.parCaisse || !scopeOptions) return;
+    const known = new Set(scopeOptions.registers.map(r => r.id));
+    const missing = data.stats.parCaisse
+      .filter(b => b.bucket === 'register' && b.id && !known.has(b.id) && !extraRegisters[b.id])
+      .map(b => b.id as string);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data: rows, error } = await supabase.rpc('get_cash_register_labels', { p_ids: missing });
+      if (cancelled) return;
+      const list = !error && Array.isArray(rows) ? rows as { id: string; code: string; name: string }[] : [];
+      setExtraRegisters(prev => {
+        const next = { ...prev };
+        for (const id of missing) next[id] = next[id] || { code: '', name: '' };
+        for (const r of list) next[r.id] = { code: r.code, name: r.name };
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [data, scopeOptions, extraRegisters]);
+
+  const viewData = useMemo<ReportData | null>(() => {
+    if (!data || data.type !== 'cash' || !data.stats.parCaisse || !scopeOptions) return data;
+    const names = new Map<string, string>(Object.entries(extraRegisters).map(([id, r]) => [id, registerText(r.code, r.name)]));
+    for (const r of scopeOptions.registers) names.set(r.id, registerText(r.code, r.name));
+    return {
+      ...data,
+      stats: {
+        ...data.stats,
+        parCaisse: data.stats.parCaisse.map(b =>
+          b.bucket === 'register' && b.id && names.has(b.id) ? { ...b, label: names.get(b.id)! } : b),
+      },
+    };
+  }, [data, scopeOptions, extraRegisters]);
+
+  const headerLabel = scopeOptions
+    ? [siteName, reportType === 'cash' ? scopeLabel(scopeOptions, scope) : scopeLabel(scopeOptions, EMPTY_SCOPE)]
+        .filter(Boolean).join(' · ')
+    : siteName;
+
   const buildHtml = () => {
-    if (!matches) return '';
-    return buildReportHtml(data!, tenantMeta, range, showMargin, siteName, hideZeroBalances);
+    if (!matches || !viewData) return '';
+    return buildReportHtml(viewData, tenantMeta, range, showMargin, headerLabel, hideZeroBalances);
   };
 
   const handlePrint = () => {
@@ -248,7 +338,7 @@ export function Reports() {
                   <div className="fixed inset-0 z-20" onClick={() => setSiteDropOpen(false)} />
                   <div className="absolute top-full left-0 mt-1 z-30 bg-white border border-neutral-200 shadow-lg py-1 min-w-[180px]">
                     <button
-                      onClick={() => { setSelectedSiteId('all'); setSiteDropOpen(false); }}
+                      onClick={() => selectSite('all')}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] transition-colors ${selectedSiteId === 'all' ? 'text-neutral-900 font-semibold' : 'text-neutral-600 hover:bg-neutral-50'}`}
                     >
                       <span>Tous les sites</span>
@@ -256,7 +346,7 @@ export function Reports() {
                     </button>
                     {sites.map(s => (
                       <button key={s.id}
-                        onClick={() => { setSelectedSiteId(s.id); setSiteDropOpen(false); }}
+                        onClick={() => selectSite(s.id)}
                         className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] transition-colors ${selectedSiteId === s.id ? 'text-neutral-900 font-semibold' : 'text-neutral-600 hover:bg-neutral-50'}`}
                       >
                         <span className="truncate">{s.name}</span>
@@ -267,6 +357,10 @@ export function Reports() {
                 </>
               )}
             </div>
+          )}
+
+          {multi && reportType === 'cash' && scopeOptions && (
+            <CashScopeFilters options={scopeOptions} value={scope} onChange={setScope} />
           )}
 
           {def.hasMargin && (
@@ -344,8 +438,11 @@ export function Reports() {
                 </button>
               </div>
             )}
-            {matches ? (
-              <ReportScreen data={data!} showMargin={showMargin} hideZero={hideZeroBalances} range={range} />
+            {multi && headerLabel && (
+              <p className="mb-4 text-[11px] text-neutral-500 leading-relaxed">{headerLabel}</p>
+            )}
+            {matches && viewData ? (
+              <ReportScreen data={viewData} showMargin={showMargin} hideZero={hideZeroBalances} range={range} />
             ) : loading ? (
               <ReportSkeleton />
             ) : (

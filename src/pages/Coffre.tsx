@@ -4,6 +4,7 @@ import {
   PlusCircle, MinusCircle, ArrowUpRight, Wallet, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
@@ -245,11 +246,9 @@ export function Coffre() {
     const amt = Number(transferAmount);
     if (!Number.isFinite(amt) || amt <= 0) { error('Montant invalide'); return; }
     if (amt > balance) { error('Montant supérieur au solde du coffre'); return; }
-    const { data: session } = await supabase
-      .from('cash_sessions').select('id')
-      .eq('tenant_id', tenant!.id).eq('site_id', currentSite.id).eq('status', 'open')
-      .maybeSingle();
-    if (!session?.id) { error('Ouvrez une session de caisse avant d’effectuer ce transfert.'); return; }
+    const cashCtx = await getOperationalCashContext(currentSite.id);
+    const session = cashCtx.session;
+    if (!session?.id) { error(missingSessionMessage(cashCtx, 'Ouvrez une session de caisse avant d’effectuer ce transfert.')); return; }
     setBusy(true);
     const { error: e } = await supabase.rpc('transfer_vault_to_cash', {
       p_site_id: currentSite.id,

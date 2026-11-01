@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { loadFormDraft, clearFormDraft, saveFormDraft, scheduleSaveFormDraft, type OpInProgress } from '../../lib/draftRecovery';
 import { Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { getOperationalCashContext, missingSessionMessage } from '../../lib/cashSession';
 import { useApp } from '../../context/AppContext';
 import { usePermissions } from '../../lib/permissions';
 import { useToast } from '../../context/ToastContext';
@@ -473,10 +474,9 @@ export function InvoiceEditorInstance({
 
       let sessionId: string | null = null;
       if (!isCredit) {
-        const { data: sess } = await supabase.from('cash_sessions')
-          .select('id').eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-          .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-        sessionId = sess?.id || null;
+        const cashCtx = await getOperationalCashContext(currentSite.id);
+        sessionId = cashCtx.session?.id || null;
+        if (!sessionId && createTotalPaid > 0 && (cashCtx.multiEnabled || cashCtx.error)) throw new Error(missingSessionMessage(cashCtx, ''));
       }
 
       const status = isCredit
@@ -512,28 +512,27 @@ export function InvoiceEditorInstance({
         })),
       });
       if (itemsErr) {
-        await supabase.from('sales').delete().eq('id', sale.id);
-        error(itemsErr.message || 'Erreur lors de l\'enregistrement des lignes de facture');
+        const { error: discardErr } = await supabase.rpc('discard_failed_billing_sale', { p_sale_id: sale.id });
+        error((itemsErr.message || 'Erreur lors de l\'enregistrement des lignes de facture')
+          + (discardErr ? ` — la facture ${invNum} n'a pas pu être annulée : ${discardErr.message}` : ''));
         return;
       }
 
-      if (!isCredit) {
-        let sessionPayTotal = 0;
-        for (const p of payList) {
-          await supabase.from('sale_payments').insert({
-            tenant_id: tenant.id, sale_id: sale.id,
-            cash_session_id: sessionId,
+      if (!isCredit && payList.some(p => p.amount > 0)) {
+        const { data: payRes, error: payErr } = await supabase.rpc('register_initial_billing_payments', {
+          p_sale_id: sale.id,
+          p_cash_session_id: sessionId,
+          p_payments: payList.map(p => ({
             payment_method_id: p.method_id || null,
-            method_name: p.method_name, amount: p.amount,
+            amount: p.amount,
             reference: p.reference || '',
-          });
-          if (sessionId) sessionPayTotal += p.amount;
-        }
-        if (sessionId && sessionPayTotal > 0) {
-          await supabase.rpc('increment_session_theoretical', {
-            p_session_id: sessionId,
-            p_amount: sessionPayTotal,
-          });
+          })),
+        });
+        if (payErr || !payRes?.success) {
+          const { error: discardErr } = await supabase.rpc('discard_failed_billing_sale', { p_sale_id: sale.id });
+          error((payErr?.message || 'Erreur lors de l\'enregistrement des règlements')
+            + (discardErr ? ` — la facture ${invNum} n'a pas pu être annulée : ${discardErr.message}` : ''));
+          return;
         }
       }
 

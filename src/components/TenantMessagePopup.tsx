@@ -88,7 +88,7 @@ export function TenantMessagePopup() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+    <div data-app-overlay className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-premium animate-slide-up">
         <div className={`relative overflow-hidden bg-gradient-to-br ${cfg.bg} p-6 text-white`}>
           <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl -translate-y-10 translate-x-10" />

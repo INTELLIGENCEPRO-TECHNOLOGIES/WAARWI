@@ -7,6 +7,8 @@ import {
   Download, Upload, Scale, RotateCcw, Save, Search, ChevronDown, TrendingUp
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getOperationalCashContext, missingSessionMessage } from '../lib/cashSession';
+import { fetchPrepayAvailable } from '../lib/customerCredit';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
@@ -222,7 +224,7 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
       supabase.from('sales').select('customer_id, total, paid, status').eq('tenant_id', tenant.id).not('customer_id', 'is', null).neq('status', 'cancelled').neq('status', 'deleted').limit(5000),
       supabase.from('supplier_orders').select('supplier_id, total, paid, status').eq('tenant_id', tenant.id).neq('status', 'cancelled').limit(5000),
       supabase.from('supplier_payments').select('supplier_id, amount').eq('tenant_id', tenant.id).limit(5000),
-      supabase.from('customer_prepayments').select('customer_id, amount, amount_used').eq('tenant_id', tenant.id).limit(5000),
+      fetchPrepayAvailable(null).then(map => ({ map, err: null as Error | null })).catch((err: Error) => ({ map: {} as Record<string, number>, err })),
       supabase.from('sale_returns').select('customer_id, total, credit_used').eq('tenant_id', tenant.id).eq('status', 'approved').eq('refund_method', 'avoir').limit(5000),
     ]);
     setCustomers((cRes.data || []) as any);
@@ -241,12 +243,8 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
     });
     setDueMap(dm); setPaidMap(pm); setTotalMap(tm);
 
-    const ppm: Record<string, number> = {};
-    (prepaysRes.data || []).forEach((p: any) => {
-      const unused = Math.max(0, Number(p.amount) - Number(p.amount_used));
-      if (p.customer_id) ppm[p.customer_id] = (ppm[p.customer_id] || 0) + unused;
-    });
-    setPrepayMap(ppm);
+    if (prepaysRes.err) error(`Acomptes clients indisponibles : ${prepaysRes.err.message}`);
+    setPrepayMap(prepaysRes.map);
 
     const avm: Record<string, number> = {};
     (avoirsRes.data || []).forEach((a: any) => {
@@ -756,13 +754,16 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
     let freshBalance = currentBalance;
     if (tenant) {
       const [ppRes, avRes, balRes] = await Promise.all([
-        supabase.from('customer_prepayments').select('amount, amount_used').eq('tenant_id', tenant.id).eq('customer_id', id),
+        type === 'customer'
+          ? fetchPrepayAvailable([id]).then(map => ({ amount: map[id] || 0, err: null as Error | null })).catch((err: Error) => ({ amount: prepay, err }))
+          : Promise.resolve({ amount: 0, err: null as Error | null }),
         supabase.from('sale_returns').select('total, credit_used').eq('tenant_id', tenant.id).eq('customer_id', id).eq('status', 'approved').eq('refund_method', 'avoir'),
         type === 'customer'
           ? supabase.from('customers').select('balance').eq('id', id).maybeSingle()
           : supabase.from('suppliers').select('balance').eq('id', id).maybeSingle(),
       ]);
-      freshPrepay = (ppRes.data || []).reduce((a: number, p: any) => a + Math.max(0, Number(p.amount) - Number(p.amount_used)), 0);
+      if (ppRes.err) error(`Acompte disponible indisponible : ${ppRes.err.message}`);
+      freshPrepay = ppRes.amount;
       freshAvoir = (avRes.data || []).reduce((a: number, r: any) => a + Math.max(0, Number(r.total) - Number(r.credit_used)), 0);
       if (balRes.data) freshBalance = Number(balRes.data.balance || 0);
     }
@@ -1833,6 +1834,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
   }, [tenant?.id]);
   const creatorName = (userId?: string | null) => (userId && profileNames[userId]) || 'Utilisateur non renseigné';
   const [prepayments, setPrepayments] = useState<{ id: string; amount: number; amount_used: number; method_name: string; reference: string; created_at: string }[]>([]);
+  const [prepayAvailable, setPrepayAvailable] = useState(0);
   const [avoirs, setAvoirs] = useState<{ id: string; return_number: string; total: number; credit_used: number; created_at: string; refunded_at?: string | null }[]>([]);
   const [balanceAdjs, setBalanceAdjs] = useState<{ id: string; amount: number; note: string; created_at: string }[]>([]);
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; reason: string; reference: string; created_at: string }[]>([]);
@@ -1867,6 +1869,13 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
       supabase.from('cash_movements').select('id, amount, reason, reference, created_at').eq('tenant_id', tenant.id).eq('customer_id', c.id).eq('kind', 'customer_loan').order('created_at', { ascending: false }),
     ]);
     setPrepayments(prepays || []);
+    try {
+      const ppMap = await fetchPrepayAvailable([c.id]);
+      setPrepayAvailable(ppMap[c.id] || 0);
+    } catch (e: any) {
+      setPrepayAvailable(0);
+      error(`Acompte disponible indisponible : ${e.message}`);
+    }
     setAvoirs(avoirRows || []);
     setBalanceAdjs(adjRows || []);
     setWithdrawals(withdrawalRows || []);
@@ -1897,10 +1906,10 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     const paid = realPayments
       .filter(p => validIds.has(p.sale_id))
       .reduce((a, p) => a + Number(p.amount), 0);
-    const unusedPrepay = prepayments.reduce((a, p) => a + Math.max(0, Number(p.amount) - Number(p.amount_used)), 0);
+    const unusedPrepay = prepayAvailable;
     const unusedAvoir = avoirs.reduce((a, av) => a + Math.max(0, Number(av.total) - Number(av.credit_used)), 0);
     return { total, paid, due: total - paid - unusedPrepay, unusedPrepay, unusedAvoir };
-  }, [sales, realPayments, prepayments, avoirs]);
+  }, [sales, realPayments, prepayAvailable, avoirs]);
 
   const unpaidSales = useMemo(() => {
     const paidBySale: Record<string, number> = {};
@@ -2038,11 +2047,9 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     const dup = payments.find(p => Number(p.amount) === amt && Math.abs(now - new Date(p.created_at).getTime()) < 60000);
     if (dup) { toast(`Règlement de ${formatFCFA(amt)} effectué il y a moins d'une minute — vérifiez qu'il ne s'agit pas d'un doublon.`, 'info'); }
     setPaying(true);
-    const { data: sess } = await supabase.from('cash_sessions')
-      .select('id')
-      .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-      .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-    if (!sess) { setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
+    const cashCtx = await getOperationalCashContext(currentSite.id);
+    const sess = cashCtx.session;
+    if (!sess) { setPaying(false); error(missingSessionMessage(cashCtx, "La caisse doit être ouverte d'abord")); return; }
 
     let e: any = null;
     if (paySale === '__balance__') {
@@ -3194,11 +3201,9 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
       reload();
       return;
     }
-    const { data: sess } = await supabase.from('cash_sessions')
-      .select('id, opening_amount, theoretical_amount')
-      .eq('tenant_id', tenant.id).eq('site_id', currentSite.id)
-      .eq('status', 'open').order('opened_at', { ascending: false }).limit(1).maybeSingle();
-    if (!sess) { setPaying(false); error("La caisse doit être ouverte d'abord"); return; }
+    const cashCtx = await getOperationalCashContext(currentSite.id);
+    const sess = cashCtx.session;
+    if (!sess) { setPaying(false); error(missingSessionMessage(cashCtx, "La caisse doit être ouverte d'abord")); return; }
     const available = Number(sess.opening_amount || 0) + Number(sess.theoretical_amount || 0);
     if (available < amt) { setPaying(false); error('Solde caisse insuffisant'); return; }
     const { error: e } = await supabase.rpc('register_supplier_payment', {

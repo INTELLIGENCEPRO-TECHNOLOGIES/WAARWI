@@ -9,6 +9,7 @@ import { Auth } from './pages/Auth';
 import { Shell, type Route } from './components/Shell';
 import { Dashboard } from './pages/Dashboard';
 import { TenantMessagePopup } from './components/TenantMessagePopup';
+import { MultiCashAnnouncement } from './components/MultiCashAnnouncement';
 import { PendingApproval } from './components/PendingApproval';
 import UpdateNotification from './components/UpdateNotification';
 import { useToast } from './context/ToastContext';
@@ -319,6 +320,10 @@ function Inner() {
   useEffect(() => { if (route === 'supplier_orders') setSupplierOrdersMounted(true); }, [route]);
   const [tiersMounted, setTiersMounted] = useState(false);
   useEffect(() => { if (route === 'tiers') setTiersMounted(true); }, [route]);
+  const [settingsEntry, setSettingsEntry] = useState({ n: 0, toRegisters: false });
+  useEffect(() => {
+    if (route !== 'settings') setSettingsEntry(e => (e.toRegisters ? { ...e, toRegisters: false } : e));
+  }, [route]);
 
 
   const enabled: string[] = Array.isArray((tenant as any)?.enabled_modules)
@@ -386,7 +391,7 @@ function Inner() {
         {route === 'acc_tiers' && <Accounting section="tiers" />}
         {route === 'acc_search' && <Accounting section="search" />}
         {route === 'acc_cloture' && <Accounting section="cloture" />}
-        {route === 'settings' && <Settings />}
+        {route === 'settings' && <Settings key={settingsEntry.n} initialTab={settingsEntry.toRegisters ? 'cash_registers' : undefined} />}
         {route === 'reports' && <Reports />}
         {route === 'ipm' && <IPM />}
         {route === 'warranties' && <Warranties />}
@@ -395,6 +400,8 @@ function Inner() {
         {route === 'platform_admin' && isSuperAdmin && <PlatformAdmin />}
       </Suspense>
       <TenantMessagePopup />
+      <MultiCashAnnouncement key={`${user.id}:${tenant?.id || ''}`} route={route}
+        onConfigure={() => { setSettingsEntry(e => ({ n: e.n + 1, toRegisters: true })); setRoute('settings'); }} />
       <UpdateNotification />
     </Shell>
     </>

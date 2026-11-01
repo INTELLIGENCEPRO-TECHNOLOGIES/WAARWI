@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight } from 'lucide-react';
+import { Loader2, Save, Building2, Store, CreditCard, Tag, BookOpen, Plus, CreditCard as Edit2, Trash2, Car, Upload, X, ImageOff, ShoppingBag, ExternalLink, Copy, Check, Globe, ToggleLeft, ToggleRight, AlertCircle, Users, Shield, KeyRound, Image as ImageIcon, Database, ArrowLeft, Package, Settings as SettingsIcon, Link2, Share2, FileText, Layers, Printer, AlertTriangle, TrendingDown, Search, MoreHorizontal, Info, Warehouse, ChevronRight, Monitor } from 'lucide-react';
 import { BackupTab } from '../components/BackupTab';
 import { AccountingPlanIO } from '../components/AccountingPlanIO';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { PermissionsTab } from '../components/PermissionsTab';
+import { CashRegistersTab } from '../components/CashRegistersTab';
 import { DocumentSettingsTab } from '../components/DocumentSettingsTab';
 import { RepCommissionSettingsTab } from '../components/RepCommissionSettingsTab';
 import { ExpenseCategoriesTab } from '../components/ExpenseCategoriesTab';
@@ -20,14 +21,16 @@ import { getBrandLogo } from '../lib/brandLogos';
 import { desktopAutoFocus } from '../lib/device';
 import { usePermissions } from '../lib/permissions';
 
-type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription' | 'rep_commissions' | 'expense_types';
+type TabKey = 'home' | 'company' | 'boutique' | 'users' | 'permissions' | 'sites' | 'payments' | 'categories' | 'brands' | 'accounting' | 'stock' | 'tiers' | 'pricing_tiers' | 'backup' | 'documents' | 'ticket_header' | 'subscription' | 'rep_commissions' | 'expense_types' | 'cash_registers';
 
 type TileConfig = { k: TabKey; label: string; icon: any; color: string; bg: string };
 
-export function Settings() {
+export function Settings({ initialTab }: { initialTab?: TabKey } = {}) {
   const { refresh, profile, tenant, sites, isOwner } = useApp();
+  const { can } = usePermissions();
+  const canManageRegisters = can('manage_cash_sessions') && can('manage_settings');
   const autoMode = (tenant?.business_type || 'auto_parts') === 'auto_parts';
-  const [tab, setTab] = useState<TabKey>('home');
+  const [tab, setTab] = useState<TabKey>(initialTab || 'home');
 
   const groups: { title: string; tiles: TileConfig[] }[] = [
     {
@@ -38,6 +41,7 @@ export function Settings() {
         { k: 'users', label: 'Utilisateurs', icon: Users, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' },
         { k: 'permissions', label: 'Permissions', icon: Shield, color: 'text-rose-700', bg: 'bg-rose-50/80 border-rose-200' },
         { k: 'sites', label: 'Magasins', icon: Store, color: 'text-emerald-700', bg: 'bg-emerald-50/80 border-emerald-200' },
+        ...(canManageRegisters ? [{ k: 'cash_registers' as TabKey, label: 'Caisses', icon: Monitor, color: 'text-neutral-800', bg: 'bg-neutral-50/80 border-neutral-200' }] : []),
       ],
     },
     {
@@ -118,6 +122,7 @@ export function Settings() {
       {tab === 'users' && <UsersTab />}
       {tab === 'permissions' && <PermissionsTab />}
       {tab === 'sites' && <SitesTab />}
+      {tab === 'cash_registers' && canManageRegisters && <CashRegistersTab />}
       {tab === 'payments' && <PaymentsTab />}
       {tab === 'categories' && <CategoriesTab />}
       {tab === 'brands' && autoMode && <BrandsTab />}

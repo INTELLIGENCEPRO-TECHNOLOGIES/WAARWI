@@ -58,7 +58,7 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, lay
   };
 
   const node = (
-    <div className={`fixed inset-0 ${zCls} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`} style={zStyle}>
+    <div data-app-overlay className={`fixed inset-0 ${zCls} flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in`} style={zStyle}>
       <div className="scrim" onClick={handleScrim} />
       <div className={`relative w-full ${w} bg-[var(--w-surface)] ${variant === 'flat' ? 'flat-modal' : ''} ${fullscreenMobile ? 'rounded-none h-full sm:h-auto sm:max-h-[92vh] sm:rounded-xl' : fullMobile ? 'rounded-none sm:rounded-xl h-full sm:h-auto sm:max-h-[92vh]' : 'rounded-t-xl sm:rounded-xl h-[92vh] sm:h-auto max-h-[92vh]'} shadow-premium animate-sheet-up sm:animate-scale-in flex flex-col ${panelClassName}`}>
         {!fullMobile && !fullscreenMobile && <div className="sm:hidden sheet-handle" />}

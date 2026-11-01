@@ -1,7 +1,7 @@
 import { formatDate } from '../../lib/format';
 import {
-  fmtMoney, fmtNum, pct, fmtRate,
-  type ReportData, type DateRange,
+  fmtMoney, fmtNum, pct, fmtRate, GLOBAL_BALANCES_NOTE,
+  type ReportData, type DateRange, type CashBreakdownRow,
 } from './reportEngine';
 import {
   MetricStrip, SectionTitle, ReportTable, AmountNote, DailyBars, DASH,
@@ -14,6 +14,37 @@ const dashMoney = (n: number) => (n > 0 ? fmtMoney(n) : DASH);
 
 function Row({ children }: { children: React.ReactNode }) {
   return <tr className="hover:bg-neutral-50 transition-colors">{children}</tr>;
+}
+
+function GlobalBalancesNote({ show }: { show: boolean }) {
+  if (!show) return null;
+  return <p className="mt-3 pl-3 border-l-2 border-neutral-300 text-[11px] text-neutral-500 leading-relaxed">{GLOBAL_BALANCES_NOTE}</p>;
+}
+
+function BreakdownTable({ title, head, rows }: { title: string; head: string; rows: CashBreakdownRow[] | null }) {
+  if (!rows) return null;
+  return (
+    <>
+      <SectionTitle>{title}</SectionTitle>
+      <AmountNote />
+      <ReportTable minWidth={520}>
+        <thead>
+          <tr><th className={thCls}>{head}</th><th className={thR}>Sessions</th><th className={thR}>Entrées</th><th className={thR}>Sorties</th><th className={thR}>Net</th></tr>
+        </thead>
+        <tbody>
+          {rows.length ? rows.map((b) => (
+            <Row key={b.key}>
+              <td className={tdCls + (b.bucket === 'no_session' ? ' italic text-neutral-500' : ' font-semibold')}>{b.label}</td>
+              <td className={tdR}>{b.bucket === 'no_session' ? DASH : fmtNum(b.nbSessions)}</td>
+              <td className={tdR}>{b.entrees > 0 ? `+ ${fmtMoney(b.entrees)}` : DASH}</td>
+              <td className={b.sorties > 0 ? tdR : tdMuted + ' text-right'}>{b.sorties > 0 ? `− ${fmtMoney(b.sorties)}` : DASH}</td>
+              <td className={tdR + ' font-semibold'}>{signed(b.net)}</td>
+            </Row>
+          )) : <tr><td className={tdMuted + ' text-center'} colSpan={5}>Aucun mouvement</td></tr>}
+        </tbody>
+      </ReportTable>
+    </>
+  );
 }
 
 export function ReportScreen({
@@ -120,6 +151,9 @@ function CashScreen({ stats, showMargin }: { stats: Extract<ReportData, { type: 
           )) : <tr><td className={tdMuted + ' text-center'} colSpan={4}>Aucun mouvement</td></tr>}
         </tbody>
       </ReportTable>
+
+      <BreakdownTable title="Ventilation par caisse" head="Caisse" rows={s.parCaisse} />
+      <BreakdownTable title="Ventilation par caissier" head="Caissier" rows={s.parCaissier} />
 
       <SectionTitle note={`Top ${Math.min(50, s.articles.length)}`}>Articles vendus</SectionTitle>
       <AmountNote />
@@ -245,6 +279,7 @@ function CustomersScreen({ stats, showMargin }: { stats: Extract<ReportData, { t
         { label: `Montant dû au ${asOfLabel}`, value: fmtMoney(tn('montant_du')) },
         { label: 'Crédit disponible', value: fmtMoney(tn('credit_disponible')) },
       ]} />
+      <GlobalBalancesNote show={stats.globalBalances} />
 
       <SectionTitle note="CA net décroissant">Activité de la période</SectionTitle>
       <AmountNote />
@@ -552,6 +587,7 @@ function TiersScreen({ stats, hideZero }: { stats: Extract<ReportData, { type: '
         { label: 'Dettes fournisseurs', value: fmtMoney(supDue) },
         { label: 'Position nette', value: signed(netPosition) },
       ]} />
+      <GlobalBalancesNote show={stats.globalBalances} />
 
       <SectionTitle note={hideZero ? 'Soldes non nuls' : undefined}>Créances clients — Situation au {asOfLabel}</SectionTitle>
       <AmountNote />
