@@ -302,7 +302,7 @@ export function Warranties() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Header premium unifié ────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Garanties & IMEI</h1>
         <div className="flex items-center gap-2">
           <Search className="w-4 h-4 text-neutral-400 shrink-0" />

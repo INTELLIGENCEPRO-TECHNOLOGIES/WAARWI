@@ -2161,16 +2161,14 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
           {/* Subscription badge — compact with expiry */}
           {subInfo && (
             <button onClick={() => nav('settings', { target: 'subscription' })} className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity">
-              {!(subInfo.status === 'expired' && subInfo.expiresAt) && (
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                  subInfo.status === 'trial_active' ? 'bg-[var(--w-active)] text-blue-600'
-                    : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
-                    : subInfo.status === 'expired' ? 'bg-red-50 text-red-600'
-                    : 'bg-amber-50 text-amber-600'
-                }`}>
-                  {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
-                </span>
-              )}
+              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                subInfo.status === 'trial_active' ? 'bg-[var(--w-active)] text-blue-600'
+                  : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
+                  : subInfo.status === 'expired' ? 'bg-red-50 text-red-600'
+                  : 'bg-amber-50 text-amber-600'
+              }`}>
+                {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
+              </span>
               <span className="font-semibold text-neutral-700 max-w-[100px] truncate">{subInfo.planName}</span>
               {subInfo.expiresAt && (
                 <span className={`text-[10px] font-medium ${subInfo.status === 'expired' ? 'text-red-500' : 'text-neutral-400'}`}>

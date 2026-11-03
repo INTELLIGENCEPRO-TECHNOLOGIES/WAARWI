@@ -894,7 +894,7 @@ export function Stock() {
   return (
     <div className="space-y-3 pb-6">
       {/* ── Page Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-4 sm:px-5 lg:px-8 pb-2 pt-3 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-surface)] space-y-1.5 border-b border-neutral-100">
+      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-2 pt-3 -mt-3 sm:-mt-4 lg:-mt-6 bg-[var(--w-surface)] space-y-1.5 border-b border-neutral-100">
 
         {/* Row 1: Title + stock value + view toggle + More menu */}
         <div className="flex items-center gap-2">
