@@ -709,7 +709,7 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
     <div className="min-h-screen h-screen flex flex-col overflow-hidden bg-white">
       {/* Desktop header */}
       <header
-        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b border-neutral-200 bg-white sticky top-0 z-30 flex-shrink-0`}
+        className={`${(isDashboard && !dashMenuOpen) || isPlatformAdmin ? 'hidden' : 'hidden lg:flex'} items-center h-14 border-b ${isPOS ? 'pos-header-sep' : 'border-neutral-200'} bg-white sticky top-0 z-30 flex-shrink-0`}
       >
         <div className={`flex items-center gap-2.5 px-4 h-full transition-all duration-200 ${sidebarCollapsed ? 'w-[72px]' : ''}`}>
           {brandLogo ? (
@@ -728,14 +728,16 @@ export function Shell({ route, onRoute, children }: { route: Route; onRoute: (r:
           {/* Subscription badge — centered in the empty space */}
           {shellSubInfo && (
             <button onClick={() => onRoute('settings')} className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity">
-              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                shellSubInfo.status === 'trial_active' ? 'bg-[var(--w-active)] text-blue-600'
-                  : shellSubInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
-                  : shellSubInfo.status === 'expired' ? 'bg-transparent text-red-600'
-                  : 'bg-amber-50 text-amber-600'
-              }`}>
-                {shellSubInfo.status === 'trial_active' ? 'Essai' : shellSubInfo.status === 'active' ? 'Actif' : shellSubInfo.status === 'expired' ? 'Expiré' : 'En attente'}
-              </span>
+              {!(shellSubInfo.status === 'expired' && shellSubInfo.expiresAt) && (
+                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                  shellSubInfo.status === 'trial_active' ? 'bg-[var(--w-active)] text-blue-600'
+                    : shellSubInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
+                    : shellSubInfo.status === 'expired' ? 'bg-transparent text-red-600'
+                    : 'bg-amber-50 text-amber-600'
+                }`}>
+                  {shellSubInfo.status === 'trial_active' ? 'Essai' : shellSubInfo.status === 'active' ? 'Actif' : shellSubInfo.status === 'expired' ? 'Expiré' : 'En attente'}
+                </span>
+              )}
               <span className="font-semibold text-neutral-700 max-w-[100px] truncate">{shellSubInfo.planName}</span>
               {shellSubInfo.expiresAt && (
                 <span className={`text-[10px] font-medium ${shellSubInfo.status === 'expired' ? 'text-red-500' : 'text-neutral-400'}`}>

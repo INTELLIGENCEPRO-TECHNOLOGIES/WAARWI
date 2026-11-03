@@ -84,6 +84,15 @@ type SessionSale = {
   user_id?: string | null;
 };
 
+function PosCardImage({ url, alt }: { url: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) return <div className="pos-card-noimg w-full h-full" aria-hidden="true" />;
+  return (
+    <img src={url} alt={alt} loading="lazy" onError={() => setFailed(true)}
+      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center', margin: 0, padding: 0 }} />
+  );
+}
+
 function printXReport(
   session: CashSession & { opening_note?: string; closing_note?: string },
   controls: ControlLine[],
@@ -953,7 +962,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
       created_at: sale.created_at,
       total: sale.total,
       discount: sale.discount,
-      items: sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount })),
+      items: sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, internal_ref: i.internal_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount })),
       payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
       customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
       docHeader: docHeaderOverride !== undefined ? docHeaderOverride : buildDocHeader(),
@@ -961,7 +970,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const printSaleInvoice = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }, docHeaderOverride?: Record<string, string | null> | null, issuedByOverride?: string) => {
-    const items = sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount }));
+    const items = sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, internal_ref: i.internal_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     const paid = sale.payments.reduce((s, p) => s + p.amount, 0);
     printDocumentA4({
@@ -3406,11 +3415,10 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     <>
     <div className="flex-1 flex flex-col overflow-hidden w-full min-h-0" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-top))' }}>
       {/* ── Unified command bar ─────────────────────────────────────── */}
-      <div className="pos-command-bar shrink-0 relative z-20 border-b border-[var(--w-separator)]">
+      <div className="pos-command-bar shrink-0 relative z-20">
         {/* ═══ DESKTOP ═══ */}
         <div className="hidden lg:flex items-center h-[52px] px-2 gap-1">
-          {/* Search — underline style */}
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 h-9 mx-1 self-end">
+          <div className="pos-search flex items-center gap-2 flex-1 min-w-0 h-9 mx-1 px-2.5">
             <Search className="w-4 h-4 text-[var(--w-text-muted)] shrink-0" />
             <input
               value={search}
@@ -3450,9 +3458,8 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               </div>
             );
           })()}
-          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0" />
-          {/* Category */}
-          <button onClick={() => setCategoryPickerOpen(true)} className={`chip ${categoryId ? 'text-brand-700' : ''}`} title="Catégorie">
+          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
+          <button onClick={() => setCategoryPickerOpen(true)} className={`chip ${categoryId ? 'chip-active' : ''}`} title="Catégorie">
             <Tag className="w-3.5 h-3.5" />
             <span className="hidden xl:inline max-w-[100px] truncate">{categoryId ? (categories.find(c => c.id === categoryId)?.name || 'Cat.') : 'Catégorie'}</span>
             {categoryId && <button onClick={e => { e.stopPropagation(); setCategoryId(''); }} className="ml-0.5 hover:text-red-500"><X className="w-3 h-3" /></button>}
@@ -3472,17 +3479,29 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               <Car className="w-3.5 h-3.5 text-brand-700" /><span className="hidden xl:inline">Véhicule</span>
             </button>
           )}
-          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 ml-auto" />
-          {/* ── Session actions ── */}
+          <div className="w-px h-5 bg-[var(--w-separator)] shrink-0 mx-1" />
           <button onClick={openTickets} className="chip" data-label="Tickets"><List className="w-3.5 h-3.5" /><span className="hidden xl:inline">Tickets</span></button>
           {can('pos_returns') && <button onClick={openReturn} className="chip" data-label="Retour"><RotateCcw className="w-3.5 h-3.5" /><span className="hidden xl:inline">Retour</span></button>}
           {can('pos_cash_movement') && <button onClick={openMovement} className="chip" data-label="Mouvement"><ArrowDownRight className="w-3.5 h-3.5" /><span className="hidden xl:inline">Mouv.</span></button>}
           <button onClick={holdCart} className="chip" data-label="Pause"><Pause className="w-3.5 h-3.5" /><span className="hidden xl:inline">Pause</span></button>
           {/* Session popover button */}
           <div className="relative">
-            <button onClick={() => setSessionPopOpen(v => !v)} className="chip font-bold" data-label="Session">
-              <span>Session</span>{multiCash && ((session as any)?.register_code || (session as any)?.register_name) && <span title={registerText((session as any).register_code, (session as any).register_name)} className="text-[11px] px-1.5 py-0.5 rounded bg-neutral-900 text-white leading-none max-w-[12rem] truncate">{registerLabel((session as any).register_code, (session as any).register_name).primary}</span>}<ChevronDown className={`w-3 h-3 transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
-            </button>
+            {(() => {
+              const reg = multiCash && ((session as any)?.register_code || (session as any)?.register_name);
+              return (
+                <button onClick={() => setSessionPopOpen(v => !v)} className={`pos-session-btn ml-1 ${sessionPopOpen ? 'is-open' : ''}`} aria-expanded={sessionPopOpen}>
+                  {reg ? (
+                    <span className="flex flex-col items-start min-w-0 leading-tight">
+                      <span className="text-[10px] font-medium text-[var(--w-text-muted)]">Session</span>
+                      <span title={registerText((session as any).register_code, (session as any).register_name)} className="text-xs font-bold text-[var(--w-text)] max-w-[10rem] truncate">{registerLabel((session as any).register_code, (session as any).register_name).primary}</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-[var(--w-text)]">Session</span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-[var(--w-text-muted)] transition-transform ${sessionPopOpen ? 'rotate-180' : ''}`} />
+                </button>
+              );
+            })()}
             {sessionPopOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSessionPopOpen(false)} />
@@ -3635,13 +3654,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                       className="product-card disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <div className="relative aspect-[4/3] overflow-hidden" style={{ background: '#FFFFFF', margin: 0, padding: 0 }}>
-                        {a.image_url ? (
-                          <img src={a.image_url} alt={a.name} loading="lazy" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center', margin: 0, padding: 0 }} />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Package className="w-7 h-7 text-neutral-300" />
-                          </div>
-                        )}
+                        <PosCardImage key={a.image_url || ''} url={a.image_url} alt={a.name} />
                         {tracked && can('view_stock_levels') && (
                           <span className={`absolute top-1 right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${!a._stockLoaded ? 'bg-neutral-300 text-white' : a.stock_available <= 0 ? (allowNeg ? 'bg-orange-500 text-white' : 'bg-red-500 text-white') : low ? 'bg-amber-500 text-white' : 'bg-white/90 text-neutral-700 border border-neutral-200'} shadow-sm num`}>
                             {!a._stockLoaded ? '...' : a.stock_available <= 0 ? (allowNeg ? '×0' : 'Rupture') : `×${a.stock_available}`}

@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
+import { getDocPaperFormat, setDocPaperFormat, type DocPaperFormat } from '../lib/print';
 
 export type DocType = 'invoice' | 'quote' | 'supplier_order' | 'credit_note';
 
@@ -89,6 +90,13 @@ export function DocumentSettingsTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<DocSettings>(DEFAULT_DOC_SETTINGS);
+  const [paperFormat, setPaperFormat] = useState<DocPaperFormat>(getDocPaperFormat);
+
+  const choosePaperFormat = (f: DocPaperFormat) => {
+    setPaperFormat(f);
+    setDocPaperFormat(f);
+    success(`Format d'impression : ${f}`);
+  };
 
   const activityName = (tenant?.business_activity_type_name || '').toLowerCase().trim();
   const showImeiFields = IMEI_ACTIVITY_TYPES.some(t => activityName.includes(t));
@@ -176,6 +184,21 @@ export function DocumentSettingsTab() {
 
   return (
     <div className="space-y-0">
+      <div className="py-4 border-b border-neutral-200">
+        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Format d'impression</h3>
+        <p className="text-[10px] text-neutral-500 mb-3">Choisissez ici le format du document, puis sélectionnez le même papier dans la fenêtre d'impression. S'applique aux factures, devis et bons de commande sur cet appareil, échelle 100 %.</p>
+        <div className="inline-flex rounded-lg border border-neutral-200 p-0.5 bg-neutral-50">
+          {(['A4', 'A5'] as DocPaperFormat[]).map(f => (
+            <button
+              key={f}
+              onClick={() => { if (paperFormat !== f) choosePaperFormat(f); }}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${paperFormat === f ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Doc type tabs */}
       <div className="flex gap-0 border-b border-neutral-200 -mx-1 overflow-x-auto scrollbar-hide">
         {DOC_TYPES.map(dt => {

@@ -2104,7 +2104,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
     const tenantPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
     const items = data.items.map(i => ({
       name: i.name, supplier_ref: null,
-      oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity),
+      oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity),
       unit_price: Number(i.unit_price), discount: Number(i.discount || 0),
     }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
@@ -3244,7 +3244,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     const tenantPrint: PrintTenant = buildPrintTenantForSite(tenant, currentSite);
     const items = data.items.map(i => ({
       name: i.name, supplier_ref: i.supplier_ref || null,
-      oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity_ordered),
+      oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity_ordered),
       unit_price: Number(i.unit_price), discount: 0,
     }));
     const subtotal = items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);

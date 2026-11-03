@@ -124,6 +124,7 @@ export function TicketHeaderConfigTab() {
 
   const tenantPreview: any = selectedSite ? { ...tenant, ...Object.fromEntries(Object.entries(selectedSite).filter(([_, v]) => v != null && v !== '')) } : (tenant || {});
   const previewActivity = (tenantPreview.business_activity_type_name || '').trim();
+  const showOem = a4Config.show_oem_ref ?? tenant?.business_type === 'auto_parts';
 
   const previewValue = (key: TicketHeaderItem['key']): string => {
     switch (key) {
@@ -343,6 +344,23 @@ export function TicketHeaderConfigTab() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* OEM references */}
+          <div className="py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-neutral-800">Afficher les références OEM</div>
+              <p className="text-[10px] text-neutral-500 mt-0.5">Sur les factures, devis, bons et tickets. Utile surtout pour les pièces automobiles.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showOem}
+              onClick={() => setA4Config(prev => ({ ...prev, show_oem_ref: !showOem }))}
+              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${showOem ? 'bg-neutral-900' : 'bg-neutral-300'}`}
+            >
+              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${showOem ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+            </button>
           </div>
 
           {/* A4 preview */}

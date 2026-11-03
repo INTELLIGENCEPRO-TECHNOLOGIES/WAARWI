@@ -1,6 +1,8 @@
 import { BUSINESS_TYPE_LABELS, mergeTicketHeaderConfig, mergeA4HeaderConfig } from './types';
 import type { TicketHeaderItem, TicketHeaderSize, A4HeaderConfig, A4LogoPosition } from './types';
 import { cashMovementLabel, cashMovementSign } from './cashMovements';
+import { measurePageMetrics, paginateByHeight, estimatePageMetrics } from './printPaginate';
+import type { PageMetrics } from './printPaginate';
 import type { CashMovementKind } from './cashMovements';
 
 export type PrintTenant = {
@@ -67,10 +69,25 @@ export type PrintItem = {
   name: string;
   supplier_ref?: string | null;
   oem_ref?: string | null;
+  internal_ref?: string | null;
   quantity: number;
   unit_price: number;
   discount?: number;
 };
+
+export function showsOemRefs(t: PrintTenant): boolean {
+  return mergeA4HeaderConfig(t.a4_header_config).show_oem_ref ?? t.business_type === 'auto_parts';
+}
+
+// An OEM equal to the internal reference is an import artefact, not a manufacturer reference.
+function withVisibleOemRefs(items: PrintItem[], t: PrintTenant): PrintItem[] {
+  const show = showsOemRefs(t);
+  return items.map(i => {
+    const oem = (i.oem_ref || '').trim();
+    const hide = !show || !oem || oem === (i.internal_ref || '').trim();
+    return hide ? { ...i, oem_ref: null } : i;
+  });
+}
 
 export type PrintPayment = { method_name: string; amount: number };
 
@@ -302,7 +319,8 @@ export function renderA4Header(opts: A4HeaderOpts): string {
       </div>`;
   }
 
-  return `<div class="a4h-header">${headerInner}</div>`;
+  const wideMeta = (opts.docNumber?.length ?? 0) > 16 || opts.docTitle.length > 18;
+  return `<div class="a4h-header${wideMeta ? ' a4h-wide-meta' : ''}">${headerInner}</div>`;
 }
 
 export const a4HeaderCss = `
@@ -317,7 +335,7 @@ export const a4HeaderCss = `
   .a4h-company { font-weight: 900; color: #000; line-height: 1.15; }
   .a4h-activity { text-transform: uppercase; letter-spacing: 1px; color: #000; margin-top: 2px; }
   .a4h-info-line { color: #000; margin-top: 1px; }
-  .a4h-meta { text-align: right; min-width: 160px; shrink: 0; }
+  .a4h-meta { text-align: right; min-width: 160px; flex: 0 0 auto; max-width: 55%; }
   .a4h-title { font-size: 13px; font-weight: 800; color: #000; text-transform: uppercase; letter-spacing: 0.5px; }
   .a4h-number { font-size: 18px; font-weight: 900; color: #000; margin-top: 3px; font-variant-numeric: tabular-nums; }
   .a4h-date { font-size: 10px; font-weight: 600; color: #000; margin-top: 2px; }
@@ -410,26 +428,31 @@ function printHtml(html: string, delayMs = 300) {
 // All text is pure black, no grey, no opacity, optimized for low-quality thermal printers
 const printFontLink = '<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">';
 
+// Paper is 80mm but most 80mm printers only print ~72mm centred: content stays inside that zone.
 const ticketStyle = `
   @page { margin: 0; size: 80mm auto; }
   @media print {
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    html, body { margin: 0 !important; }
-    body { padding: 1.5mm 2mm !important; width: 80mm !important; }
+    html { width: 80mm !important; margin: 0 !important; padding: 0 !important; }
+    body { width: 72mm !important; margin: 0 auto !important; padding: 1.5mm 0 !important; }
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { width: 80mm; background: #fff; }
   body {
     font-family: 'Helvetica Neue', Arial, sans-serif;
     font-size: 13px;
-    width: 80mm;
-    padding: 1.5mm 2mm;
+    width: 72mm;
+    margin: 0 auto;
+    padding: 1.5mm 0;
     color: #000000;
     line-height: 1.4;
     background: #fff;
+    overflow-wrap: break-word;
   }
+  img { max-width: 100%; }
   .center { text-align: center; }
   .logo-wrap { display: flex; justify-content: center; margin-bottom: 6px; }
-  .logo-wrap img { max-width: 48mm; max-height: 22mm; object-fit: contain; }
+  .logo-wrap img { max-width: 48mm; height: auto; max-height: 22mm; object-fit: contain; }
   .shop-name {
     text-align: center;
     font-weight: 900;
@@ -482,11 +505,15 @@ const ticketStyle = `
   .info-row {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
+    gap: 3mm;
     font-size: 11.5px;
     margin-top: 3px;
     font-weight: 600;
     color: #000000;
   }
+  .info-row > :first-child { flex: 0 0 auto; }
+  .info-row > :last-child:not(:first-child) { flex: 1 1 auto; min-width: 0; text-align: right; overflow-wrap: anywhere; }
   .section {
     font-size: 11px;
     font-weight: 800;
@@ -516,24 +543,28 @@ const ticketStyle = `
     align-items: baseline;
     margin-top: 3px;
     font-size: 12px;
-    gap: 4px;
-    flex-wrap: wrap;
+    gap: 3mm;
   }
+  .item-line > :first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
   .item-qty { font-weight: 900; font-size: 13px; color: #000000; }
   .item-pu { font-weight: 600; font-size: 11.5px; color: #000000; }
-  .item-total { font-weight: 900; font-size: 14px; white-space: nowrap; color: #000000; }
+  .item-total { flex: 0 0 auto; font-weight: 900; font-size: 14px; white-space: nowrap; text-align: right; color: #000000; }
   .row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     font-size: 12px;
     padding: 2px 0;
-    gap: 4px;
-    flex-wrap: wrap;
+    gap: 3mm;
     color: #000000;
     font-weight: 600;
   }
-  .row span { white-space: nowrap; }
+  .row > :first-child { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  .row > :last-child:not(:first-child) { flex: 0 0 auto; white-space: nowrap; text-align: right; }
+  .ctl { padding: 3px 0 4px; border-bottom: 1px dashed #000000; }
+  .ctl:last-of-type { border-bottom: 0; }
+  .ctl-name { font-size: 12px; font-weight: 800; overflow-wrap: anywhere; }
+  .ctl .row { padding: 0 0 0 3mm; font-size: 11px; }
   .row.total {
     font-size: 16px;
     font-weight: 900;
@@ -602,7 +633,7 @@ export function printTicket80(
   const totalPaid = sale.payments.reduce((s, p) => s + p.amount, 0);
   const change = Math.max(0, totalPaid - sale.total);
   const subtotal = sale.items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-  const itemsHtml = sale.items
+  const itemsHtml = withVisibleOemRefs(sale.items, tenant)
     .map(i => {
       const lineTotal = i.quantity * i.unit_price - (i.discount || 0);
       return `<div class="item">
@@ -844,16 +875,17 @@ export function printXReport80(opts: {
 ${[...movementGroups].map(([kind, g]) =>
     `<div class="row"><span>${esc(cashMovementLabel(kind))} (${g.count})</span><span>${cashMovementSign(kind)}${fmtMoney(g.amount)}</span></div>`
   ).join('')}
-<div class="row"><span>Entrées / Sorties</span><span>+${fmtMoney(mvIncome + mvPrepay + mvVaultIn)} / -${fmtMoney(mvExpense + mvRefund + mvWithdrawal + mvLoan + mvVaultOut)}</span></div>
+<div class="row"><span>Total entrées</span><span>+${fmtMoney(mvIncome + mvPrepay + mvVaultIn)}</span></div>
+<div class="row"><span>Total sorties</span><span>-${fmtMoney(mvExpense + mvRefund + mvWithdrawal + mvLoan + mvVaultOut)}</span></div>
 <div class="row total"><span>Net caisse</span><span>${fmtMoney(netTotal)} FCFA</span></div>
 ` : '';
 
   const controlsHtml = controls.length > 0 ? `
 <hr class="hr" />
-<div class="section">Contrôle (théo. / compté / écart)</div>
+<div class="section">Contrôle de caisse</div>
 ${controls.map(c => {
     const diff = Number(c.difference_amount ?? (c.counted_amount - c.theoretical_amount));
-    return `<div class="row"><span>${esc(c.method_name)}</span><span>${fmtMoney(c.theoretical_amount)} / ${fmtMoney(c.counted_amount)} / ${diff >= 0 ? '+' : ''}${fmtMoney(diff)}</span></div>`;
+    return `<div class="ctl"><div class="ctl-name">${esc(c.method_name)}</div><div class="row"><span>Théorique</span><span>${fmtMoney(c.theoretical_amount)}</span></div><div class="row"><span>Compté</span><span>${fmtMoney(c.counted_amount)}</span></div><div class="row"><span>Écart</span><span><strong>${diff >= 0 ? '+' : ''}${fmtMoney(diff)}</strong></span></div></div>`;
   }).join('')}
 <div class="row total"><span>Écart total</span><span>${variance >= 0 ? '+' : ''}${fmtMoney(variance)} FCFA</span></div>
 ` : '';
@@ -984,8 +1016,125 @@ const a4Style = `
   .waarwi-brand-footer { margin-top: 8px; padding-top: 5px; border-top: 0.75px dashed #000; text-align: center; font-size: 8.5px; color: #000; font-weight: 600; letter-spacing: 0.2px; }
 `;
 
-export function printDocumentA4(opts: {
+// Frame from the item headers down to the totals, for commercial documents (A4 and A5).
+const commercialBlockCss = `
+  .commercial-block { flex: 1 1 auto; display: flex; flex-direction: column; border: 1px solid #000; }
+  .commercial-block table { margin-bottom: 0; }
+  .commercial-block tbody tr:last-child td { border-bottom: 0; }
+  .cb-fill { flex: 1 1 auto; }
+  .cb-totals { display: flex; justify-content: flex-end; border-top: 1px solid #000; page-break-inside: avoid; break-inside: avoid; }
+  .cb-totals .financial-box { border: 0; border-left: 1px solid #000; border-radius: 0; overflow: visible; }
+  .fin-row span:last-child { margin-left: auto; text-align: right; }
+  .page-tail { flex: 0 0 auto; }
+`;
+
+// Paged invoices (A4 and A5) share one layout; each format only sets its paper, margins and scale factors.
+// fs scales type (pt), sp vertical spacing (mm), w widths (mm). A5 is the reference at 1/1/1.
+type PagedFormat = {
+  paper: string;
+  marginMm: number;
+  widthMm: number;
+  heightMm: number;
+  fs: number;
+  sp: number;
+  w: number;
+  fullHeaderEveryPage: boolean;
+  maskedTotalsOnEveryPage: boolean;
+  estimate: { charsPerLine: number; scale: number };
+};
+
+const A5_FORMAT: PagedFormat = {
+  paper: 'A5 portrait', marginMm: 7, widthMm: 148, heightMm: 210, fs: 1, sp: 1, w: 1,
+  fullHeaderEveryPage: false, maskedTotalsOnEveryPage: false, estimate: { charsPerLine: 34, scale: 1 },
+};
+const A4_FORMAT: PagedFormat = {
+  paper: 'A4 portrait', marginMm: 10, widthMm: 210, heightMm: 297, fs: 10 / 8.5, sp: 1.3, w: 1.42,
+  fullHeaderEveryPage: true, maskedTotalsOnEveryPage: true, estimate: { charsPerLine: 43, scale: 1.2 },
+};
+
+const contentWidth = (f: PagedFormat) => f.widthMm - 2 * f.marginMm;
+const contentHeight = (f: PagedFormat) => f.heightMm - 2 * f.marginMm;
+
+// The page number is printed inside the document, so the inherited @page counter is switched off.
+function pagedDocCss(f: PagedFormat): string {
+  const n = (v: number) => String(Number(v.toFixed(2)));
+  const pt = (v: number) => `${n(v * f.fs)}pt`;
+  const mm = (v: number) => `${n(v * f.sp)}mm`;
+  const wmm = (v: number) => `${n(v * f.w)}mm`;
+  return `
+  @page { size: ${f.paper}; margin: ${f.marginMm}mm; @bottom-right { content: none; } }
+  html, body { height: auto; }
+  body { font-size: ${pt(8.5)}; line-height: 1.3; }
+  .invoice-page { min-height: ${n(contentHeight(f) - 3)}mm; }
+  .commercial-block tbody tr:last-child td { border-bottom: 0.5pt solid #000; }
+  .doc-pageno { flex: 0 0 auto; text-align: right; font-size: ${pt(6.5)}; font-weight: 700; margin-top: ${mm(1)}; }
+  .a4h-header { margin-bottom: ${mm(2)}; padding-bottom: ${mm(1.5)}; border-bottom-width: 1.2px; }
+  .a4h-logo-above { margin-bottom: ${mm(1.2)}; }
+  .a4h-body { gap: ${wmm(3)}; }
+  .a4h-info { flex: 1 1 auto; min-width: 0; line-height: 1.22; overflow-wrap: anywhere; }
+  .a4h-company { line-height: 1.1; }
+  .a4h-activity { margin-top: ${mm(0.3)}; letter-spacing: 0.6px; }
+  .a4h-info-line { margin-top: 0; }
+  .a4h-info-line[style*="margin-bottom"] { margin-bottom: ${mm(1)} !important; }
+  .a4h-left-block { gap: ${wmm(2.5)}; }
+  .a4h-right-block { flex: 0 1 auto; max-width: 64%; min-width: 0; flex-direction: row-reverse; align-items: flex-start; gap: ${wmm(2.5)}; }
+  .a4h-logo { max-width: ${wmm(24)} !important; max-height: ${wmm(18)} !important; }
+  .a4h-meta { min-width: 0; max-width: none; flex: 0 1 auto; }
+  .a4h-body > .a4h-meta { max-width: 55%; }
+  .a4h-title { font-size: ${pt(9)}; letter-spacing: 0.4px; line-height: 1.15; }
+  .a4h-number { font-size: ${pt(12)}; margin-top: ${mm(0.4)}; line-height: 1.15; overflow-wrap: anywhere; }
+  .a4h-date { font-size: ${pt(8)}; margin-top: ${mm(0.3)}; }
+  .a4h-status { font-size: ${pt(6.5)}; padding: ${mm(0.3)} ${wmm(1.4)}; margin-top: ${mm(0.8)}; border-width: 1px; }
+  .doc-cont { display: flex; justify-content: space-between; align-items: baseline; gap: ${wmm(3)}; margin-bottom: ${mm(2)}; padding-bottom: ${mm(1.2)}; border-bottom: 1.2px solid #000; font-size: ${pt(8)}; font-weight: 600; }
+  .doc-cont strong { font-size: ${pt(9)}; font-weight: 800; overflow-wrap: anywhere; }
+  .doc-cont span:last-child { text-align: right; white-space: nowrap; }
+  .parties { gap: ${wmm(2)}; margin-bottom: ${mm(2)}; }
+  .party { padding: ${mm(1.1)} ${wmm(2)}; border-width: 1px; border-radius: 2px; }
+  .party h3 { font-size: ${pt(6.5)}; margin-bottom: ${mm(0.6)}; padding-bottom: ${mm(0.4)}; border-bottom-width: 0.5pt; letter-spacing: 0.8px; }
+  .party p { font-size: ${pt(8.5)}; line-height: 1.25; margin-bottom: 0; overflow-wrap: anywhere; }
+  th { padding: ${mm(1)} ${wmm(1.5)}; font-size: ${pt(6.8)}; letter-spacing: 0.3px; line-height: 1.2; }
+  th:nth-child(1) { width: 58%; }
+  th:nth-child(2) { width: 7%; }
+  th:nth-child(3) { width: 14%; }
+  th:nth-child(4) { width: 21%; }
+  th:nth-child(n+2), td:nth-child(n+2) { padding-left: ${wmm(1)}; padding-right: ${wmm(1)}; }
+  td { padding: ${mm(0.9)} ${wmm(1.5)}; font-size: ${pt(8.5)}; line-height: 1.25; border-bottom-width: 0.5pt; }
+  td .bold { font-size: ${pt(8.5)}; font-weight: 700; overflow-wrap: anywhere; }
+  td.center { font-size: ${pt(8.5)}; }
+  td.right { white-space: nowrap; }
+  td.right.bold { font-size: ${pt(8.5)}; }
+  .item-ref { font-size: ${pt(7)}; line-height: 1.2; margin-top: ${mm(0.2)}; overflow-wrap: anywhere; }
+  .cb-totals { align-items: stretch; }
+  .cb-pay { flex: 1 1 auto; min-width: 0; padding: ${mm(1.2)} ${wmm(2)}; }
+  .cb-pay h3 { font-size: ${pt(6.5)}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; padding-bottom: ${mm(0.4)}; margin-bottom: ${mm(0.6)}; border-bottom: 0.5pt solid #000; }
+  .cb-pay .p-row { font-size: ${pt(8)}; padding: ${mm(0.4)} 0; gap: ${wmm(2)}; }
+  .financial-box { width: ${wmm(66)}; flex: 0 0 ${wmm(66)}; }
+  .fin-row { padding: ${mm(0.9)} ${wmm(2.2)}; font-size: ${pt(8.5)}; gap: ${wmm(2)}; }
+  .fin-row.grand { font-size: ${pt(11)}; padding: ${mm(1.3)} ${wmm(2.2)}; }
+  .fin-row.due-row { font-size: ${pt(9)}; }
+  .cb-strip { display: flex; justify-content: space-between; gap: ${wmm(3)}; border-top: 1px solid #000; padding: ${mm(1)} ${wmm(2.2)}; font-size: ${pt(8.5)}; font-weight: 700; background: #f5f5f5; }
+  .cb-strip span:last-child { white-space: nowrap; }
+  .footer-note { font-size: ${pt(7.5)}; margin-top: ${mm(1.5)}; }
+  .footer { font-size: ${pt(6.5)}; margin-top: ${mm(1.5)}; padding-top: ${mm(1)}; border-top-width: 0.75pt; gap: ${wmm(3)}; }
+  .waarwi-brand-footer { font-size: ${pt(6)}; margin-top: ${mm(0.8)}; padding-top: ${mm(0.6)}; }
+`;
+}
+
+export type DocPaperFormat = 'A4' | 'A5';
+const DOC_FORMAT_KEY = 'waarwi_doc_paper_format';
+
+// Paper size depends on the printer attached to this device, so the choice is stored per device.
+export function getDocPaperFormat(): DocPaperFormat {
+  try { return localStorage.getItem(DOC_FORMAT_KEY) === 'A5' ? 'A5' : 'A4'; } catch { return 'A4'; }
+}
+
+export function setDocPaperFormat(format: DocPaperFormat) {
+  try { localStorage.setItem(DOC_FORMAT_KEY, format); } catch { /* storage unavailable */ }
+}
+
+type CommercialDocOpts = {
   tenant: PrintTenant;
+  format?: DocPaperFormat;
   docLabel: string;
   docNumber: string;
   docDate: string;
@@ -1002,72 +1151,65 @@ export function printDocumentA4(opts: {
   cashier?: string;
   issuedBy?: string;
   docHeader?: { delivery_date?: string | null; reference?: string | null; warranty?: string | null; imei?: string | null; representative?: string | null } | null;
-}) {
-  const t = opts.tenant;
+};
 
-  // Payment status
+function paymentStatusLabel(opts: CommercialDocOpts, paidAmount: number): string | undefined {
+  if (!['FACTURE', 'BON DE COMMANDE'].includes(opts.docLabel)) return undefined;
+  return paidAmount >= opts.total ? 'PAYÉE' : paidAmount > 0 ? 'PARTIELLEMENT PAYÉE' : 'NON PAYÉE';
+}
+
+export function printDocumentA4(opts: CommercialDocOpts) {
+  opts = { ...opts, items: withVisibleOemRefs(opts.items, opts.tenant) };
+  const format = (opts.format ?? getDocPaperFormat()) === 'A5' ? A5_FORMAT : A4_FORMAT;
+  void printPagedDocument(opts, format);
+}
+
+// Pages are cut from measured heights so totals, payments and footer close the last page.
+// A5 intermediate pages carry only their page subtotal; A4 ones repeat the totals box with masked amounts.
+async function printPagedDocument(opts: CommercialDocOpts, f: PagedFormat) {
+  const t = opts.tenant;
   const paidAmount = typeof opts.paid === 'number' ? opts.paid : (opts.payments || []).reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(0, opts.total - paidAmount);
-  const isInvoiceType = ['FACTURE', 'BON DE COMMANDE'].includes(opts.docLabel);
-  let statusBadge = '';
-  if (isInvoiceType) {
-    if (paidAmount >= opts.total) {
-      statusBadge = '<span class="status-badge status-paid">PAYÉE</span>';
-    } else if (paidAmount > 0) {
-      statusBadge = '<span class="status-badge status-partial">PARTIELLEMENT PAYÉE</span>';
-    } else {
-      statusBadge = '<span class="status-badge status-unpaid">NON PAYÉE</span>';
-    }
-  }
+  const status = paymentStatusLabel(opts, paidAmount);
+  const isInvoiceType = status !== undefined;
+  const hasDiscount = !!(opts.discount && opts.discount > 0);
+  const payments = opts.payments || [];
 
-  // Payments detail
-  const paymentsHtml = opts.payments && opts.payments.length
-    ? `<div class="payments-section">
-        <h3>Détail des règlements</h3>
-        ${opts.payments.map(p => `<div class="p-row"><span>${esc(p.method_name)}</span><span><strong>${fmtMoney(p.amount)} FCFA</strong></span></div>`).join('')}
-      </div>`
-    : '';
-
-  const extraMeta = [
-    ...(opts.extraMeta || []),
-    ...(opts.docHeader?.reference ? [{ label: 'Reference', value: opts.docHeader.reference }] : []),
-    ...(opts.docHeader?.delivery_date ? [{ label: 'Date de livraison', value: new Date(opts.docHeader.delivery_date).toLocaleDateString('fr-FR') }] : []),
-    ...(opts.docHeader?.warranty ? [{ label: 'Garantie', value: opts.docHeader.warranty }] : []),
-    ...(opts.docHeader?.warranty && opts.docCreatedAt ? [{ label: 'Expiration garantie', value: computeWarrantyExpiry(opts.docCreatedAt, opts.docHeader.warranty) }] : []),
-    ...(opts.docHeader?.imei ? [{ label: 'IMEI / Téléphone', value: opts.docHeader.imei }] : []),
-    ...(opts.docHeader?.representative ? [{ label: 'Représentant', value: opts.docHeader.representative }] : []),
-  ].map(m => `<p>${esc(m.label)} : ${esc(m.value)}</p>`).join('');
-
-  // Split items into pages of max 25 lines, computing per-page subtotal
-  const MAX_ITEMS_PER_PAGE = 25;
-  const itemData = opts.items.map(i => {
+  const rows = opts.items.map(i => {
     const lineTotal = i.quantity * i.unit_price - (i.discount || 0);
-    return { item: i, lineTotal };
+    return {
+      lineTotal,
+      html: `<tr data-m="row">
+      <td>
+        <div class="bold">${esc(i.name)}</div>
+        ${i.supplier_ref || i.oem_ref ? `<div class="item-ref">${[
+          i.supplier_ref ? `Réf : ${esc(i.supplier_ref)}` : '',
+          i.oem_ref ? `OEM : ${esc(i.oem_ref)}` : '',
+        ].filter(Boolean).join(' · ')}</div>` : ''}
+      </td>
+      <td class="center">${i.quantity}</td>
+      <td class="right">${fmtMoney(i.unit_price)}</td>
+      <td class="right bold">${fmtMoney(lineTotal)}</td>
+    </tr>`,
+    };
   });
-  const pages: { items: typeof itemData; pageSubtotal: number }[] = [];
-  for (let i = 0; i < itemData.length; i += MAX_ITEMS_PER_PAGE) {
-    const chunk = itemData.slice(i, i + MAX_ITEMS_PER_PAGE);
-    pages.push({ items: chunk, pageSubtotal: chunk.reduce((s, d) => s + d.lineTotal, 0) });
-  }
-  if (pages.length === 0) pages.push({ items: [], pageSubtotal: 0 });
+  const itemsTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
 
-  const tableHead = `<thead><tr>
+  const tableHead = `<thead data-m="thead"><tr>
     <th>Désignation</th>
     <th class="center">Qté</th>
-    <th class="right">Prix unitaire</th>
+    <th class="right">P.U.</th>
     <th class="right">Montant</th>
   </tr></thead>`;
 
-  // Shared header HTML — identical on every page
   const headerHtml = renderA4Header({
     tenant: t,
     docTitle: opts.docLabel,
     docNumber: `N° ${opts.docNumber}`,
     docDate: `Date : ${opts.docDate}`,
-    status: statusBadge ? (paidAmount >= opts.total ? 'PAYÉE' : paidAmount > 0 ? 'PARTIELLEMENT PAYÉE' : 'NON PAYÉE') : undefined,
+    status,
   });
 
-  // Shared parties HTML — identical on every page
   const partiesHtml = `<div class="parties">
     <div class="party">
       <h3>Facturé par</h3>
@@ -1081,68 +1223,87 @@ export function printDocumentA4(opts: {
     </div>
   </div>`;
 
-  const footerHtml = `${opts.footerNote ? `<div class="footer-note">${esc(opts.footerNote)}</div>` : ''}
+  const paymentsHtml = payments.length
+    ? `<h3>Détail des règlements</h3>${payments.map(p => `<div class="p-row"><span>${esc(p.method_name)}</span><span><strong>${fmtMoney(p.amount)} FCFA</strong></span></div>`).join('')}`
+    : '';
+
+  const MASK = 'XXXXXX';
+  const totalsHtml = (subtotalLabel: string, subtotal: number, masked: boolean) => `<div class="cb-totals">
+    <div class="cb-pay">${masked ? '' : paymentsHtml}</div>
+    <div class="financial-box">
+      <div class="fin-row subtotal-fin"><span>${subtotalLabel}</span><span>${fmtMoney(subtotal)} FCFA</span></div>
+      ${hasDiscount ? `<div class="fin-row discount"><span>Remise</span><span>${masked ? MASK : `- ${fmtMoney(opts.discount || 0)} FCFA`}</span></div>` : ''}
+      <div class="fin-row grand"><span>TOTAL TTC</span><span>${masked ? MASK : `${fmtMoney(opts.total)} FCFA`}</span></div>
+      ${isInvoiceType ? `
+        <div class="fin-row paid-row"><span>Règlement</span><span>${masked ? MASK : `${fmtMoney(paidAmount)} FCFA`}</span></div>
+        <div class="fin-row due-row"><span>Reste à payer</span><span>${masked ? MASK : `${fmtMoney(remaining)} FCFA`}</span></div>
+      ` : ''}
+    </div>
+  </div>`;
+
+  const footerHtml = `<div class="page-tail">${opts.footerNote ? `<div class="footer-note">${esc(opts.footerNote)}</div>` : ''}
   <div class="footer">
     <span>${esc(t.name)}${t.ninea ? ` — NINEA : ${esc(t.ninea)}` : ''}</span>
     <span>Imprimé le ${new Date().toLocaleString('fr-FR')}</span>
   </div>
-  ${waarwiFooterA4()}`;
+  ${waarwiFooterA4()}</div>`;
 
-  // Build unified financial block — real values on last page, XXXXXX on others
-  let pagesHtml = '';
-  pages.forEach((page, idx) => {
-    const isLast = idx === pages.length - 1;
-    const masked = !isLast;
+  const contHeader = (pageNo: number, count: number) => `<div class="doc-cont">
+    <strong>${esc(t.name)}</strong>
+    <span>${esc(opts.docLabel)} N° ${esc(opts.docNumber)} · ${esc(opts.docDate)} · Page ${pageNo}/${count}</span>
+  </div>`;
 
-    const subtotalVal = `${fmtMoney(page.pageSubtotal)} FCFA`;
-    const totalVal = masked ? 'XXXXXX' : `${fmtMoney(opts.total)} FCFA`;
-    const discountVal = masked ? 'XXXXXX' : (opts.discount && opts.discount > 0 ? `- ${fmtMoney(opts.discount)} FCFA` : '');
-    const paidVal = masked ? 'XXXXXX' : `${fmtMoney(paidAmount)} FCFA`;
-    const dueVal = masked ? 'XXXXXX' : `${fmtMoney(remaining)} FCFA`;
+  const closingHtml = (pageNo: number, count: number, pageSubtotal: number) => {
+    if (f.maskedTotalsOnEveryPage) {
+      return totalsHtml(count > 1 ? `Sous-total page ${pageNo}/${count}` : 'Sous-total', count > 1 ? pageSubtotal : itemsTotal, pageNo !== count);
+    }
+    return pageNo === count
+      ? totalsHtml(count > 1 ? 'Sous-total général' : 'Sous-total', itemsTotal, false)
+      : `<div class="cb-strip"><span>Suite page suivante</span><span>Sous-total de cette page : ${fmtMoney(pageSubtotal)} FCFA</span></div>`;
+  };
 
-    const itemsBody = page.items.map(d => `<tr>
-      <td>
-        <div class="bold">${esc(d.item.name)}</div>
-        ${d.item.supplier_ref ? `<div class="item-ref">Réf : ${esc(d.item.supplier_ref)}</div>` : ''}
-        ${d.item.oem_ref ? `<div class="item-ref">OEM : ${esc(d.item.oem_ref)}</div>` : ''}
-      </td>
-      <td class="center">${d.item.quantity}</td>
-      <td class="right">${fmtMoney(d.item.unit_price)} FCFA</td>
-      <td class="right bold">${fmtMoney(d.lineTotal)} FCFA</td>
-    </tr>`).join('');
-
-    const financialBoxHtml = `<div class="financial-summary">
-      <div class="financial-box">
-        <div class="fin-row subtotal-fin"><span>Sous-total</span><span>${subtotalVal}</span></div>
-        ${opts.discount && opts.discount > 0 ? `<div class="fin-row discount"><span>Remise</span><span>${discountVal}</span></div>` : ''}
-        <div class="fin-row grand"><span>TOTAL TTC</span><span>${totalVal}</span></div>
-        ${isInvoiceType ? `
-          <div class="fin-row paid-row"><span>Règlement</span><span>${paidVal}</span></div>
-          <div class="fin-row due-row"><span>Reste à payer</span><span>${dueVal}</span></div>
-        ` : ''}
+  const renderPage = (idx: number[], pageNo: number, count: number) => {
+    const isLast = pageNo === count;
+    const pageSubtotal = idx.reduce((s, k) => s + rows[k].lineTotal, 0);
+    const fullHeader = pageNo === 1 || f.fullHeaderEveryPage;
+    return `<div class="invoice-page" data-m="page">
+      ${fullHeader ? headerHtml + partiesHtml : contHeader(pageNo, count)}
+      <div class="commercial-block">
+        <table>${tableHead}<tbody>${idx.map(k => rows[k].html).join('')}</tbody></table>
+        <div class="cb-fill"></div>
+        ${closingHtml(pageNo, count, pageSubtotal)}
       </div>
+      ${isLast ? footerHtml : ''}
+      <div class="doc-pageno">Page ${pageNo} / ${count}</div>
     </div>`;
+  };
 
-    pagesHtml += `<div class="invoice-page">
-      ${headerHtml}
-      ${partiesHtml}
-      <table>
-        ${tableHead}
-        <tbody>${itemsBody}</tbody>
-      </table>
-      <div class="page-bottom-block">
-        ${financialBoxHtml}
-        ${isLast ? paymentsHtml : ''}
-        ${isLast ? footerHtml : ''}
-      </div>
-    </div>`;
-  });
-
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.docLabel)} ${esc(opts.docNumber)}</title>
-<style>${a4Style}</style>${printFontLink}</head><body>
-${pagesHtml}
+  const docHtml = (body: string, extraCss = '') => `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(opts.docLabel)} ${esc(opts.docNumber)}</title>
+<style>${a4Style}${commercialBlockCss}${pagedDocCss(f)}${extraCss}</style>${printFontLink}</head><body>
+${body}
 </body></html>`;
-  printHtml(html, 400);
+
+  const all = rows.map((_, k) => k);
+  let metrics: PageMetrics;
+  try {
+    // Probe: full first page (all rows + totals + tail), then an empty intermediate page with its closing block.
+    metrics = await measurePageMetrics(docHtml(renderPage(all, 1, 1) + renderPage([], 2, 3), '.invoice-page { min-height: 0; }'), contentWidth(f));
+  } catch {
+    const headerConfig = mergeTicketHeaderConfig(t.header_config);
+    metrics = estimatePageMetrics({
+      rows: opts.items.map(i => ({ nameLength: String(i.name || '').length, refs: (i.supplier_ref ? 1 : 0) + (i.oem_ref ? 1 : 0) })),
+      headerLines: headerConfig.filter(c => c.key !== 'logo' && c.show && headerFieldValue(t, c.key)).length,
+      payCount: payments.length,
+      hasDiscount,
+      hasPaymentRows: isInvoiceType,
+      hasNote: !!opts.footerNote,
+      fullHeaderEveryPage: f.fullHeaderEveryPage,
+      totalsOnEveryPage: f.maskedTotalsOnEveryPage,
+    }, f.estimate);
+  }
+  // Small safety margin for rounding between screen layout and the print engine.
+  const pages = paginateByHeight(metrics, contentHeight(f) - 2.5);
+  printHtml(docHtml(pages.map((idx, p) => renderPage(idx, p + 1, pages.length)).join('')), 400);
 }
 
 // ── Stock Movement Print (A4) ─────────────────────────────────────────────────

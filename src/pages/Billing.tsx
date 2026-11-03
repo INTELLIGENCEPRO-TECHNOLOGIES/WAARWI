@@ -1023,7 +1023,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   const printQuote = () => {
     if (!quoteDetail || !tenant) return;
-    const items = quoteItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
+    const items = quoteItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     printDocumentA4({
       tenant: tenantForPrint(tenant, currentSite),
@@ -1697,7 +1697,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
 
   const printInvoice = () => {
     if (!invoiceDetail || !tenant) return;
-    const items = invoiceItems.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
+    const items = invoiceItems.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount || 0) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
     printDocumentA4({
       tenant: tenantForPrint(tenant, currentSite),
@@ -2086,7 +2086,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const printReturn = () => {
     if (!returnDetail || !tenant) return;
     const isCredit = returnDetail.refund_method === 'avoir';
-    const items = returnItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price) }));
+    const items = returnItemsDetail.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null, quantity: Number(i.quantity), unit_price: Number(i.unit_price) }));
     const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
     const extra: { label: string; value: string }[] = [];
     if (returnDetail.sales?.sale_number) extra.push({ label: 'Vente liée', value: returnDetail.sales.sale_number });
@@ -3106,7 +3106,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   id: i.id,
                   name: i.name,
                   internal_ref: i.articles?.internal_ref || null,
-                  oem_ref: i.articles?.oem_ref || null,
+                  oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null,
                   quantity: Number(i.quantity),
                   unit_price: Number(i.unit_price),
                   discount: Number(i.discount ?? 0),
@@ -3298,7 +3298,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   id: i.id,
                   name: i.name,
                   internal_ref: i.articles?.internal_ref || null,
-                  oem_ref: i.articles?.oem_ref || null,
+                  oem_ref: i.articles?.oem_ref || null, internal_ref: i.articles?.internal_ref || null,
                   quantity: Number(i.quantity),
                   unit_price: Number(i.unit_price),
                   discount: Number(i.discount ?? 0),

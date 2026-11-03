@@ -92,6 +92,7 @@ export type A4LogoPosition = 'above' | 'left' | 'right';
 export type A4HeaderConfig = {
   logo_position: A4LogoPosition;
   logo_size: TicketHeaderSize;
+  show_oem_ref?: boolean;
 };
 
 export const DEFAULT_A4_HEADER_CONFIG: A4HeaderConfig = {
@@ -106,6 +107,7 @@ export function mergeA4HeaderConfig(stored: A4HeaderConfig | null | undefined): 
   return {
     logo_position: positions.includes(stored.logo_position) ? stored.logo_position : 'above',
     logo_size: sizes.includes(stored.logo_size) ? stored.logo_size : 'md',
+    ...(typeof stored.show_oem_ref === 'boolean' ? { show_oem_ref: stored.show_oem_ref } : {}),
   };
 }
 

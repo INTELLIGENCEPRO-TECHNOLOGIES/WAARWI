@@ -592,6 +592,12 @@ p { line-height: 1.6; }
     transform: translateY(-1px);
     box-shadow: 0 4px 12px -4px rgb(0 0 0 / 0.08);
   }
+  .pos-card-noimg {
+    background: linear-gradient(135deg, #E7E7E7 0%, #FAFAFA 100%);
+  }
+  [data-theme="dark"] .pos-card-noimg {
+    background: linear-gradient(135deg, #2E2E2E 0%, #3A3A3A 100%);
+  }
   .cart-line {
     @apply rounded-xl p-3 flex items-start gap-3 transition-all duration-200;
     background: var(--w-surface);
@@ -600,9 +606,51 @@ p { line-height: 1.6; }
   .cart-line:hover { border-color: var(--w-text-disabled); }
 
   /* ── POS command bar ─────────────────────────────────── */
+  .pos-header-sep { border-bottom-color: #C4C4C4; }
+  [data-theme="dark"] .pos-header-sep { border-bottom-color: #444444; }
   .pos-command-bar {
-    background: var(--w-surface);
+    background: #F5F5F5;
+    border-bottom: 1px solid #DDDDDD;
   }
+  [data-theme="dark"] .pos-command-bar {
+    background: #1C1C1C;
+    border-bottom-color: #333333;
+  }
+  .pos-command-bar .chip:hover,
+  .pos-command-bar .chip-active { background: rgb(0 0 0 / 0.07); }
+  [data-theme="dark"] .pos-command-bar .chip:hover,
+  [data-theme="dark"] .pos-command-bar .chip-active { background: rgb(255 255 255 / 0.08); }
+  .pos-search {
+    background: #FFFFFF;
+    border: 1px solid #DDDDDD;
+    border-radius: 6px;
+    transition: border-color 150ms, box-shadow 150ms;
+  }
+  .pos-search:focus-within {
+    border-color: #111111;
+    box-shadow: 0 0 0 1px #111111;
+  }
+  [data-theme="dark"] .pos-search {
+    background: #262626;
+    border-color: #3A3A3A;
+  }
+  [data-theme="dark"] .pos-search:focus-within {
+    border-color: #E5E5E5;
+    box-shadow: 0 0 0 1px #E5E5E5;
+  }
+  .pos-session-btn {
+    @apply inline-flex items-center gap-2 h-9 pl-2.5 pr-2 rounded-md transition-colors;
+    background: #FFFFFF;
+    border: 1px solid #DDDDDD;
+  }
+  .pos-session-btn:hover,
+  .pos-session-btn.is-open { border-color: #BBBBBB; }
+  [data-theme="dark"] .pos-session-btn {
+    background: #262626;
+    border-color: #3A3A3A;
+  }
+  [data-theme="dark"] .pos-session-btn:hover,
+  [data-theme="dark"] .pos-session-btn.is-open { border-color: #555555; }
   .pos-pop-item {
     @apply flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium transition-colors;
     color: var(--w-text);

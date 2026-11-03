@@ -373,7 +373,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
         items: items.map(i => ({
           name: i.name,
           supplier_ref: null,
-          oem_ref: i.articles?.oem_ref ?? null,
+          oem_ref: i.articles?.oem_ref ?? null, internal_ref: i.articles?.internal_ref ?? null,
           quantity: Number(i.quantity),
           unit_price: Number(i.unit_price),
           discount: Number(i.discount ?? 0),
@@ -392,7 +392,7 @@ export function Sales({ onNavigate }: { onNavigate?: (route: string) => void }) 
     const printItems = items.map(i => ({
       name: i.name,
       supplier_ref: null,
-      oem_ref: i.articles?.oem_ref ?? null,
+      oem_ref: i.articles?.oem_ref ?? null, internal_ref: i.articles?.internal_ref ?? null,
       quantity: Number(i.quantity),
       unit_price: Number(i.unit_price),
       discount: Number(i.discount ?? 0),
