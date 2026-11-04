@@ -138,22 +138,23 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
           )}
           <div className="flex-1 min-w-0">
             {selected ? (
-              <p className="text-sm sm:text-base font-semibold text-black truncate">
-                Supervision · {registerText(selected.register_code, selected.register_name)} · {selected.operator_name} · {selected.site_name}
-              </p>
+              <>
+                <p className="text-xs text-neutral-500">Supervision</p>
+                <p className="text-sm sm:text-base font-semibold text-black break-words leading-tight">
+                  {registerText(selected.register_code, selected.register_name)}
+                </p>
+              </>
             ) : (
-              <p className="text-sm sm:text-base font-semibold text-black">Superviser les caisses</p>
+              <>
+                <p className="text-sm sm:text-base font-semibold text-black">Superviser les caisses</p>
+                <p className="text-xs text-neutral-500">Sessions de vos collaborateurs. Aucune vente ne peut être créée en supervision.</p>
+              </>
             )}
-            <p className="text-xs text-neutral-500 truncate">
-              {selected
-                ? `${isOpen ? 'Ouverte' : 'Clôturée'} · ouverture ${formatDateTime(selected.opened_at)}${selected.closed_at ? ` · clôture ${formatDateTime(selected.closed_at)}` : ''}${selected.closed_by_name ? ` par ${selected.closed_by_name}` : ''} · la session reste à ${selected.operator_name}`
-                : 'Sessions de vos collaborateurs. Aucune vente ne peut être créée en supervision.'}
-            </p>
           </div>
-          <button onClick={() => loadSessions(scope)} className="p-1.5 text-neutral-600 hover:text-black" title="Actualiser">
+          <button onClick={() => loadSessions(scope)} className="shrink-0 p-1.5 text-neutral-600 hover:text-black" title="Actualiser">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={onExit} className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-neutral-700 hover:text-black">
+          <button onClick={onExit} className="shrink-0 flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-neutral-700 hover:text-black">
             <LogOut className="w-3.5 h-3.5" />Quitter
           </button>
         </div>
@@ -172,11 +173,15 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
             {!isOpen && <p className="py-2 text-xs text-neutral-500">Session clôturée : consultation uniquement.</p>}
             <dl className="divide-y divide-neutral-200">
               <Row label="Magasin" value={selected.site_name} />
-              <Row label="Caisse" value={registerText(selected.register_code, selected.register_name)} />
               <Row label="Opérateur" value={selected.operator_name} />
+              <Row label="État" value={isOpen ? 'Ouverte' : 'Clôturée'} />
+              <Row label="Ouverture" value={formatDateTime(selected.opened_at)} />
+              {selected.closed_at && <Row label="Clôture" value={formatDateTime(selected.closed_at)} />}
+              {selected.closed_by_name && <Row label="Clôturée par" value={selected.closed_by_name} />}
               <Row label="Fonds d'ouverture" value={formatFCFA(Number(selected.opening_amount) || 0)} />
               {selected.theoretical_amount != null && !isOpen && <Row label="Solde théorique à la clôture" value={formatFCFA(Number(selected.theoretical_amount) || 0)} />}
             </dl>
+            <p className="pt-3 text-xs text-neutral-500">La session reste attribuée à {selected.operator_name}.</p>
           </>
         ) : (
           <>
@@ -206,7 +211,26 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
                 {scope === 'open' ? 'Aucune caisse ouverte à superviser.' : 'Aucune session clôturée sur les 30 derniers jours.'}
               </p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+                <ul className="sm:hidden divide-y divide-neutral-200">
+                  {visible.map(s => (
+                    <li key={s.id}>
+                      <button onClick={() => { setSelectedId(s.id); setActionError(''); }}
+                        className="w-full text-left py-3 flex items-start justify-between gap-3 active:bg-neutral-50 transition-colors">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-black break-words">{registerText(s.register_code, s.register_name)}</p>
+                          <p className="text-xs text-neutral-600 break-words">{s.operator_name}</p>
+                          <p className="text-xs text-neutral-500 break-words">{s.site_name}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs text-neutral-600">{s.status === 'open' ? 'Ouverte' : 'Clôturée'}</p>
+                          <p className="text-xs text-neutral-500 tabular-nums whitespace-nowrap">{formatDateTime(scope === 'open' ? s.opened_at : (s.closed_at || s.opened_at))}</p>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              <table className="hidden sm:table w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-neutral-500 border-b border-neutral-200">
                     <th className="py-2 pr-3 font-medium">Magasin</th>
@@ -223,11 +247,12 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
                       <td className="py-2.5 pr-3 font-medium text-black">{registerText(s.register_code, s.register_name)}</td>
                       <td className="py-2.5 pr-3 text-neutral-800">{s.operator_name}</td>
                       <td className="py-2.5 pr-3 text-neutral-600">{s.status === 'open' ? 'Ouverte' : 'Clôturée'}</td>
-                      <td className="py-2.5 text-right text-neutral-600 tabular-nums">{formatDateTime(scope === 'open' ? s.opened_at : (s.closed_at || s.opened_at))}</td>
+                      <td className="py-2.5 text-right text-neutral-600 tabular-nums whitespace-nowrap">{formatDateTime(scope === 'open' ? s.opened_at : (s.closed_at || s.opened_at))}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </>
         )}
@@ -245,9 +270,9 @@ export function CashSupervision({ tenantId, methods, customers, onExit }: Props)
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2.5 text-sm">
-      <dt className="text-neutral-500">{label}</dt>
-      <dd className="text-black font-medium text-right truncate">{value}</dd>
+    <div className="flex items-start justify-between gap-4 py-2.5 text-sm">
+      <dt className="shrink-0 text-neutral-500">{label}</dt>
+      <dd className="min-w-0 text-black font-medium text-right break-words">{value}</dd>
     </div>
   );
 }
