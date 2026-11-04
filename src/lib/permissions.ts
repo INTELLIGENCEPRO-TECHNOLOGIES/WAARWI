@@ -288,59 +288,72 @@ const OWNER_ONLY_KEYS: Set<PermissionKey> = new Set([
   'backup_import', 'backup_download', 'backup_delete', 'backup_manage_schedule',
 ]);
 
-export function usePermissions(): { permissions: PermissionMap; loading: boolean; can: (key: PermissionKey) => boolean } {
+type PermState = { key: string; permissions: PermissionMap; error: string | null };
+
+export function usePermissions(): { permissions: PermissionMap; loading: boolean; error: string | null; reload: () => void; can: (key: PermissionKey) => boolean } {
   const { profile, dataTick, isOwner } = useApp();
-  const [permissions, setPermissions] = useState<PermissionMap>(ALL_FALSE);
-  const [loading, setLoading] = useState(true);
+  const ctxKey = profile?.tenant_id && profile?.role ? `${profile.id}|${profile.tenant_id}|${profile.role}|${isOwner ? 1 : 0}` : '';
+  const [state, setState] = useState<PermState>({ key: '', permissions: ALL_FALSE, error: null });
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
-    if (!profile?.tenant_id || !profile?.role) {
-      setPermissions(ALL_FALSE);
-      setLoading(false);
+    if (!ctxKey || !profile) {
+      setState({ key: '', permissions: ALL_FALSE, error: null });
       return;
     }
 
     if (profile.role === 'super_admin') {
-      setPermissions(ALL_TRUE);
-      setLoading(false);
+      setState({ key: ctxKey, permissions: ALL_TRUE, error: null });
       return;
     }
 
     if (profile.role === 'admin') {
-      if (isOwner) {
-        setPermissions(ALL_TRUE);
-      } else {
-        const map = { ...ALL_TRUE };
-        for (const k of OWNER_ONLY_KEYS) map[k] = false;
-        setPermissions(map);
-      }
-      setLoading(false);
+      const map = { ...ALL_TRUE };
+      if (!isOwner) for (const k of OWNER_ONLY_KEYS) map[k] = false;
+      setState({ key: ctxKey, permissions: map, error: null });
       return;
     }
 
+    let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('role_permissions')
         .select('permissions')
         .eq('tenant_id', profile.tenant_id)
         .eq('role', profile.role)
         .maybeSingle();
+      if (cancelled) return;
 
-      if (data?.permissions) {
-        const map = { ...ALL_FALSE };
-        for (const k of PERMISSION_KEYS) {
-          if (k in data.permissions) {
-            map[k] = data.permissions[k] === true;
-          }
-        }
-        for (const k of OWNER_ONLY_KEYS) map[k] = false;
-        setPermissions(map);
-      } else {
-        setPermissions(ALL_FALSE);
+      if (error) {
+        // A failed read is not a refusal: keep rights already confirmed for this same context.
+        setState(prev => prev.key === ctxKey && !prev.error
+          ? prev
+          : { key: ctxKey, permissions: ALL_FALSE, error: 'Impossible de vérifier vos autorisations.' });
+        return;
       }
-      setLoading(false);
+
+      const map = { ...ALL_FALSE };
+      if (data?.permissions) {
+        for (const k of PERMISSION_KEYS) {
+          if (k in data.permissions) map[k] = data.permissions[k] === true;
+        }
+      }
+      for (const k of OWNER_ONLY_KEYS) map[k] = false;
+      setState({ key: ctxKey, permissions: map, error: null });
     })();
-  }, [profile?.tenant_id, profile?.role, dataTick, isOwner]);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctxKey, dataTick, reloadTick]);
+
+  const resolved = state.key === ctxKey;
+  const loading = !!ctxKey && !resolved;
+  const permissions = resolved ? state.permissions : ALL_FALSE;
+  const error = resolved ? state.error : null;
+
+  const reload = useCallback(() => {
+    setState(prev => (prev.error ? { key: '', permissions: ALL_FALSE, error: null } : prev));
+    setReloadTick(t => t + 1);
+  }, []);
 
   const can = useCallback((key: PermissionKey): boolean => {
     if (!profile) return false;
@@ -352,5 +365,5 @@ export function usePermissions(): { permissions: PermissionMap; loading: boolean
     return permissions[key] === true;
   }, [profile, permissions, isOwner]);
 
-  return { permissions, loading, can };
+  return { permissions, loading, error, reload, can };
 }

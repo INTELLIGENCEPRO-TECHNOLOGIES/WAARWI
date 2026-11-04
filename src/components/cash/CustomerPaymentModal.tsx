@@ -9,7 +9,7 @@ import { CashModal } from '../CashModal';
 import { printEncaissementTicket80 } from '../../lib/print';
 import { newIdempotencyKey } from '../../lib/cashSession';
 import type { Customer, PaymentMethod } from '../../lib/types';
-import type { CashOpContext } from './cashOpContext';
+import { permsPendingMessage, type CashOpContext } from './cashOpContext';
 
 interface Props {
   ctx: CashOpContext;
@@ -19,7 +19,10 @@ interface Props {
 
 export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
   const { tenant } = useApp();
-  const { can } = usePermissions();
+  const { can, loading: permsLoading, error: permsError } = usePermissions();
+  const permsPending = permsPendingMessage(permsLoading, permsError);
+  const directAllowed = !permsPending && can('pos_cash_movement');
+  const directBlockedMsg = permsPending || 'Droit « mouvements de caisse » requis';
   const { success, error } = useToast();
   const [bound] = useState(ctx);
   const [custPayMode, setCustPayMode] = useState<'invoice' | 'direct'>('invoice');
@@ -147,6 +150,7 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
 
   const submitDirectEncaissement = async () => {
     if (!tenant) return;
+    if (permsPending) { error(permsPending); return; }
     if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
     if (custPayAmount <= 0) { error('Montant invalide'); return; }
     if (!custPayMethod) { error('Mode de règlement requis'); return; }
@@ -215,7 +219,7 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
           footer={<>
               <button onClick={() => onClose()} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
               {custPayMode === 'direct' ? (
-                <button onClick={submitDirectEncaissement} disabled={custPaySubmitting || !custPayMethod || custPayAmount <= 0}
+                <button onClick={submitDirectEncaissement} disabled={custPaySubmitting || !directAllowed || !custPayMethod || custPayAmount <= 0}
                   className="px-5 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Valider'}
                 </button>
@@ -238,8 +242,9 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
                 className={`px-0 mr-8 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'invoice' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>
                 Client en attente
               </button>
-              <button type="button"
+              <button type="button" disabled={!directAllowed} title={directAllowed ? undefined : directBlockedMsg}
                 onClick={() => {
+                  if (!directAllowed) return;
                   setCustPayMode('direct');
                   setCustPayCustomer(null);
                   setCustPayUnpaid([]);
@@ -247,8 +252,9 @@ export function CustomerPaymentModal({ ctx, onClose, onDone }: Props) {
                   setCustPayAmount(0);
                   if (!custPayMethod) setCustPayMethod(bound.methods[0] || null);
                 }}
-                className={`px-0 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'direct' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>
+                className={`px-0 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'direct' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'} disabled:text-neutral-300 disabled:hover:text-neutral-300 disabled:cursor-not-allowed`}>
                 Encaissement direct
+                {!directAllowed && <span className="block text-[10px] font-medium text-neutral-400 mt-0.5">{directBlockedMsg}</span>}
               </button>
             </div>
 

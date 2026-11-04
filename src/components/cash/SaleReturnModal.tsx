@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronRight, Loader2, Minus, Plus, Search } from 'lucide-react';
+import { Check, ChevronRight, Loader2, Minus, Plus, RefreshCw, Search } from 'lucide-react';
 import { desktopAutoFocus } from '../../lib/device';
 import { supabase } from '../../lib/supabase';
 import { useApp } from '../../context/AppContext';
@@ -9,7 +9,7 @@ import { formatFCFA } from '../../lib/format';
 import { CashModal } from '../CashModal';
 import { printReturnTicket80 as printReturnTicket80Shared } from '../../lib/print';
 import { newIdempotencyKey } from '../../lib/cashSession';
-import type { CashOpContext, SessionSale } from './cashOpContext';
+import { cashOpError, permsPendingMessage, type CashOpContext, type SessionSale } from './cashOpContext';
 
 interface Props {
   ctx: CashOpContext;
@@ -19,37 +19,45 @@ interface Props {
 
 export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
   const { tenant } = useApp();
-  const { can } = usePermissions();
+  const { can, loading: permsLoading, error: permsError, reload: reloadPerms } = usePermissions();
+  const permsPending = permsPendingMessage(permsLoading, permsError);
+  const returnsAllowed = can('pos_returns');
   const { success, error } = useToast();
   const [bound] = useState(ctx);
   const [opKey, setOpKey] = useState(newIdempotencyKey);
   const [returnSearch, setReturnSearch] = useState('');
   const [returnSales, setReturnSales] = useState<SessionSale[]>([]);
   const [returnLoading, setReturnLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [started, setStarted] = useState(false);
   const [returnSelected, setReturnSelected] = useState<SessionSale | null>(null);
   const [returnLines, setReturnLines] = useState<{ sale_item_id: string; article_id: string; name: string; quantity: number; unit_price: number; purchase_cost: number; maxQty: number; selected: boolean }[]>([]);
 
   const loadReturnSales = async () => {
-    if (!tenant) return;
-    if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
+    if (!tenant || permsPending || !returnsAllowed) return;
     setReturnLoading(true);
-    const { data } = await supabase
+    setLoadError('');
+    const loadFail = 'Impossible de charger les ventes de la session.';
+    try {
+    const { data, error: salesErr } = await supabase
       .from('sales')
       .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(id, article_id, name, quantity, unit_price, purchase_cost)')
       .eq('tenant_id', tenant.id)
       .eq('cash_session_id', bound.sessionId)
       .neq('status', 'cancelled')
       .order('created_at', { ascending: false });
+    if (salesErr) { setLoadError(cashOpError(salesErr, loadFail)); return; }
 
     // Fetch already-returned quantities for these sales (by sale_item_id)
     const saleIds = (data || []).map((s: any) => s.id);
     let returnedMap: Record<string, number> = {};
     if (saleIds.length > 0) {
-      const { data: retData } = await supabase
+      const { data: retData, error: retErr } = await supabase
         .from('sale_returns')
         .select('sale_id, sale_return_items(sale_item_id, quantity)')
         .eq('tenant_id', tenant.id)
         .in('sale_id', saleIds);
+      if (retErr) { setLoadError(cashOpError(retErr, loadFail)); return; }
       for (const ret of retData || []) {
         for (const ri of (ret as any).sale_return_items || []) {
           if (ri.sale_item_id) {
@@ -71,10 +79,18 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
         items, fullyReturned,
       };
     }) as any);
-    setReturnLoading(false);
+    } catch (e) {
+      setLoadError(cashOpError(e as { message?: string }, loadFail));
+    } finally {
+      setReturnLoading(false);
+    }
   };
 
-  useEffect(() => { loadReturnSales(); }, [bound]);
+  useEffect(() => {
+    if (started || permsPending || !returnsAllowed) return;
+    setStarted(true);
+    loadReturnSales();
+  }, [started, permsPending, returnsAllowed]);
 
   const selectReturnSale = (s: SessionSale) => {
     setReturnSelected(s);
@@ -89,6 +105,7 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
 
   const processReturn = async () => {
     if (!returnSelected || !tenant) return;
+    if (permsPending) { error(permsPending); return; }
     if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
     const lines = returnLines.filter(l => l.selected && l.quantity > 0);
     if (lines.length === 0) { error('Aucun article sélectionné'); return; }
@@ -147,14 +164,28 @@ export function SaleReturnModal({ ctx, onClose, onDone }: Props) {
         ) : (
           <div className="flex items-center justify-end gap-3 w-full">
             <button onClick={() => { onClose(); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
-            <button onClick={processReturn} disabled={returnProcessing || returnLines.filter(l => l.selected).length === 0} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <button onClick={processReturn} disabled={returnProcessing || !!permsPending || !returnsAllowed || returnLines.filter(l => l.selected).length === 0} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : "Créer l'avoir"}
             </button>
           </div>
         )}
       >
-        {returnLoading ? (
+        {!started ? (
+          permsLoading ? (
+            <div className="py-12 flex flex-col items-center gap-2 text-xs text-neutral-500"><Loader2 className="w-6 h-6 animate-spin text-brand-700" />Vérification des autorisations…</div>
+          ) : (
+            <div className="py-8 text-center">
+              <p className="text-sm text-red-700">{permsPending || 'Vous n\'avez pas la permission d\'effectuer des retours.'}</p>
+              {permsError && <button onClick={reloadPerms} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-neutral-900 underline underline-offset-4"><RefreshCw className="w-3.5 h-3.5" />Réessayer</button>}
+            </div>
+          )
+        ) : returnLoading ? (
           <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
+        ) : loadError ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-red-700">{loadError}</p>
+            <button onClick={() => loadReturnSales()} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-neutral-900 underline underline-offset-4"><RefreshCw className="w-3.5 h-3.5" />Réessayer</button>
+          </div>
         ) : !returnSelected ? (
           <div>
             {/* Search */}

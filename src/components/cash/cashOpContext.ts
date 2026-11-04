@@ -27,6 +27,13 @@ export function cashOpError(e: { message?: string } | null | undefined, fallback
   return e?.message || fallback;
 }
 
+// Non-null while rights are unknown: callers must wait instead of reporting a refusal.
+export function permsPendingMessage(loading: boolean, error: string | null): string | null {
+  if (loading) return 'Vérification de vos autorisations en cours.';
+  if (error) return 'Impossible de vérifier vos autorisations.';
+  return null;
+}
+
 export type SessionSale = {
   id: string;
   sale_number: string;

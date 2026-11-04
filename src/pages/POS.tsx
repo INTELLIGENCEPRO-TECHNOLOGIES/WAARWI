@@ -69,7 +69,7 @@ import { CashMovementModal } from '../components/cash/CashMovementModal';
 import { CustomerPaymentModal } from '../components/cash/CustomerPaymentModal';
 import { SaleReturnModal } from '../components/cash/SaleReturnModal';
 import { CashCloseModal } from '../components/cash/CashCloseModal';
-import type { CashOpContext } from '../components/cash/cashOpContext';
+import { permsPendingMessage, type CashOpContext } from '../components/cash/cashOpContext';
 import { printSaleTicketDoc, printSaleInvoiceDoc, type PrintableSale } from '../components/cash/saleDocPrint';
 import { SessionTicketsModal } from '../components/cash/SessionTicketsModal';
 import { SessionStatsModal } from '../components/cash/SessionStatsModal';
@@ -926,7 +926,8 @@ const posCache: {
 
 export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?: (route: string) => void }) {
   const { tenant, currentSite, sites, depots, profile, setPosCart, posCartOpen, refData, onDataChange, setCurrentSite } = useApp();
-  const { can } = usePermissions();
+  const { can, loading: permsLoading, error: permsError } = usePermissions();
+  const permsPending = permsPendingMessage(permsLoading, permsError);
   const enabledModules: string[] = Array.isArray((tenant as any)?.enabled_modules)
     ? (tenant as any).enabled_modules
     : ['dashboard','pos','cash_history','articles','stock','tiers','sales','billing','supplier_orders','online_orders','accounting','settings','reports','ipm'];
@@ -1828,6 +1829,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openSessionSubmit = async () => {
     if (!tenant || !currentSite || !profile) return;
+    if (permsPending) { error(permsPending); return; }
     if (!can('pos_open_session')) { error('Vous n\'avez pas la permission d\'ouvrir une session'); return; }
     if (posCashCtxError) { error(posCashCtxError); return; }
     if (posCashCtx?.multi_enabled) {
@@ -2135,6 +2137,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openReturn = () => {
     if (!session) return;
+    if (permsPending) { error(permsPending); return; }
     if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
     setReturnOpen(true);
   };
@@ -2270,6 +2273,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   const openCloseWorkflow = () => {
     if (!session || !tenant) return;
+    if (permsPending) { error(permsPending); return; }
     if (!can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
     if (heldCarts.length > 0) {
       error(`Impossible de clôturer : ${heldCarts.length} ticket${heldCarts.length > 1 ? 's' : ''} en attente. Validez ou annulez-les d'abord.`);

@@ -25,7 +25,7 @@ interface Props {
 
 export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }: Props) {
   const { tenant, profile } = useApp();
-  const { can } = usePermissions();
+  const { can, loading: permsLoading, error: permsError, reload: reloadPerms } = usePermissions();
   const { success, error } = useToast();
   const [bound] = useState(ctx);
   const openingAmount = session.opening_amount;
@@ -52,10 +52,12 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
   const [savingReg, setSavingReg] = useState(false);
   const [sessionRegs, setSessionRegs] = useState<SessionRegularization[]>([]);
   const [statsData, setStatsData] = useState<SessionStats | null>(null);
+  const [started, setStarted] = useState(false);
+  const closeAllowed = bound.mode === 'supervision' || can('pos_close_session');
+  const permsBlocked = permsLoading || !!permsError || !closeAllowed;
 
   const loadControl = async () => {
-    if (!tenant) return;
-    if (bound.mode === 'personal' && !can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
+    if (!tenant || permsBlocked) return;
     setCloseStep('control');
     setLoadingControl(true);
     setDepositMode('none');
@@ -154,7 +156,18 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
     }
   };
 
-  useEffect(() => { loadControl(); }, [bound]);
+  // Starts once rights are confirmed; later rights refreshes must not reset the count or the idempotency key.
+  useEffect(() => {
+    if (started || permsBlocked) return;
+    setStarted(true);
+    loadControl();
+  }, [started, permsBlocked]);
+
+  const permsBlockedMsg = permsLoading
+    ? 'Vérification de vos autorisations en cours.'
+    : permsError
+      ? 'Impossible de vérifier vos autorisations.'
+      : 'Vous n\'avez pas la permission de clôturer la session.';
 
   const totalVariance = controlLines.reduce((s, c) => s + (c.counted_amount - c.theoretical_amount), 0);
 
@@ -174,6 +187,7 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
 
   const saveRegularization = async () => {
     if (!tenant || !profile) return;
+    if (permsBlocked) { error(permsBlockedMsg); return; }
     if (regAmount <= 0) { error('Montant invalide'); return; }
     setSavingReg(true);
     const { data, error: e } = bound.mode === 'supervision'
@@ -208,7 +222,7 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
 
   const confirmClose = async () => {
     if (!tenant) return;
-    if (bound.mode === 'personal' && !can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
+    if (permsBlocked) { error(permsBlockedMsg); return; }
     setClosing(true);
 
     if (bound.mode === 'supervision' || multiEnabled) {
@@ -278,7 +292,7 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
       <Modal open={regOpen} onClose={() => setRegOpen(false)} title="Régularisation d'écart" size="sm" layer="top"
         footer={<>
           <button onClick={() => setRegOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveRegularization} disabled={savingReg} className="btn-icon-primary" title="Enregistrer">
+          <button onClick={saveRegularization} disabled={savingReg || permsBlocked} className="btn-icon-primary" title="Enregistrer">
             {savingReg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           </button>
         </>}
@@ -313,18 +327,18 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
           closeStep === 'control' ? (
             <>
               <button onClick={() => onClose()} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={() => setRegOpen(true)} disabled={!!loadError || loadingControl} className="btn-icon" title="Régulariser"><Plus className="w-4 h-4" /></button>
-              <button onClick={() => setCloseStep('regularize')} disabled={!!loadError || loadingControl} className="btn-icon-primary" title="Suivant"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => setRegOpen(true)} disabled={!!loadError || loadingControl || permsBlocked} className="btn-icon" title="Régulariser"><Plus className="w-4 h-4" /></button>
+              <button onClick={() => setCloseStep('regularize')} disabled={!!loadError || loadingControl || permsBlocked} className="btn-icon-primary" title="Suivant"><ChevronRight className="w-4 h-4" /></button>
             </>
           ) : closeStep === 'regularize' ? (
             <>
               <button onClick={() => setCloseStep('control')} className="btn-icon" title="Retour"><ArrowLeft className="w-4 h-4" /></button>
-              <button onClick={() => setCloseStep('confirm')} disabled={!!loadError} className="btn-icon-primary" title="Confirmer"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => setCloseStep('confirm')} disabled={!!loadError || permsBlocked} className="btn-icon-primary" title="Confirmer"><ChevronRight className="w-4 h-4" /></button>
             </>
           ) : (
             <>
               <button onClick={() => setCloseStep('regularize')} className="btn-icon" title="Retour"><ArrowLeft className="w-4 h-4" /></button>
-              <button onClick={confirmClose} disabled={closing || !!loadError || !statsData} className="btn-icon-primary" title="Clôturer">
+              <button onClick={confirmClose} disabled={closing || !!loadError || !statsData || permsBlocked} className="btn-icon-primary" title="Clôturer">
                 {closing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
               </button>
             </>
@@ -346,7 +360,22 @@ export function CashCloseModal({ ctx, session, multiEnabled, onClose, onClosed }
           })}
         </div>
 
-        {loadingControl ? (
+        {started && permsBlocked && (
+          <div className="mb-3 flex items-center justify-between gap-3 border-b border-red-200 pb-2">
+            <p className="text-xs text-red-700">{permsBlockedMsg} Votre saisie est conservée, la clôture est bloquée.</p>
+            {permsError && <button onClick={reloadPerms} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-neutral-900 underline underline-offset-4"><RefreshCw className="w-3 h-3" />Réessayer</button>}
+          </div>
+        )}
+        {!started ? (
+          permsLoading ? (
+            <div className="py-10 flex flex-col items-center gap-2 text-xs text-neutral-500"><Loader2 className="w-5 h-5 animate-spin text-brand-700" />Vérification des autorisations…</div>
+          ) : (
+            <div className="py-8 text-center">
+              <p className="text-sm text-red-700">{permsBlockedMsg}</p>
+              {permsError && <button onClick={reloadPerms} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-neutral-900 underline underline-offset-4"><RefreshCw className="w-3.5 h-3.5" />Réessayer</button>}
+            </div>
+          )
+        ) : loadingControl ? (
           <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
         ) : loadError ? (
           <div className="py-8 text-center">

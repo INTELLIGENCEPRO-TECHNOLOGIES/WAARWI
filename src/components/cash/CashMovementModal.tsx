@@ -11,7 +11,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { printEncaissementTicket80 } from '../../lib/print';
 import { newIdempotencyKey } from '../../lib/cashSession';
 import type { Customer, PaymentMethod } from '../../lib/types';
-import type { CashOpContext } from './cashOpContext';
+import { permsPendingMessage, type CashOpContext } from './cashOpContext';
 
 interface Props {
   ctx: CashOpContext;
@@ -21,7 +21,8 @@ interface Props {
 
 export function CashMovementModal({ ctx, onClose, onDone }: Props) {
   const { tenant } = useApp();
-  const { can } = usePermissions();
+  const { can, loading: permsLoading, error: permsError } = usePermissions();
+  const permsPending = permsPendingMessage(permsLoading, permsError);
   const { success, error } = useToast();
   const [bound] = useState(ctx);
   const [opKey, setOpKey] = useState(newIdempotencyKey);
@@ -47,6 +48,7 @@ export function CashMovementModal({ ctx, onClose, onDone }: Props) {
   }, [bound]);
 
   const submitMovement = async () => {
+    if (permsPending) { error(permsPending); return; }
     if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
     if (mvKind === 'customer_withdrawal' && !can('pos_customer_withdrawal')) { error('Vous n\'avez pas la permission d\'effectuer un retrait sur acompte client'); return; }
     if (mvKind === 'customer_loan' && !can('pos_customer_loan')) { error('Vous n\'avez pas la permission d\'accorder un prêt client'); return; }
@@ -156,7 +158,7 @@ export function CashMovementModal({ ctx, onClose, onDone }: Props) {
           }
           footer={<>
               <button onClick={() => onClose()} className="px-3 sm:px-4 h-8 rounded-[4px] border border-neutral-200 text-[12px] font-semibold text-neutral-900 hover:bg-neutral-50 transition-colors">Annuler</button>
-              <button onClick={submitMovement} disabled={mvSubmitting || mvAmount <= 0}
+              <button onClick={submitMovement} disabled={mvSubmitting || !!permsPending || mvAmount <= 0}
                 className="px-3 sm:px-4 h-8 rounded-[4px] bg-neutral-900 text-white text-[12px] font-semibold hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
                 {mvSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                 <span className="sm:hidden">Valider</span>
