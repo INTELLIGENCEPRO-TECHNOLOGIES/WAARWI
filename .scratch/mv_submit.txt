@@ -1,0 +1,92 @@
+  const submitMovement = async () => {
+    if (!session || !currentSite) return;
+    if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
+    if (mvKind === 'customer_withdrawal' && !can('pos_customer_withdrawal')) { error('Vous n\'avez pas la permission d\'effectuer un retrait sur acompte client'); return; }
+    if (mvKind === 'customer_loan' && !can('pos_customer_loan')) { error('Vous n\'avez pas la permission d\'accorder un prêt client'); return; }
+    if (mvAmount <= 0) { error('Montant invalide'); return; }
+    if (mvKind !== 'expense' && mvKind !== 'customer_withdrawal' && mvKind !== 'customer_loan' && !mvMethod) { error('Mode de règlement requis'); return; }
+    if (mvKind === 'customer_prepayment' && !mvCustomer) { error('Client obligatoire'); return; }
+    if (mvKind === 'customer_withdrawal' && !mvCustomer) { error('Client obligatoire'); return; }
+    if (mvKind === 'customer_loan' && !mvCustomer) { error('Client obligatoire'); return; }
+    const mvCustDebt = Math.max(0, mvCustBalance);
+    const mvCustNet = mvCustPrepay - mvCustDebt;
+    if (mvKind === 'customer_withdrawal' && mvCustPrepay <= 0) { error('Ce client n\'a aucun acompte disponible'); return; }
+    if (mvKind === 'customer_withdrawal' && mvCustNet <= 0) { error(`Le client a une dette de ${formatFCFA(mvCustDebt)} qui couvre son acompte de ${formatFCFA(mvCustPrepay)}. Retrait impossible.`); return; }
+    if (mvKind === 'customer_withdrawal' && mvAmount > mvCustNet) { error(`Montant supérieur au retrait maximum (${formatFCFA(mvCustNet)}). Le client a un acompte de ${formatFCFA(mvCustPrepay)} et une dette de ${formatFCFA(mvCustDebt)} à déduire.`); return; }
+    if (mvKind === 'expense' && expenseCats.length > 0 && !mvExpenseCat) { error('Sélectionnez un type de dépense'); return; }
+    const expenseCatName = mvKind === 'expense' ? (expenseCats.find(c => c.id === mvExpenseCat)?.name || '') : '';
+    setMvSubmitting(true);
+    const { data, error: e } = await supabase.rpc('record_cash_movement', {
+      p_cash_session_id: session.id,
+      p_site_id: currentSite.id,
+      p_kind: mvKind,
+      p_amount: mvAmount,
+      p_reason: mvKind === 'expense' ? (expenseCatName || mvReason) : mvReason,
+      p_expense_category_id: mvKind === 'expense' ? (mvExpenseCat || null) : null,
+      p_note: mvNote,
+      p_reference: mvRef,
+      p_customer_id: mvCustomer?.id || null,
+      p_payment_method_id: mvMethod?.id || null,
+      p_method_name: mvMethod?.name || '',
+    });
+    if (e) { setMvSubmitting(false); error(e.message); return; }
+    const autoApplied = Number((data as any)?.auto_applied || 0);
+
+    const wantsReceipt = mvPrint && (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') && !!tenant;
+    if (wantsReceipt && tenant && mvMethod) {
+      const prefix = mvKind === 'customer_prepayment' ? 'ACO' : mvKind === 'customer_withdrawal' ? 'RET' : mvKind === 'customer_loan' ? 'PRT' : 'ENC';
+      const kindLabel = mvKind === 'customer_prepayment' ? 'acompte_client' : mvKind === 'customer_withdrawal' ? 'retrait_client' : mvKind === 'customer_loan' ? 'pret_client' : 'entree_caisse';
+      const { data: numData } = await supabase.rpc('next_doc_number', {
+        p_tenant_id: tenant.id, p_kind: kindLabel, p_prefix: prefix,
+      });
+      const recNum = (numData as string) || (`${prefix}-` + Date.now());
+      try {
+        printEncaissementTicket80({
+          receiptNumber: recNum,
+          amount: mvAmount,
+          method: mvMethod.name,
+          label: mvKind === 'customer_prepayment'
+            ? (mvReason ? `Acompte · ${mvReason}` : 'Acompte client')
+            : mvKind === 'customer_withdrawal'
+              ? (mvReason ? `Retrait · ${mvReason}` : 'Retrait client')
+              : mvKind === 'customer_loan'
+                ? (mvReason ? `Prêt · ${mvReason}` : 'Prêt client')
+                : (mvReason || undefined),
+          reference: mvRef || undefined,
+          customerName: mvCustomer?.name || null,
+          createdAt: new Date().toISOString(),
+          tenant: tenantForPrint as PrintTenant,
+          cashier: cashierName,
+        });
+      } catch {}
+    }
+
+    setMvSubmitting(false);
+    if (mvKind === 'customer_prepayment' && autoApplied > 0) {
+      success(`Acompte enregistré · ${formatFCFA(autoApplied)} imputé automatiquement`);
+    } else if (mvKind === 'customer_withdrawal') {
+      success('Retrait client enregistré');
+    } else if (mvKind === 'customer_loan') {
+      success('Prêt client enregistré · créance ajoutée');
+    } else if (mvKind === 'expense') {
+      success('Dépense enregistrée');
+    } else if (mvKind === 'income') {
+      success('Entrée enregistrée');
+    } else {
+      success('Acompte enregistré · en attente de facture');
+    }
+
+    if (mvPrint) {
+      setMvAmount(0);
+      setMvReason('');
+      setMvNote('');
+      setMvRef('');
+      setMvCustomer(null);
+      setMvCustSearch('');
+      setMvCustPrepay(0);
+      setMvCustBalance(0);
+      load();
+    } else {
+      setMvOpen(false);
+      load();
+    }

@@ -1,21 +1,58 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import {
-  Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Loader2,
-  Package, X, User, Check, LogOut, Lock, Printer, BarChart2,
-  ChevronRight, ChevronLeft, ChevronDown, AlertTriangle, ArrowRight, ArrowLeft, Pause, RotateCcw,
-  FileText, List, LayoutGrid, Play, Car, Tag, Flame, ArrowDownAZ, CheckCircle2, Wallet, ArrowDownRight, ArrowUpRight, Banknote, ArrowDownToLine,
-  Globe, Truck, ShoppingBag, Zap, ArrowRightCircle, Clock as ClockIcon, Phone, Monitor, AlertCircle, Shield, HandCoins, MapPin, Network,
-  TrendingUp, UserPlus, Store, History, Menu as MenuIcon, BookOpen
+  Search,
+  Trash2,
+  ShoppingCart,
+  CreditCard,
+  Loader2,
+  Package,
+  X,
+  User,
+  Check,
+  LogOut,
+  Lock,
+  Printer,
+  BarChart2,
+  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  AlertTriangle,
+  ArrowRight,
+  Pause,
+  RotateCcw,
+  FileText,
+  List,
+  LayoutGrid,
+  Play,
+  Car,
+  Tag,
+  ArrowDownAZ,
+  CheckCircle2,
+  Wallet,
+  ArrowDownRight,
+  Globe,
+  Truck,
+  ShoppingBag,
+  ArrowRightCircle,
+  Clock as ClockIcon,
+  Phone,
+  AlertCircle,
+  Shield,
+  MapPin,
+  TrendingUp,
+  UserPlus,
+  Store,
+  History,
+  Menu as MenuIcon,
+  Eye,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { fetchPrepayAvailable } from '../lib/customerCredit';
 import { useApp } from '../context/AppContext';
 import { usePermissions } from '../lib/permissions';
 import { useToast } from '../context/ToastContext';
-import { formatFCFA, formatDateTime, formatNumber } from '../lib/format';
+import { formatFCFA } from '../lib/format';
 import { Modal } from '../components/Modal';
-import { CashModal } from '../components/CashModal';
 import { EmptyState } from '../components/EmptyState';
 import { MarqueeText } from '../components/MarqueeText';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -23,12 +60,21 @@ import { VehicleArticlePicker } from '../components/VehicleArticlePicker';
 
 import { isAutoParts } from '../lib/types';
 import { desktopAutoFocus } from '../lib/device';
-import { printTicket80 as printTicket80Shared, printReturnTicket80 as printReturnTicket80Shared, printDocumentA4, printXReport80, printEncaissementTicket80, printDecaissementTicket80, buildPrintTenantForSite, type PrintTenant } from '../lib/print';
+import { buildPrintTenantForSite, type PrintTenant } from '../lib/print';
 import type { CartItem, PaymentMethod, Customer, CashSession, SalePayment } from '../lib/types';
 import { peekNavContext, consumeNavContext } from '../lib/navHighlight';
-import { isSaleSettlementIncome, type CashMovementKind } from '../lib/cashMovements';
+import { isSaleSettlementIncome } from '../lib/cashMovements';
+import { CashSupervision } from '../components/CashSupervision';
+import { CashMovementModal } from '../components/cash/CashMovementModal';
+import { CustomerPaymentModal } from '../components/cash/CustomerPaymentModal';
+import { SaleReturnModal } from '../components/cash/SaleReturnModal';
+import { CashCloseModal } from '../components/cash/CashCloseModal';
+import type { CashOpContext } from '../components/cash/cashOpContext';
+import { printSaleTicketDoc, printSaleInvoiceDoc, type PrintableSale } from '../components/cash/saleDocPrint';
+import { SessionTicketsModal } from '../components/cash/SessionTicketsModal';
+import { SessionStatsModal } from '../components/cash/SessionStatsModal';
 import { LotPickerModal, type ArticleLotSelection } from '../components/LotPickerModal';
-import { calculerIpm, parseConvention, validerDocumentsIpm, type IpmArticleLine, type IpmDocuments } from '../lib/ipm';
+import { calculerIpm, parseConvention, type IpmArticleLine } from '../lib/ipm';
 import { QuickCreateArticleModal, QuickCreateCustomerModal, QuickCreateButton } from '../components/QuickCreate';
 import { QuickActionsPanel } from '../components/QuickActionsPanel';
 import { Activity } from 'lucide-react';
@@ -50,14 +96,7 @@ type ArticleTier = { article_id: string; tier_name: string; price: number };
 
 type CategoryLite = { id: string; name: string; parent_id: string | null; track_stock?: boolean };
 
-type ControlLine = {
-  payment_method_id: string | null;
-  method_name: string;
-  theoretical_amount: number;
-  counted_amount: number;
-};
 
-type CloseStep = 'control' | 'regularize' | 'confirm';
 
 type HeldCart = {
   id: string;
@@ -68,21 +107,6 @@ type HeldCart = {
   savedAt: string;
 };
 
-type SessionSale = {
-  id: string;
-  sale_number: string;
-  total: number;
-  paid: number;
-  created_at: string;
-  customer_name: string | null;
-  customer_phone: string | null;
-  customer_address: string | null;
-  status: string;
-  items: { sale_item_id: string; article_id: string; name: string; quantity: number; unit_price: number; purchase_cost?: number; returned?: number }[];
-  fullyReturned?: boolean;
-  doc_header?: Record<string, string | null> | null;
-  user_id?: string | null;
-};
 
 function PosCardImage({ url, alt }: { url: string | null; alt: string }) {
   const [failed, setFailed] = useState(false);
@@ -93,41 +117,6 @@ function PosCardImage({ url, alt }: { url: string | null; alt: string }) {
   );
 }
 
-function printXReport(
-  session: CashSession & { opening_note?: string; closing_note?: string },
-  controls: ControlLine[],
-  salesStats: {
-    count: number; total: number; totalPayments?: number;
-    byMethod: { method_name: string; amount: number }[];
-    topArticles: { name: string; qty: number; total: number }[];
-    movements?: { kind: CashMovementKind; amount: number; reason: string; method_name: string; customer_name: string | null }[];
-    movExpense?: number; movIncome?: number; movPrepay?: number; netTotal?: number;
-  },
-  regularizations: { reg_type: string; amount: number; reason: string }[],
-  tenantArg: PrintTenant,
-  cashier: string,
-  siteName: string
-) {
-  printXReport80({
-    tenant: tenantArg,
-    cashier,
-    siteName,
-    sessionId: session.id,
-    openedAt: session.opened_at,
-    closedAt: session.closed_at,
-    openingAmount: Number(session.opening_amount),
-    salesCount: salesStats.count,
-    salesTotal: (salesStats.totalPayments ?? salesStats.total) + (salesStats.movIncome || 0) + (salesStats.movPrepay || 0),
-    byMethod: salesStats.byMethod,
-    movements: salesStats.movements,
-    controls: controls.map(c => ({
-      method_name: c.method_name,
-      theoretical_amount: c.theoretical_amount,
-      counted_amount: c.counted_amount,
-    })),
-    regularizations,
-  });
-}
 
 // ─── POS Landing Screens (Desktop-first) ──────────────────────────────────────
 
@@ -956,36 +945,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     };
   };
 
-  const printSaleTicket = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }, docHeaderOverride?: Record<string, string | null> | null) => {
-    printTicket80Shared({
-      sale_number: sale.sale_number,
-      created_at: sale.created_at,
-      total: sale.total,
-      discount: sale.discount,
-      items: sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, internal_ref: i.internal_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount })),
-      payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
-      customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
-      docHeader: docHeaderOverride !== undefined ? docHeaderOverride : buildDocHeader(),
-    }, tenantForPrint, cashierName);
-  };
+  const printSaleTicket = (sale: PrintableSale, docHeaderOverride?: Record<string, string | null> | null) =>
+    printSaleTicketDoc(sale, docHeaderOverride !== undefined ? docHeaderOverride : buildDocHeader(), tenantForPrint, cashierName);
 
-  const printSaleInvoice = (sale: { sale_number: string; created_at: string; total: number; discount: number; items: CartItem[]; payments: SalePayment[]; customer: Customer | null }, docHeaderOverride?: Record<string, string | null> | null, issuedByOverride?: string) => {
-    const items = sale.items.map(i => ({ name: i.name, supplier_ref: null, oem_ref: i.oem_ref, internal_ref: i.internal_ref, quantity: i.quantity, unit_price: i.unit_price, discount: i.discount }));
-    const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price - (i.discount || 0), 0);
-    const paid = sale.payments.reduce((s, p) => s + p.amount, 0);
-    printDocumentA4({
-      tenant: tenantForPrint,
-      docLabel: 'FACTURE',
-      docNumber: sale.sale_number,
-      docDate: new Date(sale.created_at).toLocaleDateString('fr-FR'),
-      docCreatedAt: sale.created_at,
-      customer: sale.customer ? { name: sale.customer.name, phone: (sale.customer as any).phone, address: (sale.customer as any).address } : null,
-      items, subtotal, discount: sale.discount, total: sale.total,
-      payments: sale.payments.map(p => ({ method_name: p.method_name, amount: p.amount })),
-      paid, cashier: cashierName, issuedBy: issuedByOverride ?? (profile?.full_name || undefined),
-      docHeader: docHeaderOverride !== undefined ? docHeaderOverride : buildDocHeader(),
-    });
-  };
+  const printSaleInvoice = (sale: PrintableSale, docHeaderOverride?: Record<string, string | null> | null, issuedByOverride?: string) =>
+    printSaleInvoiceDoc(sale, docHeaderOverride !== undefined ? docHeaderOverride : buildDocHeader(), tenantForPrint, cashierName, issuedByOverride ?? (profile?.full_name || undefined));
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
 
@@ -1007,6 +971,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [customers, setCustomers] = useState<Customer[]>(hasPosCache ? posCache.customers : []);
   const [methods, setMethods] = useState<PaymentMethod[]>(hasPosCache ? posCache.methods : []);
   const [session, setSession] = useState<CashSession | null>(hasPosCache ? posCache.session : null);
+  const cashCtx: CashOpContext | null = session ? {
+    mode: 'personal', sessionId: session.id, siteId: session.site_id,
+    registerLabel: '', operatorName: cashierName, siteName: currentSite?.name || '',
+    userName: cashierName, printTenant: tenantForPrint, methods, customers,
+  } : null;
   const [loadingData, setLoadingData] = useState(!hasPosCache);
   const initialLoadDone = useRef(hasPosCache);
 
@@ -1015,6 +984,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [openingNote, setOpeningNote] = useState('');
   const [openingSubmitting, setOpeningSubmitting] = useState(false);
   const [posCashCtx, setPosCashCtx] = useState<PosCashContext | null>(null);
+  const [supervising, setSupervising] = useState(false);
   const [posCashCtxError, setPosCashCtxError] = useState('');
   const [selectedRegisterId, setSelectedRegisterId] = useState<string | null>(null);
   const openIdemRef = useRef<{ key: string; registerId: string | null }>({ key: '', registerId: null });
@@ -1261,18 +1231,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     });
   }, [tenant?.id]);
 
-  useEffect(() => {
-    if (!tenant || !currentSite?.id) { setExpenseCats([]); return; }
-    supabase.rpc('get_effective_expense_categories', {
-      p_site_id: currentSite.id,
-      p_include_inactive: false,
-    }).then(({ data }) => {
-      const list = (data as { id: string; name: string }[]) || [];
-      setExpenseCats(list);
-      setMvExpenseCat(prev => list.some(c => c.id === prev) ? prev : '');
-    });
-  }, [tenant?.id, currentSite?.id]);
-
   const posRepLabel = (id?: string | null) => {
     const r = posReps.find(x => x.id === id);
     return r ? repDisplayName(r) : '';
@@ -1280,79 +1238,20 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // Cash movement (expense / income / customer prepayment)
   const [mvOpen, setMvOpen] = useState(false);
-  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'>('expense');
-  const [mvCustPrepay, setMvCustPrepay] = useState(0);
-  const [mvCustBalance, setMvCustBalance] = useState(0);
-  const [mvAmount, setMvAmount] = useState(0);
-  const [mvReason, setMvReason] = useState('');
-  const [mvExpenseCat, setMvExpenseCat] = useState('');
-  const [expenseCats, setExpenseCats] = useState<{ id: string; name: string }[]>([]);
-  const [mvNote, setMvNote] = useState('');
-  const [mvRef, setMvRef] = useState('');
-  const [mvMethod, setMvMethod] = useState<PaymentMethod | null>(null);
-  const [mvCustomer, setMvCustomer] = useState<Customer | null>(null);
-  const [mvCustSearch, setMvCustSearch] = useState('');
-  const [mvSubmitting, setMvSubmitting] = useState(false);
-  const [mvPrint, setMvPrint] = useState(true);
 
   // Customer payment (encaissement libre)
   const [custPayOpen, setCustPayOpen] = useState(false);
-  const [custPayMode, setCustPayMode] = useState<'invoice' | 'direct'>('invoice');
-  const [custPayLabel, setCustPayLabel] = useState('');
-  const [custPayPrint, setCustPayPrint] = useState(true);
-  const [custPayCustomer, setCustPayCustomer] = useState<Customer | null>(null);
-  const [custPayUnpaid, setCustPayUnpaid] = useState<{ id: string; sale_number: string; total: number; paid: number; created_at: string }[]>([]);
-  const [custPaySaleId, setCustPaySaleId] = useState<string>('');
-  const [custPayAmount, setCustPayAmount] = useState<number>(0);
-  const [custPayMethod, setCustPayMethod] = useState<PaymentMethod | null>(null);
-  const [custPayRef, setCustPayRef] = useState('');
-  const [custPaySubmitting, setCustPaySubmitting] = useState(false);
-  const [custPaySearch, setCustPaySearch] = useState('');
-  const custPayIdemRef = useRef<string>(crypto.randomUUID());
 
   // Return ticket
   const [returnOpen, setReturnOpen] = useState(false);
-  const [returnSearch, setReturnSearch] = useState('');
-  const [returnSales, setReturnSales] = useState<SessionSale[]>([]);
-  const [returnLoading, setReturnLoading] = useState(false);
-  const [returnSelected, setReturnSelected] = useState<SessionSale | null>(null);
-  const [returnLines, setReturnLines] = useState<{ sale_item_id: string; article_id: string; name: string; quantity: number; unit_price: number; purchase_cost: number; maxQty: number; selected: boolean }[]>([]);
 
   // Session tickets list
   const [ticketsOpen, setTicketsOpen] = useState(false);
-  const [sessionSales, setSessionSales] = useState<SessionSale[]>([]);
-  const [sessionProfileNames, setSessionProfileNames] = useState<Record<string, string>>({});
-  const [sessionMovements, setSessionMovements] = useState<{ id: string; kind: 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'; amount: number; reason: string; method_name: string; reference: string; customer_name: string | null; created_at: string }[]>([]);
-  const [sessionInvPayments, setSessionInvPayments] = useState<{ sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string }[]>([]);
-  const [ticketsExpanded, setTicketsExpanded] = useState<'tickets' | 'encDirect' | 'acomptes' | 'depenses' | 'remboursements' | 'retraits' | 'prets' | 'reglements' | null>('tickets');
-  const [loadingTickets, setLoadingTickets] = useState(false);
-  const [sessionEncaisse, setSessionEncaisse] = useState(0);
 
   // Close workflow
   const [closeOpen, setCloseOpen] = useState(false);
   const [sitePickerOpen, setSitePickerOpen] = useState(false);
-  const [closeStep, setCloseStep] = useState<CloseStep>('control');
-  const [controlLines, setControlLines] = useState<ControlLine[]>([]);
-  const [loadingControl, setLoadingControl] = useState(false);
-  const [closingNote, setClosingNote] = useState('');
-  const [closing, setClosing] = useState(false);
-  const [vaultAvailable, setVaultAvailable] = useState(false);
-  const [depositMode, setDepositMode] = useState<'none' | 'full' | 'partial'>('none');
-  const [depositPartial, setDepositPartial] = useState('');
-  const closeIdemRef = useRef<string>('');
-  const [statsData, setStatsData] = useState<{
-    count: number; total: number; totalPayments: number;
-    byMethod: { method_name: string; amount: number }[];
-    topArticles: { name: string; qty: number; total: number }[];
-    movements: { kind: CashMovementKind; amount: number; reason: string; method_name: string; customer_name: string | null }[];
-    invoicePayments: { sale_number: string; amount: number; method_name: string; customer_name: string | null; created_at: string; user_name: string | null }[];
-    movExpense: number; movIncome: number; movPrepay: number; movWithdrawal: number; movLoan: number; movRefund: number;
-    movVaultIn: number; movVaultOut: number;
-    netTotal: number;
-  } | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
-  const [loadingStats, setLoadingStats] = useState(false);
-  const [statsExpanded, setStatsExpanded] = useState<'reglements' | 'modes' | 'articles' | 'encDirect' | 'acomptes' | 'depenses' | 'retraits' | 'prets' | 'vaultIn' | 'vaultOut' | null>(null);
 
   // Vehicle picker
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
@@ -1378,13 +1277,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const [transforming, setTransforming] = useState(false);
 
   // Regularization
-  const [regOpen, setRegOpen] = useState(false);
-  const [regType, setRegType] = useState<'excedent' | 'manquant' | 'depot' | 'retrait'>('manquant');
-  const [regAmount, setRegAmount] = useState(0);
-  const [regReason, setRegReason] = useState('');
-  const [regNote, setRegNote] = useState('');
-  const [savingReg, setSavingReg] = useState(false);
-  const [sessionRegs, setSessionRegs] = useState<{ id?: string; reg_type: string; amount: number; reason: string; note: string }[]>([]);
 
   // Lot picker for sale
   const [lotPickerOpen, setLotPickerOpen] = useState(false);
@@ -1511,7 +1403,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     setPosCashCtx(ctxOk ? ctxData : null);
     setPosCashCtxError(ctxOk ? '' : (posCtxResult.error?.message || 'Impossible de vérifier l’état des caisses'));
     if (multiMode) {
-      const usable = (ctxData!.registers || []).filter(r => r.status !== 'busy');
+      const usable = (ctxData!.registers || []).filter(r => r.status !== 'busy' && !r.locked);
       setSelectedRegisterId(prev => {
         if (prev && usable.some(r => r.id === prev)) return prev;
         const mine = usable.find(r => r.status === 'mine');
@@ -2078,56 +1970,11 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const openCustomerPayment = () => {
     if (!session) { error('Ouvrez d\'abord la caisse'); return; }
     setCustPayOpen(true);
-    setCustPayMode('invoice');
-    setCustPayLabel('');
-    setCustPayCustomer(null);
-    setCustPayUnpaid([]);
-    setCustPaySaleId('');
-    setCustPayAmount(0);
-    setCustPayMethod(methods[0] || null);
-    setCustPayRef('');
-    setCustPaySearch('');
-    setCustPayPrint(true);
-  };
-
-  const loadCustomerUnpaid = async (c: Customer) => {
-    if (!tenant) return;
-    setCustPayCustomer(c);
-    const { data } = await supabase.from('sales')
-      .select('id, sale_number, total, paid, status, created_at')
-      .eq('tenant_id', tenant.id).eq('customer_id', c.id).neq('status', 'cancelled')
-      .order('created_at', { ascending: true });
-    const unpaid = (data || [])
-      .map((s: any) => ({ ...s, total: Number(s.total), paid: Number(s.paid) }))
-      .filter((s: any) => s.paid < s.total);
-
-    const customerBalance = Number((c as any).balance || 0);
-    const invoiceDue = unpaid.reduce((a, s) => a + (s.total - s.paid), 0);
-    const positionedDue = Math.max(0, customerBalance - invoiceDue);
-
-    if (positionedDue > 0) {
-      unpaid.unshift({
-        id: '__balance__',
-        sale_number: 'Report de solde',
-        total: positionedDue,
-        paid: 0,
-        created_at: new Date(0).toISOString(),
-      });
-    }
-
-    setCustPayUnpaid(unpaid);
-    setCustPaySaleId('');
-    setCustPayAmount(Math.max(0, customerBalance));
   };
 
   const openMovement = () => {
     if (!session) { error('Ouvrez d\'abord la caisse'); return; }
     setMvOpen(true);
-    setMvKind('expense');
-    setMvAmount(0); setMvReason(''); setMvNote(''); setMvRef(''); setMvExpenseCat('');
-    setMvMethod(methods[0] || null);
-    setMvCustomer(null); setMvCustSearch('');
-    setMvPrint(true);
   };
 
   useEffect(() => {
@@ -2144,218 +1991,6 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     return () => window.removeEventListener('waarwi:quickaction', handler);
   }, [session]);
 
-  const submitMovement = async () => {
-    if (!session || !currentSite) return;
-    if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
-    if (mvKind === 'customer_withdrawal' && !can('pos_customer_withdrawal')) { error('Vous n\'avez pas la permission d\'effectuer un retrait sur acompte client'); return; }
-    if (mvKind === 'customer_loan' && !can('pos_customer_loan')) { error('Vous n\'avez pas la permission d\'accorder un prêt client'); return; }
-    if (mvAmount <= 0) { error('Montant invalide'); return; }
-    if (mvKind !== 'expense' && mvKind !== 'customer_withdrawal' && mvKind !== 'customer_loan' && !mvMethod) { error('Mode de règlement requis'); return; }
-    if (mvKind === 'customer_prepayment' && !mvCustomer) { error('Client obligatoire'); return; }
-    if (mvKind === 'customer_withdrawal' && !mvCustomer) { error('Client obligatoire'); return; }
-    if (mvKind === 'customer_loan' && !mvCustomer) { error('Client obligatoire'); return; }
-    const mvCustDebt = Math.max(0, mvCustBalance);
-    const mvCustNet = mvCustPrepay - mvCustDebt;
-    if (mvKind === 'customer_withdrawal' && mvCustPrepay <= 0) { error('Ce client n\'a aucun acompte disponible'); return; }
-    if (mvKind === 'customer_withdrawal' && mvCustNet <= 0) { error(`Le client a une dette de ${formatFCFA(mvCustDebt)} qui couvre son acompte de ${formatFCFA(mvCustPrepay)}. Retrait impossible.`); return; }
-    if (mvKind === 'customer_withdrawal' && mvAmount > mvCustNet) { error(`Montant supérieur au retrait maximum (${formatFCFA(mvCustNet)}). Le client a un acompte de ${formatFCFA(mvCustPrepay)} et une dette de ${formatFCFA(mvCustDebt)} à déduire.`); return; }
-    if (mvKind === 'expense' && expenseCats.length > 0 && !mvExpenseCat) { error('Sélectionnez un type de dépense'); return; }
-    const expenseCatName = mvKind === 'expense' ? (expenseCats.find(c => c.id === mvExpenseCat)?.name || '') : '';
-    setMvSubmitting(true);
-    const { data, error: e } = await supabase.rpc('record_cash_movement', {
-      p_cash_session_id: session.id,
-      p_site_id: currentSite.id,
-      p_kind: mvKind,
-      p_amount: mvAmount,
-      p_reason: mvKind === 'expense' ? (expenseCatName || mvReason) : mvReason,
-      p_expense_category_id: mvKind === 'expense' ? (mvExpenseCat || null) : null,
-      p_note: mvNote,
-      p_reference: mvRef,
-      p_customer_id: mvCustomer?.id || null,
-      p_payment_method_id: mvMethod?.id || null,
-      p_method_name: mvMethod?.name || '',
-    });
-    if (e) { setMvSubmitting(false); error(e.message); return; }
-    const autoApplied = Number((data as any)?.auto_applied || 0);
-
-    const wantsReceipt = mvPrint && (mvKind === 'income' || mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') && !!tenant;
-    if (wantsReceipt && tenant && mvMethod) {
-      const prefix = mvKind === 'customer_prepayment' ? 'ACO' : mvKind === 'customer_withdrawal' ? 'RET' : mvKind === 'customer_loan' ? 'PRT' : 'ENC';
-      const kindLabel = mvKind === 'customer_prepayment' ? 'acompte_client' : mvKind === 'customer_withdrawal' ? 'retrait_client' : mvKind === 'customer_loan' ? 'pret_client' : 'entree_caisse';
-      const { data: numData } = await supabase.rpc('next_doc_number', {
-        p_tenant_id: tenant.id, p_kind: kindLabel, p_prefix: prefix,
-      });
-      const recNum = (numData as string) || (`${prefix}-` + Date.now());
-      try {
-        printEncaissementTicket80({
-          receiptNumber: recNum,
-          amount: mvAmount,
-          method: mvMethod.name,
-          label: mvKind === 'customer_prepayment'
-            ? (mvReason ? `Acompte · ${mvReason}` : 'Acompte client')
-            : mvKind === 'customer_withdrawal'
-              ? (mvReason ? `Retrait · ${mvReason}` : 'Retrait client')
-              : mvKind === 'customer_loan'
-                ? (mvReason ? `Prêt · ${mvReason}` : 'Prêt client')
-                : (mvReason || undefined),
-          reference: mvRef || undefined,
-          customerName: mvCustomer?.name || null,
-          createdAt: new Date().toISOString(),
-          tenant: tenantForPrint as PrintTenant,
-          cashier: cashierName,
-        });
-      } catch {}
-    }
-
-    setMvSubmitting(false);
-    if (mvKind === 'customer_prepayment' && autoApplied > 0) {
-      success(`Acompte enregistré · ${formatFCFA(autoApplied)} imputé automatiquement`);
-    } else if (mvKind === 'customer_withdrawal') {
-      success('Retrait client enregistré');
-    } else if (mvKind === 'customer_loan') {
-      success('Prêt client enregistré · créance ajoutée');
-    } else if (mvKind === 'expense') {
-      success('Dépense enregistrée');
-    } else if (mvKind === 'income') {
-      success('Entrée enregistrée');
-    } else {
-      success('Acompte enregistré · en attente de facture');
-    }
-
-    if (mvPrint) {
-      setMvAmount(0);
-      setMvReason('');
-      setMvNote('');
-      setMvRef('');
-      setMvCustomer(null);
-      setMvCustSearch('');
-      setMvCustPrepay(0);
-      setMvCustBalance(0);
-      load();
-    } else {
-      setMvOpen(false);
-      load();
-    }
-  };
-
-  const submitCustomerPayment = async () => {
-    if (!session || !custPayCustomer || !custPayMethod || !tenant) return;
-    if (custPayAmount <= 0) { error('Montant invalide'); return; }
-    const paidAmount = custPayAmount;
-    const customerName = custPayCustomer.name;
-    const methodName = custPayMethod.name;
-    const refValue = custPayRef;
-    setCustPaySubmitting(true);
-    let e: any = null;
-    let pieceNumber: string | null = null;
-    if (custPaySaleId === '__balance__') {
-      const idemKey = custPayIdemRef.current;
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('register_customer_balance_payment', {
-        p_customer_id: custPayCustomer.id,
-        p_payment_method_id: custPayMethod.id,
-        p_method_name: custPayMethod.name,
-        p_amount: custPayAmount,
-        p_reference: custPayRef,
-        p_cash_session_id: session.id,
-        p_idempotency_key: idemKey,
-      });
-      e = rpcErr;
-      if (!rpcErr && rpcData) pieceNumber = (rpcData as any).piece_number || null;
-    } else {
-      const { error: rpcErr } = await supabase.rpc('register_customer_payment', {
-        p_customer_id: custPayCustomer.id,
-        p_payment_method_id: custPayMethod.id,
-        p_method_name: custPayMethod.name,
-        p_amount: custPayAmount,
-        p_reference: custPayRef,
-        p_cash_session_id: session.id,
-        p_sale_id: custPaySaleId || null,
-      });
-      e = rpcErr;
-    }
-    if (e) { setCustPaySubmitting(false); error(e.message); return; }
-
-    if (custPayPrint) {
-      const recNum = pieceNumber || ('REG-' + Date.now());
-      try {
-        printEncaissementTicket80({
-          receiptNumber: recNum,
-          amount: paidAmount,
-          method: methodName,
-          label: 'Règlement client',
-          reference: refValue || undefined,
-          customerName,
-          createdAt: new Date().toISOString(),
-          tenant: tenantForPrint as PrintTenant,
-          cashier: cashierName,
-        });
-      } catch {}
-    }
-
-    custPayIdemRef.current = crypto.randomUUID();
-    setCustPaySubmitting(false);
-    success('Règlement encaissé');
-    setCustPayCustomer(null);
-    setCustPayUnpaid([]);
-    setCustPaySaleId('');
-    setCustPayAmount(0);
-    setCustPayRef('');
-    setCustPaySearch('');
-    load();
-  };
-
-  const submitDirectEncaissement = async () => {
-    if (!session || !currentSite || !tenant) return;
-    if (!can('pos_cash_movement')) { error('Vous n\'avez pas la permission d\'enregistrer un mouvement de caisse'); return; }
-    if (custPayAmount <= 0) { error('Montant invalide'); return; }
-    if (!custPayMethod) { error('Mode de règlement requis'); return; }
-    const paidAmount = custPayAmount;
-    const labelValue = custPayLabel.trim();
-    const refValue = custPayRef;
-    const methodName = custPayMethod.name;
-    setCustPaySubmitting(true);
-    const reason = labelValue || 'Encaissement direct';
-    const { error: e } = await supabase.rpc('record_cash_movement', {
-      p_cash_session_id: session.id,
-      p_site_id: currentSite.id,
-      p_kind: 'income',
-      p_amount: paidAmount,
-      p_reason: reason,
-      p_note: '',
-      p_reference: refValue,
-      p_customer_id: null,
-      p_payment_method_id: custPayMethod.id,
-      p_method_name: custPayMethod.name,
-    });
-    if (e) { setCustPaySubmitting(false); error(e.message); return; }
-
-    if (custPayPrint) {
-      const { data: numData } = await supabase.rpc('next_doc_number', {
-        p_tenant_id: tenant.id, p_kind: 'encaissement_direct', p_prefix: 'ENC',
-      });
-      const recNum = (numData as string) || ('ENC-' + Date.now());
-      try {
-        printEncaissementTicket80({
-          receiptNumber: recNum,
-          amount: paidAmount,
-          method: methodName,
-          label: labelValue || undefined,
-          reference: refValue || undefined,
-          customerName: null,
-          createdAt: new Date().toISOString(),
-          tenant: tenantForPrint as PrintTenant,
-          cashier: cashierName,
-        });
-      } catch {}
-    }
-
-    setCustPaySubmitting(false);
-    success('Encaissement enregistré');
-    setCustPayAmount(0);
-    setCustPayLabel('');
-    setCustPayRef('');
-    load();
-  };
 
   const validateSale = async () => {
     if (!session || !currentSite || !tenant) return;
@@ -2498,180 +2133,17 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // ─── Return ticket ────────────────────────────────────────────────────────
 
-  const openReturn = async () => {
+  const openReturn = () => {
+    if (!session) return;
     if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
-    setReturnOpen(true); setReturnSelected(null); setReturnLines([]);
-    setReturnLoading(true);
-    const { data } = await supabase
-      .from('sales')
-      .select('id, sale_number, total, created_at, customers(name, phone, address), status, sale_items(id, article_id, name, quantity, unit_price, purchase_cost)')
-      .eq('tenant_id', tenant!.id)
-      .eq('cash_session_id', session!.id)
-      .neq('status', 'cancelled')
-      .order('created_at', { ascending: false });
-
-    // Fetch already-returned quantities for these sales (by sale_item_id)
-    const saleIds = (data || []).map((s: any) => s.id);
-    let returnedMap: Record<string, number> = {};
-    if (saleIds.length > 0) {
-      const { data: retData } = await supabase
-        .from('sale_returns')
-        .select('sale_id, sale_return_items(sale_item_id, quantity)')
-        .eq('tenant_id', tenant!.id)
-        .in('sale_id', saleIds);
-      for (const ret of retData || []) {
-        for (const ri of (ret as any).sale_return_items || []) {
-          if (ri.sale_item_id) {
-            returnedMap[ri.sale_item_id] = (returnedMap[ri.sale_item_id] || 0) + Number(ri.quantity);
-          }
-        }
-      }
-    }
-
-    setReturnSales((data || []).map((s: any) => {
-      const items = (s.sale_items || []).map((i: any) => {
-        const alreadyReturned = returnedMap[i.id] || 0;
-        return { sale_item_id: i.id, article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price), returned: alreadyReturned };
-      });
-      const fullyReturned = items.every((i: any) => i.returned >= i.quantity);
-      return {
-        id: s.id, sale_number: s.sale_number, total: Number(s.total),
-        created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
-        items, fullyReturned,
-      };
-    }) as any);
-    setReturnLoading(false);
+    setReturnOpen(true);
   };
-
-  const selectReturnSale = (s: SessionSale) => {
-    setReturnSelected(s);
-    setReturnSearch('');
-    setReturnLines(s.items.map(i => {
-      const remaining = i.quantity - (i.returned || 0);
-      return { ...i, purchase_cost: i.purchase_cost || 0, quantity: remaining, maxQty: remaining, selected: remaining > 0 };
-    }));
-  };
-
-  const [returnProcessing, setReturnProcessing] = useState(false);
-
-  const processReturn = async () => {
-    if (!returnSelected || !tenant || !currentSite || !session) return;
-    if (!can('pos_returns')) { error('Vous n\'avez pas la permission d\'effectuer des retours'); return; }
-    const lines = returnLines.filter(l => l.selected && l.quantity > 0);
-    if (lines.length === 0) { error('Aucun article sélectionné'); return; }
-    const returnTotal = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0);
-
-    setReturnProcessing(true);
-    try {
-      const requestId = crypto.randomUUID();
-      const { data: result, error: rpcErr } = await supabase.rpc('process_sale_return', {
-        p_sale_id: returnSelected.id,
-        p_site_id: currentSite.id,
-        p_cash_session_id: session.id,
-        p_items: lines.map(l => ({ sale_item_id: l.sale_item_id, quantity: l.quantity })),
-        p_reason: 'Retour au POS',
-        p_refund_now: true,
-        p_restock: true,
-        p_request_id: requestId,
-      });
-
-      if (rpcErr) throw new Error(rpcErr.message);
-
-      const retNum = result?.return_number || 'RET-?';
-      printReturnTicket80Shared(returnSelected.sale_number, lines, returnTotal, tenantForPrint, cashierName, retNum, returnSelected.customer_name);
-
-      setReturnOpen(false);
-      success(`Retour effectué: -${formatFCFA(returnTotal)} remboursé`);
-      load();
-    } catch (e: any) {
-      error(e.message || 'Erreur lors du retour');
-    } finally {
-      setReturnProcessing(false);
-    }
-  };
-
-  const filteredReturnSales = useMemo(() => {
-    const q = returnSearch.toLowerCase().trim();
-    if (!q) return returnSales;
-    return returnSales.filter(s => s.sale_number.toLowerCase().includes(q) || (s.customer_name || '').toLowerCase().includes(q));
-  }, [returnSales, returnSearch]);
 
   // ─── Session tickets ──────────────────────────────────────────────────────
 
-  const openTickets = async () => {
-    setTicketsOpen(true); setLoadingTickets(true);
-    const [{ data }, { data: retData }, { data: mvData }, { data: pmtData }, { data: profData }] = await Promise.all([
-      supabase
-        .from('sales')
-        .select('id, sale_number, total, paid, created_at, customers(name, phone, address), status, sale_items(article_id, name, quantity, unit_price), doc_header, user_id')
-        .eq('tenant_id', tenant!.id)
-        .eq('cash_session_id', session!.id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('sale_returns')
-        .select('id, return_number, total, created_at, sale_id, customer_id, customers(name, phone, address)')
-        .eq('tenant_id', tenant!.id)
-        .eq('cash_session_id', session!.id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('cash_movements')
-        .select('id, kind, amount, reason, method_name, reference, created_at, customers(name)')
-        .eq('tenant_id', tenant!.id)
-        .eq('cash_session_id', session!.id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('sale_payments')
-        .select('amount, reference, method_name, created_at, sales(sale_number, cash_session_id, customers(name))')
-        .eq('tenant_id', tenant!.id)
-        .eq('cash_session_id', session!.id)
-        .order('created_at'),
-      supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .eq('tenant_id', tenant!.id),
-    ]);
-    const profMap: Record<string, string> = {};
-    (profData || []).forEach((p: any) => { profMap[p.id] = p.full_name || p.email || ''; });
-    setSessionProfileNames(profMap);
-    const sales: SessionSale[] = (data || []).map((s: any) => ({
-      id: s.id, sale_number: s.sale_number, total: Number(s.total), paid: Math.min(Number(s.total || 0), Number(s.paid || 0)),
-      created_at: s.created_at, customer_name: s.customers?.name || null, customer_phone: s.customers?.phone || null, customer_address: s.customers?.address || null, status: s.status,
-      items: (s.sale_items || []).map((i: any) => ({ article_id: i.article_id || '', name: i.name, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
-      doc_header: s.doc_header || null,
-      user_id: s.user_id || null,
-    }));
-    const returns: SessionSale[] = (retData || []).map((r: any) => ({
-      id: r.id, sale_number: r.return_number, total: -Number(r.total), paid: -Number(r.total),
-      created_at: r.created_at, customer_name: r.customers?.name || null, customer_phone: r.customers?.phone || null, customer_address: r.customers?.address || null, status: 'return',
-      items: [],
-    }));
-    setSessionSales([...sales, ...returns].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-    const movs = (mvData || []).map((m: any) => ({
-      id: m.id,
-      kind: m.kind as 'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund',
-      amount: Number(m.amount), reason: m.reason || '',
-      method_name: m.method_name || '', reference: m.reference || '',
-      customer_name: m.customers?.name || null,
-      created_at: m.created_at || '',
-    })).filter(m => !isSaleSettlementIncome(m.kind, m.reason));
-    setSessionMovements(movs);
-    const invPayments = (pmtData || [])
-      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement facture')) || !p.sales || p.sales.cash_session_id !== session!.id)
-      .map((p: any) => ({
-        sale_number: p.sales?.sale_number || '',
-        amount: Number(p.amount),
-        method_name: p.method_name || '',
-        customer_name: p.sales?.customers?.name || null,
-        created_at: p.created_at || '',
-      }));
-    setSessionInvPayments(invPayments);
-    const pmtTotal = (pmtData || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    const movEncaisseTotal = (mvData || [])
-      .filter((m: any) => m.kind !== 'expense' && m.kind !== 'refund' && m.kind !== 'customer_withdrawal' && m.kind !== 'customer_loan' && !isSaleSettlementIncome(m.kind, m.reason))
-      .reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
-    setSessionEncaisse(pmtTotal + movEncaisseTotal);
-    setTicketsExpanded('tickets');
-    setLoadingTickets(false);
+  const openTickets = () => {
+    if (!session) return;
+    setTicketsOpen(true);
   };
 
   // ─── Web orders ───────────────────────────────────────────────────────────
@@ -2789,314 +2261,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
 
   // ─── Stats ────────────────────────────────────────────────────────────────
 
-  const openStats = async () => {
+  const openStats = () => {
     if (!session || !tenant) return;
-    setStatsOpen(true); setLoadingStats(true);
-    const [{ data: sales }, { data: pmtRows }, { data: mvRows }] = await Promise.all([
-      supabase.from('sales').select('id, total, sale_items(name, quantity, total)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).neq('status', 'cancelled'),
-      supabase.from('sale_payments').select('method_name, amount, created_at, reference, sale_id, sales(sale_number, cash_session_id, customers(name))').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
-      supabase.from('cash_movements').select('kind, amount, reason, method_name, customers(name)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
-    ]);
-    const salesList = sales || [];
-    const pmtList = pmtRows || [];
-    const movs = (mvRows || []).map((m: any) => ({
-      kind: m.kind as CashMovementKind,
-      amount: Number(m.amount), reason: m.reason || '',
-      method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !isSaleSettlementIncome(m.kind, m.reason));
-    const byMethod: Record<string, number> = {};
-    pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
-    movs.forEach(m => {
-      if (m.kind !== 'income' && m.kind !== 'customer_prepayment' && m.kind !== 'expense' && m.kind !== 'refund') return;
-      const method = m.method_name || 'Espèces';
-      const signed = (m.kind === 'expense' || m.kind === 'refund') ? -Number(m.amount) : Number(m.amount);
-      byMethod[method] = (byMethod[method] || 0) + signed;
-    });
-    const invoicePayments = pmtList
-      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement facture')) || !p.sales || p.sales.cash_session_id !== session.id)
-      .map((p: any) => ({
-        sale_number: p.sales?.sale_number || '',
-        amount: Number(p.amount),
-        method_name: p.method_name || '',
-        customer_name: p.sales?.customers?.name || null,
-        created_at: p.created_at || '',
-        user_name: profile?.full_name || profile?.email || null,
-      }));
-    const articleMap: Record<string, { name: string; qty: number; total: number }> = {};
-    salesList.forEach((s: any) => {
-      (s.sale_items || []).forEach((item: any) => {
-        if (!articleMap[item.name]) articleMap[item.name] = { name: item.name, qty: 0, total: 0 };
-        articleMap[item.name].qty += Number(item.quantity);
-        articleMap[item.name].total += Number(item.total);
-      });
-    });
-    const topArticles = Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10);
-    const movExpense = movs.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
-    const movRefund = movs.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
-    const movWithdrawal = movs.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
-    const movLoan = movs.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
-    const movIncome = movs.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
-    const movPrepay = movs.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-    const movVaultIn = movs.filter(m => m.kind === 'vault_withdrawal').reduce((s, m) => s + m.amount, 0);
-    const movVaultOut = movs.filter(m => m.kind === 'vault_deposit').reduce((s, m) => s + m.amount, 0);
-    const totalPayments = pmtList.reduce((s: number, p: any) => s + Number(p.amount), 0);
-    setStatsData({
-      count: salesList.length,
-      total: totalPayments,
-      totalPayments,
-      byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
-      topArticles,
-      movements: movs,
-      invoicePayments,
-      movExpense, movIncome, movPrepay, movWithdrawal, movLoan, movRefund,
-      movVaultIn, movVaultOut,
-      netTotal: totalPayments + movIncome + movPrepay + movVaultIn - movExpense - movRefund - movWithdrawal - movLoan - movVaultOut,
-    });
-    setLoadingStats(false);
+    setStatsOpen(true);
   };
 
-  // ─── Close workflow ───────────────────────────────────────────────────────
+  // ─── Close workflow ──────────────────────────────
 
-  const openCloseWorkflow = async () => {
+  const openCloseWorkflow = () => {
     if (!session || !tenant) return;
     if (!can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
     if (heldCarts.length > 0) {
       error(`Impossible de clôturer : ${heldCarts.length} ticket${heldCarts.length > 1 ? 's' : ''} en attente. Validez ou annulez-les d'abord.`);
       return;
     }
-    setCloseStep('control');
-    setLoadingControl(true);
     setCloseOpen(true);
-    setDepositMode('none');
-    setDepositPartial('');
-    closeIdemRef.current = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-
-    // Le coffre est-il disponible pour ce site (module activé + coffre initialisé) ?
-    if (hasModule('vault') && can('vault_receive_from_cash')) {
-      const { data: v } = await supabase.from('vaults').select('id')
-        .eq('tenant_id', tenant.id).eq('site_id', session.site_id).eq('is_active', true).maybeSingle();
-      setVaultAvailable(!!v?.id);
-    } else {
-      setVaultAvailable(false);
-    }
-
-    const [{ data: pmts }, { data: regs }, salesResult, { data: mvs }] = await Promise.all([
-      supabase.from('sale_payments').select('payment_method_id, method_name, amount, created_at, reference, sales(sale_number, cash_session_id, customers(name))').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
-      supabase.from('cash_regularizations').select('id, reg_type, amount, reason, note').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
-      supabase.from('sales').select('id, total, sale_items(name, quantity, total)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).neq('status', 'cancelled'),
-      supabase.from('cash_movements').select('kind, amount, payment_method_id, method_name, reason, customers(name)').eq('tenant_id', tenant.id).eq('cash_session_id', session.id).order('created_at'),
-    ]);
-
-    // Build theoretical per method — include sale payments + cash movements
-    const pmtList = pmts || [];
-    const theoretical: Record<string, { method_name: string; payment_method_id: string | null; amount: number }> = {};
-    pmtList.forEach((p: any) => {
-      const key = p.method_name;
-      if (!theoretical[key]) theoretical[key] = { method_name: p.method_name, payment_method_id: p.payment_method_id, amount: 0 };
-      theoretical[key].amount += Number(p.amount);
-    });
-    (mvs || []).forEach((m: any) => {
-      if (isSaleSettlementIncome(m.kind, m.reason)) return;
-      const outflow = m.kind === 'expense' || m.kind === 'refund' || m.kind === 'customer_withdrawal' || m.kind === 'customer_loan' || m.kind === 'vault_deposit';
-      const key = m.method_name || (outflow || m.kind === 'vault_withdrawal' ? 'Espèces' : '—');
-      if (!theoretical[key]) theoretical[key] = { method_name: key, payment_method_id: m.payment_method_id, amount: 0 };
-      if (outflow) {
-        theoretical[key].amount -= Number(m.amount);
-      } else {
-        theoretical[key].amount += Number(m.amount);
-      }
-    });
-
-    const lines: ControlLine[] = methods.map(m => {
-      const th = theoretical[m.name];
-      let base = th ? th.amount : 0;
-      const normName = m.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const isCash = m.payment_type === 'cash' || normName.includes('espece') || normName.includes('liquide') || normName.includes('cash');
-      if (isCash && Number(session.opening_amount) > 0) base += Number(session.opening_amount);
-      return { payment_method_id: m.id, method_name: m.name, theoretical_amount: base, counted_amount: base };
-    });
-    Object.values(theoretical).forEach(t => {
-      if (!lines.find(l => l.method_name === t.method_name)) {
-        let base = t.amount;
-        const normName = t.method_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        const isCash = normName.includes('espece') || normName.includes('liquide') || normName.includes('cash');
-        if (isCash && Number(session.opening_amount) > 0) base += Number(session.opening_amount);
-        lines.push({ payment_method_id: t.payment_method_id, method_name: t.method_name, theoretical_amount: base, counted_amount: base });
-      }
-    });
-
-    // Build stats for X report
-    const salesList = salesResult.data || [];
-    const movList = (mvs || []).map((m: any) => ({
-      kind: m.kind as CashMovementKind,
-      amount: Number(m.amount), reason: m.reason || '',
-      method_name: m.method_name || '', customer_name: m.customers?.name || null,
-    })).filter(m => !isSaleSettlementIncome(m.kind, m.reason));
-    const byMethod: Record<string, number> = {};
-    pmtList.forEach((p: any) => { byMethod[p.method_name] = (byMethod[p.method_name] || 0) + Number(p.amount); });
-    movList.forEach(m => {
-      if (m.kind !== 'income' && m.kind !== 'customer_prepayment') return;
-      const method = m.method_name || 'Espèces';
-      byMethod[method] = (byMethod[method] || 0) + Number(m.amount);
-    });
-    const invoicePayments = pmtList
-      .filter((p: any) => (p.reference && p.reference.startsWith('Règlement facture')) || !p.sales || p.sales.cash_session_id !== session.id)
-      .map((p: any) => ({
-        sale_number: p.sales?.sale_number || '',
-        amount: Number(p.amount),
-        method_name: p.method_name || '',
-        customer_name: p.sales?.customers?.name || null,
-        created_at: p.created_at || '',
-        user_name: profile?.full_name || profile?.email || null,
-      }));
-    const articleMap: Record<string, { name: string; qty: number; total: number }> = {};
-    salesList.forEach((s: any) => {
-      (s.sale_items || []).forEach((item: any) => {
-        if (!articleMap[item.name]) articleMap[item.name] = { name: item.name, qty: 0, total: 0 };
-        articleMap[item.name].qty += Number(item.quantity);
-        articleMap[item.name].total += Number(item.total);
-      });
-    });
-    const movExpense = movList.filter(m => m.kind === 'expense').reduce((s, m) => s + m.amount, 0);
-    const movRefund = movList.filter(m => m.kind === 'refund').reduce((s, m) => s + m.amount, 0);
-    const movWithdrawal = movList.filter(m => m.kind === 'customer_withdrawal').reduce((s, m) => s + m.amount, 0);
-    const movLoan = movList.filter(m => m.kind === 'customer_loan').reduce((s, m) => s + m.amount, 0);
-    const movIncome = movList.filter(m => m.kind === 'income').reduce((s, m) => s + m.amount, 0);
-    const movPrepay = movList.filter(m => m.kind === 'customer_prepayment').reduce((s, m) => s + m.amount, 0);
-    const movVaultIn = movList.filter(m => m.kind === 'vault_withdrawal').reduce((s, m) => s + m.amount, 0);
-    const movVaultOut = movList.filter(m => m.kind === 'vault_deposit').reduce((s, m) => s + m.amount, 0);
-    const totalSales = salesList.reduce((s: number, r: any) => s + Number(r.total), 0);
-    const totalPayments = pmtList.reduce((s: number, p: any) => s + Number(p.amount), 0);
-    setStatsData({
-      count: salesList.length,
-      total: totalSales,
-      totalPayments,
-      byMethod: Object.entries(byMethod).map(([method_name, amount]) => ({ method_name, amount })),
-      topArticles: Object.values(articleMap).sort((a, b) => b.total - a.total).slice(0, 10),
-      movements: movList,
-      invoicePayments,
-      movExpense, movIncome, movPrepay, movWithdrawal, movLoan, movRefund,
-      movVaultIn, movVaultOut,
-      netTotal: totalPayments + movIncome + movPrepay + movVaultIn - movExpense - movRefund - movWithdrawal - movLoan - movVaultOut,
-    });
-
-    setControlLines(lines);
-    setSessionRegs(regs || []);
-    setLoadingControl(false);
-  };
-
-  const totalVariance = controlLines.reduce((s, c) => s + (c.counted_amount - c.theoretical_amount), 0);
-
-  const vaultCloseEnabled = hasModule('vault') && vaultAvailable && can('vault_receive_from_cash');
-  const countedCash = controlLines.reduce((s, c) => {
-    const m = methods.find(mm => mm.id === c.payment_method_id);
-    const norm = c.method_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const isCash = (m?.payment_type === 'cash') || norm.includes('espece') || norm.includes('liquide') || norm.includes('cash');
-    return isCash ? s + c.counted_amount : s;
-  }, 0);
-  const depositAmount = depositMode === 'full'
-    ? countedCash
-    : depositMode === 'partial'
-      ? Math.min(Math.max(Number(depositPartial) || 0, 0), countedCash)
-      : 0;
-  const retainedCash = Math.max(0, countedCash - depositAmount);
-
-  const saveRegularization = async () => {
-    if (!session || !tenant || !profile) return;
-    if (regAmount <= 0) { error('Montant invalide'); return; }
-    setSavingReg(true);
-    const { error: e } = await supabase.from('cash_regularizations').insert({
-      tenant_id: tenant.id, cash_session_id: session.id,
-      reg_type: regType, amount: regAmount, reason: regReason, note: regNote, user_id: profile.id,
-    });
-    setSavingReg(false);
-    if (e) { error(e.message); return; }
-    setSessionRegs(r => [...r, { id: (data as any)?.id, reg_type: regType, amount: regAmount, reason: regReason, note: regNote }]);
-    setRegOpen(false); setRegAmount(0); setRegReason(''); setRegNote('');
-    success('Régularisation enregistrée');
-  };
-
-  const deleteRegularization = async (idx: number) => {
-    const reg = sessionRegs[idx];
-    if (!reg) return;
-    if (reg.id) {
-      const { error: e } = await supabase.from('cash_regularizations').delete().eq('id', reg.id);
-      if (e) { error(e.message); return; }
-    }
-    setSessionRegs(r => r.filter((_, i) => i !== idx));
-    success('Régularisation supprimée');
-  };
-
-  const confirmClose = async () => {
-    if (!session || !tenant) return;
-    if (!can('pos_close_session')) { error('Vous n\'avez pas la permission de cloturer la session'); return; }
-    setClosing(true);
-
-    if (posCashCtx?.multi_enabled) {
-      const { error: e } = await supabase.rpc('cash_session_close', {
-        p_session_id: session.id,
-        p_control_lines: controlLines.map(c => ({
-          payment_method_id: c.payment_method_id,
-          method_name: c.method_name,
-          theoretical_amount: c.theoretical_amount,
-          counted_amount: c.counted_amount,
-        })),
-        p_closing_note: closingNote,
-        p_vault_deposit_amount: vaultCloseEnabled ? depositAmount : 0,
-        p_idempotency_key: closeIdemRef.current,
-      });
-      setClosing(false);
-      if (e) { error(e.message); return; }
-    } else if (vaultCloseEnabled) {
-      // Clôture atomique via RPC : lignes de contrôle + versement éventuel au coffre.
-      const { error: e } = await supabase.rpc('close_cash_session_v2', {
-        p_session_id: session.id,
-        p_control_lines: controlLines.map(c => ({
-          payment_method_id: c.payment_method_id,
-          method_name: c.method_name,
-          theoretical_amount: c.theoretical_amount,
-          counted_amount: c.counted_amount,
-        })),
-        p_closing_note: closingNote,
-        p_vault_deposit_amount: depositAmount,
-        p_idempotency_key: closeIdemRef.current,
-      });
-      setClosing(false);
-      if (e) { error(e.message); return; }
-    } else {
-      // Comportement de clôture inchangé (module Coffre indisponible).
-      const ctrlRows = controlLines.map(c => ({
-        tenant_id: tenant.id, cash_session_id: session.id,
-        payment_method_id: c.payment_method_id, method_name: c.method_name,
-        theoretical_amount: c.theoretical_amount, counted_amount: c.counted_amount,
-      }));
-      await supabase.from('cash_control_lines').insert(ctrlRows);
-      const countedTotal = controlLines.reduce((s, c) => s + c.counted_amount, 0);
-      const theoreticalTotal = controlLines.reduce((s, c) => s + c.theoretical_amount, 0);
-      const { error: e } = await supabase.from('cash_sessions').update({
-        status: 'closed', closed_at: new Date().toISOString(),
-        closing_amount: countedTotal, counted_cash: countedTotal,
-        theoretical_amount: theoreticalTotal,
-        variance: totalVariance, closing_note: closingNote, updated_at: new Date().toISOString(),
-      }).eq('id', session.id);
-      setClosing(false);
-      if (e) { error(e.message); return; }
-    }
-
-    if (statsData) {
-      printXReport(
-        { ...session, closing_note: closingNote } as any, controlLines, statsData, sessionRegs,
-        tenantForPrint,
-        profile?.full_name || profile?.email || '', currentSite?.name || ''
-      );
-    }
-    success('Caisse clôturée');
-    setCloseOpen(false); setSession(null); setScreen('open-form');
-    setCart([]); setDiscount(0); setCustomer(null);
-    setOpeningAmount(0); setOpeningNote('');
-    setControlLines([]); setSessionRegs([]); setStatsData(null);
-    setDepositMode('none'); setDepositPartial(''); setVaultAvailable(false);
-    load();
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -3124,18 +2303,31 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   const multiRegisters = posCashCtx?.registers || [];
   const multiNotice = posCashCtxError
     || (multiCash && posCashCtx?.can_open === false ? 'Vous n’avez pas l’autorisation d’ouvrir une caisse. Contactez votre administrateur.' : '');
+  const canSupervise = multiCash && !!posCashCtx?.is_elevated;
   const registerSlot = (multiCash || posCashCtxError) ? (
-    <PosRegisterPicker
-      registers={multiRegisters}
-      selectedId={selectedRegisterId}
-      onSelect={setSelectedRegisterId}
-      otherSession={posCashCtx?.other_session || null}
-      notice={multiNotice}
-    />
+    <>
+      <PosRegisterPicker
+        registers={multiRegisters}
+        selectedId={selectedRegisterId}
+        onSelect={setSelectedRegisterId}
+        otherSession={posCashCtx?.other_session || null}
+        notice={multiNotice}
+      />
+      {canSupervise && (
+        <button type="button" onClick={() => setSupervising(true)} className="w-full mt-2 inline-flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-neutral-700 hover:text-black hover:underline underline-offset-4 transition-colors">
+          <Eye className="w-3.5 h-3.5" />Superviser une caisse
+        </button>
+      )}
+    </>
   ) : undefined;
+  if (supervising && tenant) {
+    return <CashSupervision tenantId={tenant.id} methods={methods} customers={customers}
+      onExit={() => { setSupervising(false); load(); }} />;
+  }
   const openDisabled = !!posCashCtxError || (multiCash && (
     !!multiNotice || !!posCashCtx?.other_session || !selectedRegisterId
     || multiRegisters.find(r => r.id === selectedRegisterId)?.status === 'busy'
+    || !!multiRegisters.find(r => r.id === selectedRegisterId)?.locked
   ));
   if (screen === 'open-form' && !menuOpen) {
     return <POSLandingOpenMinimal
@@ -3511,6 +2703,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   {hasModule('online_orders') && <button onClick={() => { setSessionPopOpen(false); openWebOrders(); }} className="pos-pop-item relative"><Globe className="w-4 h-4" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
                   <div className="h-px bg-[var(--w-separator)] my-1" />
                   <button onClick={() => { setSessionPopOpen(false); leaveSession(); }} className="pos-pop-item"><LogOut className="w-4 h-4" />Quitter</button>
+                  {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setSessionPopOpen(false); setSupervising(true); }} className="pos-pop-item"><Eye className="w-4 h-4" />Superviser une caisse</button>}
                   {can('pos_close_session') && <button onClick={() => { setSessionPopOpen(false); openCloseWorkflow(); }} className="pos-pop-item text-red-600"><Lock className="w-4 h-4" />Clôturer</button>}
                 </div>
               </>
@@ -3624,6 +2817,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
               {hasModule('online_orders') && <button onClick={() => { setMobileActionsOpen(false); openWebOrders(); }} className="pos-sheet-item relative"><Globe className="w-5 h-5" />Commandes en ligne{webOrdersCounts.a_transformer > 0 && <span className="ml-auto min-w-[18px] h-[18px] px-1 text-[9px] rounded-full bg-red-500 text-white flex items-center justify-center font-bold">{webOrdersCounts.a_transformer}</span>}</button>}
               <div className="h-px bg-[var(--w-separator)] my-1" />
               <button onClick={() => { setMobileActionsOpen(false); leaveSession(); }} className="pos-sheet-item"><LogOut className="w-5 h-5" />Quitter</button>
+              {multiCash && posCashCtx?.is_elevated && <button onClick={() => { setMobileActionsOpen(false); setSupervising(true); }} className="pos-sheet-item"><Eye className="w-5 h-5" />Superviser une caisse</button>}
               {can('pos_close_session') && <button onClick={() => { setMobileActionsOpen(false); openCloseWorkflow(); }} className="pos-sheet-item text-red-600"><Lock className="w-5 h-5" />Clôturer</button>}
             </div>
           </div>
@@ -3800,392 +2994,12 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     </>
     )}
 
-      {/* Cash movement (expense / income / customer prepayment) */}
-      {mvOpen && (
-        <CashModal open={true} onClose={() => setMvOpen(false)} title="Mouvement de caisse"
-          footerLeft={
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={mvPrint} onChange={e => setMvPrint(e.target.checked)}
-                className="w-4 h-4 rounded" />
-              <Printer className="w-4 h-4 text-neutral-400" />
-              <span className="text-[12px] font-medium text-neutral-600 hidden sm:inline">Imprimer le reçu</span>
-              <span className="text-[12px] font-medium text-neutral-600 sm:hidden">Imprimer</span>
-            </label>
-          }
-          footer={<>
-              <button onClick={() => setMvOpen(false)} className="px-3 sm:px-4 h-8 rounded-[4px] border border-neutral-200 text-[12px] font-semibold text-neutral-900 hover:bg-neutral-50 transition-colors">Annuler</button>
-              <button onClick={submitMovement} disabled={mvSubmitting || mvAmount <= 0}
-                className="px-3 sm:px-4 h-8 rounded-[4px] bg-neutral-900 text-white text-[12px] font-semibold hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
-                {mvSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                <span className="sm:hidden">Valider</span>
-                <span className="hidden sm:inline">Valider le mouvement</span>
-              </button>
-          </>}>
-          <div>
-            {/* Type — flat horizontal nav */}
-            <div className="-mx-4 px-4 border-b border-neutral-200">
-              <div className="flex items-stretch w-full">
-                <button type="button" onClick={() => setMvKind('expense')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'expense' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <ArrowUpRight className={`w-6 h-6 ${mvKind === 'expense' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'expense' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Dépense</span>
-                </button>
-                <button type="button" onClick={() => setMvKind('income')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'income' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <ArrowDownRight className={`w-6 h-6 ${mvKind === 'income' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'income' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Entrée</span>
-                </button>
-                <button type="button" onClick={() => setMvKind('customer_prepayment')}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_prepayment' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <Banknote className={`w-6 h-6 ${mvKind === 'customer_prepayment' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_prepayment' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Acompte</span>
-                </button>
-                {can('pos_customer_withdrawal') && !!(tenant as any)?.settings?.enable_customer_withdrawals && (
-                <button type="button" onClick={() => { setMvKind('customer_withdrawal'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_withdrawal' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <ArrowDownToLine className={`w-6 h-6 ${mvKind === 'customer_withdrawal' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_withdrawal' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Retrait</span>
-                </button>
-                )}
-                {can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans && (
-                <button type="button" onClick={() => { setMvKind('customer_loan'); setMvCustPrepay(0); setMvCustBalance(0); }}
-                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_loan' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                  <HandCoins className={`w-6 h-6 ${mvKind === 'customer_loan' ? 'text-red-500' : 'text-neutral-400'}`} />
-                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_loan' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Prêt</span>
-                </button>
-                )}
-              </div>
-            </div>
-
-            {/* Customer section (for prepayment/withdrawal/loan) */}
-            {(mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') && (
-              <div className="pt-5 pb-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Client</div>
-                {mvCustomer ? (
-                  <div className="flex items-center gap-2.5 py-1">
-                    <User className="w-4 h-4 text-neutral-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-semibold text-neutral-900 truncate">{mvCustomer.name}</div>
-                      {mvCustomer.phone && <div className="text-[11px] text-neutral-500 truncate">{mvCustomer.phone}</div>}
-                    </div>
-                    <button onClick={() => { setMvCustomer(null); setMvCustPrepay(0); setMvCustBalance(0); }} className="text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors shrink-0">Changer</button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="relative group">
-                      <Search className="w-4 h-4 absolute left-0 top-1/2 -translate-y-1/2 text-neutral-400" />
-                      <input autoFocus value={mvCustSearch} onChange={e => setMvCustSearch(e.target.value)}
-                        className="w-input-ul pl-6 text-[13px]" placeholder="Rechercher un client…" />
-                    </div>
-                    <div className="mt-1 max-h-32 overflow-y-auto divide-y divide-neutral-100">
-                      {customers
-                        .filter(cu => {
-                          const q = mvCustSearch.toLowerCase().trim();
-                          if (!q) return true;
-                          return cu.name.toLowerCase().includes(q) || (cu.phone || '').includes(q);
-                        })
-                        .slice(0, 15)
-                        .map(cu => (
-                          <button key={cu.id} onClick={async () => {
-                            setMvCustomer(cu);
-                            if (mvKind === 'customer_withdrawal') {
-                              let avail = 0;
-                              try {
-                                const ppMap = await fetchPrepayAvailable([cu.id]);
-                                avail = ppMap[cu.id] || 0;
-                              } catch (e: any) {
-                                error(`Acompte disponible indisponible : ${e.message}`);
-                              }
-                              setMvCustPrepay(avail);
-                              const custBalance = Math.max(0, Number(cu.balance || 0));
-                              setMvCustBalance(custBalance);
-                            }
-                            if (mvKind === 'customer_loan') {
-                              setMvCustBalance(Math.max(0, Number(cu.balance || 0)));
-                            }
-                          }}
-                            className="w-full flex items-center gap-2.5 py-1.5 hover:bg-neutral-50 text-left transition-colors">
-                            <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                            <span className="text-[12px] font-semibold text-neutral-800 truncate">{cu.name}</span>
-                            {cu.phone && <span className="text-[11px] text-neutral-500 ml-auto shrink-0">{cu.phone}</span>}
-                          </button>
-                        ))}
-                    </div>
-                  </>
-                )}
-                {mvKind === 'customer_withdrawal' && mvCustomer && (() => {
-                  const debt = Math.max(0, mvCustBalance);
-                  const net = mvCustPrepay - debt;
-                  if (mvCustPrepay <= 0) {
-                    return <div className="mt-2 text-[12px] font-semibold text-red-600">Aucun acompte disponible pour ce client</div>;
-                  }
-                  return (
-                    <div className="mt-2 space-y-0.5">
-                      {debt > 0 ? (
-                        <>
-                          <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Acompte disponible</span><span className="font-bold num text-neutral-900">{formatFCFA(mvCustPrepay)}</span></div>
-                          <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Dette en cours</span><span className="font-bold num text-red-600">-{formatFCFA(debt)}</span></div>
-                          <div className="flex justify-between text-[12px] pt-1 border-t border-neutral-100"><span className="font-semibold text-neutral-900">Retrait maximum</span><span className={`font-bold num ${net > 0 ? 'text-neutral-900' : 'text-red-600'}`}>{formatFCFA(net)}</span></div>
-                        </>
-                      ) : (
-                        <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Retrait maximum</span><span className="font-bold num text-neutral-900">{formatFCFA(net)}</span></div>
-                      )}
-                      {net <= 0 && <div className="text-[11px] font-semibold text-red-600 mt-1">La dette couvre l'acompte. Retrait impossible.</div>}
-                    </div>
-                  );
-                })()}
-                {mvKind === 'customer_loan' && mvCustomer && (
-                  <div className="mt-2 space-y-0.5">
-                    <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Créance actuelle</span><span className="font-bold num text-neutral-900">{formatFCFA(Math.max(0, mvCustBalance))}</span></div>
-                    <div className="text-[11px] text-neutral-500 mt-1">Le montant du prêt sera ajouté à la créance du client.</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Form fields */}
-            <div className="pt-5">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="group">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
-                  <input type="number" value={mvAmount || ''} onChange={e => setMvAmount(Math.max(0, Number(e.target.value)))}
-                    className="w-input-ul text-2xl font-bold num" placeholder="0 FCFA" min={0} />
-                </div>
-                <div className="group">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</div>
-                  {mvKind === 'expense' && expenseCats.length > 0 ? (
-                    <SearchableSelect
-                      value={mvExpenseCat}
-                      onChange={setMvExpenseCat}
-                      options={expenseCats.map(c => ({ value: c.id, label: c.name }))}
-                      placeholder="Sélectionner…"
-                    />
-                  ) : (
-                    <input value={mvReason} onChange={e => setMvReason(e.target.value)}
-                      className="w-input-ul text-[13px]" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
-                  )}
-                </div>
-              </div>
-
-              {(mvKind === 'income' || mvKind === 'customer_prepayment') && (
-                <div className="mt-5">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Mode de règlement</div>
-                  <div className="flex flex-wrap gap-3">
-                    {methods.map(m => (
-                      <button key={m.id} type="button" onClick={() => setMvMethod(m)}
-                        className={`px-0 py-1 text-[12px] font-semibold border-b-2 transition-all ${mvMethod?.id === m.id ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>
-                        {m.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-6 mt-5">
-                <div className="group">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence</div>
-                  <input value={mvRef} onChange={e => setMvRef(e.target.value)}
-                    className="w-input-ul text-[13px]" placeholder="N° pièce…" />
-                </div>
-                <div className="group">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Note</div>
-                  <input value={mvNote} onChange={e => setMvNote(e.target.value)}
-                    className="w-input-ul text-[13px]" placeholder="Ajouter une note…" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </CashModal>
+      {mvOpen && cashCtx && (
+        <CashMovementModal ctx={cashCtx} onClose={() => setMvOpen(false)} onDone={load} />
       )}
 
-      {/* Customer payment (encaissement libre) */}
-      {custPayOpen && (
-        <CashModal open={true} onClose={() => setCustPayOpen(false)} title="Encaisser un client"
-          footerLeft={
-            (custPayMode === 'direct' || (custPayMode === 'invoice' && custPayCustomer && custPayUnpaid.length > 0)) ? (
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={custPayPrint} onChange={e => setCustPayPrint(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded" />
-                <Printer className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="text-[12px] font-medium text-neutral-600"><span className="hidden sm:inline">Imprimer le reçu</span><span className="sm:hidden">Imprimer</span></span>
-              </label>
-            ) : undefined
-          }
-          footer={<>
-              <button onClick={() => setCustPayOpen(false)} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
-              {custPayMode === 'direct' ? (
-                <button onClick={submitDirectEncaissement} disabled={custPaySubmitting || !custPayMethod || custPayAmount <= 0}
-                  className="px-5 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Valider'}
-                </button>
-              ) : (
-                <button onClick={submitCustomerPayment} disabled={custPaySubmitting || !custPayCustomer || !custPayMethod || custPayAmount <= 0}
-                  className="px-5 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  {custPaySubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Continuer'}
-                </button>
-              )}
-          </>}>
-          <div>
-            {/* Flat tab navigation */}
-            <div className="flex border-b border-neutral-200 mb-5">
-              <button type="button"
-                onClick={() => {
-                  setCustPayMode('invoice');
-                  setCustPayLabel('');
-                  if (!custPayCustomer) setCustPayAmount(0);
-                }}
-                className={`px-0 mr-8 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'invoice' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>
-                Client en attente
-              </button>
-              <button type="button"
-                onClick={() => {
-                  setCustPayMode('direct');
-                  setCustPayCustomer(null);
-                  setCustPayUnpaid([]);
-                  setCustPaySaleId('');
-                  setCustPayAmount(0);
-                  if (!custPayMethod) setCustPayMethod(methods[0] || null);
-                }}
-                className={`px-0 pb-3 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${custPayMode === 'direct' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>
-                Encaissement direct
-              </button>
-            </div>
-
-            {custPayMode === 'direct' ? (
-              <div className="space-y-5">
-                <div className="group">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
-                  <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
-                    autoFocus className="w-input-ul text-lg font-bold num" placeholder="0" min={0} />
-                </div>
-
-                <div className="group">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Libellé (optionnel)</div>
-                  <input value={custPayLabel} onChange={e => setCustPayLabel(e.target.value)}
-                    className="w-input-ul text-[13px]" placeholder="Ex: Acompte travaux, location matériel…" />
-                </div>
-
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Mode de règlement</div>
-                  <div className="flex flex-wrap gap-3">
-                    {methods.map(m => (
-                      <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
-                        className={`px-0 py-1 text-[12px] font-semibold border-b-2 transition-all ${custPayMethod?.id === m.id ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>
-                        {m.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="group">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence (optionnel)</div>
-                  <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="w-input-ul text-[13px]" placeholder="N° bordereau, transaction…" />
-                </div>
-              </div>
-            ) : !custPayCustomer ? (
-              <div>
-                <div className="text-[13px] font-semibold text-neutral-900 mb-2">Rechercher un client</div>
-                <div className="group">
-                  <div className="relative">
-                    <Search className="w-4 h-4 absolute left-0 top-1/2 -translate-y-1/2 text-neutral-400" />
-                    <input autoFocus value={custPaySearch} onChange={e => setCustPaySearch(e.target.value)}
-                      className="w-input-ul pl-6 text-[13px]" placeholder="Nom, téléphone…" />
-                  </div>
-                </div>
-                <div className="mt-3 max-h-72 overflow-y-auto -mx-1">
-                  {customers
-                    .filter(c => {
-                      const q = custPaySearch.toLowerCase().trim();
-                      if (!q) return true;
-                      return c.name.toLowerCase().includes(q) || (c.phone || '').includes(q);
-                    })
-                    .slice(0, 30)
-                    .map(c => (
-                      <button key={c.id} onClick={() => loadCustomerUnpaid(c)}
-                        className="w-full flex items-center gap-3 px-1 py-3 text-left transition-colors hover:bg-neutral-50 active:bg-neutral-100 border-b border-neutral-100 last:border-b-0">
-                        <User className="w-4 h-4 text-neutral-400 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[13px] font-semibold text-neutral-900 truncate">{c.name}</div>
-                          {c.phone && <div className="text-[11px] text-neutral-400 truncate">{c.phone}</div>}
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-neutral-300 shrink-0" />
-                      </button>
-                    ))}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="flex items-center gap-3 pb-4 border-b border-neutral-100">
-                  <User className="w-4 h-4 text-neutral-400 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-bold text-neutral-900 truncate">{custPayCustomer.name}</div>
-                    <div className="text-[11px] text-neutral-500">
-                      {custPayUnpaid.filter(s => s.id !== '__balance__').length} facture(s) impayée(s) · Solde {formatFCFA(Number((custPayCustomer as any).balance || 0))}
-                    </div>
-                  </div>
-                  <button onClick={() => setCustPayCustomer(null)} className="text-[11px] font-semibold text-neutral-500 hover:text-neutral-900 transition-colors shrink-0">Changer</button>
-                </div>
-
-                {custPayUnpaid.length === 0 && Number((custPayCustomer as any).balance || 0) <= 0 ? (
-                  <div className="py-6 text-center">
-                    <CheckCircle2 className="w-5 h-5 text-neutral-400 mx-auto mb-2" />
-                    <div className="text-[13px] font-semibold text-neutral-900">Aucune facture en attente</div>
-                    <div className="text-[11px] text-neutral-500 mt-0.5">Ce client est à jour.</div>
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Imputation</div>
-                      <div className="max-h-48 overflow-y-auto -mx-1">
-                        <button type="button" onClick={() => { setCustPaySaleId(''); setCustPayAmount(custPayUnpaid.reduce((a, s) => a + (s.total - s.paid), 0)); }}
-                          className={`w-full flex items-center gap-3 px-1 py-3 text-left transition-colors border-b border-neutral-100 ${!custPaySaleId ? 'bg-neutral-50' : 'hover:bg-neutral-50'}`}>
-                          <div className="min-w-0 flex-1">
-                            <div className={`text-[13px] truncate ${!custPaySaleId ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>Repartir automatiquement</div>
-                            <div className="text-[11px] text-neutral-400">Plus ancienne d'abord</div>
-                          </div>
-                          {!custPaySaleId && <Check className="w-4 h-4 text-neutral-900 shrink-0" />}
-                        </button>
-                        {custPayUnpaid.map(s => (
-                          <button key={s.id} type="button" onClick={() => { setCustPaySaleId(s.id); setCustPayAmount(s.total - s.paid); }}
-                            className={`w-full flex items-center gap-3 px-1 py-3 text-left transition-colors border-b border-neutral-100 last:border-b-0 ${custPaySaleId === s.id ? 'bg-neutral-50' : 'hover:bg-neutral-50'}`}>
-                            <div className="min-w-0 flex-1">
-                              <div className={`text-[13px] truncate ${custPaySaleId === s.id ? 'font-bold text-neutral-900' : 'font-medium text-neutral-700'}`}>{s.sale_number} · dû {formatFCFA(s.total - s.paid)}</div>
-                              <div className="text-[11px] text-neutral-400">{s.id === '__balance__' ? 'Solde positionné' : new Date(s.created_at).toLocaleDateString('fr-FR')}</div>
-                            </div>
-                            {custPaySaleId === s.id && <Check className="w-4 h-4 text-neutral-900 shrink-0" />}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="group">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
-                      <input type="number" value={custPayAmount || ''} onChange={e => setCustPayAmount(Math.max(0, Number(e.target.value)))}
-                        className="w-input-ul text-lg font-bold num" placeholder="0" min={0} />
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Mode de règlement</div>
-                      <div className="flex flex-wrap gap-3">
-                        {methods.map(m => (
-                          <button key={m.id} type="button" onClick={() => setCustPayMethod(m)}
-                            className={`px-0 py-1 text-[12px] font-semibold border-b-2 transition-all ${custPayMethod?.id === m.id ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>
-                            {m.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="group">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence (optionnel)</div>
-                      <input value={custPayRef} onChange={e => setCustPayRef(e.target.value)} className="w-input-ul text-[13px]" placeholder="N° bordereau, transaction…" />
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </CashModal>
+      {custPayOpen && cashCtx && (
+        <CustomerPaymentModal ctx={cashCtx} onClose={() => setCustPayOpen(false)} onDone={load} />
       )}
 
       {/* Fullscreen immersive payment */}
@@ -4278,110 +3092,9 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         )}
       </Modal>
 
-      {/* Return ticket */}
-      <CashModal open={returnOpen} onClose={() => setReturnOpen(false)} title="Ticket de retour"
-        footer={!returnSelected ? (
-          <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Fermer</button>
-        ) : (
-          <div className="flex items-center justify-end gap-3 w-full">
-            <button onClick={() => { setReturnOpen(false); setReturnSelected(null); }} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Annuler</button>
-            <button onClick={processReturn} disabled={returnProcessing || returnLines.filter(l => l.selected).length === 0} className="px-4 py-2 text-[13px] font-semibold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              {returnProcessing ? <Loader2 className="w-4 h-4 animate-spin mx-2" /> : "Créer l'avoir"}
-            </button>
-          </div>
-        )}
-      >
-        {returnLoading ? (
-          <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-        ) : !returnSelected ? (
-          <div>
-            {/* Search */}
-            <div className="relative group mb-4">
-              <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <input value={returnSearch} onChange={e => setReturnSearch(e.target.value)} placeholder="Rechercher un ticket de la session..." className="w-input-ul pl-6 text-[13px]" autoFocus={desktopAutoFocus} />
-            </div>
-            {/* List */}
-            {filteredReturnSales.length === 0 ? (
-              <div className="py-8 text-center text-sm text-neutral-500">Aucun ticket dans cette session.</div>
-            ) : (
-              <div>
-                {filteredReturnSales.map(s => (
-                  <button key={s.id} onClick={() => !s.fullyReturned && selectReturnSale(s)} disabled={s.fullyReturned} className={`w-full text-left py-2.5 border-b border-neutral-100 last:border-b-0 flex items-center justify-between gap-2 transition-colors ${s.fullyReturned ? 'opacity-40 cursor-not-allowed' : ''}`}>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-bold text-neutral-900 doc-number">{s.sale_number}</div>
-                      <div className="text-[12px] text-neutral-500 mt-0.5">
-                        {s.customer_name || 'Client comptoir'}
-                        {s.fullyReturned && <span className="ml-2 text-[10px] font-bold uppercase text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded">Retourné</span>}
-                      </div>
-                      <div className="text-[10px] text-neutral-400 num mt-0.5">{new Date(s.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })} - {new Date(s.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(s.total)}</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div>
-            {/* Selected ticket header */}
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
-              <span className="text-[15px] font-bold text-neutral-900 doc-number">{returnSelected.sale_number}</span>
-              <button onClick={() => setReturnSelected(null)} className="text-[13px] text-neutral-600 underline underline-offset-2 hover:text-neutral-900 transition-colors">Changer</button>
-            </div>
-
-            {/* Instructions */}
-            <p className="text-[13px] text-neutral-600 mt-4 mb-4 leading-relaxed">Sélectionnez les articles à retourner et ajustez les quantités.</p>
-
-            {/* Article list */}
-            <div>
-              {returnLines.map((l, i) => {
-                const toggle = (v: boolean) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, selected: v } : x));
-                const setQ = (q: number) => setReturnLines(lines => lines.map((x, j) => j === i ? { ...x, quantity: Math.min(l.maxQty, Math.max(1, q)) } : x));
-                return (
-                  <div key={i} className="py-4 border-b border-neutral-100 last:border-b-0">
-                    <div className="flex items-start gap-3">
-                      <button type="button" onClick={() => toggle(!l.selected)} className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${l.selected ? 'bg-red-600 border-red-600' : 'bg-white border-neutral-300'}`}>
-                        {l.selected && <Check className="w-3 h-3 text-white" />}
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-bold text-neutral-900 leading-snug break-words uppercase">{l.name}</div>
-                        <div className="text-[12px] text-neutral-500 mt-1 num">{formatFCFA(l.unit_price)} · Qté achetée : {l.maxQty}</div>
-                        {l.selected && (
-                          <div className="text-[12px] text-red-600 font-medium mt-0.5 num">Montant du retour : -{formatFCFA(l.quantity * l.unit_price)}</div>
-                        )}
-                        {l.selected && (
-                          <div className="mt-3 flex items-center justify-between">
-                            <span className="text-[12px] text-neutral-600">Quantité à retourner</span>
-                            <div className="flex items-center gap-3">
-                              <button type="button" onClick={() => setQ(l.quantity - 1)} className="w-8 h-8 flex items-center justify-center text-neutral-600 hover:text-neutral-900 transition-colors"><Minus className="w-4 h-4" /></button>
-                              <span className="text-[15px] font-bold num w-6 text-center">{l.quantity}</span>
-                              <button type="button" onClick={() => setQ(l.quantity + 1)} className="w-8 h-8 flex items-center justify-center text-neutral-600 hover:text-neutral-900 transition-colors"><Plus className="w-4 h-4" /></button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Total avoir */}
-            <div className="flex items-center justify-between pt-4 mt-2 border-t border-neutral-200">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-900">Avoir total</div>
-                <div className="text-[11px] text-neutral-500 mt-0.5">{returnLines.filter(l => l.selected).length} article{returnLines.filter(l => l.selected).length > 1 ? 's' : ''}</div>
-              </div>
-              <div className="text-xl font-bold text-red-600 num">
-                - {formatFCFA(returnLines.filter(l => l.selected).reduce((s, l) => s + l.quantity * l.unit_price, 0))}
-              </div>
-            </div>
-          </div>
-        )}
-      </CashModal>
+      {returnOpen && cashCtx && (
+        <SaleReturnModal ctx={cashCtx} onClose={() => setReturnOpen(false)} onDone={load} />
+      )}
 
       {/* Lot picker modal for manual lot selection */}
       <LotPickerModal
@@ -4393,1033 +3106,21 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
         confirmLabel="Confirmer la vente"
       />
 
-      {/* Session tickets list */}
-      <CashModal open={ticketsOpen} onClose={() => setTicketsOpen(false)} title="Tickets de la session"
-        footer={<button onClick={() => setTicketsOpen(false)} className="px-4 py-2 text-[13px] font-semibold text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors">Fermer</button>}
-      >
-        {loadingTickets ? (
-          <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-        ) : sessionSales.length === 0 && sessionMovements.length === 0 ? (
-          <div className="py-8 text-center text-sm text-neutral-500">Aucune activité dans cette session.</div>
-        ) : (() => {
-          const encDirectList = sessionMovements.filter(m => m.kind === 'income');
-          const acomptesList = sessionMovements.filter(m => m.kind === 'customer_prepayment');
-          const depensesList = sessionMovements.filter(m => m.kind === 'expense');
-          const remboursementsList = sessionMovements.filter(m => m.kind === 'refund');
-          const retraitsList = sessionMovements.filter(m => m.kind === 'customer_withdrawal');
-          const pretsList = sessionMovements.filter(m => m.kind === 'customer_loan');
-          const encDirectTotal = encDirectList.reduce((s, m) => s + m.amount, 0);
-          const acomptesTotal = acomptesList.reduce((s, m) => s + m.amount, 0);
-          const depensesTotal = depensesList.reduce((s, m) => s + m.amount, 0);
-          const remboursementsTotal = remboursementsList.reduce((s, m) => s + m.amount, 0);
-          const retraitsTotal = retraitsList.reduce((s, m) => s + m.amount, 0);
-          const pretsTotal = pretsList.reduce((s, m) => s + m.amount, 0);
-          return (
-          <div>
-            {/* KPI strip */}
-            {can('pos_view_session_stats') && (
-            <div className="flex items-center border-b border-neutral-200 pb-4 mb-4">
-              <div className="flex-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Tickets</div>
-                <div className="text-xl font-bold text-neutral-900 num">{sessionSales.filter(x => x.status !== 'return').length}</div>
-              </div>
-              <div className="w-px h-8 bg-neutral-200 mx-4 shrink-0" />
-              <div className="flex-1 text-right">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">Total encaissé</div>
-                <div className="text-xl font-bold text-neutral-900 num">{formatFCFA(sessionEncaisse)}</div>
-              </div>
-            </div>
-            )}
+      {ticketsOpen && cashCtx && <SessionTicketsModal ctx={cashCtx} onClose={() => setTicketsOpen(false)} />}
 
-            {/* Tickets de vente section */}
-            <div>
-              <button onClick={() => setTicketsExpanded(ticketsExpanded === 'tickets' ? null : 'tickets')} className="w-full flex items-center justify-between py-2 text-left transition-colors">
-                <div className="flex items-center gap-2 min-w-0">
-                  <List className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                  <span className="text-[13px] font-semibold text-neutral-900">Tickets de vente</span>
-                  <span className="text-[11px] text-neutral-400">{sessionSales.length}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(sessionSales.reduce((s, x) => s + x.total, 0))}</span>}
-                  <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'tickets' ? 'rotate-90' : ''}`} />
-                </div>
-              </button>
-              {ticketsExpanded === 'tickets' && (
-                <div className="mt-1">
-                  {sessionSales.length === 0 ? (
-                    <div className="text-center py-4 text-[12px] text-neutral-500">Aucun ticket.</div>
-                  ) : sessionSales.map(s => (
-                    <div key={s.id} className={`py-3 border-b border-neutral-100 last:border-b-0 ${s.status === 'return' ? 'bg-red-50/20' : ''}`}>
-                      <div className="flex items-center justify-between">
-                        <div className={`text-[13px] font-semibold truncate ${s.status === 'return' ? 'text-red-700' : 'text-neutral-900'}`}>
-                          {s.customer_name || (s.status === 'return' ? 'Remboursement' : 'Client comptoir')}
-                          {s.status === 'return' && <span className="ml-1.5 text-[10px] font-bold uppercase text-red-600">Retour</span>}
-                        </div>
-                        <span className={`text-[13px] font-bold num shrink-0 ml-3 ${s.total < 0 ? 'text-red-600' : 'text-neutral-900'}`}>{s.total < 0 ? '-' : ''}{formatFCFA(Math.abs(s.total))}</span>
-                      </div>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <div className="flex items-center gap-0 text-[11px] text-neutral-400 num whitespace-nowrap">
-                          <span className={`font-semibold ${s.status === 'return' ? 'text-red-500' : ''}`}>{s.sale_number}</span>
-                          <span className="mx-1.5">·</span>
-                          <span>{formatDateTime(s.created_at)}</span>
-                        </div>
-                        {s.status !== 'return' && can('pos_reprint') && (
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button title="Ticket 80mm" onClick={() => {
-                              const fakeSale = {
-                                sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
-                                items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                                payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.paid, reference: '' }],
-                                customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
-                              };
-                              printSaleTicket(fakeSale as any, s.doc_header);
-                            }} className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors">
-                              <Printer className="w-3.5 h-3.5" />
-                            </button>
-                            <button title="Facture A4" onClick={() => {
-                              const fakeSale = {
-                                sale_number: s.sale_number, created_at: s.created_at, total: s.total, discount: 0,
-                                items: s.items.map(i => ({ ...i, discount: 0, article_id: '', internal_ref: '', stock_available: 0, purchase_cost: 0 })),
-                                payments: [{ payment_method_id: null, method_name: 'Règlement', amount: s.paid, reference: '' }],
-                                customer: s.customer_name ? { id: '', tenant_id: '', name: s.customer_name, phone: s.customer_phone || '', email: '', address: s.customer_address || '', customer_type: '', balance: 0 } : null,
-                              };
-                              printSaleInvoice(fakeSale as any, s.doc_header, (s.user_id && sessionProfileNames[s.user_id]) || 'Utilisateur non renseigné');
-                            }} className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors">
-                              <FileText className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+      {statsOpen && session && cashCtx && <SessionStatsModal ctx={cashCtx} session={session} onClose={() => setStatsOpen(false)} />}
 
-            {/* Other sections */}
-            <div className="border-t border-neutral-200 mt-2 pt-1">
-              {encDirectList.length > 0 && (
-                <div className="border-b border-neutral-100">
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ArrowDownRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-[13px] font-semibold text-neutral-900">Encaissements directs</span>
-                      <span className="text-[11px] text-neutral-400">{encDirectList.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(encDirectTotal)}</span>}
-                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {ticketsExpanded === 'encDirect' && (
-                    <div className="pb-2">
-                      {encDirectList.map((m, i) => (
-                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.reason || 'Encaissement direct'}</div>
-                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">+{formatFCFA(m.amount)}</span>
-                          </div>
-                          <div className="flex items-center justify-between mt-0.5">
-                            <div className="text-[11px] text-neutral-400 num">
-                              <span>{m.method_name || 'Espèces'}</span>
-                              <span className="mx-1.5">·</span>
-                              <span>{formatDateTime(m.created_at)}</span>
-                            </div>
-                            {can('pos_reprint') && <button
-                              title="Réimprimer le reçu"
-                              onClick={() => {
-                                try {
-                                  printEncaissementTicket80({
-                                    receiptNumber: `ENC-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                    amount: m.amount,
-                                    method: m.method_name || 'Espèces',
-                                    label: m.reason || undefined,
-                                    reference: m.reference || undefined,
-                                    customerName: m.customer_name,
-                                    createdAt: m.created_at,
-                                    tenant: tenantForPrint as PrintTenant,
-                                    cashier: cashierName,
-                                  });
-                                } catch {}
-                              }}
-                              className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                            </button>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
-              {sessionInvPayments.length > 0 && (
-                <div className="border-b border-neutral-100">
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Wallet className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-[13px] font-semibold text-neutral-900">Reglements factures</span>
-                      <span className="text-[11px] text-neutral-400">{sessionInvPayments.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(sessionInvPayments.reduce((s, p) => s + p.amount, 0))}</span>}
-                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {ticketsExpanded === 'reglements' && (
-                    <div className="pb-2">
-                      {sessionInvPayments.map((p, i) => (
-                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{p.customer_name || 'Client'}</div>
-                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">+{formatFCFA(p.amount)}</span>
-                          </div>
-                          <div className="text-[11px] text-neutral-400 num mt-0.5">
-                            <span className="font-semibold">{p.sale_number}</span>
-                            {p.method_name && <><span className="mx-1.5">·</span><span>{p.method_name}</span></>}
-                            <span className="mx-1.5">·</span>
-                            <span>{formatDateTime(p.created_at)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {acomptesList.length > 0 && (
-                <div className="border-b border-neutral-100">
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Wallet className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-[13px] font-semibold text-neutral-900">Acomptes clients</span>
-                      <span className="text-[11px] text-neutral-400">{acomptesList.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">+{formatFCFA(acomptesTotal)}</span>}
-                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {ticketsExpanded === 'acomptes' && (
-                    <div className="pb-2">
-                      {acomptesList.map((m, i) => (
-                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.customer_name || 'Client'}</div>
-                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">+{formatFCFA(m.amount)}</span>
-                          </div>
-                          <div className="flex items-center justify-between mt-0.5">
-                            <div className="text-[11px] text-neutral-400 num">
-                              <span>{m.method_name || 'Acompte'}</span>
-                              <span className="mx-1.5">·</span>
-                              <span>{formatDateTime(m.created_at)}</span>
-                            </div>
-                            {can('pos_reprint') && <button
-                              title="Réimprimer le reçu"
-                              onClick={() => {
-                                try {
-                                  printEncaissementTicket80({
-                                    receiptNumber: `ACO-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                    amount: m.amount,
-                                    method: m.method_name || 'Espèces',
-                                    label: m.reason ? `Acompte · ${m.reason}` : 'Acompte client',
-                                    reference: m.reference || undefined,
-                                    customerName: m.customer_name,
-                                    createdAt: m.created_at,
-                                    tenant: tenantForPrint as PrintTenant,
-                                    cashier: cashierName,
-                                  });
-                                } catch {}
-                              }}
-                              className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                            </button>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {depensesList.length > 0 && (
-                <div className="border-b border-neutral-100">
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ArrowUpRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-[13px] font-semibold text-neutral-900">Décaissements</span>
-                      <span className="text-[11px] text-neutral-400">{depensesList.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(depensesTotal)}</span>}
-                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {ticketsExpanded === 'depenses' && (
-                    <div className="pb-2">
-                      {depensesList.map((m, i) => (
-                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.reason || 'Dépense'}</div>
-                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">-{formatFCFA(m.amount)}</span>
-                          </div>
-                          <div className="flex items-center justify-between mt-0.5">
-                            <div className="text-[11px] text-neutral-400 num">
-                              <span>{m.method_name || 'Espèces'}</span>
-                              <span className="mx-1.5">·</span>
-                              <span>{formatDateTime(m.created_at)}</span>
-                            </div>
-                            {can('pos_reprint') && <button
-                              title="Réimprimer le bon"
-                              onClick={() => {
-                                try {
-                                  printDecaissementTicket80({
-                                    receiptNumber: `DEC-${String(m.id).slice(0, 8).toUpperCase()}`,
-                                    amount: m.amount,
-                                    method: m.method_name || 'Espèces',
-                                    label: m.reason || undefined,
-                                    reference: m.reference || undefined,
-                                    beneficiary: m.customer_name,
-                                    createdAt: m.created_at,
-                                    tenant: tenantForPrint as PrintTenant,
-                                    cashier: cashierName,
-                                  });
-                                } catch {}
-                              }}
-                              className="p-1 text-neutral-400 hover:text-neutral-700 transition-colors"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                            </button>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {remboursementsList.length > 0 && (
-                <div className="border-b border-neutral-100">
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'remboursements' ? null : 'remboursements')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <RotateCcw className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-[13px] font-semibold text-neutral-900">Remboursements</span>
-                      <span className="text-[11px] text-neutral-400">{remboursementsList.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(remboursementsTotal)}</span>}
-                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'remboursements' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {ticketsExpanded === 'remboursements' && (
-                    <div className="pb-2">
-                      {remboursementsList.map((m, i) => (
-                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.reason || 'Remboursement'}</div>
-                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">-{formatFCFA(m.amount)}</span>
-                          </div>
-                          <div className="text-[11px] text-neutral-400 num mt-0.5">
-                            <span>{m.method_name || 'Espèces'}</span>
-                            <span className="mx-1.5">·</span>
-                            <span>{formatDateTime(m.created_at)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {retraitsList.length > 0 && (
-                <div className="border-b border-neutral-100">
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ArrowUpRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-[13px] font-semibold text-neutral-900">Retraits clients</span>
-                      <span className="text-[11px] text-neutral-400">{retraitsList.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(retraitsTotal)}</span>}
-                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {ticketsExpanded === 'retraits' && (
-                    <div className="pb-2">
-                      {retraitsList.map((m, i) => (
-                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.customer_name || 'Client'}</div>
-                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">-{formatFCFA(m.amount)}</span>
-                          </div>
-                          <div className="text-[11px] text-neutral-400 num mt-0.5">
-                            <span>{m.method_name || 'Espèces'}</span>
-                            <span className="mx-1.5">·</span>
-                            <span>{formatDateTime(m.created_at)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {pretsList.length > 0 && (
-                <div className="border-b border-neutral-100">
-                  <button onClick={() => setTicketsExpanded(ticketsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between py-3 text-left transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <HandCoins className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="text-[13px] font-semibold text-neutral-900">Prêts clients</span>
-                      <span className="text-[11px] text-neutral-400">{pretsList.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {can('pos_view_session_stats') && <span className="text-[13px] font-bold text-neutral-900 num">-{formatFCFA(pretsTotal)}</span>}
-                      <ChevronRight className={`w-3.5 h-3.5 text-neutral-300 transition-transform duration-200 ${ticketsExpanded === 'prets' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {ticketsExpanded === 'prets' && (
-                    <div className="pb-2">
-                      {pretsList.map((m, i) => (
-                        <div key={i} className="py-2.5 pl-6 border-b border-neutral-100 last:border-b-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[13px] font-semibold text-neutral-900 truncate">{m.customer_name || 'Client'}</div>
-                            <span className="text-[13px] font-bold text-neutral-900 num shrink-0 ml-3">-{formatFCFA(m.amount)}</span>
-                          </div>
-                          <div className="text-[11px] text-neutral-400 num mt-0.5">
-                            <span>Prêt</span>
-                            <span className="mx-1.5">·</span>
-                            <span>{formatDateTime(m.created_at)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-          );
-        })()}
-      </CashModal>
-
-      <CashModal open={statsOpen} onClose={() => setStatsOpen(false)} title="Statistiques de la session"
-        footer={<>
-          <button onClick={() => setStatsOpen(false)} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          {statsData && (
-            <button onClick={() => printXReport(
-              session as any,
-              methods.map(m => ({ payment_method_id: m.id, method_name: m.name, theoretical_amount: statsData.byMethod.find(b => b.method_name === m.name)?.amount || 0, counted_amount: 0 })),
-              statsData, sessionRegs,
-              tenantForPrint,
-              profile?.full_name || profile?.email || '', currentSite?.name || ''
-            )} className="btn-icon-primary" title="Imprimer rapport">
-              <Printer className="w-4 h-4" />
-            </button>
-          )}
-        </>}
-      >
-        {loadingStats ? (
-          <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-700" /></div>
-        ) : statsData ? (
-          <div>
-            {/* KPI strip: ventes + net */}
-            <div className="flex items-end gap-4 border-b border-neutral-200 pb-3 mb-1">
-              <div className="shrink-0 text-center pr-3 border-r border-neutral-200">
-                <div className="text-[8px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Ventes</div>
-                <div className="text-sm font-black text-neutral-900 num">{statsData.count}</div>
-              </div>
-              <div className="flex-1 text-left">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-0.5">Net</div>
-                <div className="text-xl font-black text-neutral-900 num leading-none">
-                  {formatNumber(statsData.netTotal)} <span className="text-[11px] font-bold text-neutral-500">FCFA</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Collapsible sections */}
-            <div className="divide-y divide-neutral-100">
-              {/* Encaissements par mode */}
-              {statsData.byMethod.length > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'modes' ? null : 'modes')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <CreditCard className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Encaissements par mode</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.byMethod.length} mode{statsData.byMethod.length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-neutral-900 num">{formatFCFA(statsData.byMethod.reduce((s, m) => s + m.amount, 0))}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'modes' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'modes' && (() => {
-                    const totalMethods = statsData.byMethod.reduce((s, m) => s + m.amount, 0);
-                    return (
-                      <div className="pb-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <div className="border border-neutral-100 rounded-md overflow-hidden">
-                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-1.5 bg-neutral-50 border-b border-neutral-100">
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-500">Mode de paiement</span>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 text-right">Montant</span>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 text-right w-12">%</span>
-                          </div>
-                          {statsData.byMethod.map(m => {
-                            const pct = totalMethods > 0 ? (m.amount / totalMethods * 100) : 0;
-                            return (
-                              <div key={m.method_name} className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 border-b border-[var(--w-separator-l)] last:border-b-0">
-                                <span className="text-xs text-neutral-800 truncate">{m.method_name}</span>
-                                <span className="text-xs font-semibold text-neutral-900 num text-right">{formatFCFA(m.amount)}</span>
-                                <span className="text-xs text-neutral-500 num text-right w-12">{pct.toFixed(0)}%</span>
-                              </div>
-                            );
-                          })}
-                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 bg-neutral-50 border-t border-neutral-200">
-                            <span className="text-xs font-bold text-neutral-900">Total</span>
-                            <span className="text-xs font-bold text-neutral-900 num text-right">{formatFCFA(totalMethods)}</span>
-                            <span className="text-xs font-bold text-neutral-900 num text-right w-12">100%</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Reglements */}
-              {statsData.invoicePayments.length > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'reglements' ? null : 'reglements')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Wallet className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Règlements factures</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.invoicePayments.length} règlement{statsData.invoicePayments.length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-emerald-700 num">+{formatFCFA(statsData.invoicePayments.reduce((s, p) => s + p.amount, 0))}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'reglements' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'reglements' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.invoicePayments.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">
-                              <span className="doc-number">{p.sale_number}</span>
-                              {p.customer_name && <span className="text-neutral-500 ml-1">- {p.customer_name}</span>}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
-                              <span>{p.method_name}</span>
-                              {p.user_name && <span>{p.user_name}</span>}
-                            </div>
-                          </div>
-                          <span className="text-xs font-semibold text-emerald-700 num shrink-0">+{formatFCFA(p.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Encaissements directs */}
-              {statsData.movIncome > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'encDirect' ? null : 'encDirect')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ArrowDownRight className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Encaissements directs</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'income').length} encaissement{statsData.movements.filter(m => m.kind === 'income').length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-emerald-700 num">+{formatFCFA(statsData.movIncome)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'encDirect' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'encDirect' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.movements.filter(m => m.kind === 'income').map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Encaissement direct'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
-                              {m.method_name && <span>{m.method_name}</span>}
-                              {m.customer_name && <span>{m.customer_name}</span>}
-                            </div>
-                          </div>
-                          <span className="text-xs font-semibold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Acomptes */}
-              {statsData.movPrepay > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'acomptes' ? null : 'acomptes')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Wallet className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Acomptes clients</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'customer_prepayment').length} acompte{statsData.movements.filter(m => m.kind === 'customer_prepayment').length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-emerald-700 num">+{formatFCFA(statsData.movPrepay)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'acomptes' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'acomptes' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.movements.filter(m => m.kind === 'customer_prepayment').map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 num">
-                              {m.method_name && <span>{m.method_name}</span>}
-                              {m.reason && <span className="truncate">{m.reason}</span>}
-                            </div>
-                          </div>
-                          <span className="text-xs font-semibold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Décaissements */}
-              {(statsData.movExpense + statsData.movRefund) > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'depenses' ? null : 'depenses')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Décaissements</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'expense' || m.kind === 'refund').length} mouvement{statsData.movements.filter(m => m.kind === 'expense' || m.kind === 'refund').length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-red-600 num">-{formatFCFA(statsData.movExpense + statsData.movRefund)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'depenses' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'depenses' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.movements.filter(m => m.kind === 'refund').map((m, i) => (
-                        <div key={`ref-${i}`} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Remboursement'}</div>
-                            <div className="text-[10px] text-neutral-400">Remboursement</div>
-                          </div>
-                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                      {statsData.movements.filter(m => m.kind === 'expense').map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Dépense'}</div>
-                            {m.method_name && <div className="text-[10px] text-neutral-400">{m.method_name}</div>}
-                          </div>
-                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Retraits clients */}
-              {(statsData.movWithdrawal || 0) > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'retraits' ? null : 'retraits')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Retraits clients</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'customer_withdrawal').length} retrait{statsData.movements.filter(m => m.kind === 'customer_withdrawal').length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-red-600 num">-{formatFCFA(statsData.movWithdrawal || 0)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'retraits' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'retraits' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.movements.filter(m => m.kind === 'customer_withdrawal').map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
-                            {m.method_name && <div className="text-[10px] text-neutral-400">{m.method_name}</div>}
-                          </div>
-                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Prêts clients */}
-              {(statsData.movLoan || 0) > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'prets' ? null : 'prets')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <HandCoins className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Prêts clients</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'customer_loan').length} prêt{statsData.movements.filter(m => m.kind === 'customer_loan').length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-red-600 num">-{formatFCFA(statsData.movLoan || 0)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'prets' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'prets' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.movements.filter(m => m.kind === 'customer_loan').map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.customer_name || 'Client'}</div>
-                            {m.reason && <div className="text-[10px] text-neutral-400 truncate">{m.reason}</div>}
-                          </div>
-                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Transfert reçu du coffre */}
-              {(statsData.movVaultIn || 0) > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'vaultIn' ? null : 'vaultIn')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ArrowDownRight className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Transfert reçu du coffre</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'vault_withdrawal').length} transfert{statsData.movements.filter(m => m.kind === 'vault_withdrawal').length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-emerald-700 num">+{formatFCFA(statsData.movVaultIn || 0)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'vaultIn' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'vaultIn' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.movements.filter(m => m.kind === 'vault_withdrawal').map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Transfert reçu du coffre'}</div>
-                            {m.method_name && <div className="text-[10px] text-neutral-400">{m.method_name}</div>}
-                          </div>
-                          <span className="text-xs font-semibold text-emerald-700 num shrink-0">+{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Versement au coffre */}
-              {(statsData.movVaultOut || 0) > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'vaultOut' ? null : 'vaultOut')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ArrowUpRight className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Versement au coffre</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.movements.filter(m => m.kind === 'vault_deposit').length} versement{statsData.movements.filter(m => m.kind === 'vault_deposit').length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-red-600 num">-{formatFCFA(statsData.movVaultOut || 0)}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'vaultOut' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'vaultOut' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.movements.filter(m => m.kind === 'vault_deposit').map((m, i) => (
-                        <div key={i} className="flex items-center justify-between py-2 pl-7 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-neutral-800 truncate">{m.reason || 'Versement au coffre'}</div>
-                            {m.method_name && <div className="text-[10px] text-neutral-400">{m.method_name}</div>}
-                          </div>
-                          <span className="text-xs font-semibold text-red-600 num shrink-0">-{formatFCFA(m.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Top articles */}
-              {statsData.topArticles.length > 0 && (
-                <div>
-                  <button onClick={() => setStatsExpanded(statsExpanded === 'articles' ? null : 'articles')} className="w-full flex items-center justify-between py-3 text-left active:bg-neutral-50 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Package className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-neutral-900">Top articles</div>
-                        <div className="text-[10px] text-neutral-500">{statsData.topArticles.length} article{statsData.topArticles.length > 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[13px] font-bold text-amber-700 num">{formatFCFA(statsData.topArticles.reduce((s, a) => s + a.total, 0))}</span>
-                      <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${statsExpanded === 'articles' ? 'rotate-90' : ''}`} />
-                    </div>
-                  </button>
-                  {statsExpanded === 'articles' && (
-                    <div className="pb-3 divide-y divide-[var(--w-separator-l)] animate-in fade-in slide-in-from-top-1 duration-200">
-                      {statsData.topArticles.map((a, i) => (
-                        <div key={a.name} className="py-2 pl-1">
-                          <div className="text-[11px] font-medium text-neutral-800 leading-snug">{a.name}</div>
-                          <div className="flex items-center justify-between mt-0.5">
-                            <span className="text-[10px] text-neutral-400 num">Qté: {a.qty}</span>
-                            <span className="text-[11px] font-semibold text-amber-700 num">{formatFCFA(a.total)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : null}
-      </CashModal>
-
-      {/* Regularization */}
-      <Modal open={regOpen} onClose={() => setRegOpen(false)} title="Régularisation d'écart" size="sm" layer="top"
-        footer={<>
-          <button onClick={() => setRegOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-          <button onClick={saveRegularization} disabled={savingReg} className="btn-icon-primary" title="Enregistrer">
-            {savingReg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          </button>
-        </>}
-      >
-        <div className="space-y-3">
-          <div className="group">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Type</div>
-            <select value={regType} onChange={e => setRegType(e.target.value as any)} className="w-select-ul text-[13px]">
-              <option value="manquant">Manquant (déficit)</option>
-              <option value="excedent">Excédent (surplus)</option>
-              <option value="depot">Dépôt</option>
-              <option value="retrait">Retrait</option>
-            </select>
-          </div>
-          <div className="group">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant (FCFA)</div>
-            <input type="number" value={regAmount || ''} onChange={e => setRegAmount(Number(e.target.value))} className="w-input-ul text-[13px]" min="0" />
-          </div>
-          <div className="group">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Motif *</div>
-            <input value={regReason} onChange={e => setRegReason(e.target.value)} className="w-input-ul text-[13px]" placeholder="Ex: Écart de monnaie, dépôt initial…" />
-          </div>
-          <div className="group">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Note (optionnel)</div>
-            <input value={regNote} onChange={e => setRegNote(e.target.value)} className="w-input-ul text-[13px]" />
-          </div>
-        </div>
-      </Modal>
-
-      {/* Close workflow */}
-      <CashModal open={closeOpen} onClose={() => !closing && setCloseOpen(false)} title="Clôture de caisse"
-        footer={
-          closeStep === 'control' ? (
-            <>
-              <button onClick={() => setCloseOpen(false)} className="btn-icon" title="Annuler"><X className="w-4 h-4" /></button>
-              <button onClick={() => setRegOpen(true)} className="btn-icon" title="Régulariser"><Plus className="w-4 h-4" /></button>
-              <button onClick={() => setCloseStep('regularize')} className="btn-icon-primary" title="Suivant"><ChevronRight className="w-4 h-4" /></button>
-            </>
-          ) : closeStep === 'regularize' ? (
-            <>
-              <button onClick={() => setCloseStep('control')} className="btn-icon" title="Retour"><ArrowLeft className="w-4 h-4" /></button>
-              <button onClick={() => setCloseStep('confirm')} className="btn-icon-primary" title="Confirmer"><ChevronRight className="w-4 h-4" /></button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => setCloseStep('regularize')} className="btn-icon" title="Retour"><ArrowLeft className="w-4 h-4" /></button>
-              <button onClick={confirmClose} disabled={closing} className="btn-icon-primary" title="Clôturer">
-                {closing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-              </button>
-            </>
-          )
-        }
-      >
-        {/* Minimal stepper — flat, bottom-border only */}
-        <div className="flex items-center mb-4">
-          {(['control', 'regularize', 'confirm'] as CloseStep[]).map((s, i) => {
-            const labels = ['Contrôle', 'Régul.', 'Confirm.'];
-            const active = closeStep === s;
-            const done = (['control', 'regularize', 'confirm'] as CloseStep[]).indexOf(closeStep) > i;
-            return (
-              <div key={s} className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-2 flex-1 justify-center border-b-2 transition-colors ${active ? 'border-neutral-900 text-neutral-900' : done ? 'border-neutral-300 text-neutral-500' : 'border-neutral-100 text-neutral-400'}`}>
-                {done ? <Check className="w-3 h-3" /> : <span className="text-[9px]">{i + 1}</span>}
-                <span>{labels[i]}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        {loadingControl ? (
-          <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-700" /></div>
-        ) : closeStep === 'control' ? (
-          <div className="space-y-0 count-up">
-            <p className="text-[11px] text-neutral-500 uppercase tracking-wider font-semibold mb-2">Saisissez les montants comptés</p>
-            <div>
-              {controlLines.map((c, idx) => {
-                const diff = c.counted_amount - c.theoretical_amount;
-                const balanced = diff === 0 && c.counted_amount > 0;
-                return (
-                  <div key={c.method_name} className="border-b border-neutral-100 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold text-neutral-900 truncate">{c.method_name}</div>
-                        <div className="text-[10px] text-neutral-500 num mt-0.5">Théorique: <span className="font-semibold text-neutral-700">{formatFCFA(c.theoretical_amount)}</span></div>
-                      </div>
-                      <input type="number" value={c.counted_amount || ''} onChange={e => setControlLines(lines => lines.map((l, i) => i === idx ? { ...l, counted_amount: Number(e.target.value) } : l))} className="w-24 px-2 py-1.5 text-xs text-right font-bold num bg-transparent focus:outline-none transition" min="0" placeholder="0" />
-                      <div className={`text-[10px] font-bold num w-14 text-right ${balanced ? 'text-neutral-700' : diff < 0 ? 'text-red-600' : diff > 0 ? 'text-amber-600' : 'text-neutral-300'}`}>
-                        {c.counted_amount === 0 ? '—' : diff === 0 ? 'OK' : `${diff > 0 ? '+' : ''}${formatFCFA(diff)}`}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="py-2.5 border-t border-neutral-200 mt-1 flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Écart total</div>
-              <div className={`num font-bold text-sm ${totalVariance > 0 ? 'text-amber-600' : totalVariance < 0 ? 'text-red-600' : 'text-neutral-800'}`}>
-                {totalVariance === 0 ? <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Équilibré</span> : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
-              </div>
-            </div>
-            {Math.abs(totalVariance) > 0 && (
-              <div className={`flex items-start gap-2 py-2 text-[11px] ${totalVariance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{totalVariance < 0 ? `Manquant de ${formatFCFA(-totalVariance)}` : `Excédent de ${formatFCFA(totalVariance)}`}</span>
-              </div>
-            )}
-          </div>
-        ) : closeStep === 'regularize' ? (
-          <div className="space-y-3 count-up">
-            <div className="divide-y divide-neutral-100 mb-3">
-              <div className="flex items-center justify-between py-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Écart</span>
-                <span className={`text-sm font-bold num ${totalVariance === 0 ? 'text-neutral-800' : 'text-red-600'}`}>
-                  {totalVariance === 0 ? 'OK' : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Régularisations</span>
-                <span className="text-sm font-bold num">{sessionRegs.length}</span>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Total régularisations</span>
-                <span className="text-sm font-bold num text-neutral-700">{formatFCFA(sessionRegs.reduce((s, r) => s + r.amount, 0))}</span>
-              </div>
-            </div>
-            {sessionRegs.length > 0 ? (
-              <div>
-                {sessionRegs.map((r, i) => (
-                  <div key={i} className="border-b border-neutral-100 py-2 flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-semibold capitalize text-neutral-800">{r.reg_type}</div>
-                      {r.reason && <div className="text-[10px] text-neutral-500 article-text line-clamp-1 mt-0.5">{r.reason}</div>}
-                    </div>
-                    <div className="num font-bold text-xs text-neutral-900 shrink-0">{formatFCFA(r.amount)}</div>
-                    <button onClick={() => deleteRegularization(i)} className="shrink-0 p-1 rounded hover:bg-red-50 text-red-400 transition-colors" title="Supprimer">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-4 text-[11px] text-neutral-500">Aucune régularisation.</div>
-            )}
-            <button onClick={() => setRegOpen(true)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold bg-white border border-dashed border-neutral-300 text-neutral-700 hover:border-brand-400 hover:bg-brand-50/40 transition">
-              <Plus className="w-3.5 h-3.5" /> Ajouter une régularisation
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3 count-up">
-            <div className="divide-y divide-neutral-100">
-              <div className="flex items-center justify-between py-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Fond ouverture</span>
-                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(session?.opening_amount ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Total compté</span>
-                <span className="text-sm font-bold text-neutral-900 num">{formatFCFA(controlLines.reduce((s, c) => s + c.counted_amount, 0))}</span>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-black">Écart final</span>
-                <span className={`text-sm font-bold num ${totalVariance === 0 ? 'text-neutral-800' : totalVariance < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                  {totalVariance === 0 ? 'Équilibré' : `${totalVariance > 0 ? '+' : ''}${formatFCFA(totalVariance)}`}
-                </span>
-              </div>
-            </div>
-
-            {vaultCloseEnabled && (
-              <div className="border border-neutral-200 rounded-md p-3 space-y-2.5">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                  <Lock className="w-3 h-3" /> Versement au coffre
-                </div>
-                {([
-                  { k: 'none', label: 'Ne rien verser' },
-                  { k: 'full', label: 'Verser la totalité des espèces comptées' },
-                  { k: 'partial', label: 'Verser un montant partiel' },
-                ] as const).map(opt => (
-                  <label key={opt.k} className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="deposit-mode" checked={depositMode === opt.k}
-                      onChange={() => setDepositMode(opt.k)} />
-                    <span className="text-xs text-neutral-800">{opt.label}</span>
-                  </label>
-                ))}
-                {depositMode === 'partial' && (
-                  <input type="number" min={0} max={countedCash} value={depositPartial}
-                    onChange={e => setDepositPartial(e.target.value)}
-                    className="w-full px-2 py-1.5 text-sm text-right font-bold num border border-neutral-200 rounded focus:outline-none focus:border-neutral-900"
-                    placeholder="Montant à verser" />
-                )}
-                <div className="divide-y divide-neutral-100 pt-1">
-                  <div className="flex items-center justify-between py-1.5">
-                    <span className="text-[10px] text-neutral-500">Espèces comptées</span>
-                    <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(countedCash)}</span>
-                  </div>
-                  <div className="flex items-center justify-between py-1.5">
-                    <span className="text-[10px] text-neutral-500">Versé au coffre</span>
-                    <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(depositAmount)}</span>
-                  </div>
-                  <div className="flex items-center justify-between py-1.5">
-                    <span className="text-[10px] text-neutral-500">Conservé en caisse</span>
-                    <span className="text-xs font-bold text-neutral-900 num">{formatFCFA(retainedCash)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="group">
-              <textarea value={closingNote} onChange={e => setClosingNote(e.target.value)} className="w-input-ul text-sm resize-none" rows={4} placeholder="Note de clôture (optionnel)" />
-            </div>
-            <div className="flex items-start gap-2 py-2 text-[11px] text-amber-600">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>Action irréversible. La session sera verrouillée.</span>
-            </div>
-          </div>
-        )}
-      </CashModal>
+      {closeOpen && session && cashCtx && (
+        <CashCloseModal ctx={cashCtx} session={session} multiEnabled={!!posCashCtx?.multi_enabled}
+          onClose={() => setCloseOpen(false)}
+          onClosed={() => {
+            setCloseOpen(false); setSession(null); setScreen('open-form');
+            setCart([]); setDiscount(0); setCustomer(null);
+            setOpeningAmount(0); setOpeningNote('');
+            load();
+          }} />
+      )}
 
       {/* Site picker modal */}
       <Modal open={sitePickerOpen} onClose={() => setSitePickerOpen(false)} title="Changer de point de vente" size="md"

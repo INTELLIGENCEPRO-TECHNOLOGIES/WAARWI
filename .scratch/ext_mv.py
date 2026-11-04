@@ -1,0 +1,8 @@
+L=open('src/pages/POS.tsx').read().split('\n')
+g=lambda a,b:'\n'.join(L[a-1:b])
+state=g(1280,1293).replace("  const [expenseCats, setExpenseCats] = useState<{ id: string; name: string }[]>([]);\n","")
+submit=g(2144,2235)
+jsx=g(3783,3977)
+open('.scratch/mv_state.txt','w').write(state)
+open('.scratch/mv_submit.txt','w').write(submit)
+open('.scratch/mv_jsx.txt','w').write(jsx)

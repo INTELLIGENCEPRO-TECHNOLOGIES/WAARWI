@@ -44,6 +44,8 @@ export interface PosRegisterOption {
   is_default: boolean;
   status: 'free' | 'mine' | 'busy';
   operator_name: string | null;
+  assigned_to?: string | null;
+  locked?: boolean;
 }
 
 export interface PosCashContext {

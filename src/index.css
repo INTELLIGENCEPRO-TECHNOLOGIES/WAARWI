@@ -606,6 +606,8 @@ p { line-height: 1.6; }
   .cart-line:hover { border-color: var(--w-text-disabled); }
 
   /* ── POS command bar ─────────────────────────────────── */
+  .pos-header-sep { border-bottom-color: #C4C4C4; }
+  [data-theme="dark"] .pos-header-sep { border-bottom-color: #444444; }
   .pos-command-bar {
     background: #F5F5F5;
     border-bottom: 1px solid #DDDDDD;

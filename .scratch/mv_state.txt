@@ -1,0 +1,13 @@
+  const [mvKind, setMvKind] = useState<'expense' | 'income' | 'customer_prepayment' | 'customer_withdrawal' | 'customer_loan' | 'refund'>('expense');
+  const [mvCustPrepay, setMvCustPrepay] = useState(0);
+  const [mvCustBalance, setMvCustBalance] = useState(0);
+  const [mvAmount, setMvAmount] = useState(0);
+  const [mvReason, setMvReason] = useState('');
+  const [mvExpenseCat, setMvExpenseCat] = useState('');
+  const [mvNote, setMvNote] = useState('');
+  const [mvRef, setMvRef] = useState('');
+  const [mvMethod, setMvMethod] = useState<PaymentMethod | null>(null);
+  const [mvCustomer, setMvCustomer] = useState<Customer | null>(null);
+  const [mvCustSearch, setMvCustSearch] = useState('');
+  const [mvSubmitting, setMvSubmitting] = useState(false);
+  const [mvPrint, setMvPrint] = useState(true);

@@ -836,6 +836,7 @@ export function printXReport80(opts: {
   controls?: XReportControl[];
   regularizations?: XReportRegularization[];
   registerLabel?: string;
+  printedBy?: string;
 }) {
   const movements = opts.movements || [];
   const controls = opts.controls || [];
@@ -906,7 +907,7 @@ ${tenantHeader80Compact(opts.tenant)}
 <div class="line">${esc(opts.siteName)} · ${esc(opts.cashier)}</div>
 ${opts.registerLabel ? `<div class="line">Caisse : ${esc(opts.registerLabel)}</div>` : ''}
 <div class="line">Ouv. ${fmtDt(opts.openedAt)}${opts.closedAt ? ` · Clôt. ${fmtDt(opts.closedAt)}` : ''}</div>
-<div class="line">Imprimé ${fmtDt(new Date())}</div>
+<div class="line">Imprimé ${fmtDt(new Date())}${opts.printedBy ? ` par ${esc(opts.printedBy)}` : ''}</div>
 <hr class="hr" />
 <div class="row"><span>Fond d'ouverture</span><span>${fmtMoney(opts.openingAmount)}</span></div>
 <div class="row"><span>Ventes (${opts.salesCount})</span><span>${fmtMoney(opts.salesTotal)}</span></div>

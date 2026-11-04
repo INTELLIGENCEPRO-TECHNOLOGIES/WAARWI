@@ -1,0 +1,195 @@
+        <CashModal open={true} onClose={() => setMvOpen(false)} title="Mouvement de caisse"
+          footerLeft={
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={mvPrint} onChange={e => setMvPrint(e.target.checked)}
+                className="w-4 h-4 rounded" />
+              <Printer className="w-4 h-4 text-neutral-400" />
+              <span className="text-[12px] font-medium text-neutral-600 hidden sm:inline">Imprimer le reçu</span>
+              <span className="text-[12px] font-medium text-neutral-600 sm:hidden">Imprimer</span>
+            </label>
+          }
+          footer={<>
+              <button onClick={() => setMvOpen(false)} className="px-3 sm:px-4 h-8 rounded-[4px] border border-neutral-200 text-[12px] font-semibold text-neutral-900 hover:bg-neutral-50 transition-colors">Annuler</button>
+              <button onClick={submitMovement} disabled={mvSubmitting || mvAmount <= 0}
+                className="px-3 sm:px-4 h-8 rounded-[4px] bg-neutral-900 text-white text-[12px] font-semibold hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+                {mvSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span className="sm:hidden">Valider</span>
+                <span className="hidden sm:inline">Valider le mouvement</span>
+              </button>
+          </>}>
+          <div>
+            {/* Type — flat horizontal nav */}
+            <div className="-mx-4 px-4 border-b border-neutral-200">
+              <div className="flex items-stretch w-full">
+                <button type="button" onClick={() => setMvKind('expense')}
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'expense' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <ArrowUpRight className={`w-6 h-6 ${mvKind === 'expense' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'expense' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Dépense</span>
+                </button>
+                <button type="button" onClick={() => setMvKind('income')}
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'income' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <ArrowDownRight className={`w-6 h-6 ${mvKind === 'income' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'income' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Entrée</span>
+                </button>
+                <button type="button" onClick={() => setMvKind('customer_prepayment')}
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_prepayment' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <Banknote className={`w-6 h-6 ${mvKind === 'customer_prepayment' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_prepayment' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Acompte</span>
+                </button>
+                {can('pos_customer_withdrawal') && !!(tenant as any)?.settings?.enable_customer_withdrawals && (
+                <button type="button" onClick={() => { setMvKind('customer_withdrawal'); setMvCustPrepay(0); setMvCustBalance(0); }}
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_withdrawal' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <ArrowDownToLine className={`w-6 h-6 ${mvKind === 'customer_withdrawal' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_withdrawal' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Retrait</span>
+                </button>
+                )}
+                {can('pos_customer_loan') && !!(tenant as any)?.settings?.enable_customer_loans && (
+                <button type="button" onClick={() => { setMvKind('customer_loan'); setMvCustPrepay(0); setMvCustBalance(0); }}
+                  className={`relative flex-1 flex flex-col items-center gap-1 py-4 transition-colors ${mvKind === 'customer_loan' ? 'text-[var(--w-text)] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0 after:w-full after:h-[3px] after:bg-red-500' : 'text-neutral-600 hover:text-neutral-900'}`}>
+                  <HandCoins className={`w-6 h-6 ${mvKind === 'customer_loan' ? 'text-red-500' : 'text-neutral-400'}`} />
+                  <span className={`text-[12px] font-semibold ${mvKind === 'customer_loan' ? 'text-[var(--w-text)]' : 'text-neutral-600'}`}>Prêt</span>
+                </button>
+                )}
+              </div>
+            </div>
+
+            {/* Customer section (for prepayment/withdrawal/loan) */}
+            {(mvKind === 'customer_prepayment' || mvKind === 'customer_withdrawal' || mvKind === 'customer_loan') && (
+              <div className="pt-5 pb-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Client</div>
+                {mvCustomer ? (
+                  <div className="flex items-center gap-2.5 py-1">
+                    <User className="w-4 h-4 text-neutral-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-semibold text-neutral-900 truncate">{mvCustomer.name}</div>
+                      {mvCustomer.phone && <div className="text-[11px] text-neutral-500 truncate">{mvCustomer.phone}</div>}
+                    </div>
+                    <button onClick={() => { setMvCustomer(null); setMvCustPrepay(0); setMvCustBalance(0); }} className="text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors shrink-0">Changer</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative group">
+                      <Search className="w-4 h-4 absolute left-0 top-1/2 -translate-y-1/2 text-neutral-400" />
+                      <input autoFocus value={mvCustSearch} onChange={e => setMvCustSearch(e.target.value)}
+                        className="w-input-ul pl-6 text-[13px]" placeholder="Rechercher un client…" />
+                    </div>
+                    <div className="mt-1 max-h-32 overflow-y-auto divide-y divide-neutral-100">
+                      {customers
+                        .filter(cu => {
+                          const q = mvCustSearch.toLowerCase().trim();
+                          if (!q) return true;
+                          return cu.name.toLowerCase().includes(q) || (cu.phone || '').includes(q);
+                        })
+                        .slice(0, 15)
+                        .map(cu => (
+                          <button key={cu.id} onClick={async () => {
+                            setMvCustomer(cu);
+                            if (mvKind === 'customer_withdrawal') {
+                              let avail = 0;
+                              try {
+                                const ppMap = await fetchPrepayAvailable([cu.id]);
+                                avail = ppMap[cu.id] || 0;
+                              } catch (e: any) {
+                                error(`Acompte disponible indisponible : ${e.message}`);
+                              }
+                              setMvCustPrepay(avail);
+                              const custBalance = Math.max(0, Number(cu.balance || 0));
+                              setMvCustBalance(custBalance);
+                            }
+                            if (mvKind === 'customer_loan') {
+                              setMvCustBalance(Math.max(0, Number(cu.balance || 0)));
+                            }
+                          }}
+                            className="w-full flex items-center gap-2.5 py-1.5 hover:bg-neutral-50 text-left transition-colors">
+                            <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                            <span className="text-[12px] font-semibold text-neutral-800 truncate">{cu.name}</span>
+                            {cu.phone && <span className="text-[11px] text-neutral-500 ml-auto shrink-0">{cu.phone}</span>}
+                          </button>
+                        ))}
+                    </div>
+                  </>
+                )}
+                {mvKind === 'customer_withdrawal' && mvCustomer && (() => {
+                  const debt = Math.max(0, mvCustBalance);
+                  const net = mvCustPrepay - debt;
+                  if (mvCustPrepay <= 0) {
+                    return <div className="mt-2 text-[12px] font-semibold text-red-600">Aucun acompte disponible pour ce client</div>;
+                  }
+                  return (
+                    <div className="mt-2 space-y-0.5">
+                      {debt > 0 ? (
+                        <>
+                          <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Acompte disponible</span><span className="font-bold num text-neutral-900">{formatFCFA(mvCustPrepay)}</span></div>
+                          <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Dette en cours</span><span className="font-bold num text-red-600">-{formatFCFA(debt)}</span></div>
+                          <div className="flex justify-between text-[12px] pt-1 border-t border-neutral-100"><span className="font-semibold text-neutral-900">Retrait maximum</span><span className={`font-bold num ${net > 0 ? 'text-neutral-900' : 'text-red-600'}`}>{formatFCFA(net)}</span></div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Retrait maximum</span><span className="font-bold num text-neutral-900">{formatFCFA(net)}</span></div>
+                      )}
+                      {net <= 0 && <div className="text-[11px] font-semibold text-red-600 mt-1">La dette couvre l'acompte. Retrait impossible.</div>}
+                    </div>
+                  );
+                })()}
+                {mvKind === 'customer_loan' && mvCustomer && (
+                  <div className="mt-2 space-y-0.5">
+                    <div className="flex justify-between text-[12px]"><span className="text-neutral-500">Créance actuelle</span><span className="font-bold num text-neutral-900">{formatFCFA(Math.max(0, mvCustBalance))}</span></div>
+                    <div className="text-[11px] text-neutral-500 mt-1">Le montant du prêt sera ajouté à la créance du client.</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Form fields */}
+            <div className="pt-5">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Montant</div>
+                  <input type="number" value={mvAmount || ''} onChange={e => setMvAmount(Math.max(0, Number(e.target.value)))}
+                    className="w-input-ul text-2xl font-bold num" placeholder="0 FCFA" min={0} />
+                </div>
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">{mvKind === 'expense' ? 'Type de dépense' : 'Motif'}</div>
+                  {mvKind === 'expense' && expenseCats.length > 0 ? (
+                    <SearchableSelect
+                      value={mvExpenseCat}
+                      onChange={setMvExpenseCat}
+                      options={expenseCats.map(c => ({ value: c.id, label: c.name }))}
+                      placeholder="Sélectionner…"
+                    />
+                  ) : (
+                    <input value={mvReason} onChange={e => setMvReason(e.target.value)}
+                      className="w-input-ul text-[13px]" placeholder={mvKind === 'expense' ? 'Carburant…' : 'Motif'} />
+                  )}
+                </div>
+              </div>
+
+              {(mvKind === 'income' || mvKind === 'customer_prepayment') && (
+                <div className="mt-5">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">Mode de règlement</div>
+                  <div className="flex flex-wrap gap-3">
+                    {methods.map(m => (
+                      <button key={m.id} type="button" onClick={() => setMvMethod(m)}
+                        className={`px-0 py-1 text-[12px] font-semibold border-b-2 transition-all ${mvMethod?.id === m.id ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-700'}`}>
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-6 mt-5">
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Référence</div>
+                  <input value={mvRef} onChange={e => setMvRef(e.target.value)}
+                    className="w-input-ul text-[13px]" placeholder="N° pièce…" />
+                </div>
+                <div className="group">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">Note</div>
+                  <input value={mvNote} onChange={e => setMvNote(e.target.value)}
+                    className="w-input-ul text-[13px]" placeholder="Ajouter une note…" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CashModal>
+      )}

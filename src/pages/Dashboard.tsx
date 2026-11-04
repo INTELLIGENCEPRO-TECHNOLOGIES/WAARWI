@@ -8,6 +8,7 @@ import { setNavContext, type NavContext } from '../lib/navHighlight';
 import { isSaleSettlementIncome } from '../lib/cashMovements';
 import { getOperationalCashContext } from '../lib/cashSession';
 import { Modal } from '../components/Modal';
+import SubscriptionStatus from '../components/SubscriptionStatus';
 import { desktopAutoFocus } from '../lib/device';
 import {
   TrendingUp, TrendingDown, AlertTriangle, Package, Loader2,
@@ -2160,25 +2161,7 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
         <div className="ml-auto flex items-center gap-4">
           {/* Subscription badge — compact with expiry */}
           {subInfo && (
-            <button onClick={() => nav('settings', { target: 'subscription' })} className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity">
-              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                subInfo.status === 'trial_active' ? 'bg-[var(--w-active)] text-blue-600'
-                  : subInfo.status === 'active' ? 'bg-emerald-50 text-emerald-600'
-                  : subInfo.status === 'expired' ? 'bg-red-50 text-red-600'
-                  : 'bg-amber-50 text-amber-600'
-              }`}>
-                {subInfo.status === 'trial_active' ? 'Essai' : subInfo.status === 'active' ? 'Actif' : subInfo.status === 'expired' ? 'Expiré' : 'En attente'}
-              </span>
-              <span className="font-semibold text-neutral-700 max-w-[100px] truncate">{subInfo.planName}</span>
-              {subInfo.expiresAt && (
-                <span className={`text-[10px] font-medium ${subInfo.status === 'expired' ? 'text-red-500' : 'text-neutral-400'}`}>
-                  {subInfo.status === 'expired' ? 'Expiré le' : "jusqu'au"} {new Date(subInfo.expiresAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </span>
-              )}
-              {subInfo.billingCycle === 'lifetime' && !subInfo.expiresAt && (
-                <span className="text-[10px] font-medium text-emerald-500">à vie</span>
-              )}
-            </button>
+            <SubscriptionStatus info={subInfo} onClick={() => nav('settings', { target: 'subscription' })} />
           )}
 
           {/* Subtle vertical separator */}
@@ -2416,33 +2399,29 @@ function DesktopDashboard({ stats, shopInfo, greet, firstName, dayDelta, dayMarg
             </div>
 
             {/* Créances clients */}
-            <button onClick={() => nav('tiers')} className="flex items-center justify-between py-3 border-b border-neutral-100 text-left group">
+            <button onClick={() => nav('tiers')} className="flex items-center justify-between gap-2 py-3 border-b border-neutral-100 text-left group">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <Users className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <span className="text-xs font-semibold text-neutral-600">Créances clients</span>
                 </div>
-                <p className="text-[11px] text-neutral-400 mt-0.5 ml-5.5">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''} a relancer</p>
+                <div className="ml-[22px] mt-1 text-lg font-bold text-neutral-900 num tracking-tight leading-tight whitespace-nowrap">{formatFCFA(stats.receivables)}</div>
+                <p className="ml-[22px] mt-0.5 text-[11px] text-neutral-400">{stats.customersToChase} client{stats.customersToChase > 1 ? 's' : ''} à relancer</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-lg font-bold text-neutral-900 num tracking-tight">{formatFCFA(stats.receivables)}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
-              </div>
+              <ChevronRight className="w-3.5 h-3.5 shrink-0 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
             </button>
 
             {/* Dettes fournisseurs */}
-            <button onClick={() => nav('supplier_orders')} className="flex items-center justify-between py-3 border-b border-neutral-100 text-left group">
+            <button onClick={() => nav('supplier_orders')} className="flex items-center justify-between gap-2 py-3 border-b border-neutral-100 text-left group">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <Truck className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <span className="text-xs font-semibold text-neutral-600">Dettes fournisseurs</span>
                 </div>
-                <p className="text-[11px] text-neutral-400 mt-0.5 ml-5.5">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} a payer</p>
+                <div className="ml-[22px] mt-1 text-lg font-bold text-neutral-900 num tracking-tight leading-tight whitespace-nowrap">{formatFCFA(stats.payables)}</div>
+                <p className="ml-[22px] mt-0.5 text-[11px] text-neutral-400">{stats.suppliersToChase} fournisseur{stats.suppliersToChase > 1 ? 's' : ''} à payer</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-lg font-bold text-neutral-900 num tracking-tight">{formatFCFA(stats.payables)}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
-              </div>
+              <ChevronRight className="w-3.5 h-3.5 shrink-0 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
             </button>
 
             {/* Stock à surveiller */}

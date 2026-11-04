@@ -41,6 +41,7 @@ export function PosRegisterPicker({
         <span className="font-semibold text-neutral-800">{l.primary}</span>
         {l.secondary && <span className="text-neutral-500 tabular-nums"> · {l.secondary}</span>}
         {r.status === 'busy' && <div className="text-neutral-500">En cours · {r.operator_name || 'Autre opérateur'}</div>}
+        {r.locked && r.status !== 'busy' && <div className="text-neutral-500">Assignée à {r.assigned_to || 'un autre collaborateur'} · ouverture impossible</div>}
       </div>
     );
   }
@@ -50,10 +51,12 @@ export function PosRegisterPicker({
       <div className="text-[10px] uppercase tracking-wide text-neutral-400 mb-1.5 text-center">Choisissez votre caisse</div>
       <div role="radiogroup" className="flex flex-col divide-y divide-neutral-200 border border-neutral-200 rounded-md bg-white overflow-hidden">
         {registers.map(r => {
-          const busy = r.status === 'busy';
+          const busy = r.status === 'busy' || !!r.locked;
           const active = selectedId === r.id;
           const l = registerLabel(r.code, r.name);
-          const status = busy ? `En cours · ${r.operator_name || 'Autre opérateur'}` : r.status === 'mine' ? 'Votre session' : null;
+          const status = r.status === 'busy' ? `En cours · ${r.operator_name || 'Autre opérateur'}`
+            : r.locked ? `Assignée à ${r.assigned_to || 'un autre collaborateur'}`
+            : r.status === 'mine' ? 'Votre session' : null;
           return (
             <button
               key={r.id}
