@@ -3,7 +3,7 @@ import {
   ShoppingBag, Loader2, Search, RefreshCw, ClipboardList,
   CheckCircle, Truck, X, Calendar,
   User, MessageCircle, Link2,
-  Printer, Pencil, Ban, ChevronLeft, ChevronRight, AlertTriangle, Trash2,
+  Printer, Pencil, Ban, ChevronLeft, ChevronRight, AlertTriangle, Trash2, Wallet,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
@@ -25,9 +25,11 @@ import { loadLayout, saveLayout, clearFormDraft, type LayoutWindow } from '../li
 import { RotateCcw } from 'lucide-react';
 import { DispatchStep, type DispatchLineItem } from '../components/supplier/DispatchStep';
 import { buildStockLevelMap, type StockLevelMap } from '../lib/autoDistribute';
+import { SupplierPaymentModal } from '../components/supplier/SupplierPaymentModal';
+import { PAYMENT_STATE_LABELS, isOrderPayable, orderPaymentState, orderRemaining, type SupplierPaymentState } from '../lib/supplierPayment';
 
 type SupplierOrder = {
-  id: string; order_number: string; total: number; status: string;
+  id: string; order_number: string; total: number; paid: number; status: string;
   created_at: string; expected_date: string | null;
   public_token?: string | null;
   public_code?: string | null;
@@ -58,6 +60,17 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'cancelled', label: 'Annulée' },
 ];
 
+const PAYMENT_FILTERS: { key: '' | SupplierPaymentState; label: string }[] = [
+  { key: '',        label: 'Tous' },
+  { key: 'unpaid',  label: 'Non payées' },
+  { key: 'partial', label: 'Partiellement payées' },
+];
+
+const ROW_GRID = 'hidden lg:grid items-center gap-x-5 xl:gap-x-8 2xl:gap-x-6 px-4 xl:px-8 '
+  + 'lg:grid-cols-[92px_minmax(120px,1fr)_80px_132px_140px_88px] '
+  + '2xl:grid-cols-[108px_minmax(160px,1fr)_88px_96px_140px_128px_148px_196px]';
+const WIDE_ONLY = 'hidden 2xl:block';
+
 const SUPPLIER_ORDERS_PAGE_ID = 'supplier-orders-page';
 const SUPPLIER_ORDERS_GROUP = 'supplier-orders';
 
@@ -65,6 +78,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
   const { tenant, currentSite, sites, depots, dataTick, profile, user } = useApp();
   const { can } = usePermissions();
   const { canEditStatus, canDelete } = useSupplierOrderRights();
+  const canPayOrders = can('access_tiers');
   const autoMode = isAutoParts(tenant);
   const { success, error } = useToast();
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
@@ -112,6 +126,9 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
   const [serverStatusCounts, setServerStatusCounts] = useState<Record<string, number>>({});
   const [serverPending, setServerPending] = useState<{ pending_count: number; pending_total: number }>({ pending_count: 0, pending_total: 0 });
   const [statusFilter, setStatusFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState<'' | SupplierPaymentState>('');
+  const [serverPaymentCounts, setServerPaymentCounts] = useState<Record<string, number>>({});
+  const [toPay, setToPay] = useState<SupplierOrder | null>(null);
   const [toCancel, setToCancel] = useState<SupplierOrder | null>(null);
   const [toDelete, setToDelete] = useState<SupplierOrder | null>(null);
   const [toRevert, setToRevert] = useState<SupplierOrder | null>(null);
@@ -297,7 +314,8 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
   }, [search]);
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, tenant?.id, currentSite?.id]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, paymentFilter, tenant?.id, currentSite?.id]);
+  useEffect(() => { setToPay(null); }, [tenant?.id, currentSite?.id]);
 
   // ── Load data ──────────────────────────────────────────────────
 
@@ -315,6 +333,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
     };
     if (debouncedSearch) params.p_search = debouncedSearch;
     if (statusFilter) params.p_status_filter = statusFilter;
+    if (paymentFilter) params.p_payment_filter = paymentFilter;
 
     const { data, error: rpcErr } = await supabase.rpc('rpc_paginated_supplier_orders', params);
     if (myReqId !== reqIdRef.current) return;
@@ -322,13 +341,15 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
     if (rpcErr || !data) {
       setLoadError(rpcErr?.message || 'Impossible de charger les commandes');
       setList([]); setFilteredCount(0); setAllCount(0);
-      setServerStatusCounts({}); setServerPending({ pending_count: 0, pending_total: 0 });
+      setServerStatusCounts({}); setServerPaymentCounts({}); setServerPending({ pending_count: 0, pending_total: 0 });
       setLoading(false); setRefreshing(false);
       return;
     }
 
     const rows = ((data.rows || []) as any[]).map((r: any) => ({
       ...r,
+      total: Number(r.total) || 0,
+      paid: Number(r.paid) || 0,
       suppliers: r.supplier_name ? {
         name: r.supplier_name, phone: r.supplier_phone,
         whatsapp: r.supplier_whatsapp, email: r.supplier_email, address: r.supplier_address,
@@ -338,10 +359,14 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
     setFilteredCount(data.filtered_count || 0);
     setAllCount(data.all_count || 0);
     setServerStatusCounts(data.status_counts || {});
+    setServerPaymentCounts(data.payment_counts || {});
+    const filtered = Number(data.filtered_count) || 0;
+    const lastPage = Math.max(1, Math.ceil(filtered / PAGE_SIZE));
+    if (page > lastPage) setPage(lastPage);
     setServerPending(data.pending || { pending_count: 0, pending_total: 0 });
     setLoadError(null);
     setLoading(false); setRefreshing(false);
-  }, [tenant?.id, currentSite?.id, page, debouncedSearch, statusFilter]);
+  }, [tenant?.id, currentSite?.id, page, debouncedSearch, statusFilter, paymentFilter]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -862,7 +887,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
         </div>
       )}
       {/* ═══ Header ═══ */}
-      <div className="sticky top-0 z-10 -mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pb-3 pt-4 -mt-3 sm:-mt-4 lg:-mt-6 bg-white space-y-3 border-b border-neutral-100">
+      <div className={`sticky top-0 z-10 pb-3 bg-white space-y-3 border-b border-neutral-100 ${isDesktop ? 'px-4 xl:px-8 pt-4' : '-mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pt-4 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
         {/* Mobile: title + right-aligned action button (unchanged) */}
         <div className="md:hidden flex items-start justify-between">
           <h1 className="text-lg font-bold text-neutral-900 leading-tight">Achats</h1>
@@ -923,6 +948,24 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
           >
             <ClipboardList className="w-4 h-4" /><span>Nouvelle commande</span>
           </button>
+        </div>
+
+        <div className="flex items-baseline gap-4 overflow-x-auto no-scrollbar whitespace-nowrap text-xs" role="group" aria-label="Filtre de règlement">
+          <span className="shrink-0 text-[10px] uppercase font-semibold tracking-wide text-neutral-400">Règlement</span>
+          {PAYMENT_FILTERS.map(f => {
+            const active = paymentFilter === f.key;
+            const count = f.key ? Number(serverPaymentCounts[f.key]) || 0 : null;
+            return (
+              <button
+                key={f.key || 'all'}
+                onClick={() => setPaymentFilter(f.key)}
+                aria-pressed={active}
+                className={`shrink-0 pb-1 border-b-2 transition-colors ${active ? 'border-neutral-900 text-neutral-900 font-semibold' : 'border-transparent text-neutral-500 hover:text-neutral-800'}`}
+              >
+                {f.label}{count !== null && <span className="num ml-1 text-neutral-400">{count}</span>}
+              </button>
+            );
+          })}
         </div>
 
         {/* Mobile: centered tabs with dividers, no counts/badges */}
@@ -992,19 +1035,26 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
       ) : (
         <div className={flashList ? 'waarwi-flash waarwi-flash-scroll' : ''}>
           {/* Desktop table header */}
-          <div className="hidden lg:flex items-center px-8 h-8 border-b border-neutral-200 bg-neutral-50/60 text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
-            <div className="w-[140px]">N° Commande</div>
-            <div className="flex-1 min-w-0">Fournisseur</div>
-            <div className="w-[100px]">Statut</div>
-            <div className="w-[120px] text-right">Date</div>
-            <div className="w-[130px] text-right">Montant</div>
-            <div className="w-[100px] text-right pr-1">Actions</div>
+          <div className={`${ROW_GRID} mt-5 h-10 border-y border-neutral-200 bg-neutral-50/60 text-[10px] font-bold text-neutral-500 uppercase tracking-wider whitespace-nowrap`}>
+            <div>N° Cde</div>
+            <div>Fournisseur</div>
+            <div>Statut</div>
+            <div className={`${WIDE_ONLY} text-right`}>Date</div>
+            <div className="text-right">Total</div>
+            <div className={`${WIDE_ONLY} text-right`}>Payé</div>
+            <div className="text-right">Reste à payer</div>
+            <div className="text-right pr-1">Actions</div>
           </div>
           <div className="divide-y divide-neutral-100">
             {filtered.map(o => {
               const stColor = STATUS_COLORS[o.status] || 'text-slate-500';
               const stLabel = STATUS_LABELS[o.status] || o.status;
               const canReceive = ['sent', 'confirmed', 'partial'].includes(o.status);
+              const payState = orderPaymentState(o);
+              const payLabel = payState ? PAYMENT_STATE_LABELS[payState] : '—';
+              const payColor = payState === 'paid' ? 'text-neutral-900' : payState === 'partial' ? 'text-neutral-700' : 'text-neutral-500';
+              const remaining = o.status === 'cancelled' ? 0 : orderRemaining(o);
+              const showPay = canPayOrders && !!o.supplier_id && isOrderPayable(o);
               return (
                 <div
                   key={o.id}
@@ -1013,18 +1063,30 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
                   className="group cursor-pointer transition hover:bg-neutral-50/60"
                 >
                   {/* Desktop: single row */}
-                  <div className="hidden lg:flex items-center px-8 h-10">
-                    <div className="w-[140px] text-[13px] font-semibold text-neutral-800 truncate">{o.order_number}</div>
-                    <div className="flex-1 min-w-0 text-xs text-neutral-600 truncate">{o.suppliers?.name || '—'}</div>
-                    <div className="w-[100px]"><span className={`text-[11px] font-semibold ${stColor}`}>{stLabel}</span></div>
-                    <div className="w-[120px] text-right text-xs text-neutral-500 num whitespace-nowrap">{formatDate(o.created_at)}</div>
-                    <div className="w-[130px] text-right text-sm font-extrabold text-neutral-900 num whitespace-nowrap">{formatFCFA(o.total)}</div>
-                    <div className="w-[100px] flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className={`${ROW_GRID} min-h-[52px] py-2`}>
+                    <div className="text-[13px] font-semibold text-neutral-800 truncate">{o.order_number}</div>
+                    <div className="min-w-0 text-[13px] text-neutral-700 truncate" title={o.suppliers?.name || undefined}>{o.suppliers?.name || '—'}</div>
+                    <div className="truncate"><span className={`text-[11px] font-semibold whitespace-nowrap ${stColor}`}>{stLabel}</span></div>
+                    <div className={`${WIDE_ONLY} text-right text-xs text-neutral-500 num whitespace-nowrap`}>{formatDate(o.created_at)}</div>
+                    <div className="text-right text-sm font-extrabold text-neutral-900 num whitespace-nowrap">{formatFCFA(o.total)}</div>
+                    <div className={`${WIDE_ONLY} text-right text-xs text-neutral-600 num whitespace-nowrap`}>{formatFCFA(o.paid)}</div>
+                    <div className="text-right leading-tight">
+                      <div className="text-[13px] font-semibold text-neutral-900 num whitespace-nowrap">{o.status === 'cancelled' ? '—' : formatFCFA(remaining)}</div>
+                      <div className={`mt-0.5 text-[10px] font-semibold whitespace-nowrap ${payColor}`}>{payLabel}</div>
+                    </div>
+                    <div className="flex items-center justify-end gap-0.5">
+                      <div className="hidden 2xl:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                       <button onClick={e => { e.stopPropagation(); sendWhatsAppFor(o); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[#25D366] transition" title="WhatsApp"><MessageCircle className="w-3.5 h-3.5" /></button>
                       <button onClick={e => { e.stopPropagation(); copyLinkFor(o); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Copier le lien"><Link2 className="w-3.5 h-3.5" /></button>
                       {o.status === 'draft' && <button onClick={e => { e.stopPropagation(); changeStatus(o, 'sent'); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-[var(--w-text-secondary)] transition" title="Marquer envoyée"><CheckCircle className="w-3.5 h-3.5" /></button>}
                       {canReceive && <button onClick={e => { e.stopPropagation(); openOrderReceive(o); }} className="p-1.5 rounded-lg hover:bg-[var(--w-hover)] text-emerald-500 transition" title="Réceptionner"><Truck className="w-3.5 h-3.5" /></button>}
                       {canDelete && <button onClick={e => { e.stopPropagation(); setToDelete(o); }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>}
+                      </div>
+                      {showPay && (
+                        <button onClick={e => { e.stopPropagation(); setToPay(o); }} className="ml-1 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-neutral-900 hover:bg-[var(--w-hover)] transition" title={`Régler ${formatFCFA(remaining)}`}>
+                          <Wallet className="w-3.5 h-3.5" />Régler
+                        </button>
+                      )}
                     </div>
                   </div>
                   {/* Mobile: 3-line layout */}
@@ -1045,8 +1107,20 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
                       {canReceive && <button onClick={e => { e.stopPropagation(); openOrderReceive(o); }} className="p-1.5 rounded-md hover:bg-[var(--w-hover)] text-emerald-500 transition" title="Réceptionner"><Truck className="w-4 h-4" /></button>}
                       {canDelete && <button onClick={e => { e.stopPropagation(); setToDelete(o); }} className="p-1.5 rounded-md hover:bg-red-50 text-red-500 transition" title="Supprimer"><Trash2 className="w-4 h-4" /></button>}
                       <div className="flex-1" />
+                      {showPay && (
+                        <button onClick={e => { e.stopPropagation(); setToPay(o); }} className="inline-flex items-center gap-1 min-h-[36px] px-2.5 rounded-md text-xs font-semibold text-neutral-900 active:bg-[var(--w-hover)] hover:bg-[var(--w-hover)] transition shrink-0" aria-label={`Régler ${formatFCFA(remaining)}`}>
+                          <Wallet className="w-4 h-4" />Régler
+                        </button>
+                      )}
                       <div className="w-px h-5 bg-neutral-200 mx-1" />
                       <span className="text-sm font-extrabold text-neutral-900 num whitespace-nowrap shrink-0">{formatFCFA(o.total)}</span>
+                    </div>
+                    {/* Line 4: settlement next to the total */}
+                    <div className="flex items-baseline justify-end gap-2 mt-0.5 text-[11px] flex-wrap">
+                      <span className={`font-semibold ${payColor}`}>{payLabel}</span>
+                      {o.status !== 'cancelled' && (
+                        <span className="text-neutral-500 num whitespace-nowrap">Payé {formatFCFA(o.paid)} · Reste <span className="font-semibold text-neutral-900">{formatFCFA(remaining)}</span></span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1167,6 +1241,17 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
         message={`La réception de "${toRevert?.order_number || ''}" sera annulée : les quantités reçues seront retirées du stock et l'écriture comptable d'achat supprimée. Vous pourrez ensuite corriger la commande et la réceptionner à nouveau.`}
         danger
       />
+
+      {toPay?.supplier_id && (
+        <SupplierPaymentModal
+          supplier={{ id: toPay.supplier_id, name: toPay.suppliers?.name || 'Fournisseur' }}
+          initialOrderId={toPay.id}
+          siteId={currentSite?.id || null}
+          onSuccess={() => load(true)}
+          onStale={() => load(true)}
+          onClose={() => setToPay(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={!!toDelete}

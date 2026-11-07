@@ -25,6 +25,8 @@ import { MobileInvoiceDetail } from '../components/MobileInvoiceDetail';
 import { DocumentEditor, type DocLineItem, type DocHeaderForm, type DocMode } from '../components/DocumentEditor';
 import { DEFAULT_DOC_SETTINGS } from '../components/DocumentSettingsTab';
 import { SupplierOrderEditor, type SOLineItem, type SOHeaderForm, type SOMode } from '../components/SupplierOrderEditor';
+import { SupplierPaymentModal } from '../components/supplier/SupplierPaymentModal';
+import { RecentPaymentsAccordion } from '../components/RecentPaymentsAccordion';
 import type { Customer } from '../lib/types';
 import { CollapsibleSection, FormField, ValidatedInput } from '../components/FormPrimitives';
 import { useTranslation } from 'react-i18next';
@@ -1376,7 +1378,14 @@ export function Tiers({ visible = true, onNavigate }: { visible?: boolean; onNav
           onClose={() => { setCustView(null); load(); }}
         />
       )}
-      {supView && (
+      {supView?.key === 'payment' && (
+        <SupplierPaymentModal
+          supplier={supView.s}
+          siteId={currentSite?.id || null}
+          onClose={() => { setSupView(null); load(); }}
+        />
+      )}
+      {supView && supView.key !== 'payment' && (
         <SupplierDetailModal
           view={supView}
           siteId={currentSite?.id || null}
@@ -1789,7 +1798,7 @@ function CustomerDetailModal({ view, customerList, onClose, windowed, onCustomer
   const [activeCustomer, setActiveCustomer] = useState<Customer>(viewC);
   const initialC = activeCustomer;
   const { tenant, currentSite } = useApp();
-  const { success, error } = useToast();
+  const { success, error, toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
   const [saleItems, setSaleItems] = useState<any[]>([]);
@@ -2762,25 +2771,6 @@ function LedgerView({ customerName, statement, statementLoading, dateFrom, dateT
   );
 }
 
-/* ───────────────────────── Recent payments accordion ───────────────────────── */
-function RecentPaymentsAccordion({ label, children }: { label: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-4">
-      <button type="button" onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1 text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide hover:text-[var(--w-text)] transition-colors">
-        <ChevronRight className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
-        {label}
-      </button>
-      {open && (
-        <div className="mt-1.5 max-h-[160px] overflow-y-auto">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ───────────────────────── Payment form ───────────────────────── */
 function PaymentForm({
   unpaid, methods, paySale, setPaySale, payAmount, setPayAmount, payMethod, setPayMethod,
@@ -3034,22 +3024,11 @@ function MobileSupplierOrderDetail({ order, items, payments: pays, supplierName,
 function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: SupplierOptionKey }; siteId: string | null; onClose: () => void }) {
   const { s, key } = view;
   const { tenant, currentSite } = useApp();
-  const { success, error } = useToast();
-  const { can } = usePermissions();
-  const vaultEnabled = (tenant?.enabled_modules || []).includes('vault') && can('vault_pay_supplier');
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
-  const [methods, setMethods] = useState<any[]>([]);
   const [articles, setArticles] = useState<any[]>([]);
-
-  const [payOrder, setPayOrder] = useState<string>('');
-  const [payAmount, setPayAmount] = useState<string>('');
-  const [payMethod, setPayMethod] = useState<string>('');
-  const [payRef, setPayRef] = useState('');
-  const [payFunding, setPayFunding] = useState<'cash' | 'vault'>('cash');
-  const [paying, setPaying] = useState(false);
 
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -3079,10 +3058,9 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
   const reload = async () => {
     if (!tenant) return;
     setLoading(true);
-    const [oRes, pRes, mRes, aRes, adjRes, balRes] = await Promise.all([
+    const [oRes, pRes, aRes, adjRes, balRes] = await Promise.all([
       supabase.from('supplier_orders').select('id, order_number, total, paid, status, created_at, expected_date, user_id').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('created_at', { ascending: false }).limit(400),
       supabase.from('supplier_payments').select('*').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('paid_at', { ascending: false }).limit(200),
-      supabase.from('payment_methods').select('id, name, code, payment_type').eq('tenant_id', tenant.id).eq('is_active', true).neq('payment_type', 'credit').order('sort_order'),
       supabase.from('articles').select('id, name, internal_ref, supplier_ref, sale_price, is_active').eq('tenant_id', tenant.id).eq('supplier_id', s.id).order('name').limit(300),
       supabase.from('balance_adjustments').select('id, amount, note, kind, created_at').eq('tenant_id', tenant.id).eq('entity_type', 'supplier').eq('entity_id', s.id).order('created_at', { ascending: false }),
       supabase.from('suppliers').select('balance').eq('id', s.id).maybeSingle(),
@@ -3090,11 +3068,9 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     const oo = oRes.data || [];
     setOrders(oo);
     setPayments(pRes.data || []);
-    setMethods(mRes.data || []);
     setArticles(aRes.data || []);
     setBalanceAdjs(adjRes.data || []);
     if (balRes.data) setSupplierBalance(Number(balRes.data.balance || 0));
-    if (!payMethod && (mRes.data || []).length) setPayMethod(mRes.data![0].id);
     const ids = oo.map(o => o.id);
     if (ids.length) {
       const { data: items } = await supabase.from('supplier_order_items').select('*').in('order_id', ids);
@@ -3110,16 +3086,6 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     const paid = valid.reduce((a, o) => a + Number(o.paid || 0), 0);
     return { total, paid, due: Math.max(0, total - paid) };
   }, [orders]);
-
-  const unpaidOrders = useMemo(() => {
-    const result = orders.filter(o => o.status !== 'cancelled' && Number(o.paid || 0) < Number(o.total));
-    const invoiceDue = result.reduce((a, o) => a + (Number(o.total) - Number(o.paid || 0)), 0);
-    const positionedDue = Math.max(0, supplierBalance - invoiceDue);
-    if (positionedDue > 0) {
-      result.unshift({ id: '__balance__', order_number: 'Report de solde', total: positionedDue, paid: 0, status: 'validated', created_at: new Date(0).toISOString() } as any);
-    }
-    return result;
-  }, [orders, supplierBalance]);
 
   const ledger = useMemo(() => {
     type Row = { id: string; ts: string; label: string; ref: string; debit: number; credit: number; kind: 'order' | 'payment' | 'cancel' | 'adjustment' };
@@ -3176,49 +3142,6 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     return { year, months };
   }, [orders]);
 
-  const submitPayment = async () => {
-    const amt = Number(payAmount);
-    if (!amt || amt <= 0) { error('Montant invalide'); return; }
-    const pm = methods.find(m => m.id === payMethod);
-    if (!pm) { error('Mode de règlement requis'); return; }
-    if (!tenant || !currentSite) return;
-    const now = Date.now();
-    const dup = payments.find(p => Number(p.amount) === amt && Math.abs(now - new Date(p.created_at || p.paid_at).getTime()) < 60000);
-    if (dup) { toast(`Règlement de ${formatFCFA(amt)} effectué il y a moins d'une minute — vérifiez qu'il ne s'agit pas d'un doublon.`, 'info'); }
-    setPaying(true);
-    const isBalance = payOrder === '__balance__';
-    if (payFunding === 'vault') {
-      const { error: e } = await supabase.rpc('register_supplier_payment_from_vault', {
-        p_supplier_id: s.id, p_payment_method_id: pm.id, p_method_name: pm.name,
-        p_amount: amt, p_reference: payRef || (isBalance ? `Règlement solde · ${s.name}` : ''),
-        p_site_id: currentSite.id, p_order_id: isBalance ? null : (payOrder || null),
-        p_idempotency_key: (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`),
-      });
-      setPaying(false);
-      if (e) { error(e.message); return; }
-      success('Règlement enregistré · imputé sur le coffre');
-      setPayOrder(''); setPayAmount(''); setPayRef('');
-      reload();
-      return;
-    }
-    const cashCtx = await getOperationalCashContext(currentSite.id);
-    const sess = cashCtx.session;
-    if (!sess) { setPaying(false); error(missingSessionMessage(cashCtx, "La caisse doit être ouverte d'abord")); return; }
-    const available = Number(sess.opening_amount || 0) + Number(sess.theoretical_amount || 0);
-    if (available < amt) { setPaying(false); error('Solde caisse insuffisant'); return; }
-    const { error: e } = await supabase.rpc('register_supplier_payment', {
-      p_supplier_id: s.id, p_payment_method_id: pm.id, p_method_name: pm.name,
-      p_amount: amt, p_reference: payRef || (isBalance ? `Règlement solde · ${s.name}` : ''),
-      p_cash_session_id: sess.id, p_order_id: isBalance ? null : (payOrder || null),
-      p_from_cash: true,
-    });
-    setPaying(false);
-    if (e) { error(e.message); return; }
-    success('Règlement enregistré · imputé sur la caisse du jour');
-    setPayOrder(''); setPayAmount(''); setPayRef('');
-    reload();
-  };
-
   const openOrder = (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -3262,7 +3185,7 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
     });
   };
 
-  const modalTitle = key === 'info' ? 'Interrogation fournisseur' : key === 'payment' ? 'Saisir un règlement' : key === 'articles' ? 'Articles liés' : 'Documents d\'achats';
+  const modalTitle = key === 'info' ? 'Interrogation fournisseur' : key === 'articles' ? 'Articles liés' : 'Documents d\'achats';
   const [infoTab, setInfoTab] = useState<'comptable' | 'commerciale' | 'statistiques'>('comptable');
   const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
@@ -3487,16 +3410,9 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 
   return (
     <Modal open onClose={onClose} title={modalTitle} size="sm" layer="top" fullscreenMobile
-      panelClassName={key === 'payment' || key === 'docs' ? 'sm:!h-[500px]' : ''}
+      panelClassName={key === 'docs' ? 'sm:!h-[500px]' : ''}
       footer={
-        key === 'payment' ? (
-          <div className="flex items-center gap-2">
-            <button onClick={submitPayment} disabled={paying || (Number(payAmount) || 0) <= 0} className="btn-icon" title="Valider">
-              {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-            <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
-          </div>
-        ) : <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
+        <button onClick={onClose} className="btn-icon" title="Fermer"><X className="w-4 h-4" /></button>
       }>
 
       <div className="pb-3 border-b border-neutral-100">
@@ -3504,7 +3420,6 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
           <div>
             <div className="text-sm font-bold text-black">{s.name}</div>
             <div className="text-[9px] font-semibold tracking-wider uppercase text-[var(--w-text-disabled)] mt-0.5">
-              {key === 'payment' && 'Règlement avec imputation'}
               {key === 'docs' && 'Documents d\'achats · statistiques'}
               {key === 'articles' && `${articles.length} article${articles.length > 1 ? 's' : ''} lié${articles.length > 1 ? 's' : ''}`}
             </div>
@@ -3518,19 +3433,6 @@ function SupplierDetailModal({ view, onClose }: { view: { s: Supplier; key: Supp
 
       {loading ? <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[var(--w-text-disabled)]" /></div> : (
         <>
-          {key === 'payment' && (
-            <SupplierPaymentForm
-              unpaid={unpaidOrders} methods={methods}
-              payOrder={payOrder} setPayOrder={setPayOrder}
-              payAmount={payAmount} setPayAmount={setPayAmount}
-              payMethod={payMethod} setPayMethod={setPayMethod}
-              payRef={payRef} setPayRef={setPayRef}
-              payFunding={payFunding} setPayFunding={setPayFunding} vaultEnabled={vaultEnabled}
-              paying={paying} onSelectOrder={(id: string) => { const o = unpaidOrders.find(x => x.id === id); if (o) setPayAmount(String(Math.max(0, Number(o.total) - Number(o.paid || 0)))); }}
-              recentPayments={payments.slice(0, 8).map(p => ({ ...p, order_number: orders.find(x => x.id === p.order_id)?.order_number }))}
-            />
-          )}
-
           {key === 'docs' && (
             <SupplierDocsView
               kpis={docsKpis} yearStats={yearStats} docs={filteredDocs} orderItems={orderItems}
@@ -3729,127 +3631,6 @@ function SupplierLedgerView({ supplierName, ledger, totalCredit, totalDebit, due
         {filteredDette < 0 && <span>Avoir : <span className="font-bold text-black num">{formatFCFA(Math.abs(filteredDette))}</span></span>}
         {filteredDette === 0 && <span>Solde : <span className="font-bold text-black num">0 FCFA</span></span>}
       </div>
-    </div>
-  );
-}
-
-/* ───────────────────────── Supplier payment form ───────────────────────── */
-function SupplierPaymentForm({
-  unpaid, methods, payOrder, setPayOrder, payAmount, setPayAmount, payMethod, setPayMethod,
-  payRef, setPayRef, payFunding, setPayFunding, vaultEnabled, paying, onSelectOrder, recentPayments,
-}: any) {
-  const selected = unpaid.find((o: any) => o.id === payOrder);
-  const isBalance = selected?.id === '__balance__';
-  const due = selected ? Math.max(0, Number(selected.total) - Number(selected.paid || 0)) : 0;
-  const amt = Number(payAmount) || 0;
-  const remaining = Math.max(0, due - amt);
-
-  return (
-    <div className="pt-1">
-      {/* Montant à régler | Imputation — deux colonnes, trait vertical fin, pas de carte */}
-      <div className="grid grid-cols-2 py-1">
-        <div className="pr-4">
-          <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">Montant à régler</label>
-          <div className="mt-1 flex items-baseline gap-1">
-            <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-              className="text-lg font-bold text-[var(--w-text)] focus:outline-none flex-1 min-w-0 placeholder:text-slate-300 bg-transparent" placeholder="0" min={0} />
-            <span className="text-xs text-[var(--w-text-muted)] font-medium">FCFA</span>
-          </div>
-        </div>
-        <div className="pl-4 border-l border-neutral-200">
-          {selected ? (
-            <>
-              <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">{isBalance ? 'Solde positionné' : 'Dû'}</div>
-              <div className="mt-1 text-sm font-bold text-slate-800 num">{formatFCFA(due)}</div>
-              {amt > 0 && <div className="text-[11px] text-[var(--w-text-muted)] mt-0.5">Reste : <span className={`font-bold num ${remaining === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatFCFA(remaining)}</span></div>}
-            </>
-          ) : (
-            <>
-              <div className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide">Imputation</div>
-              <div className="mt-1 text-xs text-[var(--w-text-disabled)]">Aucune commande</div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Imputer sur — champ underline */}
-      <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Imputer sur</label>
-        <SearchableSelect
-          variant="underline"
-          options={[
-            { value: '', label: 'Acompte libre (sans commande)' },
-            ...unpaid.filter((o: any) => o.id !== '__balance__').map((o: any) => {
-              const d = Math.max(0, Number(o.total) - Number(o.paid || 0));
-              return { value: o.id, label: `${o.order_number} · dû ${formatFCFA(d)}` };
-            })
-          ]}
-          value={payOrder}
-          onChange={v => { setPayOrder(v); onSelectOrder(v); }}
-          placeholder="Acompte libre (sans commande)"
-        />
-        {unpaid.some((o: any) => o.id === '__balance__') && (
-          <button type="button" onClick={() => { setPayOrder('__balance__'); onSelectOrder('__balance__'); }}
-            className={`mt-1.5 text-[11px] font-medium transition-colors ${isBalance ? 'text-[var(--w-text)] font-semibold' : 'text-[var(--w-text-muted)] hover:text-[var(--w-text)]'}`}>
-            Solde positionné · {formatFCFA(unpaid.find((o: any) => o.id === '__balance__')?.total || 0)}
-          </button>
-        )}
-        {unpaid.length === 0 && <div className="text-[11px] text-emerald-700 mt-1 inline-flex items-center gap-1"><Check className="w-3 h-3" />Tout soldé</div>}
-      </div>
-
-      {/* Modes de règlement — une seule ligne, texte compact, soulignement du mode actif */}
-      <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Mode</label>
-        <div className="flex items-center gap-4">
-          {methods.map((m: any) => (
-            <button key={m.id} type="button" onClick={() => setPayMethod(m.id)}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payMethod === m.id ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
-              {m.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Référence — input underline */}
-      <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Référence (optionnel)</label>
-        <input value={payRef} onChange={e => setPayRef(e.target.value)}
-          className="bare-input text-sm py-1.5"
-          placeholder="N° chèque, virement…" />
-      </div>
-
-      {vaultEnabled && (
-        <div className="mt-3">
-          <label className="text-[10px] uppercase font-semibold text-[var(--w-text-muted)] tracking-wide mb-1 block">Source des fonds</label>
-          <div className="flex items-center gap-4">
-            <button type="button" onClick={() => setPayFunding('cash')}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'cash' ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
-              Caisse
-            </button>
-            <button type="button" onClick={() => setPayFunding('vault')}
-              className={`text-[12px] pb-1 transition-all border-b-2 ${payFunding === 'vault' ? 'border-[var(--w-text)] text-[var(--w-text)] font-semibold' : 'border-transparent text-[var(--w-text-disabled)] hover:text-[var(--w-text-sec)]'}`}>
-              Coffre
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Imputation — texte seul, pas de point vert */}
-      <div className="mt-3 text-[11px] text-[var(--w-text-muted)]">
-        {payFunding === 'vault' ? 'Imputé sur le coffre' : 'Imputé sur la caisse du jour'}
-      </div>
-
-      {recentPayments.length > 0 && (
-        <RecentPaymentsAccordion label="Derniers règlements">
-          {recentPayments.map((p: any) => (
-            <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-neutral-100 last:border-0">
-              <div className="text-xs text-[var(--w-text-sec)]">{p.method_name}{p.reference ? ` · ${p.reference}` : ''}</div>
-              <div className="text-xs text-[var(--w-text-disabled)]">{p.order_number || 'Acompte'}</div>
-              <div className="text-xs font-bold text-emerald-700 num">{formatFCFA(p.amount)}</div>
-            </div>
-          ))}
-        </RecentPaymentsAccordion>
-      )}
     </div>
   );
 }
