@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useStickyOffset } from '../lib/useStickyOffset';
 import { createPortal } from 'react-dom';
 import {
   Plus, FileText, Loader2, Printer, CheckCircle, X, Trash2, Car,
@@ -186,6 +187,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+  const [stickyTopRef, stickyTop] = useStickyOffset<HTMLDivElement>();
 
   // Multi-instance quote windows (desktop)
   const [quoteWindows, setQuoteWindows] = useState<Map<string, QuoteWindowDescriptor>>(new Map());
@@ -2185,7 +2187,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
         </div>
       )}
       {/* ── Header ───────────────────────────────────────────── */}
-      <div className={`sticky top-0 z-20 pb-3 pt-4 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)] ${isDesktop ? '-mx-4 sm:-mx-5 lg:-mx-6 px-4 sm:px-5 lg:px-6' : '-mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
+      <div ref={stickyTopRef} className={`sticky top-0 z-20 pb-3 pt-4 bg-[var(--w-surface)] space-y-3 border-b border-[var(--w-separator)] ${isDesktop ? '-mx-4 sm:-mx-5 lg:-mx-6 px-4 sm:px-5 lg:px-6' : '-mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
       <div className="md:hidden flex items-start justify-between">
         <h1 className="text-lg font-bold text-neutral-900 leading-tight">Facturation</h1>
         <div className="shrink-0">
@@ -2436,7 +2438,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   })}
                 </div>
                 <div className="hidden md:block">
-                  <div className="flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
                     <span className="shrink-0 w-28">N° Devis</span>
                     <span className="shrink-0 hidden lg:inline w-24">Date</span>
                     <span className="flex-1 min-w-0">Client</span>
@@ -2505,7 +2507,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   })}
                 </div>
                 <div className="hidden md:block">
-                  <div className="flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
                     <span className="shrink-0 w-28">N° Facture</span>
                     <span className="shrink-0 hidden lg:inline w-32">Date</span>
                     <span className="flex-1 min-w-0">Client</span>
@@ -2586,7 +2588,7 @@ export function Billing({ visible = true, onNavigate }: { visible?: boolean; onN
                   })}
                 </div>
                 <div className="hidden md:block">
-                  <div className="flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  <div style={{ top: stickyTop }} className="sticky z-10 bg-[var(--w-surface)] flex items-center gap-3 px-2 py-1.5 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
                     <span className="shrink-0 w-28">N° Document</span>
                     <span className="shrink-0 hidden lg:inline w-32">Date</span>
                     <span className="flex-1 min-w-0">Client</span>

@@ -26,6 +26,7 @@ import { RotateCcw } from 'lucide-react';
 import { DispatchStep, type DispatchLineItem } from '../components/supplier/DispatchStep';
 import { buildStockLevelMap, type StockLevelMap } from '../lib/autoDistribute';
 import { SupplierPaymentModal } from '../components/supplier/SupplierPaymentModal';
+import { useStickyOffset } from '../lib/useStickyOffset';
 import { PAYMENT_STATE_LABELS, isOrderPayable, orderPaymentState, orderRemaining, type SupplierPaymentState } from '../lib/supplierPayment';
 
 type SupplierOrder = {
@@ -84,6 +85,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
   const sharedSuppliers = (tenant as any)?.settings?.shared_suppliers !== false;
   const stockMethod = (tenant as any)?.settings?.stock_method || 'none';
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+  const [stickyTopRef, stickyTop] = useStickyOffset<HTMLDivElement>();
 
   // ── Window manager (desktop) ────────────────────────────────────
   const {
@@ -887,7 +889,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
         </div>
       )}
       {/* ═══ Header ═══ */}
-      <div className={`sticky top-0 z-10 pb-3 bg-white space-y-3 border-b border-neutral-100 ${isDesktop ? 'px-4 xl:px-8 pt-4' : '-mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pt-4 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
+      <div ref={stickyTopRef} className={`sticky top-0 z-10 pb-3 bg-white space-y-3 border-b border-neutral-100 ${isDesktop ? 'px-4 xl:px-8 pt-4' : '-mx-3 sm:-mx-5 lg:-mx-8 px-3 sm:px-5 lg:px-8 pt-4 -mt-3 sm:-mt-4 lg:-mt-6'}`}>
         {/* Mobile: title + right-aligned action button (unchanged) */}
         <div className="md:hidden flex items-start justify-between">
           <h1 className="text-lg font-bold text-neutral-900 leading-tight">Achats</h1>
@@ -1035,7 +1037,7 @@ export function SupplierOrders({ visible = true, onNavigate }: { visible?: boole
       ) : (
         <div className={flashList ? 'waarwi-flash waarwi-flash-scroll' : ''}>
           {/* Desktop table header */}
-          <div className={`${ROW_GRID} mt-5 h-10 border-y border-neutral-200 bg-neutral-50/60 text-[10px] font-bold text-neutral-500 uppercase tracking-wider whitespace-nowrap`}>
+          <div style={{ top: stickyTop }} className={`${ROW_GRID} sticky z-[5] mt-5 h-10 border-y border-neutral-200 bg-neutral-50 text-[10px] font-bold text-neutral-500 uppercase tracking-wider whitespace-nowrap`}>
             <div>N° Cde</div>
             <div>Fournisseur</div>
             <div>Statut</div>
