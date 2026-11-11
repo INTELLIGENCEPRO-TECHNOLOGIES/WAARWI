@@ -1,0 +1,33 @@
+{
+  "projectId": "70445941",
+  "functions": {
+    "admin-users": {
+      "hasChanged": false,
+      "hash": "4ff631539555eda705710bc7460353be1ca1046b2c4fed460236c9717947e560"
+    },
+    "backup-export-v3": {
+      "hasChanged": false,
+      "hash": "67e6038daeef6b17d47cd71b63bd6b39f1afb09adafcfa3b98b5051f718ae033"
+    },
+    "backup-offsite": {
+      "hasChanged": false,
+      "hash": "2c7cc97af23387c2c7c24dfd13b306d293b29312b99e2f2944a63c6a7e7e10df"
+    },
+    "backup-scheduler": {
+      "hasChanged": false,
+      "hash": "5c8771d3f8b228427fdfd997a092059cf378dc0cdb543eee3e559ac32abd2c5a"
+    },
+    "run-ipm-migration": {
+      "hasChanged": false,
+      "hash": "ad47806c29392e6d46a5f1a53ba64f2e549ea774f41dbe10d31756086003482f"
+    },
+    "send-notification-email": {
+      "hasChanged": false,
+      "hash": "3f59abaccc2b8405aa58166674f04eeff73efcf1eacc1cde501d65960ecab163"
+    },
+    "shop-og": {
+      "hasChanged": false,
+      "hash": "faa454e646b07fadd65054aa9653b1473251e27d30eab951cbbc92cfffe547dc"
+    }
+  }
+}

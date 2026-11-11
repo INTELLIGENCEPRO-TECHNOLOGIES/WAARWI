@@ -1,0 +1,339 @@
+src/components/AccountingPlanIO.tsx: error TS6133: 'useMemo' is declared but its value is never read.
+src/components/BackupTab.tsx: error TS6133: 'Info' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'Activity' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'AlertTriangle' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'CheckCircle' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'ChevronRight' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'Clock' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'Database' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'Download' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'HardDrive' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'History' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'Server' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'Settings2' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'ShieldCheck' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'Upload' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'XCircle' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'Zap' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'cronReady' is declared but its value is never read.
+src/components/CentralizedBackups.tsx: error TS6133: 'formatDate' is declared but its value is never read.
+src/components/DocumentEditor.tsx: error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/DocumentEditor.tsx: error TS6133: 'CheckCircle' is declared but its value is never read.
+src/components/DocumentEditor.tsx: error TS6133: 'Package' is declared but its value is never read.
+src/components/DocumentEditor.tsx: error TS6133: 'articles' is declared but its value is never read.
+src/components/DocumentEditor.tsx: error TS6133: 'cols' is declared but its value is never read.
+src/components/DocumentEditor.tsx: error TS6133: 'docSettings' is declared but its value is never read.
+src/components/DocumentEditor.tsx: error TS6133: 'onCreateArticle' is declared but its value is never read.
+src/components/DocumentSettingsTab.tsx: error TS6133: 'Check' is declared but its value is never read.
+src/components/FormPrimitives.tsx: error TS6133: 'useEffect' is declared but its value is never read.
+src/components/FormPrimitives.tsx: error TS6133: 'useRef' is declared but its value is never read.
+src/components/LandingConfigSection.tsx: error TS2322: Type '{ ref: RefObject<HTMLTextAreaElement>; value: string; onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void; ... 4 more ...; placeholder: string; }' is not assignable to type 'DetailedHTMLProps<TextareaHTMLAttributes<HTMLTextAreaElement>, HTMLTextAreaElement>'.
+src/components/MasterCatalogAdmin.tsx: error TS6133: 'Check' is declared but its value is never read.
+src/components/Shell.tsx: error TS2353: Object literal may only specify known properties, and 'accounting' does not exist in type 'Partial<Record<Route, string[]>>'.
+src/components/Shell.tsx: error TS6133: 'CreditCard' is declared but its value is never read.
+src/components/Shell.tsx: error TS6133: 'Receipt' is declared but its value is never read.
+src/components/Shell.tsx: error TS6133: 'ShoppingBag' is declared but its value is never read.
+src/components/Shell.tsx: error TS6133: 'Wallet' is declared but its value is never read.
+src/components/Shell.tsx: error TS6133: 'searchFocused' is declared but its value is never read.
+src/components/Shell.tsx: error TS6133: 'useQuickAction' is declared but its value is never read.
+src/components/SupplierOrderEditor.tsx: error TS6133: 'Calendar' is declared but its value is never read.
+src/components/SupplierOrderEditor.tsx: error TS6133: 'Minus' is declared but its value is never read.
+src/components/SupplierOrderEditor.tsx: error TS6133: 'Package' is declared but its value is never read.
+src/components/SupplierOrderEditor.tsx: error TS6133: 'Plus' is declared but its value is never read.
+src/components/SupplierOrderEditor.tsx: error TS6133: 'useCallback' is declared but its value is never read.
+src/components/billing/InvoiceEditorInstance.tsx: error TS6133: 'articleTiers' is declared but its value is never read.
+src/components/billing/InvoiceEditorInstance.tsx: error TS6133: 'onNavigateInvoice' is declared but its value is never read.
+src/components/billing/InvoiceEditorInstance.tsx: error TS6133: 'onTierPicker' is declared but its value is never read.
+src/components/billing/InvoiceEditorInstance.tsx: error TS6133: 'sales' is declared but its value is never read.
+src/components/billing/QuoteEditorInstance.tsx: error TS2741: Property 'doc_date' is missing in type '{ customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string; valid_until: string; }' but required in type 'DocHeaderForm'.
+src/components/billing/QuoteEditorInstance.tsx: error TS6133: 'applyTier' is declared but its value is never read.
+src/components/billing/QuoteEditorInstance.tsx: error TS6133: 'applyVehicleArticle' is declared but its value is never read.
+src/components/billing/QuoteEditorInstance.tsx: error TS6133: 'finalizeItem' is declared but its value is never read.
+src/components/billing/QuoteEditorInstance.tsx: error TS6133: 'formatFCFA' is declared but its value is never read.
+src/components/billing/QuoteEditorInstance.tsx: error TS6133: 'updateItem' is declared but its value is never read.
+src/components/cash/SessionStatsModal.tsx: error TS6133: 'i' is declared but its value is never read.
+src/components/reports/reportEngine.ts: error TS6133: 'AMOUNT_NOTE' is declared but its value is never read.
+src/components/reports/reportEngine.ts: error TS6133: 'BUSINESS_TYPE_LABELS' is declared but its value is never read.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'hero_cta_label' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'hero_cta_label' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'hero_subtitle' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'hero_subtitle' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'hero_title' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'hero_title' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_active' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_active' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_active' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_active' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_color' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_color' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_color' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_text' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'promo_banner_text' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'show_waarwi_badge' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'show_waarwi_badge' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'show_waarwi_badge' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'social_links' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'social_links' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2339: Property 'social_links' does not exist on type 'ShopSettings'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'hero_cta_label' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'hero_subtitle' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'hero_title' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'hero_title' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'promo_banner_active' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'promo_banner_color' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'promo_banner_color' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'promo_banner_text' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'show_waarwi_badge' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS2353: Object literal may only specify known properties, and 'social_links' does not exist in type 'Partial<ShopSettings>'.
+src/components/shop/ShopAppearanceSettings.tsx: error TS6133: 'Eye' is declared but its value is never read.
+src/components/shop/ShopAppearanceSettings.tsx: error TS6133: 'EyeOff' is declared but its value is never read.
+src/components/shop/ShopFilters.tsx: error TS6133: 'Tag' is declared but its value is never read.
+src/components/shop/ShopFooter.tsx: error TS2322: Type 'unknown' is not assignable to type 'string | undefined'.
+src/components/shop/ShopFooter.tsx: error TS2339: Property 'show_waarwi_badge' does not exist on type 'ShopSettings'.
+src/components/shop/ShopFooter.tsx: error TS2339: Property 'social_links' does not exist on type 'ShopSettings'.
+src/components/shop/ShopHero.tsx: error TS6133: 'tenant' is declared but its value is never read.
+src/components/shop/ShopProductCard.tsx: error TS6133: 'cat' is declared but its value is never read.
+src/components/shop/ShopProductCard.tsx: error TS6133: 'theme' is declared but its value is never read.
+src/components/shop/ShopProductDetail.tsx: error TS2339: Property 'old_price' does not exist on type 'ShopArticle'.
+src/components/shop/ShopProductDetail.tsx: error TS2339: Property 'old_price' does not exist on type 'ShopArticle'.
+src/components/shop/ShopProductDetail.tsx: error TS2339: Property 'old_price' does not exist on type 'ShopArticle'.
+src/components/shop/ShopProductDetail.tsx: error TS2339: Property 'old_price' does not exist on type 'ShopArticle'.
+src/components/shop/ShopProductDetail.tsx: error TS2339: Property 'old_price' does not exist on type 'ShopArticle'.
+src/components/shop/ShopProductDetail.tsx: error TS6133: 'Info' is declared but its value is never read.
+src/components/supplier/DispatchStep.tsx: error TS6133: 'formatNum' is declared but its value is never read.
+src/components/supplier/SupplierOrderInstance.tsx: error TS6133: 'CheckCircle' is declared but its value is never read.
+src/components/supplier/SupplierOrderInstance.tsx: error TS6133: 'Modal' is declared but its value is never read.
+src/components/supplier/SupplierOrderInstance.tsx: error TS6133: 'Truck' is declared but its value is never read.
+src/components/supplier/SupplierOrderInstance.tsx: error TS6133: 'isDispatchValid' is declared but its value is never read.
+src/context/AppContext.tsx: error TS2352: Conversion of type '{ id: any; name: any; parent_id: any; tenant_id: any; track_stock: any; }[]' to type 'Category[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/context/QuickActionContext.tsx: error TS6133: 'ctx' is declared but its value is never read.
+src/lib/print.ts: error TS6133: 'tenantHeaderA4Lines' is declared but its value is never read.
+src/lib/print.ts: error TS6133: 'tenantLogoA4' is declared but its value is never read.
+src/lib/print.ts: error TS6196: 'A4LogoPosition' is declared but never used.
+src/lib/useForm.ts: error TS6133: 'useEffect' is declared but its value is never read.
+src/lib/usePaginatedList.ts: error TS6133: 'nonSearchKey' is declared but its value is never read.
+src/lib/usePaginatedList.ts: error TS6133: 'prefetchAbortedRef' is declared but its value is never read.
+src/pages/Accounting.tsx: error TS6133: 'Check' is declared but its value is never read.
+src/pages/Accounting.tsx: error TS6133: 'ConfirmDialog' is declared but its value is never read.
+src/pages/Accounting.tsx: error TS6133: 'Trash2' is declared but its value is never read.
+src/pages/Articles.tsx: error TS2339: Property 'track_stock' does not exist on type 'Form'.
+src/pages/Articles.tsx: error TS2345: Argument of type '(f: Form) => { id: string | null; stock_init: number; tenant_id?: string | undefined; internal_ref?: string | undefined; name?: string | undefined; description?: string | undefined; ... 18 more ...; ipm_eligible?: boolean | undefined; }' is not assignable to parameter of type 'SetStateAction<Form>'.
+src/pages/Articles.tsx: error TS6133: 'CategoryFilterSheet' is declared but its value is never read.
+src/pages/Articles.tsx: error TS6133: 'Plus' is declared but its value is never read.
+src/pages/Articles.tsx: error TS6133: 'businessLabel' is declared but its value is never read.
+src/pages/Articles.tsx: error TS6133: 'filtered' is declared but its value is never read.
+src/pages/Articles.tsx: error TS6133: 'mStatus' is declared but its value is never read.
+src/pages/ArticlesComponents.tsx: error TS2339: Property 'track_stock' does not exist on type 'Form'.
+src/pages/ArticlesComponents.tsx: error TS6133: 'category' is declared but its value is never read.
+src/pages/ArticlesComponents.tsx: error TS6133: 'categoryOptions' is declared but its value is never read.
+src/pages/ArticlesComponents.tsx: error TS6133: 'onDelete' is declared but its value is never read.
+src/pages/ArticlesComponents.tsx: error TS6133: 'qty' is declared but its value is never read.
+src/pages/ArticlesComponents.tsx: error TS6133: 'showStock' is declared but its value is never read.
+src/pages/ArticlesComponents.tsx: error TS6133: 'suppliers' is declared but its value is never read.
+src/pages/ArticlesComponents.tsx: error TS6133: 'suppliers' is declared but its value is never read.
+src/pages/Auth.tsx: error TS6133: 'Lock' is declared but its value is never read.
+src/pages/Billing.tsx: error TS1117: An object literal cannot have multiple properties with the same name.
+src/pages/Billing.tsx: error TS1117: An object literal cannot have multiple properties with the same name.
+src/pages/Billing.tsx: error TS2322: Type '(inv?: Invoice | null) => void' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
+src/pages/Billing.tsx: error TS2531: Object is possibly 'null'.
+src/pages/Billing.tsx: error TS2741: Property 'doc_date' is missing in type '{ customer_id: string; note: string; delivery_date: string; reference: string; warranty: string; representative: string; imei: string; valid_until: string; }' but required in type 'DocHeaderForm'.
+src/pages/Billing.tsx: error TS6133: 'CalendarDays' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'Car' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'Check' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'DEFAULT_COLUMNS' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'DocColumn' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'GripVertical' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'Lock' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'Package' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'QuickCreateButton' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'SearchableSelect' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'ShoppingCart' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'Smartphone' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'Tag' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'Trash2' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'WizardHeaderField' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'activeQuoteTierCb' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'activeQuoteVehicleCb' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'amount' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'autoSaveQuote' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'billTotals' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'created_at' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'customer_id' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'finalizeInvoiceItem' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'finalizeQuoteItem' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'invoiceEditorPaid' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'invoicePostCreation' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'ipmLoading' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'matchesCommon' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'openInvoiceDetail' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'openQuoteForEdit' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'openQuoteForView' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'primaryAction' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'primaryLabel' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'quoteEditorMode' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'returnIsFullReturn' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'returnSale' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'returnedQtys' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'setReturnedQtys' is declared but its value is never read.
+src/pages/Billing.tsx: error TS6133: 'sites' is declared but its value is never read.
+src/pages/CashHistory.tsx: error TS2339: Property 'offsetWidth' does not exist on type 'Element'.
+src/pages/CashHistory.tsx: error TS6133: 'Modal' is declared but its value is never read.
+src/pages/CashHistory.tsx: error TS6133: 'formatDateTime' is declared but its value is never read.
+src/pages/Coffre.tsx: error TS6133: 'a4Style' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'ArrowDownRight' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'Bell' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'HeroChart' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'Menu' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'Modal' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'RefreshCw' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'RotateCcw' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'TrendingDown' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'WeekBarChart' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'can' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'dayDelta' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'dayDelta' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'dayMarginPct' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'desktopAutoFocus' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'firstName' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'greet' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'marginPct' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'multiSiteView' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'now' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 's' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'sessionPaymentsTotal' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'setMultiSiteView' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'shopInfo' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'toastError' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'webBlink' is declared but its value is never read.
+src/pages/Dashboard.tsx: error TS6133: 'webCardRef' is declared but its value is never read.
+src/pages/IPM.tsx: error TS6133: 'CheckCircle2' is declared but its value is never read.
+src/pages/IPM.tsx: error TS6133: 'Plus' is declared but its value is never read.
+src/pages/IPM.tsx: error TS6133: 'i' is declared but its value is never read.
+src/pages/IPM.tsx: error TS6133: 'tenantId' is declared but its value is never read.
+src/pages/MasterCatalog.tsx: error TS6133: 'ChevronRight' is declared but its value is never read.
+src/pages/MoneyTransfer.tsx: error TS1345: An expression of type 'void' cannot be tested for truthiness.
+src/pages/MoneyTransfer.tsx: error TS1345: An expression of type 'void' cannot be tested for truthiness.
+src/pages/MoneyTransfer.tsx: error TS2322: Type '{ key: string; label: string; icon: LucideIcon; visible: boolean; }[]' is not assignable to type '{ key: SettingsTab; label: string; icon: any; visible: boolean; }[]'.
+src/pages/MoneyTransfer.tsx: error TS2339: Property 'service_point_id' does not exist on type 'LedgerEntry'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_credit"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_credit"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_manage"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_manage"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_manage"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_manage"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_repay"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_view"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_customer_view"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_expense_cancel"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_expense_manage"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_expense_view"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS2345: Argument of type '"mt_expense_view"' is not assignable to parameter of type '"access_pos" | "access_billing" | "access_articles" | "access_tiers" | "access_dashboard" | "access_reports" | "access_master_catalog" | "access_stock" | "access_sales" | ... 84 more ... | "backup_manage_schedule"'.
+src/pages/MoneyTransfer.tsx: error TS6133: 'creditActualTotal' is declared but its value is never read.
+src/pages/MoneyTransfer.tsx: error TS6133: 'getUserName' is declared but its value is never read.
+src/pages/MoneyTransfer.tsx: error TS6133: 'pointServiceLinks' is declared but its value is never read.
+src/pages/MoneyTransfer.tsx: error TS6133: 'profile' is declared but its value is never read.
+src/pages/MoneyTransfer.tsx: error TS6133: 'svcFamily' is declared but its value is never read.
+src/pages/OnlineOrders.tsx: error TS2339: Property 'offsetWidth' does not exist on type 'Element'.
+src/pages/OnlineOrders.tsx: error TS6133: 'Modal' is declared but its value is never read.
+src/pages/OnlineOrders.tsx: error TS6133: 'Search' is declared but its value is never read.
+src/pages/OnlineOrders.tsx: error TS6133: 'i' is declared but its value is never read.
+src/pages/POS.tsx: error TS2322: Type 'CategoryLite[]' is not assignable to type 'Category[]'.
+src/pages/POS.tsx: error TS2345: Argument of type '{ id: any; opening_amount: any; opened_at: any; }' is not assignable to parameter of type 'SetStateAction<CashSession | null>'.
+src/pages/POS.tsx: error TS6133: 'ActionIconBtn' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'LandingActionBtn' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'fmtDateFull' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'printInvoice' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'remaining' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'setTransforming' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'tenantLogo' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'tenantName' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'updateQty' is declared but its value is never read.
+src/pages/POS.tsx: error TS6133: 'useRecentSessions' is declared but its value is never read.
+src/pages/PlatformAdmin.tsx: error TS6133: 'Info_' is declared but its value is never read.
+src/pages/PlatformAdmin.tsx: error TS6133: 'Receipt' is declared but its value is never read.
+src/pages/PlatformAdmin.tsx: error TS6133: 'ShoppingCart' is declared but its value is never read.
+src/pages/PlatformAdmin.tsx: error TS6133: 'Truck' is declared but its value is never read.
+src/pages/Representatives.tsx: error TS6133: 'Receipt' is declared but its value is never read.
+src/pages/Representatives.tsx: error TS6133: 'Search' is declared but its value is never read.
+src/pages/Representatives.tsx: error TS6133: 'TrendingUp' is declared but its value is never read.
+src/pages/Representatives.tsx: error TS6133: 'UserCheck' is declared but its value is never read.
+src/pages/Representatives.tsx: error TS6133: 'Wallet' is declared but its value is never read.
+src/pages/Representatives.tsx: error TS6133: 'activeSales' is declared but its value is never read.
+src/pages/Sales.tsx: error TS2339: Property 'offsetWidth' does not exist on type 'Element'.
+src/pages/Sales.tsx: error TS2345: Argument of type '{ show_delivery_date: any; show_reference: any; show_warranty: any; show_imei: any; show_representative: any; warranty_terms: any; require_header_lock: any; allow_edit: any; allow_delete: any; columns_config: DocColumn[]; }' is not assignable to parameter of type 'SetStateAction<DocSettings>'.
+src/pages/Sales.tsx: error TS6133: 'BookOpen' is declared but its value is never read.
+src/pages/Sales.tsx: error TS6133: 'Printer' is declared but its value is never read.
+src/pages/Sales.tsx: error TS6133: 'itemsLoading' is declared but its value is never read.
+src/pages/Sales.tsx: error TS6133: 'printTicket' is declared but its value is never read.
+src/pages/Sales.tsx: error TS6133: 'useMemo' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'ChevronRight' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'Copy' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'ExternalLink' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'Globe' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'Link2' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'activeDepots' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'activeStores' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'error' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'profile' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'sites' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'tenant' is declared but its value is never read.
+src/pages/Settings.tsx: error TS6133: 'value' is declared but its value is never read.
+src/pages/Shop.tsx: error TS2339: Property 'promo_banner_active' does not exist on type 'ShopSettings'.
+src/pages/Shop.tsx: error TS2339: Property 'promo_banner_color' does not exist on type 'ShopSettings'.
+src/pages/Shop.tsx: error TS2339: Property 'promo_banner_text' does not exist on type 'ShopSettings'.
+src/pages/Shop.tsx: error TS2339: Property 'promo_banner_text' does not exist on type 'ShopSettings'.
+src/pages/Shop.tsx: error TS2339: Property 'promo_banner_text' does not exist on type 'ShopSettings'.
+src/pages/Shop.tsx: error TS2339: Property 'promo_banner_text' does not exist on type 'ShopSettings'.
+src/pages/Shop.tsx: error TS2339: Property 'promo_banner_text' does not exist on type 'ShopSettings'.
+src/pages/Shop.tsx: error TS2339: Property 'showFeaturedRow' does not exist on type 'ShopThemeConfig'.
+src/pages/Stock.tsx: error TS6133: 'ArticleLotSelection' is declared but its value is never read.
+src/pages/Stock.tsx: error TS6133: 'canViewPrices' is declared but its value is never read.
+src/pages/Stock.tsx: error TS6133: 'filtered' is declared but its value is never read.
+src/pages/Stock.tsx: error TS6133: 'ok' is declared but its value is never read.
+src/pages/Stock.tsx: error TS6133: 'searchFocused' is declared but its value is never read.
+src/pages/Stock.tsx: error TS6133: 'setListEditMode' is declared but its value is never read.
+src/pages/SupplierOrders.tsx: error TS2339: Property 'offsetWidth' does not exist on type 'Element'.
+src/pages/SupplierOrders.tsx: error TS6133: 'Modal' is declared but its value is never read.
+src/pages/SupplierOrders.tsx: error TS6133: 'headerForm' is declared but its value is never read.
+src/pages/SupplierOrders.tsx: error TS6133: 'isDispatchValid' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS2339: Property 'kind' does not exist on type '{ id: string; amount: number; note: string; created_at: string; }'.
+src/pages/Tiers.tsx: error TS2339: Property 'kind' does not exist on type '{ id: string; amount: number; note: string; created_at: string; }'.
+src/pages/Tiers.tsx: error TS6133: 'ChevronDown' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'CollapsibleSection' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'CustomerList' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'OptionsSheet' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'Phone' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'PowerOff' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'SupplierList' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'avoirMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'createMenuDropdown' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'due' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'dueMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'dueMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'dueMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'excessAvoir' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'excessPrepay' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'flashTarget' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'formatDateTime' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'ledgerNetBalance' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'ledgerWinCounter' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'optCust' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'optSup' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'orderItems' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'paidMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'paidMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'paying' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'prepayMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'reactivateCust' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'reactivateSup' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'saleItems' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'setOptCust' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'setOptSup' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'sites' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'supDueMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'totalCredit' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'totalDebit' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'totalMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'totalMap' is declared but its value is never read.
+src/pages/Tiers.tsx: error TS6133: 'yearStats' is declared but its value is never read.
+src/pages/Warranties.tsx: error TS6133: 'useMemo' is declared but its value is never read.

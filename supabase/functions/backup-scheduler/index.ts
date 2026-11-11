@@ -354,7 +354,7 @@ Deno.serve(async (req: Request) => {
           "platform_manual",
         );
 
-        await admin
+        const { error: bnItemErr } = await admin
           .from("_br_schedule_run_items")
           .update({
             status: "succeeded",
@@ -365,15 +365,27 @@ Deno.serve(async (req: Request) => {
           })
           .eq("run_id", run.id)
           .eq("tenant_id", tenant_id);
+        if (bnItemErr) {
+          throw new Error(
+            `Sauvegarde ${result.backup_id ?? "?"} créée mais statut non enregistré : ${bnItemErr.message}`,
+          );
+        }
 
-        await admin
+        const { error: bnRunErr } = await admin
           .from("_br_schedule_runs")
           .update({
             status: "completed",
             finished_at: new Date().toISOString(),
             tenants_succeeded: 1,
+            tenants_failed: 0,
           })
           .eq("id", run.id);
+        if (bnRunErr) {
+          return json(
+            { error: `Run finalize failed: ${bnRunErr.message}`, run_id: run.id, backup_id: result.backup_id },
+            500,
+          );
+        }
 
         return json({
           success: true,
@@ -481,6 +493,56 @@ Deno.serve(async (req: Request) => {
 
       if (runErr) return json({ error: runErr.message }, 500);
 
+      const runErrors: {
+        tenant_id: string | null;
+        tenant_name?: string;
+        error: string;
+      }[] = [];
+
+      async function finalizeRun(
+        status: "completed" | "partial_failure" | "failed",
+        counts: { succeeded: number; failed: number },
+      ): Promise<string | null> {
+        const { error: fErr } = await admin
+          .from("_br_schedule_runs")
+          .update({
+            status,
+            finished_at: new Date().toISOString(),
+            tenants_succeeded: counts.succeeded,
+            tenants_failed: counts.failed,
+            tenants_skipped: skipped,
+            error_summary: runErrors.length > 0 ? runErrors : null,
+          })
+          .eq("id", run.id);
+        return fErr ? fErr.message : null;
+      }
+
+      async function abortRun(message: string, succeededSoFar: number) {
+        runErrors.push({ tenant_id: null, error: message });
+        await admin
+          .from("_br_schedule_run_items")
+          .update({
+            status: "failed",
+            finished_at: new Date().toISOString(),
+            error_message: `Exécution interrompue : ${message}`,
+          })
+          .eq("run_id", run.id)
+          .in("status", ["pending", "running"]);
+        const failedCount = eligible.length - succeededSoFar;
+        const finErr = await finalizeRun(
+          succeededSoFar > 0 ? "partial_failure" : "failed",
+          { succeeded: succeededSoFar, failed: failedCount },
+        );
+        return json(
+          {
+            error: message,
+            run_id: run.id,
+            run_finalize_error: finErr ?? undefined,
+          },
+          500,
+        );
+      }
+
       const items = eligible.map((t: { id: string }) => ({
         run_id: run.id,
         tenant_id: t.id,
@@ -499,13 +561,13 @@ Deno.serve(async (req: Request) => {
         const { error: iErr } = await admin
           .from("_br_schedule_run_items")
           .insert(items);
-        if (iErr) return json({ error: iErr.message }, 500);
+        if (iErr) return await abortRun(`items: ${iErr.message}`, 0);
       }
       if (skippedItems.length > 0) {
         const { error: sErr } = await admin
           .from("_br_schedule_run_items")
           .insert(skippedItems);
-        if (sErr) return json({ error: sErr.message }, 500);
+        if (sErr) return await abortRun(`skipped items: ${sErr.message}`, 0);
       }
 
       const maxConcurrent = policy.max_concurrent || 2;
@@ -519,11 +581,12 @@ Deno.serve(async (req: Request) => {
         error: string;
       }[] = [];
 
+      try {
       for (let i = 0; i < eligible.length; i += maxConcurrent) {
         const batch = eligible.slice(i, i + maxConcurrent);
         const results = await Promise.allSettled(
           batch.map(async (t: { id: string; name: string }) => {
-            await admin
+            const { error: runningErr } = await admin
               .from("_br_schedule_run_items")
               .update({
                 status: "running",
@@ -531,6 +594,9 @@ Deno.serve(async (req: Request) => {
               })
               .eq("run_id", run.id)
               .eq("tenant_id", t.id);
+            if (runningErr) {
+              throw new Error(`item running: ${runningErr.message}`);
+            }
 
             const result = await backupTenantWithRetry(
               admin,
@@ -539,7 +605,7 @@ Deno.serve(async (req: Request) => {
               "auto",
             );
 
-            await admin
+            const { error: doneErr } = await admin
               .from("_br_schedule_run_items")
               .update({
                 status: "succeeded",
@@ -550,6 +616,11 @@ Deno.serve(async (req: Request) => {
               })
               .eq("run_id", run.id)
               .eq("tenant_id", t.id);
+            if (doneErr) {
+              throw new Error(
+                `Sauvegarde ${result.backup_id ?? "?"} créée mais statut non enregistré : ${doneErr.message}`,
+              );
+            }
 
             return { tenant_id: t.id, backup_id: result.backup_id };
           }),
@@ -576,7 +647,7 @@ Deno.serve(async (req: Request) => {
               tenant_name: t.name,
               error: errMsg,
             });
-            await admin
+            const { error: failUpdErr } = await admin
               .from("_br_schedule_run_items")
               .update({
                 status: "failed",
@@ -586,27 +657,30 @@ Deno.serve(async (req: Request) => {
               })
               .eq("run_id", run.id)
               .eq("tenant_id", t.id);
+            if (failUpdErr) {
+              runErrors.push({
+                tenant_id: t.id,
+                tenant_name: t.name,
+                error: `item failed status: ${failUpdErr.message}`,
+              });
+            }
           }
         }
       }
+      } catch (loopErr: unknown) {
+        return await abortRun(
+          loopErr instanceof Error ? loopErr.message : "Erreur inattendue",
+          succeeded,
+        );
+      }
 
-      const finalStatus =
+      const finalStatus: "completed" | "partial_failure" | "failed" =
         failed === 0
           ? "completed"
           : succeeded === 0
             ? "failed"
             : "partial_failure";
-      await admin
-        .from("_br_schedule_runs")
-        .update({
-          status: finalStatus,
-          finished_at: new Date().toISOString(),
-          tenants_succeeded: succeeded,
-          tenants_failed: failed,
-          error_summary: errors.length > 0 ? errors : null,
-        })
-        .eq("id", run.id);
-
+      runErrors.unshift(...errors);
       // ---------- Retention cleanup ----------
       // ONLY process tenants whose backup succeeded this run.
       // ONLY delete kind='auto' with is_auto=true. Never touch platform_manual/manual/safety/import.
@@ -753,6 +827,17 @@ Deno.serve(async (req: Request) => {
             }
           }
         } catch { /* offsite queue is best-effort, never block the run */ }
+      }
+
+      for (const re of retentionErrors) {
+        runErrors.push({ tenant_id: re.tenant_id, error: `retention: ${re.error}` });
+      }
+      const finalizeErr = await finalizeRun(finalStatus, { succeeded, failed });
+      if (finalizeErr) {
+        return json(
+          { error: `Run finalize failed: ${finalizeErr}`, run_id: run.id },
+          500,
+        );
       }
 
       return json({

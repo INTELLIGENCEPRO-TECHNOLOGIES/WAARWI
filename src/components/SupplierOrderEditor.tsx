@@ -6,6 +6,7 @@ import {
   User, FileText, Calendar, Columns3,
 } from 'lucide-react';
 import { formatFCFA, formatNum } from '../lib/format';
+import { QtyInput } from './QtyInput';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -430,14 +431,12 @@ export function SupplierOrderEditor(props: SupplierOrderEditorProps) {
                 );
                 case 'qty': return (
                   <div key="qty" className={w}>
-                    <input
+                    <QtyInput
                       ref={inputQtyRef}
-                      type="number"
-                      value={inputRow.quantity_ordered || ''}
-                      onChange={e => setInputRow(p => ({ ...p, quantity_ordered: Number(e.target.value) || 0 }))}
+                      value={inputRow.quantity_ordered}
+                      onValueChange={n => setInputRow(p => ({ ...p, quantity_ordered: n }))}
                       onKeyDown={handleInputKey}
                       className={inputCls + ' text-center'}
-                      min="1"
                     />
                   </div>
                 );

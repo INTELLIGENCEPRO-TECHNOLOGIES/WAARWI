@@ -80,6 +80,7 @@ import { QuickActionsPanel } from '../components/QuickActionsPanel';
 import { Activity } from 'lucide-react';
 import { CategoryPickerModal } from './ArticlesComponents';
 import { PosNumpad, type NumpadField } from '../components/PosNumpad';
+import { QtyInput } from '../components/QtyInput';
 import { PosRegisterPicker } from '../components/PosRegisterPicker';
 import { newIdempotencyKey, registerLabel, registerText, type PosCashContext } from '../lib/cashSession';
 import { type SalesRepresentative, type RepCommissionSettings, DEFAULT_REP_SETTINGS, computeRepCommission, repDisplayName } from '../lib/repCommission';
@@ -1721,9 +1722,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
     }));
   };
 
-  const setQty = (id: string, raw: string) => {
-    const n = raw === '' ? 0 : Number(raw);
-    if (isNaN(n)) return;
+  const setQty = (id: string, n: number) => {
     const allowNeg = !!(currentSite as any)?.allow_negative_stock;
     const art = articles.find(a => a.id === id);
     const tracked = art ? tracksStock(art) : true;
@@ -1732,7 +1731,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
   };
 
   const finalizeQty = (id: string) => {
-    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: Math.max(1, i.quantity) } : i));
+    setCart(c => c.map(i => i.article_id === id ? { ...i, quantity: i.quantity > 0 ? i.quantity : 1 } : i));
   };
 
   const setPrice = (id: string, raw: string) => {
@@ -2454,7 +2453,7 @@ export function POS({ onLeave, onNavigate }: { onLeave?: () => void; onNavigate?
                   </button>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <input type="number" value={i.quantity || ''} onChange={e => setQty(i.article_id, e.target.value)} onBlur={() => finalizeQty(i.article_id)} onClick={e => e.stopPropagation()} className="w-12 bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[10px] text-center font-bold num outline-none pb-0.5 shrink-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" title="Quantité" />
+                  <QtyInput value={i.quantity} onValueChange={n => setQty(i.article_id, n)} onBlur={() => finalizeQty(i.article_id)} onClick={e => e.stopPropagation()} className="w-12 bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[10px] text-center font-bold num outline-none pb-0.5 shrink-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" title="Quantité" />
                   <span className="text-[10px] text-neutral-400">x</span>
                   <input type="number" value={i.unit_price || ''} onChange={e => setPrice(i.article_id, e.target.value)} onBlur={() => finalizePrice(i.article_id)} onClick={e => e.stopPropagation()} className="w-16 bg-transparent border-b border-neutral-200 focus:border-neutral-900 text-[10px] text-right num outline-none pb-0.5 shrink-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" title="Prix unitaire" />
                   <span className="text-[10px] text-neutral-400">=</span>

@@ -7,6 +7,7 @@ import {
   CheckCircle, RefreshCw, Coins, BookOpen, Ban, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useTopLayer } from './modalStack';
+import { QtyInput } from './QtyInput';
 import { formatFCFA, formatNum } from '../lib/format';
 import { type DocSettings, type DocColumn, DEFAULT_COLUMNS } from './DocumentSettingsTab';
 import { type SalesRepresentative, repDisplayName } from '../lib/repCommission';
@@ -582,14 +583,12 @@ export function DocumentEditor(props: DocumentEditorProps) {
                   );
                   case 'qty': return (
                     <div key="qty" className="px-1" style={st}>
-                      <input
+                      <QtyInput
                         ref={inputQtyRef}
-                        type="number"
-                        value={inputRow.quantity || ''}
-                        onChange={e => setInputRow(p => ({ ...p, quantity: Number(e.target.value) || 0 }))}
+                        value={inputRow.quantity}
+                        onValueChange={n => setInputRow(p => ({ ...p, quantity: n }))}
                         onKeyDown={handleInputKey}
                         className={inputCls + ' text-center'}
-                        min="1"
                       />
                     </div>
                   );

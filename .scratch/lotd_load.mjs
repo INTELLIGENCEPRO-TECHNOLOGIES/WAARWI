@@ -1,0 +1,18 @@
+import { client } from '../tests/backup-v3/deps.mjs';
+import { installSchema, installLotC, SEED } from '../tests/backup-v3/fixtures.mjs';
+import { LOTD_SCHEMA, LOTD_REGISTRY_PROFILES, LOTD_SEED, LOTD_TEST_HELPERS, lotDSql } from '../tests/backup-v3/lotd_fixtures.mjs';
+const DB = process.env.DBN || 'br_v3_lotd_load';
+const a = client(); await a.connect();
+await a.query(`DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`); await a.query(`CREATE DATABASE ${DB}`); await a.end();
+const c = client({ database: DB }); await c.connect();
+const step = async (n, s) => { try { await c.query(s); console.log('ok', n); } catch (e) { console.log('FAIL', n, e.message, e.where || '', e.position || ''); process.exit(1); } };
+await installSchema((s) => c.query(s)); console.log('ok schema');
+await step('seed', SEED);
+await step('lotd_schema', LOTD_SCHEMA);
+await step('profiles_reg', LOTD_REGISTRY_PROFILES);
+await installLotC((s) => c.query(s)); console.log('ok lotc');
+await step('lotd_seed', LOTD_SEED);
+await step('lotd_migration', lotDSql());
+await step('helpers', LOTD_TEST_HELPERS);
+const d = await c.query(`SELECT br_check_schema_drift() d`); console.log(JSON.stringify(d.rows[0].d));
+await c.end();

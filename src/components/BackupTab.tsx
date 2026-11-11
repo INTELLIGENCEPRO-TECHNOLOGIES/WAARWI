@@ -9,6 +9,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { usePermissions } from '../lib/permissions';
 import { ConfirmDialog } from './Modal';
+import { BackupV3TrialPanel } from './BackupV3TrialPanel';
 
 type BackupStatus = 'creating' | 'verified' | 'failed' | 'legacy' | 'incompatible';
 
@@ -41,6 +42,9 @@ type PreflightResult = {
   issues: { code: string; severity: string; message: string; table?: string }[];
   issue_count: number;
 };
+
+const DESTRUCTIVE_SUSPENDED = true;
+const DESTRUCTIVE_SUSPENDED_MESSAGE = 'Cette opération est temporairement indisponible pendant la sécurisation du système de sauvegarde.';
 
 const FREQ_OPTIONS = [
   { v: 6,   l: 'Toutes les 6 heures' },
@@ -96,6 +100,7 @@ export function BackupTab() {
   const [backups, setBackups] = useState<Backup[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [activationEnabled, setActivationEnabled] = useState(false);
+  const destructiveAllowed = activationEnabled && !DESTRUCTIVE_SUSPENDED;
   const [confirmRestore, setConfirmRestore] = useState<Backup | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Backup | null>(null);
@@ -206,10 +211,7 @@ export function BackupTab() {
   const doDownload = async (b: Backup) => {
     if (!can('backup_download')) { toast.error('Permission insuffisante'); return; }
     setBusy('download');
-    const { data, error: e } = await supabase.from('tenant_backups')
-      .select('payload,created_at,label,format_version,checksums,global_checksum,row_counts')
-      .eq('id', b.id)
-      .maybeSingle();
+    const { data, error: e } = await supabase.rpc('br_download_backup', { p_backup_id: b.id });
     setBusy(null);
     if (e || !data) { toast.error(e?.message || 'Introuvable'); return; }
     const blob = new Blob([JSON.stringify({
@@ -295,12 +297,12 @@ export function BackupTab() {
     if (!can('backup_create')) { toast.error('Permission insuffisante'); return; }
     setBusy('runNow');
     const { error: e } = await supabase.rpc('br_create_backup', {
-      p_label: `Auto ${new Date().toLocaleString('fr-FR')}`,
-      p_kind: 'auto',
+      p_label: `Sauvegarde immédiate ${new Date().toLocaleString('fr-FR')}`,
+      p_kind: 'manual',
     });
     setBusy(null);
     if (e) { toast.error(e.message); return; }
-    toast.success('Sauvegarde automatique créée');
+    toast.success('Sauvegarde créée');
     load();
   };
 
@@ -317,6 +319,18 @@ export function BackupTab() {
           La restauration et la réinitialisation n'affectent aucun autre tenant.
         </p>
       </div>
+
+      {DESTRUCTIVE_SUSPENDED && (
+        <div className="py-3 px-3 bg-amber-50 border border-amber-200 rounded-md my-3 flex items-start gap-2.5">
+          <Lock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-amber-800">Restauration, réinitialisation et import indisponibles</p>
+            <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+              {DESTRUCTIVE_SUSPENDED_MESSAGE} Vos sauvegardes restent conservées et la création de sauvegardes reste possible.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Activation lock banner */}
       {!activationEnabled && (
@@ -358,6 +372,8 @@ export function BackupTab() {
         </div>
       )}
 
+      <BackupV3TrialPanel />
+
       {/* Import from file */}
       {can('backup_import') && (
         <div className="py-4 border-b border-neutral-200">
@@ -378,7 +394,8 @@ export function BackupTab() {
           />
           <button
             onClick={onPickFile}
-            disabled={busy === 'import' || !activationEnabled}
+            disabled={busy === 'import' || !destructiveAllowed}
+            title={DESTRUCTIVE_SUSPENDED ? DESTRUCTIVE_SUSPENDED_MESSAGE : undefined}
             className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 transition disabled:opacity-50"
           >
             {busy === 'import' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
@@ -500,9 +517,9 @@ export function BackupTab() {
                   {can('backup_restore') && canRestore(b) && (
                     <button
                       onClick={() => runPreflight(b)}
-                      disabled={!!busy || !activationEnabled}
+                      disabled={!!busy || !destructiveAllowed}
                       className="p-1.5 rounded-md hover:bg-neutral-100 transition-colors disabled:opacity-40"
-                      title={activationEnabled ? 'Vérifier puis restaurer' : 'Verrouillage actif'}
+                      title={DESTRUCTIVE_SUSPENDED ? DESTRUCTIVE_SUSPENDED_MESSAGE : activationEnabled ? 'Vérifier puis restaurer' : 'Verrouillage actif'}
                     >
                       {busy === 'preflight' && preflightTarget?.id === b.id
                         ? <Loader2 className="w-4 h-4 text-neutral-500 animate-spin" />
@@ -541,7 +558,8 @@ export function BackupTab() {
             </p>
             <button
               onClick={() => setConfirmReset(true)}
-              disabled={!activationEnabled || !!busy}
+              disabled={!destructiveAllowed || !!busy}
+              title={DESTRUCTIVE_SUSPENDED ? DESTRUCTIVE_SUSPENDED_MESSAGE : undefined}
               className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-800 transition disabled:opacity-50"
             >
               <AlertTriangle className="w-3.5 h-3.5" />
@@ -587,7 +605,7 @@ export function BackupTab() {
       <ConfirmDialog
         open={!!confirmRestore}
         title="Restaurer cette sauvegarde ?"
-        message={`La vérification pré-restauration a réussi. Toutes les données actuelles seront remplacées par celles de « ${confirmRestore?.label} ». Une sauvegarde de sécurité sera créée avant l'opération. Cette action est irréversible.`}
+        message={`La vérification pré-restauration a réussi. Toutes les données actuelles seront remplacées par celles de « ${confirmRestore?.label} ». Une sauvegarde de sécurité sera créée avant l'opération. Cette action est irréversible. Cette opération concerne tous les magasins de votre entreprise.`}
         confirmLabel="Restaurer"
         danger
         onClose={() => { setConfirmRestore(null); setPreflightResult(null); setPreflightTarget(null); }}
@@ -596,7 +614,7 @@ export function BackupTab() {
       <ConfirmDialog
         open={confirmReset}
         title="Réinitialiser les opérations ?"
-        message="Toutes les ventes, commandes et mouvements seront supprimés. Les articles, clients et fournisseurs restent intacts. Une sauvegarde de sécurité sera créée automatiquement."
+        message="Toutes les ventes, commandes et mouvements seront supprimés. Les articles, clients et fournisseurs restent intacts. Une sauvegarde de sécurité sera créée automatiquement. Cette opération concerne tous les magasins de votre entreprise."
         confirmLabel="Réinitialiser"
         danger
         onClose={() => setConfirmReset(false)}
@@ -605,7 +623,7 @@ export function BackupTab() {
       <ConfirmDialog
         open={!!confirmImport}
         title="Importer cette sauvegarde ?"
-        message={`Le fichier « ${confirmImport?.name} » remplacera toutes les données actuelles de votre entreprise. Une sauvegarde de sécurité sera créée automatiquement avant.`}
+        message={`Le fichier « ${confirmImport?.name} » remplacera toutes les données actuelles de votre entreprise. Une sauvegarde de sécurité sera créée automatiquement avant. Cette opération concerne tous les magasins de votre entreprise.`}
         confirmLabel="Importer et restaurer"
         danger
         onClose={() => setConfirmImport(null)}
