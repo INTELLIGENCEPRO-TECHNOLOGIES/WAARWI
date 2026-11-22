@@ -895,6 +895,8 @@ function TenantDetailPage({ tenant, plans, onClose, onRefresh, onDelete, onOpenS
                       <dl className="pa-detail-list">
                         <div><dt>Inscrite le</dt><dd>{formatDate(tenant.created_at)}</dd></div>
                         {tenant.city && <div><dt>Ville</dt><dd>{tenant.city}</dd></div>}
+                        {tenant.address && <div><dt>Adresse</dt><dd>{tenant.address}</dd></div>}
+                        {tenant.registration_other_activity && <div><dt>Activité précisée</dt><dd>{tenant.registration_other_activity}</dd></div>}
                         {tenant.responsible_name && <div><dt>Responsable</dt><dd>{tenant.responsible_name}</dd></div>}
                         {tenant.whatsapp_phone && <div><dt>WhatsApp</dt><dd>{tenant.whatsapp_phone}</dd></div>}
                         {tenant.first_payment?.state === 'paid' && <div><dt>Premier règlement</dt><dd>Payé · {formatFCFA(tenant.first_payment.amount)}</dd></div>}

@@ -24,7 +24,6 @@ type AppState = {
   /** Per-browser default site id (null when the user has never picked one on this browser). */
   localDefaultSiteId: string | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null, extra?: { city?: string; whatsapp_phone?: string; responsible_title?: string; selected_plan?: string; billing_cycle?: string }) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   dataTick: number;
@@ -326,44 +325,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  const signUp = async (email: string, password: string, fullName: string, companyName: string, businessType: string, activityTypeId?: string | null, extra?: { city?: string; whatsapp_phone?: string; responsible_title?: string; selected_plan?: string; billing_cycle?: string }) => {
-    let { data, error } = await supabase.auth.signUp({ email, password });
-    if (error && error.message?.toLowerCase().includes('already registered')) {
-      const signInRes = await supabase.auth.signInWithPassword({ email, password });
-      if (signInRes.error) throw signInRes.error;
-      data = signInRes.data as any;
-    } else if (error) {
-      throw error;
-    }
-    if (!data.user) throw new Error('Inscription impossible');
-    const { error: rpcErr } = await supabase.rpc('provision_tenant', {
-      p_company_name: companyName,
-      p_user_full_name: fullName,
-      p_business_type: businessType,
-      p_activity_type_id: activityTypeId || null,
-      p_city: extra?.city || '',
-      p_whatsapp_phone: extra?.whatsapp_phone || '',
-      p_responsible_title: extra?.responsible_title || '',
-      p_selected_plan: extra?.selected_plan || 'trial',
-      p_billing_cycle: extra?.billing_cycle || 'monthly',
-    });
-    if (rpcErr) throw rpcErr;
-
-    // Notify admin of new signup (fire-and-forget)
-    const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('id', data.user.id).maybeSingle();
-    if (prof?.tenant_id) {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification-email`;
-      const { data: sess } = await supabase.auth.getSession();
-      fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${sess.session?.access_token || ''}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'new_signup', tenant_id: prof.tenant_id }),
-      }).catch(() => {});
-    }
-
-    await loadSession();
-  };
-
   const signOut = async () => {
     try {
       setUser(null); setProfile(null); setTenant(null); setSites([]); setDepots([]); setCurrentSite(null);
@@ -445,7 +406,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCurrentSite: handleSetCurrentSite,
       setDefaultSite: handleSetDefaultSite,
       localDefaultSiteId,
-      signIn, signUp, signOut, refresh: loadSession,
+      signIn, signOut, refresh: loadSession,
       dataTick, onDataChange,
       posCartCount, posCartOpen, setPosCart,
       refData,
